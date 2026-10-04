@@ -77,6 +77,7 @@ public class StarCommand extends CommandTreeBase {
             }
         };
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         final String name;
 
         ActionType(String name) {

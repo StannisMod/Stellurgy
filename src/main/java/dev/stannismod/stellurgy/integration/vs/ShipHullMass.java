@@ -137,7 +137,7 @@ final class ShipHullMass {
             }
             TileEntity tile = world.getTileEntity(p);
             if (tile != null) {
-                double held = dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getTEWeight(tile);
+                double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);
                 if (held > 0.0) {
                     builder.add(MassContributor.ofBlock(p.getX() + 0.5 - ox, p.getY() + 0.5 - oy,
                             p.getZ() + 0.5 - oz, held, MassContributor.Kind.CONTENT));
@@ -170,7 +170,7 @@ final class ShipHullMass {
             if (tile == null) {
                 return;
             }
-            double held = dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getTEWeight(tile);
+            double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);
             if (held > 0.0) {
                 builder.add(MassContributor.ofBlock(x + 0.5 - ox, y + 0.5 - oy, z + 0.5 - oz,
                         held, MassContributor.Kind.CONTENT));
@@ -233,13 +233,13 @@ final class ShipHullMass {
         EntityPlayer player = (EntityPlayer) body;
         double carried = 0.0D;
         for (net.minecraft.item.ItemStack stack : player.inventory.mainInventory) {
-            carried += dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getWeight(stack);
+            carried += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(stack);
         }
         for (net.minecraft.item.ItemStack stack : player.inventory.armorInventory) {
-            carried += dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getWeight(stack);
+            carried += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(stack);
         }
         for (net.minecraft.item.ItemStack stack : player.inventory.offHandInventory) {
-            carried += dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getWeight(stack);
+            carried += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(stack);
         }
         return carried;
     }

@@ -35,7 +35,7 @@ public abstract class MixinDeckMovementBoundInputs {
     private static final double REPORT_ABOVE_BLOCKS = 1.0;
 
     @Inject(method = "accepts", at = @At("RETURN"), remap = false)
-    private static void stellurgyTest$recordStep(EntityPlayerMP player,
+    private void stellurgyTest$recordStep(EntityPlayerMP player,
                                           double fromX, double fromY, double fromZ,
                                           double toX, double toY, double toZ,
                                           CallbackInfoReturnable<Boolean> cir) {

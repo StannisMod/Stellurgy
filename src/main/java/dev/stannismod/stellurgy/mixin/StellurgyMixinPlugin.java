@@ -45,6 +45,7 @@ import java.util.Set;
  */
 public class StellurgyMixinPlugin implements IMixinConfigPlugin {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy");
 
     /** Fully-qualified names of the per-dimension WorldInfo mixins gated by the

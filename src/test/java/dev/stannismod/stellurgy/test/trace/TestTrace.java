@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Locale;
 
 import net.minecraft.entity.Entity;
-
-import dev.stannismod.stellurgy.command.test.TestEventLog;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.World;
 
 /**
  * The sink a test-only mixin writes an observation into, and the side routing that picks which
@@ -15,10 +15,10 @@ import dev.stannismod.stellurgy.command.test.TestEventLog;
  *
  * <p>There are two event logs, one per side, because cross-side ordering within a tick is undefined
  * and shipping client records to the server would lose exactly the records a relog test needs. The
- * server half lives in the mod's probe ({@link TestEventLog}) and is registered under
- * {@code -Dstellurgy.tests=true}; the client half lives in the harness bootstrap and is
- * enabled by the harness's own coremod. A mixin runs on whichever side the world it is looking at
- * belongs to, so it cannot pick a log at compile time — it asks here.</p>
+ * server half is the server's own {@link ServerEventLog}, started when the mod's test probes are
+ * registered; the client half lives in the harness bootstrap and is enabled by the harness's own
+ * coremod. A mixin runs on whichever side the world it is looking at belongs to, so it cannot pick
+ * a log at compile time — it asks here.</p>
  *
  * <h2>Both halves self-gate</h2>
  *
@@ -58,7 +58,35 @@ public final class TestTrace {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .noteInstrumentEntered(name);
         } else {
-            TestEventLog.noteInstrumentEntered(name);
+            noteOnServer(serverLog(entity == null ? null : entity.world), name);
+        }
+    }
+
+    /** {@link #instrumentHere} for a point that is SERVER by the physical side of its JVM rather
+     *  than by its thread — a packet decoded on a dedicated server's netty thread. */
+    public static void instrumentServer(String name) {
+        noteOnServer(ServerEventLog.current(), name);
+    }
+
+    /**
+     * The log of the server {@code world} belongs to, or of the server running in this JVM when
+     * there is no world in hand; null when there is no server log at all (the test mixin
+     * configuration was not applied), in which case the observation has nowhere to go.
+     */
+    private static ServerEventLog serverLog(World world) {
+        MinecraftServer server = world == null ? null : world.getMinecraftServer();
+        return server instanceof SideTraceOwner ? ServerEventLog.of(server) : ServerEventLog.current();
+    }
+
+    private static void noteOnServer(ServerEventLog log, String name) {
+        if (log != null) {
+            log.noteInstrumentEntered(name);
+        }
+    }
+
+    private static void recordOnServer(ServerEventLog log, long tick, String type, String payload) {
+        if (log != null) {
+            log.record("server", tick, type, payload);
         }
     }
 
@@ -76,7 +104,7 @@ public final class TestTrace {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .noteInstrumentEntered(name);
         } else {
-            TestEventLog.noteInstrumentEntered(name);
+            noteOnServer(ServerEventLog.current(), name);
         }
     }
 
@@ -90,8 +118,8 @@ public final class TestTrace {
     public static void recordServer(String type, String payload) {
         net.minecraft.world.WorldServer overworld =
                 net.minecraftforge.common.DimensionManager.getWorld(0);
-        TestEventLog.record("server", overworld == null ? 0L : overworld.getTotalWorldTime(),
-                type, payload);
+        recordOnServer(ServerEventLog.current(),
+                overworld == null ? 0L : overworld.getTotalWorldTime(), type, payload);
     }
 
     /** {@link #record} for an observation point with no entity — see {@link #instrumentHere}. On the
@@ -115,7 +143,7 @@ public final class TestTrace {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .recordEvent(type, payload);
         } else {
-            TestEventLog.record("server", entity.world.getTotalWorldTime(), type, payload);
+            recordOnServer(serverLog(entity.world), entity.world.getTotalWorldTime(), type, payload);
         }
     }
 
@@ -134,7 +162,7 @@ public final class TestTrace {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .noteInstrumentEntered(name);
         } else {
-            TestEventLog.noteInstrumentEntered(name);
+            noteOnServer(serverLog(world), name);
         }
     }
 
@@ -144,7 +172,7 @@ public final class TestTrace {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .recordEvent(type, payload);
         } else {
-            TestEventLog.record("server", world.getTotalWorldTime(), type, payload);
+            recordOnServer(serverLog(world), world.getTotalWorldTime(), type, payload);
         }
     }
 

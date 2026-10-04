@@ -121,7 +121,7 @@ public class MissionOreMining extends MissionResourceCollection {
                 if (distanceData / (double) maxData > Math.random()) {
                     ItemStack[] stacks;
 
-                    Asteroid asteroid = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(((ItemAsteroidChip) stack.getItem()).getType(stack));
+                    Asteroid asteroid = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(((ItemAsteroidChip) stack.getItem()).getType(stack));
 
                     if (asteroid != null) {
 

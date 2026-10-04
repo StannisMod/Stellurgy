@@ -6,6 +6,9 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.IAtmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class AtmosphereType implements IAtmosphere {
 
     /** Packet-safe send for atmosphere effects: FakePlayers / headless test
@@ -36,7 +39,16 @@ public class AtmosphereType implements IAtmosphere {
     public static final AtmosphereType VERYHOTNOO2 = new AtmosphereVeryHotNoOxygen(true, false, false, "VeryHotNoO2");
     public static final AtmosphereType SUPERHEATEDNOO2 = new AtmosphereSuperheatedNoOxygen(true, false, false, "SuperheatedNoOxygen");
 
-    static {
+    /**
+     * Put the built-in atmospheres into the game's register. Called once, by the mod in pre-init:
+     * every lookup by name falls back to {@code "air"}, so the register must hold the built-ins before
+     * the first packet, tile load or GUI can ask — which a class initialiser cannot promise, because
+     * nothing guarantees this class is touched before them.
+     */
+    public static void registerBuiltIns() {
+        if (AtmosphereRegister.getInstance().getAtmosphereList().contains(AIR)) {
+            throw new IllegalStateException("the built-in atmospheres are registered once, in pre-init");
+        }
         AtmosphereRegister.getInstance().registerAtmosphere(AIR);
         AtmosphereRegister.getInstance().registerAtmosphere(PRESSURIZEDAIR);
         AtmosphereRegister.getInstance().registerAtmosphere(VACUUM);

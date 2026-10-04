@@ -42,9 +42,10 @@ public class RenderPlanetarySky extends IRenderHandler {
     private int glSkyList2;
 
 
-    private static float xrotangle = 0; // used for ring rotation because I don't want to bother changing the definitions of methods.
-    private static float[] skycolor = {0,0,0}; // used for black hole rendering - same reason as above
-    private static double currentplanetphi = 0; // used for calculating ring/disk angle
+    // Computed earlier in a frame and read later in the same frame, by this sky alone.
+    private float xrotangle = 0;
+    private final float[] skycolor = {0,0,0};
+    private double currentplanetphi = 0;
 
     //Mostly vanilla code
     //TODO: make usable on other planets
@@ -104,7 +105,11 @@ public class RenderPlanetarySky extends IRenderHandler {
         GL11.glEndList();
     }
 
-    public static void renderPlanetPubHelper(BufferBuilder buffer, ResourceLocation icon, int locationX, int locationY, double zLevel, float size, float alphaMultiplier, double shadowAngle, boolean hasAtmosphere, float[] skyColor, float[] ringColor, boolean gasGiant, boolean hasRing, double ringAngle, boolean hasDecorators, float[] shadowColorMultiplier, float alphaMultiplier2) {
+    /**
+     * @param ringPhiDeg  the ring/disk angle of the planet the calling sky is drawn from, in degrees
+     * @param ringXRotDeg the ring rotation the calling sky computed for this frame, in degrees
+     */
+    public static void renderPlanetPubHelper(BufferBuilder buffer, ResourceLocation icon, int locationX, int locationY, double zLevel, float size, float alphaMultiplier, double shadowAngle, boolean hasAtmosphere, float[] skyColor, float[] ringColor, boolean gasGiant, boolean hasRing, double ringAngle, boolean hasDecorators, float[] shadowColorMultiplier, float alphaMultiplier2, double ringPhiDeg, float ringXRotDeg) {
         GlStateManager.enableBlend();
 
 
@@ -201,8 +206,8 @@ GL11.glPopMatrix();
         GlStateManager.disableCull();
         if (hasRing) {
             GL11.glPushMatrix();
-            GL11.glRotatef((float) currentplanetphi, 0f, 1f, 0f);
-            float m = -xrotangle;
+            GL11.glRotatef((float) ringPhiDeg, 0f, 1f, 0f);
+            float m = -ringXRotDeg;
             while (m > 360)
                 m-=360;
             while (m < 0)
@@ -618,11 +623,11 @@ GL11.glPopMatrix();
         } else {
             children = new LinkedList<>();
             isMoon = false;
-            atmosphere = DimensionManager.overworldProperties.getAtmosphereDensityAtHeight(mc.getRenderViewEntity().posY);
-            solarOrbitalDistance = DimensionManager.overworldProperties.orbitalDist;
+            atmosphere = DimensionManager.getInstance().getOverworldProperties().getAtmosphereDensityAtHeight(mc.getRenderViewEntity().posY);
+            solarOrbitalDistance = DimensionManager.getInstance().getOverworldProperties().orbitalDist;
             sunColor = new Vec3d(1, 1, 1);
-            primaryStar = DimensionManager.overworldProperties.getStar();
-            properties = DimensionManager.overworldProperties;
+            primaryStar = DimensionManager.getInstance().getOverworldProperties().getStar();
+            properties = DimensionManager.getInstance().getOverworldProperties();
         }
 
         currentplanetphi = myPhi;
@@ -1119,7 +1124,7 @@ GL11.glPopMatrix();
         boolean gasGiant = properties.isGasGiant();
         float[] skyColor = properties.skyColor;
         float[] ringColor = properties.ringColor;
-        renderPlanetPubHelper(buffer, icon, 0, 0, -20, size * 0.2f, alphaMultiplier, shadowAngle, hasAtmosphere, skyColor, ringColor, gasGiant, hasRing, properties.ringAngle, hasDecorators, shadowColorMultiplier, alphaMultiplier2);
+        renderPlanetPubHelper(buffer, icon, 0, 0, -20, size * 0.2f, alphaMultiplier, shadowAngle, hasAtmosphere, skyColor, ringColor, gasGiant, hasRing, properties.ringAngle, hasDecorators, shadowColorMultiplier, alphaMultiplier2, currentplanetphi, xrotangle);
     }
 
     protected void rotateAroundAxis() {

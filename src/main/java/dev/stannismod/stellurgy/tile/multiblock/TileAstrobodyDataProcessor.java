@@ -42,6 +42,7 @@ import java.util.List;
 
 public class TileAstrobodyDataProcessor extends TileMultiPowerConsumer implements IModularInventory, IInventory {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
             {{"slab", 'c', "slab"},
                     {"slab", "slab", "slab"}},

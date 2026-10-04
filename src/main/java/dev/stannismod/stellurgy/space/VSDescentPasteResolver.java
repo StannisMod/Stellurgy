@@ -35,6 +35,7 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  */
 public final class VSDescentPasteResolver implements DescentController.PasteResolver {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /** Blocks between adjacent paste lanes at a planet's spawn (simultaneous-descent spread). */
@@ -147,7 +148,7 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
                 .getDimensionProperties(destPlanetDim);
         int orbitHeight = props != null ? props.getOrbitHeight()
                 : StellurgyConfiguration.getCurrentConfig().orbit;
-        double arrivalY = arrivalAltitude(orbitHeight, VSIntegration.shipYPositionMaximum());
+        double arrivalY = arrivalAltitude(orbitHeight, VSIntegration.shipYPositionMaximum(dst));
 
         // The ship arrives in the air over the paste column, centred on its own footprint, and flies
         // down under its pilot's hand from there.
@@ -156,7 +157,7 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
                         + "shipyard=[{},{}]x[{},{}] orbitHeight={} physicsCeiling={} arrivalY={}",
                 destPlanetDim, laneIndex, pasteX, pasteY, pasteZ, shipHeight,
                 (int) yard.minX, (int) yard.maxX, (int) yard.minZ, (int) yard.maxZ,
-                orbitHeight, VSIntegration.shipYPositionMaximum(), arrivalY);
+                orbitHeight, VSIntegration.shipYPositionMaximum(dst), arrivalY);
         return new DescentController.Landing(pasteX, pasteY, pasteZ, landingPose);
     }
 }

@@ -150,6 +150,7 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
     }
 
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final int[] NO_SLOTS = new int[0];
 
     @Override

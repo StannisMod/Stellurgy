@@ -51,6 +51,8 @@ public final class ShipInertiaWriter {
      * static logger initialises the mod, which initialises the block registry, which refuses to load
      * before the game has bootstrapped — so a boundary class that logged that way could not be
      * exercised outside a running server, and the rules it enforces are exactly the kind that must be.
+     *
+     * <p>Effectively final, process lifetime: built once at class initialisation.</p>
      */
     private static final Logger LOG = LogManager.getLogger("stellurgy.mass");
 

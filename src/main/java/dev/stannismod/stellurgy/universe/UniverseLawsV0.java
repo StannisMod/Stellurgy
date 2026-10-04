@@ -14,6 +14,7 @@ package dev.stannismod.stellurgy.universe;
  */
 public final class UniverseLawsV0 implements IUniverseLaws {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final UniverseLawsV0 INSTANCE = new UniverseLawsV0();
 
     private UniverseLawsV0() {

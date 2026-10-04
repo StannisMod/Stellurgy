@@ -4,9 +4,7 @@ import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
-import net.minecraftforge.common.MinecraftForge;
 import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
-import dev.stannismod.stellurgy.unit.IngameTestOrchestrator;
 
 import java.util.Collections;
 import java.util.List;
@@ -32,9 +30,6 @@ public class RunTestsCommand extends StellurgyCommand {
             throw wrongUsage(sender);
         }
         EntityPlayerMP player = getCommandSenderAsPlayer(sender);
-        if (!IngameTestOrchestrator.registered) {
-            MinecraftForge.EVENT_BUS.register(IngameTestOrchestrator.instance);
-        }
-        IngameTestOrchestrator.runTests(player.getEntityWorld(), player);
+        dev.stannismod.stellurgy.Stellurgy.serverState().ingameTests.runTests(player.getEntityWorld(), player);
     }
 }

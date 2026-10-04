@@ -28,6 +28,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class BlockShieldCable extends Block implements ITileEntityProvider, IHasItemBlock {
 
     private static final AxisAlignedBB CORE_AABB = new AxisAlignedBB(5.0D / 16.0D, 5.0D / 16.0D, 5.0D / 16.0D,
@@ -57,7 +60,7 @@ public class BlockShieldCable extends Block implements ITileEntityProvider, IHas
         super(material);
         setUnlocalizedName(name);
         setRegistryName(AdvancedForceFieldSystem.MODID, name);
-        setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         setHardness(1.0F);
         setResistance(4.0F);
         setSoundType(SoundType.METAL);

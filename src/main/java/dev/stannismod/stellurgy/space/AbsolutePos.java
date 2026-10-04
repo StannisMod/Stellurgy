@@ -31,7 +31,11 @@ package dev.stannismod.stellurgy.space;
  */
 public final class AbsolutePos {
 
-    /** Absolute origin: sector {@code (0,0,0)}, offset {@code (0,0,0)}. */
+    /**
+     * Absolute origin: sector {@code (0,0,0)}, offset {@code (0,0,0)}.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     public static final AbsolutePos ORIGIN = new AbsolutePos(0L, 0L, 0L, 0L, 0L, 0L);
 
     private final long sectorX;

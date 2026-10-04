@@ -9,6 +9,7 @@ public class TeslaCapabilityProvider {
 	    //MinecraftForge.EVENT_BUS.register(TeslaCapabilityProvider.class);
 	    LibVulpes.logger.info("Tesla integration loaded");
 	}
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	private static final ResourceLocation KEY = new ResourceLocation("libvulpes:ProviderTesla");
 
 //	@SubscribeEvent

@@ -27,6 +27,7 @@ import java.util.List;
 
 public class TileBiomeScanner extends TileMultiPowerConsumer {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
 
             {{null, null, null, null, null},

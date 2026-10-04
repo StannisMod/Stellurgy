@@ -40,6 +40,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipReadoutTest {
 
+    /** A constant: a {@code ControlFrame} copies its axes and hands them out read-only. */
     private static final ControlFrame HELM =
             ControlFrame.of(new Vector3d(0, 0, 1), new Vector3d(-1, 0, 0), new Vector3d(0, 1, 0));
     private static final double T = 100_000.0D;

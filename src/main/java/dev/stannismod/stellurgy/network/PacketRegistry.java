@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.network;
 
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketItemModifcation;
 
 import java.util.HashSet;
@@ -27,7 +26,11 @@ import java.util.Set;
  */
 public final class PacketRegistry {
 
-    /** The space, in wire order. Appending is safe; inserting or reordering renumbers the tail. */
+    /**
+     * The space, in wire order. Appending is safe; inserting or reordering renumbers the tail.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final Class<?>[] PACKETS = {
             PacketDimInfo.class,
             PacketSatellite.class,
@@ -53,6 +56,7 @@ public final class PacketRegistry {
             PacketSystemBodiesSync.class,
             PacketNavBodyInfo.class,
             PacketSpaceClockSync.class,
+            PacketKnownPlanets.class,
             PacketShipReadout.class,
     };
 
@@ -66,7 +70,7 @@ public final class PacketRegistry {
     public static void registerAll() {
         verify(PACKETS);
         for (Class<?> packet : PACKETS) {
-            PacketHandler.INSTANCE.addDiscriminator(packet);
+            dev.stannismod.stellurgy.Stellurgy.instance.libVulpes.packets.addDiscriminator(packet);
         }
     }
 

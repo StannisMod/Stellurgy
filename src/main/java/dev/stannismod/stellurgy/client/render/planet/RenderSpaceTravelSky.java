@@ -45,15 +45,8 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
      * scale: 40 per distance unit while a unit was a hundredth of an AU.
      */
     private static final double COMPANION_MAP_UNITS_PER_AU = 4_000d;
-    private static WavefrontObject sphere;
-
-    static {
-        try {
-            sphere = new WavefrontObject(new ResourceLocation("stellurgy:models/atmosphere.obj"));
-        } catch (ModelFormatException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private final WavefrontObject sphere =
+            WavefrontObject.required(new ResourceLocation("stellurgy:models/atmosphere.obj"));
 
     ResourceLocation currentlyBoundTex = null;
     float celestialAngle;

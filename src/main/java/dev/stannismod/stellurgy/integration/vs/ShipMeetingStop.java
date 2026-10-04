@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.integration.vs;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +14,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.event.ShipCollisionEvent;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 /**
  * Two craft may not pass through one another: while their world boxes overlap, both are held at
@@ -54,15 +54,18 @@ import dev.stannismod.stellurgy.api.event.ShipCollisionEvent;
 public final class ShipMeetingStop {
 
     /**
-     * Which pairs were overlapping on the previous tick, per world dimension, so the event is posted
-     * on the EDGE — the tick a meeting begins — while the holding happens on every tick of it.
+     * Which pairs were overlapping on a world's previous tick, so the event is posted on the EDGE —
+     * the tick a meeting begins — while the holding happens on every tick of it. That world's own part
+     * ({@link WorldRuntime}): this handler is one object on the bus for the whole process, and a memory
+     * kept on it would outlive every world, so a meeting from a stopped server could silence the same
+     * pair's first meeting in the next one.
      *
      * <p>A pair is keyed by its two identities in a fixed order, because the overlap is symmetric
-     * and "a met b" and "b met a" are one meeting. Keyed by dimension rather than by {@code World}
-     * so a world object replaced between ticks does not resurrect a meeting that has ended, and the
-     * per-world entry is rebuilt from what that world's own tick found.</p>
+     * and "a met b" and "b met a" are one meeting.</p>
      */
-    private final Map<Integer, Set<String>> meetingLastTick = new HashMap<>();
+    private static final class Meetings {
+        Set<String> lastTick = new HashSet<>();
+    }
 
     /** Subscribe the one instance the bus owns. Called from {@link VSIntegration}'s init beside the
      *  other watchers. */
@@ -75,15 +78,16 @@ public final class ShipMeetingStop {
         if (event.phase != TickEvent.Phase.END || event.world == null || event.world.isRemote) {
             return;
         }
+        final World world = event.world;
+        final Meetings meetings = WorldRuntime.of(world, Meetings.class, Meetings::new);
         if (!StellurgyConfiguration.getCurrentConfig().shipsCollide) {
             // Disabled means disabled: no detection, no event, no cost beyond this read.
-            meetingLastTick.remove(event.world.provider.getDimension());
+            meetings.lastTick.clear();
             return;
         }
-        final World world = event.world;
         final Map<String, AxisAlignedBB> boxes = VSIntegration.loadedShipBoxes(world);
         if (boxes.size() < 2) {
-            meetingLastTick.remove(world.provider.getDimension());
+            meetings.lastTick.clear();
             return;
         }
 
@@ -108,19 +112,15 @@ public final class ShipMeetingStop {
             }
         }
 
-        final Set<String> before = meetingLastTick.get(world.provider.getDimension());
+        final Set<String> before = meetings.lastTick;
         for (String pair : meetingNow) {
-            if (before == null || !before.contains(pair)) {
+            if (!before.contains(pair)) {
                 final int split = pair.indexOf('|');
                 MinecraftForge.EVENT_BUS.post(new ShipCollisionEvent(world,
                         pair.substring(0, split), pair.substring(split + 1)));
             }
         }
-        if (meetingNow.isEmpty()) {
-            meetingLastTick.remove(world.provider.getDimension());
-        } else {
-            meetingLastTick.put(world.provider.getDimension(), meetingNow);
-        }
+        meetings.lastTick = meetingNow;
     }
 
     /** The two identities in a fixed order, so one meeting has one key whichever way it is found. */

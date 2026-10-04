@@ -85,13 +85,8 @@ public final class FieldSurfaceMath {
         if (world == null) {
             return generators;
         }
-        int dimension = world.provider.getDimension();
-        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.getActiveGenerators()) {
+        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.getActiveGenerators(world)) {
             if (generator == null || generator.isInvalid()) {
-                continue;
-            }
-            World generatorWorld = generator.getWorld();
-            if (generatorWorld == null || generatorWorld.provider.getDimension() != dimension) {
                 continue;
             }
             if (!generator.isFieldPowered()) {

@@ -18,7 +18,6 @@ import org.apache.logging.log4j.Logger;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.SealableBlockHandler;
@@ -53,13 +52,25 @@ public class StellurgyConfiguration {
     private final static String COMPAT = "Compatibility";
     /** OWNER: the LOADER — log4j hands out one object per name for the launch, and this class asks
      *  for it by name like every other class here does. Nothing releases it because nothing may.
-     *  Not to be confused with the configuration below, which is the SERVER's while one is joined. */
+     *  Not to be confused with the configuration below, which is the SERVER's while one is joined.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final Logger logger = LogManager.getLogger(Constants.modId);
 
+    /**
+     * The raw string lists read from the config file. Effectively final, process lifetime: written only
+     * by {@link #loadPreInit()}; all but geodeOres, blackHoleGeneratorTiming and orbitalLaserOres are read
+     * again (and may be rewritten) by {@link #loadPostInit()}.
+     */
     private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
-    private static StellurgyConfiguration currentConfig = new StellurgyConfiguration();
-    private static StellurgyConfiguration diskConfig;
-    private static boolean usingServerConfig = false;
+    /**
+     * This process's own configuration, read from its file at pre-init. Effectively final, client /
+     * dedicated-server lifetime: the reference is never replaced; its fields are filled by
+     * {@link #loadPreInit()} / {@link #loadPostInit()} and rewritten only by the operator reloads
+     * (config sync, {@code /addtorch}, {@code /addsealant}).
+     */
+    private static final StellurgyConfiguration ownConfig = new StellurgyConfiguration();
 
     // ASM compat fix for PlusTiC Portly tools rotating Stellurgy rockets on release.
 
@@ -77,10 +88,11 @@ public class StellurgyConfiguration {
     public double warpTBIBurnMult = 10.0;
     @ConfigProperty(needsSync = true)
     public int dataBusBigMultiplier = 4;
-    @ConfigProperty
-    public int MoonId = Constants.INVALID_PLANET;
     @ConfigProperty(needsSync = true)
     public int spaceDimId = -2;
+    /** Lowest dimension id a planet may take; read once at pre-init. */
+    @ConfigProperty
+    public int minDimension = 2;
     // Movable-ship space subsystem (server-authoritative; loaded in loadPreInit, never network-synced).
     // There is deliberately NO enable flag here: space is the mod's subject rather than one of its
     // features, and it registers wherever the mod runs. See SpaceSubsystem.shouldRegister.
@@ -257,14 +269,10 @@ public class StellurgyConfiguration {
     public LinkedList<Block> blackListRocketBlocks = new LinkedList<>();
     @ConfigProperty
     public LinkedList<String> standardGeodeOres = new LinkedList<>();
-    @ConfigProperty(needsSync = true, internalType = Integer.class)
-    public HashSet<Integer> initiallyKnownPlanets = new HashSet<>();
     @ConfigProperty
     public boolean geodeOresBlackList;
     @ConfigProperty
     public boolean laserDrillOresBlackList;
-    @ConfigProperty(needsSync = true, keyType = String.class, valueType = Asteroid.class)
-    public HashMap<String, Asteroid> asteroidTypes = new HashMap<>();
     @ConfigProperty
     public int oxygenVentSize;
     @ConfigProperty
@@ -486,33 +494,20 @@ public class StellurgyConfiguration {
         }
     }
 
+    /**
+     * The configuration in force for the CALLER: a server's own; on a client, the configuration the
+     * connected server sent, or the client's own when it sent none (a local server, which runs this
+     * very configuration) or there is no connection. Before Forge has injected the proxy no
+     * connection can exist, so the process's own is the answer.
+     */
     public static StellurgyConfiguration getCurrentConfig() {
-        if (currentConfig == null) {
-            logger.error("Had to generate a new config, this shouldn't happen");
-            return new StellurgyConfiguration();
-        }
-        return currentConfig;
-    }
-
-    public static void loadConfigFromServer(StellurgyConfiguration config) {
-        if (usingServerConfig)
-            throw new IllegalStateException("Cannot load server config when already using server config!");
-
-        diskConfig = currentConfig;
-        currentConfig = config;
-        usingServerConfig = true;
-    }
-
-    public static void useClientDiskConfig() {
-        if (usingServerConfig) {
-            currentConfig = diskConfig;
-            usingServerConfig = false;
-        }
+        dev.stannismod.stellurgy.common.CommonProxy proxy = dev.stannismod.stellurgy.Stellurgy.proxy;
+        return proxy == null ? ownConfig : proxy.configInForce(ownConfig);
     }
 
     public static void loadPreInit() {
 
-        StellurgyConfiguration stellurgyConfig = getCurrentConfig();
+        StellurgyConfiguration stellurgyConfig = ownConfig;
         net.minecraftforge.common.config.Configuration config = stellurgyConfig.config;
 
         //General
@@ -602,7 +597,7 @@ public class StellurgyConfiguration {
         stellurgyConfig.telescopeSurveyDataPerStep = config.get(PLANET, "telescopeSurveyDataPerStep", 0, "Distance data one step of a survey consumes, drawn from the observatory's data buses the same way its asteroid scan draws. A step with too little data waits rather than resolving, so an unfed instrument stalls instead of working for free. Zero (the default) means a survey costs nothing - what it should cost is a balance question, not a mechanic one.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.telescopeObscuredAtMagnitudes = config.get(PLANET, "telescopeObscuredAtMagnitudes", 5d, "How much dust a survey can see THROUGH, in magnitudes of visual extinction - the unit astronomy measures interstellar dust in. A nebula between the instrument and what it is looking at dims it; past this much, the survey can still tell that a system is there but can no longer make out its bodies, and writes the bare coordinate instead. The default is the real boundary at which faint objects behind a cloud disappear: ~1 magnitude is noticeable dimming, ~5 is where things start vanishing, ~10 is an opaque dark cloud. Raise it to see through thicker clouds; set it to 0 to turn concealment off entirely.", 0d, Double.MAX_VALUE).getDouble();
         stellurgyConfig.telescopePassiveRadiusSteps = config.get(PLANET, "telescopePassiveRadiusSteps", 1, "How far, in STAR TERRITORIES, the passive local radar reaches around the observatory's own. 0 is the system you are standing in and nothing else; 1 (the default) adds the twenty-six territories around it. Territories and not cells: one look already yields every body of the system that owns it, so a radius counted in cells never reached a neighbour at all - two cells was a fifth of the way to the innermost planet of the system the instrument was already standing in. Passive costs nothing; the pointing is what looks far away.", 0, Integer.MAX_VALUE).getInt();
-        DimensionManager.getInstance().setDimOffset(config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets."));
+        stellurgyConfig.minDimension = config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets.");
         stellurgyConfig.canPlayerRespawnInSpace = config.get(PLANET, "allowPlanetRespawn", false, "Allow bed respawn on planets with breathable air.").getBoolean();
         stellurgyConfig.forcePlayerRespawnInSpace = config.get(PLANET, "forcePlanetRespawn", false, "Allow bed respawn on planets even without breathable air. Requires 'allowPlanetRespawn=true'.").getBoolean();
         stellurgyConfig.perDimWorldInfo = config.get(PLANET, Constants.CONFIG_KEY_PER_DIM_WORLD_INFO, true, "Master switch for Stellurgy's per-dimension WorldInfo overrides on planets: per-planet weather AND per-planet time-of-day / working beds. When false, planets use the vanilla shared-overworld WorldInfo and NONE of the weather/time mixins are woven — fully classic behaviour. The sub-toggles below (enableCustomPlanetWeather) only take effect when this is true.").getBoolean();
@@ -736,7 +731,7 @@ public class StellurgyConfiguration {
     }
 
     public static void loadPostInit() {
-        StellurgyConfiguration stellurgyConfig = getCurrentConfig();
+        StellurgyConfiguration stellurgyConfig = ownConfig;
 
         //Register fuels
         logger.info("Start registering liquid rocket fuels");
@@ -1192,8 +1187,9 @@ public class StellurgyConfiguration {
         return this;
     }
 
+    /** Writes this process's own configuration back to its file; a server's copy has no file here. */
     public void save() {
-        if (!usingServerConfig)
+        if (this == ownConfig)
             config.save();
     }
 

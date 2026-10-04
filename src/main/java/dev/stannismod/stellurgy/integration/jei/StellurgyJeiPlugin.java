@@ -100,62 +100,53 @@ public class StellurgyJeiPlugin implements IModPlugin {
     public static final String asteroidsUUID = "stellurgy.asteroids";
     public static final String gasGiantsUUID = GasGiantCategory.UID;
     /**
-     * JEI's own helper facade, as handed to {@link #register}. OWNER: the CLIENT — JEI loads its
-     * plugins once per client and this object is JEI's, for as long as JEI is there; nothing here
-     * releases it because nothing here may.
-     *
-     * <p>Static rather than an instance field because the recipe-refresh entry points on this class
-     * are static: they are called from outside a JEI callback, where the plugin instance JEI built
-     * is not in reach.</p>
+     * JEI's helpers and runtime, handed over by JEI's own callbacks. JEI builds this plugin and holds
+     * it, so these are static by transitivity; their WRITER is JEI, treated like Forge for the
+     * plugins it owns (maintainer ruling 2026-10-02), and each is written once at the start of a JEI
+     * runtime's life — again when JEI restarts, which begins a new one — and only read until then.
      */
-    private static IJeiHelpers jeiHelpers;
+    private IJeiHelpers jeiHelpers;
 
-    private static IJeiRuntime jeiRuntime;
-    private static final List<GasGiantWrapper> currentGasGiantRecipes = new ArrayList<>();
-    private static boolean gasRefreshQueued = false;
+    /** See {@link #jeiHelpers}. */
+    private IJeiRuntime jeiRuntime;
 
-
+    /** Whether this plugin has put its refresh tick on the bus; JEI may call the callbacks again. */
+    private boolean refreshTickRegistered;
 
     @Override
     public void onRuntimeAvailable(IJeiRuntime runtime) {
         jeiRuntime = runtime;
-        //debug
-        //Stellurgy.logger.info("[JEI][GasGiants] onRuntimeAvailable");
+        if (!refreshTickRegistered) {
+            refreshTickRegistered = true;
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new JeiClientTickHandler(this));
+        }
     }
 
-    public static void requestGasGiantRefresh() {
-        gasRefreshQueued = true;
-    }
-    public static boolean hasQueuedGasGiantRefresh() {
-        return gasRefreshQueued;
-    }
-    public static void tryApplyQueuedGasGiantRefresh() {
-        if (!gasRefreshQueued) return;
-
+    /**
+     * Replace the gas-giant recipes JEI shows with the ones the connected server's galaxy holds.
+     * What is removed is asked of JEI's own registry, which is the only list of what JEI shows.
+     *
+     * @return whether the refresh ran; false while JEI's runtime or the client world is not up yet,
+     *         and the caller tries again later
+     */
+    @SuppressWarnings("unchecked")
+    boolean refreshGasGiantRecipes() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc == null || mc.world == null) return;
-        if (jeiRuntime == null) return;
+        if (mc == null || mc.world == null || jeiRuntime == null) return false;
 
         IRecipeRegistry recipeRegistry = jeiRuntime.getRecipeRegistry();
-        if (recipeRegistry == null) return;
-
-        //Stellurgy.logger.info("[JEI][GasGiants] removing old recipes count=" + currentGasGiantRecipes.size());
-        for (GasGiantWrapper recipe : currentGasGiantRecipes) {
-            recipeRegistry.removeRecipe(recipe, gasGiantsUUID);
+        if (recipeRegistry == null) return false;
+        mezz.jei.api.recipe.IRecipeCategory<GasGiantWrapper> category =
+                recipeRegistry.getRecipeCategory(gasGiantsUUID);
+        if (category != null) {
+            for (GasGiantWrapper shown : new ArrayList<>(recipeRegistry.getRecipeWrappers(category))) {
+                recipeRegistry.removeRecipe(shown, gasGiantsUUID);
+            }
         }
-        currentGasGiantRecipes.clear();
-
-        List<GasGiantWrapper> rebuilt = GasGiantRecipeMaker.getRecipes(jeiHelpers);
-        //Stellurgy.logger.info("[JEI][GasGiants] rebuilt recipe count=" + rebuilt.size());
-
-        for (GasGiantWrapper recipe : rebuilt) {
-            //Stellurgy.logger.info("[JEI][GasGiants] adding recipe dim=" + recipe.getDimId() + " planet=" + recipe.getPlanetName());
+        for (GasGiantWrapper recipe : GasGiantRecipeMaker.getRecipes(jeiHelpers)) {
             recipeRegistry.addRecipe(recipe, gasGiantsUUID);
         }
-        currentGasGiantRecipes.addAll(rebuilt);
-
-        gasRefreshQueued = false;
-        //Stellurgy.logger.info("[JEI][GasGiants] applied runtime recipe refresh, count=" + currentGasGiantRecipes.size());
+        return true;
     }
 
     /* newer JEI doesnt have this

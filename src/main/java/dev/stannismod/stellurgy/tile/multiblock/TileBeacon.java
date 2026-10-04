@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class TileBeacon extends TileMultiPowerConsumer {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]
             {
                     {

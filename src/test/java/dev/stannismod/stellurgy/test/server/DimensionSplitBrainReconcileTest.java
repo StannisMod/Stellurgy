@@ -38,10 +38,17 @@ import static org.junit.Assert.assertTrue;
  * world must still register that dimension. Pre-fix it is missing from the Stellurgy
  * registry; post-fix a reconciliation loop registers every temp.dat dim the XML
  * pass skipped.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class DimensionSplitBrainReconcileTest {
 
     private static final String AR_DIMS = "stellurgyDimensions";
+    /**
+     * A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own matcher.
+     */
     private static final Pattern PLANET_DIMID =
             Pattern.compile("<planet\\b[^>]*\\bDIMID=\"(-?\\d+)\"");
 

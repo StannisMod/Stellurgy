@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.After;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -103,13 +102,6 @@ public class PlanetDerivationTest {
     /** @see #RENORMALISED_RATIO_MIN */
     private static final double RENORMALISED_RATIO_MAX = 2.5d;
 
-    @After
-    public void restoreGlobals() {
-        // Both are process-wide seams; a test that installs one must not leak it into the next class.
-        PlanetTypes.resetToStock();
-        PlanetTypes.setWorldTypeAvailability(null);
-    }
-
     private static GalacticCoord cell(long sx, long sy, long sz) {
         return GalacticCoord.ofSectorLocal(sx, sy, sz, 0L, 0L, 0L);
     }
@@ -136,7 +128,7 @@ public class PlanetDerivationTest {
             // One cell per body, as the placement guarantees; the exact cell is the generator's business,
             // so a distinct synthetic one is enough to key the per-body draws.
             out.add(PlanetDerivation.derive(seed, anchor, cell(anchor.sectorX() + i + 1, 0, 0), 0, s,
-                    false, orbit));
+                    false, orbit, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce()));
         }
         return out;
     }
@@ -201,7 +193,7 @@ public class PlanetDerivationTest {
         int seen = 0;
 
         for (int i = 0; i < 400 && !sameGravityDifferentDay; i++) {
-            BodyProfile p = PlanetDerivation.derive(SEED + i, anchor, cell(600 + i, 7, 0), 0, s, false, 140);
+            BodyProfile p = PlanetDerivation.derive(SEED + i, anchor, cell(600 + i, 7, 0), 0, s, false, 140, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
             int spin = p.rotationalPeriodTicks();
             seen++;
             assertTrue("a day must stay inside the drawn band: " + spin,
@@ -224,8 +216,8 @@ public class PlanetDerivationTest {
     public void aDrawnDayIsStillDeterministic() {
         GalacticCoord anchor = cell(610, 0, 0);
         StellarBody s = sol();
-        BodyProfile a = PlanetDerivation.derive(SEED, anchor, cell(611, 2, 0), 0, s, false, 150);
-        BodyProfile b = PlanetDerivation.derive(SEED, anchor, cell(611, 2, 0), 0, s, false, 150);
+        BodyProfile a = PlanetDerivation.derive(SEED, anchor, cell(611, 2, 0), 0, s, false, 150, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
+        BodyProfile b = PlanetDerivation.derive(SEED, anchor, cell(611, 2, 0), 0, s, false, 150, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
         assertEquals(a.rotationalPeriodTicks(), b.rotationalPeriodTicks());
     }
 
@@ -238,8 +230,8 @@ public class PlanetDerivationTest {
             GalacticCoord anchor = cell(x, 3, -1);
             for (int i = 0; i < 6; i++) {
                 long orbit = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, 6, s);
-                BodyProfile a = PlanetDerivation.derive(SEED, anchor, cell(x, 3, i), 0, s, false, orbit);
-                BodyProfile b = PlanetDerivation.derive(SEED, anchor, cell(x, 3, i), 0, s, false, orbit);
+                BodyProfile a = PlanetDerivation.derive(SEED, anchor, cell(x, 3, i), 0, s, false, orbit, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
+                BodyProfile b = PlanetDerivation.derive(SEED, anchor, cell(x, 3, i), 0, s, false, orbit, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
                 assertEquals("type must be stable", a.typeName(), b.typeName());
                 assertEquals("terrain must be stable", a.terrain(), b.terrain());
                 assertEquals("mass must be stable", a.massEarths(), b.massEarths(), 0d);
@@ -259,8 +251,8 @@ public class PlanetDerivationTest {
         StellarBody s = sol();
         GalacticCoord anchor = cell(4, 0, 0);
         GalacticCoord body = cell(9, 1, 2);
-        BodyProfile inFive = PlanetDerivation.derive(SEED, anchor, body, 0, s, false, 140);
-        BodyProfile inTwelve = PlanetDerivation.derive(SEED, anchor, body, 0, s, false, 140);
+        BodyProfile inFive = PlanetDerivation.derive(SEED, anchor, body, 0, s, false, 140, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
+        BodyProfile inTwelve = PlanetDerivation.derive(SEED, anchor, body, 0, s, false, 140, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
         assertEquals(inFive.typeName(), inTwelve.typeName());
         assertEquals(inFive.massEarths(), inTwelve.massEarths(), 0d);
     }
@@ -272,8 +264,8 @@ public class PlanetDerivationTest {
         StellarBody s = sol();
         GalacticCoord anchor = cell(0, 0, 0);
         GalacticCoord shared = cell(5, 0, 0);
-        BodyProfile planet = PlanetDerivation.derive(SEED, anchor, shared, 0, s, false, 100);
-        BodyProfile moon = PlanetDerivation.derive(SEED, anchor, shared, 1, s, true, 100);
+        BodyProfile planet = PlanetDerivation.derive(SEED, anchor, shared, 0, s, false, 100, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
+        BodyProfile moon = PlanetDerivation.derive(SEED, anchor, shared, 1, s, true, 100, PlanetTypes.stock(), new dev.stannismod.stellurgy.universe.ReportOnce());
         assertFalse("a moon must not inherit its parent's exact bulk",
                 planet.massEarths() == moon.massEarths()
                         && planet.radiusEarths() == moon.radiusEarths());
@@ -584,11 +576,12 @@ public class PlanetDerivationTest {
                 .terrain(TerrainOption.ofNative(3, 2))
                 .terrain(TerrainOption.ofTemplate("ruins", 1))
                 .build();
-        PlanetTypes.setWorldTypeAvailability(name -> false);
+        PlanetTypes types = PlanetTypes.stock().withWorldTypeAvailability(name -> false);
 
         Map<String, Integer> drawn = new HashMap<>();
         for (int i = 0; i < 4000; i++) {
-            TerrainOption option = PlanetTypes.drawTerrain(preset, i * 0x9E3779B97F4A7C15L);
+            TerrainOption option = types.drawTerrain(preset, i * 0x9E3779B97F4A7C15L,
+                    new dev.stannismod.stellurgy.universe.ReportOnce());
             String key = option.source() + ":" + option.genType() + option.template();
             drawn.merge(key, 1, Integer::sum);
         }
@@ -611,10 +604,11 @@ public class PlanetDerivationTest {
                 .terrain(TerrainOption.ofWorldType("PRESENT", "opts", 99))
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build();
-        PlanetTypes.setWorldTypeAvailability(name -> "PRESENT".equals(name));
+        PlanetTypes types = PlanetTypes.stock().withWorldTypeAvailability(name -> "PRESENT".equals(name));
         int foreign = 0;
         for (int i = 0; i < 500; i++) {
-            if (PlanetTypes.drawTerrain(preset, i * 0x9E3779B97F4A7C15L).source()
+            if (types.drawTerrain(preset, i * 0x9E3779B97F4A7C15L,
+                    new dev.stannismod.stellurgy.universe.ReportOnce()).source()
                     == TerrainSource.MOD_WORLDTYPE) {
                 foreign++;
             }
@@ -629,8 +623,9 @@ public class PlanetDerivationTest {
                 .terrain(TerrainOption.ofWorldType("A", "", 1))
                 .terrain(TerrainOption.ofWorldType("B", "", 1))
                 .build();
-        PlanetTypes.setWorldTypeAvailability(name -> false);
-        TerrainOption option = PlanetTypes.drawTerrain(preset, 12345L);
+        PlanetTypes types = PlanetTypes.stock().withWorldTypeAvailability(name -> false);
+        TerrainOption option = types.drawTerrain(preset, 12345L,
+                new dev.stannismod.stellurgy.universe.ReportOnce());
         assertEquals("a world must still generate when its type's mods are all absent",
                 TerrainSource.NATIVE, option.source());
     }
@@ -644,12 +639,12 @@ public class PlanetDerivationTest {
                 .pressure(0, 1000).temperature(0, 1000).gravity(0, 400).build());
         table.add(PlanetTypePreset.builder("rare").weight(10)
                 .pressure(0, 1000).temperature(0, 1000).gravity(0, 400).build());
-        PlanetTypes.setPresets(table);
+        PlanetTypes types = PlanetTypes.authored(table);
 
         Map<String, Integer> counts = new HashMap<>();
         for (int i = 0; i < 5000; i++) {
-            PlanetTypePreset p = PlanetTypes.drawType(100, albedo -> 280, 100, false,
-                    i * 0x9E3779B97F4A7C15L);
+            PlanetTypePreset p = types.drawType(100, albedo -> 280, 100, false,
+                    i * 0x9E3779B97F4A7C15L, new dev.stannismod.stellurgy.universe.ReportOnce());
             counts.merge(p.name(), 1, Integer::sum);
         }
         assertTrue("both overlapping presets must be reachable — first match would never draw the "
@@ -664,9 +659,10 @@ public class PlanetDerivationTest {
         List<PlanetTypePreset> table = new ArrayList<>();
         table.add(PlanetTypePreset.builder("narrow").weight(1)
                 .pressure(0, 10).temperature(0, 10).gravity(0, 10).build());
-        PlanetTypes.setPresets(table);
+        PlanetTypes types = PlanetTypes.authored(table);
         assertEquals("silently substituting a preset would hide the coverage gap for ever",
-                null, PlanetTypes.drawType(900, albedo -> 900, 300, false, 1L));
+                null, types.drawType(900, albedo -> 900, 300, false, 1L,
+                        new dev.stannismod.stellurgy.universe.ReportOnce()));
     }
 
     /** A star archetype that varies across the sweep, so no test measures one kind of system only. */

@@ -50,7 +50,9 @@ public final class StellurgyWorldGravity {
 
     private StellurgyWorldGravity() {}
 
-    /** Nothing to fall towards. Allocated once; callers must not mutate what they are handed. */
+    /** Nothing to fall towards. Allocated once; callers must not mutate what they are handed — it is
+     *  handed out as the read-only {@code Vector3dc}. Effectively final, process lifetime: built once
+     *  at class initialisation. */
     private static final Vector3dc WEIGHTLESS = new Vector3d();
 
     /**

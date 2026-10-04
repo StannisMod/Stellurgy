@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.HashMap;
+import java.util.Map;
 
 import net.minecraft.entity.player.EntityPlayer;
 
@@ -77,10 +77,10 @@ public abstract class MixinAtmosphereChangeEvents {
      */
     @Redirect(method = "onTick",
             at = @At(value = "INVOKE",
-                    target = "Ljava/util/HashMap;put(Ljava/lang/Object;Ljava/lang/Object;)"
+                    target = "Ljava/util/Map;put(Ljava/lang/Object;Ljava/lang/Object;)"
                             + "Ljava/lang/Object;"),
             require = 1)
-    private Object stellurgyTest$atmosphereCommitted(HashMap<EntityPlayer, IAtmosphere> cache,
+    private Object stellurgyTest$atmosphereCommitted(Map<EntityPlayer, IAtmosphere> cache,
                                               Object player, Object atmosphere) {
         Object previous = cache.put((EntityPlayer) player, (IAtmosphere) atmosphere);
         EntityPlayer who = (EntityPlayer) player;

@@ -29,6 +29,8 @@ import static com.googlecode.cqengine.query.QueryFactory.nullableAttribute;
 /**
  * One of these objects will represent a ship. You can obtain a physics object for that ship (if one
  * is available), by calling {@link IPhysObjectWorld#getPhysObjectFromUUID(UUID)}.
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public class ShipData {
     /**

@@ -10,6 +10,7 @@ import net.minecraft.world.World;
 
 public class EntityLaserBolt extends EntityThrowable implements IEnergyProjectile {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DamageSource LASER_DAMAGE = new DamageSource("affs.laser").setProjectile().setMagicDamage();
 
     public EntityLaserBolt(World worldIn) {

@@ -46,7 +46,7 @@ public class GuiCodeDevice extends GuiAffsBase {
     protected void actionPerformed(GuiButton button) throws IOException {
         super.actionPerformed(button);
         if (button.id == 1) {
-            AdvancedForceFieldSystem.NETWORK.sendToServer(PacketSyncCodeValue.forItem(container.getHand(), codeField.getText()));
+            dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToServer(PacketSyncCodeValue.forItem(container.getHand(), codeField.getText()));
             saveFlashTicks = SAVE_FLASH_DURATION;
         }
     }

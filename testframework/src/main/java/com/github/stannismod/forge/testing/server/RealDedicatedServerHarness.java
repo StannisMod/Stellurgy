@@ -528,14 +528,16 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      * seated craft's ship identity" while the child had already printed
      * {@code Critical injection failure: LVT … has incompatible changes}. The loudness existed the
      * whole time; nobody could hear it.
+     *
+     * <p>A constant: an unmodifiable list of strings over a backing list nothing else references.</p>
      */
-    private static final String[] FATAL_MARKERS = {
-        "Critical injection failure",
-        "InvalidMixinException",
-        "InvalidInjectionException",
-        "Mixin apply for mod",
-        "MixinTransformerError",
-    };
+    private static final java.util.List<String> FATAL_MARKERS = java.util.Collections.unmodifiableList(
+            java.util.Arrays.asList(
+                    "Critical injection failure",
+                    "InvalidMixinException",
+                    "InvalidInjectionException",
+                    "Mixin apply for mod",
+                    "MixinTransformerError"));
 
     /** Put a child-side fatal on the TEST runner's own stdout, where a failure report can see it. */
     private static void echoIfFatal(String line) {

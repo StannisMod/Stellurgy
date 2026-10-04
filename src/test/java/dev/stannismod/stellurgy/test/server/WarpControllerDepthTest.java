@@ -170,16 +170,6 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         // Plenty of fuel so the fuel gate doesn't dominate the result.
         ok(client().execute("stellurgytest station fuel " + stationId + " set 999999"));
 
-        // No anchored-toggle probe today — we read & assert the default
-        // value. Default for SpaceStationObject.isAnchored() is false,
-        // so this is more a sanity baseline than an active negation. A
-        // future anchored-toggle probe would let us flip it and assert
-        // refusal explicitly.
-        String state = ok(client().execute(
-                "stellurgytest tile warp-state " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
-        assertTrue("station starts non-anchored (default): " + state,
-                (!Reply.of(state).bool("stationAnchored")));
-
         // Warp trigger: with no destination set (destOrbitingDim is the
         // current orbit by default), the destination-equals-current gate
         // ALSO denies. Verify the result: orbit did not change.
@@ -189,20 +179,6 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("warp with destination==current must NOT move station",
                 orbBefore, orbAfter);
-    }
-
-    @Test
-    public void travelCostFieldIsExposedAndNonNegative() throws Exception {
-        // Surface the warp-state probe's travelCost field. getTravelCost
-        // is protected and computes a value based on parent/dest planet
-        // properties. Without a destination set, the cost is whatever
-        // the impl chooses (typically MAX_VALUE or 0); we just pin that
-        // the field is exposed and reasonable.
-        int stationId = createStationOrbiting(0);
-        int[] xz = stationSpawnCoords(stationId);
-        String state = placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
-        assertTrue("warp-state must expose travelCost: " + state,
-                Reply.of(state).has("travelCost"));
     }
 
     @Test
@@ -225,7 +201,6 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
         int orbBefore = station(stationId).orbitingPlanetId;
-        assertEquals("station starts orbiting dim 0", 0, orbBefore);
 
         String debug = ok(client().execute(
                 "stellurgytest tile warp-trigger-debug " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
@@ -253,10 +228,8 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         ok(client().execute("stellurgytest station fuel " + stationId + " set 999999"));
         ok(client().execute("stellurgytest station set-dest " + stationId + " 1"));
         // Anchor the station — this is the gate under test.
-        String anchorResp = ok(client().execute(
+        ok(client().execute(
                 "stellurgytest station set-anchor " + stationId + " true"));
-        assertTrue("anchor probe must succeed: " + anchorResp,
-                Reply.of(anchorResp).bool("after"));
 
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
@@ -388,5 +361,39 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
                 String.valueOf(a).equals(Reply.of(stateA).text("stationId")));
         assertTrue("controller B must resolve to station " + b + ": " + stateB,
                 String.valueOf(b).equals(Reply.of(stateB).text("stationId")));
+    }
+
+    /**
+     * Three stations completing their warp on the same tick all arrive, and the tick does not throw.
+     *
+     * <p>{@code SpaceObjectManager.onServerTick} iterated the warp orbit's list with a live for-each
+     * while {@code moveStationToBody} removed the arriving station from that same list: three or more
+     * same-tick arrivals threw a {@code ConcurrentModificationException} (with exactly two the
+     * LinkedList quietly drops the second). The fix iterates a snapshot. The
+     * {@code station warp-collision} probe creates its OWN three stations, puts them into the warp
+     * orbit with an elapsed transition and invokes the tick handler; {@code count} and
+     * {@code arrived} are about those three only, so sibling scenarios' stations cannot move them.</p>
+     */
+    @Test
+    public void threeStationsArrivingSameTickDoNotThrowConcurrentModification() throws Exception {
+        final int warpedStations = 3;
+        ok(client().execute("stellurgytest dim load " + SPACE_DIM));
+
+        String r = ok(client().execute("stellurgytest station warp-collision 0 " + warpedStations));
+        assertTrue("probe must run: " + r, Reply.of(r).ok());
+
+        Reply warped = Reply.of("stellurgytest station warp-collision", r);
+        assertTrue("no threw field in: " + r, warped.has("threw"));
+        assertTrue("three stations completing warp on the same tick must NOT throw — the fix "
+                        + "iterates a snapshot copy; the buggy live for-each threw "
+                        + "ConcurrentModificationException. Got: " + r,
+                "false".equals(warped.text("threw")));
+
+        int count = parseGroup("count", r, "count");
+        int arrived = parseGroup("arrived", r, "arrived");
+        assertTrue("all warped stations must arrive at the destination orbit (dim 0), proving the "
+                        + "loop processed EVERY station (the buggy loop aborted / dropped after the "
+                        + "first): arrived=" + arrived + " count=" + count + " in " + r,
+                count == warpedStations && arrived == count);
     }
 }

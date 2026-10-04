@@ -198,6 +198,15 @@ public class TileAdvancedFlightComputer extends TileEntity
      */
     public volatile FreeFlightInput pilotInput = null;
 
+    /** What this client's pilot is commanding this ship; written only on the client. */
+    private final dev.stannismod.stellurgy.client.PilotCommand pilotCommand =
+            new dev.stannismod.stellurgy.client.PilotCommand();
+
+    /** What this client's pilot is commanding this ship. */
+    public dev.stannismod.stellurgy.client.PilotCommand pilotCommand() {
+        return pilotCommand;
+    }
+
     /**
      * The pilot's commanded world-frame velocity (blocks/s) that the force controller realizes,
      * or {@code null} when this computer commands nothing. Written by {@link #update()} from the
@@ -1126,7 +1135,7 @@ public class TileAdvancedFlightComputer extends TileEntity
         return dev.stannismod.stellurgy.space.ShipEntryController.effectiveEntryCeiling(
                 props != null ? props.getOrbitHeight()
                         : dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().orbit,
-                VSIntegration.shipYPositionMaximum());
+                VSIntegration.shipYPositionMaximum(world));
     }
 
     /**
@@ -1270,6 +1279,9 @@ public class TileAdvancedFlightComputer extends TileEntity
      * The pilot's frame, in the ship's own: the one the flight law's body frame is built on
      * ({@code FreeFlightPhysics.bodyBasisFromQuat} at identity — forward, right, up), asked of it
      * rather than restated, so "right" means the same thing to the law and to the authority table.
+     *
+     * <p>Effectively final, process lifetime: built once at class initialisation; a
+     * {@code ControlFrame} is immutable.</p>
      */
     static final dev.stannismod.stellurgy.ship.control.ControlFrame HELM_FRAME = helmFrame();
 
@@ -1860,44 +1872,6 @@ public class TileAdvancedFlightComputer extends TileEntity
             saturated = command.isSaturated();
         }
         lastSaturated = saturated;
-
-        // Flight recorder, physics-thread channel: one sample per physics step. This is the clock
-        // the ship's velocity actually integrates on, and it is NOT the game tick - an interval
-        // that wanders here is the physics loop failing to hold its rate, which no server-side tick
-        // measurement can see. Costs a handful of stores into a preallocated ring.
-        // The PHYSICS transform, not the game-tick one. They are different objects and only one of
-        // them advances on this clock: sampling getShipTransform() from a 60 Hz hook gives a pose
-        // that only changes 20 times a second, so two thirds of the samples read as "did not move"
-        // and the rest as a triple step - a metronomic ship reported as a stuttering one, by the
-        // instrument alone. Measured on the first calibration run: median step 0.0, p95 2.0.
-        ShipTransform pose = physicsPose;
-        Vector3d vNow = calc.getLinearVelocity();
-        double cmdSpeed = vCmd == null || vCmd.length < 3 ? 0.0
-                : Math.sqrt(vCmd[0] * vCmd[0] + vCmd[1] * vCmd[1] + vCmd[2] * vCmd[2]);
-        BlockPos here = getPos();
-        dev.stannismod.stellurgy.command.test.MotionTrace.phys(
-                dev.stannismod.stellurgy.command.test.MotionTrace.keyOf(
-                        physo.getWorld().provider.getDimension(),
-                        here.getX(), here.getY(), here.getZ()),
-                // The WORLD tick this physics step ran against, read across the thread boundary as
-                // a plain long. This loop runs on the physics thread at its own rate, so several
-                // steps share one world tick and the healthy reading is that every tick got at
-                // least one - never that each carried exactly one. A counter incremented here
-                // would count steps and call them ticks, and could not show a missed tick at all.
-                physo.getWorld().getTotalWorldTime(),
-                // WHO drove this step, and on WHICH ship. A block's flight computer is one object on
-                // one ship, so a window carrying two of either is a state to go and look at rather
-                // than a number to average - and the two cases have different causes: two
-                // controllers on one ship is a stale tile instance that outlived its replacement in
-                // the ship's controller set, two ships is two craft claiming one computer.
-                System.identityHashCode(this),
-                physo.getUuid() == null ? 0.0 : physo.getUuid().hashCode(),
-                dt, pose.getPosX(), pose.getPosY(), pose.getPosZ(),
-                Math.sqrt(vNow.x * vNow.x + vNow.y * vNow.y + vNow.z * vNow.z),
-                cmdSpeed, calc.getMass(),
-                // "Clamped": the hull delivered less than the law asked for. At its authority the
-                // controller is no longer tracking its command, which is the fact worth recording.
-                saturated);
 
         calc.addForceAndTorque(force, torque);
     }

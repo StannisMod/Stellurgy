@@ -303,6 +303,35 @@ final class VSBridge {
     }
 
     /**
+     * The attitude the ship managing the block at {@code pos} had at the PREVIOUS game tick, as
+     * {@code {w,x,y,z}}, or {@code null} if no ship manages it. With {@link #getShipAttitude} it is the
+     * pair a frame interpolates between; the ship advances both together once per tick.
+     */
+    static double[] shipPrevAttitude(World world, BlockPos pos) {
+        Optional<PhysicsObject> managing = ValkyrienUtils.getPhysoManagingBlock(world, pos);
+        return managing.isPresent() ? prevTickRotation(managing.get()) : null;
+    }
+
+    /** {@link #shipPrevAttitude}'s by-id sibling: the previous-tick attitude of ship {@code shipId}. */
+    static double[] shipPrevAttitudeForId(World world, String shipId) {
+        try {
+            PhysicsObject physo = physoById(world, shipId);
+            return physo == null ? null : prevTickRotation(physo);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** The previous tick's rotation; a ship that has not ticked yet has no previous tick and answers
+     *  its current one, which is what an interpolation over a ship that has not moved means. */
+    private static double[] prevTickRotation(PhysicsObject physo) {
+        ShipTransform prev = physo.getShipData().getPrevTickShipTransform();
+        Quaterniond q = (prev != null ? prev : physo.getShipData().getShipTransform())
+                .rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
+        return new double[]{q.w, q.x, q.y, q.z};
+    }
+
+    /**
      * The world-frame POSITION {@code [x,y,z]} of the ship managing the block at {@code pos}
      * (its transform position — where the ship's pose actually is right now), or {@code null}
      * if no ship manages it. Managed-block-keyed like {@link #getShipAttitude}, so on a shared
@@ -320,33 +349,24 @@ final class VSBridge {
     }
 
     /**
-     * The physics mod's hard ceiling for a ship's world-frame altitude ("Ship Y Position
-     * Maximum"): VS clamps every ship's pose to this Y each physics step, so no ship can climb
-     * above it under any thrust, whatever Stellurgy believes about orbit heights.
+     * The physics mod's hard ceiling for a ship's world-frame altitude in {@code world}: VS clamps
+     * every ship's pose there to this Y each physics step, so no ship can climb above it under any
+     * thrust, whatever Stellurgy believes about orbit heights.
      */
-    static double shipYPositionMaximum() {
-        return org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit;
+    static double shipYPositionMaximum(World world) {
+        return org.valkyrienskies.mod.common.physics.ShipAltitudeBand.of(world).upper();
     }
 
     /**
-     * Widen the physics mod's ship altitude range so it covers AT LEAST {@code [floor, ceiling]}.
-     * The clamp is a pair of global statics applied per physics step; the space cells realize ship
-     * poses megablocks from the stock values, and a ship's own thrust can never carry it past
-     * either clamp - so the range must cover the whole pose band BEFORE the first ship arrives,
-     * deterministically, not be ratcheted up teleport-by-teleport. Never narrows a range the user
-     * configured wider; the widening is per-session (the VS config file is not written back).
+     * Widen {@code world}'s ship altitude band so it covers AT LEAST {@code [floor, ceiling]}. The
+     * space cells realize ship poses megablocks from the stock values, and a ship's own thrust can
+     * never carry it past either clamp - so the band must cover the whole pose range BEFORE the first
+     * ship arrives, deterministically, not be ratcheted up teleport-by-teleport. Never narrows a band
+     * the operator configured wider, and never touches the configuration: the widening belongs to the
+     * world and ends with it.
      */
-    static void widenShipAltitudeRange(double floor, double ceiling, Logger logger) {
-        if (org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit < ceiling) {
-            logger.info("Raising the physics ship altitude ceiling {} -> {} to cover the space cells.",
-                    org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit, ceiling);
-            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = ceiling;
-        }
-        if (org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit > floor) {
-            logger.info("Lowering the physics ship altitude floor {} -> {} to cover the space cells.",
-                    org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit, floor);
-            org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit = floor;
-        }
+    static void coverShipAltitudeBand(World world, double floor, double ceiling) {
+        org.valkyrienskies.mod.common.physics.ShipAltitudeBand.of(world).cover(floor, ceiling);
     }
 
     /**
@@ -958,16 +978,6 @@ final class VSBridge {
     }
 
     /**
-     * TEST/HEADLESS: set VS's "ships permanently loaded" flag. Without a player nearby VS unloads a
-     * freshly assembled ship within a tick, so its physics object drops out of the loaded set between
-     * probe calls; enabling this keeps ships loaded so a headless server test can observe them across
-     * calls. (This is the {@code VSConfig.SHIP_LOADING_SETTINGS.permanentlyLoaded} lever.)
-     */
-    static void setShipsPermanentlyLoaded(boolean value) {
-        org.valkyrienskies.mod.common.config.VSConfig.SHIP_LOADING_SETTINGS.permanentlyLoaded = value;
-    }
-
-    /**
      * PARK the ship nearest to {@code (x,y,z)} in the queryable registry: disable its physics so it
      * holds position while {@code ShipTransit} advances its coordinate logically (a physically-flying
      * parked ship in a shared hyperspace world would drift lanes into each other). Works off the
@@ -1018,8 +1028,8 @@ final class VSBridge {
      * delta, and mirror the transform into the loaded physics object when there is one. The subspace
      * shipyard blocks do not move; only the world-frame pose does (entities are NOT capped by the 256
      * build height — vanilla's only hard Y line is the void-kill below −64). VS's per-tick world-Y
-     * clamps ({@code VSConfig.shipUpperLimit}/{@code shipLowerLimit}) are widened when the destination
-     * lies outside them, or the physics tick would immediately drag the ship back. The ship should be
+     * clamp (the destination world's {@code ShipAltitudeBand}) is widened when the destination
+     * lies outside it, or the physics tick would immediately drag the ship back. The ship should be
      * PARKED across the write ({@link #parkShipAt}) so the physics thread is not concurrently
      * rewriting the transform; unpark after. Returns false when no ship is near the source.
      */
@@ -1043,16 +1053,14 @@ final class VSBridge {
         if (ship == null) {
             return false;
         }
-        // Safety net only: production space cells get their whole pose band covered ONCE at
-        // subsystem registration (raiseShipCeilingTo), so for them this never fires. It remains
-        // for destinations outside any pre-raised range (probe teleports to arbitrary Y, and
-        // deployments where the subsystem never registered) - without it the next physics step
+        // Safety net only: every server world gets the space cells' whole pose band covered as it
+        // loads, so for production destinations this never fires. It remains for destinations
+        // outside that band (probe teleports to arbitrary Y) - without it the next physics step
         // would clamp the ship straight back out of the teleport.
-        if (dstY + 100d > org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit) {
-            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = dstY + 1_000d;
-        }
-        if (dstY - 100d < org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit) {
-            org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit = dstY - 1_000d;
+        org.valkyrienskies.mod.common.physics.ShipAltitudeBand band =
+                org.valkyrienskies.mod.common.physics.ShipAltitudeBand.of(world);
+        if (dstY + 100d > band.upper() || dstY - 100d < band.lower()) {
+            band.cover(dstY - 1_000d, dstY + 1_000d);
         }
         ShipTransform old = ship.getShipTransform();
         // Rotation-preserving variant of VS's own teleport recipe (its /vs teleport command resets the
@@ -1676,15 +1684,18 @@ final class VSBridge {
             // fell to its bare epsilon while the deck stepped half a block. What that looked like
             // from outside was "the smoothing policy churns the capture", and three different
             // policies were written and measured against a fault that was never in any of them.
-            reportSuppressed("shipVelocityAtPointFor", t);
+            reportSuppressed(world, "shipVelocityAtPointFor", t);
             return null;
         }
     }
 
-    /** Causes already reported by {@link #reportSuppressed}, so a per-tick failure says its piece
-     *  once instead of drowning the log it is trying to be visible in. */
-    private static final java.util.Set<String> REPORTED_SUPPRESSED =
-            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+    /** Causes a world has already reported through {@link #reportSuppressed}, so a per-tick failure
+     *  says its piece once per world instead of drowning the log it is trying to be visible in.
+     *  Held by that world ({@link dev.stannismod.stellurgy.world.WorldRuntime}). */
+    private static final class SuppressedReports {
+        final java.util.Set<String> causes =
+                java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+    }
 
     /**
      * Say, once, that this port answered with nothing because something threw.
@@ -1726,22 +1737,23 @@ final class VSBridge {
                     vLin.z() + (w.x() * ry - w.y() * rx)
             };
         } catch (Throwable t) {
-            reportSuppressed("declaredVelocityAtPointFor", t);
+            reportSuppressed(world, "declaredVelocityAtPointFor", t);
             return null;
         }
     }
 
-    private static void reportSuppressed(String operation, Throwable t) {
+    private static void reportSuppressed(World world, String operation, Throwable t) {
         StackTraceElement[] trace = t.getStackTrace();
         String site = trace.length > 0 ? trace[0].toString() : "no frames";
         String key = operation + "|" + t.getClass().getName() + "|" + site;
-        if (!REPORTED_SUPPRESSED.add(key)) {
+        if (!dev.stannismod.stellurgy.world.WorldRuntime.of(world, SuppressedReports.class,
+                SuppressedReports::new).causes.add(key)) {
             return;
         }
         dev.stannismod.stellurgy.Stellurgy.logger.warn(
                 "[VS-PORT] " + operation + " answered NOTHING because " + t.getClass().getSimpleName()
                         + " was thrown at " + site + " — a caller that reads this as \"not moving\""
-                        + " is acting on a wrong answer. Reported once per cause.", t);
+                        + " is acting on a wrong answer. Reported once per cause per world.", t);
     }
 
     /**

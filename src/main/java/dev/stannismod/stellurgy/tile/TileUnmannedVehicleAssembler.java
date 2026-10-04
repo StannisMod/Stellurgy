@@ -16,7 +16,6 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
 import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import dev.stannismod.stellurgy.util.WeightEngine;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
@@ -271,7 +270,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                         }
 
                         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                            mass += WeightEngine.INSTANCE.getWeight(world, currPos);
+                            mass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currPos);
                         } else {
                             mass += 1f; // fallback: count blocks
                         }
@@ -380,7 +379,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                     || (thrustMonopropellant > 0 && totalFuelUse > monopropellantfuelUse)
                     || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
                 status = ErrorCodes.COMBINEDTHRUST;
-            } else if (getThrust() <= getNeededThrust()) {
+            } else if (getThrust() <= 0 || !canLaunchFullFromHere()) {
                 status = ErrorCodes.NOENGINES;
             } else if (((int) stats.getStatTag("intakePower")) <= 0) {
                 status = ErrorCodes.NOINTAKE;

@@ -27,6 +27,7 @@ public class StationAssemblerCategory implements IRecipeCategory<StationAssemble
     private static final int BG_W = 180;
     private static final int BG_H = 90;
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation ROCKET_BUILDER_PNG =
         new ResourceLocation("stellurgy", "textures/gui/rocketBuilder.png");
 

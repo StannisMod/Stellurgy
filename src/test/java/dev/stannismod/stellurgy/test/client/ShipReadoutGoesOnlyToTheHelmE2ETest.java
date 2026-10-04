@@ -33,7 +33,7 @@ import static org.junit.Assert.assertEquals;
  * is SHOWN — the HUD lines drawn from what arrived.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ShipReadoutGoesOnlyToTheHelmE2ETest extends AbstractSharedVsClientE2ETest {
+public class ShipReadoutGoesOnlyToTheHelmE2ETest extends AbstractSharedVsClientTest {
 
     private static final int DIM = 0;
 

@@ -15,6 +15,7 @@ public enum ControlAxis {
     PITCH(true),
     YAW(true);
 
+    /** Effectively final, process lifetime: set once when the object is built. */
     private final boolean rotation;
 
     ControlAxis(boolean rotation) {

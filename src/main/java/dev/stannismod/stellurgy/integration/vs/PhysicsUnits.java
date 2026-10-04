@@ -25,6 +25,6 @@ public final class PhysicsUnits {
     public static final double ACCELERATION = StatsRocket.GRAVITY_BLOCKS_PER_TICK_SQUARED
             * TICKS_PER_WALL_SECOND * TICKS_PER_WALL_SECOND / StatsRocket.STANDARD_GRAVITY;
 
-    /** SI seconds per engine second: 1.806. */
+    /** SI seconds per engine second: 1.806. Effectively final, process lifetime: built once at class initialisation. */
     public static final double SECONDS = Math.sqrt(ACCELERATION);
 }

@@ -4,8 +4,12 @@
   "package": "com.github.stannismod.forge.testing.mixin",
   "compatibilityLevel": "JAVA_8",
   "target": "@env(DEFAULT)",
+  "mixins": [
+    "MixinMinecraftServerBridge"
+  ],
   "client": [
     "MixinNetHandlerPlayClient",
-    "MixinGuiIngameChat"
+    "MixinGuiIngameChat",
+    "MixinMinecraftClientBridge"
   ]
 }

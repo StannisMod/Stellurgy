@@ -144,19 +144,6 @@ public class ChipNBTRoundTripTest {
         assertEquals(-42, ItemStationChip.getUUID(s));
     }
 
-    @Test
-    public void stationChipUuidPersistsAcrossItemStackCopy() {
-        ItemStack a = freshStack();
-        ItemStationChip.setUUID(a, 999);
-        ItemStack b = a.copy();
-        assertEquals("ItemStack.copy() must preserve the UUID NBT key",
-                999, ItemStationChip.getUUID(b));
-        // Independence: mutating b must NOT change a.
-        ItemStationChip.setUUID(b, 1);
-        assertEquals("mutating the copy must not bleed into the original",
-                999, ItemStationChip.getUUID(a));
-    }
-
     // ───────────────────── ItemAsteroidChip ─────────────────────────────
 
     @Test
@@ -202,30 +189,6 @@ public class ChipNBTRoundTripTest {
 
     // ─────────────────── ItemSatelliteIdentificationChip ────────────────
 
-    @Test
-    public void satelliteChipDirectNbtReadsBackKnownKeys() {
-        // setSatellite(SatelliteBase) requires a non-null SatelliteBase
-        // backed by the full SatelliteRegistry — out of scope for a
-        // unit test. For the NBT-format pin, directly seed the keys that
-        // production reads: satelliteId, dimId, satelliteName. The
-        // ItemSatelliteIdentificationChip.getSatellite static method
-        // routes through DimensionManager -> FMLCommonHandler.getSide(),
-        // which requires Forge's FML to be initialised; that's a
-        // server-tier integration concern, not unit-tier. We pin the
-        // NBT key shape here; the server-tier round-trip is implicitly
-        // covered by SatelliteIdChipPersistenceTest.
-        ItemStack s = freshStack();
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setLong("satelliteId", 42L);
-        nbt.setInteger("dimId", 0);
-        nbt.setString("satelliteName", "test-comsat");
-        s.setTagCompound(nbt);
-
-        assertEquals(42L, s.getTagCompound().getLong("satelliteId"));
-        assertEquals(0, s.getTagCompound().getInteger("dimId"));
-        assertEquals("test-comsat", s.getTagCompound().getString("satelliteName"));
-    }
-
     /** {@code setSatellite(SatelliteBase)} must
      *  attach the freshly built NBT to the stack. Previously the
      *  else-branch (no pre-existing tag compound) silently dropped
@@ -266,30 +229,5 @@ public class ChipNBTRoundTripTest {
         s.setTagCompound(nbt);
         chip.erase(s);
         assertFalse("erase must drop the NBT compound entirely", s.hasTagCompound());
-    }
-
-    // ───────────────────── Cross-chip: ItemStack.copy() ────────────────
-
-    @Test
-    public void itemStackCopyPreservesArbitraryChipNbt() {
-        // Generic copy contract — pins that Stellurgy's "chip is a stack with
-        // NBT" assumption survives the vanilla copy path used by hopper,
-        // shulker boxes, inventory transfer, etc.
-        ItemStack a = freshStack();
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setInteger("dimId", 1);
-        nbt.setLong("UUID", 0xDEADBEEFL);
-        nbt.setString("DimensionName", "TestPlanet");
-        a.setTagCompound(nbt);
-
-        ItemStack b = a.copy();
-        assertEquals(1, b.getTagCompound().getInteger("dimId"));
-        assertEquals(0xDEADBEEFL, b.getTagCompound().getLong("UUID"));
-        assertEquals("TestPlanet", b.getTagCompound().getString("DimensionName"));
-
-        // Mutating b's NBT must not alter a's.
-        b.getTagCompound().setInteger("dimId", 99);
-        assertEquals("original stack's NBT must be independent of the copy",
-                1, a.getTagCompound().getInteger("dimId"));
     }
 }

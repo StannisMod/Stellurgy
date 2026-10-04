@@ -28,6 +28,8 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  * cannot leave {@code [MIN_HALF_SIZE, MAX_HALF_SIZE]}.</p>
  *
  * <p>Pure arithmetic — no GL, no client state — so the rule can be checked without a client.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class ApparentSize {
 

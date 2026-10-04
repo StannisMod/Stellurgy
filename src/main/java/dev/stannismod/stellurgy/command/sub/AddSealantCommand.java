@@ -42,6 +42,8 @@ public class AddSealantCommand extends StellurgyCommand {
         if (SealableBlockHandler.INSTANCE.getOverriddenSealableBlocks().contains(block)) {
             throw new CommandException("commands.stellurgy.addsealant.exists", block.getLocalizedName());
         }
+        // Rewrites static state while the game runs, on purpose: an operator edit of the config is a
+        // partial re-initialisation of the mod, the sanctioned exception to statics being written once.
         StellurgyConfiguration.getCurrentConfig().addSealedBlock(block);
         sender.sendMessage(new TextComponentTranslation("commands.stellurgy.addsealant.success", block.getLocalizedName()));
     }

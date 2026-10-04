@@ -48,6 +48,12 @@ import net.minecraftforge.fml.relauncher.Side;
  * the thing a recorder watches — a craft's interpolator, a pilot seat — the memory is a field on
  * that object instead, and not here.</p>
  *
+ * <h2>The two recorders every side carries</h2>
+ *
+ * <p>The flight recorder ({@link #motion}) and, on the server only, the ordered event log
+ * ({@link #events}) are typed fields rather than recorder memory: they are read by name from the
+ * test's JVM, and their lifetime is the side's own.</p>
+ *
  * <p>Test source set: absent from a released jar.</p>
  */
 public final class SideTrace {
@@ -57,9 +63,41 @@ public final class SideTrace {
     private final Map<Class<?>, List<TraceWindow>> byType = new ConcurrentHashMap<>();
     private final Map<Class<?>, Object> memory = new ConcurrentHashMap<>();
     private int nextHandle = 1;
+    /** This side's flight recorder. Each side feeds its own channels of it. */
+    private final MotionTrace motion = new MotionTrace();
+    /** The server's ordered event log; null on the client, whose log the harness bridge keeps. */
+    private final ServerEventLog events;
 
-    public SideTrace(String side) {
+    private SideTrace(String side, ServerEventLog events) {
         this.side = side;
+        this.events = events;
+    }
+
+    /** The trace a {@code MinecraftServer} is built with. */
+    public static SideTrace forServer() {
+        return new SideTrace("server", new ServerEventLog());
+    }
+
+    /** The trace {@code Minecraft} is built with. */
+    public static SideTrace forClient() {
+        return new SideTrace("client", null);
+    }
+
+    /** This side's flight recorder. */
+    public MotionTrace motion() {
+        return motion;
+    }
+
+    /**
+     * The server's ordered event log. Throws on the client: a client record belongs in the harness
+     * bridge's log, and an empty server-shaped log here would read as "nothing happened".
+     */
+    public ServerEventLog events() {
+        if (events == null) {
+            throw new IllegalStateException("the " + side + " trace keeps no event log - the client's"
+                    + " ordered log is the harness bridge's (ForgeTestClientBootstrap.recordEvent)");
+        }
+        return events;
     }
 
     // ---- which side ---------------------------------------------------------------------------

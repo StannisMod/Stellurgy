@@ -68,7 +68,7 @@ public class ZoneScaleTest {
      */
     @Test
     public void everyRealMoonGetsACellOfItsOwn() {
-        for (Planet p : SOLAR_SYSTEM) {
+        for (Planet p : solarSystem) {
             if (p.innermostMoonOrbitKm <= 0d) {
                 continue;
             }
@@ -97,7 +97,7 @@ public class ZoneScaleTest {
      */
     @Test
     public void everyBodysOwnDescentShellFitsInsideItsOwnCell() {
-        for (Planet p : SOLAR_SYSTEM) {
+        for (Planet p : solarSystem) {
             SystemBody body = p.body();
             long cell = ZoneScale.cellBlocks(body, sol(), p.tightestMoonBlocks(), 0L);
             long shell = DescentShell.radiusAround(body);
@@ -134,7 +134,7 @@ public class ZoneScaleTest {
     @Test
     public void everyCellContainsTheSphereOfTheBodyItNames() {
         boolean checkedAMoon = false;
-        for (Planet p : SOLAR_SYSTEM) {
+        for (Planet p : solarSystem) {
             if (p.innermostMoonOrbitKm <= 0d) {
                 continue;
             }
@@ -214,7 +214,7 @@ public class ZoneScaleTest {
      */
     @Test
     public void theCountIsAPowerOfTwo() {
-        for (Planet p : SOLAR_SYSTEM) {
+        for (Planet p : solarSystem) {
             int count = ZoneScale.cellsAcrossZone(p.body(), sol(), p.tightestMoonBlocks(), 0L);
             assertTrue(p.name + " has a lattice of " + count + " cells, which is not a power of two",
                     count > 0 && (count & (count - 1)) == 0);
@@ -305,12 +305,14 @@ public class ZoneScaleTest {
         }
     }
 
+    /** A constant: a {@code Planet} is an immutable value: a final string and final doubles. */
     private static final Planet EARTH =
             new Planet("Earth", 1d, 1d, 149_600_000d, 384_400d);
+    /** A constant: a {@code Planet} is an immutable value: a final string and final doubles. */
     private static final Planet LUNA =
             new Planet("Luna", 0.0123d, 0.2727d, 384_400d, 0d);
 
-    private static final Planet[] SOLAR_SYSTEM = {
+    private final Planet[] solarSystem = {
             new Planet("Mars", 0.107d, 0.532d, 227_900_000d, 9_376d),          // Phobos
             EARTH,                                                              // Luna
             new Planet("Jupiter", 317.8d, 11.209d, 778_500_000d, 128_000d),    // Metis

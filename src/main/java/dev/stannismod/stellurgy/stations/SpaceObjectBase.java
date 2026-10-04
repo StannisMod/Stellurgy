@@ -26,7 +26,7 @@ public abstract class SpaceObjectBase implements ISpaceObject {
     private DimensionProperties properties;
 
     public SpaceObjectBase() {
-        properties = (DimensionProperties) dev.stannismod.stellurgy.dimension.DimensionManager.defaultSpaceDimensionProperties.clone();
+        properties = dev.stannismod.stellurgy.dimension.DimensionManager.newOpenSpaceProperties();
         angularVelocity = new double[3];
         rotation = new double[3];
     }

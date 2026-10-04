@@ -4,7 +4,7 @@ import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.util.WeightEngine;
+import dev.stannismod.stellurgy.Stellurgy;
 
 /**
  * The structural mass of one block, in kilograms, for the physics engine to accumulate.
@@ -53,8 +53,8 @@ public final class StellurgyBlockMass {
         }
         ItemStack asItem = new ItemStack(state.getBlock());
         if (asItem.isEmpty()) {
-            return WeightEngine.INSTANCE.fallbackMass();
+            return Stellurgy.weights().fallbackMass();
         }
-        return WeightEngine.INSTANCE.getWeight(asItem);
+        return Stellurgy.weights().getWeight(asItem);
     }
 }

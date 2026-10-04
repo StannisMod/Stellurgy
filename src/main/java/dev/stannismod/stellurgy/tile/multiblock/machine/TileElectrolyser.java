@@ -18,6 +18,7 @@ import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 import java.util.List;
 
 public class TileElectrolyser extends TileMultiblockMachine {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{null, null, null},
                     {'P', "blockCoil", 'P'}},

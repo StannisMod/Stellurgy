@@ -12,31 +12,38 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public final class ClientFieldTouchEffectCache {
 
-    private static final Map<Integer, List<TouchEffect>> EFFECTS_BY_DIMENSION = new ConcurrentHashMap<>();
     private static final int MAX_AGE_TICKS = 20;
     private static final int SEGMENTS = 72;
+
+    /** The touch ripples a client world is showing, as that world's own part ({@link WorldRuntime}):
+     *  each is stamped with the world's clock, and goes with the world. */
+    private static final class Effects {
+        final List<TouchEffect> live = Collections.synchronizedList(new ArrayList<>());
+    }
 
     private ClientFieldTouchEffectCache() {
     }
 
-    public static void addEffect(int dimension, BlockPos generatorPos, Vec3d contactPoint, long spawnTick) {
-        if (spawnTick < 0L) {
+    /**
+     * Show a touch ripple the server reported in {@code dimension}, if that is the world this client
+     * shows. The world is looked up here, inside a client class, because the packet handler that calls
+     * this is common code and must not name the client's world type.
+     */
+    public static void addEffect(int dimension, BlockPos generatorPos, Vec3d contactPoint) {
+        World world = net.minecraft.client.Minecraft.getMinecraft().world;
+        if (world == null || world.provider.getDimension() != dimension) {
             return;
         }
-        List<TouchEffect> effects = EFFECTS_BY_DIMENSION.computeIfAbsent(dimension, key -> Collections.synchronizedList(new ArrayList<>()));
-        effects.add(new TouchEffect(generatorPos, contactPoint, spawnTick, MAX_AGE_TICKS));
+        List<TouchEffect> effects = WorldRuntime.of(world, Effects.class, Effects::new).live;
+        effects.add(new TouchEffect(generatorPos, contactPoint, world.getTotalWorldTime(), MAX_AGE_TICKS));
         if (effects.size() > 48) {
             effects.remove(0);
         }
-    }
-
-    public static void clearAll() {
-        EFFECTS_BY_DIMENSION.clear();
     }
 
     public static void render(World world, float partialTicks, double camX, double camY, double camZ) {
@@ -44,8 +51,8 @@ public final class ClientFieldTouchEffectCache {
             return;
         }
 
-        List<TouchEffect> effects = EFFECTS_BY_DIMENSION.get(world.provider.getDimension());
-        if (effects == null || effects.isEmpty()) {
+        List<TouchEffect> effects = WorldRuntime.of(world, Effects.class, Effects::new).live;
+        if (effects.isEmpty()) {
             return;
         }
 

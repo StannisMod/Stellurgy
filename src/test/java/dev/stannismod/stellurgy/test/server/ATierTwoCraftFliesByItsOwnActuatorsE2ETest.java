@@ -105,12 +105,8 @@ public class ATierTwoCraftFliesByItsOwnActuatorsE2ETest extends AbstractSharedSe
      */
     private static final double NO_MOTION_BAND = 1.0e-9;
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
-
     private final Events events = new Events(this::exec,
-            ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * Each scenario starts with an empty sky and in vacuum.

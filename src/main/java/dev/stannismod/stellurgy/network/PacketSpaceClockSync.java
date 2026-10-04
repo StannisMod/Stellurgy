@@ -53,8 +53,9 @@ public class PacketSpaceClockSync extends BasePacket {
     }
 
     @Override
+    @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
     public void executeClient(EntityPlayer player) {
-        SpaceClockSync.accept(tick);
+        dev.stannismod.stellurgy.client.ServerView.current().clock().accept(tick);
     }
 
     @Override

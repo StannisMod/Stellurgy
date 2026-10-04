@@ -96,7 +96,7 @@ public class ShipTransformationManager {
         for (int i = 0; i < parent.getWatchingPlayers().size(); i++) {
             EntityPlayerMP player = parent.getWatchingPlayers().get(i);
             if (player != null) {
-                ValkyrienSkiesMod.physWrapperNetwork.sendTo(posMessage, player);
+                dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.physWrapperNetwork.sendTo(posMessage, player);
             }
         }
     }

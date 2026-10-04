@@ -31,15 +31,22 @@ public class ItemOreScanner extends Item implements IModularInventory {
     @Override
     public void addInformation(@Nonnull ItemStack stack, World player, List<String> list, ITooltipFlag arg5) {
 
+        if (!stack.hasTagCompound()) {
+            // Asked before the satellite is looked up: an unprogrammed scanner names none, and the
+            // creative search tree asks every item for its tooltip at the title screen, where there
+            // is no server whose satellites could be meant.
+            list.add(LibVulpes.proxy.getLocalizedString("msg.unprogrammed"));
+            super.addInformation(stack, player, list, arg5);
+            return;
+        }
+
         SatelliteBase sat = DimensionManager.getInstance().getSatellite(this.getSatelliteID(stack));
 
         SatelliteOreMapping mapping = null;
         if (sat instanceof SatelliteOreMapping)
             mapping = (SatelliteOreMapping) sat;
 
-        if (!stack.hasTagCompound())
-            list.add(LibVulpes.proxy.getLocalizedString("msg.unprogrammed"));
-        else if (mapping == null)
+        if (mapping == null)
             list.add(LibVulpes.proxy.getLocalizedString("msg.itemorescanner.nosat"));
         else if (mapping.getDimensionId() == player.provider.getDimension()) {
             list.add(LibVulpes.proxy.getLocalizedString("msg.connected"));

@@ -1,17 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -25,8 +17,12 @@ import static org.junit.Assert.assertTrue;
  * vanilla bed-right-click pre-checks" — that's a server-side handler
  * contract, and synthetic event posts ARE the honest stimulus at this tier.
  * Player supply: {@code ensure-fake}.
+ *
+ * <p>One server for the class, over the two planets {@link Galaxy} declares — one in vacuum, one
+ * breathable. Each scenario stations the fake player and reads one synthetic event's verdict.</p>
  */
-public class VacuumGuardsTest {
+@SeededWorld(VacuumGuardsTest.Galaxy.class)
+public class VacuumGuardsTest extends AbstractSharedServerTest {
 
     private static final int DIM_VAC = 9611;
     private static final int DIM_AIR = 9612;
@@ -34,28 +30,20 @@ public class VacuumGuardsTest {
     private static final String SLEEP_RESULT = "resultStatus";
     private static final String CANCELED = "canceled";
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
-
-    @Before
-    public void startServer() throws Exception {
-        Assume.assumeTrue("Server harness disabled",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-vacuum-guards-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
-                + planetXml("VacuumPlanet", DIM_VAC, 0)
-                + planetXml("AirPlanet", DIM_AIR, 100)
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+    /** A vacuum planet and a breathable one, otherwise identical. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(GameDirSeed seed) {
+            seed.planetDefs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
+                    + planetXml("VacuumPlanet", DIM_VAC, 0)
+                    + planetXml("AirPlanet", DIM_AIR, 100)
+                    + "    </star>\n"
+                    + "</galaxy>\n", VacuumGuardsTest.class);
+        }
     }
 
     private static String planetXml(String name, int dim, int atmosDensity) {
@@ -75,15 +63,6 @@ public class VacuumGuardsTest {
                 + "            <generateCaves>true</generateCaves>\n"
                 + "            <generateVolcanos>false</generateVolcanos>\n"
                 + "        </planet>\n";
-    }
-
-    @After
-    public void stopServer() throws Exception {
-        if (harness != null) harness.close();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", harness.client().execute(cmd));
     }
 
     private String stringField(String field, String src, String name) {

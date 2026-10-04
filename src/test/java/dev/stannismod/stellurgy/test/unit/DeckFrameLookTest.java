@@ -43,12 +43,12 @@ public class DeckFrameLookTest {
     }
 
     // Away from the +-90 pitch gimbal of the Euler DERIVATION (the quat itself has no pole).
-    private static final double[] YAWS = {-170, -90, -45, 0, 30, 90, 135, 179};
-    private static final double[] PITCHES = {-85, -45, 0, 30, 60, 85};
+    private final double[] yaws = {-170, -90, -45, 0, 30, 90, 135, 179};
+    private final double[] pitches = {-85, -45, 0, 30, 60, 85};
 
     // Ship attitudes as body rates (pitch, yaw, roll) from identity - includes the 90-degree
     // roll where the old horizon levelling was singular, and a fully inverted deck.
-    private static final double[][] SHIP_ATTITUDES = {
+    private final double[][] shipAttitudes = {
             {0, 0, 0}, {0, 0, 45}, {0, 0, 90}, {0, 0, 135}, {0, 0, 179},
             {30, 0, 0}, {0, 40, 0}, {25, 40, 60}, {-30, 20, -90}
     };
@@ -61,8 +61,8 @@ public class DeckFrameLookTest {
      */
     @Test
     public void lookQuatCarriesForwardToTheVanillaLookVector() {
-        for (double yaw : YAWS) {
-            for (double pitch : PITCHES) {
+        for (double yaw : yaws) {
+            for (double pitch : pitches) {
                 double[] fwd = FreeFlightPhysics.lookQuat(yaw, pitch).rotate(0, 0, 1);
                 double[] mc = look(yaw, pitch);
                 for (int i = 0; i < 3; i++) {
@@ -81,8 +81,8 @@ public class DeckFrameLookTest {
      */
     @Test
     public void lookQuatRoundTripsThroughEulerWithZeroRoll() {
-        for (double yaw : YAWS) {
-            for (double pitch : PITCHES) {
+        for (double yaw : yaws) {
+            for (double pitch : pitches) {
                 float[] e = FreeFlightPhysics.eulerFromQuat(FreeFlightPhysics.lookQuat(yaw, pitch));
                 assertEquals("yaw at " + yaw + "/" + pitch, 0.0, wrap180(e[0] - yaw), ANGLE_DELTA);
                 assertEquals("pitch at " + yaw + "/" + pitch, pitch, e[1], ANGLE_DELTA);
@@ -101,7 +101,7 @@ public class DeckFrameLookTest {
      */
     @Test
     public void aDeckYawTurnSweepsTheAimAboutTheShipsUpAtAnyAttitude() {
-        for (double[] att : SHIP_ATTITUDES) {
+        for (double[] att : shipAttitudes) {
             Quat ship = FreeFlightPhysics.integrateBodyRates(Quat.IDENTITY, att[0], att[1], att[2]);
             double[] shipUp = ship.rotate(0, 1, 0);
             for (double pitch : new double[]{-40, 0, 55}) {
@@ -134,7 +134,7 @@ public class DeckFrameLookTest {
      */
     @Test
     public void theDerivedWorldAimIsTheComposedCamerasForward() {
-        for (double[] att : SHIP_ATTITUDES) {
+        for (double[] att : shipAttitudes) {
             Quat ship = FreeFlightPhysics.integrateBodyRates(Quat.IDENTITY, att[0], att[1], att[2]);
             for (double yaw : new double[]{-120, 0, 75}) {
                 for (double pitch : new double[]{-50, 0, 35}) {

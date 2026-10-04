@@ -19,7 +19,6 @@ public class SatelliteBuilderWrapper extends MachineRecipe {
     public final boolean isCopyRecipe;
     private final IRecipe baseRecipe;                         // keep a handle
     private final List<ItemStack> outputVariants;             // for JEI cycling (copy recipe)
-    private static Set<String> COPY_STRIP_STRINGS;
 
     public SatelliteBuilderWrapper(IRecipe rec, boolean isCopyRecipe) {
         this(rec, isCopyRecipe, null);
@@ -90,12 +89,13 @@ public class SatelliteBuilderWrapper extends MachineRecipe {
 
                 // === CHIP-COPY RECIPE ===
                 if (slotIndex == 7 || slotIndex == 8) {
-                    ensureCopyStripStringsBuilt();
+                    // Built per tooltip, in the language the client shows now.
+                    Set<String> copyStripStrings = copyStripStrings();
 
                     // Strip any "unprogrammed"/blank-style lines (locale + color safe)
                     tooltip.removeIf(line -> {
                         String stripped = net.minecraft.util.text.TextFormatting.getTextWithoutFormattingCodes(line);
-                        return stripped != null && COPY_STRIP_STRINGS.contains(stripped.trim().toLowerCase());
+                        return stripped != null && copyStripStrings.contains(stripped.trim().toLowerCase());
                     });
 
                     // Add concise labels
@@ -115,9 +115,8 @@ public class SatelliteBuilderWrapper extends MachineRecipe {
         tooltip.add(label);
     }
 
-    private static void ensureCopyStripStringsBuilt() {
-        if (COPY_STRIP_STRINGS != null) return;
-        COPY_STRIP_STRINGS = new HashSet<>();
+    private static Set<String> copyStripStrings() {
+        Set<String> strings = new HashSet<>();
         String[] keys = {
                 "msg.itemchip.unprogrammed",
                 "msg.satelliteidchip.unprogrammed",
@@ -128,11 +127,12 @@ public class SatelliteBuilderWrapper extends MachineRecipe {
         };
         for (String k : keys) {
             String v1 = I18n.format(k);
-            if (v1 != null) COPY_STRIP_STRINGS.add(v1.trim().toLowerCase());
+            if (v1 != null) strings.add(v1.trim().toLowerCase());
             String v2 = LibVulpes.proxy.getLocalizedString(k);
-            if (v2 != null) COPY_STRIP_STRINGS.add(v2.trim().toLowerCase());
+            if (v2 != null) strings.add(v2.trim().toLowerCase());
         }
-        COPY_STRIP_STRINGS.add("unprogrammed");
+        strings.add("unprogrammed");
+        return strings;
     }
 
     @Override

@@ -33,6 +33,7 @@ public class TileFluidHatch extends TilePointer implements IFluidHandlerInternal
 	private EmbeddedInventory inventory;
 	private boolean outputOnly;
 
+	/** Effectively final, process lifetime: written only by Stellurgy.postInit. */
 	public static float capacityMultiplier = 1.0f;
 
 	public TileFluidHatch() {

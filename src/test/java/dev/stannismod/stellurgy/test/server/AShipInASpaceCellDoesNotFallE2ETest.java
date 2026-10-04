@@ -96,7 +96,7 @@ public class AShipInASpaceCellDoesNotFallE2ETest extends AbstractSharedServerTes
     private static final int SCAFFOLDING_BLOCKS = 36 + 7 + 2;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @Test
     public void aReleasedCraftInACellKeepsItsAltitude() throws Exception {
@@ -188,9 +188,5 @@ public class AShipInASpaceCellDoesNotFallE2ETest extends AbstractSharedServerTes
                         + after + "). Tens of blocks is what the configured field would produce, i.e."
                         + " the cell being handed a planet's gravity.",
                 Math.abs(sank) <= STILL_TOLERANCE);
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
     }
 }

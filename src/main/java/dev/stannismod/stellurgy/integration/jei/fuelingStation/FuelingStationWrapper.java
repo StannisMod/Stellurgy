@@ -11,6 +11,7 @@ public class FuelingStationWrapper implements IRecipeWrapper {
     public enum Role {
         MONO("monopropellant"), BIPROP_FUEL("biprop_fuel"),
         OXIDIZER("oxidizer"),    WORKING_FLUID("working_fluid");
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final String key; Role(String k){ this.key = k; }
         public String langKey(){ return key; }
     }

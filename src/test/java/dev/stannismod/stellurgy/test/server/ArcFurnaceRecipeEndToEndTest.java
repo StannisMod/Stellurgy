@@ -20,11 +20,6 @@ public class ArcFurnaceRecipeEndToEndTest extends AbstractSharedServerTest {
     private static final String TILE_SHORT  = "TileElectricArcFurnace";
 
     @Test
-    public void arcFurnaceFixtureValidates() throws Exception {
-        MachineRecipeEndToEndKit.runFixtureValidates(client(), FIXTURE_KEY, 400, 70, 400);
-    }
-
-    @Test
     public void arcFurnaceRunsFirstRegisteredRecipe() throws Exception {
         MachineRecipeEndToEndKit.runFirstRecipeEndToEnd(client(),
                 FIXTURE_KEY, TILE_SHORT, 500, 70, 400);

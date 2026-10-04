@@ -40,6 +40,7 @@ import java.util.List;
 
 public class TileOrbitalLaserDrill extends TileMultiPowerConsumer implements IGuiCallback, IButtonInventory {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final int POWER_PER_OPERATION = (int) (10000 * StellurgyConfiguration.getCurrentConfig().spaceLaserPowerMult);
     private AbstractDrill drill;
     private terraformingdrill terraformingDrill;

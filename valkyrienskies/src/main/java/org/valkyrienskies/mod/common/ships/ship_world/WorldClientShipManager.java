@@ -23,6 +23,7 @@ public class WorldClientShipManager implements IPhysObjectWorld {
     // Use LinkedHashSet as a queue because it preserves order and doesn't allow duplicates
     private final LinkedHashSet<UUID> loadQueue, unloadQueue;
     private ImmutableList<PhysicsObject> threadSafeLoadedShips;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger logger = LogManager.getLogger();
 
     public WorldClientShipManager(World world) {

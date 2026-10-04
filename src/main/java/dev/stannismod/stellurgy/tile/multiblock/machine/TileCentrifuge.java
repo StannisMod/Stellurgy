@@ -30,6 +30,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class TileCentrifuge extends TileMultiblockMachine {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
 
             {{Blocks.AIR, new BlockMeta(LibVulpesBlocks.blockStructureBlock), 'l'},
@@ -49,6 +50,10 @@ public class TileCentrifuge extends TileMultiblockMachine {
                     {new BlockMeta(LibVulpesBlocks.blockStructureBlock), new BlockMeta(LibVulpesBlocks.blockStructureBlock), 'O'}},
 
     };
+
+    /** Client only: the cylinder's angle, kept so a stopped centrifuge stands where it stopped. */
+    public float renderedCylinderAngle;
+
     @Override
     public Object[][][] getStructure() {
         return structure;

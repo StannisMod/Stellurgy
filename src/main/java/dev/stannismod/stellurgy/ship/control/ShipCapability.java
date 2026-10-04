@@ -46,6 +46,7 @@ import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
  */
 public final class ShipCapability {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOG = LogManager.getLogger("stellurgy.control");
 
     private final List<Actuator> actuators;

@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map.Entry;
 
 public class TileBlackHoleGenerator extends TileMultiPowerProducer implements ITickable {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     static final Object[][][] structure = new Object[][][]{
             {
                     {null, null, null},

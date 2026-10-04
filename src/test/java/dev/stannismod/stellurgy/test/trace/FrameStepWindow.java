@@ -13,7 +13,7 @@ import java.util.Locale;
  * a distribution — a smooth path has max ~ mean, a tick-stepped one has zero steps within a tick and
  * spikes at its boundaries, so max &gt;&gt; mean. The ABSOLUTE and RELATIVE halves split "the body
  * jitters in the world" from "the body jitters against the deck it rides"; the relative reference is
- * {@code DeckLook.refWorldAt}, itself frame-lerped.</p>
+ * {@link DeckReference#worldAt}, itself frame-lerped.</p>
  *
  * <p><b>Why an accumulator and not a record per frame.</b> This seam fires on every rendered frame.
  * The event log's ring is bounded per type, so a per-frame record would turn its own ring over in

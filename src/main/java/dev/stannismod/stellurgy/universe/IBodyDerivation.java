@@ -46,12 +46,13 @@ public interface IBodyDerivation {
     /** Whether body {@code index} accreted enough hydrogen to be a giant. */
     boolean isGiantAt(long seed, GalacticCoord anchor, int index, int bareTemperatureK);
 
-    /** The full profile of a body BOUND to a star. */
+    /** The full profile of a body BOUND to a star; {@code reports} is the deriving galaxy's. */
     BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
-                       StellarBody star, boolean moon, long orbitalDistance);
+                       StellarBody star, boolean moon, long orbitalDistance, ReportOnce reports);
 
     /** The full profile of an UNBOUND body — no star, no orbit, no insolation. */
-    BodyProfile deriveRogue(long seed, GalacticCoord bodyCell, int variant, double giantFraction);
+    BodyProfile deriveRogue(long seed, GalacticCoord bodyCell, int variant, double giantFraction,
+                            ReportOnce reports);
 
     /** What a body of this bulk still radiates with no star to warm it, in kelvin. */
     int residualTemperature(double massEarths, double radiusEarths);

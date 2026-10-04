@@ -1,6 +1,9 @@
 package dev.stannismod.stellurgy.client.render.planet;
 
+import net.minecraft.world.World;
+
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 /**
  * Whether the cell sky writes a body's name and distance beside it.
@@ -18,7 +21,11 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
  *       already ships its state to the clients that can see it.</li>
  * </ul>
  *
- * <p><b>The known limit, stated rather than hidden:</b> the render decision is per-CLIENT while the
+ * <p>The toggle is held by the client WORLD the console synced into ({@link WorldRuntime}), so it
+ * ends with that world: a disconnect, a dimension change or a new server starts from the default
+ * rather than from whatever the last console of some other world said.</p>
+ *
+ * <p><b>The known limit, stated rather than hidden:</b> the render decision is per-world while the
  * console is per-SHIP, so in a cell holding two ships the last console to update wins for everyone in
  * that world. And the sky belongs to the cell rather than to a ship, so its audience is wider than any
  * one console's crew — a passenger, a crew member who walked off the hull, a tier-1 craft — and those
@@ -28,29 +35,26 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
  */
 public final class SkyLabels {
 
-    private static volatile boolean consoleEnabled = true;
+    /** The console toggle as last synced into one client world. */
+    private static final class ConsoleToggle {
+        boolean enabled = true;
+    }
 
     private SkyLabels() {
     }
 
-    /** Whether a label may be drawn at all right now — the config flag AND the console toggle. */
-    public static boolean enabled() {
+    /** Whether a label may be drawn at all in {@code world} — the config flag AND the console toggle. */
+    public static boolean enabled(World world) {
         StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
-        return (cfg == null || cfg.skyBodyLabels) && consoleEnabled;
+        return (cfg == null || cfg.skyBodyLabels) && toggleOf(world).enabled;
     }
 
-    /** What the console toggle currently says, ignoring the config flag. */
-    public static boolean consoleEnabled() {
-        return consoleEnabled;
+    /** Apply a navigation computer's toggle to the client world it synced into. */
+    public static void setConsoleEnabled(World world, boolean enabled) {
+        toggleOf(world).enabled = enabled;
     }
 
-    /** Apply a navigation computer's toggle to this client. */
-    public static void setConsoleEnabled(boolean enabled) {
-        consoleEnabled = enabled;
-    }
-
-    /** Back to the default (client disconnect / world unload), so a setting cannot outlive its ship. */
-    public static void reset() {
-        consoleEnabled = true;
+    private static ConsoleToggle toggleOf(World world) {
+        return WorldRuntime.of(world, ConsoleToggle.class, ConsoleToggle::new);
     }
 }

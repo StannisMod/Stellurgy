@@ -28,6 +28,7 @@ public class ModuleOreMapper extends ModuleBase {
     private static final int MAXZOOM = 128;
     private static final int MAXRADIUS = 16;
     private static final int FANCYSCANMAXSIZE = 57;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation backdrop = new ResourceLocation("stellurgy", "textures/gui/VideoSatallite.png");
     TileEntity masterConsole;
     private ClientDynamicTexture texture;

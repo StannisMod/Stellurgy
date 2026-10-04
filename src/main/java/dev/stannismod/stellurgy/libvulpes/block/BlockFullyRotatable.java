@@ -15,6 +15,7 @@ import net.minecraft.world.World;
 import javax.annotation.Nonnull;
 
 public class BlockFullyRotatable extends Block {
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static final PropertyEnum<EnumFacing> FACING =  PropertyEnum.create("facing", EnumFacing.class);
 
 	public BlockFullyRotatable(Material par2Material) {

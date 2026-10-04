@@ -42,9 +42,6 @@ public final class SpaceSubsystem {
     /** Periodic GC sweep interval, in server ticks (~30 s at 20 tps). Internal cadence, not a config knob. */
     private static final int GC_TICK_INTERVAL = 600;
 
-    /** Armed by {@link #armSaveFaultOnce()}; consumed by the next save point that reaches it. */
-    private static boolean saveFaultArmed;
-
     // ---- this subsystem's own state: five services that live and die together -----------------
 
     // Final and public: this is a state object, and the code that drives it — the Forge handlers
@@ -55,12 +52,20 @@ public final class SpaceSubsystem {
     public final SpaceManager manager;
     public final ShipLedger ledger;
     public final ShipTransitManager transit;
+    /** The transit's hyperspace crosser; held here too for its census of the last cut, lane and re-seat. */
+    public final VSShipCrosser crosser = new VSShipCrosser();
     public final ShipEntryController entry;
     public final DescentController descent;
     public final CellCrossingController cellCrossings;
+    public final AssemblyCrewRebind crewRebind = new AssemblyCrewRebind();
+    public final SlotBindings slotBindings = new SlotBindings();
+    /** The sky producers' broadcast cadence and derived-content cache, for this server. */
+    public final SystemBodiesProducer skyProducer = new SystemBodiesProducer();
     private int gcTickCounter;
     /** Set by the pool-pressure eviction listener; consumed on the next server tick to run an extra GC. */
     private boolean pressureGcRequested;
+    /** Armed by {@link #armSaveFaultOnce()}; consumed by the next save point that reaches it. */
+    private boolean saveFaultArmed;
 
     /**
      * Wire a subsystem. <b>This is the ONE construction site</b>, and every {@code null} argument
@@ -104,8 +109,8 @@ public final class SpaceSubsystem {
         // The WORLD's lane allocator, never a fresh one: lanes are a property of the single hyperspace
         // world every subsystem parks in, so a per-subsystem allocator hands out lanes another one is
         // already using.
-        this.transit = new ShipTransitManager(this.manager, HyperspaceWorld.lanes(),
-                new VSShipCrosser(), this.ledger, useClock);
+        this.transit = new ShipTransitManager(this.manager, dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.lanes(),
+                this.crosser, this.ledger, useClock);
         this.transit.setOfflineProgress(new OfflineProgress(
                 OfflineProgress.parseMode(cfg == null ? null : cfg.spaceTransitOfflineProgress),
                 SpaceSubsystem::isPlayerOnline));
@@ -254,23 +259,15 @@ public final class SpaceSubsystem {
             // registration, which is an internal, expected no-op and was always kept quiet.
             return existing;
         }
-        // The cells realize ship poses across the whole [-HALF_CELL, HALF_CELL) band on every axis
-        // while the physics mod's stock altitude clamp sits at 1000 and a ship's own thrust can
-        // never carry it past that clamp. Widen the range ONCE here, deterministically, so the full
-        // vertical range of every cell is flyable from the first tick - not ratcheted up
-        // arrival-by-arrival, which left each ship a mere ~1000-block corridor above wherever it
-        // happened to enter. BOTH ends: the band is centred, so half of it is below the world
-        // origin and a floor left at its stock value is a clamp waiting under every descent.
-        VSIntegration.widenShipAltitudeRange(requiredShipFloor(), requiredShipCeiling());
         // Register the physical slot dimensions once per JVM; a single-player world re-open reuses the
         // already-registered dims (DimensionManager registration is JVM-global and re-registering throws).
-        if (SpaceSlotPool.slotDims().isEmpty()) {
-            SpaceSlotPool.registerPool(Math.max(1, cfg.spaceCellPoolSize));
+        if (dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().isEmpty()) {
+            dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerPool(Math.max(1, cfg.spaceCellPoolSize));
         }
         // Register the shared hyperspace dim UPFRONT here, exactly like the pool (cheap - a Forge map
         // entry, no world loaded until a ship first transits). Idempotent, so safe on a single-player
         // re-open. Consistent with the pool + gives a predictable id at a known point.
-        HyperspaceWorld.register();
+        dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.register();
         SpaceManager.Config mgrConfig = new SpaceManager.Config(
                 parseGcPolicy(cfg.spaceCellGcPolicy),
                 cfg.spaceCellMaxAgeTicks,
@@ -280,7 +277,7 @@ public final class SpaceSubsystem {
         // off the table by construction.
         SpaceSubsystem built = new SpaceSubsystem(null, null, mgrConfig);
         Stellurgy.logger.info("[SPACE] subsystem online: pool={} gcPolicy={} maxStored={} maxAgeTicks={}",
-                SpaceSlotPool.slotDims().size(), mgrConfig.gcPolicy, mgrConfig.maxStoredCells, mgrConfig.maxAgeTicks);
+                dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().size(), mgrConfig.gcPolicy, mgrConfig.maxStoredCells, mgrConfig.maxAgeTicks);
         return built;
     }
 
@@ -305,7 +302,7 @@ public final class SpaceSubsystem {
         // future, so the freshest observation could never win a merge again. A world with none
         // stored (a new save) starts at zero, which is where a new clock starts.
         if (data != null) {
-            spaceTick = data.clock();
+            Stellurgy.serverState().setSpaceClock(data.clock());
         }
         if (live == null) {
             return;
@@ -330,7 +327,7 @@ public final class SpaceSubsystem {
             // Skipped entirely when the save has no hyperspace folder: then there is provably
             // nothing parked, and loading would pin an empty world on every boot of every save.
             if (SpaceSlotPool.hyperspaceStoreExists()) {
-                HyperspaceWorld.getOrCreate();
+                dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getOrCreate();
             }
             java.util.List<TransitRecord> records = data.loadTransits();
             for (TransitRecord r : records) {
@@ -745,7 +742,7 @@ public final class SpaceSubsystem {
      * total, which is the whole point of it and also why nothing can be made to break from outside.
      * Fired and disarmed by the first save that reaches it.
      */
-    public static void armSaveFaultOnce() {
+    public void armSaveFaultOnce() {
         saveFaultArmed = true;
     }
 
@@ -754,7 +751,7 @@ public final class SpaceSubsystem {
      * save point actually reached the fault — which matters because the save that can take the server
      * down is the world autosave, not one a command asked for.
      */
-    public static boolean isSaveFaultArmed() {
+    public boolean isSaveFaultArmed() {
         return saveFaultArmed;
     }
 
@@ -762,31 +759,11 @@ public final class SpaceSubsystem {
      * The armed fault, thrown from the middle of a save point's gather — where a mistake in that gather
      * would land, which is the one failure the handler undertakes to survive.
      */
-    static void failSavePointIfArmed() {
+    void failSavePointIfArmed() {
         if (saveFaultArmed) {
             saveFaultArmed = false;
             throw new IllegalStateException("armed ship-ledger save fault");
         }
-    }
-
-    /**
-     * Server-stop teardown of everything space keeps OUTSIDE the subsystem object. The subsystem
-     * itself is released by its owner ({@link Stellurgy}) — it is one object with one
-     * lifetime, and the server that is stopping is the one it belonged to. The slot dimensions stay
-     * registered (JVM-global).
-     */
-    public static void onServerStopped() {
-        // The clock belongs to the save that was just closed. A single-player client keeps this JVM
-        // alive between worlds, so carrying the number over would date the next world's first jump
-        // against the previous world's history; the next server-started hook reads its own.
-        spaceTick = 0L;
-        saveFaultArmed = false;
-        SystemBodiesProducer.reset();
-        dev.stannismod.stellurgy.universe.SystemContent.reset();
-        HyperspaceWorld.reset();
-        // The diagnostics describe the stack that has just gone; carrying them into the next server
-        // is how "the last re-seat was blocked at X" ends up describing a jump from another session.
-        SpaceDiagnostics.reset();
     }
 
     /** Parse the {@code spaceCellGcPolicy} config string, defaulting to {@code BOTH} on an unknown value. */
@@ -803,29 +780,15 @@ public final class SpaceSubsystem {
     }
 
     /**
-     * The subsystem's own clock, in ticks: the counter {@link #spaceClock()} answers with on the
-     * server. Advanced once per server tick by {@link Ticker}, written out with the rest of the
-     * subsystem's durable state and read back on server start, so a persisted age or ETA still means
-     * what it meant before the reboot.
-     *
-     * <p>Plain static state and not a world's counter, because a world's counter belongs to that
-     * world. The overworld's is the only one that advances unconditionally, and it is also the one
-     * anything that wants to age a save writes to; every other dimension's advances only while that
-     * dimension ticks; and neither is resolvable in the windows around server start and stop, where
-     * asking for one used to answer <b>tick zero</b> — silently dating a body's address, a transit's
-     * elapsed time or a capacitor's charge to the beginning of the world.</p>
-     */
-    private static long spaceTick;
-
-    /**
      * The one clock every space-side elapsed-time computation reads, on EITHER side. Public so
      * machines that carry a lazy resource — a capacitor that is charged by arithmetic rather than by
      * ticking — measure their elapsed time against exactly the same counter a transit does, and so a
      * ship parked in an unloaded cell is never quietly on a different clock from one in a loaded
      * chunk.
      *
-     * <p><b>Side-agnostic on purpose.</b> On the server this is {@link #spaceTick}, the subsystem's
-     * own counter; on a client it is {@link SpaceClockSync}, the synced copy of that same counter. No
+     * <p><b>Side-agnostic on purpose.</b> On the server this is the running server's own counter
+     * ({@link dev.stannismod.stellurgy.ServerState#spaceTick()}), written out with the subsystem's
+     * durable state and read back on server start; on a client it is {@link SpaceClockSync}, the synced copy of that same counter. No
      * caller needs to know which side it is on, and none may reach for a world's own clock instead:
      * every dimension except the overworld carries a clock that advances only while it ticks, so "the
      * total time of whatever world I am in" is a DIFFERENT quantity that merely looks like this one.
@@ -833,32 +796,10 @@ public final class SpaceSubsystem {
      * There is now no world clock anywhere in this answer, so that class of mistake has nothing left
      * to be made out of.</p>
      */
-    /**
-     * Advance the subsystem's clock by one tick. THE ONLY writer besides the restore, and it is
-     * called from exactly one place ({@link SpaceSubsystemEvents}'s server tick) — two writers on the
-     * same event would run the clock at twice the tick rate and nothing would report it.
-     */
-    static void advanceClock() {
-        spaceTick++;
-    }
-
     public static long spaceClock() {
         return FMLCommonHandler.instance().getEffectiveSide().isClient()
-                ? SpaceClockSync.now()
-                : spaceTick;
-    }
-
-    /**
-     * TEST/HEADLESS: put the owned clock at {@code tick}. Ages the universe by arithmetic instead of
-     * by waiting, which is the only way a dwell measured in days is testable at all — and, unlike the
-     * counter this used to be, moving it touches no world, so a shared server's day cycle, mob spawns
-     * and every other {@code totalTime % N} gate are left exactly where they were.
-     *
-     * <p>Production has no other writer: the clock is advanced by {@link Ticker} and restored by
-     * {@link #onServerStarted()}, and nothing else may set it.</p>
-     */
-    public static void setSpaceClock(long tick) {
-        spaceTick = tick;
+                ? dev.stannismod.stellurgy.Stellurgy.proxy.clientSpaceClock()
+                : Stellurgy.serverState().spaceTick();
     }
 
     /** Whether {@code player} is currently connected — the offline-progress crew-online check. */

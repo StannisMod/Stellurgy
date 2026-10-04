@@ -5,8 +5,10 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -124,5 +126,46 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
 
         // A save with no flightAssistOn key must default flight-assist ON.
         assertTrue("legacy flight-assist must default ON: " + r, bool(r, "legacyFaOn"));
+    }
+
+    /**
+     * The public API factory {@code StatsRocket#createFromNBT}, handed exactly what a rocket's stats
+     * write, must give back stats that write the same compound.
+     *
+     * <p>This test fails if {@code StatsRocket#createFromNBT} unwraps the stats compound before
+     * handing it to {@code readFromNBT}, which unwraps it again, finds nothing and leaves every field
+     * at its default — the defect this test was written to reproduce. The persistence round trip runs through the PRODUCTION
+     * writer ({@code StatsRocket#writeToNBT}) and the production factory on the stats of a real,
+     * assembled rocket, through the {@code rocket stats-from-nbt} probe verb, which compares nothing
+     * itself. The premise that the craft's stats are not defaults is read off {@code rocket info}
+     * (its thrust is non-zero), so an equal pair cannot be two empty rockets.</p>
+     *
+     * <p>Tier: a mechanics test, not a unit, because constructing a {@code StatsRocket} reads the
+     * running mod's configuration (the constructor takes {@code orbit} from it), and a fast tier may
+     * not arrange mod state. No client e2e: the factory has no caller inside Stellurgy and no player
+     * surface; it is offered to dependent mods through the API package.</p>
+     *
+     * red-witnessed: with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}
+     * handed the unwrapped {@code nbt.getCompoundTag(TAGNAME)} instead — the shipped defect — this
+     * fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and
+     * {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},
+     * {@code weight:7.049999f} and the seat (2026-10-02).
+     */
+    @Test
+    public void statsReadThroughTheApiFactoryWriteWhatTheRocketWrote() throws Exception {
+        String assemble = RocketFixture.assembleAt(site(), cmd -> ok(client().execute(cmd)),
+                "simple", 0, 255 - site().y, "the craft whose stats are written stands here");
+        int rocket = RocketFixture.rocketEntityId(assemble);
+        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), rocket);
+        ArrangementFailure.requireArranged("the craft's stats must not be the defaults, or an equal"
+                + " pair would say nothing: thrust " + info.thrust, info.thrust > 0);
+
+        Reply roundTrip = Reply.of("stellurgytest rocket stats-from-nbt",
+                ok(client().execute("stellurgytest rocket stats-from-nbt " + rocket)));
+        ArrangementFailure.requireArranged("the factory round trip must run: " + roundTrip,
+                roundTrip.ok());
+        assertEquals("StatsRocket.createFromNBT must give back the stats the rocket wrote, so that"
+                        + " they write the same compound again",
+                roundTrip.text("written"), roundTrip.text("rewritten"));
     }
 }

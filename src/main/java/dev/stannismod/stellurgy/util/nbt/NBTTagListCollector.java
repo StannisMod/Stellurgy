@@ -14,6 +14,7 @@ import java.util.stream.Collector;
 
 public class NBTTagListCollector implements Collector<NBTBase, NBTTagList, NBTTagList> {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     static final Set<Characteristics> CH_UNORDERED_ID
             = Collections.unmodifiableSet(EnumSet.of(Characteristics.UNORDERED,
             Characteristics.IDENTITY_FINISH));

@@ -7,7 +7,7 @@ import dev.stannismod.stellurgy.affs.te.TileEntityShieldGenerator;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import net.minecraftforge.event.world.WorldEvent;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
@@ -27,7 +27,6 @@ public final class ShieldNetworkManager {
     private static final int STATUS_SINK_LIMITED = 3;
     private static final int STATUS_CABLE_LIMITED = 4;
     private static final int STATUS_BALANCED = 5;
-    private static final Map<Integer, WorldState> WORLD_STATES = new HashMap<>();
 
     private ShieldNetworkManager() {
     }
@@ -43,8 +42,7 @@ public final class ShieldNetworkManager {
         if (world == null || pos == null) {
             return null;
         }
-        WorldState state = WORLD_STATES.get(world.provider.getDimension());
-        return state == null ? null : state.stateByPos.get(pos);
+        return getState(world).stateByPos.get(pos);
     }
 
     public static void setShieldEnergyResistanceBias(World world, BlockPos pos, double bias) {
@@ -77,24 +75,9 @@ public final class ShieldNetworkManager {
         state.solve(world);
     }
 
-    @SubscribeEvent
-    public static void onWorldUnload(WorldEvent.Unload event) {
-        World world = event.getWorld();
-        if (world == null || world.isRemote) {
-            return;
-        }
-        WORLD_STATES.remove(world.provider.getDimension());
-        ShieldNetworkRegistry.clearWorld(world);
-    }
-
+    /** {@code world}'s solver state, owned by that world ({@code WorldRuntime}) and dropped with it. */
     private static WorldState getState(World world) {
-        int dim = world.provider.getDimension();
-        WorldState state = WORLD_STATES.get(dim);
-        if (state == null) {
-            state = new WorldState();
-            WORLD_STATES.put(dim, state);
-        }
-        return state;
+        return WorldRuntime.of(world, WorldState.class, WorldState::new);
     }
 
     private static final class WorldState {
@@ -108,7 +91,7 @@ public final class ShieldNetworkManager {
             Set<ShieldNetworkState> consumedStates = new HashSet<>();
             stateByPos.clear();
 
-            Set<IShieldNetworkNode> nodes = ShieldNetworkRegistry.snapshot();
+            Set<IShieldNetworkNode> nodes = ShieldNetworkRegistry.of(world).snapshot();
             Map<BlockPos, IShieldCable> cables = new HashMap<>();
             Map<BlockPos, IShieldSource> sources = new HashMap<>();
             Map<BlockPos, IShieldSink> sinks = new HashMap<>();

@@ -64,8 +64,7 @@ public final class GalacticAnchor {
      * How far out this anchor sits from its galaxy's centre, in light years — what the guaranteed
      * minimum radius is checked against.
      */
-    public double reachLy() {
-        IUniverseLaws laws = UniverseRegistry.getGenerator().laws();
+    public double reachLy(IUniverseLaws laws) {
         double x = laws.lightYearsForCells(local.sectorX());
         double y = laws.lightYearsForCells(local.sectorY());
         double z = laws.lightYearsForCells(local.sectorZ());

@@ -10,7 +10,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Atmosphere Terraformer multiblock validation.
+ * Atmosphere Terraformer group: multiblock validation, the lone controller's tick, and the
+ * terraforming helper an atmosphere change starts.
  *
  * <p>{@link dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer}
  * — the largest Stellurgy multiblock by footprint: a 17×17 sphere-like shape over
@@ -76,6 +77,61 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("terraformer validated despite missing neighbour: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
+    }
+
+    /**
+     * A lone controller, with no structure around it, survives a tick burst: the production tick checks
+     * {@code isComplete} before it does any work.
+     */
+    @Test
+    public void terraformerControllerSurvivesTickWithoutStructure() throws Exception {
+        FixtureSite s = site();
+        String at = " 0 " + s.x + " " + s.y + " " + s.z;
+
+        String place = join(client().execute("stellurgytest place" + at + " stellurgy:terraformer"));
+        assertTrue("terraformer place failed: " + place, Reply.of(place).bool("placed"));
+
+        String info = join(client().execute("stellurgytest machine info" + at));
+        assertEquals("expected terraformer tile: " + info,
+                "TileAtmosphereTerraformer", MachineInfo.of(info).tileSimpleName());
+
+        String tryComplete = join(client().execute("stellurgytest machine try-complete" + at));
+        assertTrue("incomplete terraformer should report isComplete=false: " + tryComplete,
+                (!Reply.of(tryComplete).bool("isComplete")));
+
+        String tick = join(client().execute("stellurgytest tile force-tick" + at + " 60"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
+        assertEquals("must tick all 60 iterations", 60, Reply.of(tick).integer("ticked"));
+
+        String postInfo = join(client().execute("stellurgytest machine info" + at));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileAtmosphereTerraformer", MachineInfo.of(postInfo).tileSimpleName());
+    }
+
+    /**
+     * A change of air is what sets the ground to change: after
+     * {@link dev.stannismod.stellurgy.dimension.DimensionProperties#setAtmosphereDensity(int)} the
+     * planet's world has a terraforming helper working on it. The overworld's density is restored
+     * afterwards, so no sibling here reads a mutated atmosphere.
+     */
+    @Test
+    public void atmosphereChangeStartsTerraformingHelper() throws Exception {
+        String before = join(client().execute("stellurgytest terraforming info 0"));
+        assertTrue("baseline terraforming info errored: " + before, !Reply.of(before).has("error"));
+        Reply baseline = Reply.of("stellurgytest terraforming info", before);
+        assertTrue("could not extract currentAtmosphere from: " + before, baseline.has("currentAtmosphere"));
+        int currentBefore = baseline.integer("currentAtmosphere");
+
+        int target = currentBefore == 25 ? 75 : 25;
+        try {
+            client().execute("stellurgytest terraforming set-density 0 " + target);
+
+            String after = join(client().execute("stellurgytest terraforming info 0"));
+            assertTrue("no terraforming helper on the planet's world after the atmosphere changed: " + after,
+                    Reply.of(after).bool("helperPresent"));
+        } finally {
+            client().execute("stellurgytest terraforming set-density 0 " + currentBefore);
+        }
     }
 
     private static String join(java.util.List<String> resp) {

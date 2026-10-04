@@ -34,13 +34,15 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  *       kind of world commoner in exact proportion.</li>
  * </ul>
  *
- * <p>Static state, server-side authored config — the same lifetime and the same reset points as the
- * star catalogue it is loaded beside.</p>
+ * <p>An immutable value. The table a save runs with is held by that server's galaxy
+ * ({@code DimensionManager.getPlanetTypes()}), read from the save's planet file when the server starts,
+ * and handed to the universe schema's derivation; nothing in the process holds "the current table".</p>
  */
 public final class PlanetTypes {
 
     // A self-contained logger rather than Stellurgy.logger: loading the mod class triggers Forge
     // bootstrap, which would break pure unit tests of the derivation this class feeds.
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Universe");
 
     /**
@@ -50,41 +52,50 @@ public final class PlanetTypes {
      */
     public static final String UNCLASSIFIED = "unclassified";
 
+    private final List<PlanetTypePreset> presets;
+
     /**
-     * Whether a foreign {@code WorldType} of this name exists in the running modset. A seam, so the
-     * filter is unit-testable without a Minecraft registry; production resolves it against
-     * {@code WorldType.byName}.
+     * Whether a foreign {@code WorldType} of this name exists in the running modset. Production
+     * resolves it against {@code WorldType.parseWorldType}; a unit test hands in its own.
      */
-    private static volatile Predicate<String> worldTypeAvailable = PlanetTypes::worldTypeIsRegistered;
+    private final Predicate<String> worldTypeAvailable;
 
-    private static volatile List<PlanetTypePreset> presets = stockPresets();
-
-    private PlanetTypes() {
+    private PlanetTypes(List<PlanetTypePreset> presets, Predicate<String> worldTypeAvailable) {
+        this.presets = presets;
+        this.worldTypeAvailable = worldTypeAvailable;
     }
 
     // ─── The catalogue ─────────────────────────────────────────────────────────
 
-    /** Every preset currently in force, in authored order. Never empty. */
-    public static List<PlanetTypePreset> presets() {
+    /** The code-shipped table. */
+    public static PlanetTypes stock() {
+        return new PlanetTypes(stockPresets(), PlanetTypes::worldTypeIsRegistered);
+    }
+
+    /**
+     * The table a planet file authors (its {@code <planetType>} elements). {@code null} or empty means
+     * the file states none, and the code-shipped table is in force.
+     */
+    public static PlanetTypes authored(List<PlanetTypePreset> authored) {
+        if (authored == null || authored.isEmpty()) {
+            return stock();
+        }
+        return new PlanetTypes(Collections.unmodifiableList(new ArrayList<>(authored)),
+                PlanetTypes::worldTypeIsRegistered);
+    }
+
+    /** This table, judging terrain availability by {@code probe} instead of the running modset. */
+    public PlanetTypes withWorldTypeAvailability(Predicate<String> probe) {
+        return new PlanetTypes(presets, probe);
+    }
+
+    /** Every preset in this table, in authored order. Never empty. */
+    public List<PlanetTypePreset> presets() {
         return presets;
     }
 
-    /** Install an authored table (the {@code <planetType>} elements). An empty list restores stock. */
-    public static void setPresets(List<PlanetTypePreset> authored) {
-        if (authored == null || authored.isEmpty()) {
-            presets = stockPresets();
-            return;
-        }
-        presets = Collections.unmodifiableList(new ArrayList<>(authored));
-    }
-
-    /** Restore the code-shipped table — the world-unload / config-reset path. */
-    public static void resetToStock() {
-        presets = stockPresets();
-    }
-
     /** The preset of that name, or {@code null}. */
-    public static PlanetTypePreset byName(String name) {
+    public PlanetTypePreset byName(String name) {
         if (name == null) {
             return null;
         }
@@ -94,11 +105,6 @@ public final class PlanetTypes {
             }
         }
         return null;
-    }
-
-    /** Override the {@code WorldType}-availability probe (tests, or an addon with its own registry). */
-    public static void setWorldTypeAvailability(Predicate<String> probe) {
-        worldTypeAvailable = probe == null ? PlanetTypes::worldTypeIsRegistered : probe;
     }
 
     // ─── The draws ─────────────────────────────────────────────────────────────
@@ -119,7 +125,7 @@ public final class PlanetTypes {
      *
      * @param temperatureForAlbedo what this world's surface temperature would be at a given albedo
      */
-    public static List<PlanetTypePreset> candidates(int pressure,
+    public List<PlanetTypePreset> candidates(int pressure,
                                                     DoubleToIntFunction temperatureForAlbedo,
                                                     int gravityPercent, boolean gasGiant) {
         List<PlanetTypePreset> out = new ArrayList<>();
@@ -141,9 +147,10 @@ public final class PlanetTypes {
      * substituted and no preset is invented: the answer is {@code null}, and the caller reports the
      * world as {@link #UNCLASSIFIED}. A silent substitution would hide the authoring gap forever.</p>
      */
-    public static PlanetTypePreset drawType(int pressure,
+    public PlanetTypePreset drawType(int pressure,
                                             DoubleToIntFunction temperatureForAlbedo,
-                                            int gravityPercent, boolean gasGiant, long hash) {
+                                            int gravityPercent, boolean gasGiant, long hash,
+                                            ReportOnce reports) {
         List<PlanetTypePreset> admitting = candidates(pressure, temperatureForAlbedo, gravityPercent,
                 gasGiant);
         if (admitting.isEmpty()) {
@@ -151,7 +158,7 @@ public final class PlanetTypes {
             // than one of the types that declined it — an author widening a range needs to know where
             // the world actually sits, not where the last candidate would have put it.
             int neutral = temperatureForAlbedo.applyAsInt(AstronomicalBodyHelper.EARTH_ALBEDO);
-            if (SystemContent.reportOnce("noPlanetType:" + gasGiant + ':' + pressure / 50 + ':'
+            if (reports.first("noPlanetType:" + gasGiant + ':' + pressure / 50 + ':'
                     + neutral / 25 + ':' + gravityPercent / 25)) {
                 LOGGER.warn("no planet type admits a world at pressure {}, {} K, gravity {}% (gasGiant={})"
                         + " - it will be reported as '{}'. Widen a <planetType> range to cover it.",
@@ -178,7 +185,7 @@ public final class PlanetTypes {
      * modset can actually run. Never {@code null}: a preset whose every entry names a missing mod falls
      * back to Stellurgy's own generator, which is the one thing always present.
      */
-    public static TerrainOption drawTerrain(PlanetTypePreset preset, long hash) {
+    public TerrainOption drawTerrain(PlanetTypePreset preset, long hash, ReportOnce reports) {
         if (preset == null) {
             return TerrainOption.ofNative(0, 1);
         }
@@ -190,7 +197,7 @@ public final class PlanetTypes {
             }
         }
         if (available.isEmpty()) {
-            if (SystemContent.reportOnce("noTerrain:" + preset.name())) {
+            if (reports.first("noTerrain:" + preset.name())) {
                 LOGGER.warn("planet type '{}' has no runnable terrain source in this modset (every "
                         + "<gen> entry names a WorldType that is not registered) - falling back to the "
                         + "native generator.", preset.name());

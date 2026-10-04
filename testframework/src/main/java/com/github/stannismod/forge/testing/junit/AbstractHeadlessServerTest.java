@@ -65,8 +65,7 @@ public abstract class AbstractHeadlessServerTest {
      * is tempting — but it was tried as the harness default on 2026-08-14 and cost a bigger server
      * heap, more wall clock and three unexplained reds; see
      * {@code RealDedicatedServerHarness}'s flat preset for the numbers. A fixture that needs
-     * standable ground is usually better served by standing on a spot whose terrain was SURVEYED
-     * (see {@code FixtureGroundOnPinnedSeedTest}).</p>
+     * standable ground is usually better served by standing on a spot whose terrain was SURVEYED.</p>
      */
     protected boolean requiresFlatTerrain() {
         return false;

@@ -91,8 +91,11 @@ public final class GameDirSeed {
         return config.isEmpty() && planetDefs == null;
     }
 
-    /** Write what was declared into {@code root}, and return a one-line description for the log. */
-    String writeInto(Path root) throws IOException {
+    /**
+     * Write what was declared into {@code root}, and return a one-line description for the log.
+     * Public because the shared SERVER scope seeds its world the same way.
+     */
+    public String writeInto(Path root) throws IOException {
         Path stellurgyConfigDir = root.resolve("config").resolve("advRocketry");
         Files.createDirectories(stellurgyConfigDir);
         StringBuilder described = new StringBuilder();

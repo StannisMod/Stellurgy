@@ -24,14 +24,15 @@ import javax.annotation.Nullable;
 
 public class WorldDummy extends World {
 
-    private final static ProviderDummy dummyProvider = new ProviderDummy();
     public int displayListIndex = -1;
     StorageChunk storage;
     private CapabilityDispatcher capabilities;
 
     public WorldDummy(Profiler p_i45368_5_, StorageChunk storage) {
-        super(new DummySaveHandler(), new WorldInfo(new NBTTagCompound()), dummyProvider, p_i45368_5_, false);
-        dummyProvider.setWorld(this);
+        // A provider of its own: a provider points back at its world, so a shared one would point
+        // every earlier dummy at the newest and keep that one alive.
+        super(new DummySaveHandler(), new WorldInfo(new NBTTagCompound()), new ProviderDummy(), p_i45368_5_, false);
+        this.provider.setWorld(this);
         this.storage = storage;
         this.chunkProvider = new ChunkProviderDummy(this, storage);
 

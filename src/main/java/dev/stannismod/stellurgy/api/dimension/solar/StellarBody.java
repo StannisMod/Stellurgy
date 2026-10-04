@@ -28,6 +28,8 @@ public class StellarBody {
      * <p>The field this replaces was an ANGLE with the same default of 5, applied to the sky as a
      * tilt. An angle cannot say where a companion is — only how far off the primary it looks from one
      * particular world — so nothing could place it, light a planet by it, or let it move.</p>
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     public static final long DEFAULT_COMPANION_ORBIT = Math.round(
             0.05d * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);

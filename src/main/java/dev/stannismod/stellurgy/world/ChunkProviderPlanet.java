@@ -40,6 +40,8 @@ import dev.stannismod.stellurgy.world.decoration.*;
 public class ChunkProviderPlanet implements IChunkGenerator {
     /**
      * RNG.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     protected static final IBlockState STONE = Blocks.STONE.getDefaultState();
     private final Random rand;

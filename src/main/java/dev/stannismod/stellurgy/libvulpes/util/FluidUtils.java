@@ -16,6 +16,7 @@ import java.util.Map;
 
 public class FluidUtils {
 	
+	/** Effectively final, process lifetime: filled only by FluidUtils.addFluidMapping. */
 	private static Map<String, List<String>> fluidEquivalentMapping = new HashMap<>();
 
 	public static boolean containsFluid(@Nonnull ItemStack stack) {

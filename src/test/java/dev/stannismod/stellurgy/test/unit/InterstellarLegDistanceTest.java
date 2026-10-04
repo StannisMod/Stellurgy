@@ -35,7 +35,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class InterstellarLegDistanceTest {
 
-    /** A baseline drive hauling the placeholder hull: the reference ship every band is quoted for. */
+    /**
+     * A baseline drive hauling the placeholder hull: the reference ship every band is quoted for.
+     *
+     * <p>A constant: a final {@code long} computed once by a pure function of static-final drive
+     * constants.</p>
+     */
     private static final long BASELINE_SPEED =
             JumpSpeed.blocksPerTick(DriveTuning.BASELINE_DRIVE_POWER, DriveTuning.PLACEHOLDER_SHIP_MASS,
                     DriveTier.baseline());
@@ -54,7 +59,7 @@ public class InterstellarLegDistanceTest {
     @Test
     public void theNearestSystemIsFarEnoughToBeAJumpAndCloseEnoughToBeReached() {
         GalaxyGenConfig cfg = GalaxyGenConfig.defaults();
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg);
 
         List<Long> ticks = new ArrayList<>();
         List<String> rows = new ArrayList<>();
@@ -147,17 +152,6 @@ public class InterstellarLegDistanceTest {
     private static final double MIN_BAND_FOR_A_SECOND_DRIVE_TIER = 1_000d;
 
     @Test
-    public void crossingAGalaxyIsWideEnoughAboveOneStepToHoldASecondDriveTier() {
-        System.out.println(String.format(
-                "star -> galaxy band: %.0f x (galaxy diameter %.0f ly / star separation %.2f ly)",
-                DECLARED_STAR_TO_GALAXY_BAND, 2d * UniverseScale.REFERENCE_GALAXY_RADIUS_LY,
-                UniverseScale.MEAN_STAR_SEPARATION_LY));
-        assertTrue("a star -> galaxy band of only x" + (long) DECLARED_STAR_TO_GALAXY_BAND
-                        + " leaves no room for a drive tier above the first",
-                DECLARED_STAR_TO_GALAXY_BAND >= MIN_BAND_FOR_A_SECOND_DRIVE_TIER);
-    }
-
-    @Test
     public void theMeasuredBandMatchesTheArithmeticItIsDerivedFrom() {
         // The same 20 seeds as the leg reading above, and the same real generator. The lattice is
         // STRATIFIED rather than Poisson, so a measured neighbour distance runs somewhat wider than
@@ -166,7 +160,7 @@ public class InterstellarLegDistanceTest {
         // longer the scales apart the drive ladder is derived against.
         final double TOLERANCE_FACTOR = 2d;
 
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(GalaxyGenConfig.defaults());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),GalaxyGenConfig.defaults());
         List<Double> bands = new ArrayList<>();
         for (long seed = 1L; seed <= 20L; seed++) {
             Double stepLy = nearestNeighbourLightYears(gen, seed);

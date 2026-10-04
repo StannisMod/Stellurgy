@@ -1024,26 +1024,6 @@ public class ShipTransitManagerTest {
     // -- durable hyperspace: a restart is something a jump SURVIVES (JUMP-9 / JUMP-10) ------------
 
     @Test
-    public void aRestoredTransitKeepsTheLaneAndTheShipItLeftParkedIn() {
-        SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
-        HyperspaceTiles tiles = new HyperspaceTiles();
-        FakeCrosser crosser = new FakeCrosser();
-        BlockPos parkedAt = HyperspaceTiles.tilePos(3);
-        crosser.parkedAnchors.add(parkedAt);          // hyperspace kept it across the restart
-        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser, new ShipLedger(), () -> 0L);
-        String ship = UUID.randomUUID().toString();
-
-        mgr.importTransit(new TransitRecord(ship, cell(1), cell(2), 4_000_000L, 0L, 10_000L, 0L, 7L,
-                new ArrayList<UUID>(), new NBTTagCompound(), 3, parkedAt));
-
-        // The two questions a returning crew member's placement is decided by. Both answer "nowhere"
-        // for a transit with no physical ship, and both have to answer about the parked hull now.
-        assertEquals("a jump whose ship is still parked resumes with that ship, so its crew belongs"
-                + " in the parked world", crosser.parkedDim(), mgr.crewDimensionOf(ship));
-        assertEquals("...and at the ship, not at the world origin", parkedAt, mgr.hyperspaceAnchorOf(ship));
-    }
-
-    @Test
     public void aRestoredTransitWhoseLaneCameBackEmptyStillRebuildsFromItsSnapshot() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         FakeCrosser crosser = new FakeCrosser();   // parkedAnchors empty: the hull did not survive

@@ -37,6 +37,10 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * registered-dimension count. Pre-fix the count grows by the bumped
  * {@code numPlanets}; post-fix (guard on {@code loadedPlanets.isEmpty()}) it is
  * unchanged.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class DimensionRandomPlanetReloadTest {
 

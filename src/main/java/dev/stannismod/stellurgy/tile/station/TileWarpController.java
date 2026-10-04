@@ -99,7 +99,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
 
             DimensionProperties destProperties = DimensionManager.getInstance().getDimensionProperties(getSpaceObject().getDestOrbitingBody());
 
-            if (properties == DimensionManager.defaultSpaceDimensionProperties)
+            if (properties == DimensionManager.getInstance().getDefaultSpaceProperties())
                 return Integer.MAX_VALUE;
 
             if (destProperties.getStar() != properties.getStar())
@@ -159,7 +159,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
 
             DimensionProperties destProperties = DimensionManager.getInstance().getDimensionProperties(destinationID);
 
-            if (properties == DimensionManager.defaultSpaceDimensionProperties)
+            if (properties == DimensionManager.getInstance().getDefaultSpaceProperties())
                 return Integer.MAX_VALUE;
 
             if (destProperties.getStar() != properties.getStar())

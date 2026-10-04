@@ -20,6 +20,7 @@ import java.util.*;
  * keeps all of a ship's chunks in cache for fast access.
  */
 public class ClaimedChunkCacheController implements Iterable<Chunk> {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     @java.lang.SuppressWarnings("all")
     private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(ClaimedChunkCacheController.class);
     /**

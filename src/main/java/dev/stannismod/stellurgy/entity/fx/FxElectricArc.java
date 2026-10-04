@@ -8,6 +8,7 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 
 public class FxElectricArc extends Particle {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final ResourceLocation icon = new ResourceLocation("stellurgy:textures/particle/hardSquare.png");
     int numRecursions;
 

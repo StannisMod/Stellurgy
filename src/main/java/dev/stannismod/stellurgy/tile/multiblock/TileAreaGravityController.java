@@ -35,6 +35,7 @@ import java.util.List;
 
 public class TileAreaGravityController extends TileMultiPowerConsumer implements ISliderBar, IGuiCallback {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = {
             {{null, null, null},
                     {null, 'c', null},

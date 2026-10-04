@@ -21,7 +21,9 @@ public enum ControlDirection {
     YAW_POSITIVE(ControlAxis.YAW, true),
     YAW_NEGATIVE(ControlAxis.YAW, false);
 
+    /** Effectively final, process lifetime: set once when the object is built. */
     private final ControlAxis axis;
+    /** Effectively final, process lifetime: set once when the object is built. */
     private final boolean positive;
 
     ControlDirection(ControlAxis axis, boolean positive) {

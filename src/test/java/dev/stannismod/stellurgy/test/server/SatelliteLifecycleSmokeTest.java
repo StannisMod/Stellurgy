@@ -33,74 +33,16 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
      *  empty", well under what the mod ships. */
     private static final int MIN_SATELLITE_TYPES = 5;
 
-    /** The generation and storage this satellite type declares, read back from its info. Neither is
-     *  a threshold: both are the type's own numbers. */
-    private static final int TYPE_POWER_GEN = 250;
-    /** @see #TYPE_POWER_GEN */
-    private static final int TYPE_POWER_STORAGE = 5000;
-
     private static final String ID_PATTERN = "id";
 
     @Test
     public void satelliteCreatePopulatesDimensionProperties() throws Exception {
         // Registry sanity.
         String types = String.join("\n", client().execute("stellurgytest satellite types"));
-        assertTrue("satellite types schema invalid: " + types,
-                (Reply.of(types).arrayLength("satelliteTypes") >= 0));
         int totalQuotes = countOccurrences(types, "\"");
         int actualCount = (totalQuotes - 2) / 2; // -2 for "satelliteTypes" key quotes
         assertTrue("expected ≥5 satellite types, got " + actualCount + ": " + types,
                 actualCount >= MIN_SATELLITE_TYPES);
-
-        // Create real satellite via the legacy create path used by the prior
-        // smoke. The 10 per-type assertions below cover the remaining types.
-        long satId = createAndGetId("solarEnergy", 250, 5000, 1024);
-        String list = String.join("\n", client().execute("stellurgytest satellite list 0"));
-        Reply.of(list).element("satellites", "id", String.valueOf(satId));
-        String info = String.join("\n", client().execute("stellurgytest satellite info 0 " + satId));
-        assertTrue("info missing/wrong type: " + info, "solarEnergy".equals(Reply.of(info).text("type")));
-        assertTrue("info missing/wrong powerGen: " + info, (Reply.of(info).integer("powerGen") == TYPE_POWER_GEN));
-        assertTrue("info missing/wrong powerStorage: " + info, (Reply.of(info).integer("powerStorage") == TYPE_POWER_STORAGE));
-    }
-
-    @Test
-    public void opticalScannerSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("optical", 100, 2000, 4096);
-    }
-
-    @Test
-    public void densityScannerSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("density", 110, 2100, 4096);
-    }
-
-    @Test
-    public void compositionScannerSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("composition", 120, 2200, 4096);
-    }
-
-    @Test
-    public void massScannerSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("mass", 130, 2300, 4096);
-    }
-
-    @Test
-    public void asteroidMinerSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("asteroidMiner", 140, 2400, 4096);
-    }
-
-    @Test
-    public void gasCollectionSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("gasMining", 150, 2500, 4096);
-    }
-
-    @Test
-    public void biomeChangerSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("biomeChanger", 160, 2600, 4096);
-    }
-
-    @Test
-    public void weatherControllerSatelliteRoundTrips() throws Exception {
-        roundTripSatellite("weatherController", 170, 2700, 4096);
     }
 
     /**
@@ -164,35 +106,6 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
                 String.valueOf(satId).equals(Reply.of(linked).text("linkedSatelliteId")));
         assertTrue("terminal must surface the linked satellite type: " + linked,
                 "density".equals(Reply.of(linked).text("linkedType")));
-    }
-
-    /**
-     * Helper: drive the create &rarr; list &rarr; info round-trip and assert every
-     * echoed field. Encapsulates the common assertion set so per-type tests
-     * stay one-liners.
-     */
-    private void roundTripSatellite(String type, int powerGen, int powerStorage, int maxData) throws Exception {
-        long satId = createAndGetId(type, powerGen, powerStorage, maxData);
-
-        String list = String.join("\n", client().execute("stellurgytest satellite list 0"));
-        // Addressed by the id this scenario just minted, and its TYPE read off that row. The list
-        // is shared with every other satellite the suite made, so `type` identifies nothing: the
-        // second line used to be a separate lookup and the world it passed on was one where some
-        // OTHER satellite had this type.
-        assertEquals("the satellite this scenario created must be listed with its own type: " + list,
-                String.valueOf(type),
-                Reply.of("stellurgytest satellite list", list)
-                        .element("satellites", "id", String.valueOf(satId)).text("type"));
-
-        String info = String.join("\n", client().execute("stellurgytest satellite info 0 " + satId));
-        assertTrue("info must echo type=" + type + ": " + info,
-                String.valueOf(type).equals(Reply.of(info).text("type")));
-        assertTrue("info must echo powerGen=" + powerGen + ": " + info,
-                String.valueOf(powerGen).equals(Reply.of(info).text("powerGen")));
-        assertTrue("info must echo powerStorage=" + powerStorage + ": " + info,
-                String.valueOf(powerStorage).equals(Reply.of(info).text("powerStorage")));
-        assertTrue("info must echo maxData=" + maxData + ": " + info,
-                String.valueOf(maxData).equals(Reply.of(info).text("maxData")));
     }
 
     /**

@@ -34,13 +34,13 @@ import static org.junit.Assert.assertTrue;
 public class CreativeTabTitleContractTest {
 
     /** Every compiled main source root; a tab declared in any of them ships in the jar. */
-    private static final String[] SOURCE_ROOTS = {
+    private final String[] sourceRoots = {
             "src/main/java",
             "valkyrienskies/src/main/java",
     };
 
     /** Every root that ships assets/&lt;domain&gt;/lang/. */
-    private static final String[] RESOURCE_ROOTS = {
+    private final String[] resourceRoots = {
             "src/main/resources",
             "valkyrienskies/src/main/resources",
     };
@@ -51,16 +51,19 @@ public class CreativeTabTitleContractTest {
      */
     private static final int MIN_TABS = 4;
 
+    /**
+     * A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own matcher.
+     */
     // NOT-A-PROBE-REPLY: Java source text, the string literal handed to a CreativeTabs constructor
     private static final Pattern NEW_TAB = Pattern.compile("new\\s+CreativeTabs\\s*\\(\\s*\"([^\"]+)\"");
 
     /** Labels known to be untranslated - each a recorded bug, never a permanent exception. */
-    private static final Map<String, String> EXEMPT = new LinkedHashMap<String, String>();
+    private final Map<String, String> exemptions = new LinkedHashMap<String, String>();
 
     @Test
     public void everyCreativeTabHasAnEnglishTitle() throws IOException {
         TreeSet<String> catalogue = new TreeSet<String>();
-        for (String root : RESOURCE_ROOTS) {
+        for (String root : resourceRoots) {
             for (Path lang : filesUnder(Paths.get(root), ".lang")) {
                 if (lang.getFileName().toString().equalsIgnoreCase("en_us.lang")) {
                     catalogue.addAll(keysOf(lang));
@@ -69,7 +72,7 @@ public class CreativeTabTitleContractTest {
         }
 
         Map<String, String> tabs = new LinkedHashMap<String, String>();
-        for (String root : SOURCE_ROOTS) {
+        for (String root : sourceRoots) {
             Path dir = Paths.get(root);
             assertTrue("source root not found at " + dir.toAbsolutePath()
                     + " - this test must run with the project root as its working directory",
@@ -86,14 +89,14 @@ public class CreativeTabTitleContractTest {
 
         StringBuilder misses = new StringBuilder();
         for (Map.Entry<String, String> tab : tabs.entrySet()) {
-            if (!EXEMPT.containsKey(tab.getKey()) && !catalogue.contains("itemGroup." + tab.getKey())) {
+            if (!exemptions.containsKey(tab.getKey()) && !catalogue.contains("itemGroup." + tab.getKey())) {
                 misses.append("  itemGroup.").append(tab.getKey()).append("   (").append(tab.getValue()).append(")\n");
             }
         }
         assertTrue("creative tab(s) whose title no en_US catalogue defines - the player reads the raw key:\n"
                 + misses, misses.length() == 0);
 
-        for (String exempt : EXEMPT.keySet()) {
+        for (String exempt : exemptions.keySet()) {
             assertTrue("exemption '" + exempt + "' is stale: the tab is translated now or no longer exists."
                     + " Delete the exemption so this test guards it.",
                     tabs.containsKey(exempt) && !catalogue.contains("itemGroup." + exempt));

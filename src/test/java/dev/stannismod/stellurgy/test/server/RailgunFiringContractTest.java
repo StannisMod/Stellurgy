@@ -190,10 +190,6 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
                 + ": " + tryComplete, Reply.of(tryComplete).bool("isComplete"));
     }
 
-    private static String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     private static String extractStr(String src, String field) {
         String value = Reply.of(src).text(field);
         return value;

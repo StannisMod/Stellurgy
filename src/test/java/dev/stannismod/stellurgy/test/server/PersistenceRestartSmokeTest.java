@@ -22,6 +22,10 @@ import static org.junit.Assert.assertTrue;
  * Boot 1 creates a station + satellite + mutates Earth atmosphere density.
  * Boot 2 (same workDir) verifies every mutation survived save/load + registry
  * counts are stable.
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class PersistenceRestartSmokeTest {
 

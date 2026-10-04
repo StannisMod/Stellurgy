@@ -46,7 +46,7 @@ public class WorldProviderSpaceSlot extends WorldProviderSpace {
         // The one unbound slot that is not scratch: hyperspace holds every ship in flight and now
         // outlives the server, so its content is named after the world rather than after whichever
         // dimension id this boot's free-id scan handed it.
-        return getDimension() == HyperspaceWorld.dimId()
+        return getDimension() == dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId()
                 ? SpaceSlotPool.hyperspaceSubfolder()
                 : SpaceSlotPool.unboundSlotSubfolder(getDimension());
     }

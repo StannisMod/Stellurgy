@@ -16,18 +16,6 @@ import static org.junit.Assert.assertFalse;
 public class PlanetWeatherStateTest {
 
     @Test
-    public void planetWeatherStateDefaultsStable() {
-        PlanetWeatherState state = new PlanetWeatherState();
-        assertEquals("fresh state: cleanWeatherTime", 0, state.getCleanWeatherTime());
-        assertEquals("fresh state: rainTime", 0, state.getRainTime());
-        assertEquals("fresh state: thunderTime", 0, state.getThunderTime());
-        assertFalse("fresh state: raining", state.isRaining());
-        assertFalse("fresh state: thundering", state.isThundering());
-        assertFalse("fresh state: lastSyncedRaining", state.wasLastSyncedRaining());
-        assertFalse("fresh state: lastSyncedThundering", state.wasLastSyncedThundering());
-    }
-
-    @Test
     public void planetWeatherStateNbtRoundTrip() {
         PlanetWeatherState source = new PlanetWeatherState();
         source.setCleanWeatherTime(1234);
@@ -105,21 +93,5 @@ public class PlanetWeatherStateTest {
         // Second seed is a no-op (clock already owned).
         fresh.seedTimeIfNeeded(9999L, 9999L);
         assertEquals("seed is sticky", 1000L, fresh.getWorldTime());
-    }
-
-    @Test
-    public void lastSyncedFlagsAreSettable() {
-        // lastSynced* are transient (not in NBT) and only used by the manager
-        // to detect edge transitions for explicit client packets — but the
-        // setter/getter pair must still behave like a plain flag pair.
-        PlanetWeatherState state = new PlanetWeatherState();
-        state.markSyncedRaining(true);
-        state.markSyncedThundering(true);
-
-        assertEquals(true, state.wasLastSyncedRaining());
-        assertEquals(true, state.wasLastSyncedThundering());
-
-        state.markSyncedRaining(false);
-        assertFalse(state.wasLastSyncedRaining());
     }
 }

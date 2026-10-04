@@ -43,7 +43,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
 
     /** Force-load chunks around the test column so subsequent place +
      *  inject operations don't race against vanilla chunk-populate. */
-    private static void warmup(int blockX, int blockZ) {
+    private void warmup(int blockX, int blockZ) {
         int cx = blockX >> 4;
         int cz = blockZ >> 4;
         try {
@@ -58,7 +58,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
     }
 
     /** Place a TileFluidTank at the given coords. */
-    private static void placeTank(int x, int y, int z) throws Exception {
+    private void placeTank(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "stellurgytest place 0 " + x + " " + y + " " + z
                         + " stellurgy:liquidTank"));
@@ -71,7 +71,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
      *  Capacity is config-driven (libVulpes default × Stellurgy's
      *  {@code blockLiquidHatchCapacityMultiplier}) so the test reads
      *  it dynamically rather than pinning a magic number. */
-    private static int storedCapacity(int x, int y, int z) throws Exception {
+    private int storedCapacity(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "stellurgytest fluid stored 0 " + x + " " + y + " " + z));
         return FluidStored.of(resp).capacity(0);
@@ -79,7 +79,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
 
     /** Return the {@code amount} field from the {@code fluid stored}
      *  response, or 0 if the tank is empty. */
-    private static int storedAmount(int x, int y, int z) throws Exception {
+    private int storedAmount(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "stellurgytest fluid stored 0 " + x + " " + y + " " + z));
         assertTrue("fluid stored must succeed: " + resp,

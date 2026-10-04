@@ -41,6 +41,7 @@ public final class ShipReadout {
         CANNOT_HOVER
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final int DIRECTIONS = ControlDirection.values().length;
 
     private final long revision;

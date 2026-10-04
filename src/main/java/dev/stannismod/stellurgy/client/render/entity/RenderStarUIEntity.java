@@ -12,13 +12,16 @@ import net.minecraft.util.math.RayTraceResult;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.client.render.SharedModels;
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.entity.EntityUIStar;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderStarUIEntity extends Render<EntityUIStar> implements IRenderFactory<EntityUIStar> {
+
+    private final WavefrontObject orbitRing =
+            WavefrontObject.required(new ResourceLocation("stellurgy:models/warpcore.obj"));
 
     public RenderStarUIEntity(RenderManager renderManager) {
         super(renderManager);
@@ -99,12 +102,12 @@ public class RenderStarUIEntity extends Render<EntityUIStar> implements IRenderF
             GL11.glTranslated(0, -.75f, 0);
             GL11.glPushMatrix();
             GL11.glRotated(speedRotate * System.currentTimeMillis() % 360, 0f, 1f, 0f);
-            SharedModels.orbitRing().renderOnly("Rotate1");
+            orbitRing.renderOnly("Rotate1");
             GL11.glPopMatrix();
 
             GL11.glPushMatrix();
             GL11.glRotated(180 + speedRotate * System.currentTimeMillis() % 360, 0f, 1f, 0f);
-            SharedModels.orbitRing().renderOnly("Rotate1");
+            orbitRing.renderOnly("Rotate1");
             GL11.glPopMatrix();
             GlStateManager.enableTexture2D();
         }

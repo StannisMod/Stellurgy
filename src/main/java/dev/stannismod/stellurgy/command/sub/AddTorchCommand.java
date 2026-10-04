@@ -40,6 +40,8 @@ public class AddTorchCommand extends StellurgyCommand {
         if (StellurgyConfiguration.getCurrentConfig().torchBlocks.contains(block)) {
             throw new CommandException("commands.stellurgy.addtorch.exists", block.getLocalizedName());
         }
+        // Rewrites static state while the game runs, on purpose: an operator edit of the config is a
+        // partial re-initialisation of the mod, the sanctioned exception to statics being written once.
         StellurgyConfiguration.getCurrentConfig().addTorchblock(block);
         sender.sendMessage(new TextComponentTranslation("commands.stellurgy.addtorch.success", block.getLocalizedName()));
     }

@@ -19,6 +19,8 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  * plus {@link VSIntegration#parkShipAt}/{@link VSIntegration#unparkShipAt}. Both crossings paste into a
  * clear void column so the flood-fill re-assembly grabs only the ship. A safe no-op
  * (returns {@code null} - the transit aborts cleanly) when a world is missing.
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
@@ -107,13 +109,13 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * craft its hyperspace anchor resolves by POSITION, the craft its durable id names, and what the
      * computer standing at that anchor calls itself. The cut happens once, hundreds of ticks before
      * an arrival that stalls reports anything, so nothing downstream can reconstruct it — and the
-     * question "did this jump deliver the hull it meant" has no other witness. Deliberately not
-     * test-gated: a harness child JVM has no test mode.
+     * question "did this jump deliver the hull it meant" has no other witness. This crosser's, so it
+     * goes with the server whose subsystem holds it.
      */
-    private static volatile String lastArrivalCut = "";
+    private volatile String lastArrivalCut = "";
 
     /** @see #lastArrivalCut */
-    public static String lastArrivalCut() {
+    public String lastArrivalCut() {
         return lastArrivalCut;
     }
 
@@ -122,17 +124,19 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * that a lane holds two ships; it cannot say which of them arrived first, and therefore cannot
      * say whether a lane was handed out occupied or became occupied later.
      */
-    private static volatile String lastDepartLane = "";
+    private volatile String lastDepartLane = "";
 
     /** @see #lastDepartLane */
-    public static String lastDepartLane() {
+    public String lastDepartLane() {
         return lastDepartLane;
     }
 
-    /** Owned by {@link SpaceDiagnostics#reset()} — see there for why a diagnostic needs an owner. */
-    static void resetDiagnostics() {
-        lastArrivalCut = "";
-        lastDepartLane = "";
+    /** Why this crosser's last crew placement did not seat everyone, or {@code ""} when it did. */
+    private volatile String lastReseatBlock = "";
+
+    /** @see #lastReseatBlock */
+    public String lastReseatBlock() {
+        return lastReseatBlock;
     }
 
     /**
@@ -259,7 +263,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
                                                           String shipId,
                                                           HyperspaceTiles.Tile tile) {
         WorldServer src = DimensionManager.getWorld(srcSlotDim);
-        WorldServer hyper = HyperspaceWorld.getOrCreate();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getOrCreate();
         // Three different reasons a departure never even starts, told apart. Rolled into one null they
         // are indistinguishable from a crossing that ran and failed, and the caller's log then blames
         // the cut for something that happened before it.
@@ -330,7 +334,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     @Override
     public ShipCrossingService.Crossed arriveFromHyperspace(String shipId, HyperspaceTiles.Tile tile,
                                                             BlockPos hyperAnchor, int targetSlotDim) {
-        WorldServer hyper = HyperspaceWorld.getOrCreate();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getOrCreate();
         WorldServer dst = DimensionManager.getWorld(targetSlotDim);
         if (hyper == null || dst == null || hyperAnchor == null) {
             // An arrival that never even reaches the crossing used to be a bare null, repeated once per
@@ -490,7 +494,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     @Override
     public net.minecraft.nbt.NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile,
                                                           BlockPos hyperAnchor, String shipId) {
-        WorldServer hyper = HyperspaceWorld.getOrCreate();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getOrCreate();
         if (hyper == null || hyperAnchor == null) {
             return null;
         }
@@ -649,7 +653,9 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // distinction is the whole failure this path used to be able to produce - a destination holding
         // a second ship had its arrival scan the stranger's yard, find no seat, and give up while the
         // crew's own seat sat tens of thousands of blocks away in the same world.
-        if (CrewTransfer.reseat(dst, arrivalAnchor, stash, toUuid(shipId), vsShipUuid)) {
+        CrewTransfer.Reseat reseat = CrewTransfer.reseat(dst, arrivalAnchor, stash, toUuid(shipId), vsShipUuid);
+        lastReseatBlock = reseat.block;
+        if (reseat.seated) {
             crewStash.remove(shipId);
             return bodiesPlaced;
         }
@@ -703,7 +709,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     @Override
     public int parkedDim() {
-        return HyperspaceWorld.dimId();
+        return dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
     }
 
     @Override
@@ -714,7 +720,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     @Override
     public boolean parkedShipPresent(BlockPos hyperAnchor) {
-        WorldServer hyper = HyperspaceWorld.getIfLoaded();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getIfLoaded();
         if (hyper == null || hyperAnchor == null) {
             return false;
         }
@@ -728,7 +734,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     @Override
     public List<Integer> parkedShipLanes() {
         List<Integer> lanes = new ArrayList<>();
-        WorldServer hyper = HyperspaceWorld.getIfLoaded();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getIfLoaded();
         if (hyper == null) {
             return lanes;
         }
@@ -751,7 +757,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     @Override
     public boolean disposeParkedLane(int laneIndex) {
-        WorldServer hyper = HyperspaceWorld.getIfLoaded();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getIfLoaded();
         if (hyper == null) {
             return false;
         }
@@ -796,7 +802,9 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         //
         // Named by identity, and hyperspace is where that matters most: every ship in flight is parked
         // in the same world, so "the ship at this anchor" has neighbours by construction.
-        return CrewTransfer.reseat(dst, anchor, stash, toUuid(shipId), vsShipUuid) && bodiesPlaced;
+        CrewTransfer.Reseat reseat = CrewTransfer.reseat(dst, anchor, stash, toUuid(shipId), vsShipUuid);
+        lastReseatBlock = reseat.block;
+        return reseat.seated && bodiesPlaced;
     }
 
     @Override

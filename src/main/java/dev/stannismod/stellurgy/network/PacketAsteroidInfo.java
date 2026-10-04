@@ -5,7 +5,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.PacketBuffer;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
@@ -78,7 +78,7 @@ public class PacketAsteroidInfo extends BasePacket {
 
     @Override
     public void executeClient(EntityPlayer thePlayer) {
-        StellurgyConfiguration.getCurrentConfig().asteroidTypes.put(asteroid.ID, asteroid);
+        DimensionManager.getInstance().getAsteroidTypes().put(asteroid.ID, asteroid);
     }
 
     @Override

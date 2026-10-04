@@ -13,7 +13,10 @@ public class MapGenSpaceVillage extends MapGenVillage {
     /** Where a space village may not be placed. A CONSTANT: two vanilla biome objects, which are
      *  the REGISTRY's and outlive nothing this class owns; the list is fixed-size and never written.
      *  If this ever needs to answer differently per world, it stops being a constant and becomes the
-     *  server's — at which point it needs an owner, not just a wider list. */
+     *  server's - at which point it needs an owner, not just a wider list.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final List<Biome> BLACKLIST_VILLAGE_SPAWN_BIOMES = Arrays.asList(Biomes.OCEAN, Biomes.DEEP_OCEAN);
     private final int minTownSeparation;
     private int size;

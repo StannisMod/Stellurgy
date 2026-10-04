@@ -10,11 +10,16 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.valkyrienskies.mod.common.ValkyrienSkiesMod;
 import org.valkyrienskies.mod.common.command.config.ShortName;
+import org.valkyrienskies.mod.common.physics.BlockPhysicsDetails;
+import org.valkyrienskies.mod.common.ships.block_relocation.ShipSpawnDetector;
 
 // NOTE: When updating names/comments remember to update them in the lang files.
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 @SuppressWarnings("WeakerAccess") // NOTE: Any forge config option MUST be "public"
 @Config(modid = ValkyrienSkiesMod.MOD_ID)
-public class VSConfig extends VSConfigTemplate {
+public class VSConfig {
 
     @Name("Ship Y Position Minimum")
     public static double shipLowerLimit = -30;
@@ -204,11 +209,23 @@ public class VSConfig extends VSConfigTemplate {
     }
 
     /**
-     * Synchronizes the data in this class and the data in the forge configuration
+     * Synchronizes the data in this class and the data in the forge configuration.
+     *
+     * <p>Rewrites every static of this class while the game runs, on purpose: a config reload is a
+     * partial re-initialisation of the mod, the sanctioned exception to statics being written once.</p>
      */
     public static void sync() {
         ConfigManager.sync(ValkyrienSkiesMod.MOD_ID, Type.INSTANCE);
-        VSConfig.onSync();
+    }
+
+    /**
+     * Rebuild the tables derived from this config: the ship-spawn blacklist and the block masses.
+     * They name blocks, so they can only be built once every block is registered — the mod runs this
+     * at init — and a config reload rebuilds them the same way, the sanctioned exception above.
+     */
+    public static void rederive() {
+        ShipSpawnDetector.syncWithConfig();
+        BlockPhysicsDetails.syncWithConfig();
     }
 
     @Mod.EventBusSubscriber(modid = ValkyrienSkiesMod.HOST_MOD_ID)
@@ -219,6 +236,7 @@ public class VSConfig extends VSConfigTemplate {
         public static void onConfigChanged(final ConfigChangedEvent.OnConfigChangedEvent event) {
             if (event.getModID().equals(ValkyrienSkiesMod.MOD_ID)) {
                 sync();
+                rederive();
             }
         }
     }

@@ -24,6 +24,7 @@ class VoidDrill extends AbstractDrill {
     private final List<ItemStack> ores = new ArrayList<>();
     private boolean voidCobble; // performance optimization: if true, cobble is not even generated
     private int opCounter = 0; // counts operations when voidCobble is true
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ItemStack[] EMPTY = new ItemStack[0];
     private int sourceDimId = Integer.MIN_VALUE;
     private int cachedDimId = Integer.MIN_VALUE;

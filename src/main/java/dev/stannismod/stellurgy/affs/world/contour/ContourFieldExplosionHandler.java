@@ -27,7 +27,7 @@ public final class ContourFieldExplosionHandler {
         }
 
         Map<TileEntityContourInjector, Set<BlockPos>> injectorBlocks = new LinkedHashMap<>();
-        for (IShieldNetworkNode node : ShieldNetworkRegistry.snapshot()) {
+        for (IShieldNetworkNode node : ShieldNetworkRegistry.of(world).snapshot()) {
             if (!(node instanceof TileEntityContourInjector)) {
                 continue;
             }

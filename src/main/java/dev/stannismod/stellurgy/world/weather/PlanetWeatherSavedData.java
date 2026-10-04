@@ -5,7 +5,9 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.storage.WorldSavedData;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Single {@link WorldSavedData} instance living on the overworld's
@@ -23,6 +25,14 @@ public final class PlanetWeatherSavedData extends WorldSavedData {
     public static final String STORAGE_KEY = "stellurgy_planet_weather";
 
     private final Map<Integer, PlanetWeatherState> statesByDimension = new HashMap<>();
+
+    /**
+     * Not persisted: the dimensions this server has already tried to migrate legacy weather for, and
+     * already warned about running unwrapped. This object is loaded once per server from that server's
+     * save, so both are "once per dimension per server" without anything to release.
+     */
+    private final Set<Integer> legacyMigrationTried = new HashSet<>();
+    private final Set<Integer> unwrappedWarned = new HashSet<>();
 
     public PlanetWeatherSavedData() {
         super(STORAGE_KEY);
@@ -49,6 +59,16 @@ public final class PlanetWeatherSavedData extends WorldSavedData {
     public void put(int dimensionId, PlanetWeatherState state) {
         statesByDimension.put(dimensionId, state);
         markDirty();
+    }
+
+    /** {@code true} the first time it is asked for {@code dimensionId} on this server. */
+    boolean firstLegacyMigration(int dimensionId) {
+        return legacyMigrationTried.add(dimensionId);
+    }
+
+    /** {@code true} the first time it is asked for {@code dimensionId} on this server. */
+    boolean firstUnwrappedWarning(int dimensionId) {
+        return unwrappedWarned.add(dimensionId);
     }
 
     @Override

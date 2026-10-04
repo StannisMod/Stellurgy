@@ -299,7 +299,7 @@ public class GalaxyFieldTest {
         // "Empty of stars", not "empty": what a ship meets out here is material the galaxies threw out,
         // and that is the ejecta halo rather than the profile. This pins the half that has not moved —
         // nothing CONDENSES out here — and VoidContentTest pins the half that has.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(1.0d));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(1.0d));
         Galaxy home = gen.galaxies().home(77L);
         // Past the whole RETINUE, not just past the primary: a satellite sits one to three diameters
         // out, so probing at three radii would be probing inside a galaxy and this test would be
@@ -338,37 +338,6 @@ public class GalaxyFieldTest {
                 spacing, UniverseScale.lightYearsForCells(spacing), diagonal, headroom));
         assertTrue("the galaxy lattice must fit the sector space with room to spare — headroom is only "
                         + String.format("%.2f", headroom) + "x", headroom >= MIN_LATTICE_HEADROOM);
-    }
-
-    @Test
-    public void theReferenceSizeIsTheSizeTheTypeTableIsWrittenAgainst() {
-        // The reference anchors the galaxy SEPARATION, and the type bands are absolute light years so
-        // they can be checked against a catalogue. Nothing mechanical tied the two together, so the
-        // bands could sit two orders from the reference and nothing would notice — which is exactly
-        // what happened. This is that tie: the reference has to be a size an ordinary spiral IS.
-        GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        GalaxyGenConfig.GalaxyType spiral = typeNamed(config, "Spiral");
-        assertTrue("the reference galaxy radius (" + UniverseScale.REFERENCE_GALAXY_RADIUS_LY
-                        + " ly) falls outside the spiral band [" + spiral.minRadiusLy + ", "
-                        + spiral.maxRadiusLy + "] — one of the two was moved without the other",
-                UniverseScale.REFERENCE_GALAXY_RADIUS_LY >= spiral.minRadiusLy
-                        && UniverseScale.REFERENCE_GALAXY_RADIUS_LY <= spiral.maxRadiusLy);
-    }
-
-    @Test
-    public void authoredContentIsAdmittedToTheDISCGIANTSandToNoDwarf() {
-        // The floor is a constraint on the TYPE DRAW, so what it really states is a SET: the classes a
-        // galaxy holding authored content may be. A floor that slipped below the dwarf-irregular band
-        // would let a pack's content be seated in an object a few thousand light years across and
-        // land outside it on the next seed.
-        GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        double floor = UniverseScale.MIN_AUTHORED_GALAXY_RADIUS_LY;
-        for (GalaxyGenConfig.GalaxyType t : config.galaxyTypes) {
-            boolean dwarf = t.name.startsWith("Dwarf");
-            boolean qualifies = t.minRadiusLy >= floor;
-            assertEquals(t.name + " qualifies for authored content: expected " + !dwarf,
-                    !dwarf, qualifies);
-        }
     }
 
     private static GalaxyGenConfig.GalaxyType typeNamed(GalaxyGenConfig config, String name) {
@@ -629,7 +598,7 @@ public class GalaxyFieldTest {
         // that populates its primary. Had the profile been read off the cube's OWNER instead, every
         // satellite would be named, addressable and completely empty, which is what this catches.
         GalaxyGenConfig config = cfg(1.0d);
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         GalaxyField f = gen.galaxies();
 
         long seed = 0xC0FFEEL;

@@ -25,13 +25,14 @@ import javax.annotation.Nullable;
 
 public class BlockShieldGenerator extends Block implements ITileEntityProvider, IHasItemBlock {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyInteger TIER = PropertyInteger.create("tier", 0, BlockFieldGenerator.TIER_COUNT - 1);
 
     public BlockShieldGenerator(String name, Material material) {
         super(material);
         setUnlocalizedName(name);
         setRegistryName(AdvancedForceFieldSystem.MODID, name);
-        setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         setHardness(3.0F);
         setResistance(8.0F);
         setSoundType(SoundType.METAL);

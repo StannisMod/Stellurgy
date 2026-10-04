@@ -32,7 +32,6 @@ import java.util.List;
 
 public class ItemWeatherController extends ItemSatelliteIdentificationChip implements IModularInventory, IButtonInventory, INetworkItem {
 
-    private int floodlevel = 63;
     @Override
     public List<ModuleBase> getModules(int id, EntityPlayer player) {
         List<ModuleBase> list = new LinkedList<>();

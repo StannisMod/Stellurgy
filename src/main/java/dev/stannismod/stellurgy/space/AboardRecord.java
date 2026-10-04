@@ -65,6 +65,7 @@ import dev.stannismod.stellurgy.tile.TilePilotSeat;
  */
 public final class AboardRecord {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     private AboardRecord() { }
@@ -123,7 +124,7 @@ public final class AboardRecord {
         // Hyperspace is in no cell, so `presence` is null for everyone aboard a jumping ship - and
         // the dimension id, the only other evidence a saved player carries, is re-minted by a
         // free-id scan on the next boot. So the record has to say it itself.
-        boolean inTransit = world.provider.getDimension() == HyperspaceWorld.dimId();
+        boolean inTransit = world.provider.getDimension() == dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
         Entity riding = player.getRidingEntity();
         if (riding instanceof EntityDummy) {
             // A crew member SEATED on a ship that is in no cell needs no record: vanilla brings a

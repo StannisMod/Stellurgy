@@ -55,7 +55,7 @@ public class PacketAtmSync extends BasePacket {
 
     @Override
     public void executeClient(EntityPlayer thePlayer) {
-        dev.stannismod.stellurgy.client.ClientAtmosphere.accept(
+        dev.stannismod.stellurgy.client.ClientAtmosphere.of(thePlayer.world).accept(
                 AtmosphereRegister.getInstance().getAtmosphere(type), pressure);
     }
 

@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.event.ShipEvent;
 import dev.stannismod.stellurgy.integration.vs.DeckHold;
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
@@ -130,9 +131,9 @@ public abstract class MixinDeckHoldEvents {
                 "\"who\":\"" + TestTrace.json(player.getName()) + "\""
                         + ",\"dim\":" + (player.world == null ? -999
                                 : player.world.provider.getDimension())
-                        + ",\"held\":" + DeckHold.isHeld(player)
-                        + ",\"heldFor\":" + (DeckHold.heldShipId(player) == null ? "null"
-                                : "\"" + TestTrace.json(DeckHold.heldShipId(player)) + "\"")
+                        + ",\"held\":" + Stellurgy.serverState().deckHolds.isHeld(player)
+                        + ",\"heldFor\":" + (Stellurgy.serverState().deckHolds.heldShipId(player) == null ? "null"
+                                : "\"" + TestTrace.json(Stellurgy.serverState().deckHolds.heldShipId(player)) + "\"")
                         + ",\"tagged\":" + (aboard != null)
                         + ",\"posture\":\"" + (aboard == null ? "none" : aboard.posture) + "\""
                         + (aboard == null ? ""

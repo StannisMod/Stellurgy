@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.ArrangementFailure;
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -60,7 +61,7 @@ public class AShipIsReWeighedOnACadenceE2ETest extends AbstractHeadlessServerTes
     private static final int ROUND_BUDGET_TICKS = 2 * TileAdvancedFlightComputer.MASS_ROUND_TICKS;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), new EvictionReports());
 
     @Test
     public void aSettledShipIsMeasuredAgainWithNothingHappeningToIt() throws Exception {

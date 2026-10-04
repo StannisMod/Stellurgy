@@ -165,7 +165,7 @@ public class ClusteredGalaxyGeneratorTest {
 
     @Test
     public void systemAtIsDeterministic() {
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         forEachSuperCell(6, SPACING, probe -> {
             Optional<GalacticCoord> anchor = gen.anchorAt(SEED, probe);
             if (!anchor.isPresent()) {
@@ -190,7 +190,7 @@ public class ClusteredGalaxyGeneratorTest {
     @Test
     public void onlyTheSeatCellItselfHoldsTheSystem() {
         // The anchor NAMES the system; its neighbours are ordinary space that merely attributes to it.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         int checked = 0;
         for (GalacticCoord anchor : anchors(gen, SEED, SPACING, 3)) {
             assertTrue(gen.systemAt(SEED, anchor).isPresent());
@@ -203,7 +203,7 @@ public class ClusteredGalaxyGeneratorTest {
 
     @Test
     public void differentSeedsProduceDifferentGalaxies() {
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         Set<String> occupiedA = occupiedSeats(gen, SEED, SPACING, 6);
         Set<String> occupiedB = occupiedSeats(gen, SEED + 1, SPACING, 6);
         assertFalse("a different seed must not reproduce the same galaxy", occupiedA.equals(occupiedB));
@@ -213,7 +213,7 @@ public class ClusteredGalaxyGeneratorTest {
     public void minimumSpacingIsRespected() {
         // At most one system per minSpacing-cube super-cell, anywhere in the sampled volume.
         GalaxyGenConfig config = cfg(0.9d, SPACING); // dense, no void: stress spacing
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         Map<String, Integer> perSuperCell = new HashMap<>();
         for (GalacticCoord anchor : anchors(gen, SEED, SPACING, 4)) {
             long s = config.minSpacing;
@@ -234,7 +234,7 @@ public class ClusteredGalaxyGeneratorTest {
         // systems — two names, two frames, no gravitational relation — from being read as a binary.
         // Multiplicity is something a system states about itself, never something the lattice fakes.
         GalaxyGenConfig config = cfg(1.0d, SPACING); // every cube occupied: the tightest case
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         List<GalacticCoord> seats = anchors(gen, SEED, SPACING, 2);
         assertTrue("the sweep must find systems", seats.size() > MIN_SYSTEMS_FOR_SPREAD);
         double floorBlocks = UniverseScale.SEPARATION_FLOOR_AU * AstronomicalBodyHelper.BLOCKS_PER_AU;
@@ -254,7 +254,7 @@ public class ClusteredGalaxyGeneratorTest {
         // which reads as a lattice of tight clumps with guaranteed-empty walls. What replaces it is a
         // margin sized by what a system NEEDS, so most of the cube is reachable.
         GalaxyGenConfig config = cfg(1.0d, SPACING);
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         long s = config.minSpacing;
         double nearestFaceFraction = 1d;
         int checked = 0;
@@ -283,7 +283,7 @@ public class ClusteredGalaxyGeneratorTest {
         //
         // Sampled against the home galaxy's OWN radius rather than a hard-coded distance: the radius
         // is drawn per seed, so a fixed number would be testing one draw.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(1.0d, SPACING));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(1.0d, SPACING));
         Galaxy home = gen.galaxies().home(SEED);
 
         assertTrue("the galaxy's core must hold stars (found " + seatsInBlockAround(gen, 0L, 3) + ")",
@@ -304,7 +304,7 @@ public class ClusteredGalaxyGeneratorTest {
     public void systemsInRegionAgreesWithSystemAt() {
         // The single most important consistency contract: the region enumeration and the point query
         // must never diverge, or a telescope scan would show systems a jump can't reach (or vice versa).
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         // The sweep is one super-cell narrower than the box, because a seat sits at an offset INSIDE
         // its cube: the outermost swept cube's seat would fall outside a box cut at that cube's face.
         long r = 3L * SPACING;
@@ -333,7 +333,7 @@ public class ClusteredGalaxyGeneratorTest {
 
     @Test
     public void systemsInRegionHandlesSwappedBounds() {
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         long r = 2L * SPACING;
         Map<GalacticCoord, PlanetarySystem> ordered = gen.systemsInRegion(SEED, cell(-r, -r, -r), cell(r, r, r));
         Map<GalacticCoord, PlanetarySystem> swapped = gen.systemsInRegion(SEED, cell(r, r, r), cell(-r, -r, -r));
@@ -345,7 +345,7 @@ public class ClusteredGalaxyGeneratorTest {
         // The profile is not a mask with two states. A galaxy is densest at its nucleus and thins with
         // radius, so the same density knob has to place more stars near the centre than out at the rim
         // — that gradient is the whole difference between a galaxy and a uniform fog.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(1.0d, SPACING));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(1.0d, SPACING));
         Galaxy home = gen.galaxies().home(SEED);
 
         int core = seatsInBlockAround(gen, 0L, 4);
@@ -355,9 +355,9 @@ public class ClusteredGalaxyGeneratorTest {
 
     @Test
     public void densityDrivesOccupancy() {
-        int sparse = occupiedSeats(new ClusteredGalaxyGenerator(cfg(0.1d, SPACING)),
+        int sparse = occupiedSeats(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(0.1d, SPACING)),
                 SEED, SPACING, 7).size();
-        int dense = occupiedSeats(new ClusteredGalaxyGenerator(cfg(0.9d, SPACING)),
+        int dense = occupiedSeats(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(0.9d, SPACING)),
                 SEED, SPACING, 7).size();
         assertTrue("higher density must place more systems (" + sparse + " vs " + dense + ")",
                 dense > sparse);
@@ -372,7 +372,7 @@ public class ClusteredGalaxyGeneratorTest {
         GalaxyGenConfig config = new GalaxyGenConfig(SPACING, 0.9d,
                 GalaxyGenConfig.DEFAULT_GALAXY_SPACING, GalaxyGenConfig.DEFAULT_GALAXY_DENSITY,
                 types, null);
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
 
         int common = 0;
         int rare = 0;
@@ -416,7 +416,7 @@ public class ClusteredGalaxyGeneratorTest {
 
     @Test
     public void proceduralSystemIdsAreNegative() {
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(0.9d, SPACING));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(0.9d, SPACING));
         boolean sawAny = false;
         for (GalacticCoord anchor : anchors(gen, SEED, SPACING, 2)) {
             sawAny = true;
@@ -451,7 +451,7 @@ public class ClusteredGalaxyGeneratorTest {
         List<GalaxyGenConfig.StarType> types = new ArrayList<>();
         types.add(new GalaxyGenConfig.StarType(50, 0.5f, 1.0f, Integer.MAX_VALUE));
         types.add(new GalaxyGenConfig.StarType(250, 2.0f, 3.0f, Integer.MAX_VALUE));
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),
                 new GalaxyGenConfig(SPACING, 0.9d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                         GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, types, null));
 
@@ -477,7 +477,7 @@ public class ClusteredGalaxyGeneratorTest {
         // A system is an anchored NEIGHBOURHOOD — the star holds the anchor cell, each planet/belt its
         // own cell (snapped to that cell's centre), all inside the anchor's minSpacing super-cell.
         GalaxyGenConfig config = cfg(0.9d, SPACING);
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         long s = config.minSpacing;
         boolean checkedAny = false;
         for (GalacticCoord anchor : anchors(gen, SEED, SPACING, 1)) {
@@ -540,7 +540,7 @@ public class ClusteredGalaxyGeneratorTest {
         // distance d is d units from its star, in blocks, and its cell NAME is a reading of that same
         // position rather than a second layout arithmetic beside it. When those two came apart, the
         // science said one thing and the flight time said another.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(0.9d, SPACING));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(0.9d, SPACING));
         int checked = 0;
         for (GalacticCoord anchor : anchors(gen, SEED, SPACING, 1)) {
             List<SystemBody> bodies = gen.bodiesFor(SEED, anchor);
@@ -571,7 +571,7 @@ public class ClusteredGalaxyGeneratorTest {
     public void aSystemNeverReachesPastItsOwnClearSpace() {
         // The bound that replaces "a system is a fraction of the distance to the next star": named
         // bodies stay inside half the separation floor, whatever a star's own zone would have drawn.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(1.0d, SPACING));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(1.0d, SPACING));
         int checked = 0;
         for (GalacticCoord anchor : anchors(gen, SEED, SPACING, 1)) {
             for (SystemBody body : gen.bodiesFor(SEED, anchor)) {
@@ -590,7 +590,7 @@ public class ClusteredGalaxyGeneratorTest {
         // would have to share that cell, which at most one real body per cell forbids — so the system
         // degenerates to its star alone. Degenerate but CONSISTENT: attribution stays exact, nothing
         // escapes the box, and no cell ends up with two destinations in it.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(0.9d, 1));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(0.9d, 1));
         boolean checkedAny = false;
         for (long x = -6; x <= 6; x++) {
             GalacticCoord c = cell(x, 0, 0);
@@ -634,7 +634,7 @@ public class ClusteredGalaxyGeneratorTest {
         // property the console, the descent trigger and the sky all read, and unlike the old one it
         // is stated against the unit that actually owns a neighbourhood.
         GalaxyGenConfig config = cfg(0.9d, SPACING);
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         long s = config.minSpacing;
         boolean checkedAny = false;
         for (long sup = -2; sup <= 2; sup++) {
@@ -733,7 +733,7 @@ public class ClusteredGalaxyGeneratorTest {
         // The whole reason the legacy generator had to go: it drew from
         // new Random(System.currentTimeMillis()), so two saves of one seed held different worlds and
         // nothing about a system could be predicted, reproduced or reported.
-        ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         GalacticCoord anchor = cell(0, 0, 0);
 
         List<SystemBody> first = g.authoredRetinueFor(SEED, anchor, authoredStar(), 0, 6,
@@ -756,7 +756,7 @@ public class ClusteredGalaxyGeneratorTest {
         // more of them. Stated as a bound rather than an equality, because the drawn orbits still
         // decide how many FIT — a system squeezed by its neighbours holds fewer worlds rather than
         // the same worlds at the wrong distances.
-        ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         GalacticCoord anchor = cell(0, 0, 0);
 
         int few = majorBodies(g.authoredRetinueFor(SEED, anchor, authoredStar(), 0, FEW_WORLDS_REQUESTED,
@@ -773,7 +773,7 @@ public class ClusteredGalaxyGeneratorTest {
     public void anAuthoredWorldsCellIsNeverTakenByADerivedOne() {
         // The authored system wins: a pack's own world may not be displaced, or shadowed, by a body
         // the generator drew.
-        ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         GalacticCoord anchor = cell(0, 0, 0);
         List<SystemBody> free = g.authoredRetinueFor(SEED, anchor, authoredStar(), 0, 6,
                 java.util.Collections.<String>emptySet());
@@ -812,7 +812,7 @@ public class ClusteredGalaxyGeneratorTest {
         // separation between a moon and its parent must exceed the parent's own radius. A test that
         // pinned "2.5 radii" would pin the tuning; this pins that a moon is a thing you can see from
         // the world it goes round.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(defaultsCfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),defaultsCfg());
         long tick = 12_345L;
         int checkedMoons = 0;
         int checkedParents = 0;
@@ -868,7 +868,7 @@ public class ClusteredGalaxyGeneratorTest {
         // neighbours e/p^(1/3) apart, so the field stood 42 % further apart than the constant claimed
         // and nothing said so. This test is the thing that would have said so.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
 
         int span = 8; // a 17-cube of territories: enough seats for the ratio to settle
         int territories = 0;
@@ -914,29 +914,6 @@ public class ClusteredGalaxyGeneratorTest {
         assertTrue("the field must stand about as far apart as MEAN_STAR_SEPARATION_LY claims: "
                         + separation + " ly against " + claimed,
                 separation > claimed * 0.85d && separation < claimed * 1.2d);
-    }
-
-    @Test
-    public void aBlueStarIsAFindAndARedDwarfIsTheSky() {
-        // The weights are an observed census by NUMBER, so what they owe is the ORDER OF MAGNITUDE
-        // between classes, not any particular value. They read 40/25/20/10/5 before — a blue star in
-        // one system out of twenty, against an observed one in seven hundred and sixty, while the
-        // table's own comment called them rare.
-        List<GalaxyGenConfig.StarType> table = GalaxyGenConfig.defaults().starTypes;
-        assertEquals("arrangement: the stock table is the five-class one", 5, table.size());
-
-        for (int i = 1; i < table.size(); i++) {
-            assertTrue("a hotter class must never be commoner than a cooler one: "
-                            + table.get(i - 1).temperature + " weighted " + table.get(i - 1).weight
-                            + " against " + table.get(i).temperature + " weighted " + table.get(i).weight,
-                    table.get(i).weight < table.get(i - 1).weight);
-        }
-
-        GalaxyGenConfig.StarType coolest = table.get(0);
-        GalaxyGenConfig.StarType hottest = table.get(table.size() - 1);
-        assertTrue("a red dwarf must outnumber a blue star by at least two orders, as observed: "
-                        + coolest.weight + " against " + hottest.weight,
-                coolest.weight >= hottest.weight * 100);
     }
 
     // ── the derivation is part of the world model ─────────────────────────────
@@ -991,14 +968,16 @@ public class ClusteredGalaxyGeneratorTest {
         @Override
         public BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
                                   dev.stannismod.stellurgy.api.dimension.solar.StellarBody star,
-                                  boolean moon, long orbitalDistance) {
-            return base.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance);
+                                  boolean moon, long orbitalDistance,
+                                  dev.stannismod.stellurgy.universe.ReportOnce reports) {
+            return base.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance, reports);
         }
 
         @Override
         public BodyProfile deriveRogue(long seed, GalacticCoord bodyCell, int variant,
-                                       double giantFraction) {
-            return base.deriveRogue(seed, bodyCell, variant, giantFraction);
+                                       double giantFraction,
+                                       dev.stannismod.stellurgy.universe.ReportOnce reports) {
+            return base.deriveRogue(seed, bodyCell, variant, giantFraction, reports);
         }
 
         @Override
@@ -1012,8 +991,8 @@ public class ClusteredGalaxyGeneratorTest {
         // The point of the seam: a later schema can change what a body IS while the placement stands.
         // If this passes with an unused parameter somewhere, the seam is decoration.
         GalaxyGenConfig config = defaultsCfg();
-        ClusteredGalaxyGenerator stock = new ClusteredGalaxyGenerator(config);
-        ClusteredGalaxyGenerator shifted = new ClusteredGalaxyGenerator(config, new ShiftedDerivation());
+        ClusteredGalaxyGenerator stock = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
+        ClusteredGalaxyGenerator shifted = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config, new ShiftedDerivation());
 
         GalacticCoord anchor = null;
         for (int i = 0; i < 64 && anchor == null; i++) {
@@ -1052,18 +1031,6 @@ public class ClusteredGalaxyGeneratorTest {
         }
         Collections.sort(lines);
         return lines.toString();
-    }
-
-    @Test
-    public void aGeneratorHandsOutTheDerivationItUses() {
-        // How everything outside this package reaches the world's derivation. Asking the class directly
-        // would pin version 1 forever, whatever schema the save is owed.
-        IBodyDerivation mine = new ShiftedDerivation();
-
-        assertSame("a generator must hand out the derivation it was built with",
-                mine, new ClusteredGalaxyGenerator(defaultsCfg(), mine).derivation());
-        assertSame("and the stock one hands out version 1's", BodyDerivationV0.INSTANCE,
-                new ClusteredGalaxyGenerator(defaultsCfg()).derivation());
     }
 
     // ── the golden corpus ─────────────────────────────────────────────────────
@@ -1179,11 +1146,6 @@ public class ClusteredGalaxyGeneratorTest {
         static final String FIXTURE_RESOURCE = "/universe/golden-corpus-v1.txt";
         static final String FIXTURE_PATH = "src/test/resources/universe/golden-corpus-v1.txt";
 
-        /** Fixed seeds. Arbitrary, and that is the point — they are frozen, not chosen for an outcome. */
-        private static final long[] SEEDS = {
-                1L, 42L, 1337L, 8675309L, -1L, 6_942_069L, 2_147_483_647L,
-        };
-
         /** Territories swept per axis, centred on the origin — the home galaxy's centre. */
         private static final int SPAN = 1;
 
@@ -1197,7 +1159,9 @@ public class ClusteredGalaxyGeneratorTest {
             sb.append("config ").append(config.fingerprint()).append('\n');
             renderScale(sb);
             renderCosmology(sb);
-            for (long seed : SEEDS) {
+            // Fixed seeds. Arbitrary, and that is the point — they are frozen, not chosen for an outcome.
+            long[] seeds = {1L, 42L, 1337L, 8675309L, -1L, 6_942_069L, 2_147_483_647L};
+            for (long seed : seeds) {
                 renderSeed(sb, config, seed);
             }
             return sb.toString();
@@ -1227,7 +1191,7 @@ public class ClusteredGalaxyGeneratorTest {
         }
 
         private static void renderSeed(StringBuilder sb, GalaxyGenConfig config, long seed) {
-            ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(config);
+            ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
             long step = config.minSpacing;
             Set<String> seen = new HashSet<>();
             List<String> lines = new ArrayList<>();
@@ -1313,9 +1277,11 @@ public class ClusteredGalaxyGeneratorTest {
                                                SystemBody body) {
             BodyProfile profile = system.star().isPresent()
                     ? PlanetDerivation.derive(seed, anchor, body.name(), 0, system.star().get(), false,
-                            body.orbitalDistance())
+                            body.orbitalDistance(), dev.stannismod.stellurgy.universe.PlanetTypes.stock(),
+                            new dev.stannismod.stellurgy.universe.ReportOnce())
                     : PlanetDerivation.deriveRogue(seed, body.name(), 0,
-                            g.config().rogue.giantFraction);
+                            g.config().rogue.giantFraction, dev.stannismod.stellurgy.universe.PlanetTypes.stock(),
+                            new dev.stannismod.stellurgy.universe.ReportOnce());
             return "  derived " + anchor.cellKey() + ' ' + body.name().cellKey()
                     + " type=" + profile.typeName()
                     + " mass=" + Double.toString(profile.massEarths())

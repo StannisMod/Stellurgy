@@ -65,6 +65,7 @@ public final class SpaceManager {
         void onForcedEviction(String cellKey, boolean wasDirty);
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final EvictionListener NO_EVICTION_LISTENER = (cellKey, wasDirty) -> { };
 
     /**

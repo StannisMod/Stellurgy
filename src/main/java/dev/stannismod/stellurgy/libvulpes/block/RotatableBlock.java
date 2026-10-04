@@ -17,6 +17,7 @@ import javax.annotation.Nonnull;
 
 public class RotatableBlock extends Block {
 
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static final PropertyEnum<EnumFacing> FACING =  BlockHorizontal.FACING;
     protected boolean isBlockContainer;
 

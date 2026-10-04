@@ -42,7 +42,7 @@ import static org.junit.Assert.assertTrue;
  * position aimed at), then reads the block back once.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETest {
+public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientTest {
 
     @Override
     protected String subsystem() {
@@ -68,6 +68,9 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
      * Pitches tried, in order, when looking for a deck block to work on. Straight down (90) resolves
      * the block the bot is standing ON, which cannot take a placement — its up face is where the bot
      * is. The shallower entries reach a block in FRONT of the bot, whose up face is free.
+     *
+     * <p>A constant: written only by its initialiser, read only by iteration in this class, and
+     * never handed out — an array is mutable, so that is what holds it.</p>
      */
     private static final float[] AIM_PITCHES = {55.0F, 65.0F, 75.0F, 45.0F, 85.0F};
 

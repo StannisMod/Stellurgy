@@ -203,7 +203,7 @@ public class PhysRenderChunk {
             }
             // Tessellator tessellator = Tessellator.getInstance();
             // BufferBuilder worldrenderer = tessellator.getBuffer();
-            BufferBuilder vsChunkBuilder = FastBlockModelRenderer.VERTEX_BUILDER;
+            BufferBuilder vsChunkBuilder = FastBlockModelRenderer.chunkBuilderFor(parent.chunk.getWorld());
             vsChunkBuilder.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK);
             vsChunkBuilder.setTranslation(-offsetPos.getX(), -offsetPos.getY(), -offsetPos.getZ());
 

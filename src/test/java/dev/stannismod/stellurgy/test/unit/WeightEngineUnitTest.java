@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fluids.Fluid;
+import org.junit.Rule;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import org.junit.rules.TemporaryFolder;
 import dev.stannismod.stellurgy.util.WeightEngine;
 
 import java.io.File;
-import java.io.FileWriter;
-import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -18,9 +17,12 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * MC-free unit coverage for {@link WeightEngine}: the parts that don't need a
- * block/item registry — fluid weight arithmetic, the JSON table round-trip, and
- * default seeding. Block/material resolution (which needs real ItemStacks) is
- * covered by the server-tier {@code WeightSystemTest}.
+ * block/item registry — the JSON table round-trip, the schema check, and default
+ * seeding. Block/material resolution (which needs real ItemStacks) is covered by the
+ * server-tier {@code WeightSystemTest}.
+ *
+ * <p>Every test builds its own engine, so nothing reaches the game's table (the mod's) or its
+ * file.</p>
  */
 public class WeightEngineUnitTest {
 
@@ -28,84 +30,43 @@ public class WeightEngineUnitTest {
      *  far under what the mod ships. */
     private static final int MIN_MATERIALS = 10;
 
-    private static Fluid testFluid() {
-        ResourceLocation tex = new ResourceLocation("stellurgy", "blocks/unit_fluid");
-        return new Fluid("stellurgy_unit_fluid", tex, tex);
-    }
+    /** The opening of a table in the schema this engine reads. */
+    private static final String CURRENT = "{\"formatVersion\":" + WeightEngine.FORMAT_VERSION;
 
-    @Test
-    public void fluidWeightIsPositiveAndLinearInAmount() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        we.resetTables();
-        double prevScale = StellurgyConfiguration.getCurrentConfig().fuelMassScale;
-        try {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
-            // An unknown fluid still weighs something (the fallback per-mB rate)
-            // and the weight is linear in the amount. The exact kN/mB constant is
-            // an implementation default.
-            float base = we.getWeight(testFluid(), 1000f);
-            assertTrue("fallback fluid weight must be positive: " + base, base > 0);
-            assertEquals("fluid weight must be linear in the amount",
-                    2 * base, we.getWeight(testFluid(), 2000f), 1e-4);
-        } finally {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = prevScale;
-        }
-    }
-
-    @Test
-    public void fuelMassScaleMultipliesFluidWeight() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        we.resetTables();
-        double prevScale = StellurgyConfiguration.getCurrentConfig().fuelMassScale;
-        try {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
-            float base = we.getWeight(testFluid(), 1000f);
-
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 2.5;
-            assertEquals("fluid weight must scale by fuelMassScale",
-                    2.5f * base, we.getWeight(testFluid(), 1000f), 1e-4);
-        } finally {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = prevScale;
-        }
-    }
+    @Rule
+    public TemporaryFolder tempFolder = new TemporaryFolder();
 
     @Test
     public void seedDefaultsPopulatesMaterialTable() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        we.resetTables();
+        WeightEngine we = WeightEngine.fromJson(CURRENT + "}");
         assertTrue("default material table must be populated", we.materialCount() > MIN_MATERIALS);
     }
 
     @Test
-    public void individualOverrideSurvivesSaveLoadRoundTrip() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        try {
-            we.resetTables();
-            assertNull("clean slate must not know the test key", we.rawIndividual("ar:roundtrip_probe"));
+    public void individualOverrideSurvivesSaveLoadRoundTrip() throws Exception {
+        File file = new File(tempFolder.getRoot(), "weights.json");
 
-            we.setIndividual("ar:roundtrip_probe", 42.0);
-            we.save();
+        WeightEngine fresh = new WeightEngine(file.getPath());
+        assertNull("a fresh file must not know the test key", fresh.rawIndividual("ar:roundtrip_probe"));
 
-            // Wipe in-memory state, then reload from the file just written.
-            we.resetTables();
-            assertNull("resetTables must drop the in-memory override", we.rawIndividual("ar:roundtrip_probe"));
+        Files.write(file.toPath(), (CURRENT + ",\"individual\":{\"ar:roundtrip_probe\":42.0}}")
+                .getBytes(StandardCharsets.UTF_8));
+        WeightEngine written = new WeightEngine(file.getPath());
+        assertEquals("the override must be read from the file",
+                Double.valueOf(42.0), written.rawIndividual("ar:roundtrip_probe"));
 
-            we.load();
-            assertEquals("override must persist across save/load",
-                    Double.valueOf(42.0), we.rawIndividual("ar:roundtrip_probe"));
-        } finally {
-            // Leave no residue in the on-disk config for other tests.
-            we.resetTables();
-            we.save();
-        }
+        // Save writes it back; an engine built from what was saved must hold it again.
+        written.save();
+        WeightEngine reloaded = new WeightEngine(file.getPath());
+        assertEquals("override must persist across save/load",
+                Double.valueOf(42.0), reloaded.rawIndividual("ar:roundtrip_probe"));
     }
 
     /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code WeightEngine#load} at {@code if (root == null || !root.has("formatVersion")} checking no schema
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has("formatVersion")} checking no schema
      * version fails "must NOT be read" (0.1); {@code WeightEngine#retireIncompatibleFile} at {@code if (!current.renameTo(retired))} deleting the file instead of setting it aside
-     * fails "must be kept beside the new one"; {@code WeightEngine#retireIncompatibleFile} at {@code seedDefaults();}'s reseed skipped fails "must be reseeded"
-     * (held entry 7.0); {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails "must write a fresh table"; {@code WeightEngine#save} at {@code json.addProperty("formatVersion", FORMAT_VERSION);} not
-     * stamping the version fails "retired again".</p>
+     * fails "must be kept beside the new one"; {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails "must write a fresh table";
+     * {@code WeightEngine#save} at {@code json.addProperty("formatVersion", FORMAT_VERSION);} not stamping the version fails "retired again".</p>
      */
     @Test
     public void aTableFromAnotherSchemaIsSetAsideRatherThanRead() throws Exception {
@@ -115,58 +76,37 @@ public class WeightEngineUnitTest {
         // able to launch, so a file whose schema version does not match must be set aside and
         // replaced with defaults — never reinterpreted, and never deleted either, because only its
         // author can tell a material default from a deliberate absolute.
-        WeightEngine we = WeightEngine.INSTANCE;
-        File table = new File("config/advRocketry/weights.json");
-        File retired = new File(table.getPath() + ".v1.bak");
-        try {
-            if (retired.exists()) {
-                requireArranged("could not clear a stale backup from an earlier run", retired.delete());
-            }
-            File parent = table.getParentFile();
-            if (parent != null) {
-                parent.mkdirs();
-            }
-            // Shaped like the pre-kilogram schema: no formatVersion, and an override that would be
-            // read back verbatim if the version check were absent.
-            try (Writer w = new FileWriter(table)) {
-                w.write("{\"individual\":{\"ar:legacy_probe\":0.1},\"byRegex\":{},"
-                        + "\"fluids\":{},\"materials\":{\"ROCK\":0.4},"
-                        + "\"fallback\":0.1,\"fluidFallback\":0.001}");
-            }
+        File table = new File(tempFolder.getRoot(), "weights.json");
+        File retired = new File(table.getPath() + ".v" + (WeightEngine.FORMAT_VERSION - 1) + ".bak");
 
-            // What the tables held before the load, so a reseed is OBSERVABLE: the other tests leave
-            // defaults behind, and a verdict that only counted materials would be green with no
-            // reseed at all.
-            we.setIndividual("ar:held_before_load", 7.0);
+        // Shaped like the pre-kilogram schema: no formatVersion, an override that would be read back
+        // verbatim, and a one-entry material table — so a table that WAS read shows as one material,
+        // and only a reseed can show as a populated one.
+        Files.write(table.toPath(), ("{\"individual\":{\"ar:legacy_probe\":0.1},\"byRegex\":{},"
+                + "\"fluids\":{},\"materials\":{\"ROCK\":0.4},"
+                + "\"fallback\":0.1,\"fluidFallback\":0.001}").getBytes(StandardCharsets.UTF_8));
 
-            we.load();
+        WeightEngine we = new WeightEngine(table.getPath());
 
-            assertNull("a table from another schema must NOT be read into the live tables",
-                    we.rawIndividual("ar:legacy_probe"));
-            assertTrue("the incompatible file must be kept beside the new one, not dropped",
-                    retired.exists());
-            assertTrue("the tables must be reseeded with defaults, replacing what they held (held entry "
-                    + we.rawIndividual("ar:held_before_load") + ", materials " + we.materialCount() + ")",
-                    we.rawIndividual("ar:held_before_load") == null && we.materialCount() > MIN_MATERIALS);
+        assertNull("a table from another schema must NOT be read into the live tables",
+                we.rawIndividual("ar:legacy_probe"));
+        assertTrue("the incompatible file must be kept beside the new one, not dropped",
+                retired.exists());
+        assertTrue("the tables must be the defaults, not the one-material table that was set aside"
+                        + " (materials " + we.materialCount() + ")",
+                we.materialCount() > MIN_MATERIALS);
 
-            // The file just written must survive its own version check, i.e. save() stamps it. A file
-            // that fails the check is RETIRED again — which re-creates the backup — and then reseeded,
-            // which leaves the tables looking healthy; so the backup is the discriminating reading and
-            // the material count is not.
-            requireArranged("could not clear the first backup before the second load", retired.delete());
-            // The reseed must have WRITTEN a table: with no file, the next load takes the no-file branch,
-            // retires nothing, and an absent backup would read as a passed check on a file that was
-            // never there.
-            assertTrue("the reseed must write a fresh table for the next load to check", table.exists());
-            we.load();
-            assertFalse("the reseeded file must pass the version check on the next load, but it was"
-                    + " retired again: save() did not stamp the version it checks", retired.exists());
-        } finally {
-            if (retired.exists()) {
-                retired.delete();
-            }
-            we.resetTables();
-            we.save();
-        }
+        // The file just written must survive its own version check, i.e. save() stamps it. A file
+        // that fails the check is RETIRED again — which re-creates the backup — and then reseeded,
+        // which leaves the tables looking healthy; so the backup is the discriminating reading and
+        // the material count is not.
+        requireArranged("could not clear the first backup before the second load", retired.delete());
+        // The reseed must have WRITTEN a table: with no file, the next load takes the no-file branch,
+        // retires nothing, and an absent backup would read as a passed check on a file that was
+        // never there.
+        assertTrue("the reseed must write a fresh table for the next load to check", table.exists());
+        new WeightEngine(table.getPath());
+        assertFalse("the reseeded file must pass the version check on the next load, but it was"
+                + " retired again: save() did not stamp the version it checks", retired.exists());
     }
 }

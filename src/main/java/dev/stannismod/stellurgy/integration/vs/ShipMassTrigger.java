@@ -58,6 +58,7 @@ public final class ShipMassTrigger {
 
     private ShipMassTrigger() {}
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOG = LogManager.getLogger("stellurgy.mass");
 
     /** The Forge subscriber. Registered for the whole run; the work is gated by the event itself. */

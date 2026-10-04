@@ -378,7 +378,8 @@ public class PhysicsCalculations {
         physX += getLinearVelocity().x() * getPhysicsTimeDeltaPerPhysTick();
         physY += getLinearVelocity().y() * getPhysicsTimeDeltaPerPhysTick();
         physZ += getLinearVelocity().z() * getPhysicsTimeDeltaPerPhysTick();
-        physY = Math.min(Math.max(physY, VSConfig.shipLowerLimit), VSConfig.shipUpperLimit);
+        ShipAltitudeBand band = ShipAltitudeBand.of(getParent().getWorld());
+        physY = Math.min(Math.max(physY, band.lower()), band.upper());
     }
 
     /**

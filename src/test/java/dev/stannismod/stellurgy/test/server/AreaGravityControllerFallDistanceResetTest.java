@@ -137,10 +137,6 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
                 .fallDistance();
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
