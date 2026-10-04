@@ -138,6 +138,32 @@ public final class DeckFrameTick {
                 ? null : new double[]{episode.localX, episode.localY, episode.localZ};
     }
 
+    /**
+     * Whether {@code entity} is being updated in its deck's frame right now - so its position is a
+     * point in the craft's shipyard, not in the world. What its update's handlers read there is the
+     * craft's ENCLOSURE (its roof, its sealed rooms); a fact about the WORLD (weather, biome, the
+     * world's own blocks over it) is asked at {@link #worldPositionOf} instead.
+     */
+    public static boolean inDeckFrame(Entity entity) {
+        Episode episode = episodeOf(entity);
+        return episode != null && episode.writing;
+    }
+
+    /**
+     * Where {@code entity} is in its world: its own position, or, while {@link #inDeckFrame}, its
+     * deck point mapped through the craft's pose. {@code null} only for a body in the deck frame of
+     * a craft that no longer maps - a position that names nowhere, never a stand-in.
+     */
+    public static net.minecraft.util.math.BlockPos worldPositionOf(Entity entity) {
+        Episode episode = episodeOf(entity);
+        if (episode == null || !episode.writing) {
+            return entity.getPosition();
+        }
+        double[] w = VSIntegration.toWorldFrameFor(entity.world, episode.shipId,
+                entity.posX, entity.posY, entity.posZ);
+        return w == null ? null : new net.minecraft.util.math.BlockPos(w[0], w[1], w[2]);
+    }
+
     private static Episode episodeOf(Entity entity) {
         return entity instanceof DeckHeld ? ((DeckHeld) entity).stellurgy$deckEpisode() : null;
     }
