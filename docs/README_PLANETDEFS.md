@@ -554,7 +554,7 @@ Content and progression:
 | element | notes |
 |---|---|
 | `GasGiant` | boolean, spelled with capitals. A gas giant has **no surface**: it cannot be landed on and is not offered as a descent target. |
-| `gas` | Fluid name; a harvestable gas. Repeatable. Read on any planet but written back only for a gas giant, so a `<gas>` on a rocky world is lost at the first save. Unknown fluid warns and is skipped. |
+| `gas` | **Not accepted here.** What can be harvested from a world is what its air holds, so state the gas inside `<atmosphere>`. A `<gas>` directly under `<planet>` is an error for that planet (it is skipped, with its moons). |
 | `isKnown` | boolean. **Writes into a GLOBAL list**, not into the planet: it marks this dimension as known to every player from the start. |
 | `artifact` | An item stack required to unlock travel here. Repeatable. |
 | `spawnable` | An entity that spawns here. See below. |
@@ -700,8 +700,10 @@ taken once at load; the name may point forward, and may name another copy.
   the WHOLE file — that is only visible once every body is read.
 
 **Gas giant versus surface.** `<GasGiant>true</GasGiant>` makes the world surfaceless. It is then not
-a landing target however else it is configured, `laserDrillOres` on it is ignored, and only `<gas>`
-entries can be harvested from it.
+a landing target however else it is configured, and `laserDrillOres` on it is ignored. A gas
+harvester orbiting it is offered every gas its air holds that some mod has registered as a fluid,
+and draws each one at a rate that follows that gas's partial pressure: a gas twice as dense fills
+the same tanks in half the time.
 
 **Tidal locking versus rotation.** `tidallyLocked` makes the world's rotation equal its orbit. A
 `rotationalPeriod` stated alongside it is stored but has no visible effect.

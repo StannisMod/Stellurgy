@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.integration.jei.gasgiants;
 
 import mezz.jei.api.IJeiHelpers;
-import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 public class GasGiantRecipeMaker {
 
@@ -56,17 +54,9 @@ public class GasGiantRecipeMaker {
                 starName = star.getName();
             }
 
-            Set<String> seenFluidNames = new LinkedHashSet<>();
             List<FluidStack> fluids = new ArrayList<>();
-
-            for (Fluid fluid : props.getHarvestableGasses()) {
-                if (fluid == null) continue;
-
-                String fluidName = fluid.getName();
-                if (fluidName == null || fluidName.isEmpty()) continue;
-                if (!seenFluidNames.add(fluidName)) continue;
-
-                fluids.add(new FluidStack(fluid, 1000));
+            for (Gas gas : props.getHarvestableGases()) {
+                fluids.add(new FluidStack(gas.fluid(), 1000));
             }
 
             if (!fluids.isEmpty()) {

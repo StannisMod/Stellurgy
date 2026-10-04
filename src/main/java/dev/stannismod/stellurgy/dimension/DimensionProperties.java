@@ -18,12 +18,9 @@ import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.BiomeManager;
 import net.minecraftforge.common.BiomeManager.BiomeEntry;
 import net.minecraftforge.common.util.Constants.NBT;
-import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.SidedProxy;
 import org.apache.commons.lang3.ArrayUtils;
 import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
@@ -31,6 +28,7 @@ import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.Afuckinginterface;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
@@ -196,7 +194,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     //Satellites
     private HashMap<Long, SatelliteBase> satellites;
     private HashMap<Long, SatelliteBase> tickingSatellites;
-    private List<Fluid> harvestableAtmosphere;
     private List<SpawnListEntryNBT> spawnableEntities;
     private HashSet<HashedBlockPosition> beaconLocations;
     private IBlockState oceanBlock;
@@ -337,7 +334,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         canDecorate = true;
 
         customIcon = "";
-        harvestableAtmosphere = new LinkedList<>();
         spawnableEntities = new LinkedList<>();
         beaconLocations = new HashSet<>();
         seaLevel = 63;
@@ -579,7 +575,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         starId = 0;
         averageTemperature = 100;
         hasRings = false;
-        harvestableAtmosphere = new LinkedList<>();
         spawnableEntities = new LinkedList<>();
         beaconLocations = new HashSet<>();
         seaLevel = 63;
@@ -704,8 +699,20 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         this.scaledOreCacheFor = Double.NaN;
     }
 
-    public List<Fluid> getHarvestableGasses() {
-        return harvestableAtmosphere;
+    /**
+     * What can be taken out of this world's air: every gas present in it that something has bottled
+     * as a fluid, in registry order. Presence is availability — there is no second list, so a gas the
+     * air gains is offered and a gas it loses is withdrawn, with nothing to keep in step. A gas with
+     * no registered fluid is measured but not offered: nothing could hold it.
+     */
+    public List<Gas> getHarvestableGases() {
+        List<Gas> offered = new ArrayList<>();
+        for (Gas gas : GasRegistry.all()) {
+            if (air.partialPressure(gas) > 0L && gas.fluid() != null) {
+                offered.add(gas);
+            }
+        }
+        return offered;
     }
 
     public List<ItemStack> getRequiredArtifacts() {
@@ -2185,21 +2192,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         parentPlanet = nbt.getInteger("parentPlanet");
         this.setStar(DimensionManager.getInstance().getStar(nbt.getInteger("starId")));
 
-        if (isGasGiant) {
-            NBTTagList fluidList = nbt.getTagList("fluids", NBT.TAG_STRING);
-            getHarvestableGasses().clear();
-
-            for (int i = 0; i < fluidList.tagCount(); i++) {
-                Fluid fluid = FluidRegistry.getFluid(fluidList.getStringTagAt(i));
-                if (fluid != null)
-                    getHarvestableGasses().add(fluid);
-            }
-
-            //Do not allow empty atmospheres, at least not yet
-            if (getHarvestableGasses().isEmpty())
-                getHarvestableGasses().addAll(AtmosphereRegister.getInstance().getHarvestableGasses());
-        }
-
         if (nbt.hasKey("oceanBlock")) {
             Block block = Block.REGISTRY.getObject(new ResourceLocation(nbt.getString("oceanBlock")));
             if (block == Blocks.AIR) {
@@ -2618,16 +2610,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         }
 
         nbt.setInteger("parentPlanet", parentPlanet);
-
-        if (isGasGiant) {
-            NBTTagList fluidList = new NBTTagList();
-
-            for (Fluid f : getHarvestableGasses()) {
-                fluidList.appendTag(new NBTTagString(f.getName()));
-            }
-
-            nbt.setTag("fluids", fluidList);
-        }
 
         if (oceanBlock != null) {
             nbt.setString("oceanBlock", Block.REGISTRY.getNameForObject(oceanBlock.getBlock()).toString());

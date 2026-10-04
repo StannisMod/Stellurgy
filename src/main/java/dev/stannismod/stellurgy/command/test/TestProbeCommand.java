@@ -7439,6 +7439,13 @@ public class TestProbeCommand extends CommandBase {
             info.put("hasOxygen", props.hasOxygen());
             // What the outdoor air is made of, by substance, in the composition's own unit.
             info.put("gases", gasesOf(props.getAir()));
+            // What a gas harvester here is offered, by gas name in the order it is offered — the
+            // planet's own answer, not one rebuilt from "gases" above.
+            List<String> harvestable = new java.util.ArrayList<>();
+            for (dev.stannismod.stellurgy.atmosphere.gas.Gas gas : props.getHarvestableGases()) {
+                harvestable.add(gas.name());
+            }
+            info.put("harvestable", harvestable);
             info.put("seaLevel", props.getSeaLevel());
             info.put("rainStartLength", props.getRainStartLength());
             info.put("thunderStartLength", props.getThunderStartLength());

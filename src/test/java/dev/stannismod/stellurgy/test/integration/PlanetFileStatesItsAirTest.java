@@ -161,6 +161,26 @@ public class PlanetFileStatesItsAirTest {
                 named(read, "Both"));
     }
 
+    /**
+     * What can be harvested from a body is what its air holds, so a planet-level {@code <gas>} — the
+     * list a file once kept beside the air — would mean nothing; the body that carries one is refused
+     * rather than loaded with the list quietly dropped.
+     *
+     * <p>red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at {@code throw new
+     * IllegalArgumentException("planet '" + properties.getName() + "' lists a <"} replaced by an empty
+     * branch, this fails with "a body listing harvestable gases of its own must be refused" — `Lister`
+     * loaded, the control passing.</p>
+     */
+    @Test
+    public void aPlanetLevelGasListRefusesThatBodyAndNoOther() throws Exception {
+        DimensionPropertyCoupling read = read(
+                planet("Lister", stated(1_000L, 1_000L) + "      <gas>hydrogen</gas>\n")
+                + planet("Control", stated(1_000L, 1_000L)));
+        assertNotNull("CONTROL: a body stating only its composition loads from the same file",
+                named(read, "Control"));
+        assertNull("a body listing harvestable gases of its own must be refused", named(read, "Lister"));
+    }
+
     private void assertRefused(String planets, String body) throws Exception {
         try {
             read(planets);

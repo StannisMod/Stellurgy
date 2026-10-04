@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.MissionCompletion;
+import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
@@ -9,6 +10,11 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -156,5 +162,51 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         // at MissionGasCollection.java:50 (FluidStack(type, 64000)).
         assertTrue("fluid contents must include oxygen 64000 mB: " + cargo.raw(),
                 cargo.fluidAmount("oxygen") == DELIVERED_OXYGEN_MB);
+    }
+
+    /** What a gas harvester may collect is what the world's air holds — no list beside it. Empty air
+     *  offers nothing; a single nano-atmosphere of hydrogen is offered (presence, not quantity, decides);
+     *  oxygen added beside it is offered too, and nothing the air does not hold is.
+     *
+     *  <p>The air changes through the planet's own gas exchange, and the offer is the planet's answer as
+     *  {@code planet info} reports it. Does NOT see the rocket's selector or the mission it plans — only
+     *  the offer they both read. Hydrogen and oxygen are used because Stellurgy itself registers their
+     *  fluids; a gas no mod has bottled is measured and not offered, and that half is unpinned here.</p>
+     *
+     *  <p>red-witnessed: with {@code DimensionProperties#getHarvestableGases} at
+     *  {@code air.partialPressure(gas) > 0L} widened to {@code >= 0L}, empty air was offered every
+     *  bottled gas; with the method answering an empty list, the hydrogen trace was not offered.</p> */
+    @Test
+    public void aHarvesterIsOfferedExactlyTheGasesTheAirHolds() throws Exception {
+        final int dim = 0;
+        PlanetAir.Probe probe = cmd -> ok(client().execute(cmd));
+        PlanetAir before = PlanetAir.snapshot(probe, dim);
+        try {
+            run(probe, "stellurgytest atmosphere set-density " + dim + " 0");
+            assertEquals("air emptied, so nothing is there to offer", set(), offered(probe, dim));
+
+            run(probe, "stellurgytest planet add-gas " + dim + " hydrogen 1");
+            assertEquals("one nano-atmosphere of hydrogen is in the air, so hydrogen is offered",
+                    set("hydrogen"), offered(probe, dim));
+
+            run(probe, "stellurgytest planet add-gas " + dim + " oxygen 200000000");
+            assertEquals("oxygen joined the hydrogen, so both are offered and nothing else",
+                    set("hydrogen", "oxygen"), offered(probe, dim));
+        } finally {
+            before.restore(probe);
+        }
+    }
+
+    private static Set<String> offered(PlanetAir.Probe probe, int dim) throws Exception {
+        String command = "stellurgytest planet info " + dim;
+        return set(Reply.of(command, probe.run(command)).textArray("harvestable"));
+    }
+
+    private static void run(PlanetAir.Probe probe, String command) throws Exception {
+        Reply.of(command, probe.run(command)).requireOk(command);
+    }
+
+    private static Set<String> set(String... names) {
+        return new HashSet<>(Arrays.asList(names));
     }
 }

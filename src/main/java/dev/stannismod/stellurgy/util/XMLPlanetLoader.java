@@ -10,8 +10,6 @@ import net.minecraft.nbt.NBTException;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.biome.Biome;
 import net.minecraftforge.common.BiomeManager.BiomeEntry;
-import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
 import net.minecraftforge.oredict.OreDictionary;
 import org.w3c.dom.*;
@@ -850,16 +848,8 @@ public class XMLPlanetLoader {
         if (properties.hasRivers)
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_RIVER_OVERRIDE, "true"));
 
-        if (properties.isGasGiant()) {
+        if (properties.isGasGiant())
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_GASGIANT, "true"));
-
-            if (!properties.getHarvestableGasses().isEmpty()) {
-                for (Fluid f : properties.getHarvestableGasses()) {
-                    nodePlanet.appendChild(createTextNode(doc, ELEMENT_GAS, f.getName()));
-                }
-
-            }
-        }
 
         nodePlanet.appendChild(createTextNode(doc, ELEMENT_FOGCOLOR, properties.fogColor[0] + "," + properties.fogColor[1] + "," + properties.fogColor[2]));
         nodePlanet.appendChild(createTextNode(doc, ELEMENT_SKYCOLOR, properties.skyColor[0] + "," + properties.skyColor[1] + "," + properties.skyColor[2]));
@@ -1177,13 +1167,12 @@ public class XMLPlanetLoader {
                     Stellurgy.logger.warn("Invalid fog color specified"); //TODO: more detailed error msg
                 }
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_GAS)) {
-                Fluid fluid = FluidRegistry.getFluid(planetPropertyNode.getTextContent());
-
-                if (fluid == null)
-                    Stellurgy.logger.warn("\"" + planetPropertyNode.getTextContent() + "\" is not a valid fluid"); //TODO: more detailed error msg
-                else {
-                    properties.getHarvestableGasses().add(fluid);
-                }
+                // A planet-level <gas> once listed what could be harvested here. What can be harvested
+                // is now what the air holds, so this element would be silently meaningless; refused,
+                // so an older file says what it lost instead of losing it quietly.
+                throw new IllegalArgumentException("planet '" + properties.getName() + "' lists a <"
+                        + ELEMENT_GAS + "> of its own; what can be harvested is what its air holds, so"
+                        + " state the gas inside <" + ELEMENT_ATMOSPHERE + "> instead");
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_OCEANBLOCK)) {
                 String blockName = planetPropertyNode.getTextContent();
                 Block block = Block.REGISTRY.getObject(new ResourceLocation(blockName));

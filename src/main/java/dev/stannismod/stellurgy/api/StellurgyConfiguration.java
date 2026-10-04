@@ -15,7 +15,6 @@ import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.oredict.OreDictionary;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 import dev.stannismod.stellurgy.atmosphere.AirState;
@@ -58,7 +57,7 @@ public class StellurgyConfiguration {
      *  Not to be confused with the configuration below, which is the SERVER's while one is joined. */
     private static final Logger logger = LogManager.getLogger(Constants.modId);
 
-    private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
+    private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
     private static StellurgyConfiguration currentConfig = new StellurgyConfiguration();
     private static StellurgyConfiguration diskConfig;
     private static boolean usingServerConfig = false;
@@ -709,8 +708,6 @@ public class StellurgyConfiguration {
         //Missions
         stellurgyConfig.asteroidMiningTimeMult = config.get(MISSION, "miningMissionTmeMultiplier", 1.0, "Multiplier for mining mission time.").getDouble();
         stellurgyConfig.gasCollectionMult = config.get(MISSION, "gasMissionMultiplier", 1.0, "Multiplier for gas mission time.").getDouble();
-        harvestableGasses = config.getStringList("harvestableGasses", MISSION, new String[]{}, "List of fluid names that can be harvested from any gas giant");
-        spawnableGasses = config.getStringList("spawnableGasses", MISSION, new String[]{"hydrogen;125;1600;1.0", "helium;125;1600;0.9", "helium3;175;1600;0.2", "oxygen;0;124;1.0", "nitrogen;0;124;1.0", "ammonia;0;124;0.75", "methane;0;124;0.25"}, "List of fluids that can generate on gas giants. Format: fluid;minGravity;maxGravity;chance");
         stellurgyConfig.gasHarvestAmountMultiplier = config.get(
             MISSION, "gasHarvestAmountMultiplier", 1.0,
             "Per-mission harvest cap = 64,000 mB × multiplier. Ignored if gasHarvestInfinite=true."
@@ -1039,42 +1036,6 @@ public class StellurgyConfiguration {
         }
         logger.info("End registering rocket blacklist blocks");
         blackListRocketBlocksStr = null;
-
-        logger.info("Start registering Harvestable Gasses");
-        for (String str : harvestableGasses) {
-            Fluid fluid = FluidRegistry.getFluid(str);
-            if (fluid == null)
-                logger.warn("'" + str + "' is not a valid Fluid");
-            else
-                AtmosphereRegister.getInstance().registerHarvestableFluid(fluid);
-        }
-        logger.info("End registering Harvestable Gasses");
-        harvestableGasses = null;
-
-        logger.info("Start registering Spawnable Gasses");
-        for (String str : spawnableGasses) {
-
-            String[] splitStr = str.split(";");
-            Fluid fluid = FluidRegistry.getFluid(splitStr[0]);
-            int minGravity = 0;
-            int maxGravity = 1600;
-            double chance = 1.0;
-            if (splitStr.length > 1) {
-                minGravity = Integer.parseInt(splitStr[1]);
-            }
-            if (splitStr.length > 2) {
-                maxGravity = Integer.parseInt(splitStr[2]);
-            }
-            if (splitStr.length > 3) {
-                chance = Double.parseDouble(splitStr[3]);
-            }
-            if (fluid == null)
-                logger.warn("'" + str + "' is not a valid Fluid");
-            else
-                StellurgyFluids.registerGasGiantGas(fluid, minGravity, maxGravity, chance);
-        }
-        logger.info("End registering Spawnable Gasses");
-        spawnableGasses = null;
 
         logger.info("Start registering entity atmosphere bypass");
 

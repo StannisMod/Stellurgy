@@ -20,7 +20,6 @@ import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketSatellitesUpdate;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.util.FluidGasGiantGas;
 import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader.DimensionPropertyCoupling;

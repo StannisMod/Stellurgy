@@ -15,7 +15,6 @@ import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereAssertions;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.block.BlockRedstoneEmitter;

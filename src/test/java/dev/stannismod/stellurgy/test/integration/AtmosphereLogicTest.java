@@ -26,9 +26,8 @@ import static org.junit.Assert.assertTrue;
 /**
  * Atmosphere — pure-logic checks on Atmosphere subtypes.
  *
- * Loading {@code Atmosphere} runs its static initializer which registers
- * atmospheres into {@code AtmosphereRegister}. We trigger MC bootstrap defensively
- * because some atmosphere subclasses reference vanilla blocks transitively.
+ * We trigger MC bootstrap defensively because some atmosphere subclasses
+ * reference vanilla blocks transitively.
  */
 public class AtmosphereLogicTest {
 
