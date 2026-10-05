@@ -2957,8 +2957,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
                 "the deck must still hold him after a teleport that kept him over it");
         // WINDOW: the held point is read on both sides of this stretch and both reads are named in
         // the verdict. A deck that re-derived his place from the point it held before would pull it
-        // back on his next update; twenty ticks is twenty of them.
-        dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);
+        // back on his next update; twenty ticks is twenty of them, on both clocks — his client moves
+        // him in the deck's frame and sends the claim, the server's update of him takes it.
+        advanceWorldAndClient(0, 20);
         DeckCapture later = deckCaptureOfThisShip(scenarioShipId,
                 "the deck must go on holding him on the new cell");
         // Half a cell: the two cells are a block apart, so a point within half a block of the new
