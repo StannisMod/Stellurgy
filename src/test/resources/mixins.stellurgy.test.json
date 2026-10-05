@@ -85,6 +85,8 @@
     "MixinShipFrameTravelShove",
     "MixinDeckFrameTickShove",
     "MixinDeckFrameReseatPass",
+    "MixinEntityDummyGlueTrace",
+    "MixinDeclaredMotionPoseTrace",
     "MixinClientDeckPoseTrace",
     "MixinClientDeckPoseTickTrace",
     "MixinHullSweepInputs",

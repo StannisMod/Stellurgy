@@ -4,7 +4,6 @@ import com.google.gson.JsonObject;
 
 import org.junit.After;
 import org.junit.FixMethodOrder;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
@@ -201,17 +200,25 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     /** The client's frame cap before this test raised it, so cleanup can put it back. */
     private int previousFrameRate = -1;
 
+    /**
+     * A SEATED pilot's view of a flying craft is as even as the craft's flight — before a jump and
+     * after one. Its per-tick channel is the pilot's own position, which is his seat's, which is the
+     * seat block through the client's shown pose of the craft.
+     *
+     * <p>It was ignored for two weeks as "a riding body is excluded from the per-tick re-image", and
+     * that was not the mechanism: the seat entity lands exactly on its block through the pose every
+     * client tick ({@code dummy_glue}, printed below). What stood still was the POSE: under load two
+     * poses landed inside one client tick and none in the next, and a pose taken as valid at the tick
+     * it arrived showed the craft stepping 4.0, 2.0, then 0.0 ({@code pose_tick}, printed below).</p>
+     *
+     * <p>red-witnessed: with {@code DeclaredMotionTransformInterpolator#onNewTransformPacket} taking
+     * a pose as valid at the tick it ARRIVED (the form before {@code ShipTransformUpdateMessage}
+     * carried {@code serverTick}), 3 of 6 parallel instances fail on the control leg — "covered 5.33
+     * blocks in one beat, against the 3.67 it was COMMANDED", "covered 4.0 blocks", and "the ground
+     * covered per beat changed by 2.0 blocks between two consecutive beats" — 2026-10-05; 6 of 6
+     * green in three parallel runs with the stamp.</p>
+     */
     @Test
-    @Ignore("RED ON A REAL DEFECT THAT NOBODY IS FIXING TODAY, and the defect is not the jump."
-            + " A body STANDING on a deck is re-imaged every client tick through the ship's"
-            + " predicted pose; a body RIDING is excluded from that pass by the isRiding() clause"
-            + " in ShipFrameTravel.followShipPoses, so a seated pilot follows his mount at"
-            + " vanilla's entity-tracking rate. Measured over eight parallel instances of this"
-            + " test: four red, THREE OF THEM BEFORE THE JUMP, with a client tick covering 4.0"
-            + " blocks against a 2.0 blocks/tick cruise while the physics channel of the same"
-            + " window read 0.667 per step with zero variation. RE-ENABLE when a ridden entity"
-            + " rides that prediction too; the acceptance is this class green in eight parallel"
-            + " instances, because four green out of eight is what it already does.")
     public void aShipFliesAsSmoothlyAfterAJumpAsBeforeOne() throws Exception {
 
         // The rendered frame is one of the four clocks this test reads, and the harness seeds
@@ -371,6 +378,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // step series can say whether that unevenness is periodic.
         System.out.println("[SMOOTH-RAW] before:  " + before.clientJson);
         System.out.println("[SMOOTH-RAW] settled: " + settled.clientJson);
+        System.out.println("[SMOOTH-GLUE] before:" + before.glue);
+        System.out.println("[SMOOTH-GLUE] settled:" + settled.glue);
+        System.out.println("[SMOOTH-POSE] before:" + before.pose);
+        System.out.println("[SMOOTH-POSE] settled:" + settled.pose);
         System.out.println("[SMOOTH] control (before jump):    " + before);
         System.out.println("[SMOOTH] subject (after jump):     " + after);
         System.out.println("[SMOOTH] subject (settled):        " + settled);
@@ -566,6 +577,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         String label = "";
         String serverJson = "";
         String clientJson = "";
+        /** The seat entity's per-update records over this leg, one per line. */
+        String glue = "";
+        /** The craft's shown pose per client tick over this leg ({@code pose_tick}), one per line. */
+        String pose = "";
         double travel;
         double physHitchMs;
         double gameHitchMs;
@@ -751,6 +766,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
 
     private Leg measure(String label, int dim, int[] afc) throws Exception {
         exec("stellurgytest vs motion-trace reset");
+        long glueMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R);
         try {
             // STIMULUS: FLY_TICKS of held climb — the flight each leg's traces describe.
@@ -804,7 +820,24 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // How far the SHIP itself went over the window, from the physics channel's own net move —
         // the one displacement in the set that no interpolation filter has touched.
         leg.travel = netMoveLength(phys);
+        leg.glue = seatGlueLines(clientEvents().since(glueMark, "dummy_glue"));
+        leg.pose = seatGlueLines(clientEvents().since(glueMark, "pose_tick"))
+                + "\n  arrivals:" + seatGlueLines(clientEvents().since(glueMark, "pose_arrival"));
         return leg;
+    }
+
+    /**
+     * The seat entity's own per-update record over a leg ({@code dummy_glue}), one line per update:
+     * where the seat block stood through the client's pose of the craft, the seat entity before and
+     * after its glue, and its tick against its rider's. The pilot's per-tick channel says THAT his
+     * tick stood still; this says which of the pose, the glue or the update did not happen.
+     */
+    private static String seatGlueLines(String reply) {
+        StringBuilder out = new StringBuilder();
+        for (String record : Events.records(reply)) {
+            out.append("\n    ").append(record);
+        }
+        return out.toString();
     }
 
     /**

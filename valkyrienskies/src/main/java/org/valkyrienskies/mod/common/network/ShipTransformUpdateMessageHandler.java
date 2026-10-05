@@ -56,7 +56,7 @@ public class ShipTransformUpdateMessageHandler implements IMessageHandler<ShipTr
                         ITransformInterpolator interpolator = physicsObject.getTransformInterpolator();
                         interpolator.onNewTransformPacket(shipTransform, shipBB,
                                 update.linearX, update.linearY, update.linearZ,
-                                update.angularX, update.angularY, update.angularZ);
+                                update.angularX, update.angularY, update.angularZ, message.getServerTick());
                         // The craft's DECLARED motion, stored where every consumer already looks for
                         // it — the same ShipPhysicsData the server fills from its physics step. This
                         // is the whole point of carrying it: a client asking "how fast is this deck

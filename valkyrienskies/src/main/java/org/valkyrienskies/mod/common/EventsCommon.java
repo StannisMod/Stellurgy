@@ -187,6 +187,7 @@ public class EventsCommon {
                     if (message == null) {
                         message = new ShipTransformUpdateMessage();
                         message.setDimensionID(world.provider.getDimension());
+                        message.setServerTick(world.getTotalWorldTime());
                         perPlayer.put(watcher, message);
                     }
                     message.addData(physicsObject.getUuid(), shipTransform, shipBB,

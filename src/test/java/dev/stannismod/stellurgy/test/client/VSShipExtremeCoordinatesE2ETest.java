@@ -476,7 +476,12 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // climbed, client did not).
         String serverPlayer = exec("stellurgytest player health");
         assertTrue("[" + label + "] the CLIENT rider must track the server ship's climb (client="
-                + riderDelta + " server=" + serverDelta + "); server player: " + serverPlayer,
+                + riderDelta + " server=" + serverDelta + "); server player: " + serverPlayer
+                // The client's shown pose of the craft, per tick and per arrival, over the leg: the
+                // rider is his seat, his seat is its block through that pose, so a rider behind his
+                // ship is that pose behind the poses it was sent.
+                + "\n  client pose per tick: " + Events.records(clientEvents().since(climbClientMark, "pose_tick"))
+                + "\n  client pose arrivals: " + Events.records(clientEvents().since(climbClientMark, "pose_arrival")),
                 Math.abs(riderDelta - serverDelta) < RIDER_TRACKS_SHIP_BLOCKS);
     }
 

@@ -28,6 +28,17 @@ public interface ITransformInterpolator {
                               double angularX, double angularY, double angularZ);
 
     /**
+     * The same, with the server tick the pose is valid at. An interpolator that shows the pose of a
+     * stated tick needs it; one that only chases the newest pose may ignore it, which is what this
+     * default does.
+     */
+    default void onNewTransformPacket(@Nonnull ShipTransform newTransform, @Nonnull AxisAlignedBB newAABB,
+                                      double linearX, double linearY, double linearZ,
+                                      double angularX, double angularY, double angularZ, long serverTick) {
+        onNewTransformPacket(newTransform, newAABB, linearX, linearY, linearZ, angularX, angularY, angularZ);
+    }
+
+    /**
      * Moves the interpolator up 1 tick, moving the current transform closer to the latest transform.
      */
     void tickTransformInterpolator();

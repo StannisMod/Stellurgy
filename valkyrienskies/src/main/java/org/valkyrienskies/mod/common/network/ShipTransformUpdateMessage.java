@@ -59,10 +59,25 @@ public class ShipTransformUpdateMessage implements IMessage {
     private static final ObjectMapper serializer = VSJacksonUtil.getPacketMapper();
     final Map<UUID, ShipPoseAndMotion> shipTransforms;
     int dimensionID;
+    /**
+     * The server tick every pose in this packet is valid at — the world's total time when it was
+     * built. A pose is a statement about an instant, and the instant it ARRIVES is not that instant:
+     * under load two arrive inside one client tick and none in the next, and a client that took each
+     * as "now" showed the craft standing still for a tick and then covering two.
+     */
+    long serverTick;
 
     public ShipTransformUpdateMessage() {
         this.shipTransforms = new HashMap<>();
         this.dimensionID = -1;
+    }
+
+    public void setServerTick(long serverTick) {
+        this.serverTick = serverTick;
+    }
+
+    public long getServerTick() {
+        return serverTick;
     }
 
     public void addData(final UUID shipUUID, final ShipTransform shipTransform, final AxisAlignedBB alignedBB,
@@ -142,6 +157,7 @@ public class ShipTransformUpdateMessage implements IMessage {
             shipTransforms.put(shipID, new ShipPoseAndMotion(shipTransform, axisAlignedBB, lx, ly, lz, ax, ay, az));
         }
         dimensionID = packetBuffer.readInt();
+        serverTick = packetBuffer.readLong();
     }
 
     @Override
@@ -188,5 +204,6 @@ public class ShipTransformUpdateMessage implements IMessage {
             }
         }
         packetBuffer.writeInt(dimensionID);
+        packetBuffer.writeLong(serverTick);
     }
 }

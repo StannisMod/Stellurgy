@@ -17,6 +17,18 @@ import javax.annotation.Nonnull;
  * The client's pose for a craft, ADVANCED from the state the craft declared rather than filtered
  * toward it.
  *
+ * <h2>A pose is shown at the tick it is VALID at (2026-10-05)</h2>
+ *
+ * <p>Every pose arrives stamped with the server tick it was built on. A pose for a tick already shown
+ * by prediction corrects that prediction as a residual; a pose for a tick not yet shown moves the
+ * shown tick up to its own, and the residual turns any jump into ordinary movement; a shown tick
+ * predicting more than two ahead of the stream comes back the same way. So the shown pose is never
+ * further from the newest pose than prediction puts it, and never moves by a step the craft did not
+ * take. Until then a pose was taken as valid at the tick it ARRIVED, and under load that was wrong
+ * exactly when it mattered: measured over six parallel clients, two poses landed in one client tick
+ * and none in the next, and the shown pose stepped 4.0, then 2.0 by prediction, then 0.0 when the
+ * predicted pose arrived — a seated pilot's "freeze and catch up", three of six runs red.</p>
+ *
  * <h2>WIRED 2026-08-25 (maintainer's call, on the numbers below)</h2>
  *
  * <p>Measured on a craft slewing at 2 rad/s with the rotational trace at full precision: the shown
@@ -118,22 +130,6 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
      */
     private static final double RESIDUAL_SURVIVES_PER_TICK = 0.5;
 
-    /**
-     * The most the retirement of a residual may add to a single tick's movement, in blocks.
-     *
-     * <p>Retiring an error is itself movement of the deck, and a big enough one is movement the
-     * craft's own motion cannot explain — which is precisely what the body-capture guard is built to
-     * notice. Measured: after a 12-tick gap the prediction had drifted 2.72 blocks, half of that
-     * went into one tick, and the guard dropped the capture three times over a climb it used to ride
-     * cleanly. So the fraction is a rate LIMIT, not a rate: a large error takes more ticks to retire
-     * and never arrives as a lurch.</p>
-     *
-     * <p>The number is the capture guard's own static epsilon (0.2 blocks), deliberately rather than
-     * a new invented one: below it the guard cannot tell this retirement from noise, which is the
-     * exact property wanted.</p>
-     */
-    private static final double RESIDUAL_MAX_RETIRED_BLOCKS_PER_TICK = 0.2;
-
 
     /**
      * Residual beyond which the pose is adopted outright, in blocks, added to the distance the
@@ -192,11 +188,59 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
     private final Quaterniond prevTickEndRot = new Quaterniond();
     private boolean haveShownStep;
 
-    /** Whether a pose arrived for the tick about to be shown, and whether anything was PREDICTED
-     *  since the last one — the second is what decides whether a difference on arrival is a
-     *  prediction error to retire or simply the craft's own movement. */
-    private boolean packetSinceLastTick;
-    private boolean extrapolatedSinceLastPacket;
+    /**
+     * The server tick the shown pose stands for. It advances by exactly ONE each client tick,
+     * whatever arrives: a pose is shown at the tick it is valid at (its stamp), never at the tick it
+     * happens to land in.
+     *
+     * <p>Measured 2026-10-05 under six parallel clients, before poses carried a stamp: two poses landed
+     * inside one client tick and none in the next, and an interpolator taking each arrival as "now"
+     * jumped to the newer of the two (a step of 4.0 blocks at a 2.0 cruise), predicted the next tick
+     * on top of it, and then stood still for a tick when the pose it had predicted arrived — the
+     * "2.0, 2.0, 0.0, 4.0" a seated pilot sees as the craft freezing and catching up.</p>
+     */
+    private long shownTick;
+    /** The tick {@link #declaredTransform} stands for. */
+    private long declaredTick;
+    /** The stamp of the newest pose taken in or waiting; a pose not newer says nothing new. */
+    private long newestPoseTick;
+    /** Whether any pose has arrived yet — the first one places the shown tick. */
+    private boolean aligned;
+    /** The newest pose that arrived for a tick not yet shown, or {@code null}. */
+    private Pose pending;
+    /** Whether the pose for the tick already shown by prediction arrived since the last tick. */
+    private boolean lateForShownTick;
+    /** Whether the tick just shown is a pose exactly as it arrived (diagnostic — a test reads it). */
+    private boolean shownFromPose;
+
+    /**
+     * How many ticks the shown pose may run AHEAD of the newest pose before the client is ahead of the
+     * stream rather than merely predicting across a late one, and brings its shown tick back —
+     * continuously, through the residual. Measured 2026-10-05 under six parallel clients: at most
+     * three poses arrived inside one client tick, so a prediction two ticks deep is unevenness.
+     */
+    private static final long MAX_TICKS_FROM_STREAM = 2;
+
+    /** One arrived pose, with its motion and the tick it is valid at. */
+    private static final class Pose {
+        final ShipTransform transform;
+        final AxisAlignedBB aabb;
+        final double linearX, linearY, linearZ, angularX, angularY, angularZ;
+        final long tick;
+
+        Pose(ShipTransform transform, AxisAlignedBB aabb, double linearX, double linearY, double linearZ,
+             double angularX, double angularY, double angularZ, long tick) {
+            this.transform = transform;
+            this.aabb = aabb;
+            this.linearX = linearX;
+            this.linearY = linearY;
+            this.linearZ = linearZ;
+            this.angularX = angularX;
+            this.angularY = angularY;
+            this.angularZ = angularZ;
+            this.tick = tick;
+        }
+    }
 
     private static final double DOUBLE_EQUALS_THRESHOLD = 1e-6;
 
@@ -212,29 +256,160 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
         onNewTransformPacket(newTransform, newAABB, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     }
 
+    /** A pose with no stated tick is taken as the tick after the newest — what every pose was taken
+     *  as before poses carried one. The pose packet states its tick; this is the interface's
+     *  stamp-less form. */
     @Override
     public void onNewTransformPacket(@Nonnull ShipTransform newTransform, @Nonnull AxisAlignedBB newAABB,
                                      double linearX, double linearY, double linearZ,
                                      double angularX, double angularY, double angularZ) {
-        // How wrong the prediction was: what is being SHOWN, against what the craft says is true.
-        final double dx = curTickTransform.getPosX() - newTransform.getPosX();
-        final double dy = curTickTransform.getPosY() - newTransform.getPosY();
-        final double dz = curTickTransform.getPosZ() - newTransform.getPosZ();
-        final double error = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        onNewTransformPacket(newTransform, newAABB, linearX, linearY, linearZ, angularX, angularY, angularZ,
+                aligned ? newestPoseTick + 1 : 0L);
+    }
 
-        final double declaredSpeed = Math.sqrt(linearX * linearX + linearY * linearY + linearZ * linearZ);
-        final double discontinuityAbove =
-                DISCONTINUITY_FLOOR_BLOCKS + declaredSpeed * SECONDS_PER_TICK * DISCONTINUITY_TICKS;
-
-        if (!extrapolatedSinceLastPacket) {
-            // Nothing was predicted, so there is no prediction error: the previous pose was declared
-            // too, and the step between them is simply what the craft did. Taking the difference as
-            // a residual and fading it would smear a real movement over the following ticks — and
-            // measured, that is not a small effect: with a packet every tick the shown pose wobbled
-            // around the true one and a body standing on a rolling deck walked 1.17 blocks across it.
+    @Override
+    public void onNewTransformPacket(@Nonnull ShipTransform newTransform, @Nonnull AxisAlignedBB newAABB,
+                                     double linearX, double linearY, double linearZ,
+                                     double angularX, double angularY, double angularZ, long serverTick) {
+        final Pose pose = new Pose(newTransform, newAABB, linearX, linearY, linearZ,
+                angularX, angularY, angularZ, serverTick);
+        if (!aligned) {
+            // The first pose places the clock: it is shown on the tick this client is about to run,
+            // which is the tick it arrived in — the same latency every pose had before it was stamped.
+            aligned = true;
+            take(pose);
+            shownTick = serverTick - 1;
             residualPos.zero();
             residualRot.identity();
-        } else if (error > discontinuityAbove) {
+            curTickTransform = composeShown();
+            return;
+        }
+        if (serverTick <= newestPoseTick) {
+            // Not newer than a pose already taken in or waiting: it says nothing new.
+            return;
+        }
+        newestPoseTick = serverTick;
+        if (serverTick > shownTick) {
+            // Its tick has not been shown yet: the next tick shows it (or, if it is further ahead,
+            // catches up to it continuously). Only the newest is kept — an older one in between
+            // says nothing the newest does not.
+            pending = pose;
+            return;
+        }
+        // LATE: a pose for a tick already shown, by prediction. From now on the shown pose is derived
+        // from it, and the shown pose does not move on arrival — what the prediction got wrong is a
+        // residual, retired over the following ticks.
+        final ShipTransform shown = curTickTransform;
+        take(pose);
+        lateForShownTick = serverTick == shownTick;
+        if (shownTick - serverTick > MAX_TICKS_FROM_STREAM) {
+            // Not a late pose but a client running ahead of the stream: its shown tick comes back,
+            // and the residual carries the difference, so nothing visible moves.
+            shownTick = serverTick + MAX_TICKS_FROM_STREAM;
+        }
+        advanceDeclaredTo(shownTick);
+        residualAgainst(shown);
+        curTickTransform = composeShown();
+    }
+
+    @Override
+    public void tickTransformInterpolator() {
+        if (!aligned) {
+            // Nothing has arrived: the pose this craft was loaded at stands.
+            captureTickEnd();
+            noteShownStep();
+            return;
+        }
+        final ShipTransform before = curTickTransform;
+        // The leftover of a wrong prediction fades rather than being applied as a step.
+        retireResidual();
+
+        final Pose due = pending;
+        pending = null;
+        final boolean realign = due == null && lateForShownTick;
+        lateForShownTick = false;
+        long skipped = 0;
+        if (due != null) {
+            // A pose newer than the shown tick is in hand: show ITS tick. One tick on is the ordinary
+            // case; further is a burst, caught up to now, the residual turning the jump into ordinary
+            // movement. Holding it for its own tick instead was measured 2026-10-05 to cost a tick of
+            // latency on every other tick when poses arrive in pairs (a seated pilot 3.9 blocks behind
+            // his climbing ship, against a 3.0 bound), and a queue that never drained after a stall.
+            skipped = due.tick - shownTick - 1;
+            shownTick = due.tick;
+            take(due);
+            ticksShownFromPacket++;
+        } else if (!realign) {
+            // Nothing arrived: the craft keeps doing what it last said it was doing.
+            shownTick++;
+            ticksExtrapolated++;
+        }
+        // REALIGN: the pose for the tick already shown by prediction arrived this tick, and nothing
+        // newer. Predicting a further tick would leave the client permanently a tick ahead of the
+        // stream, where every change of the craft's motion is an overshoot — measured 2026-10-05: a
+        // craft that had stopped was shown 2.77 blocks past where it stood, and the residual took
+        // thirteen ticks to retire while its pilot's next climb was measured against it. So the shown
+        // tick stays on that pose, and the residual carries the tick of movement the eye expects.
+        advanceDeclaredTo(shownTick);
+        shownFromPose = due != null && skipped == 0;
+        if (skipped > 0 || realign) {
+            residualAgainst(advance(before, 1));
+        }
+
+        curTickTransform = composeShown();
+        captureTickEnd();
+        noteShownStep();
+    }
+
+    /** Take an arrived pose as the craft's declared state at its own tick. */
+    private void take(Pose pose) {
+        declaredTransform = pose.transform;
+        declaredTick = pose.tick;
+        newestPoseTick = Math.max(newestPoseTick, pose.tick);
+        latestReceivedTransform = pose.transform;
+        latestReceivedAABB = pose.aabb;
+        linearVelocity.set(pose.linearX, pose.linearY, pose.linearZ);
+        angularVelocity.set(pose.angularX, pose.angularY, pose.angularZ);
+    }
+
+    /** Carry the declared pose forward by its declared motion to {@code tick}. */
+    private void advanceDeclaredTo(long tick) {
+        if (tick > declaredTick) {
+            declaredTransform = advance(declaredTransform, tick - declaredTick);
+            declaredTick = tick;
+        }
+    }
+
+    /** {@code transform} moved on by {@code ticks} of the declared motion. */
+    @Nonnull
+    private ShipTransform advance(@Nonnull ShipTransform transform, long ticks) {
+        final double seconds = ticks * SECONDS_PER_TICK;
+        final Vector3d advancedPos = new Vector3d(
+                transform.getPosX() + linearVelocity.x * seconds,
+                transform.getPosY() + linearVelocity.y * seconds,
+                transform.getPosZ() + linearVelocity.z * seconds);
+        final Quaterniond advancedRot = new Quaterniond(transform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL));
+        final double angle = angularVelocity.length() * seconds;
+        if (angle > 1.0E-9) {
+            final Vector3d axis = new Vector3d(angularVelocity).normalize();
+            // World-frame rotation rate, so it composes on the LEFT of the craft's orientation.
+            advancedRot.premul(new Quaterniond().fromAxisAngleRad(axis.x, axis.y, axis.z, angle)).normalize();
+        }
+        return new ShipTransform(advancedPos, advancedRot, transform.getCenterCoord());
+    }
+
+    /**
+     * Set the residual so the shown pose is {@code shown} — what the declared pose got wrong about
+     * it, to be retired — unless the difference is a discontinuity, which is adopted outright.
+     */
+    private void residualAgainst(@Nonnull ShipTransform shown) {
+        final double dx = shown.getPosX() - declaredTransform.getPosX();
+        final double dy = shown.getPosY() - declaredTransform.getPosY();
+        final double dz = shown.getPosZ() - declaredTransform.getPosZ();
+        final double error = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        final double discontinuityAbove = DISCONTINUITY_FLOOR_BLOCKS
+                + linearVelocity.length() * SECONDS_PER_TICK * DISCONTINUITY_TICKS;
+        if (error > discontinuityAbove) {
             // Not a mispredicted tick — the craft is somewhere else entirely (a teleport, a jump
             // arrival, a load). Fading across that would sweep the deck, and anything standing on
             // it, through the space between.
@@ -243,84 +418,33 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
             discontinuitiesAdopted++;
         } else {
             residualPos.set(dx, dy, dz);
-            final Quaterniondc curRot = curTickTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-            final Quaterniondc newRot = newTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-            // residual = cur * new^-1, left-multiplied, so it composes onto the declared rotation
-            residualRot.set(newRot).invert().premul(curRot).normalize();
+            final Quaterniondc shownRot = shown.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
+            final Quaterniondc declaredRot = declaredTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
+            // residual = shown * declared^-1, left-multiplied, so it composes onto the declared rotation
+            residualRot.set(declaredRot).invert().premul(shownRot).normalize();
         }
         lastResidualBlocks = error;
         if (error > maxResidualBlocks) {
             maxResidualBlocks = error;
         }
-
-        this.declaredTransform = newTransform;
-        this.latestReceivedTransform = newTransform;
-        this.latestReceivedAABB = newAABB;
-        this.linearVelocity.set(linearX, linearY, linearZ);
-        this.angularVelocity.set(angularX, angularY, angularZ);
-        this.extrapolatedSinceLastPacket = false;
-        this.packetSinceLastTick = true;
-        // The shown pose does not move on arrival: declared + residual is exactly where it already
-        // was. That identity is what makes a packet unfelt.
-        this.curTickTransform = composeShown();
-    }
-
-    @Override
-    public void tickTransformInterpolator() {
-        // A packet arrived for this tick: its pose IS the craft's state and there is nothing to
-        // predict. Extrapolation is for the ticks a packet did not come — a chosen cadence, a late
-        // packet, a stalled server — and running it when one did means betting against information
-        // already in hand.
-        if (packetSinceLastTick) {
-            packetSinceLastTick = false;
-            ticksShownFromPacket++;
-            retireResidual();
-            curTickTransform = composeShown();
-            captureTickEnd();
-            noteShownStep();
-            return;
-        }
-        extrapolatedSinceLastPacket = true;
-        ticksExtrapolated++;
-
-        // Nothing came, so the craft keeps doing what it last said it was doing.
-        final Vector3d advancedPos = new Vector3d(
-                declaredTransform.getPosX() + linearVelocity.x * SECONDS_PER_TICK,
-                declaredTransform.getPosY() + linearVelocity.y * SECONDS_PER_TICK,
-                declaredTransform.getPosZ() + linearVelocity.z * SECONDS_PER_TICK);
-        final Quaterniondc declaredRot = declaredTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-        final Quaterniond advancedRot = new Quaterniond(declaredRot);
-        final double angle = angularVelocity.length() * SECONDS_PER_TICK;
-        if (angle > 1.0E-9) {
-            final Vector3d axis = new Vector3d(angularVelocity).normalize();
-            // World-frame rotation rate, so it composes on the LEFT of the craft's orientation.
-            advancedRot.premul(new Quaterniond().fromAxisAngleRad(axis.x, axis.y, axis.z, angle)).normalize();
-        }
-        declaredTransform = new ShipTransform(advancedPos, advancedRot, declaredTransform.getCenterCoord());
-
-        // And the leftover of a wrong prediction fades rather than being applied as a step.
-        retireResidual();
-
-        // Remember where the pose stood, so the step about to be taken can be reported afterwards.
-        curTickTransform = composeShown();
-        captureTickEnd();
-        noteShownStep();
     }
 
     /**
-     * Retire part of the residual — a FRACTION of it, but never more than the cap in one tick.
+     * Retire a FRACTION of the residual each tick, and nothing caps it.
      *
-     * <p>The fraction is what makes a small error vanish quickly; the cap is what stops a large one
-     * from arriving as a lurch the craft's own motion cannot account for. Both are needed: without
-     * the fraction a tiny residual would take forever, without the cap a 2.72-block one put over a
-     * block into a single tick and dropped a body's capture.</p>
+     * <p>A cap of 0.2 blocks a tick stood here, taken from the body-capture guard's epsilon so the
+     * guard could not see a retirement; that guard was deleted on 2026-09-16, and the cap outlived its
+     * reason. What it did then, measured 2026-10-05: under load the server's physics fell behind the
+     * game tick (poses advancing 0.67–1.33 blocks a stamp against a declared 2.0), every prediction
+     * overshot by about a block, and a residual retired at 0.2 grew without bound — 11.7 blocks, the
+     * shown craft running away from the craft; and a craft that stopped was shown 2.77 blocks past it
+     * for thirteen ticks. A fraction converges on any steady error and retires a stop's overshoot in a
+     * few ticks.</p>
      */
     private void retireResidual() {
         final double length = residualPos.length();
         if (length > 1.0E-9) {
-            final double retire = Math.min(length * (1.0 - RESIDUAL_SURVIVES_PER_TICK),
-                    RESIDUAL_MAX_RETIRED_BLOCKS_PER_TICK);
-            residualPos.mul(Math.max(0.0, 1.0 - retire / length));
+            residualPos.mul(RESIDUAL_SURVIVES_PER_TICK);
         } else {
             residualPos.zero();
         }
