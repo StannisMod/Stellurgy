@@ -314,6 +314,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
         // EXPERIMENT: a dose of gate evaluations, not a budget — both legs of this test are in dim 0,
         // and `tp` has already moved the server's copy of him by the time the command answers.
+        // SERVER-ONLY: the gate runs on the server's ticks of dim 0; the read is the server's log.
         GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);
         String changes = serverEvents().since(mark, "player_atmosphere_changed");
 

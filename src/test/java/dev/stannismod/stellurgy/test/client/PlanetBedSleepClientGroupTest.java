@@ -198,6 +198,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientE2ETest {
         // EXPERIMENT: trySleep's daytime gate reads skylightSubtracted, which WorldServer.tick
         // recomputes from the clock on every pass of THAT world — so a pass of the planet's own
         // clock is the whole of what is needed, counted there rather than on the client.
+        // SERVER-ONLY: the daytime gate is recomputed on the planet world's own pass; the read is the server's world time.
         GameTicks.advanceWorld(serverClient(), DIM_LOCKED, SKYLIGHT_WORLD_TICKS);
 
         long staged = dimTime(DIM_LOCKED);
@@ -276,6 +277,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientE2ETest {
         // 20000/24000 is night in the overworld.
         exec("time set " + STAGED_NIGHT);
         // EXPERIMENT: the same daytime gate, recomputed on a pass of the planet's own clock.
+        // SERVER-ONLY: the daytime gate is recomputed on the planet world's own pass; the read is the server's world time.
         GameTicks.advanceWorld(serverClient(), DIM_SKIP, SKYLIGHT_WORLD_TICKS);
 
         JsonObject before = dimTimeJson(DIM_SKIP);

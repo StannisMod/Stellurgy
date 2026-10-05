@@ -223,6 +223,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         // WINDOW: the same slew window the roofed-deck scenario below argues.
+        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
         double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         scenario().requireArranged("the hull must be upside down before the pilot is released inside"
@@ -468,6 +469,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // the SLEW advances on, so on a starved box this window can still end short — and then the
         // read below says so, loudly and typed. A link on the hull reaching its commanded attitude
         // would remove that too; nothing publishes one yet.
+        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
         ShipInfo inverted = ShipInfo.byId(this::exec, 0, scenarioShipId);
         // WHY -sqrt(1/2): the step below moves the body world-DOWN, and it only reaches the cavity
@@ -698,6 +700,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // tell a deck-normal ascent from a world-up one only past tan(theta) = 1.6 / 1.2, i.e. 53.1
         // degrees — below that a world-up climb can pass both. So the hull must be past it, with a
         // degree of margin inside the commanded 60.
+        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);
         double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         scenario().requireArranged("the hull must be rolled past the angle the ascent bounds can"

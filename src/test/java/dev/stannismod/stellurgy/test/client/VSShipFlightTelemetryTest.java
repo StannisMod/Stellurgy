@@ -489,10 +489,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
         // EXPERIMENT: BRAKE_SETTLE_TICKS of the cell's world are the brake's dose. With no air the
         // dose is not a hiding place: a hull nobody brakes keeps its spin however long it runs.
+        // SERVER-ONLY: the brake is the flight computer's, with the centred input linked above; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), scenarioDim, BRAKE_SETTLE_TICKS);
         // WINDOW: HOLD_SAMPLES readings HOLD_TICKS_BETWEEN ticks of the cell's world apart; the claim
         // is on the worst of them, so a rate that dips and rises back is caught.
         java.util.List<Double> hold = new java.util.ArrayList<Double>();
+        // SERVER-ONLY: the brake is the flight computer's, with the centred input linked above; the read is the server's ship report.
         GameTicks.observe(serverClient(), GameTicks.world(scenarioDim), HOLD_SAMPLES,
                 HOLD_TICKS_BETWEEN, () -> hold.add(shipInfo().omega));
         double worst = java.util.Collections.max(hold);
@@ -1478,7 +1480,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 "for this craft's flight computer at " + afcX + "," + afcY + "," + afcZ,
                 "seated at the helm, the pilot must receive his ship's readout", READOUT_LINK_TICKS);
         long helmWindow = clientEvents().mark();
-        bot().waitTicks(ROLE_DOSE_TICKS);
+        // EXPERIMENT: the dose both legs are compared over; the server sends, the client records.
+        advanceServerAndClient(ROLE_DOSE_TICKS);
         int atTheHelm = Events.recordsWhereAll(clientEvents().since(helmWindow, "client_ship_readout_received"),
                 "afcX", afcX, "afcY", afcY, "afcZ", afcZ).size();
         requireArranged("held at the helm for " + ROLE_DOSE_TICKS + " ticks the pilot must go on"
@@ -1495,7 +1498,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         deckCaptureOfThisShip(physicsId, "off the helm, the player must be standing aboard this"
                 + " craft — a passenger, not a bystander");
         long deckWindow = clientEvents().mark();
-        bot().waitTicks(ROLE_DOSE_TICKS);
+        // EXPERIMENT: the same dose as at the helm.
+        advanceServerAndClient(ROLE_DOSE_TICKS);
         String onDeck = clientEvents().since(deckWindow, "client_ship_readout_received");
         Events.assertInstrumentRan(onDeck, "client_ship_readout_received",
                 "a passenger received no readout — the recorder must be one that fires, as it did"

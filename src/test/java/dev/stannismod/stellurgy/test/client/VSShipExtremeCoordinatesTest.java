@@ -593,6 +593,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 }
                 // Park him back near the origin so the next case starts from a known place.
                 exec("stellurgytest player far-tp 0.5 200 0.5");
+                // SERVER-ONLY: a server-side park between cases; the next case reads the server's own teleport reply.
                 dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);
             }
 

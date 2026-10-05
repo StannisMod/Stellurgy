@@ -263,6 +263,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
                 Reply.of(drive).bool("afcResolved"));
         // EXPERIMENT: the dose of drive the hull is given; the displacement it buys is read below and
         // gated as an arrangement, so a dose that turns out short says so rather than passing.
+        // SERVER-ONLY: a server command drives the hull; the reads are the server's ship pose and shield report.
         GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);
         exec("stellurgytest vs force-clear-by-id 0 " + shipId);
         double[] ship2 = shipPos(shipId);

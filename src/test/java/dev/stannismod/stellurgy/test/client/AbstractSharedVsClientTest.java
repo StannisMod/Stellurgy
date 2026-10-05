@@ -545,6 +545,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
         // OWN pose and the craft is back on its pad. Thirty ticks of the hull's world clock is the
         // stretch this helper has always given it; the read below, taken after the craft has flown
         // unparked, is what reports a stretch that was too short.
+        // SERVER-ONLY: the transform is adopted by the server's physics object; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);
         String unparked = exec("stellurgytest vs unpark-by-id " + dim + " " + shipId);
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
@@ -552,6 +553,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
                 Reply.of(unparked).ok());
         // WINDOW: physics running unparked — a craft whose adoption did not take is back at its pad
         // here, and the gate below names where it was sent and where it is.
+        // SERVER-ONLY: the craft flies on the server's physics; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);
 
         String after = shipInfoById(dim, shipId);

@@ -483,7 +483,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         scenario().asserting("a real attack-key press on the aimed ship block, and the server's verdict on it");
         bot().setKey(KEY_ATTACK, true);
         // STIMULUS: the attack key held across client ticks, as a mouse button is.
-        bot().waitTicks(10);
+        bot().waitWorldTicks(10);
         bot().setKey(KEY_ATTACK, false);
 
         events.awaitRecordWithFields(pressMark, "block_broken",
@@ -534,7 +534,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         // Re-aim: filling the hand does not move the crosshair, but a settling ship does.
         bot().setLook(deck.yaw, deck.pitch);
         // STIMULUS: the raytrace refreshes once per client tick, so the new rotation needs a tick.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         JsonObject aim = bot().reportMouseOver();
         scenario().requireArranged("the crosshair must still be on the same ship block after the hand"
                 + " was filled. aim=" + aim + deck.diag, isBlockAt(aim, deck.x, deck.y, deck.z));
@@ -548,7 +548,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         scenario().asserting("a real use-key press with stone in hand, and the server's verdict on it");
         bot().setKey(KEY_USE_ITEM, true);
         // STIMULUS: the use key held across client ticks, as a mouse button is.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
         events.awaitRecordWithFields(pressMark, "block_placed",
@@ -643,7 +643,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             for (float pitch : AIM_PITCHES) {
                 bot().setLook(0.0F, pitch);
                 // STIMULUS: the raytrace refreshes once per client tick, so the new rotation needs a tick.
-                bot().waitTicks(5);
+                bot().waitWorldTicks(5);
                 JsonObject candidate = bot().reportMouseOver();
                 if (isShipDeckHit(candidate, seatSub)) {
                     aim = candidate;
