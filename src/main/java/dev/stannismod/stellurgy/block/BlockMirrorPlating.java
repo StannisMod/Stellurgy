@@ -32,10 +32,11 @@ import dev.stannismod.stellurgy.projectile.ContactResolver;
  * it absorbs less of each. And there is no such thing as a half-working mirror: an optic either is one
  * or is not, which is why this does not degrade through stages the way a hull plate does.</p>
  *
- * <h3>It does nothing whatever about a slug</h3>
- * <p>Glass and foil. A solid body goes through it and is not even slowed; the kind carried by the
- * contact is the only thing separating that case from the one above, which is exactly what the contact
- * seam exists to make expressible.</p>
+ * <h3>It does nothing special about a slug</h3>
+ * <p>Glass and foil. A solid body is not reflected: the plating declines, and the default law breaks it
+ * like any other pane at the price its table row sets. The kind carried by the contact is the only thing
+ * separating that case from the one above, which is exactly what the contact seam exists to make
+ * expressible.</p>
  */
 public class BlockMirrorPlating extends BlockPlating {
 
