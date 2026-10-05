@@ -3,7 +3,9 @@ package dev.stannismod.stellurgy.subsystem.network;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraftforge.fml.relauncher.Side;
 import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.util.WrongSideException;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -55,16 +57,17 @@ public final class SubsystemNetworkManager {
     /**
      * The networks of the server running this world.
      *
-     * @throws IllegalArgumentException for a null or client world: networks are solved on the server,
-     *                                  and a client world has none to join or to mark
+     * @throws IllegalArgumentException for a null world
+     * @throws WrongSideException       for a client world: networks are solved on the server, and a
+     *                                  client world has none to join or to mark
      * @throws IllegalStateException    when no server session is running, which with a server world in
      *                                  hand means the lifecycle hooks did not run
      */
     public static SubsystemNetworkManager of(World world) {
-        if (world == null || world.isRemote) {
-            throw new IllegalArgumentException("subsystem networks belong to a server world, not to "
-                    + (world == null ? "no world" : "a client world"));
+        if (world == null) {
+            throw new IllegalArgumentException("subsystem networks belong to a server world, not to no world");
         }
+        requireServerSide(world);
         SubsystemNetworkManager current = Stellurgy.subsystemNetworks();
         if (current == null) {
             throw new IllegalStateException("no subsystem networks: the server holding dim "
@@ -74,17 +77,29 @@ public final class SubsystemNetworkManager {
     }
 
     /**
-     * The network the block at this position belongs to, or null if it is in none.
+     * The network the block at this position belongs to, or null if it is in none — and null for a
+     * null domain, world or position, and on a server world while no server session is running.
      *
-     * <p>Reads whatever server session this JVM is running, for a world of either side: a client JVM
-     * attached to a remote server runs no session and reads null, while an integrated server's client
-     * thread reads that server's state by dimension. The second is a cross-side read and not a
-     * contract: a screen that must show network state is told it by the server, as the weapon
+     * <p>SERVER ONLY. A client world throws: on an integrated server the client thread could reach
+     * the server's tables by dimension, and the answer would look right while being read across
+     * threads. A screen that must show network state is told it by the server, as the weapon
      * console's is.</p>
+     *
+     * @throws WrongSideException for a client world
      */
     public static SubsystemNetworkState getState(SubsystemNetworkDomain domain, World world, BlockPos pos) {
+        if (world != null) {
+            requireServerSide(world);
+        }
         SubsystemNetworkManager current = Stellurgy.subsystemNetworks();
         return current == null ? null : current.stateAt(domain, world, pos);
+    }
+
+    private static void requireServerSide(World world) {
+        if (world.isRemote) {
+            throw new WrongSideException("a subsystem network of dim " + world.provider.getDimension(),
+                    Side.SERVER, Side.CLIENT);
+        }
     }
 
     public void register(ISubsystemNetworkNode node) {

@@ -56,6 +56,7 @@
     "MixinTilePlanetSelectorEvents",
     "MixinTileNavigationComputerEvents",
     "MixinTileTurretEvents",
+    "MixinWeaponOrdersSeedEvents",
     "MixinLinkerDesignationEvents",
     "MixinServerPlayerPoseEvents",
     "MixinShotEvents",

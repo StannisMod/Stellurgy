@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkController;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
+import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 
 import java.util.List;
 
@@ -45,11 +46,46 @@ public final class WeaponNetworkDomain extends SubsystemNetworkDomain {
         if (!(state instanceof WeaponNetworkState)) {
             return;
         }
+        WeaponNetworkState weapons = (WeaponNetworkState) state;
         // A network with no console left commands nothing. Keeping the last console's target would
         // leave a battery firing at a point nobody can retract, which is the one failure mode a
         // player cannot fix by breaking something.
         if (controllers.isEmpty()) {
-            ((WeaponNetworkState) state).clearTarget();
+            weapons.dropTarget();
+            return;
+        }
+        seedFromLatestOrders(weapons, controllers);
+    }
+
+    /**
+     * The network carries the LATEST orders any of its consoles holds — the last order wins.
+     *
+     * <p>The network is not saved, so after a restart this is the only way its orders come back, and
+     * the same rule settles every other way consoles can disagree: two batteries joined by a cable,
+     * or a console that was unloaded while the others were given a new order. A console's copy is
+     * taken when it is no older than the network's own orders: an inherited network that has been
+     * told nothing since keeps what it has unless a console says something newer, and one whose
+     * target was dropped for want of a console gets it back from the console that returns. Orders
+     * the network was given and no console has copied yet are newer than any console's, and stand.</p>
+     */
+    private static void seedFromLatestOrders(WeaponNetworkState weapons,
+                                             List<ISubsystemNetworkController> controllers) {
+        TileWeaponConsole latest = null;
+        long latestStamp = weapons.getOrdersStamp();
+        for (ISubsystemNetworkController controller : controllers) {
+            if (!(controller instanceof TileWeaponConsole)) {
+                continue;
+            }
+            TileWeaponConsole console = (TileWeaponConsole) controller;
+            long stamp = console.getSavedOrdersStamp();
+            if (stamp != WeaponNetworkState.NO_STAMP && stamp >= latestStamp
+                    && (latest == null || stamp > latest.getSavedOrdersStamp())) {
+                latest = console;
+                latestStamp = stamp;
+            }
+        }
+        if (latest != null) {
+            weapons.adoptOrders(latest.getSavedOrders(), latestStamp);
         }
     }
 

@@ -49,11 +49,12 @@ import java.util.List;
  * One place to point a battery, and the only thing the weapons network adds that a gun cannot do
  * alone.
  *
- * <h3>It owns nothing</h3>
- * <p>A console is a stateless editor of the network's own state: it holds no target, no hold-fire
- * flag and no copy of anything. Two consoles on one network therefore cannot disagree — they are
- * both looking at the same object — and breaking one loses nothing but the window onto it. That is
- * why every button below writes to {@link WeaponNetworkState} and every readout reads from it.</p>
+ * <h3>It edits the network's orders, and keeps them across a restart</h3>
+ * <p>Every button below writes to {@link WeaponNetworkState} and every readout reads from it, so two
+ * consoles on one network cannot disagree while it runs — they are looking at the same object. The
+ * network itself is never saved, though, so each console also keeps a COPY of the orders with the
+ * time they were given, writes it to its save, and a rebuilt network takes the latest copy any of its
+ * consoles holds ({@link WeaponNetworkDomain}). The copy is never answered from.</p>
  *
  * <h3>What it is FOR</h3>
  * <p>Convenience, not capability. Every gun on the network already aims and fires by itself; what a
@@ -77,7 +78,18 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     /** The screen's lines, in the order {@link #readoutLines} produces them. */
     private static final int READOUT_LINES = 5;
 
+    private static final String NBT_ORDERS = "weaponOrders";
+    private static final String NBT_ORDERS_STAMP = "weaponOrdersStamp";
+
     private boolean registered;
+
+    /** The network's orders as of the last copy, saved with this block; null before the first. */
+    private NBTTagCompound savedOrders;
+    /** When {@link #savedOrders} were given, in world total time. */
+    private long savedOrdersStamp = WeaponNetworkState.NO_STAMP;
+    /** The network state and revision {@link #savedOrders} were copied from; not saved. */
+    private WeaponNetworkState copiedFrom;
+    private int copiedRevision;
 
     /** The open screen's readout lines; refilled each time the server sends a readout. */
     private final List<ModuleText> readouts = new ArrayList<>();
@@ -117,21 +129,54 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     }
 
     /**
-     * The network hands its state over after every rebuild. Nothing is copied out of it: a console
-     * that cached the target would be a second source of truth, and the two would disagree the first
-     * time somebody used the other console.
+     * The network hands its state over on every solve, and the console copies the ORDERS whenever
+     * they have changed — never to answer from: every getter below still reads the network. The copy
+     * is what this console writes to its save, because the network itself is never saved.
      */
     @Override
     public void applyNetworkState(SubsystemNetworkState state) {
+        if (state instanceof WeaponNetworkState && world != null && !world.isRemote
+                && copyOrders((WeaponNetworkState) state)) {
+            markDirty();
+        }
+    }
+
+    /**
+     * Take the network's orders and their stamp, unless this copy is already of them.
+     *
+     * @return whether the copy changed, which is when the block needs saving again
+     */
+    private boolean copyOrders(WeaponNetworkState state) {
+        if (state == copiedFrom && state.getOrdersRevision() == copiedRevision) {
+            return false;
+        }
+        savedOrdersStamp = state.stampOrders(world.getTotalWorldTime());
+        savedOrders = state.writeOrders();
+        copiedFrom = state;
+        copiedRevision = state.getOrdersRevision();
+        return true;
+    }
+
+    /**
+     * The orders this console last copied from its network, as it saves them; null when it has never
+     * been on one. Read by the network's rebuild, which takes the latest orders its consoles hold.
+     */
+    public NBTTagCompound getSavedOrders() {
+        return savedOrders == null ? null : savedOrders.copy();
+    }
+
+    /** When {@link #getSavedOrders} were given, or {@link WeaponNetworkState#NO_STAMP}. */
+    public long getSavedOrdersStamp() {
+        return savedOrders == null ? WeaponNetworkState.NO_STAMP : savedOrdersStamp;
     }
 
     /**
      * The network this console is on, or null when it stands alone.
      *
-     * <p>SERVER ONLY in meaning. The network lives in the server session; a client JVM attached to a
-     * remote server has none and reads null here, so nothing a client shows may be derived from this
-     * — the screen is told by the server instead ({@link ReadoutSync}). Every getter below inherits
-     * this.</p>
+     * <p>SERVER ONLY: the network lives in the server session, and asking from a client world throws
+     * {@link dev.stannismod.stellurgy.util.WrongSideException}. Nothing a client shows is derived from
+     * this — the screen is told by the server instead ({@link ReadoutSync}). Every getter below
+     * inherits this.</p>
      */
     public WeaponNetworkState network() {
         SubsystemNetworkState state = SubsystemNetworkManager.getState(WeaponNetworkDomain.INSTANCE,
@@ -141,24 +186,35 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
 
     // ---- the commands a console exists to give
 
-    /** Point every gun on this network at a world point. */
-    public boolean assignTarget(Vec3d target) {
+    /**
+     * Give the network an order through this console: {@code change} edits the network's state, and
+     * this console copies the result on the spot rather than at the next solve. The copy carries the
+     * order's stamp, so a network joined to another in this same tick still sees this console as
+     * holding the latest order — waiting for the solve would leave the order on a state the join may
+     * discard.
+     *
+     * @return false when the console is on no network, which commands nothing
+     */
+    private boolean order(java.util.function.Consumer<WeaponNetworkState> change) {
         WeaponNetworkState state = network();
         if (state == null) {
             return false;
         }
-        state.setTarget(target);
+        change.accept(state);
+        if (copyOrders(state)) {
+            markDirty();
+        }
         return true;
+    }
+
+    /** Point every gun on this network at a world point. */
+    public boolean assignTarget(Vec3d target) {
+        return order(state -> state.setTarget(target));
     }
 
     /** Point every gun on this network at an entity, and keep pointing as it moves. */
     public boolean assignTargetEntity(java.util.UUID entity) {
-        WeaponNetworkState state = network();
-        if (state == null) {
-            return false;
-        }
-        state.setTargetEntity(entity);
-        return true;
+        return order(state -> state.setTargetEntity(entity));
     }
 
     /**
@@ -167,12 +223,7 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
      * whose guns disagreed about it would shoot its own crew at random.
      */
     public boolean setAccessCode(String code) {
-        WeaponNetworkState state = network();
-        if (state == null) {
-            return false;
-        }
-        state.setAccessCode(code);
-        return true;
+        return order(state -> state.setAccessCode(code));
     }
 
     public String getAccessCode() {
@@ -187,13 +238,10 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
 
     /** Point every gun on this network at a ship, by the physics substrate's id, and keep following it. */
     public boolean assignTargetShip(String shipId) {
-        WeaponNetworkState state = network();
-        if (state == null) {
-            return false;
-        }
-        state.clearTarget();
-        state.setTargetShip(shipId);
-        return true;
+        return order(state -> {
+            state.clearTarget();
+            state.setTargetShip(shipId);
+        });
     }
 
     public String getTargetShip() {
@@ -203,12 +251,7 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
 
     /** The rule this network tells a friendly hull by; see {@link HullAllegianceRule}. */
     public boolean setHullAllegiance(HullAllegianceRule rule) {
-        WeaponNetworkState state = network();
-        if (state == null) {
-            return false;
-        }
-        state.setHullAllegiance(rule);
-        return true;
+        return order(state -> state.setHullAllegiance(rule));
     }
 
     public HullAllegianceRule getHullAllegiance() {
@@ -217,12 +260,7 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     }
 
     public boolean clearTarget() {
-        WeaponNetworkState state = network();
-        if (state == null) {
-            return false;
-        }
-        state.clearTarget();
-        return true;
+        return order(WeaponNetworkState::clearTarget);
     }
 
     /**
@@ -231,12 +269,7 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
      * and clearing the target to stop the shooting would lose the tracking too.
      */
     public boolean setHoldFire(boolean hold) {
-        WeaponNetworkState state = network();
-        if (state == null) {
-            return false;
-        }
-        state.setHoldFire(hold);
-        return true;
+        return order(state -> state.setHoldFire(hold));
     }
 
     public boolean isHoldFire() {
@@ -371,16 +404,17 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
      */
     @Override
     public boolean onLinkAimed(@Nonnull ItemStack linker, @Nonnull RayTraceResult aimedAt, EntityPlayer player) {
-        WeaponNetworkState state = network();
-        if (state == null) {
+        boolean taken = order(state -> {
+            state.clearTarget();
+            if (aimedAt.typeOfHit == RayTraceResult.Type.ENTITY) {
+                state.setTargetEntity(aimedAt.entityHit.getUniqueID());
+            } else {
+                state.setTarget(aimedAt.hitVec);
+            }
+        });
+        if (!taken) {
             player.sendMessage(new TextComponentTranslation("msg.weaponLinker.noNetwork"));
             return false;
-        }
-        state.clearTarget();
-        if (aimedAt.typeOfHit == RayTraceResult.Type.ENTITY) {
-            state.setTargetEntity(aimedAt.entityHit.getUniqueID());
-        } else {
-            state.setTarget(aimedAt.hitVec);
         }
         LinkerDesignation.confirm(player, aimedAt);
         return true;
@@ -634,10 +668,37 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
         registered = false;
     }
 
+    /**
+     * Saves the network's orders as this console last copied them, with their stamp. An order given
+     * in the same tick as the save has not been through a solve yet, so the copy is refreshed here
+     * first — otherwise a world saved straight after a button press would come back without it.
+     */
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
-        // Nothing of its own to save: the network owns the target and the hold-fire switch, and a
-        // console that persisted a copy would come back disagreeing with them.
-        return super.writeToNBT(nbt);
+        super.writeToNBT(nbt);
+        if (world != null && !world.isRemote) {
+            WeaponNetworkState state = network();
+            if (state != null) {
+                copyOrders(state);
+            }
+        }
+        if (savedOrders != null) {
+            nbt.setTag(NBT_ORDERS, savedOrders.copy());
+            nbt.setLong(NBT_ORDERS_STAMP, savedOrdersStamp);
+        }
+        return nbt;
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound nbt) {
+        super.readFromNBT(nbt);
+        if (nbt.hasKey(NBT_ORDERS)) {
+            savedOrders = nbt.getCompoundTag(NBT_ORDERS);
+            savedOrdersStamp = nbt.getLong(NBT_ORDERS_STAMP);
+        } else {
+            savedOrders = null;
+            savedOrdersStamp = WeaponNetworkState.NO_STAMP;
+        }
+        copiedFrom = null;
     }
 }

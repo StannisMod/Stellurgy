@@ -5,12 +5,14 @@ import org.junit.Test;
 import java.util.List;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * What a console buys, and what it must never buy.
@@ -218,7 +220,85 @@ public class WeaponConsoleE2ETest extends AbstractSharedServerTest {
                 + droppedSeq + ".." + windowEnd + "): " + recommanded, recommanded.isEmpty());
     }
 
+    /**
+     * Two batteries joined into one take the order that was given LAST, whichever side it came from.
+     *
+     * <p>Two rows, each two lone consoles — each its own network — with one gap between them. Each
+     * console of a row is given a different access code, one tick apart, and a third console is then
+     * placed in the gap, joining the row into one network. In the first row the later order is on
+     * the east console, in the second on the west one, so the outcome cannot come from position. Nor
+     * from which of the two old networks the joined one inherits: that choice is not ordered, and
+     * either way a console holding a newer order must win.</p>
+     *
+     * <p>Each wait is on {@code weapon_orders_seeded}, the record of that decision, narrowed to the
+     * exact consoles of one row; the code is then read once from the console that joined them, which
+     * holds no order of its own.</p>
+     *
+     * <p>red-witnessed: with {@code WeaponNetworkDomain#seedFromLatestOrders} at
+     * {@code stamp >= latestStamp} made {@code stamp <= latestStamp} (the earliest order wins), this
+     * fails at "the joined battery in the first row must take the order given last — the east
+     * console's: … expected:&lt;w636-[la]st&gt; but was:&lt;w636-[fir]st&gt;" (2026-10-05).</p>
+     */
+    @Test
+    public void theLastOrderWinsWhenTwoBatteriesAreJoined() throws Exception {
+        FixtureSite site = clearedSite(1, 2, "two rows of weapon consoles");
+        int y = site.y + 1;
+        int west = site.x + 1;
+        int gap = site.x + 2;
+        int east = site.x + 3;
+        int eastLastRow = site.z + 1;
+        int westLastRow = site.z + 4;
+
+        long lone = events.markInstrumented();
+        for (int z : new int[] {eastLastRow, westLastRow}) {
+            place("stellurgy:weaponConsole", west, y, z);
+            place("stellurgy:weaponConsole", east, y, z);
+        }
+        for (int z : new int[] {eastLastRow, westLastRow}) {
+            for (int x : new int[] {west, east}) {
+                events.awaitRecordWithFields(lone, "weapon_orders_seeded",
+                        "the console at " + Weapons.at(x, y, z) + " never formed a network of its own",
+                        Weapons.ARRANGEMENT_TICKS, "consoles", Weapons.at(x, y, z));
+            }
+        }
+
+        code(west, y, eastLastRow, "w636-first");
+        code(east, y, westLastRow, "w636-first");
+        // EXPERIMENT: one tick is the dose — an order is stamped with the tick it was given, so the
+        // second pair of orders must be given at least one tick after the first to be the later one.
+        GameTicks.advance(client(), GameTicks.server(), 1);
+        code(east, y, eastLastRow, "w636-last");
+        code(west, y, westLastRow, "w636-last");
+
+        long joined = events.mark();
+        place("stellurgy:weaponConsole", gap, y, eastLastRow);
+        place("stellurgy:weaponConsole", gap, y, westLastRow);
+        for (int z : new int[] {eastLastRow, westLastRow}) {
+            events.awaitRecordWithFields(joined, "weapon_orders_seeded",
+                    "the row at z=" + z + " never became one network",
+                    Weapons.ARRANGEMENT_TICKS, "consoles",
+                    Weapons.at(west, y, z) + "|" + Weapons.at(gap, y, z) + "|" + Weapons.at(east, y, z));
+        }
+
+        Reply first = ask("stellurgytest weaponconsole read 0 " + gap + " " + y + " " + eastLastRow)
+                .requireOk("read the joining console of the first row");
+        assertEquals("the joined battery in the first row must take the order given last — the east"
+                + " console's: " + first, "w636-last", first.text("code"));
+        Reply second = ask("stellurgytest weaponconsole read 0 " + gap + " " + y + " " + westLastRow)
+                .requireOk("read the joining console of the second row");
+        assertEquals("and in the second row too, where the last order came from the west console: "
+                + second, "w636-last", second.text("code"));
+    }
+
     // ---- scenario construction
+
+    /** Give the console at this position an access code, refusing unless it is on a network. */
+    private void code(int x, int y, int z, String code) throws Exception {
+        Reply set = ask("stellurgytest weaponconsole code 0 " + x + " " + y + " " + z + " " + code)
+                .requireOk("give the console at " + Weapons.at(x, y, z) + " a code");
+        requireArranged("the console at " + Weapons.at(x, y, z) + " is on no network, so the code was"
+                + " not an order: " + set, set.bool("applied"));
+    }
 
     /**
      * Place the console and wait for the weapons network to rebuild around it, then answer what the
