@@ -237,6 +237,45 @@ final class VSBridge {
     }
 
     /**
+     * The subspace position of the flight computer aboard the LOADED ship named by {@code uuid}, or
+     * {@code null} when this world has no such ship loaded or it carries none.
+     *
+     * <p>Read from the physics engine's own set of the ship's force controllers, which is the set its
+     * physics tick drives: the flight computer is one of them, registered as its tile is set into the
+     * ship's chunks — before the ship is announced as assembled or loaded — and replaced, not
+     * duplicated, when a chunk reload rebuilds it. So "which computer flies this ship" and "which
+     * computer this answers" are one fact. An unloaded ship has no such set and gets {@code null}: the
+     * question is about a craft the physics is running.</p>
+     *
+     * <p>Where a hull carries more than one computer, the lowest position by x, then y, then z — the
+     * order the shipyard scan this replaced visited them in.</p>
+     */
+    static BlockPos flightComputerOfLoadedShip(World world, UUID uuid) {
+        if (world == null || world.isRemote || uuid == null) {
+            return null;
+        }
+        PhysicsObject physo = ValkyrienUtils.getServerShipManager(world).getPhysObjectFromUUID(uuid);
+        if (physo == null) {
+            return null;
+        }
+        BlockPos first = null;
+        for (org.valkyrienskies.mod.common.physics.IPhysicsBlockController controller
+                : physo.getPhysicsControllersInShip()) {
+            if (!(controller instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)
+                    || ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) controller).isInvalid()) {
+                continue;
+            }
+            BlockPos at = controller.getNodePos();
+            if (first == null || at.getX() < first.getX()
+                    || (at.getX() == first.getX() && (at.getY() < first.getY()
+                    || (at.getY() == first.getY() && at.getZ() < first.getZ())))) {
+                first = at;
+            }
+        }
+        return first;
+    }
+
+    /**
      * The physics mod's uuid for the ship carrying our DURABLE id {@code durableId}, or {@code null}
      * when this world holds no such ship.
      *

@@ -4,10 +4,6 @@ import java.util.UUID;
 
 import javax.annotation.Nullable;
 
-import org.valkyrienskies.mod.common.ships.ShipData;
-import org.valkyrienskies.mod.common.util.datastructures.IBlockPosSet;
-
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassSource;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
@@ -25,10 +21,9 @@ import net.minecraft.world.World;
  * mass alone. The day something needs our mass for a computer-less hull, it is this class that
  * changes, and no caller does.</p>
  *
- * <p>The computer is looked for among the ship's own blocks, never by scanning its shipyard: the
- * flight computer's background round asks this every few seconds for every craft, and a shipyard
- * scan visits every column of a claim at every height, where the block set is the hull and nothing
- * else.</p>
+ * <p>The computer is read from the physics engine's record of the ship's force controllers
+ * ({@link VSIntegration#flightComputerOf}), never found by walking blocks: the flight computer's
+ * background round asks this every few seconds for every craft.</p>
  *
  * <p>One instance per world, made where it is needed; it holds the world and nothing else.</p>
  */
@@ -52,7 +47,7 @@ public final class FlightComputerMassSource implements ShipMassSource {
             return null;
         }
         UUID physicsId = VSIntegration.shipUuidOfDurableId(world, shipId.toString());
-        if (physicsId == null || flightComputerOf(VSBridge.shipDataByUuid(world, physicsId)) == null) {
+        if (physicsId == null || flightComputerOf(physicsId) == null) {
             return null;
         }
         return ShipHullMass.frameOf(world, physicsId);
@@ -73,7 +68,7 @@ public final class FlightComputerMassSource implements ShipMassSource {
         }
         UUID durable = VSIntegration.durableIdOfShip(world, physicsId);
         if (durable == null) {
-            TileEntity te = tileAt(flightComputerOf(VSBridge.shipDataByUuid(world, physicsId)));
+            TileEntity te = tileAt(flightComputerOf(physicsId));
             durable = te instanceof TileAdvancedFlightComputer
                     ? ((TileAdvancedFlightComputer) te).shipIdOrNull()
                     : null;
@@ -81,23 +76,10 @@ public final class FlightComputerMassSource implements ShipMassSource {
         return durable == null ? null : massFrame(durable);
     }
 
-    /** The subspace position of a flight computer among {@code ship}'s blocks, or {@code null}. */
+    /** The subspace position of the loaded ship's flight computer, or {@code null}. */
     @Nullable
-    private BlockPos flightComputerOf(@Nullable ShipData ship) {
-        IBlockPosSet blocks = ship == null ? null : ship.getBlockPositions();
-        if (blocks == null) {
-            return null;
-        }
-        BlockPos[] found = new BlockPos[1];
-        blocks.forEach((x, y, z) -> {
-            if (found[0] == null) {
-                BlockPos pos = new BlockPos(x, y, z);
-                if (world.getBlockState(pos).getBlock() == StellurgyBlocks.blockAdvancedFlightComputer) {
-                    found[0] = pos;
-                }
-            }
-        });
-        return found[0];
+    private BlockPos flightComputerOf(UUID physicsId) {
+        return VSBridge.flightComputerOfLoadedShip(world, physicsId);
     }
 
     @Nullable

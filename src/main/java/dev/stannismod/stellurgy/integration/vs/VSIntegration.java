@@ -902,13 +902,14 @@ public final class VSIntegration {
      * bound", so in a world holding more than one ship that scan searches a stranger's craft and
      * happily returns a real, wrong flight computer. A caller that then writes to it gets a successful
      * call and no effect on the ship it meant.</p>
+     *
+     * <p>Answers for a LOADED ship only, from the physics engine's own record of the ship's force
+     * controllers (see {@link VSBridge#flightComputerOfLoadedShip}) — no shipyard walk, no chunk
+     * loading. An unloaded ship answers {@code null}.</p>
      */
     public static BlockPos flightComputerOf(net.minecraft.world.WorldServer world,
             java.util.UUID shipUuid) {
-        if (shipUuid == null) {
-            return null;
-        }
-        return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid));
+        return VSBridge.flightComputerOfLoadedShip(world, shipUuid);
     }
 
     /**
