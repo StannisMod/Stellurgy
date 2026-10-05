@@ -46,7 +46,8 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  * back to its system via {@link #anchorForCell} (super-cell partition; derive-don't-store). The persistent
  * override store holds authored (XML anchor) placements, player POIs and {@code pin-on-touch} snapshots of
  * touched procedural systems; untouched procedural space is re-derived on demand from {@code (seed, coord)}
- * through the {@link IGalaxyGenerator} seam (which ships as {@link EmptyGalaxyGenerator} here).</p>
+ * through the {@link IGalaxyGenerator} seam, which holds {@link EmptyGalaxyGenerator} until {@link #populate}
+ * installs the one the save's world model builds from the pack's configuration.</p>
  *
  * <p>A {@link WorldSavedData} on the overworld's global {@code MapStorage} (reachable from any dimension since
  * the overworld is always loaded). Server-side only; the world seed is re-derived on load rather than
@@ -1648,8 +1649,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * strict: a reserved galaxy is a galaxy forced into a cell that had its own contents, and one more
      * weight moves every draw that walks the table.
      *
-     * @param config the pack's {@code <galaxyGen>} configuration, or {@code null} for an
-     *               authored-anchors-only universe
+     * @param config the pack's {@code <galaxyGen>} configuration — {@link GalaxyGenConfig#defaults()}
+     *               when it states none, non-procedural when it asks for authored anchors only
      * @return the schema to install for this world
      * @throws UniverseSchemaMismatchException when the save cannot be honoured by this build
      */
@@ -1763,9 +1764,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return schema;
     }
 
-    /** The fingerprint a {@code null} (authored-anchors-only) configuration has its own name for. */
     public static String fingerprintOf(GalaxyGenConfig config) {
-        return (config == null) ? GalaxyGenConfig.noGeneratorFingerprint() : config.fingerprint();
+        if (config == null) {
+            throw new IllegalArgumentException("a galaxy configuration is required: a pack with no "
+                    + "<galaxyGen> is given GalaxyGenConfig.defaults()");
+        }
+        return config.fingerprint();
     }
 
     private void stampSchema(int version, String fingerprint) {
@@ -1873,12 +1877,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     /**
-     * Release the running server's generator, leaving the shipped default: void space between
-     * authored anchors.
+     * Release the running server's generator: void space between authored anchors until a world
+     * model installs one at {@link #populate}.
      *
-     * <p>That default is a DESIGNED answer, not a fallback — it is what a pack with no
-     * {@code <galaxyGen>} is owed — which is why returning to it is spelled out here rather than
-     * reached by passing null to the setter.</p>
+     * <p>This is NOT what a pack with no {@code <galaxyGen>} is given — that pack gets the shipped
+     * procedural configuration, and only {@code procedural="false"} asks for the void. Spelled out here
+     * rather than reached by passing null to the setter, which is refused.</p>
      */
     public void detachGenerator() {
         generator = new EmptyGalaxyGenerator();

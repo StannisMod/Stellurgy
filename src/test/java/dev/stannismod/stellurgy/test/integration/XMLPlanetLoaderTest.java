@@ -6,12 +6,15 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -118,6 +121,84 @@ public class XMLPlanetLoaderTest {
     // ---- oregen persistence (issue #73) --------------------------------------
 
     // ---- terrainSource -------------------------------------------------------
+
+    // ---- the procedural galaxy ----------------------------------------------
+
+    /**
+     * red-witnessed: with {@code DimensionPropertyCoupling#galaxyGenConfig} at
+     * {@code GalaxyGenConfig.defaults()} replaced by {@code GalaxyGenConfig.nonProcedural()}, the first
+     * verdict fails with "no <galaxyGen> is the shipped procedural galaxy, not an empty one"; replaced by
+     * the defaults with one more reserved galaxy, the second fails with "and the shipped configuration,
+     * knob for knob expected:<[54856f457186f8ee]> but was:<[d2ed657bccc48b66]>", 2026-10-05.
+     */
+    @Test
+    public void aPackThatStatesNoGalaxyGenIsGivenTheShippedConfiguration() throws Exception {
+        XMLPlanetLoader.DimensionPropertyCoupling read =
+                load("no-galaxygen.xml", galaxy(star("Sol", "")));
+
+        assertTrue("no <galaxyGen> is the shipped procedural galaxy, not an empty one",
+                read.galaxyGenConfig.procedural);
+        assertEquals("and the shipped configuration, knob for knob",
+                GalaxyGenConfig.defaults().fingerprint(), read.galaxyGenConfig.fingerprint());
+    }
+
+    /**
+     * red-witnessed: with {@code XMLPlanetLoader#readGalaxyGen}'s branch at
+     * {@code if ("false".equalsIgnoreCase(value))} removed, this fails with "procedural="false" must be
+     * read as a galaxy with nothing between its anchors", 2026-10-05.
+     */
+    @Test
+    public void proceduralFalseIsAGalaxyOfAuthoredAnchorsOnly() throws Exception {
+        XMLPlanetLoader.DimensionPropertyCoupling read = load("opt-out.xml",
+                galaxy("<galaxyGen procedural=\"false\"/>\n" + star("Sol", "")));
+
+        assertFalse("procedural=\"false\" must be read as a galaxy with nothing between its anchors",
+                read.galaxyGenConfig.procedural);
+    }
+
+    /**
+     * red-witnessed: with {@code XMLPlanetLoader#nonProcedural}'s {@code if (!knobs.isEmpty())} made
+     * never true, this fails with "a density beside procedural="false" tunes a population the pack asked
+     * not to have — it must be refused, not ignored"; with its message's {@code "; remove " + knobs}
+     * dropped, with "the refusal must name the knob the pack must remove", 2026-10-05.
+     */
+    @Test
+    public void proceduralFalseBesideAKnobIsRefusedAndTheKnobNamed() throws Exception {
+        try {
+            load("opt-out-with-density.xml",
+                    galaxy("<galaxyGen procedural=\"false\" density=\"0.4\"/>\n" + star("Sol", "")));
+            fail("a density beside procedural=\"false\" tunes a population the pack asked not to have"
+                    + " — it must be refused, not ignored");
+        } catch (RuntimeException refused) {
+            assertTrue("the refusal must name the knob the pack must remove: " + refused.getMessage(),
+                    String.valueOf(refused.getMessage()).contains("density"));
+        }
+    }
+
+    /**
+     * red-witnessed: with {@code XMLPlanetLoader#readGalaxyGen}'s {@code if (!"true".equalsIgnoreCase(value))}
+     * made never true, this fails with "procedural="no" is neither answer — reading it as either would be
+     * a guess"; with that refusal's message not naming the attribute, with "the refusal must name the
+     * attribute", 2026-10-05.
+     */
+    @Test
+    public void aProceduralValueThatIsNotTrueOrFalseIsRefused() throws Exception {
+        try {
+            load("opt-out-misspelt.xml", galaxy("<galaxyGen procedural=\"no\"/>\n" + star("Sol", "")));
+            fail("procedural=\"no\" is neither answer — reading it as either would be a guess");
+        } catch (RuntimeException refused) {
+            assertTrue("the refusal must name the attribute: " + refused.getMessage(),
+                    String.valueOf(refused.getMessage()).contains("procedural"));
+        }
+    }
+
+    private XMLPlanetLoader.DimensionPropertyCoupling load(String name, String xml) throws Exception {
+        File file = tempFolder.newFile(name);
+        Files.write(file.toPath(), xml.getBytes(StandardCharsets.UTF_8));
+        return new XMLPlanetLoader().loadPlanetsOrThrow(file,
+                new dev.stannismod.stellurgy.dimension.DimensionManager(
+                        new dev.stannismod.stellurgy.api.StellurgyConfiguration().minDimension));
+    }
 
     // ---- helpers -------------------------------------------------------------
 

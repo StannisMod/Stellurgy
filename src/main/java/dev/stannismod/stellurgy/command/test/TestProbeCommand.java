@@ -6511,10 +6511,9 @@ public class TestProbeCommand extends CommandBase {
                     + declared.local().sectorZ() + "]}");
             return;
         }
-        // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator and bind a
-        // seed. A world with no <galaxyGen> in its planetDefs runs the authored-anchors-only default, so
-        // without this there are no procedural systems to realize at all and every test about them would
-        // be a test about an empty universe. `gen-reset` puts back the generator and the seed the save
+        // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator at a test's
+        // own density and bind a seed — the shipped configuration is sparse, so a test that needs
+        // procedural systems close to it asks for them here. `gen-reset` puts back the generator and the seed the save
         // had before the first install; a shared-server class MUST call it, because the generator and
         // the seed are the server's.
         //
@@ -6556,6 +6555,24 @@ public class TestProbeCommand extends CommandBase {
                 parkedGenerator = null;
             }
             send(sender, "{\"ok\":true,\"restored\":" + restored + "}");
+            return;
+        }
+        // gen-empty: the void between authored anchors, as a pack's procedural="false" would have it —
+        // for a scenario whose subject must not share its sky with the save's procedural field.
+        // `gen-reset` puts back what was in force before, exactly as after gen-install.
+        if (args.length >= 1 && "gen-empty".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            if (parkedGenerator == null) {
+                parkedGenerator = reg.generator();
+                parkedWorldSeed = reg.worldSeed();
+            }
+            reg.detachGenerator();
+            send(sender, "{\"ok\":true,\"generator\":\"" + reg.generator().getClass().getSimpleName() + "\"}");
             return;
         }
         // find-procedural <radiusInSuperCells>: the first body a ship could land on that has NO dimension
@@ -6684,6 +6701,43 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             send(sender, "{\"ok\":false,\"reason\":\"no moon in range\"}");
+            return;
+        }
+        // find-giant <radius>: the first GAS GIANT in a box of `radius` minimum spacings each way,
+        // reported by its cellKey and its `variant` among the cell's realizable bodies — the pair
+        // `realize` takes. A giant has no surface, so realizing it registers properties and no world.
+        if (args.length >= 2 && "find-giant".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            long r = parseIntOr(args[1], 8);
+            long s = Math.max(1L, reg.generator().minSpacingCells());
+            for (long x = -r; x <= r; x++) {
+                for (long y = -r; y <= r; y++) {
+                    for (long z = -r; z <= r; z++) {
+                        dev.stannismod.stellurgy.space.GalacticCoord probe =
+                                dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+                                        x * s, y * s, z * s, 0L, 0L, 0L);
+                        for (dev.stannismod.stellurgy.universe.SystemBody b : reg.systemBodiesAt(probe)) {
+                            if (b.kind() != dev.stannismod.stellurgy.universe.SystemBodyKind.GAS_GIANT) {
+                                continue;
+                            }
+                            java.util.OptionalInt variant = reg.variantOf(b);
+                            if (!variant.isPresent()) {
+                                continue; // an identity that does not separate: never guessed
+                            }
+                            send(sender, "{\"ok\":true,\"cellKey\":\"" + b.name().cellKey()
+                                    + "\",\"variant\":" + variant.getAsInt()
+                                    + ",\"family\":" + reg.realizableBodiesAt(b.name()).size() + "}");
+                            return;
+                        }
+                    }
+                }
+            }
+            send(sender, "{\"ok\":false,\"reason\":\"no gas giant in range\"}");
             return;
         }
         // derived <sx> <sy> <sz>: what the DERIVATION says about the body in that cell, without

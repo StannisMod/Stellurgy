@@ -96,7 +96,7 @@ public class DimensionManager implements IGalaxy {
     private Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> stagedAnchors = new HashMap<>();
     private boolean stagedAnchorsReset;
     /**
-     * The pack's {@code <galaxyGen>} configuration for this server, or {@code null} when it declares
+     * The pack's {@code <galaxyGen>} configuration for this server — the shipped one when it states
      * none. Kept for the whole session, not drained: the upgrade command stamps with it, and the
      * planet file is written back with it.
      */
@@ -178,7 +178,7 @@ public class DimensionManager implements IGalaxy {
         return reports;
     }
 
-    /** The pack's {@code <galaxyGen>} configuration for this server, or {@code null} if it declares none. */
+    /** The pack's {@code <galaxyGen>} configuration for this server — the shipped one when it states none. */
     public dev.stannismod.stellurgy.universe.GalaxyGenConfig getPackGalaxyConfig() {
         return packGalaxyConfig;
     }
@@ -1193,7 +1193,10 @@ public class DimensionManager implements IGalaxy {
         // model. Where the save carries no stamp, reconcileSchema adopts the current schema at the
         // one install point, loudly and with a stamp written; that is the same outcome without the
         // window.
-        packGalaxyConfig = (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig : null;
+        // No planetDefs.xml is a pack that states nothing, and that is the shipped configuration — not
+        // an empty galaxy, which a pack asks for only with <galaxyGen procedural="false"/>.
+        packGalaxyConfig = (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig
+                : dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults();
         // C129: registration authority on load was planetDefs.xml only (the loop
         // above), while per-dim persisted state lives in temp.dat (loadedPlanets).
         // A dim present in temp.dat but absent from a hand-edited / restored /

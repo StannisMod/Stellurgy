@@ -1123,17 +1123,17 @@ public class UniverseRegistryTest {
 
     @Test
     public void anAuthoredOnlyUniverseHasAModelOfItsOwn() {
-        // No <galaxyGen> is a legitimate world, not a missing configuration — and it is a DIFFERENT
-        // world from one that declares a generator, so the two must not share a fingerprint.
+        // procedural="false" is a legitimate world, not a missing configuration — and it is a DIFFERENT
+        // world from a procedural one, so the two must not share a fingerprint.
         UniverseRegistry reg = testUniverse.newRegistry();
-        reg.reconcileSchema(null);
+        reg.reconcileSchema(GalaxyGenConfig.nonProcedural());
 
         assertEquals("an authored-anchors-only world is stamped like any other",
                 UniverseSchemas.CURRENT, reg.schemaVersion());
-        assertNotEquals("declaring no generator is not the same universe as declaring one",
+        assertNotEquals("an authored-anchors-only universe is not the same universe as a procedural one",
                 packConfig().fingerprint(), reg.configFingerprint());
         assertEquals("and it reopens unchanged", UniverseSchemas.CURRENT,
-                reg.reconcileSchema(null).version());
+                reg.reconcileSchema(GalaxyGenConfig.nonProcedural()).version());
     }
 
     @Test

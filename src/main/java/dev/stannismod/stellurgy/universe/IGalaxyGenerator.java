@@ -17,9 +17,11 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  * identically. The registry supplies the RAW world seed (it does not pre-mix per cell), leaving the mixing
  * policy to the generator so a clustered sampler can correlate neighbouring cells.</p>
  *
- * <p>Two implementations ship: {@link EmptyGalaxyGenerator}, the void between authored anchors that a
- * pack with no {@code <galaxyGen>} is owed, and {@link ClusteredGalaxyGenerator}, which that element
- * configures. An addon installs its own via {@link UniverseRegistry#attachGenerator}.</p>
+ * <p>Two implementations ship: {@link ClusteredGalaxyGenerator}, which {@code <galaxyGen>} configures
+ * and which a pack that states none is given with the shipped configuration, and
+ * {@link EmptyGalaxyGenerator}, the void between authored anchors that {@code procedural="false"} asks
+ * for. Which one answers a configuration is the world-model version's choice. An addon installs its own
+ * via {@link UniverseRegistry#attachGenerator}.</p>
  *
  * <p><b>A generator is never told where the AUTHORED systems stand</b>, and seats its field as if they
  * did not exist. Keeping procedural systems out of an authored neighbourhood is the
@@ -168,8 +170,8 @@ public interface IGalaxyGenerator {
      * would have to say to reproduce it, and what the save fingerprints so a later load can tell that
      * the pack has been retuned underneath it.
      *
-     * <p>Empty is a real answer and not a stub: a generator with no parameters (the authored-anchors-only
-     * default, or one an addon fabricates from something other than this config) has nothing to write
+     * <p>Empty is a real answer and not a stub: a generator with no parameters (the one that answers
+     * {@code procedural="false"}, or one an addon fabricates from something other than this config) has nothing to write
      * back, and a pack file that carried a {@code <galaxyGen>} section for it would describe a generator
      * nobody installed.
      */

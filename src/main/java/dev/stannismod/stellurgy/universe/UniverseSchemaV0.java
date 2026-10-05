@@ -68,9 +68,14 @@ public final class UniverseSchemaV0 implements UniverseSchema {
 
     @Override
     public IGalaxyGenerator generator(GalaxyGenConfig config, PlanetTypes types, ReportOnce reports) {
-        return (config == null)
-                ? new EmptyGalaxyGenerator()
-                : new ClusteredGalaxyGenerator(reports, config, new BodyDerivationV0(types), laws());
+        if (config == null) {
+            throw new IllegalArgumentException("a galaxy configuration is required: a pack with no "
+                    + "<galaxyGen> is given GalaxyGenConfig.defaults(), and an empty galaxy is the pack's "
+                    + "procedural=\"false\"");
+        }
+        return config.procedural
+                ? new ClusteredGalaxyGenerator(reports, config, new BodyDerivationV0(types), laws())
+                : new EmptyGalaxyGenerator();
     }
 
     @Override

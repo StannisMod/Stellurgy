@@ -86,6 +86,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
 
     @Test
     public void aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt() throws Exception {
+        authoredOnlySky();
         String setup = exec("stellurgytest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
@@ -114,6 +115,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
 
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt() throws Exception {
+        authoredOnlySky();
         String setup = exec("stellurgytest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
@@ -203,6 +205,15 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
         }
     }
 
+    /**
+     * The void between authored anchors, as a pack's {@code procedural="false"} has it — the sky a
+     * scenario counts bodies or clouds against when the count must be its own and nothing else's.
+     */
+    private void authoredOnlySky() throws Exception {
+        String empty = exec("stellurgytest space gen-empty");
+        assertTrue("the authored-only sky must install: " + empty, Reply.of(empty).ok());
+    }
+
     /** Install the dense procedural galaxy, refusing an install that did not happen. */
     private void installDenseGalaxy() throws Exception {
         String installed = exec(GEN_INSTALL);
@@ -250,8 +261,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
      */
     @Test
     public void withoutAProceduralGeneratorTheSkyIsEmptyRatherThanInvented() throws Exception {
-        String reset = exec("stellurgytest space gen-reset");
-        assertTrue("the default generator must be restorable: " + reset, Reply.of(reset).ok());
+        authoredOnlySky();
 
         SkyNebulae feed = SkyNebulae.at(this::exec, 0, 0, 0);
         assertEquals("a universe with no clusters must seat no clouds: " + feed.raw(), 0, feed.seated);
@@ -275,8 +285,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
         assertTrue("and the magnitudes must follow the column, not be invented: " + through,
                 decimal(through, "magnitudes") > 0d);
 
-        String reset = exec("stellurgytest space gen-reset");
-        assertTrue("the default generator must be restorable: " + reset, Reply.of(reset).ok());
+        authoredOnlySky();
         String clear = exec("stellurgytest space extinction " + line[0] + " " + line[1]);
         assertEquals("a universe with no clouds must dim nothing: " + clear, 0d,
                 decimal(clear, "magnitudes"), 1.0E-9d);

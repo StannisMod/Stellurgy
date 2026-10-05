@@ -85,9 +85,10 @@ public interface UniverseSchema {
     }
 
     /**
-     * The generator this schema produces for {@code config}, or the empty generator when the pack
-     * declares no {@code <galaxyGen>} (an authored-anchors-only universe, which is a legitimate world
-     * rather than a missing configuration). Worlds are typed from {@code types}, the save's own
+     * The generator this schema produces for {@code config} — never null: a pack that declares no
+     * {@code <galaxyGen>} is handed {@link GalaxyGenConfig#defaults()}, and one that asks for an
+     * authored-anchors-only universe says {@code procedural="false"}, which is a legitimate world
+     * rather than a missing configuration. Worlds are typed from {@code types}, the save's own
      * planet-type table, and what it reports is remembered in {@code reports}, the galaxy's.
      */
     IGalaxyGenerator generator(GalaxyGenConfig config, PlanetTypes types, ReportOnce reports);

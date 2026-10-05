@@ -79,13 +79,16 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
     }
 
     /**
-     * The fixture's fields as the running server holds them, and — its last verdict — that a file
-     * stating no {@code <galaxyGen>} runs its authored anchors only.
+     * The fixture's fields as the running server holds them, and — its last verdicts — that a file
+     * stating no {@code <galaxyGen>} runs the shipped procedural galaxy.
      *
-     * <p>red-witnessed: 2026-10-02, the last verdict only (the field reads above predate this record):
-     * with {@code XMLPlanetLoader#readAllPlanets} at {@code return coupling;} preceded by a line
-     * giving an absent {@code galaxyGenConfig} the shipped {@code GalaxyGenConfig.defaults()}, this
-     * fails with {@code "generator":"ClusteredGalaxyGenerator"}.</p>
+     * <p>red-witnessed, the last two verdicts (the field reads above predate the record form): with
+     * {@code DimensionPropertyCoupling#galaxyGenConfig} at {@code GalaxyGenConfig.defaults()} replaced
+     * by {@code GalaxyGenConfig.nonProcedural()}, it fails
+     * with "a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy:
+     * {"generator":"EmptyGalaxyGenerator","config":null}"; with {@code UniverseSchemaV0#generator}'s
+     * {@code new ClusteredGalaxyGenerator(reports, config, …)} built at half the config's density, with
+     * "built from the shipped configuration: … "density":0.175", 2026-10-05.</p>
      */
     @Test
     public void fixtureXmlRoundTripsThroughServerStart() throws Exception {
@@ -116,13 +119,14 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
         assertEquals("gravity did not round-trip: " + planetInfo,
                 FIXTURE_GRAVITY_HUNDREDTHS / 100.0, info.number("gravity"), 1e-9);
 
-        // This fixture states no <galaxyGen>, and a pack that states none gets a universe of its
-        // authored systems ONLY — no procedural generator, rather than the shipped generator's
-        // defaults. Read off the generator the running universe has in force. (The file WITH a
-        // <galaxyGen> is PlanetDefsAuthoringTest's.)
+        // This fixture states no <galaxyGen>: the shipped procedural galaxy, read off the generator the
+        // running universe has in force. (The file WITH a <galaxyGen> is PlanetDefsAuthoringTest's.)
         Reply inForce = Reply.of("stellurgytest space gen-config",
                 String.join("\n", client().execute("stellurgytest space gen-config")));
-        assertEquals("a planetDefs.xml with no <galaxyGen> must run its authored anchors only: "
-                + inForce, "EmptyGalaxyGenerator", inForce.text("generator"));
+        assertEquals("a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy: "
+                + inForce, "ClusteredGalaxyGenerator", inForce.text("generator"));
+        assertEquals("built from the shipped configuration: " + inForce,
+                dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults().density,
+                Reply.of("gen-config config", inForce.object("config")).number("density"), 0d);
     }
 }

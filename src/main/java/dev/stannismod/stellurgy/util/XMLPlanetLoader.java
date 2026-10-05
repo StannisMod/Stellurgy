@@ -96,6 +96,7 @@ public class XMLPlanetLoader {
     private static final String ATTR_ALLOWS_OXYGEN = "allowsOxygen";
     private static final String ATTR_TIDALLY_LOCKABLE = "tidallyLockable";
     private static final String ATTR_DENSITY = "density";
+    private static final String ATTR_PROCEDURAL = "procedural";
     private static final String ATTR_MINSPACING = "minSpacing";
     private static final String ATTR_GALAXYSPACING = "galaxySpacing";
     private static final String ATTR_GALAXYDENSITY = "galaxyDensity";
@@ -333,6 +334,17 @@ public class XMLPlanetLoader {
 
     /** Parse a {@code <galaxyGen>} element (attrs + {@code <starType>} children) into a config. */
     private GalaxyGenConfig readGalaxyGen(Node node) {
+        String procedural = attr(node, ATTR_PROCEDURAL);
+        if (procedural != null) {
+            String value = procedural.trim();
+            if ("false".equalsIgnoreCase(value)) {
+                return nonProcedural(node);
+            }
+            if (!"true".equalsIgnoreCase(value)) {
+                throw new RuntimeException("<galaxyGen procedural=\"" + procedural + "\">: procedural is "
+                        + "\"true\" or \"false\"");
+            }
+        }
         GalaxyGenConfig defaults = GalaxyGenConfig.defaults();
         double density = attrDouble(node, ATTR_DENSITY, defaults.density);
         int minSpacing = attrInt(node, ATTR_MINSPACING, defaults.minSpacing);
@@ -369,6 +381,33 @@ public class XMLPlanetLoader {
         // Empty <starType> / <galaxyType> lists fall back to the stock archetypes (config ctor).
         return new GalaxyGenConfig(minSpacing, density, galaxySpacing, galaxyDensity, types,
                 galaxyTypes).withRogueTuning(rogue);
+    }
+
+    /**
+     * A pack's {@code <galaxyGen procedural="false"/>}. Every other knob of the element tunes the
+     * population this asks not to have, so one beside it is refused rather than ignored: the pack
+     * author would otherwise read a density into a universe that has none.
+     */
+    private static GalaxyGenConfig nonProcedural(Node node) {
+        java.util.List<String> knobs = new ArrayList<>();
+        org.w3c.dom.NamedNodeMap attrs = node.getAttributes();
+        for (int i = 0; attrs != null && i < attrs.getLength(); i++) {
+            String name = attrs.item(i).getNodeName();
+            if (!ATTR_PROCEDURAL.equals(name)) {
+                knobs.add(name);
+            }
+        }
+        NodeList children = node.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            if (children.item(i).getNodeType() == Node.ELEMENT_NODE) {
+                knobs.add("<" + children.item(i).getNodeName() + ">");
+            }
+        }
+        if (!knobs.isEmpty()) {
+            throw new RuntimeException("<galaxyGen procedural=\"false\"> asks for no procedural population,"
+                    + " so it takes no other setting; remove " + knobs);
+        }
+        return GalaxyGenConfig.nonProcedural();
     }
 
     /**
@@ -766,11 +805,17 @@ public class XMLPlanetLoader {
             galaxyElement.appendChild(nodeStar);
         }
 
-        // Emit the procedural generator's config so a re-read (resetFromXml) round-trips it.
-        java.util.Optional<dev.stannismod.stellurgy.universe.GalaxyGenConfig> tuning =
-                java.util.Optional.ofNullable(galaxyGen);
-        if (tuning.isPresent()) {
-            galaxyElement.appendChild(writeGalaxyGen(doc, tuning.get()));
+        // Emit the galaxy configuration so a re-read (resetFromXml) round-trips it — including a pack's
+        // procedural="false", which would otherwise come back as the shipped procedural default.
+        if (galaxyGen == null) {
+            throw new IllegalArgumentException("a galaxy configuration is required to write planetDefs");
+        }
+        if (!galaxyGen.procedural) {
+            Element off = doc.createElement(ELEMENT_GALAXYGEN);
+            off.setAttribute(ATTR_PROCEDURAL, "false");
+            galaxyElement.appendChild(off);
+        } else {
+            galaxyElement.appendChild(writeGalaxyGen(doc, galaxyGen));
             // The planet-type table travels with the generator, and only with it: an authored-anchors-only
             // world has nothing that draws a type, so writing the presets there would put a section into
             // the file that nothing reads.
@@ -2101,7 +2146,7 @@ public class XMLPlanetLoader {
         // Every galaxy an anchor named is RESERVED. The keys are only known once the catalogue has
         // been walked, which is after <galaxyGen> was read — so they are folded in here rather than
         // making the document's element ORDER load-bearing.
-        if (coupling.galaxyGenConfig != null && !coupling.declaredGalaxies.isEmpty()) {
+        if (!coupling.declaredGalaxies.isEmpty()) {
             coupling.galaxyGenConfig =
                     coupling.galaxyGenConfig.withReservedGalaxies(coupling.declaredGalaxies);
         }
@@ -2142,8 +2187,8 @@ public class XMLPlanetLoader {
         // Every non-home galaxy an anchor named. Each one is RESERVED — its cell holds a galaxy
         // whatever the hash says — because authored content must exist under every seed.
         public List<GalaxyKey> declaredGalaxies = new ArrayList<>();
-        // Procedural-galaxy generation config from an optional <galaxyGen> element; null = authored-only.
-        public GalaxyGenConfig galaxyGenConfig = null;
+        // The galaxy configuration: the shipped one unless a <galaxyGen> element states otherwise.
+        public GalaxyGenConfig galaxyGenConfig = GalaxyGenConfig.defaults();
         // Authored <planetType> presets. Empty -> the stock table stands.
         public List<PlanetTypePreset> planetTypes = new ArrayList<>();
 
