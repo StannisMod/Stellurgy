@@ -174,7 +174,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
                 "the client must be AT the build site before the assembly, because a client near the"
                         + " ship is what makes the physics mod load it");
 
-        Events loadEvents = events();
+        Events loadEvents = serverEvents();
         long spawnMark = loadEvents.markInstrumented();
         String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
@@ -310,13 +310,12 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
      * for "the gate resolved him to what he was already in" as for "the gate never ran".</p>
      */
     private String cachedAtmosphereWithPlayerAt(double x, double y, double z) throws Exception {
-        long mark = events().markInstrumented();
+        long mark = serverEvents().markInstrumented();
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
-        // EXPERIMENT: GATE_WORLD_TICKS of dim 0's clock, which is a dose of gate evaluations, not a
-        // budget — both legs of this test are in dim 0, and `tp` has already moved the server's copy
-        // of him by the time the command answers.
+        // EXPERIMENT: a dose of gate evaluations, not a budget — both legs of this test are in dim 0,
+        // and `tp` has already moved the server's copy of him by the time the command answers.
         GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);
-        String changes = events().since(mark, "player_atmosphere_changed");
+        String changes = serverEvents().since(mark, "player_atmosphere_changed");
 
         // AN ABSENCE IS AN ANSWER HERE, and this is what makes it one. One leg of this test expects
         // the gate to resolve the player into a sealed cabin and the other expects it NOT to — that

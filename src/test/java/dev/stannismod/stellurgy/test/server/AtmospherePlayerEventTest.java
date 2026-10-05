@@ -93,7 +93,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     }
 
     /** This class's reader of the server's ordered event log. */
-    private Events events() {
+    private Events serverEvents() {
         return new Events(this::exec,
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
@@ -128,7 +128,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
      * because the first living update may resolve him before a later mark could be taken.</p>
      */
     private String enterDimAndAwaitResolution(int dim) throws Exception {
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         enterDim(dim, 40);
         // Answers the LAST matching record itself, not a `since` reply.

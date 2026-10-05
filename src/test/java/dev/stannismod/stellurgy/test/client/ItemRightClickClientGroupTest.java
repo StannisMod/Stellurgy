@@ -251,7 +251,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         // record with other text. The harness no longer adds to it — the completion sentinel that
         // used to be broadcast per server command is gone with the server's control socket.
         scenario().measuring("mark the event log immediately before the right-click");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
 
         scenario().asserting("the analyser composes a reading for the atmosphere it is standing in");
@@ -311,7 +311,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().record("posListBefore", posBefore);
 
         scenario().asserting("the right-click queues positions into the satellite's posList");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         bot().useItem();
 
@@ -377,7 +377,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         awaitHeld(equipMark, "stellurgy:orescanner");
 
         scenario().asserting("no screen opens on the client");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         bot().useItem();
@@ -424,7 +424,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         awaitHeld(equipMark, "stellurgy:orescanner");
 
         scenario().asserting("the OreMapping GUI opens on the client");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         bot().useItem();
@@ -531,10 +531,10 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         // a changed rotation from the player's own update, once per tick, and the harness counts a
         // tick at its END, after that update; the click below leaves on the same connection after
         // it, so the server has the look when it ray-traces the click.
-        bot().waitTicks(1);
+        bot().waitWorldTicks(1);
 
         scenario().asserting("the client sees exactly one spawned hovercraft, and loses the stack");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         bot().useItem();
@@ -624,7 +624,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
                 + " or a PASS is indistinguishable from a spawn; saw " + before, before == 0);
 
         scenario().asserting("an empty ray-trace spawns nothing and keeps the stack");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         bot().setLook(0f, -90f);
         bot().useItem();
@@ -684,16 +684,16 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
             // Whatever screen the chip left open is closed here, and the close is waited for on the
             // SERVER: the close travels as a client packet, so without the wait the next scenario can
             // begin while the server still holds the chip's container open for this player.
-            long closeMark = events().mark();
+            long closeMark = serverEvents().mark();
             bot().closeScreen();
-            events().await(closeMark, "container_closed", "closing the chip's screen must reach the SERVER"
+            serverEvents().await(closeMark, "container_closed", "closing the chip's screen must reach the SERVER"
                     + " before the next scenario equips anything", LINK_BUDGET_TICKS);
         }
     }
 
     private void chipOpensAndReopens(int modularFullScreenId, int leftShift) throws Exception {
         scenario().measuring("sneak-right-click opens the chip's modular GUI");
-        Events events = events();
+        Events events = serverEvents();
         long openMark = events.mark();
         long openOnClient = clientEvents().mark();
         bot().setKey(leftShift, true);
@@ -701,7 +701,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
             // STIMULUS: the sneak is held across client ticks before the use, because the client
             // publishes sneaking from its own tick; one connection delivers in order, so the server
             // reads the sneak before the use packet that follows it.
-            bot().waitTicks(6);
+            bot().waitWorldTicks(6);
             bot().useItem();
             events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"
                             + " server and make it open the chip's own container", LINK_BUDGET_TICKS,

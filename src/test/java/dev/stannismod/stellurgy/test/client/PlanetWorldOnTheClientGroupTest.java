@@ -145,24 +145,26 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientE2ETest
                     before > 0);
 
             // Mark BEFORE the kick: the disconnect and the clear are one call apart on a netty thread.
-            long kickMark = client.mark();
+            // Both records land after the world is gone.
+            Events leaving = clientConnectionEvents();
+            long kickMark = leaving.mark();
             String kicked = exec("kick " + PLAYER + " c031-remote-disconnect");
 
             // The chain production commits: the mod's disconnect handler ran, and from inside it the
             // registry was emptied.
-            client.assertChain(kickMark, "leaving a REMOTE server must clear the client's Stellurgy dimension"
+            leaving.assertChain(kickMark, "leaving a REMOTE server must clear the client's Stellurgy dimension"
                             + " registry, so the previous server's planets cannot linger as ghosts"
                             + " (kick='" + kicked.trim() + "')",
                     LEAVE_LINK_BUDGET_TICKS, "client_disconnected", "client_dimensions_unregistered");
             // SILENCE-IS-THE-ANSWER: neither window below is read for an absence — the chain just above
             // required a client_disconnected and a client_dimensions_unregistered after kickMark, so both
             // are non-empty, and what is asserted is a field of a record that is there.
-            String disconnects = client.since(kickMark, "client_disconnected");
+            String disconnects = leaving.since(kickMark, "client_disconnected");
             assertTrue("the clearing branch is guarded on the server being REMOTE, so a run in which the"
                     + " client reports remote:false has not exercised this contract: " + disconnects,
                     Events.anyRecordHas(disconnects, "remote", "true"));
             // The sizes are read at the clear's HEAD: what the registry held going in.
-            String cleared = client.since(kickMark, "client_dimensions_unregistered");
+            String cleared = leaving.since(kickMark, "client_dimensions_unregistered");
             String clearedDims = Events.firstField(cleared, "dims");
             assertTrue("the clear must have had this server's dimensions to remove — a clear of an"
                     + " already-empty registry proves nothing about the ghost: " + cleared,
@@ -198,7 +200,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientE2ETest
     public void joiningPlayerIsToldTheSpawnPointOfTheWorldItJoined() throws Exception {
         DimInfo original = DimInfo.forDim(this::exec, 0);
         try {
-            Events server = events();
+            Events server = connectionEvents();
             long logoutMark = server.mark();
             bot().disconnect();
             server.await(logoutMark, "player_logged_out",
@@ -390,9 +392,9 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientE2ETest
             long toC = clientLog.mark();
             exec("stellurgytest tp " + SYNC_C);
             awaitClientDim(toC, SYNC_C, "the weather read below is the weather of the world he is IN");
-            // WINDOW: from the arrival mark to the log read, FADE_WINDOW_TICKS of dim C's own clock. What it
-            // cannot see: a packet sent in the window's last tick and not yet applied.
-            GameTicks.advanceWorld(serverClient(), SYNC_C, FADE_WINDOW_TICKS);
+            // WINDOW: dim C's clock and the client's, which applies what dim C sends. What it cannot see:
+            // a packet sent in the window's last tick and not yet applied.
+            advanceWorldAndClient(SYNC_C, FADE_WINDOW_TICKS);
             String toldC = clientLog.since(toC, "client_game_state_changed");
             Events.assertInstrumentRan(toldC, "client_game_state_changed",
                     "the client's weather packets must be observed at all before their absence on dim C can"
@@ -445,7 +447,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientE2ETest
             awaitClientDim(transferMark, REDIRECT_DIM, "he must be standing on the planet before he types the"
                     + " command, since the redirect is keyed to the world he is IN");
 
-            Events server = events();
+            Events server = serverEvents();
             long rainMark = server.markInstrumented();
             long clientRainMark = clientEvents().mark();
             bot().sendChat("/weather rain 600");

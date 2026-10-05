@@ -134,7 +134,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     private String durableShipName;
 
     /**
-     * Client ticks between two reads of the arrival's own records — the step {@link Events}'s waits
+     * Ticks between two reads of the arrival's own records — the step {@link Events}'s waits
      * advance by, so a budget expressed in ITERATIONS (as the loops here were) converts by
      * multiplying. Named because the conversion is otherwise a bare {@code * 5} whose meaning has to
      * be re-derived at every site.
@@ -260,7 +260,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             // plus a re-assert every PilotInputCadence.REPEAT_TICKS), so a loaded box stretches the
             // climb through the client's TICK rate. NOT per rendered frame — that reading was
             // refuted 2026-08-21. 4 000 ticks is the old 800 polls of 5.
-            Events events = events();
+            Events events = serverEvents();
             entryMark = events.markInstrumented();
             clientMark = clientEvents().mark();
             int climbBudget = 4000;
@@ -338,7 +338,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // feed — the client half used to be a static-field read of a ring that production carried.
         System.out.println("[ARRIVAL-TRACE server] " + exec("stellurgytest vs arrival-trace"));
         for (String writer : new String[]{"pos_jump", "vel_jump", "mount", "dismount"}) {
-            System.out.println("[ARRIVAL-TRACE server " + writer + "] " + events().since(0, writer));
+            System.out.println("[ARRIVAL-TRACE server " + writer + "] " + serverEvents().since(0, writer));
         }
         System.out.println("[ARRIVAL-TRACE client] " + clientEvents().since(0));
         // ...and the end state, read ONCE now that the link has established it happened.
@@ -351,8 +351,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // (3) Not falling: over a two-second window the client-rendered altitude must not sink
         // like a body in free fall.
         double y0 = clientPlayerY();
-        // WINDOW: y0 and y1, both in the message; the claim is over their difference.
-        bot().waitTicks(40);
+        // WINDOW: a fall is a value, not an event; no record answers.
+        advanceServerAndClient(40);
         double y1 = clientPlayerY();
         assertTrue("the arrived pilot must NOT be in free fall (clientY " + y0 + " -> " + y1
                         + " over 40 ticks; free fall sinks ~20). riding=" + bot().reportRidingEntity(),
@@ -368,7 +368,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // So the cruise is zeroed by probe — not by his keys, which are what is under test — and the
         // hull is given time to brake before the key is asked anything.
         String arrivedShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
-                this::exec, events(), clientDim, durableShipName, arrivalBudget * 5);
+                this::exec, serverEvents(), clientDim, durableShipName, arrivalBudget * 5);
         String zeroed = exec("stellurgytest vs ff-cruise-by-id " + clientDim + " " + arrivedShipId
                 + " 0 0 0");
         scenario().requireArranged("the arrived ship's cruise must be zeroed before his key is"
@@ -376,7 +376,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                 Reply.of(zeroed).bool("afcResolved"));
         // EXPERIMENT: CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the
         // constant for the measurement).
-        bot().waitTicks(CRUISE_BRAKE_TICKS);
+        advanceServerAndClient(CRUISE_BRAKE_TICKS);
         final double before = clientPlayerY();
         // EXPERIMENT: a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival
         // at its computer — that arrival is the first half of the contract and a link, so a seat
@@ -404,7 +404,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // the record was written only by the mount transition. It is maintained from state on the
         // server tick, so it lands some ticks after the arrival — awaited as the record's own WRITE
         // (`aboard_record_stamped`), which a poll of the tag could only see once it persisted.
-        events().await(entryMark, "aboard_record_stamped", "a pilot who flew his own ship into a cell"
+        serverEvents().await(entryMark, "aboard_record_stamped", "a pilot who flew his own ship into a cell"
                 + " must be STAMPED with a durable aboard record - it is the only evidence the login"
                 + " restore has that he was ever aboard", arrivalBudget * 5);
         String tag = exec("stellurgytest space aboard-tag " + BOT);
@@ -513,7 +513,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // but it is the second link — a refusal that was decided and never said is a different defect
         // from one that was never decided, and the old form (poll the chat, then guess from the
         // altitude) could not tell them apart.
-        Events events = events();
+        Events events = serverEvents();
         long refusalMark = events.markInstrumented();
         // The CLIENT's own mark beside it, and taken here for the same reason: the message he reads
         // and the seat he keeps are both facts of HIS log, and the two logs number independently —
@@ -670,7 +670,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,

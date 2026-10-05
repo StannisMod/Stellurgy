@@ -164,7 +164,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         // `beacon_unregistered` separate them. An earlier attempt put that report in a production LOG
         // and it was unreadable from here — the mod logger writes into the server child's own log,
         // which nothing in this harness captures.
-        Events.MarkOrWhyNot mark = events().markIfInstrumented();
+        Events.MarkOrWhyNot mark = serverEvents().markIfInstrumented();
 
         // Break the controller via place-air. world.setBlockState calls
         // the old block's breakBlock callback in Forge 1.12, which is
@@ -204,7 +204,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
     }
 
     /** The server's ordered event log, read through this tier's command channel. */
-    private Events events() {
+    private Events serverEvents() {
         return new Events(this::exec,
                 ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
     }
@@ -227,7 +227,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
             return "(no mark was taken, so nothing can be said about the sequence: " + mark.refusal
                     + ")";
         }
-        String records = events().since(mark.seq);
+        String records = serverEvents().since(mark.seq);
         // Asked of each record's own `type`. `contains("beacon_")` over the envelope is answered
         // by the INSTRUMENTS list, which names every registered recorder whether or not it wrote
         // anything — so the "no beacon record at all" branch below could never be reached, and

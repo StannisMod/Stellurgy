@@ -171,10 +171,10 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
         arrangeProbe("stellurgytest player clear-armor");
         exec("gamerule naturalRegeneration false");
         exec("gamemode survival @a");
-        // WINDOW: ten ticks of survival on the spot he was placed, watched for damage — he arrived
-        // in creative, so full health is the start of the window by construction, and a spot that
-        // hurts (inside a block, over nothing) shows as less at its end.
-        bot().waitTicks(10);
+        // WINDOW: survival on the spot he was placed, watched for damage — he arrived in creative, so
+        // full health is the start by construction, and a spot that hurts (inside a block, over
+        // nothing) shows as less at its end.
+        advanceServerAndClient(10);
         double health = health(bot().reportState());
         scenario().record("healthOnPlatform", health);
         scenario().requireArranged("the player must be standing unhurt on his platform before the"
@@ -449,7 +449,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             // event can witness that the player was ticked and judged breathable. markInstrumented
             // is what rules out the two silences that are not about the subject — an unsubscribed
             // recorder and a mixin configuration that was never queued.
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             // WINDOW: from the mark to the log read below, counted on the player's OWN world clock —
             // the atmosphere judges him on that world's ticks, so client ticks would buy a busy box
@@ -508,7 +508,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             // Both marks BEFORE the vacuum exists, or the first drain of a three-millibucket tank
             // happens between the flip and the mark and the chain starts mid-way.
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -599,7 +599,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                 + " the refill is watched; client=" + clientBefore, clientBefore == airBefore);
 
         scenario().asserting("standing on the powered pad raises the suit's air, on both sides");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         long fillClientMark = clientEvents().mark();
         exec("tp @p " + (px + 0.5) + " " + (py + 1) + " " + (pz + 0.5));
@@ -658,7 +658,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             // The same absence as the component-route counter-test, on the other route, and with the
             // same limit: a breathable atmosphere does not tick, so nothing can witness that the
             // player was judged. markInstrumented is what rules out an instrument that was not there.
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             // WINDOW: the same absence window, on the player's own world clock.
             GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);
@@ -714,7 +714,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long drainClientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -789,7 +789,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             scenario().requireArranged("player must start at full health, got " + healthStart,
                     healthStart >= FULL_HEALTH);
 
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -844,7 +844,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             scenario().requireArranged("player should start at full health, got " + healthStart,
                     healthStart >= FULL_HEALTH);
 
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -909,7 +909,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long drainClientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -1123,9 +1123,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             scenario().measuring("health in the same room while it is merely warm");
             double healthStart = openSurvivalWindow();
-            // WINDOW: healthStart and healthCold, eighty ticks apart in the room at cabin temperature;
-            // the control asserts their difference, so the interval is how long the room had to hurt.
-            bot().waitTicks(80);
+            // WINDOW: the interval is how long the room at cabin temperature had to hurt.
+            advanceServerAndClient(80);
             double healthCold = health(bot().reportState());
             scenario().record("healthAfterControlWindow", healthCold);
             assertTrue("control leg: the room itself must not hurt him while it is at cabin"
@@ -1140,7 +1139,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             String who = standing.text("player");
             // Marked BEFORE the stimulus, so the waits below are about the damage THIS heating caused
             // and cannot be satisfied by anything the control leg already recorded.
-            Events serverEvents = events();
+            Events serverEvents = serverEvents();
             long hotDamageMark = serverEvents.markInstrumented();
             long hotMark = clientEvents().mark();
             setRoomAir(at, (veryHot + 10) * 1000);
@@ -1275,7 +1274,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             // wearer's health on the very hazard this scenario claims the suit covers.
             // Both marks BEFORE survival begins: in creative the hazard path never asks the suit, so
             // the first payment can only come after this point, and a mark taken later could miss it.
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long clientMark = clientEvents().mark();
             scenario().measuring("health and suit air before the stale-air window");
@@ -1390,7 +1389,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             scenario().requireArranged("the suit's tank must hold oxygen, or the gate would refuse for want"
                     + " of a supply rather than decide on protection: " + suit, suit.integer("chestAir") > 0);
 
-            long mark = events().markInstrumented();
+            long mark = serverEvents().markInstrumented();
             // Four times carbon monoxide's own limit (`Gas#hazardThreshold`, production's), put into the
             // planet's open air: a toxic index of four from this gas alone, whatever else the air holds.
             // Four is a choice — clear of the index of one at which a dose starts, and small enough that
@@ -1409,7 +1408,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             // asked the suit gate about him SUITED_POISON_TICKS times — or at the FIRST second it judged
             // him exposed, so a suit that has stopped protecting doses him for one second rather than for
             // the whole window, and cannot carry the shared player to a harmful dose.
-            String suited = events().awaitMatching(mark, "poison_breathed",
+            String suited = serverEvents().awaitMatching(mark, "poison_breathed",
                     reply -> Events.recordsWhere(reply, "who", who).size() >= SUITED_POISON_TICKS
                             || !Events.recordsWhereAll(reply, "who", who, "immune", "false").isEmpty(),
                     SUITED_POISON_TICKS + " records carrying who = " + who + ", or one judging him exposed",
@@ -1428,9 +1427,9 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                     "exposed=0 largestRise=0.0", "exposed=" + exposed + " largestRise=" + largestRise);
 
             scenario().measuring("take the suit off in the same air");
-            long controlMark = events().mark();
+            long controlMark = serverEvents().mark();
             arrangeProbe("stellurgytest player clear-armor");
-            String control = events().awaitMatching(controlMark, "poison_breathed",
+            String control = serverEvents().awaitMatching(controlMark, "poison_breathed",
                     reply -> Events.recordsWhereAll(reply, "who", who, "immune", "false").size()
                             >= CONTROL_POISON_TICKS,
                     CONTROL_POISON_TICKS + " records carrying who = " + who + " and immune = false",
@@ -1499,7 +1498,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             exec("replaceitem entity @a slot.armor.legs minecraft:air");
             exec("replaceitem entity @a slot.armor.feet minecraft:air");
 
-            long mark = events().markInstrumented();
+            long mark = serverEvents().markInstrumented();
             // The same poisoning as the whole-suit scenario above, for the same reasons: carbon monoxide at
             // four times its own limit (`Gas#hazardThreshold`), a toxic index of four.
             Gas poison = GasRegistry.CARBON_MONOXIDE;
@@ -1507,7 +1506,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                     + 4L * poison.hazardThreshold());
 
             scenario().measuring("breathe it in a helmet and a chest alone");
-            String partial = events().awaitMatching(mark, "poison_breathed",
+            String partial = serverEvents().awaitMatching(mark, "poison_breathed",
                     reply -> Events.recordsWhereAll(reply, "who", who, "immune", "false").size()
                             >= PARTIAL_SUIT_POISON_TICKS,
                     PARTIAL_SUIT_POISON_TICKS + " records carrying who = " + who + " and immune = false",
@@ -1526,13 +1525,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                     + " | " + partial, climbsEverySecond(partialDoses));
 
             scenario().measuring("put the whole suit back on");
-            long wholeMark = events().mark();
+            long wholeMark = serverEvents().mark();
             arrangeProbe("stellurgytest player equip-space-chest");
             // Closes on the protected records, or at the FIRST second the whole suit was judged exposed: a
             // suit that has stopped protecting must not keep a player who already carries a dose in the
             // poison for the whole budget — measured 2026-10-04 under exactly that inversion, it killed the
             // shared client's player and failed the next scenario on his death.
-            String whole = events().awaitMatching(wholeMark, "poison_breathed",
+            String whole = serverEvents().awaitMatching(wholeMark, "poison_breathed",
                     reply -> Events.recordsWhereAll(reply, "who", who, "immune", "true",
                             "worn", "FEET+LEGS+CHEST+HEAD").size() >= PARTIAL_SUIT_POISON_TICKS
                             || !Events.recordsWhereAll(reply, "who", who, "immune", "false",

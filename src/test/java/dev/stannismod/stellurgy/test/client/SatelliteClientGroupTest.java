@@ -67,10 +67,11 @@ public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
                         + " unresolved — that is the branch readClient must then drop",
                 decodeBudgetTicks);
 
-        // WINDOW: from the mark to the read below, the disconnect count over `settleTicks` after the
-        // decode. A disconnect is the event that must NOT happen, so there is no record to link on;
-        // the pre-fix NPE disconnected a tick or two after the decode, well inside this window.
-        bot().waitTicks(settleTicks);
+        // WINDOW: a disconnect is the event that must NOT happen, so there is no record to link on;
+        // the pre-fix NPE disconnected a tick or two after the decode, well inside this window. The
+        // client half counts every tick, world or not: a disconnect is exactly what would take the
+        // world away.
+        advanceServerAndAllClientTicks(settleTicks);
 
         // SILENCE-IS-THE-ANSWER: the disconnect seam runs only on a disconnect, so no instrument check
         // can apply to it; the log is proved listening by the mark (it refuses an unarmed log) and by
@@ -114,7 +115,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().asserting("a deploy that cannot resolve its satellite tells the pilot");
         // markInstrumented: the server link is recorded by a test-only MIXIN, so an empty log has a
         // second silent cause — the mixin never woven — and both must be ruled out.
-        Events events = events();
+        Events events = serverEvents();
         long serverMark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         try {

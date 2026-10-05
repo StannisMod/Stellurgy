@@ -24,6 +24,7 @@ import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.Chains;
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.PilotSeat;
 import dev.stannismod.stellurgy.test.LedgerEntry;
@@ -130,7 +131,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final int JUMP_PRESS_BUDGET_TICKS = 200;
 
     /**
-     * How long a container slot click is given to have been APPLIED, in client ticks.
+     * How long a container slot click is given to have been APPLIED, in ticks.
      *
      * <p>A bound on a round trip, not a settle and not a poll budget: the click goes to the server,
      * the container applies it, the inventory comes back. Two seconds is generous for one exchange
@@ -312,7 +313,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The loop's pilot-input delivery chain, both halves, for the failure messages below: a
         // window opened with the pair, so its counts are this run's.
         seatDelivery = SeatDelivery.open(this::exec, bot(),
-                new Events(this::exec, bot()::waitTicks, evictionReports()), clientEvents());
+                serverEvents(), clientEvents());
     }
 
     /** This run's pilot-input delivery windows — see {@link SeatDelivery}. */
@@ -403,7 +404,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // from the boarding onward reads it now — the seat's verdict, the console's, the crossings'
         // — and a reader that only exists from halfway down is one more reason for the early legs to
         // keep polling values.
-        Events events = new Events(this::exec, bot()::waitTicks, evictionReports());
+        Events events = serverEvents();
         long tLeg = System.currentTimeMillis();
 
         // Leg 4 says why, and it holds for the whole loop: an observer is aboard the whole way, so
@@ -1033,7 +1034,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // decided at the edge of its own premise.
         long[] moonAt0 = frameOf(homeMoon.cell, homeMoon.homeCell);
         // STIMULUS: a short, fixed sample of the moon's own motion, to size the window below.
-        bot().waitTicks(20);
+        advanceServerAndClient(20);
         long[] moonAt1 = frameOf(homeMoon.cell, homeMoon.homeCell);
         double sampleTravel = travel(moonAt0, moonAt1);
         double perTick = sampleTravel / Math.max(1L, moonAt1[3] - moonAt0[3]);
@@ -1044,10 +1045,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         long[] moonBefore = frameOf(homeMoon.cell, homeMoon.homeCell);
         int stationTicks = (int) Math.ceil(4.0 * before[0] / perTick);
         // EXPERIMENT: the dose is the moon's travel, sized just above; no key is held. Given in pieces
-        // because one bridge wait is bounded below the bot's read timeout (ForgeTestClientBootstrap
-        // .waitTicks), and a dose of minutes does not fit in one.
+        // because one bridge wait is bounded below the bot's read timeout
+        // (ForgeTestClientBootstrap's CLIENT_SIDE_BUDGET_MILLIS), and a dose of minutes does not fit
+        // in one.
         for (int given = 0; given < stationTicks; given += STATION_DOSE_PIECE_TICKS) {
-            bot().waitTicks(Math.min(STATION_DOSE_PIECE_TICKS, stationTicks - given));
+            advanceServerAndClient(Math.min(STATION_DOSE_PIECE_TICKS, stationTicks - given));
         }
         long[] after = skyReadingOf(exec("stellurgytest space bodies"), homeMoon.dim);
         long[] moonAfter = frameOf(homeMoon.cell, homeMoon.homeCell);
@@ -1433,8 +1435,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final int RADAR_RECORD_TICKS = 20;
 
     /**
-     * One piece of a long no-input dose, in client ticks: thirty seconds at the game's 20 per second,
-     * well inside the bridge's own per-wait budget (three quarters of the bot's read timeout).
+     * One piece of a long no-input dose, in ticks: thirty seconds at the game's 20 per second, well
+     * inside the bridge's own per-wait budget (three quarters of the bot's read timeout).
      */
     private static final int STATION_DOSE_PIECE_TICKS = 600;
 
@@ -1847,7 +1849,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // awaited over the chain, so a load undone by an unload does not answer. A usable hull is one
         // whose blocks are in its subspace, which is what the seat search needs. Then ONE search.
         String hullId = ShipIdentity.awaitPhysicsIdOf(this::exec,
-                new Events(this::exec, bot()::waitTicks, evictionReports()), dim, builtShipName, budget * 5);
+                serverEvents(), dim, builtShipName, budget * 5);
         lastSeatProbe = exec("stellurgytest vs find-seat " + dim + " id " + hullId);
         rememberAnchor(lastSeatProbe);
         return lastSeatProbe;
@@ -1868,10 +1870,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         bot().setKey(Keyboard.KEY_J, true);
         // STIMULUS: down across client ticks, then up across client ticks — so that a second press
         // right after this one is a new edge and not a continuation of this one.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         bot().setKey(Keyboard.KEY_J, false);
         // STIMULUS: the key-up half of the edge.
-        bot().waitTicks(20);
+        bot().waitWorldTicks(20);
     }
 
     // `chatText` lived here: the client's last N chat lines flattened and lower-cased, for substring
@@ -1969,7 +1971,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         bot().holdKey(key);
         try {
             // STIMULUS: the burst.
-            bot().waitTicks(burstTicks);
+            advanceServerAndClient(burstTicks);
         } finally {
             bot().releaseKey(key);
         }
@@ -1986,8 +1988,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private String cutThrottle(int cutTicks) throws Exception {
         bot().holdKey(Keyboard.KEY_X);
         try {
-            // STIMULUS: the throttle cut, held for the caller's cutTicks.
-            bot().waitTicks(cutTicks);
+            // STIMULUS: the throttle cut.
+            advanceServerAndClient(cutTicks);
         } finally {
             bot().releaseKey(Keyboard.KEY_X);
         }
@@ -2058,7 +2060,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // Marked BEFORE the Scan click: the first thing awaited below is the scan pass ENDING, and
         // that pass starts on this click.
-        Events spawnEvents = new Events(this::exec, bot()::waitTicks, evictionReports());
+        Events spawnEvents = serverEvents();
         long spawnMark = spawnEvents.markInstrumented();
         bot().clickButtonById(BUTTON_SCAN);
 
@@ -2193,7 +2195,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             // call getMouseOver inside the tick the harness counts, so the lag is somewhere after
             // it (the deck look, the physics mod's ship pick, the render frame). An open question,
             // not a settled number.
-            bot().waitTicks(AIM_STEP_TICKS);
+            bot().waitWorldTicks(AIM_STEP_TICKS);
             aim.mouseOver = bot().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, target)) {
                 break;
@@ -2273,14 +2275,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             aim.distSq = look(targetWorld, px, py, pz);
-            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
-            // pick. MEASURED that one is not enough (2026-09-23: a one-tick step turned all three aim
-            // controllers red, deterministically, the pick read back from a look tens of degrees off
-            // the aim; five, alone, green). The mechanism is NOT established — Minecraft.runTick does
-            // call getMouseOver inside the tick the harness counts, so the lag is somewhere after
-            // it (the deck look, the physics mod's ship pick, the render frame). An open question,
-            // not a settled number.
-            bot().waitTicks(AIM_STEP_TICKS);
+            // STIMULUS: the controller's step — why five ticks and not one: see the same step in the
+            // aim controller above.
+            bot().waitWorldTicks(AIM_STEP_TICKS);
 
             aim.mouseOver = bot().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, targetSub)) {
@@ -2344,7 +2341,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private void pressUse() throws Exception {
         bot().setKey(KEY_USE_ITEM, true);
         // STIMULUS: the use key held down across client ticks, as a mouse button is.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
     }
 
@@ -2512,11 +2509,26 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return clientHarness.bot();
     }
 
+    /**
+     * A WINDOW in which one side drives what the other observes; one whose subject is the client's
+     * own simulation alone is {@code bot().waitWorldTicks}.
+     */
+    private void advanceServerAndClient(int ticks) throws Exception {
+        GameTicks.serverAndClient(serverHarness.client(), GameTicks.server(), bot()::waitWorldTicks)
+                .ticks(ticks);
+    }
+
+    private Events serverEvents() {
+        return new Events(this::exec, GameTicks.serverAndClient(serverHarness.client(), GameTicks.server(), bot()::waitWorldTicks),
+                evictionReports());
+    }
+
     /** The CLIENT's own ordered event log, behind the same verbs the server's is read through.
      *  {@link Events#mark} refuses a sequence unless a recorder is subscribed, which is what keeps
      *  an empty log later from reading as "it never happened". */
     private Events clientEvents() {
-        return ClientEvents.of(bot(), evictionReports());
+        return ClientEvents.of(bot(), GameTicks.serverAndClient(serverHarness.client(), GameTicks.server(), bot()::waitWorldTicks),
+                evictionReports());
     }
 
     /**
@@ -2659,7 +2671,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             throw new AssertionError(never.getMessage()
                     + " | the client renders: " + bot().reportRidingEntity()
                     + " | every mount the SERVER has recorded this boot: "
-                    + new Events(this::exec, bot()::waitTicks, evictionReports()).since(0L, "mount") + diagnosis, never);
+                    + serverEvents().since(0L, "mount") + diagnosis, never);
         }
         // Read ONCE, now that the link says the mount happened: a settled state, not a wait.
         return bot().reportRidingEntity();

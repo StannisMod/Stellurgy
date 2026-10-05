@@ -188,7 +188,7 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         // anchored form resolved the yard nearest a point over the whole registry, so it could reach
         // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
-        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), dim, durableShipId, 200);
+        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), dim, durableShipId, 200);
         PilotSeat seat = PilotSeat.byId(this::exec, dim, scenarioShipId)
                 .requireFound("the pilot seat must be found, or the test is vacuous");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
@@ -324,15 +324,15 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
 
         // EXPERIMENT: CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured,
         // see the constant); then the cruise is judged ONCE, by the window below.
-        bot().waitTicks(CRUISE_RAMP_TICKS);
+        advanceServerAndClient(CRUISE_RAMP_TICKS);
         // WINDOW: three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names
         // both. The physics velocity controller never decides it has arrived, so no record answers.
         ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);
-        // WINDOW: the first half of the same window.
-        bot().waitTicks(SETTLE_SAMPLE_TICKS);
+        // WINDOW: a cruise speed is a value, not an event; no record answers.
+        advanceServerAndClient(SETTLE_SAMPLE_TICKS);
         ShipInfo s1 = ShipInfo.byId(this::exec, dim, shipId);
-        // WINDOW: the second half of the same window.
-        bot().waitTicks(SETTLE_SAMPLE_TICKS);
+        // WINDOW: the second speed of the pair.
+        advanceServerAndClient(SETTLE_SAMPLE_TICKS);
         ShipInfo s2 = ShipInfo.byId(this::exec, dim, shipId);
         double first = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
         double second = Math.hypot(s2.x - s1.x, s2.z - s1.z) / SETTLE_SAMPLE_TICKS;
@@ -363,7 +363,7 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         // over the cruise, and the contract is about the cruise rather than about any tick of it.
         // What it cannot see: a seat lost and regained inside one sampling gap.
         for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {
-            bot().waitTicks(POLL_EVERY_TICKS);
+            advanceServerAndClient(POLL_EVERY_TICKS);
             samples++;
             boolean seated = riding();
             int mounts = bot().reportEntities("EntityDummy", 64.0).get("count").getAsInt();

@@ -420,7 +420,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // reader that arrived after it would find an empty log and could not tell that from a
         // restore that never ran. This boot's log is new - a sequence from boot 1 means nothing
         // here - so the mark is taken on the boot-2 server, not remembered across the restart.
-        Events events = events();
+        Events events = serverEvents();
         long restoreMark = events.mark();
 
         startClient();
@@ -523,10 +523,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // above; what is left is the rider's position being written each tick, which nothing
         // publishes and no record could carry. So: give it the ticks, then read.
         double joinY = state.get("playerY").getAsDouble();
-        // WINDOW: a value converging, where nothing decides. Its two ends are `joinY` (read the
-        // instant the mount link closed) and the read below, and both are printed and asserted
-        // against, so a red says whether he was converging or never left the wrong height.
-        bot().waitTicks(SEAT_SETTLE_TICKS);
+        // WINDOW: a value converging, where nothing decides; reading both ends lets a red say whether
+        // he was converging or never left the wrong height.
+        advanceServerAndClient(SEAT_SETTLE_TICKS);
         state = bot().reportState();
         double clientX = state.get("playerX").getAsDouble();
         double clientY = state.get("playerY").getAsDouble();
@@ -612,10 +611,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // SHIP'S OWN world position rather than the deck point he stood on. The whole scenario's
         // records, because a login produces exactly one of each and a mark would only narrow what
         // is already unambiguous.
-        String placement = events().since(0, "login_restored");
-        String holdEnded = events().since(0, "deck_hold_login")
-                + " | ended: " + events().since(0, "deck_hold_ended")
-                + " | pins: " + events().since(0, "deck_hold_pin");
+        String placement = serverEvents().since(0, "login_restored");
+        String holdEnded = serverEvents().since(0, "deck_hold_login")
+                + " | ended: " + serverEvents().since(0, "deck_hold_ended")
+                + " | pins: " + serverEvents().since(0, "deck_hold_pin");
 
         // THE DRIVER, not the condition. The previous cut of this pin measured a body on a deck that
         // was standing perfectly still - every field came back exactly 0.0, carry included - and a
@@ -634,9 +633,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // on it. A release is an EVENT with production's own reason string on it, and an empty log
         // is only an answer once the recorder says it was listening.
         long idleReleaseMark = clientEvents().mark();
-        // WINDOW: deckBefore / deckAfter and the tick history from fromTick bound it, and every
-        // assertion below is over what happened between the two reads.
-        bot().waitTicks(OBSERVE_TICKS);
+        // WINDOW: an idle stretch is not an event; nothing records it.
+        advanceServerAndClient(OBSERVE_TICKS);
         String idleReleases = clientReleases(idleReleaseMark, "an idle window with no input at all");
         long dropsInIdle = guardReleases(idleReleases);
         double[] deckAfter = awaitShipPose(dim);
@@ -718,9 +716,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // lives for two hundred: asking once at the top says what the hold had done by then, which
         // is not the same question as how it ENDED. Both are printed, in that order, so a reader can
         // see the hold still running at the first read and finished by the second.
-        String holdAfter = events().since(0, "deck_hold_login")
-                + " | ended: " + events().since(0, "deck_hold_ended")
-                + " | pins: " + events().since(0, "deck_hold_pin");
+        String holdAfter = serverEvents().since(0, "deck_hold_login")
+                + " | ended: " + serverEvents().since(0, "deck_hold_ended")
+                + " | pins: " + serverEvents().since(0, "deck_hold_pin");
 
         String walkTable = "\n  restored 1: " + describeWalk(restoredWalk)
                 + "\n  restored 2: " + describeWalk(restoredWalkAgain)
@@ -836,7 +834,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // STIMULUS: six ticks of W, not twelve: the fixture's deck is small, and a walk long enough
         // to carry him off its edge ends the capture - which reads as a silent record rather than as
         // a clean body.
-        bot().waitTicks(6);
+        bot().waitWorldTicks(6);
         bot().releaseKey(Keyboard.KEY_W);
         String walkHistory = clientTickHistory();
         lastWalkLines = linesAfter(walkHistory, walkFrom);
@@ -847,11 +845,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long dropsInWalk = guardReleases(clientReleases(walkReleaseMark, "a swept and committed walk"));
         // EXPERIMENT: the idle window opens two client ticks after the release, so the walk's last
         // applied input tick is outside it and "idle" means no input at all.
-        bot().waitTicks(2);
+        bot().waitWorldTicks(2);
         long idleFrom = lastClientTick();
         long idleReleaseMark = clientEvents().mark();
-        // WINDOW: from idleFrom to the history read below, with the deck's pose on either side.
-        bot().waitTicks(OBSERVE_TICKS);
+        // WINDOW: an idle stretch is not an event; nothing records it.
+        advanceServerAndClient(OBSERVE_TICKS);
         String idleHistory = clientTickHistory();
         long dropsInIdle = guardReleases(clientReleases(idleReleaseMark,
                 "the idle window after the key was released"));
@@ -997,7 +995,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 Reply.of(driven).bool("afcResolved"));
         // EXPERIMENT: the pulse is the dose — long enough to set the ship moving, short enough that
         // the window the caller opens next watches the hold SETTLING it (see THROTTLE_PULSE_TICKS).
-        bot().waitTicks(THROTTLE_PULSE_TICKS);
+        advanceServerAndClient(THROTTLE_PULSE_TICKS);
     }
 
     /**
@@ -1069,7 +1067,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             // loaded-tile list, and this method does not merely observe — it seats the bot — so an
             // unaddressed mount would put him on a neighbour's craft and then measure that.
             SeatMount seat = SeatMount.onShip(this::exec, dim,
-                    ShipIdentity.awaitPhysicsIdOf(this::exec, events(), dim, arrangedShipId, 100));
+                    ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), dim, arrangedShipId, 100));
             if (!seat.seatFound) {
                 return "<no seat to re-capture through: " + seat.raw() + ">";
             }
@@ -1104,8 +1102,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             commandWindowCruise(dim);
             double[] deckBefore = awaitShipPose(dim);
             long fromTick = lastClientTick();
-            // WINDOW: the same one the subject measures, bounded by the two deck reads.
-            bot().waitTicks(OBSERVE_TICKS);
+            // WINDOW: the same one the subject measures.
+            advanceServerAndClient(OBSERVE_TICKS);
             double[] deckAfter = awaitShipPose(dim);
             String history = clientTickHistory();
             String moved = deckBefore == null || deckAfter == null
@@ -1161,7 +1159,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // crossing re-assembles the hull, so the physics id is a new one on this side and is
         // translated from the durable name the ledger kept. What is still awaited is the shipyard
         // becoming queryable — a fact about time, not about which craft answers.
-        String arrivedShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+        String arrivedShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
                 300);
         // ONE read. The retry that stood here was measured on 2026-09-13 — both scenarios of this
         // class that reach here, ONE attempt each, zero ticks spent — so it waited for nothing: the
@@ -1195,7 +1193,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String mountAt = exec("stellurgytest vs seat-mount-at " + slotDim
                 + " " + seatX + " " + seatY + " " + seatZ);
         assertTrue("the pilot seat's mount must exist: " + mountAt, readBool(mountAt, "ok"));
-        Events events = events();
+        Events events = serverEvents();
         // Before the mount, so the two links it produces cannot be missed between two reads.
         long seatMark = events.mark();
         // The CLIENT's own mark for the same mount, beside the server's: the seating this scenario
@@ -1282,7 +1280,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // Build a PILOTED tier-2 ship on the ground and assemble it with the real assembler - which
         // is what mints the durable ship id the aboard record and the ledger are both keyed by.
-        Events events = events();
+        Events events = serverEvents();
         String coords = placeFixture(launchSite(), VARIANT);
         // The mark BEFORE the assembler is told, so the ship this arrangement is about cannot be
         // missed between two counts and cannot be confused with one that already existed.
@@ -1401,7 +1399,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 // `"cellKey":null` was hunting for one rendering of.
                 Reply.of(launch).ok() && Reply.of(launch).has("cellKey"));
 
-        Events events = events();
+        Events events = serverEvents();
         String coords = placeFixture(FixtureSite.openAir(LAUNCH_DIM, SRC_X, SRC_Z), VARIANT);
         long assemblyMark = events.mark();
         String assembled = exec("stellurgytest rocket assemble " + LAUNCH_DIM + " " + coords);
@@ -1726,9 +1724,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // THIS climb's pilot-input delivery chain, both halves, for the failure below. Opened per
         // climb because the class restarts the server between its legs, and a window lives and dies
         // with the server it was opened on.
-        SeatDelivery seatDelivery = SeatDelivery.open(this::exec, bot(), events(), clientEvents());
+        SeatDelivery seatDelivery = SeatDelivery.open(this::exec, bot(), serverEvents(), clientEvents());
         try {
-            PilotThrust.climb(bot(), events(), serverHarness.client(), clientDim(), PilotThrust.DOSE_TICKS,
+            PilotThrust.climb(bot(), serverEvents(), serverHarness.client(), clientDim(), PilotThrust.DOSE_TICKS,
                     what);
         } catch (ArrangementFailure already) {
             throw already;
@@ -1889,7 +1887,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     protected double[] awaitShipPose(int dim) throws Exception {
         assertNotNull("awaitShipPose is about THIS pilot's ship, and the arrangement has not named"
                 + " one yet", arrangedShipId);
-        Events log = events();
+        Events log = serverEvents();
         long mark = log.markInstrumented();
         String hullId = ShipIdentity.awaitPhysicsIdOf(this::exec, log, dim, arrangedShipId, 200);
         String info = exec("stellurgytest vs ship-info " + dim + " id " + hullId);
@@ -2010,23 +2008,38 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * recorder is registered when the probe command is (server start), so a mark taken before the
      * client connects is already covered - and it has to be taken there, because the login restore
      * fires ON the connection.</p>
+     *
+     * <p>The client half looks the bot up on every step, because the mark may be taken before the
+     * client has connected; a wait taken across a login therefore starts counting once the world is
+     * up. A wait whose client is deliberately out of the world uses {@link #connectionEvents()}.</p>
      */
-    protected Events events() {
-        return new Events(this::exec, ticks -> bot().waitTicks(ticks), evictionReports());
+    protected Events serverEvents() {
+        return new Events(this::exec,
+                GameTicks.serverAndClient(serverHarness.client(), GameTicks.server(), ticks -> bot().waitWorldTicks(ticks)),
+                evictionReports());
     }
 
     /**
-     * The same log, advanced on the SERVER's own clock instead of the client's.
+     * The same log for the window between a disconnect and the reconnect, where the client has no
+     * world by design.
      *
-     * <p>For the one window this family has in which there is no client to wait in: between a
-     * disconnect and the reconnect. {@link #events()} steps by {@code bot().waitTicks}, and the bot
-     * is the thing that went away; the server is still ticking, and a logout is something it does on
-     * a tick. {@link GameTicks#advance} also fails loudly when that clock STOPS, so a hung server is
-     * reported as a stalled clock rather than as a link that never arrived.</p>
+     * <p>Still two clocks: a disconnect is performed on the client's next tick, not when it is asked
+     * for, so a server-only deadline can run out before the channel has even closed; and
+     * {@link #serverEvents()}'s world ticks would stall for the whole window.</p>
      */
-    protected Events serverClockEvents() {
+    protected Events connectionEvents() {
         return new Events(this::exec,
-                ticks -> GameTicks.advance(serverHarness.client(), GameTicks.server(), ticks), evictionReports());
+                GameTicks.serverAndClient(serverHarness.client(), GameTicks.server(), ticks -> bot().waitTicks(ticks)),
+                evictionReports());
+    }
+
+    /**
+     * A WINDOW in which one side drives what the other observes; one whose subject is the client's
+     * own simulation alone is {@code bot().waitWorldTicks}.
+     */
+    protected void advanceServerAndClient(int ticks) throws Exception {
+        GameTicks.serverAndClient(serverHarness.client(), GameTicks.server(), t -> bot().waitWorldTicks(t))
+                .ticks(ticks);
     }
 
     /**
@@ -2057,7 +2070,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * Wait for one record of {@code type} on the CLIENT's own log - optionally one carrying
      * {@code needle} - or fail naming everything the client DID record since {@code mark}.
      *
-     * <p>The two logs are separate instruments with separate sequences: {@link #events()} reads the
+     * <p>The two logs are separate instruments with separate sequences: {@link #serverEvents()} reads the
      * server's through the probe channel, and the client's own is reachable only through the bot.
      * Cross-side ORDER within a tick is undefined, so a client link is always awaited BESIDE a
      * server chain and never inside one — which is why this family has a client wait of its own
@@ -2083,14 +2096,18 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     /**
-     * The CLIENT's own ordered event log, behind the same verbs as {@link #events()}.
+     * The CLIENT's own ordered event log, behind the same verbs as {@link #serverEvents()}.
      *
      * <p>This family boots its own harness rather than extending the shared client base, so it
      * reaches {@link ClientEvents} directly. {@link Events#markInstrumented} must never be called on
      * it: the client reply carries no {@code mixins} flag.</p>
+     *
+     * <p>Two clocks, because most of what the client records is driven by a server packet.</p>
      */
     protected Events clientEvents() {
-        return ClientEvents.of(bot(), evictionReports());
+        return ClientEvents.of(bot(),
+                GameTicks.serverAndClient(serverHarness.client(), GameTicks.server(), ticks -> bot().waitWorldTicks(ticks)),
+                evictionReports());
     }
 
     /**

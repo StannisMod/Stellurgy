@@ -148,7 +148,7 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
         // does not exist until that read pins it, so no weather change for this dimension can have
         // been announced before this line, and the wait below cannot open a window the record has
         // already passed through.
-        long mark = events().mark();
+        long mark = serverEvents().mark();
         DimWeather first = weather(dim);
         if (first.raining) {
             return first; // it is already raining; there is no transition left to wait for
@@ -158,7 +158,7 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
         // The poll it replaces asked the probe for the state every few ticks — a reading of a LEVEL
         // where the subject is an EDGE, so it could tell neither when the rain began nor, on the
         // dimension that never rains, whether the cycle had run at all.
-        events().awaitMatching(mark, "planet_weather_changed",
+        serverEvents().awaitMatching(mark, "planet_weather_changed",
                 reply -> Events.recordsWhereAll(reply,
                         "dim", String.valueOf(dim), "raining", "true").size() > 0,
                 "carrying dim = " + dim + " and raining = true",
@@ -177,7 +177,7 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
      */
     private DimWeather weatherAfterCycle(int dim) throws Exception {
         // Marked before the constructing read, for the reason weatherUntilRaining gives.
-        long mark = events().mark();
+        long mark = serverEvents().mark();
         // The constructing read: its VALUE is discarded, its side effect is the point — this is
         // what pins the dimension and calls initDimension, so the cycle below runs on a real world.
         // Read through the reader even so: a world that could not be brought up must fail HERE and
@@ -188,7 +188,7 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
         // whole question for these two planets: the atmosphere gate and a -1 rain marker each force
         // the sky clear on EVERY tick rather than accumulating toward it, so the state the first
         // tick leaves is the state every later tick leaves.
-        events().awaitMatching(mark, "planet_weather_changed",
+        serverEvents().awaitMatching(mark, "planet_weather_changed",
                 reply -> !Events.recordsWhere(reply, "dim", String.valueOf(dim)).isEmpty(),
                 "carrying dim = " + dim,
                 "the weather cycle must run on dim " + dim + " before its sky can be judged",
@@ -197,8 +197,8 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
         // And across the whole stretch, not only at the read: a sky that rained on one tick and
         // cleared on the next is the defect, and the read alone would call it clear.
         assertTrue("dim " + dim + " rained at some tick since its world came up, whatever it reads"
-                        + " now (" + now.raw() + "): " + events().since(mark, "planet_weather_changed"),
-                Events.recordsWhereAll(events().since(mark, "planet_weather_changed"),
+                        + " now (" + now.raw() + "): " + serverEvents().since(mark, "planet_weather_changed"),
+                Events.recordsWhereAll(serverEvents().since(mark, "planet_weather_changed"),
                         "dim", String.valueOf(dim), "raining", "true").isEmpty());
         return now;
     }
@@ -210,7 +210,7 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
     }
 
     /** This boot's reader of the server's ordered event log — the harness is this class's own. */
-    private Events events() {
+    private Events serverEvents() {
         return new Events(cmd -> String.join("\n", client().execute(cmd)),
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }

@@ -78,7 +78,7 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientE2E
                 "opening the death screen",
                 "the kill must bring the player's client to the death screen", DEATH_LINK_BUDGET_TICKS);
         // WINDOW: the death screen's own enabling timer, counted on the clock that runs it.
-        bot().waitTicks(DEATH_SCREEN_BUTTONS_ENABLE_TICKS);
+        bot().waitWorldTicks(DEATH_SCREEN_BUTTONS_ENABLE_TICKS);
         long respawnMark = client.mark();
         bot().clickButton(RESPAWN_BUTTON_INDEX);
         // The server rebuilds the player and tells the client with a respawn packet — the moment the
