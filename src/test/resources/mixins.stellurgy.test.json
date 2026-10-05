@@ -64,6 +64,7 @@
     "MixinTileFireControlSensorEvents",
     "MixinSubsystemNetworkRebuildEvents",
     "MixinSubsystemNodeReleaseEvents",
+    "MixinTurretMuzzleEvents",
     "MixinContactResolverEvents",
     "MixinContactResolverImpactEvents",
     "MixinShotSubstrateCrossingEvents",

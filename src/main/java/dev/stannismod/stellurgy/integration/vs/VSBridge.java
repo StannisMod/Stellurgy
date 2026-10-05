@@ -403,35 +403,6 @@ final class VSBridge {
         return new double[]{v.x(), v.y(), v.z()};
     }
 
-    /**
-     * The world-frame velocity {@code [x,y,z]} (blocks/second) of the ship AT the point {@code (x,y,z)} -
-     * the ship's linear velocity PLUS the tangential velocity of its rotation there ({@code omega x r}),
-     * or {@code null} if the point is aboard no loaded ship. This is how fast the DECK is carrying an
-     * aboard body at that point; the aboard-body external-move guard widens by one tick of it so a
-     * rotating deck is not mistaken for a teleport. The ship transform's position is used as the rotation
-     * centre - an approximation good enough for a guard tolerance. Only primitive/MC types cross the gate.
-     */
-    static double[] shipVelocityAtPoint(World world, double x, double y, double z) {
-        try {
-            PhysicsObject physo = physoAt(world, x, y, z);
-            if (physo == null) {
-                return null;
-            }
-            Vector3dc vLin = physo.getPhysicsData().getLinearVelocity();
-            Vector3dc w = physo.getPhysicsData().getAngularVelocity();
-            Vec3d c = physo.getShipData().getShipTransform().getShipPositionVec3d();
-            double rx = x - c.x, ry = y - c.y, rz = z - c.z;
-            // v = vLin + (omega x r)
-            return new double[]{
-                    vLin.x() + (w.y() * rz - w.z() * ry),
-                    vLin.y() + (w.z() * rx - w.x() * rz),
-                    vLin.z() + (w.x() * ry - w.y() * rx)
-            };
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
     /** Whether VS's per-world ship manager is attached to {@code world} (i.e. VS ships can live
      *  there). Defensive: any failure to consult VS is treated as "no support". */
     static boolean hasShipSupport(World world) {
@@ -1611,8 +1582,13 @@ final class VSBridge {
         }
     }
 
-    /** {@link #shipVelocityAtPoint}, but for the anchored ship {@code shipId} instead of a
-     *  containment lookup — the guard of an anchored capture must widen by ITS ship's carry.
+    /** One game tick in the substrate's time unit — what turns its per-second velocities into ours. */
+    private static final double SECONDS_PER_TICK = 0.05;
+
+    /** The velocity of the ship {@code shipId} at a world point — its linear velocity plus the
+     *  tangential velocity of its rotation there, {@code v + omega x r} — or null when that ship is
+     *  not loaded on this side. Named by the ship rather than found by containment: the guard of an
+     *  anchored capture must widen by ITS ship's carry.
      *
      *  <p><b>One expression, both sides, and that is the point.</b> A craft's motion crosses the
      *  wire with its pose ({@code ShipTransformUpdateMessage}, every tick), so the client evaluates
@@ -1628,7 +1604,14 @@ final class VSBridge {
      *  observations, which is a guess wearing a measurement's clothes: it was divided by a count of
      *  calls rather than by time, and a 0.279 rad/s roll came back as 55.5 rad/s and threw a body a
      *  kilometre into the sky (#390). A body is not moved by a number only its own client invented;
-     *  the craft says how it is moving, and both sides read the same answer. */
+     *  the craft says how it is moving, and both sides read the same answer.
+     *
+     *  <p><b>Blocks per TICK</b>, world frame. The substrate's velocities are per second — it steps
+     *  {@code pos += v * dt} with {@code dt} in seconds ({@code PhysicsCalculations}, and its
+     *  interpolator's {@code SECONDS_PER_TICK}) — and are converted here, once, because every reader
+     *  in this mod works in ticks. Until 2026-10-05 this answered per second and each reader was left
+     *  to convert: the deck code did, the weapons and the shield did not, and a moving hull's motion
+     *  counted twenty times over in every round it fired. */
     static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
         try {
             PhysicsObject physo = physoById(world, shipId);
@@ -1656,9 +1639,9 @@ final class VSBridge {
             Vec3d c = physo.getShipData().getShipTransform().getShipPositionVec3d();
             double rx = x - c.x, ry = y - c.y, rz = z - c.z;
             return new double[]{
-                    vLin.x() + (w.y() * rz - w.z() * ry),
-                    vLin.y() + (w.z() * rx - w.x() * rz),
-                    vLin.z() + (w.x() * ry - w.y() * rx)
+                    (vLin.x() + (w.y() * rz - w.z() * ry)) * SECONDS_PER_TICK,
+                    (vLin.y() + (w.z() * rx - w.x() * rz)) * SECONDS_PER_TICK,
+                    (vLin.z() + (w.x() * ry - w.y() * rx)) * SECONDS_PER_TICK
             };
         } catch (Throwable t) {
             // ANSWERING NOTHING IS A DEGRADATION AND IT SAYS SO — once per cause, because this runs
@@ -1692,42 +1675,6 @@ final class VSBridge {
      * catch is there — but a caller that cannot tell "the ship is not moving" from "nobody could
      * work out whether it is" has been handed a wrong answer rather than none.</p>
      */
-    /**
-     * The craft's DECLARED velocity at a point — what it says it is doing, rather than what the pose
-     * on this side has just done.
-     *
-     * <p>The two are one statement while a craft's motion is steady and two while it is changing: the
-     * shown pose reports the step it took over the PREVIOUS tick, and a hard-driven craft can change
-     * its rate several fold between two of them. A body's CARRY must be what the deck actually did —
-     * anything else slides it across the deck — but a TOLERANCE has no business being the tighter of
-     * two known numbers, and the capture guard was dropping bodies over exactly that difference:
-     * measured, a deck step of 1.6 blocks judged against an allowance built from 0.2.</p>
-     *
-     * <p>On the server this returns what {@link #shipVelocityAtPointFor} returns; the two can differ
-     * only on the client, which is the side with a pose source standing between the craft and the
-     * body.</p>
-     */
-    static double[] declaredVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
-        try {
-            PhysicsObject physo = physoById(world, shipId);
-            if (physo == null) {
-                return null;
-            }
-            Vector3dc vLin = physo.getPhysicsData().getLinearVelocity();
-            Vector3dc w = physo.getPhysicsData().getAngularVelocity();
-            Vec3d c = physo.getShipData().getShipTransform().getShipPositionVec3d();
-            double rx = x - c.x, ry = y - c.y, rz = z - c.z;
-            return new double[]{
-                    vLin.x() + (w.y() * rz - w.z() * ry),
-                    vLin.y() + (w.z() * rx - w.x() * rz),
-                    vLin.z() + (w.x() * ry - w.y() * rx)
-            };
-        } catch (Throwable t) {
-            reportSuppressed(world, "declaredVelocityAtPointFor", t);
-            return null;
-        }
-    }
-
     private static void reportSuppressed(World world, String operation, Throwable t) {
         StackTraceElement[] trace = t.getStackTrace();
         String site = trace.length > 0 ? trace[0].toString() : "no frames";

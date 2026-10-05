@@ -102,7 +102,7 @@ public final class DeckMovementBound {
         // the same one the client was told.
         final double[] shipVel = VSIntegration.shipVelocityAtPointFor(player.world, shipId, toX, toY, toZ);
         final double carryPerTick = shipVel == null ? 0.0
-                : Math.sqrt(shipVel[0] * shipVel[0] + shipVel[1] * shipVel[1] + shipVel[2] * shipVel[2]) * 0.05;
+                : Math.sqrt(shipVel[0] * shipVel[0] + shipVel[1] * shipVel[1] + shipVel[2] * shipVel[2]);
 
         // A packet does not always cover exactly one tick. Under load a client sends fewer of them
         // and each carries more ground — measured on a fast climb, a step of 1.47 blocks against a

@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.test.server;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.List;
+
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -144,6 +146,93 @@ public class TurretOnAShipE2ETest extends AbstractSharedServerTest {
                 + " standoff (" + standoff + ") plus the most it can have flown in " + age + " steps ("
                 + pathAtMost + ") — it is in the world, but not where this gun is: " + read,
                 fromGun <= standoff + pathAtMost + 1.0E-6D);
+    }
+
+    /** The moving-hull scenario's own build site and flight height, clear of this class's other one. */
+    private static final int MOVING_SRC_X = 7600, MOVING_SRC_Z = 7600;
+    private static final int MOVING_X = 7600, MOVING_Y = 170, MOVING_Z = 9800;
+    /** What the hull's flight computer is told to fly, blocks per SECOND along +X — its own unit. */
+    private static final double COMMANDED_SPEED = 10.0D;
+    /** World given to the computer to bring the hull up to its commanded speed. */
+    private static final int SETTLE_TICKS = 80;
+    /** The window the hull's motion is measured over, immediately before the shot. */
+    private static final int WINDOW_TICKS = 20;
+
+    /**
+     * A round fired from a hull that is MOVING leaves with the hull's motion added to its own — the
+     * motion the hull really has, in the unit the round flies in.
+     *
+     * <p>The scenario above parks its hull, so the inherited motion is zero there and any scale on it
+     * passes. Here the hull is flown by its own flight computer across the gun's line of fire, and the
+     * motion production hands the round ({@code turret_muzzle}, read at the seam where it is decided) is
+     * compared with the hull's own displacement per tick, measured from its position over a window just
+     * before the shot.</p>
+     *
+     * <p>red-witnessed: with {@code VSBridge#shipVelocityAtPointFor} at
+     * {@code (vLin.x() + (w.y() * rz - w.z() * ry)) * SECONDS_PER_TICK,} answering the X component per
+     * second again, this fails at "a round from a moving hull does not carry the hull's motion: it
+     * carries 10.0 blocks a tick along X while the hull was measured doing 0.5634920634930884 (ratio
+     * 17.746478873207156)" (2026-10-05).</p>
+     */
+    @Test
+    public void aRoundFromAMovingHullCarriesTheHullsMotionPerTick() throws Exception {
+        ask("stellurgytest shot clear 0").requireOk("clear the air");
+
+        WarShip ship = WarShip.build(events, this::exec, FixtureSite.openAir(0, MOVING_SRC_X, MOVING_SRC_Z),
+                null, "the hull the gun is bolted to");
+        ship.parkAt(MOVING_X, MOVING_Y, MOVING_Z, ON_THE_HULL);
+
+        int[] seat = ship.seat();
+        int gunX = seat[0] + 3, gunY = seat[1], gunZ = seat[2];
+        long built = events.markInstrumented();
+        buildGun(gunX, gunY, gunZ);
+        Weapons.awaitAssembled(events, built, gunX, gunY, gunZ, PARTS, "the gun aboard the hull never assembled");
+        ask("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
+
+        // Fly it: the computer realizes the command as force every physics tick, for as long as it stands.
+        ask("stellurgytest vs unpark-by-id 0 " + ship.vsShip).requireOk("give the hull its physics back");
+        Reply drive = ask("stellurgytest vs force-vel-by-id 0 " + ship.vsShip + " " + COMMANDED_SPEED + " 0 0");
+        requireArranged("the command never reached this hull's own flight computer: " + drive,
+                drive.bool("afcResolved"));
+        GameTicks.advanceObserved(client(), GameTicks.server(), SETTLE_TICKS);
+
+        // WINDOW: the hull's own displacement over ticks the box actually delivered, read twice.
+        Reply before = ship.info();
+        long elapsed = GameTicks.advanceObserved(client(), GameTicks.server(), WINDOW_TICKS);
+        Reply after = ship.info();
+        double hullPerTick = (after.number("posX") - before.number("posX")) / elapsed;
+        System.out.println("[measure] hull moved " + (after.number("posX") - before.number("posX"))
+                + " blocks along X in " + elapsed + " ticks = " + hullPerTick + " a tick");
+        requireArranged("the hull is not flying along X at anything like its commanded "
+                        + COMMANDED_SPEED + " blocks a second (" + hullPerTick + " a tick measured), so"
+                        + " there is no motion here for a round to inherit: " + before + " -> " + after,
+                hullPerTick > COMMANDED_SPEED / 20.0D * 0.5D);
+
+        // Across the course, well clear of the hull: the round's own motion is along Z, so whatever
+        // it carries along X is the hull's.
+        long aimed = events.markInstrumented();
+        ask("stellurgytest turret target 0 " + gunX + " " + gunY + " " + gunZ + " "
+                + after.number("posX") + " " + after.number("posY") + " " + (after.number("posZ") + 80.0D))
+                .requireOk("aim the gun across the hull's course");
+        Weapons.awaitFired(events, aimed, gunX, gunY, gunZ, "the gun aboard the moving hull never fired");
+
+        String muzzles = events.since(aimed, "turret_muzzle");
+        Events.assertInstrumentRan(muzzles, "turret_muzzle_events", "the gun's muzzle was or was not resolved");
+        List<String> ours = Events.recordsWhereAll(muzzles, "x", String.valueOf(gunX),
+                "y", String.valueOf(gunY), "z", String.valueOf(gunZ));
+        assertTrue("the gun fired and no muzzle of it was recorded: " + muzzles, !ours.isEmpty());
+        String muzzle = ours.get(ours.size() - 1);
+        double carriedX = Events.number(muzzle, "cx");
+        double ratio = carriedX / hullPerTick;
+        System.out.println("[measure] round carries " + carriedX + " a tick along X against the hull's "
+                + hullPerTick + " (ratio " + ratio + ")");
+        // The band is wide on purpose: the hull's speed is measured over a window, not at the instant,
+        // and a computer still trimming its course moves it a little. A unit error is a factor of
+        // twenty and cannot hide in it.
+        assertTrue("a round from a moving hull does not carry the hull's motion: it carries " + carriedX
+                        + " blocks a tick along X while the hull was measured doing " + hullPerTick
+                        + " (ratio " + ratio + ") — " + muzzle,
+                ratio > 0.5D && ratio < 2.0D);
     }
 
     /** The same reference gun the ground tests use, placed at SUBSPACE coordinates. */

@@ -36,8 +36,9 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
 @Mixin(value = VSIntegration.class, remap = false)
 public abstract class MixinShipVelocityAtPoint {
 
-    /** Speed worth a record, in blocks per second as this seam reports it. A parked hull is ~0. */
-    private static final double SHIP_SPEED_REPORT = 4.0;
+    /** Speed worth a record, in blocks per tick as this seam reports it (4 blocks a second). A parked
+     *  hull is ~0. */
+    private static final double SHIP_SPEED_REPORT = 0.2;
 
     @Inject(method = "shipVelocityAtPointFor", at = @At("RETURN"))
     private static void stellurgyTest$afterShipVelocityAtPoint(World world, String shipId,
