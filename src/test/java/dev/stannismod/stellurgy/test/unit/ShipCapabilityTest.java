@@ -505,6 +505,141 @@ public class ShipCapabilityTest {
     }
 
     /**
+     * Side engines at the four corners, pushing across the hull: a clean couple about yaw in both
+     * senses, 4T of sustained torque each way, and no clean push at all. The hull the desaturation
+     * scenarios unload a wheel on.
+     */
+    private static List<Actuator> yawCouple() {
+        List<Actuator> hull = new ArrayList<>();
+        hull.add(sideEngine(2, 2, -T));
+        hull.add(sideEngine(2, -2, -T));
+        hull.add(sideEngine(-2, 2, T));
+        hull.add(sideEngine(-2, -2, T));
+        return hull;
+    }
+
+    /** The index, in {@code cap}'s allocation order, of the device named {@code id}. */
+    private static int indexOf(ShipCapability cap, ActuatorId id) {
+        for (int i = 0; i < cap.actuators().size(); i++) {
+            if (cap.actuators().get(i).id().equals(id)) {
+                return i;
+            }
+        }
+        throw new AssertionError("no device " + id + " in " + cap.actuators());
+    }
+
+    /**
+     * An idle wheel is given back its momentum by the thrusters, and the hull feels none of it: with
+     * nothing commanded, a yaw wheel holding 2.53 s of its own torque is run back to empty — every step
+     * nearer, never past — while the net force and torque on the hull stay at zero. The sustained
+     * couple cancels what the unwinding wheel would do to the hull.
+     *
+     * <p>The negative half, in the same method: on a hull with NOTHING but wheels — no sustained
+     * torque to cancel the unwinding with — the wheel keeps what it holds, because unloading it would
+     * turn the hull.</p>
+     *
+     * <p>red-witnessed: one break per verdict, 2026-10-05, after a healthy run of the class —
+     * {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed fails
+     * "step 0: every step brings it nearer empty: 505999.99999999994 -> 505999.99999999994";
+     * {@code CleanAxisScheme#desaturate} at {@code delta[k] += holding[k];} dropped (the wheel unwinds
+     * with nothing cancelling it) fails "step 0: and turned about nothing" with 200000;
+     * {@code CleanAxisScheme#desaturate} at {@code Math.min(1.0D, -held / rate))} unwinding at full
+     * torque whatever is left fails "step 50: the wheel never unloads past empty: -4000";
+     * {@code CleanAxisScheme#desaturate} at {@code if (holding == null)} unloading with nothing to
+     * cancel it fails "a wheel nothing can hold the hull against keeps what it holds" with 495999.99
+     * against 505999.99.</p>
+     */
+    @Test
+    public void anIdleWheelIsGivenBackByTheThrustersWithoutTurningTheHull() {
+        double torque = 2.0D * T; // inside the couple's 4T, so the thrusters can cancel all of it
+        List<Actuator> hull = yawCouple();
+        hull.addAll(wheel(0, 1, 0, torque, 10.0D * T));
+        ShipCapability cap = ShipCapability.solve(hull, slab(), HELM);
+        ActuatorId yawWheel = new ActuatorId(0, 1, 0, 1);
+        // 2.53 s of full torque, well inside capacity — and not a whole number of 0.05 s steps, so the
+        // last step must stop at empty rather than land on it by arithmetic.
+        double held = 2.53D * torque;
+        MomentumStore store = new MomentumStore();
+        store.restore(yawWheel, held);
+        ControlScheme scheme = ControlScheme.cleanAxes();
+
+        double before = held;
+        boolean emptied = false;
+        for (int step = 0; step < 1000 && !emptied; step++) {
+            ActuatorCommand idle = scheme.allocate(cap, new Vector3d(), new Vector3d(), store, 0.05D);
+            double now = store.given(yawWheel);
+            assertEquals("step " + step + ": the hull is pushed nowhere while the wheel unloads",
+                    0.0D, idle.force().length(), T * EPS);
+            assertEquals("step " + step + ": and turned about nothing",
+                    0.0D, idle.torque().length(), T * EPS);
+            assertTrue("step " + step + ": the wheel never unloads past empty: " + now, now >= 0.0D);
+            assertTrue("step " + step + ": every step brings it nearer empty: " + before + " -> " + now,
+                    now < before);
+            before = now;
+            emptied = now == 0.0D;
+        }
+        assertTrue("the idle wheel is emptied, ending at " + before, emptied);
+
+        // NEGATIVE HALF: nothing aboard can cancel the unwinding, so the wheel keeps its momentum.
+        ShipCapability wheelsOnly = ShipCapability.solve(wheel(0, 1, 0, torque, 10.0D * T), slab(), HELM);
+        MomentumStore kept = new MomentumStore();
+        kept.restore(yawWheel, held);
+        ActuatorCommand alone = scheme.allocate(wheelsOnly, new Vector3d(), new Vector3d(), kept, 0.05D);
+        assertEquals("a wheel nothing can hold the hull against keeps what it holds",
+                held, kept.given(yawWheel), 0.0D);
+        assertEquals("and the hull is left alone", 0.0D, alone.torque().length(), 0.0D);
+    }
+
+    /**
+     * A wheel the command is using is not unloaded under it: a yaw command past the couple's
+     * sustained figure leans on the wheel, and the throttles it gets are the same whether the wheel
+     * starts empty or half full — unloading does not fight a burst.
+     *
+     * <p>The positive half, in the same method: the same half-full wheel with NOTHING commanded is
+     * unloaded, so the equality above is not a hull on which nothing ever unloads.</p>
+     *
+     * <p>red-witnessed: 2026-10-05 — {@code CleanAxisScheme#desaturate} at
+     * {@code if (wheel.isSustained() || u[i] != 0.0D)} unloading a wheel the command uses fails "device
+     * #1 gets the same throttle whatever the wheel already holds" with 1.0 against 0.9; with
+     * {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed the
+     * positive half fails "with nothing commanded the same wheel is unloaded: 500000.0".</p>
+     */
+    @Test
+    public void aWheelInUseIsNotUnloadedUnderTheCommand() {
+        double torque = 2.0D * T;
+        List<Actuator> hull = yawCouple();
+        hull.addAll(wheel(0, 1, 0, torque, 10.0D * T));
+        ShipCapability cap = ShipCapability.solve(hull, slab(), HELM);
+        ActuatorId yawWheel = new ActuatorId(0, 1, 0, 1);
+        int wheelIndex = indexOf(cap, yawWheel);
+        double half = 5.0D * T;
+        ControlScheme scheme = ControlScheme.cleanAxes();
+        Vector3d burstYaw = new Vector3d(0,
+                0.9D * cap.authority(ControlDirection.YAW_POSITIVE, Endurance.BURST), 0);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the command must be past the sustained yaw, or it does not use the wheel",
+                burstYaw.y > cap.authority(ControlDirection.YAW_POSITIVE, Endurance.SUSTAINED));
+
+        ActuatorCommand fromEmpty = scheme.allocate(cap, new Vector3d(), burstYaw, new MomentumStore(), 0.05D);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the burst must lean on the yaw wheel", fromEmpty.throttle(wheelIndex) != 0.0D);
+        MomentumStore halfFull = new MomentumStore();
+        halfFull.restore(yawWheel, half);
+        ActuatorCommand fromHalf = scheme.allocate(cap, new Vector3d(), burstYaw, halfFull, 0.05D);
+        for (int i = 0; i < cap.actuators().size(); i++) {
+            assertEquals("device #" + i + " gets the same throttle whatever the wheel already holds",
+                    fromEmpty.throttle(i), fromHalf.throttle(i), EPS);
+        }
+
+        // POSITIVE HALF: the same half-full wheel, nothing commanded, IS unloaded.
+        MomentumStore idle = new MomentumStore();
+        idle.restore(yawWheel, half);
+        scheme.allocate(cap, new Vector3d(), new Vector3d(), idle, 0.05D);
+        assertTrue("with nothing commanded the same wheel is unloaded: " + idle.given(yawWheel),
+                idle.given(yawWheel) < half);
+    }
+
+    /**
      * A hull with no mass is not a hull that can be given an acceleration.
      *
      * <p>red-witnessed: 2026-09-30 — {@code ShipCapability#solve} at {@code boolean massless = !(mass.getTotalMass() > AllocationTolerances.MASS_EPSILON);} with the massless guard removed fails

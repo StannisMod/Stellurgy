@@ -16314,7 +16314,7 @@ public class TestProbeCommand extends CommandBase {
      *       burst roll 101 / pitch 129 / yaw 139 rad/s² for 0.895 s.</li>
      * </ul>
      */
-    private static void placeTier2Actuators(net.minecraft.world.WorldServer world,
+    private static BlockPos placeTier2Actuators(net.minecraft.world.WorldServer world,
                                             int rocketX, int rocketY, int rocketZ, boolean deck,
                                             boolean surgeLayerHigh) {
         net.minecraft.block.Block motor = dev.stannismod.stellurgy.api.StellurgyBlocks.blockAdvEngine;
@@ -16360,18 +16360,20 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
         }
-        placeReactionWheel(world, rocketX, rocketY, rocketZ);
+        return placeReactionWheel(world, rocketX, rocketY, rocketZ);
     }
 
     /**
      * The one reaction wheel a tier-2 fixture carries: against the upper centre tank's +Z face —
      * welded, clear of every motor's facing, and off the underside's centre, which the inverted-hull
-     * scenarios stand a body on.
+     * scenarios stand a body on. Answers where it stands, which the fixture's reply names.
      */
-    private static void placeReactionWheel(net.minecraft.world.WorldServer world,
-                                           int rocketX, int rocketY, int rocketZ) {
-        world.setBlockState(new BlockPos(rocketX, rocketY + 2, rocketZ + 1),
+    private static BlockPos placeReactionWheel(net.minecraft.world.WorldServer world,
+                                               int rocketX, int rocketY, int rocketZ) {
+        BlockPos wheel = new BlockPos(rocketX, rocketY + 2, rocketZ + 1);
+        world.setBlockState(wheel,
                 dev.stannismod.stellurgy.api.StellurgyBlocks.blockReactionWheel.getDefaultState());
+        return wheel;
     }
 
     private static void placeMotor(net.minecraft.world.WorldServer world, net.minecraft.block.Block motor,
@@ -16847,13 +16849,14 @@ public class TestProbeCommand extends CommandBase {
                             net.minecraft.init.Blocks.IRON_BLOCK.getDefaultState());
                 }
             }
+            BlockPos wheel = null;
             if (includeAdvancedFlightComputer && wheelOnlyHull) {
-                placeReactionWheel(world, rocketX, rocketY, rocketZ);
+                wheel = placeReactionWheel(world, rocketX, rocketY, rocketZ);
             } else if (includeAdvancedFlightComputer && !bareHull) {
                 // The roofed craft's roof lifts its centre of mass well above the pushers, and its
                 // scenario turns it end over end about X, which it can only do if its SURGE pushers
                 // hold its weight when it stands on its nose — so they take the upper layer there.
-                placeTier2Actuators(world, rocketX, rocketY, rocketZ, includePilotDeck, includeRoofedDeck);
+                wheel = placeTier2Actuators(world, rocketX, rocketY, rocketZ, includePilotDeck, includeRoofedDeck);
             }
             String holdFromComputer = "null";
             if (includeHold) {
@@ -16879,7 +16882,9 @@ public class TestProbeCommand extends CommandBase {
 
             send(sender, "{\"ok\":true,\"variant\":\"" + variant + "\",\"builderPos\":[" + builderPos.getX() + ","
                     + builderPos.getY() + "," + builderPos.getZ() + "]"
-                    + ",\"holdFromFlightComputer\":" + holdFromComputer + "}");
+                    + ",\"holdFromFlightComputer\":" + holdFromComputer
+                    + ",\"wheelPos\":" + (wheel == null ? "null"
+                            : "[" + wheel.getX() + "," + wheel.getY() + "," + wheel.getZ() + "]") + "}");
             return;
         }
         if (args.length >= 5 && "machine".equalsIgnoreCase(args[0])

@@ -791,6 +791,81 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         return false;
     }
 
+    // ---- 6b. an idle craft gives its wheel back ---------------------------------------------------
+
+    /**
+     * How long the window between the two wheel reads is, in server ticks. Any decrease is the
+     * verdict, so the window only has to hold at least one physics step; a slower box gives fewer
+     * steps and a smaller drop, never a different sign.
+     */
+    private static final int UNLOAD_WINDOW_TICKS = 20;
+
+    /**
+     * The yaw momentum the wheel is built holding, N·m·s, about the ship's vertical: a round number
+     * well inside the fixture wheel's capacity — measured 2026-10-05 as 0.0588 of it, so the capacity
+     * is 1.7 MN·m·s.
+     */
+    private static final double WOUND_YAW_MOMENTUM = 100_000.0;
+
+    /**
+     * A craft whose reaction wheel holds momentum, left holding station with nothing else asked of
+     * it, gives that momentum back: its thrusters unload the wheel. The wheel is built already wound —
+     * its stored momentum written into the block before assembly, which is how a saved world brings
+     * one back — and holding station asks the wheel for nothing, so the only thing in the window that
+     * can empty it is what the flight computer's allocation does with a wheel the command leaves
+     * idle.
+     *
+     * <p>A WINDOW of two reads of the computer's own wheel figure, and the verdict names both: the
+     * fullest wheel aboard holds less at the second read than at the first.</p>
+     *
+     * <p>Contract: this fails if production breaks the contract that a craft at rest gives its wheels
+     * back their momentum.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, after a healthy run (0.0588 → 0.0) — with
+     * {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed it
+     * fails "an idle craft must give its wheel back: the fullest wheel aboard read 0.058823529411764705
+     * of its capacity, and 20 ticks later 0.058823529411764705".</p>
+     */
+    @Test
+    public void anIdleCraftGivesItsWheelBack() throws Exception {
+        standInVacuum();
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-pilot-deck", "a decked craft with a wound wheel");
+        int[] wheel = fixture.intArray("wheelPos");
+        requireArranged("the fixture must say where its wheel stands: " + fixture,
+                wheel != null && wheel.length == 3);
+        String wound = exec("blockdata " + wheel[0] + " " + wheel[1] + " " + wheel[2]
+                + " {storedMomentumY:" + WOUND_YAW_MOMENTUM + "d}");
+        Craft craft = assembleLaid(site, fixture, "a decked craft with a wound wheel");
+        command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
+        removePad(site, "a craft left in free air");
+
+        Reply model = readout(craft, "the craft built with a wound wheel");
+        Reply yaw = Reply.of(Reply.of(model.object("directions")).object("YAW_POSITIVE"));
+        double sustainedYaw = Reply.of(yaw.object("live")).number("sustained");
+        requireArranged("the craft must be able to turn about yaw with its thrusters alone, or nothing "
+                + "aboard can cancel an unwinding wheel: " + yaw, sustainedYaw > 0.0);
+
+        // WINDOW: the fill is a value that converges; two reads, and the verdict names both.
+        double first = wheelFill(craft);
+        requireArranged("the wheel must hold momentum once the craft is built (blockdata: " + wound
+                + ")", first > 0.0);
+        GameTicks.advance(client(), GameTicks.server(), UNLOAD_WINDOW_TICKS);
+        double second = wheelFill(craft);
+        measured("idle wheel", "first=" + first, "second=" + second, "sustainedYaw=" + sustainedYaw);
+        assertTrue("an idle craft must give its wheel back: the fullest wheel aboard read " + first
+                        + " of its capacity, and " + UNLOAD_WINDOW_TICKS + " ticks later " + second,
+                second < first);
+    }
+
+    /** How full the fullest wheel aboard is, 0 to 1, as the craft's flight computer reports it. */
+    private double wheelFill(Craft craft) throws Exception {
+        Reply r = Reply.of(exec("stellurgytest vs flight-model-by-id " + DIM + " " + craft.physicsId));
+        requireArranged("the craft's flight computer must answer for its wheels: " + r,
+                r.bool("found") && r.has("wheelFill"));
+        return r.number("wheelFill");
+    }
+
     // ---- 7. the assembler's thrust-to-weight gate ---------------------------------------------------
 
     /**
