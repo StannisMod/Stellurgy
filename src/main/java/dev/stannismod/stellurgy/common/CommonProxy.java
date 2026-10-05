@@ -10,7 +10,7 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
@@ -156,7 +156,7 @@ public class CommonProxy {
 
     // atmosphere detector
 
-    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, IAtmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
+    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion assertion, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
         return new ModuleButton(offsetX, offsetY, buttonId, text, detector, buttonImages);
     }
 

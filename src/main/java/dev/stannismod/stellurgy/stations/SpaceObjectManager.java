@@ -436,7 +436,7 @@ public class SpaceObjectManager implements ISpaceObjectManager {
         Stellurgy.proxy.fireFogBurst(station);
 
 
-        ((DimensionProperties) station.getProperties()).setAtmosphereDensityDirect(0);
+        ((DimensionProperties) station.getProperties()).realizeAtmosphere(false, 0);
         nextStationTransitionTick = (int) (StellurgyConfiguration.getCurrentConfig().travelTimeMultiplier * timeDelta) + Stellurgy.proxy.getWorldTimeUniversal(0);
         station.beginTransition(nextStationTransitionTick);
 

@@ -6,24 +6,33 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 
 import dev.stannismod.stellurgy.test.Plot;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 
 /**
- * Vacuum, suits, and the air a player breathes. Eight scenarios, one client.
+ * Vacuum, suits, and the air a player breathes, on one client.
  *
  * <p>Every member works the same lever — flip the overworld's atmosphere density and watch what
  * happens to a player who is, or is not, wearing something that protects him — and every one of them
  * reads the outcome on the real client: health as the client renders it, the armour NBT the
  * inventory screen draws.</p>
  *
- * <h2>Why these eight share one harness</h2>
+ * <h2>Why these share one harness</h2>
  *
  * <p>Measured 2026-08-07 at 8 forks, from the result XML: 117.6 + 349.4 + 351.3 + 120.2 s across
  * eight client boots — <b>15.6 minutes</b>.</p>
@@ -89,6 +98,9 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
     private static final int PAD_DX = 16;
     private static final int PAD_DZ = 16;
     private static final int PAD_EDGE = 8;
+    private static final int ROOM_DX = 40;
+    private static final int ROOM_DZ = 40;
+    private static final int ROOM_Y = Plot.DEFAULT_Y;
     private static final int STAND_DX = PAD_DX + 4;
     private static final int STAND_DZ = PAD_DZ + 4;
 
@@ -156,13 +168,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
         awaitClientPlacedNear(standMark, plot().x(STAND_DX) + 0.5, plot().z(STAND_DZ) + 0.5,
                 "the vacuum this scenario is about is the one at the player's own position");
 
-        exec("stellurgytest player clear-armor");
+        arrangeProbe("stellurgytest player clear-armor");
         exec("gamerule naturalRegeneration false");
         exec("gamemode survival @a");
-        // WINDOW: ten ticks of survival on the spot he was placed, watched for damage — he arrived
-        // in creative, so full health is the start of the window by construction, and a spot that
-        // hurts (inside a block, over nothing) shows as less at its end.
-        bot().waitTicks(10);
+        // WINDOW: survival on the spot he was placed, watched for damage — he arrived in creative, so
+        // full health is the start by construction, and a spot that hurts (inside a block, over
+        // nothing) shows as less at its end.
+        advanceServerAndClient(10);
         double health = health(bot().reportState());
         scenario().record("healthOnPlatform", health);
         scenario().requireArranged("the player must be standing unhurt on his platform before the"
@@ -200,9 +212,11 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                 expectBreathable ? readBack >= 1 : readBack == 0);
     }
 
-    private void restoreDim(int originalDensity) {
+    private void restoreDim(PlanetAir originalAir) {
         try {
-            exec("stellurgytest atmosphere set-density " + plot().dim + " " + Math.max(originalDensity, 1));
+            // The gases, not the pressure: a world emptied to vacuum cannot be thickened back by a
+            // number, since its air no longer says what it was made of.
+            originalAir.restore(this::exec);
         } catch (Exception ignored) {
             // Teardown only — the next scenario sets the density it needs and proves it took.
         }
@@ -401,18 +415,18 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
     /**
      * From {@code ItemSpaceChestSubInventoryDrainE2ETest}. Counter-test: same suit and tank in a
-     * breathable atmosphere. The breathable {@code AtmosphereType.onTick} is a no-op, so
+     * breathable atmosphere. The breathable {@code Atmosphere.onTick} is a no-op, so
      * {@code protectsFrom} &rarr; {@code decrementAir} is never called and the tank's oxygen stays
      * at its initial value.
      *
-     * <p>red-witnessed: with {@code AtmosphereHandler#onTick} (its per-body tick) asking
-     * {@code VACUUM.isImmune} of every body in
-     * a breathable atmosphere every ten ticks (it spends a suit's air, hurts nobody), this fails with
+     * <p>red-witnessed: with {@code AtmosphereHandler#onTick} at {@code if (atmosType.canTick() &&}
+     * given an else branch asking {@code VACUUM.isImmune} of every body in a breathable atmosphere
+     * every ten ticks (it spends a suit's air, hurts nobody), this fails with
      * "a breathable atmosphere must never reach the suit's tank at all; drains recorded" — 2026-09-28.</p>
      */
     @Test
     public void breathableAtmosphereDoesNotDrainChestTank() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
             setDensityAndConfirm(100, true);
@@ -435,7 +449,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             // event can witness that the player was ticked and judged breathable. markInstrumented
             // is what rules out the two silences that are not about the subject — an unsubscribed
             // recorder and a mixin configuration that was never queued.
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             // WINDOW: from the mark to the log read below, counted on the player's OWN world clock —
             // the atmosphere judges him on that world's ticks, so client ticks would buy a busy box
@@ -450,7 +464,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             assertEquals("chest air must hold steady when the atmosphere doesn't drain; before=1000"
                     + " after=" + chestAirAfter, 1000, chestAirAfter);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -467,10 +481,17 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * rather than as a chain link because the gate's recorder is edge-only — a decision that repeats
      * is not recorded — and only the flip itself is guaranteed to be an edge: the tank starts with
      * oxygen, so the run of {@code true}s before it is what makes the {@code false} a change.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DAMAGE — {@code HazardExposure#applyTo} at {@code if (row.damage() != null)}
+     * no longer applying a row's damage: "vacuum damage must apply once the tank is drained … no
+     * `living_hurt` carrying source = Vacuum". REFUSAL RECORDED — {@code Atmosphere#onTick} at {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying
+     * the exposure even to a player the suit protects: "the suit gate must be recorded turning the
+     * player DOWN — that flip is the contract …". Not witnessed: the drain link, the client's health
+     * and the emptied tank.</p>
      */
     @Test
     public void drainedChestTankTransitionsToVacuumDamage() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -487,7 +508,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             // Both marks BEFORE the vacuum exists, or the first drain of a three-millibucket tank
             // happens between the flip and the mark and the chain starts mid-way.
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -519,7 +540,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             assertEquals("tank must be fully drained after the wait window; chestAir="
                     + chestAirAfter, 0, chestAirAfter);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -536,8 +557,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>Pins the END STATE (air rises over the window) rather than a per-tick mB rate.</p>
      *
      * <p>red-witnessed: with {@code TileGasChargePad#canPerformFunction} at
-     * {@code fillable.increment(stack, drained.amount)} draining its tank but no longer calling
-     * {@code fillable.increment}, this fails with "no `suit_air_filled` whose 'filled' is not 0" —
+     * {@code fillable.increment(stack, drained.amount);} removed, so the pad still drains its tank
+     * but fills nothing, this fails with "no `suit_air_filled` whose 'filled' is not 0" —
      * 2026-09-28.</p>
      */
     @Test
@@ -578,7 +599,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                 + " the refill is watched; client=" + clientBefore, clientBefore == airBefore);
 
         scenario().asserting("standing on the powered pad raises the suit's air, on both sides");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         long fillClientMark = clientEvents().mark();
         exec("tp @p " + (px + 0.5) + " " + (py + 1) + " " + (pz + 0.5));
@@ -615,12 +636,14 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code protectsFrom} branch is never evaluated and no decrement fires.
      *
      * <p>red-witnessed: with the same breathable-drain inversion as
-     * {@link #breathableAtmosphereDoesNotDrainChestTank} (in {@code AtmosphereHandler#onTick}), this fails with "a breathable atmosphere must
+     * {@link #breathableAtmosphereDoesNotDrainChestTank} — {@code AtmosphereHandler#onTick} at
+     * {@code if (atmosType.canTick() &&} given an else branch asking {@code VACUUM.isImmune} of every
+     * body in a breathable atmosphere every ten ticks — this fails with "a breathable atmosphere must
      * never reach the enchanted suit's buffer; drains recorded" — 2026-09-28.</p>
      */
     @Test
     public void suitedPlayerInBreathableDimDoesNotLoseChestAir() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
             setDensityAndConfirm(100, true);
@@ -635,7 +658,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             // The same absence as the component-route counter-test, on the other route, and with the
             // same limit: a breathable atmosphere does not tick, so nothing can witness that the
             // player was judged. markInstrumented is what rules out an instrument that was not there.
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             // WINDOW: the same absence window, on the player's own world clock.
             GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);
@@ -651,7 +674,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             assertEquals("chest air must be unchanged in breathable atmosphere; before=1000 after="
                     + chestAirAfter, 1000, chestAirAfter);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -666,14 +689,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * whole suit was consulted and the chest was asked to pay. Only then does the silence in
      * {@code living_hurt} say the suit held rather than that the atmosphere never looked at him.</p>
      *
-     * <p>red-witnessed: with {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger("air", newAmt)}
-     * reporting the air spent without
-     * spending it (protection intact), this fails with "the drained buffer must reach the client's
+     * <p>red-witnessed: with {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger("air", newAmt);}
+     * skipped, so it reports the air spent without spending it (protection intact), this fails with "the drained buffer must reach the client's
      * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */
     @Test
     public void suitedPlayerInVacuumLosesChestAirOverTime() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -692,7 +714,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long drainClientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -735,7 +757,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                     + " healthAfter=" + healthAfter + " diag=" + exec("stellurgytest player suit-diag"),
                     healthAfter >= healthStart);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -749,10 +771,14 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * reaches {@code attackEntityFrom} when the suit gate has turned the player down, so a
      * {@code living_hurt} from {@code Vacuum} proves the atmosphere tick ran on THIS player, and the
      * empty drain log then says the missing chest never entered a decrement path.</p>
+     *
+     * <p>red-witnessed: with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: "vacuum
+     * damage must apply to a bare-skinned player — no `living_hurt`", 2026-09-30. Only that link is
+     * witnessed; the empty drain log, the client's health and the chest reading are not.</p>
      */
     @Test
     public void unsuitedPlayerInVacuumLosesNoAirAndTakesDamage() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -763,7 +789,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             scenario().requireArranged("player must start at full health, got " + healthStart,
                     healthStart >= FULL_HEALTH);
 
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -786,7 +812,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             assertEquals("chestAir must remain -1 throughout — no chest = no decrement path",
                     -1, readChestAir());
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -801,10 +827,14 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>Kept alongside {@link #unsuitedPlayerInVacuumLosesNoAirAndTakesDamage()}, which asserts the
      * same damage plus the no-chest decrement contract: this one is the narrower, older pin and the
      * one the suit tests cross-check themselves against.</p>
+     *
+     * <p>red-witnessed: with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: "the
+     * vacuum must damage the player at all before the client can be shown it — no `living_hurt`",
+     * 2026-09-30. The client-health link after it is not witnessed.</p>
      */
     @Test
     public void vacuumDamageReachesTheClient() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -814,7 +844,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             scenario().requireArranged("player should start at full health, got " + healthStart,
                     healthStart >= FULL_HEALTH);
 
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -834,7 +864,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                     LINK_BUDGET_TICKS);
             scenario().record("healthAfter", current);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -851,13 +881,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * writes only on a CHANGE and an unbroken run of protection may produce no record at all.</p>
      *
      * <p>red-witnessed: with {@code ItemSpaceChest#decrementAir} at
-     * {@code fluidDrained = fluidItem.drain(amtDrained, true)} reporting the air spent without
-     * draining its tank (protection intact), this fails with "the drained tank must reach the client's
+     * {@code fluidDrained = fluidItem.drain(amtDrained, true);} made a simulated drain, so it reports
+     * the air spent without draining its tank (protection intact), this fails with "the drained tank must reach the client's
      * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */
     @Test
     public void vacuumDrainsOxygenFromChestSubInventoryTank() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -879,7 +909,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
-            Events events = events();
+            Events events = serverEvents();
             long mark = events.markInstrumented();
             long drainClientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
@@ -916,7 +946,644 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             assertTrue("a full suit must keep isImmune=true while the tank has oxygen; healthStart="
                     + healthStart + " healthAfter=" + healthAfter, healthAfter >= healthStart);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
+    }
+
+    // ── a zone that is still PRESSURISED but no longer breathable ─────────────
+
+    /**
+     * Builds a sealed room in this scenario's plot, seals it with a powered vent, overwrites the
+     * zone's gas so it reads pressurised-but-stale, and stands the player inside it in survival.
+     *
+     * <p>The dimension around the room is left BREATHABLE on purpose. Every other scenario in this
+     * class makes the whole dimension a vacuum, which would make "the player was hurt" true whether
+     * or not the room ever became a zone at all. Here the only thing in the world that can hurt
+     * anyone is the room's own air — so an arrangement that silently failed to build a zone surfaces
+     * as the control below staying at full health, instead of as a false pass.</p>
+     *
+     * @return the vent's position as {@code dim x y z}, for the probes the scenario then runs
+     */
+    private String sealStaleZoneAndStandInIt() throws Exception {
+        String at = buildSealedRoomWithVent();
+
+        // Pressurised, and short of oxygen: the three partials still total one atmosphere, so this
+        // is emphatically NOT the vacuum every other scenario here uses - it is a room whose air has
+        // been breathed. 50 000 ppm sits below lifeSupportMinPartialO2's 160 000 ppm default.
+        arrangeProbe("stellurgytest vent setair " + at
+                + " " + ppm(790_000) + " " + ppm(50_000) + " " + ppm(160_000));
+
+        String infoCommand = "stellurgytest vent info " + at;
+        Reply info = Reply.of(infoCommand, exec(infoCommand));
+        scenario().record("ventInfo", info.toString());
+        // What is asserted is the room's STATE, not the number that was written into it. The vent
+        // holding the seal is powered and fuelled, so it is adding the oxygen it pays for the whole
+        // time this room exists, and the composition sits a little above what setair asked for.
+        // Pinning `"airO2":50000` as a literal made the arrangement fail the moment that started
+        // working - and it was redundant anyway: `lowO2` IS the statement that the oxygen is below
+        // what a person needs, derived from this very number, and the pressure says the room is not
+        // a vacuum. The subject is "pressurised, and too thin to breathe"; these three say it.
+        long o2 = info.longInteger("airO2");
+        scenario().requireArranged("the room must actually BE a zone before anyone stands in it, and"
+                + " it must read as pressurised-but-stale rather than as vacuum: " + info,
+                o2 > 0 && info.longInteger("airPressure") == 100
+                        && "lowO2".equals(info.text("blobAtmosphere")));
+
+        standInTheRoomUnhurt();
+        return at;
+    }
+
+    /**
+     * The room itself: a sealed stone box in this scenario's plot with a powered, sealed vent in its
+     * floor. What the air inside it then IS belongs to the caller - a stale zone and an overheated
+     * one are the same room with different contents, and sharing the geometry is what keeps them
+     * comparable.
+     *
+     * @return the vent's position as {@code dim x y z}, for the probes the scenario then runs
+     */
+    private String buildSealedRoomWithVent() throws Exception {
+        int dim = plot().dim;
+        int vx = plot().x(ROOM_DX), vy = ROOM_Y, vz = plot().z(ROOM_DZ);
+        String at = dim + " " + vx + " " + vy + " " + vz;
+
+        scenario().arranging("build a sealed room and seal it with a powered vent");
+        arrangeProbe("stellurgytest fill " + dim + " " + (vx - 2) + " " + (vy - 1) + " " + (vz - 2)
+                + " " + (vx + 2) + " " + vy + " " + (vz + 2) + " minecraft:stone");
+        for (int yy = vy + 1; yy <= vy + 2; yy++) {
+            arrangeProbe("stellurgytest fill " + dim + " " + (vx - 2) + " " + yy + " " + (vz - 2)
+                    + " " + (vx + 2) + " " + yy + " " + (vz + 2) + " minecraft:stone");
+            arrangeProbe("stellurgytest fill " + dim + " " + (vx - 1) + " " + yy + " " + (vz - 1)
+                    + " " + (vx + 1) + " " + yy + " " + (vz + 1) + " minecraft:air");
+        }
+        arrangeProbe("stellurgytest fill " + dim + " " + (vx - 2) + " " + (vy + 3) + " " + (vz - 2)
+                + " " + (vx + 2) + " " + (vy + 3) + " " + (vz + 2) + " minecraft:stone");
+
+        Reply placed = arrangeProbe("stellurgytest place " + at + " stellurgy:oxygenVent");
+        scenario().requireArranged("the vent must place: " + placed, placed.bool("placed"));
+        arrangeProbe("stellurgytest energy inject " + at + " 1000000");
+        arrangeProbe("stellurgytest fluid inject " + at + " oxygen 16000");
+        arrangeProbe("stellurgytest tile force-tick " + at + " 1");
+        arrangeProbe("stellurgytest vent reseal " + at);
+        arrangeProbe("stellurgytest tile force-tick " + at + " 5");
+        return at;
+    }
+
+    /**
+     * A probe that is a step of the arrangement, refused as one unless the verb reported {@code ok}.
+     * A dropped reply cannot say the step did not happen, and the scenario would then measure a room
+     * that was never built.
+     */
+    private Reply arrangeProbe(String command) throws Exception {
+        Reply reply = Reply.of(command, exec(command));
+        scenario().requireArranged(command + " must report ok: " + reply, reply.ok());
+        return reply;
+    }
+
+    /** Puts the player inside the sealed room, on its floor, at full health. */
+    private void standInTheRoomUnhurt() throws Exception {
+        int vx = plot().x(ROOM_DX), vy = ROOM_Y, vz = plot().z(ROOM_DZ);
+        // Stand him in the room while still CREATIVE: creative short-circuits
+        // AtmosphereNeedsSuit.isImmune, so the room cannot hurt him yet. Checking health in survival
+        // instead measured the subject: the room bit once during the settling ticks and the
+        // precondition read 19.0, i.e. this scenario refusing to run because its own contract had
+        // already fired.
+        // WHERE he stands is a link on the client applying the placement onto a floor it holds —
+        // not a settle of ten ticks, which was a guess at how long that takes on this box.
+        standOnFloorTheClientHolds(vx + 0.5, vy + 1, vz + 0.5, 0f, 0f,
+                "the player must be standing on the sealed room's floor before the window opens");
+
+        // A creative player takes no fall or suffocation damage, so this cannot catch a bad
+        // arrival — that is the placement link's job. What it catches is a player who comes into
+        // this scenario already hurt from an earlier one on the same client, with regeneration off.
+        double health = health(bot().reportState());
+        scenario().record("healthInRoom", health);
+        scenario().requireArranged("the player must be at full health INSIDE the sealed room before"
+                + " the window opens; client health=" + health, health >= 20.0);
+    }
+
+    /**
+     * Closes the arrangement: survival LAST, with no settling tick after it, so the damage window
+     * starts where the scenario says it does and not a second earlier.
+     */
+    private double openSurvivalWindow() throws Exception {
+        exec("gamerule naturalRegeneration false");
+        exec("gamemode survival @a");
+        double health = health(bot().reportState());
+        scenario().record("healthAtWindowOpen", health);
+        return health;
+    }
+
+    // ── a zone that is breathable and far too HOT ─────────────────────────────
+
+    /**
+     * The first rung of the thermal failure ladder, on a real client: a compartment whose air has
+     * been driven past the crew threshold hurts the person standing in it.
+     *
+     * <p>The room's air is <b>breathable</b> throughout - the same one atmosphere with the same
+     * oxygen - so nothing here can be confused with this class's other hazards. The only thing that
+     * changes between the control and the subject is the temperature of that air.</p>
+     *
+     * <p>The control leg is what makes the subject a measurement rather than a coincidence: the
+     * player stands in the very same sealed room at cabin temperature, in survival, with
+     * regeneration off, and must come out of it untouched. Without it, "his health fell" is also
+     * what suffocating in a badly built box looks like.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CONTROL — {@code PressurizedAir}
+     * made a ticking, unbreathable atmosphere (the {@code Atmosphere#PRESSURIZEDAIR} at {@code new Atmosphere(false, true, true, "PressurizedAir")} constant) that
+     * raises the heat row (the row {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.VERYHOT, HEAT);} names): "control leg: the room itself must
+     * not hurt him while it is at cabin temperature … start=20.0 after=16.0". HURTS —
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VERYHOT, HEAT);} dropping
+     * the heat row (taken while that table was a static block; the row is unchanged): "a compartment past the crew threshold must hurt the person in it … no
+     * `client_health_updated` below 20.0". HEAT ITSELF — {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} skipping the damage
+     * of the heat row only, so it still sets him alight: "the overheated room must itself deal him
+     * heat damage — not only set him alight — no `living_hurt` carrying who = ForgeTestClient and
+     * source = Heat was recorded within 200 ticks", with the fire's own {@code living_hurt} records
+     * in the window, 2026-09-30. The rung, cabin and player-name premises are arrangements and are
+     * not witnessed.</p>
+     */
+    @Test
+    public void overheatedZoneAirHurtsAnUnsuitedCrewman() throws Exception {
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        try {
+            setDensityAndConfirm(100, true);
+            int veryHot = configInt("shipHeatCrewVeryHotKelvin");
+            int ambient = configInt("shipHeatAmbientKelvin");
+            scenario().requireArranged("the crew rung must be switched on, and the cabin must start"
+                    + " below it, or this scenario asks nothing: rung=" + veryHot
+                    + " ambient=" + ambient, veryHot > 0 && ambient < veryHot);
+
+            String at = buildSealedRoomWithVent();
+            setRoomAir(at, ambient * 1000);
+            String cabin = atmosphereInRoom();
+            scenario().requireArranged("premise: a breathable room at cabin temperature must be an"
+                    + " ordinary room: " + cabin, "PressurizedAir".equals(cabin));
+            standInTheRoomUnhurt();
+            exec("stellurgytest player clear-armor");
+
+            scenario().measuring("health in the same room while it is merely warm");
+            double healthStart = openSurvivalWindow();
+            // WINDOW: the interval is how long the room at cabin temperature had to hurt.
+            advanceServerAndClient(80);
+            double healthCold = health(bot().reportState());
+            scenario().record("healthAfterControlWindow", healthCold);
+            assertTrue("control leg: the room itself must not hurt him while it is at cabin"
+                    + " temperature, or the drop below would be about the box and not the heat;"
+                    + " start=" + healthStart + " after=" + healthCold, healthCold >= healthStart);
+
+            scenario().arranging("drive the same room's air past the crew threshold");
+            // Who the room is about to hurt, by name, so the damage wait below is about THIS player.
+            Reply standing = Reply.of(exec("stellurgytest atmosphere for-player"));
+            scenario().requireArranged("the server must name the player standing in the room: "
+                    + standing, standing.ok());
+            String who = standing.text("player");
+            // Marked BEFORE the stimulus, so the waits below are about the damage THIS heating caused
+            // and cannot be satisfied by anything the control leg already recorded.
+            Events serverEvents = serverEvents();
+            long hotDamageMark = serverEvents.markInstrumented();
+            long hotMark = clientEvents().mark();
+            setRoomAir(at, (veryHot + 10) * 1000);
+            String hostile = atmosphereInRoom();
+            scenario().record("atmosphereWhenHot", hostile);
+            scenario().requireArranged("the overheated room must present a hostile atmosphere before"
+                    + " anyone can be hurt by it: " + hostile, "VeryHot".equals(hostile));
+
+            scenario().asserting("an overheated compartment hurts the crew standing in it");
+            // THE HEAT ITSELF, by its damage source. The heat row also sets him alight, and the fire
+            // hurts him on its own, so the client's health falling below cannot say the heat did it —
+            // a row that ignited him and dealt nothing would pass that link. `living_hurt` is the
+            // server's LivingHurtEvent, fired only for a hit that got past the invulnerability window,
+            // and it names the damage source, so this is the row's own hit, landed.
+            String heatHit = serverEvents.awaitRecordWithFields(hotDamageMark, "living_hurt",
+                    "the overheated room must itself deal him heat damage — not only set him alight",
+                    LINK_BUDGET_TICKS, "who", who, "source", "Heat");
+            scenario().record("heatDamage", heatHit);
+            double healthHot = awaitClientHealthBelow(hotMark, healthCold,
+                    "a compartment past the crew threshold must hurt the person in it - the room IS"
+                            + " the hazard, and the CLIENT must be told the damage rather than the"
+                            + " server merely holding it (he was on " + healthCold + " while the"
+                            + " same room was merely warm)",
+                    LINK_BUDGET_TICKS);
+            scenario().record("healthAfterHeating", healthHot);
+        } finally {
+            restoreDim(originalAir);
+        }
+    }
+
+    /** Overwrites the room's air: breathable sea-level gas at a stated temperature, in milliK. */
+    private void setRoomAir(String at, int milliK) throws Exception {
+        arrangeProbe("stellurgytest vent setair " + at
+                + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK);
+    }
+
+    /** What a person standing in the room breathes, as the handler publishes it. */
+    private String atmosphereInRoom() throws Exception {
+        String resp = exec("stellurgytest atmosphere get " + plot().dim + " " + plot().x(ROOM_DX) + " "
+                + (ROOM_Y + 1) + " " + plot().z(ROOM_DZ));
+        Reply reply = Reply.of(resp);
+        assertTrue("no atmosphere type in: " + resp, reply.has("type"));
+        return reply.text("type");
+    }
+
+    /** A tuned threshold read off the server, so no assertion here restates one. */
+    private int configInt(String key) throws Exception {
+        String resp = exec("stellurgytest config get " + key);
+        Reply reply = Reply.of(resp);
+        scenario().requireArranged("config get " + key + " failed: " + resp, reply.ok());
+        assertTrue("no value in: " + resp, reply.has("value"));
+        return reply.integer("value");
+    }
+
+    /**
+     * The control, and the reason the scenario below means anything: a room whose oxygen has fallen
+     * under the breathable floor hurts someone standing in it with no suit.
+     *
+     * <p>This is the half of the suit-fallback contract that is NOT a breach. A breach is already
+     * covered by this class's vacuum scenarios; this is the other failure the life-support design
+     * names — regeneration not keeping up, leaving a room still full of gas and still lethal.</p>
+     *
+     * <p>red-witnessed: with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: "a
+     * pressurised room below the breathable oxygen floor must hurt an unsuited player, and the CLIENT
+     * must be told it (he started at 20.0) — no `client_health_updated` below 20.0", 2026-09-30.</p>
+     *
+     * <p>Not asserted: a closing comparison of his health against the start, because the wait above
+     * already requires a client health below the start, so the comparison could not go red on its
+     * own.</p>
+     */
+    @Test
+    public void staleZoneAirHurtsAnUnsuitedPlayer() throws Exception {
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        try {
+            setDensityAndConfirm(100, true);
+            String at = sealStaleZoneAndStandInIt();
+            exec("stellurgytest player clear-armor");
+
+            scenario().measuring("health before the stale-air window");
+            // Marked before the window opens: the claim is about damage taken IN it, and a mark
+            // taken afterwards would accept a record from the arrangement.
+            long staleMark = clientEvents().mark();
+            double healthStart = openSurvivalWindow();
+
+            scenario().asserting("stale zone air damages an unsuited player");
+            double healthAfter = awaitClientHealthBelow(staleMark, healthStart,
+                    "a pressurised room below the breathable oxygen floor must hurt an unsuited"
+                            + " player, and the CLIENT must be told it (he started at "
+                            + healthStart + ")",
+                    LINK_BUDGET_TICKS);
+            scenario().record("healthAfter", healthAfter)
+                    .record("ventInfoAfter", exec("stellurgytest vent info " + at));
+        } finally {
+            restoreDim(originalAir);
+        }
+    }
+
+    /**
+     * The suit fallback, on the case that is not a breach: the suit is a personal contour ON TOP of
+     * the zone air, so in a room life support can no longer keep breathable the crew breathe from
+     * the suit — and pay for it.
+     *
+     * <p>Both halves are asserted because either alone is satisfiable by a broken system: unchanged
+     * health alone is what a room that never went stale looks like (which is what the control above
+     * rules out), and a falling air buffer alone is what a suit draining without protecting anybody
+     * looks like.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DRAIN — {@code AtmosphereHazards#byAtmosphere}
+     * at {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} dropping the low-oxygen row (taken while
+     * that table was a static block; the row is unchanged): "the stale air must reach the suit's buffer … no
+     * `suit_air_drained` carrying route = enchanted". NO REFUSAL — {@code ItemAirWrapper#protectsFrom} at {@code return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;} spending
+     * the air and then refusing protection anyway: "the suit must protect its wearer from stale zone
+     * air; decisions since the window opened: …". NO HEALTH — {@code Atmosphere#onTick} at {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying the
+     * exposure even to a protected player: "and no health may have been spent on it;
+     * healthStart=20.0 healthAfter=19.0". PAYS — {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger("air", newAmt);} reporting the air spent
+     * without writing it: "and it must PAY for that protection … before=1000 after=1000". Not
+     * witnessed: the client's rendering of the drained suit, and the full-suit premise.</p>
+     */
+    @Test
+    public void staleZoneAirDrainsTheSuitAndNotTheCrew() throws Exception {
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        try {
+            setDensityAndConfirm(100, true);
+            sealStaleZoneAndStandInIt();
+
+            scenario().arranging("equip an air-carrying suit");
+            arrangeProbe("stellurgytest player equip-airsuit 1000");
+            assertEquals("the suit must start full so any fall belongs to this window",
+                    1000, readChestAir());
+
+            // Survival only once the suit is on: an unprotected settling tick here would spend the
+            // wearer's health on the very hazard this scenario claims the suit covers.
+            // Both marks BEFORE survival begins: in creative the hazard path never asks the suit, so
+            // the first payment can only come after this point, and a mark taken later could miss it.
+            Events events = serverEvents();
+            long mark = events.markInstrumented();
+            long clientMark = clientEvents().mark();
+            scenario().measuring("health and suit air before the stale-air window");
+            double healthStart = openSurvivalWindow();
+
+            scenario().asserting("the suit covers the stale zone, and spends air doing it");
+            // A LINK, not a budget: the suit paying is a record production publishes
+            // (`suit_air_drained`, route "enchanted" for this suit — the chest's own buffer), and the
+            // hazard path only spends inside its once-a-second gate, so a fixed wait was a guess at
+            // how many of those gates a box of this speed would fit in.
+            String drains = events.awaitRecordWithField(mark, "suit_air_drained", "route", "enchanted",
+                    "the stale air must reach the suit's buffer — a drain is the proof the hazard path"
+                            + " asked the suit at all", LINK_BUDGET_TICKS);
+
+            // The suit HELD while it paid: the gate never recorded a refusal. The decision recorder
+            // is edge-only, so the claim is the ABSENCE of `immune:false` in a window the drain above
+            // proves was watched.
+            String decisions = events.since(mark, "suit_immunity_decided");
+            assertEquals("the suit must protect its wearer from stale zone air; decisions since the"
+                            + " window opened: " + decisions + " | drains: " + drains,
+                    0, Events.countRecords(decisions, "immune", "false"));
+
+            int chestAirAfter = readChestAir();
+            double healthAfter = health(bot().reportState());
+            scenario().record("chestAirAfter", chestAirAfter).record("healthAfter", healthAfter);
+            assertTrue("and no health may have been spent on it; healthStart=" + healthStart
+                    + " healthAfter=" + healthAfter, healthAfter >= healthStart);
+            assertTrue("and it must PAY for that protection — a fallback that costs nothing is not a"
+                    + " fallback; before=1000 after=" + chestAirAfter, chestAirAfter < 1000);
+            int clientAirAfter = clientChestAirOnceSynced(clientMark, v -> v < 1000,
+                    "the client must render the drained suit, not a stale full one");
+            scenario().record("clientChestAir", clientAirAfter);
+            assertTrue("the client must render the drained suit, not a stale full one; client="
+                    + clientAirAfter, clientAirAfter < 1000);
+        } finally {
+            restoreDim(originalAir);
+        }
+    }
+
+    // ── poisoned air ──────────────────────────────────────────────────────────
+
+    /**
+     * Game ticks between two poison ticks — production's {@code Poisoning#TICKS_PER_SECOND} at
+     * {@code 20}, private there, restated here: the dose advances once a vanilla second.
+     */
+    private static final int POISON_TICK_PERIOD = 20;
+    /**
+     * How many poison ticks the suited player breathes the poison for, counted in the records
+     * themselves: six, so five seconds of exposure lie between the first and the last. A chosen
+     * exposure, not a measurement — long enough that a dose let through would reach twenty
+     * limit-seconds at a toxic index of four. Counted, not timed: the records come from SERVER ticks,
+     * and a window timed in client ticks would end before the last of them on a slow box.
+     */
+    private static final int SUITED_POISON_TICKS = 6;
+    /**
+     * How many poison ticks the unsuited control breathes it for, again counted in its own records:
+     * three. At a toxic index of four the dose entering the third is eight limit-seconds, under the
+     * thirty from which a dose injures — see the method's javadoc for why the control must stop short
+     * of harm.
+     */
+    private static final int CONTROL_POISON_TICKS = 3;
+
+    /**
+     * A whole sealed suit breathing from its own tank keeps poisoned air out: a player wearing one in
+     * air past its toxic limit takes in no dose, second after second, while the same air starts dosing
+     * him the moment he takes it off.
+     *
+     * <p>The subject is the gate {@code Poisoning#tick} asks — {@code AtmosphereHazards#isImmune} for
+     * the poison exposure, which wants all four pieces and a supply — and what the dose does while it
+     * answers. Read on {@code poison_breathed}, written where that question is asked, so each record is
+     * itself the proof that the player breathed poison that second.</p>
+     *
+     * <p>The suited window comes FIRST and the unsuited control second, and the control is SHORT: a dose
+     * outlives the air (half-life five minutes) and injures from thirty limit-seconds on, so a control
+     * run to the point of harm would go on hurting the shared client's player for half a minute of
+     * clean air. The harm itself is pinned on the server ({@code server/PoisonedAirTest}).</p>
+     *
+     * <p>What it does not see: a mask alone (ruled insufficient; not pinned here), a tank running dry
+     * mid-window, and poison inside a sealed zone rather than in a planet's open air.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-04, each run alone against a healthy run of
+     * the same method. KEPT OUT — {@code Poisoning#tick} at {@code index = 0.0D;} made
+     * {@code index = index + 0.0D;} (the gate still answering immune, its answer no longer acted on): "a
+     * whole sealed suit with a supply must keep poisoned air out: no second judged him exposed, and the
+     * dose he carried never rose" — and, under {@code AtmosphereHazards#isImmune} at
+     * {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD)} answering false, the same
+     * verdict after one exposed second rather than a whole window. BREATHING IT — {@code Poisoning#tick}
+     * at {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: "a player
+     * standing in poisoned air must be breathing it … no `poison_breathed` 6 records carrying who =
+     * ForgeTestClient, or one judging him exposed was recorded within 320 ticks". CONTROL EXPOSED — {@code AtmosphereHazards#isImmune}
+     * at {@code if (exposure.isEmpty())} made always to hold: "CONTROL: the same air must judge him
+     * exposed, second after second, once the suit is off — no `poison_breathed` 3 records carrying who =
+     * ForgeTestClient and immune = false was recorded within 260 ticks". CONTROL RISES —
+     * {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made {@code return dose;}: "the dose
+     * he carries must climb second by second … doses=[0.0, 0.0, 0.0]".</p>
+     *
+     * <p>red-witnessed: NOT YET for the INSTRUMENT RAN verdict ({@code Events.assertInstrumentRan} on
+     * {@code poison_events}). Attempted as {@code Poisoning#tick} at
+     * {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero, which keeps the
+     * observation point from ever executing: the run stops at the BREATHING IT wait above, on the same
+     * records, before this line is reached — so this verdict cannot be the first red of any inversion
+     * that silences the point.</p>
+     */
+    @Test
+    public void aSealedSuitKeepsPoisonedAirOut() throws Exception {
+        int dim = plot().dim;
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, dim);
+        try {
+            standOnOwnPlatformInSurvival();
+            Reply suit = arrangeProbe("stellurgytest player equip-space-chest");
+            String who = suit.text("player");
+            scenario().requireArranged("the suit's tank must hold oxygen, or the gate would refuse for want"
+                    + " of a supply rather than decide on protection: " + suit, suit.integer("chestAir") > 0);
+
+            long mark = serverEvents().markInstrumented();
+            // Four times carbon monoxide's own limit (`Gas#hazardThreshold`, production's), put into the
+            // planet's open air: a toxic index of four from this gas alone, whatever else the air holds.
+            // Four is a choice — clear of the index of one at which a dose starts, and small enough that
+            // the control's three seconds stay under the thirty limit-seconds at which a dose injures.
+            Gas poison = GasRegistry.CARBON_MONOXIDE;
+            arrangeProbe("stellurgytest planet add-gas " + dim + " " + poison.name() + " "
+                    + 4L * poison.hazardThreshold());
+            String at = dim + " " + plot().x(STAND_DX) + " " + (PAD_Y + 1) + " " + plot().z(STAND_DZ);
+            Reply air = Reply.of("stellurgytest atmosphere get " + at, exec("stellurgytest atmosphere get " + at));
+            scenario().requireArranged("the air where he stands must be poisonous before the window means"
+                            + " anything: " + air,
+                    air.has("statements") && Arrays.asList(air.textArray("statements")).contains("TOXIC"));
+
+            scenario().measuring("stand suited in the poisoned air");
+            // The window IS the exposure, and it closes on the records: it ends when the poison tick has
+            // asked the suit gate about him SUITED_POISON_TICKS times — or at the FIRST second it judged
+            // him exposed, so a suit that has stopped protecting doses him for one second rather than for
+            // the whole window, and cannot carry the shared player to a harmful dose.
+            String suited = serverEvents().awaitMatching(mark, "poison_breathed",
+                    reply -> Events.recordsWhere(reply, "who", who).size() >= SUITED_POISON_TICKS
+                            || !Events.recordsWhereAll(reply, "who", who, "immune", "false").isEmpty(),
+                    SUITED_POISON_TICKS + " records carrying who = " + who + ", or one judging him exposed",
+                    "a player standing in poisoned air must be breathing it — the poison tick must reach"
+                            + " the suit gate for him once a second", LINK_BUDGET_TICKS
+                            + SUITED_POISON_TICKS * POISON_TICK_PERIOD);
+            Events.assertInstrumentRan(suited, "poison_events", "the suit kept the poison out");
+            List<String> suitedSeconds = Events.recordsWhere(suited, "who", who);
+            int exposed = Events.recordsWhereAll(suited, "who", who, "immune", "false").size();
+            double largestRise = largestRise(dosesOf(suited, who));
+            scenario().record("suitedSeconds", suitedSeconds.size()).record("suitedLargestRise", largestRise);
+            // The dose he carried may be anything a scenario before this one left on the shared player;
+            // what a sealed suit decides is that nothing more gets IN, so the dose never rises.
+            assertEquals("a whole sealed suit with a supply must keep poisoned air out: no second judged him"
+                    + " exposed, and the dose he carried never rose; " + suited,
+                    "exposed=0 largestRise=0.0", "exposed=" + exposed + " largestRise=" + largestRise);
+
+            scenario().measuring("take the suit off in the same air");
+            long controlMark = serverEvents().mark();
+            arrangeProbe("stellurgytest player clear-armor");
+            String control = serverEvents().awaitMatching(controlMark, "poison_breathed",
+                    reply -> Events.recordsWhereAll(reply, "who", who, "immune", "false").size()
+                            >= CONTROL_POISON_TICKS,
+                    CONTROL_POISON_TICKS + " records carrying who = " + who + " and immune = false",
+                    "CONTROL: the same air must judge him exposed, second after second, once the suit is"
+                            + " off", LINK_BUDGET_TICKS + CONTROL_POISON_TICKS * POISON_TICK_PERIOD);
+            List<Double> doses = dosesOf(Events.recordsWhereAll(control, "who", who, "immune", "false"));
+            scenario().record("controlDoses", doses);
+            assertTrue("CONTROL: unsuited in the same air, the dose he carries must climb second by second,"
+                    + " or the suited window above could not have shown a dose at all; doses=" + doses
+                    + " | " + control, climbsEverySecond(doses));
+        } finally {
+            restoreDim(originalAir);
+        }
+    }
+
+    /**
+     * How many poison ticks each half of the partial-suit scenario lasts, counted in its own records:
+     * three, as for the control above, and for the same reason — the exposed half must stop short of
+     * the thirty limit-seconds at which a dose injures.
+     */
+    private static final int PARTIAL_SUIT_POISON_TICKS = 3;
+
+    /**
+     * A helmet and a chest with a full tank are not enough against poison: only the WHOLE suit keeps it
+     * out (ruled 2026-10-04 — "the whole suit only", against a mask stopping it). Without legs and boots
+     * the same air judges the player exposed and doses him; with them put back, it judges him protected
+     * and his dose no longer rises.
+     *
+     * <p>The subject is {@code AtmosphereHazards#isImmune} answering for the poison exposure, which
+     * needs the full suit, asked by {@code Poisoning#tick}; read on {@code poison_breathed}, whose
+     * {@code worn} field names the pieces each answer was given about, so the arrangement is checked on
+     * the very records the verdict reads.</p>
+     *
+     * <p>What it does not see: any other partial set (helmet alone, chest alone — the gate is all or
+     * nothing, and the head-and-chest case is the one a mask would be), and the suit's tank running
+     * dry.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-04, each against a healthy run of the same
+     * method. PARTIAL EXPOSED — {@code AtmosphereHazards#isImmune} at {@code if (exposure.needsFullSuit()}
+     * made never to hold: "a helmet and a chest with a supply must NOT keep poisoned air out … no
+     * `poison_breathed` 3 records carrying who = ForgeTestClient and immune = false was recorded within
+     * 260 ticks". PARTIAL RISES — {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made
+     * {@code return dose;}: "and the poison must get in: the dose must climb second by second;
+     * doses=[0.0, 0.0, 0.0]". WHOLE PROTECTED — {@code AtmosphereHazards#isImmune} at
+     * {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD)} answering false: "CONTROL: the
+     * same air must judge him protected once the whole suit is on — every second in it". WHOLE KEPT OUT
+     * — {@code Poisoning#tick} at {@code index = 0.0D;} made {@code index = index + 0.0D;}: "CONTROL: in
+     * the whole suit nothing more gets in — the dose he carried in must not rise; doses=[12.0, 16.0,
+     * 20.0]".</p>
+     *
+     * <p>red-witnessed: NOT YET for the INSTRUMENT RAN verdict ({@code Events.assertInstrumentRan} on
+     * {@code poison_events}). Attempted as {@code Poisoning#tick} at
+     * {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: the run stops at
+     * the PARTIAL EXPOSED wait on the same records before this line is reached.</p>
+     */
+    @Test
+    public void aHelmetAndTankWithoutTheRestOfTheSuitDoNotKeepPoisonedAirOut() throws Exception {
+        int dim = plot().dim;
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, dim);
+        try {
+            standOnOwnPlatformInSurvival();
+            Reply suit = arrangeProbe("stellurgytest player equip-space-chest");
+            String who = suit.text("player");
+            scenario().requireArranged("the suit's tank must hold oxygen, or the gate would refuse for want"
+                    + " of a supply rather than for the missing pieces: " + suit, suit.integer("chestAir") > 0);
+            exec("replaceitem entity @a slot.armor.legs minecraft:air");
+            exec("replaceitem entity @a slot.armor.feet minecraft:air");
+
+            long mark = serverEvents().markInstrumented();
+            // The same poisoning as the whole-suit scenario above, for the same reasons: carbon monoxide at
+            // four times its own limit (`Gas#hazardThreshold`), a toxic index of four.
+            Gas poison = GasRegistry.CARBON_MONOXIDE;
+            arrangeProbe("stellurgytest planet add-gas " + dim + " " + poison.name() + " "
+                    + 4L * poison.hazardThreshold());
+
+            scenario().measuring("breathe it in a helmet and a chest alone");
+            String partial = serverEvents().awaitMatching(mark, "poison_breathed",
+                    reply -> Events.recordsWhereAll(reply, "who", who, "immune", "false").size()
+                            >= PARTIAL_SUIT_POISON_TICKS,
+                    PARTIAL_SUIT_POISON_TICKS + " records carrying who = " + who + " and immune = false",
+                    "a helmet and a chest with a supply must NOT keep poisoned air out — the gate must judge"
+                            + " him exposed, second after second", LINK_BUDGET_TICKS
+                            + PARTIAL_SUIT_POISON_TICKS * POISON_TICK_PERIOD);
+            Events.assertInstrumentRan(partial, "poison_events", "a partial suit let the poison in");
+            List<String> exposedSeconds = Events.recordsWhereAll(partial, "who", who, "immune", "false");
+            scenario().requireArranged("every exposed second must have been judged about a helmet and a chest"
+                    + " and nothing else, or the subject is a different set of pieces: " + partial,
+                    Events.recordsWhereAll(partial, "who", who, "immune", "false", "worn", "CHEST+HEAD").size()
+                            == exposedSeconds.size());
+            List<Double> partialDoses = dosesOf(exposedSeconds);
+            scenario().record("partialDoses", partialDoses);
+            assertTrue("and the poison must get in: the dose must climb second by second; doses=" + partialDoses
+                    + " | " + partial, climbsEverySecond(partialDoses));
+
+            scenario().measuring("put the whole suit back on");
+            long wholeMark = serverEvents().mark();
+            arrangeProbe("stellurgytest player equip-space-chest");
+            // Closes on the protected records, or at the FIRST second the whole suit was judged exposed: a
+            // suit that has stopped protecting must not keep a player who already carries a dose in the
+            // poison for the whole budget — measured 2026-10-04 under exactly that inversion, it killed the
+            // shared client's player and failed the next scenario on his death.
+            String whole = serverEvents().awaitMatching(wholeMark, "poison_breathed",
+                    reply -> Events.recordsWhereAll(reply, "who", who, "immune", "true",
+                            "worn", "FEET+LEGS+CHEST+HEAD").size() >= PARTIAL_SUIT_POISON_TICKS
+                            || !Events.recordsWhereAll(reply, "who", who, "immune", "false",
+                            "worn", "FEET+LEGS+CHEST+HEAD").isEmpty(),
+                    PARTIAL_SUIT_POISON_TICKS + " records carrying who = " + who
+                            + ", immune = true and worn = FEET+LEGS+CHEST+HEAD, or one in the whole suit"
+                            + " judging him exposed",
+                    "the whole suit on, the poison tick must keep asking the suit gate about him",
+                    LINK_BUDGET_TICKS + PARTIAL_SUIT_POISON_TICKS * POISON_TICK_PERIOD);
+            List<String> wholeSeconds = Events.recordsWhereAll(whole, "who", who, "worn", "FEET+LEGS+CHEST+HEAD");
+            List<String> protectedSeconds = Events.recordsWhereAll(whole, "who", who, "immune", "true",
+                    "worn", "FEET+LEGS+CHEST+HEAD");
+            assertEquals("CONTROL: the same air must judge him protected once the whole suit is on — every"
+                    + " second in it; " + whole, wholeSeconds.size(), protectedSeconds.size());
+            List<Double> wholeDoses = dosesOf(protectedSeconds);
+            scenario().record("wholeDoses", wholeDoses);
+            assertEquals("CONTROL: in the whole suit nothing more gets in — the dose he carried in must not"
+                    + " rise; doses=" + wholeDoses + " | " + whole, 0.0D, largestRise(wholeDoses), 0.0D);
+        } finally {
+            restoreDim(originalAir);
+        }
+    }
+
+    /** The {@code dose} of each of {@code who}'s poison records in {@code reply}, in order. */
+    private static List<Double> dosesOf(String reply, String who) {
+        return dosesOf(Events.recordsWhere(reply, "who", who));
+    }
+
+    /** The {@code dose} each of these poison records carried, in order. */
+    private static List<Double> dosesOf(List<String> records) {
+        List<Double> doses = new ArrayList<>();
+        for (String record : records) {
+            doses.add(Events.number(record, "dose"));
+        }
+        return doses;
+    }
+
+    /** The largest step up between consecutive doses — zero when the dose never rose. */
+    private static double largestRise(List<Double> doses) {
+        double largest = 0.0D;
+        for (int i = 1; i < doses.size(); i++) {
+            largest = Math.max(largest, doses.get(i) - doses.get(i - 1));
+        }
+        return largest;
+    }
+
+    /** Whether the doses rose at every step, over at least two of them. */
+    private static boolean climbsEverySecond(List<Double> doses) {
+        boolean climbs = doses.size() >= 2;
+        for (int i = 1; i < doses.size(); i++) {
+            climbs &= doses.get(i) > doses.get(i - 1);
+        }
+        return climbs;
     }
 }

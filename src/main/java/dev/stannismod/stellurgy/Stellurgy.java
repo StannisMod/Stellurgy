@@ -392,6 +392,12 @@ public class Stellurgy {
         return serverState().spaceObjects;
     }
 
+    /** The running server's subsystem networks, or {@code null} when there is none. */
+    public static dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks() {
+        ServerState state = instance == null ? null : instance.server;
+        return state == null ? null : state.subsystemNetworks;
+    }
+
     /**
      * Builds the state whose lifetime is one server. The server-start hook calls it; so does the
      * headless test bootstrap, which runs no server and arranges the server's state the same way.
@@ -561,7 +567,6 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.world.WorldRuntime.Attach.class);
 
         //Init API
-        dev.stannismod.stellurgy.atmosphere.AtmosphereType.registerBuiltIns();
         instance.installSealHandler(SealableBlockHandler.INSTANCE);
         SealableBlockHandler.INSTANCE.loadDefaultData();
 
@@ -690,6 +695,20 @@ public class Stellurgy {
         GameRegistry.registerTileEntity(TileOxygenVent.class, "StellurgyOxygenVent");
         GameRegistry.registerTileEntity(TileGasChargePad.class, "StellurgyOxygenCharger");
         GameRegistry.registerTileEntity(TileCO2Scrubber.class, "ARCO2Scrubber");
+        // These eleven ids are NEW - they have never been written into a save, so unlike the frozen
+        // AR* strings further down there is nothing here to keep readable, and they are spelled the
+        // way the renamed ids around them are rather than transliterated from the AR* form.
+        GameRegistry.registerTileEntity(TileAirRecirculator.class, "StellurgyAirRecirculator");
+        GameRegistry.registerTileEntity(TileGasSeparator.class, "StellurgyGasSeparator");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileLifeSupportPlant.class, "StellurgyLifeSupportPlant");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileVentilationDuct.class, "StellurgyVentilationDuct");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort.class, "StellurgyJettisonPort");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatPipe.class, "StellurgyHeatPipe");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatAccumulator.class, "StellurgyHeatAccumulator");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatRadiator.class, "StellurgyHeatRadiator");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatChiller.class, "StellurgyHeatChiller");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatDump.class, "StellurgyHeatDump");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatIntakeDuct.class, "StellurgyHeatIntakeDuct");
         GameRegistry.registerTileEntity(TileWarpController.class, "StellurgyStationMonitor");
         GameRegistry.registerTileEntity(TileAtmosphereDetector.class, "StellurgyOxygenDetector");
         GameRegistry.registerTileEntity(TileStationOrientationController.class, "StellurgyOrientationControl");
@@ -801,6 +820,7 @@ public class Stellurgy {
         StellurgyItems.itemSmallAirlockDoor = new ItemDoor(StellurgyBlocks.blockAirLock).setUnlocalizedName("smallAirlock").setCreativeTab(tabAdvRocketry);
         //Short.MAX_VALUE is forge's wildcard, don't use it
         StellurgyItems.itemCarbonScrubberCartridge = new Item().setMaxDamage(Short.MAX_VALUE - 1).setUnlocalizedName("carbonScrubberCartridge").setCreativeTab(tabAdvRocketry);
+        StellurgyItems.itemCarbonDust = new Item().setUnlocalizedName("carbonDust").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemLens = new ItemIngredient(1).setUnlocalizedName("stellurgy:lens").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemSatellitePowerSource = new ItemIngredient(2).setUnlocalizedName("stellurgy:satellitePowerSource").setCreativeTab(tabAdvRocketry);
         StellurgyItems.itemSatellitePrimaryFunction = new ItemIngredient(7).setUnlocalizedName("stellurgy:satellitePrimaryFunction").setCreativeTab(tabAdvRocketry);
@@ -897,6 +917,11 @@ public class Stellurgy {
         LibVulpesBlocks.registerItem(StellurgyItems.itemLens.setRegistryName("lens"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemThermite.setRegistryName("thermite"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemCarbonScrubberCartridge.setRegistryName("carbonScrubberCartridge"));
+        LibVulpesBlocks.registerItem(StellurgyItems.itemCarbonDust.setRegistryName("carbonDust"));
+        // dustCarbon is the ore-dictionary name every 1.12 tech mod uses for powdered carbon, so
+        // our recirculator output feeds their recipes and theirs feeds ours. The dictionary is a
+        // registry we do not namespace: joining it is the whole point, not a side effect.
+        net.minecraftforge.oredict.OreDictionary.registerOre("dustCarbon", StellurgyItems.itemCarbonDust);
         LibVulpesBlocks.registerItem(StellurgyItems.itemSmallAirlockDoor.setRegistryName("smallAirlockDoor"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemHovercraft.setRegistryName("hoverCraft"));
         LibVulpesBlocks.registerItem(StellurgyItems.itemSpaceStation.setRegistryName("spaceStation"));
@@ -1041,6 +1066,17 @@ public class Stellurgy {
         StellurgyBlocks.blockPlanetHoloSelector = new BlockHalfTile(TileHolographicPlanetSelector.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("planetHoloSelector").setCreativeTab(tabAdvRocketry).setHardness(3f);
         //Oxygen machines
         StellurgyBlocks.blockCO2Scrubber = new BlockTileComparatorOverride(TileCO2Scrubber.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("scrubber").setHardness(3f);
+        StellurgyBlocks.blockAirRecirculator = new BlockTile(TileAirRecirculator.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("airRecirculator").setHardness(3f);
+        StellurgyBlocks.blockGasSeparator = new dev.stannismod.stellurgy.block.BlockGasSeparator(TileGasSeparator.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("gasSeparator").setHardness(3f);
+        StellurgyBlocks.blockLifeSupportPlant = new BlockTile(dev.stannismod.stellurgy.tile.atmosphere.TileLifeSupportPlant.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("lifeSupportPlant").setHardness(3f);
+        StellurgyBlocks.blockVentilationDuct = new dev.stannismod.stellurgy.block.BlockVentilationDuct().setCreativeTab(tabAdvRocketry).setUnlocalizedName("ventilationDuct").setHardness(1f);
+        StellurgyBlocks.blockJettisonPort = new BlockTile(dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("jettisonPort").setHardness(3f);
+        StellurgyBlocks.blockHeatPipe = new dev.stannismod.stellurgy.block.BlockHeatPipe().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatPipe").setHardness(1f);
+        StellurgyBlocks.blockHeatAccumulator = new dev.stannismod.stellurgy.block.BlockHeatAccumulator().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatAccumulator").setHardness(3f);
+        StellurgyBlocks.blockHeatRadiator = new dev.stannismod.stellurgy.block.BlockHeatRadiator().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatRadiator").setHardness(1f);
+        StellurgyBlocks.blockHeatChiller = new BlockTile(dev.stannismod.stellurgy.tile.heat.TileHeatChiller.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatChiller").setHardness(3f);
+        StellurgyBlocks.blockHeatDump = new BlockTile(dev.stannismod.stellurgy.tile.heat.TileHeatDump.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatDump").setHardness(3f);
+        StellurgyBlocks.blockHeatIntakeDuct = new dev.stannismod.stellurgy.block.BlockHeatIntakeDuct().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatIntakeDuct").setHardness(1f);
         StellurgyBlocks.blockOxygenVent = new BlockTile(TileOxygenVent.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("oxygenVent").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockOxygenCharger = new BlockHalfTile(TileGasChargePad.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("oxygenCharger").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockOxygenDetection = new BlockRedstoneEmitter(Material.IRON, "stellurgy:atmosphereDetector_active").setUnlocalizedName("atmosphereDetector").setHardness(3f).setCreativeTab(tabAdvRocketry);
@@ -1075,6 +1111,10 @@ public class Stellurgy {
         StellurgyFluids.fluidOxygen = new Fluid("oxygen", notFlowing, flowing).setUnlocalizedName("oxygen").setGaseous(true).setDensity(-1000).setViscosity(1000).setColor(0xFF6CE2FF);
         StellurgyFluids.fluidHydrogen = new Fluid("hydrogen", notFlowing, flowing).setUnlocalizedName("hydrogen").setGaseous(true).setDensity(-1000).setViscosity(1000).setColor(0xFFDBC1C1);
         StellurgyFluids.fluidNitrogen = new Fluid("nitrogen", notFlowing, flowing).setUnlocalizedName("nitrogen").setGaseous(true).setDensity(-1000).setViscosity(1000).setColor(0xFFDFE5FE);
+        // Name matches GregTechCEu's CarbonDioxide material fluid so the two unify by registry name,
+        // the same way oxygen already does -- whichever mod registers first wins and the other falls
+        // back to it below. snake_case here is GT's convention, not AR's; it is load-bearing.
+        StellurgyFluids.fluidCarbonDioxide = new Fluid("carbon_dioxide", notFlowing, flowing).setUnlocalizedName("carbon_dioxide").setGaseous(true).setDensity(-1000).setViscosity(1000).setColor(0xFFA8A8A8);
         StellurgyFluids.fluidRocketFuel = new Fluid("rocketFuel", notFlowing, flowing).setUnlocalizedName("rocketFuel").setGaseous(false).setLuminosity(2).setDensity(800).setViscosity(1500).setColor(0xFFE5D884);
         StellurgyFluids.fluidEnrichedLava = new Fluid("enrichedLava", new ResourceLocation("stellurgy:blocks/fluid/lava_still"), new ResourceLocation("stellurgy:blocks/fluid/lava_flow")).setUnlocalizedName("enrichedLava").setLuminosity(15).setDensity(3000).setViscosity(6000).setTemperature(1300).setColor(0xFFFFFFFF);
 
@@ -1085,6 +1125,8 @@ public class Stellurgy {
             StellurgyFluids.fluidHydrogen = FluidRegistry.getFluid("hydrogen");
         if (!FluidRegistry.registerFluid(StellurgyFluids.fluidNitrogen))
             StellurgyFluids.fluidNitrogen = FluidRegistry.getFluid("nitrogen");
+        if (!FluidRegistry.registerFluid(StellurgyFluids.fluidCarbonDioxide))
+            StellurgyFluids.fluidCarbonDioxide = FluidRegistry.getFluid("carbon_dioxide");
         if (!FluidRegistry.registerFluid(StellurgyFluids.fluidRocketFuel))
             StellurgyFluids.fluidRocketFuel = FluidRegistry.getFluid("rocketFuel");
         if (!FluidRegistry.registerFluid(StellurgyFluids.fluidEnrichedLava))
@@ -1098,6 +1140,7 @@ public class Stellurgy {
         StellurgyBlocks.blockOxygenFluid = new BlockFluid(StellurgyFluids.fluidOxygen, Material.WATER).setUnlocalizedName("oxygenFluidBlock").setCreativeTab(CreativeTabs.MISC);
         StellurgyBlocks.blockHydrogenFluid = new BlockFluid(StellurgyFluids.fluidHydrogen, Material.WATER).setUnlocalizedName("hydrogenFluidBlock").setCreativeTab(CreativeTabs.MISC);
         StellurgyBlocks.blockNitrogenFluid = new BlockFluid(StellurgyFluids.fluidNitrogen, Material.WATER).setUnlocalizedName("nitrogenFluidBlock").setCreativeTab(CreativeTabs.MISC);
+        StellurgyBlocks.blockCarbonDioxideFluid = new BlockFluid(StellurgyFluids.fluidCarbonDioxide, Material.WATER).setUnlocalizedName("carbonDioxideFluidBlock").setCreativeTab(CreativeTabs.MISC);
         StellurgyBlocks.blockFuelFluid = new BlockFluid(StellurgyFluids.fluidRocketFuel, new MaterialLiquid(MapColor.YELLOW)).setUnlocalizedName("rocketFuelBlock").setCreativeTab(CreativeTabs.MISC);
         StellurgyBlocks.blockEnrichedLavaFluid = new BlockEnrichedLava(StellurgyFluids.fluidEnrichedLava, Material.LAVA).setUnlocalizedName("enrichedLavaBlock").setCreativeTab(CreativeTabs.MISC).setLightLevel(15);
 
@@ -1105,6 +1148,7 @@ public class Stellurgy {
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidHydrogen);
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidNitrogen);
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidOxygen);
+        FluidRegistry.addBucketForFluid(StellurgyFluids.fluidCarbonDioxide);
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidRocketFuel);
         FluidRegistry.addBucketForFluid(StellurgyFluids.fluidEnrichedLava);
 
@@ -1224,6 +1268,17 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockPlanetHoloSelector.setRegistryName("planetHoloSelector"));
         //Oxygen machines
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockCO2Scrubber.setRegistryName("oxygenScrubber"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockAirRecirculator.setRegistryName("airRecirculator"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGasSeparator.setRegistryName("gasSeparator"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockLifeSupportPlant.setRegistryName("lifeSupportPlant"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockVentilationDuct.setRegistryName("ventilationDuct"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJettisonPort.setRegistryName("jettisonPort"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatPipe.setRegistryName("heatPipe"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatAccumulator.setRegistryName("heatAccumulator"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatRadiator.setRegistryName("heatRadiator"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatChiller.setRegistryName("heatChiller"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatDump.setRegistryName("heatDump"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatIntakeDuct.setRegistryName("heatIntakeDuct"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockOxygenVent.setRegistryName("oxygenVent"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockOxygenCharger.setRegistryName("oxygenCharger"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockOxygenDetection.setRegistryName("oxygenDetection"));
@@ -1253,6 +1308,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockOxygenFluid.setRegistryName("oxygenFluid"), null, false);
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHydrogenFluid.setRegistryName("hydrogenFluid"), null, false);
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockNitrogenFluid.setRegistryName("nitrogenFluid"), null, false);
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockCarbonDioxideFluid.setRegistryName("carbonDioxideFluid"), null, false);
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockFuelFluid.setRegistryName("rocketFuel"), null, false);
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockEnrichedLavaFluid.setRegistryName("enrichedLavaFluid"), null, false);
 
@@ -1414,6 +1470,9 @@ public class Stellurgy {
         // real work, because a player is not a host that persists its own NBT.
         dev.stannismod.stellurgy.player.CapabilityPlayerBindings.register();
         dev.stannismod.stellurgy.api.capability.CapabilityWear.register();
+        dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter.register();
+        dev.stannismod.stellurgy.api.capability.CapabilityHeatPump.register();
+        dev.stannismod.stellurgy.api.capability.CapabilityHeatSink.register();
         //Need to raise the Max Entity Radius to allow player interaction with rockets
         World.MAX_ENTITY_RADIUS = 20;
 
@@ -1461,6 +1520,7 @@ public class Stellurgy {
 
         // Async weather fix
         MinecraftForge.EVENT_BUS.register(new EntityEventHandler());
+        MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.subsystem.heat.HotSlugPhysics());
         // Re-seat a returning player on the ship deck he logged out on: being aboard a ship
         // survives a relog, at any ship attitude.
         // Safe without VS on the classpath: every ship call inside goes through the

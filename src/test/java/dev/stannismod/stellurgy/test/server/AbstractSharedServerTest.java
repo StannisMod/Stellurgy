@@ -157,6 +157,25 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
         return String.join("\n", client().execute(cmd));
     }
 
+    /** Send a command and read its reply as DATA — refusing, naming the command, if the verb did
+     *  not answer one JSON object. */
+    protected final Reply ask(String cmd) throws Exception {
+        return Reply.of(cmd, exec(cmd));
+    }
+
+    /**
+     * Send a command that is a STEP OF THE ARRANGEMENT, and refuse as an arrangement failure unless
+     * the verb reported {@code ok}.
+     *
+     * <p>A reply dropped on the floor cannot say that the step did not happen: a fill into an
+     * unloaded world, a force-tick of a tile that is not there and an energy inject into the wrong
+     * block all answer an {@code error}, and an unread one lets the scenario go on to measure a world
+     * that was never built — and report what it measures as the mechanic.</p>
+     */
+    protected final Reply arrange(String cmd) throws Exception {
+        return ask(cmd).requireOk(cmd);
+    }
+
     /**
      * What time it is in the GAME, asked of the server.
      *
@@ -243,5 +262,17 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
      */
     protected final FixtureSite site() {
         return plot().site();
+    }
+
+    /**
+     * This scenario's site, with the FIRST link of its chain already taken: the volume the fixture
+     * is about to use — {@code halo} blocks out from the site's footprint, {@code height} blocks up —
+     * is asserted EMPTY by the air fill's own {@code placed} count, and refused as an arrangement
+     * failure naming what was standing in it otherwise.
+     */
+    protected final FixtureSite clearedSite(int halo, int height, String what) throws Exception {
+        FixtureSite site = site();
+        site.requireClear(this::exec, halo, height, what);
+        return site;
     }
 }

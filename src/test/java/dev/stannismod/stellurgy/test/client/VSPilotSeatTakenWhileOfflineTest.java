@@ -6,7 +6,6 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.GameTicks;
 
 import com.google.gson.JsonObject;
 
@@ -111,7 +110,7 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         // was queued: THIS scenario's ship by construction, where a count on a shared world is
         // answered by every neighbour that ever assembled one. The fork multiplier that used to size
         // this wait is gone with it — it was a machine-shaped number standing in for a deadline.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
@@ -151,12 +150,8 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
                 + seated, isRiding(seated));
 
         // ---- ACT 1: a REAL logout that leaves the world running (disconnect half only). ---------
-        // The client is away, so it has no world of its own to wait in - but the SERVER is still
-        // ticking, and processing a disconnect is something it does on a tick. So the log is read on
-        // the SERVER's clock: every poll advances the server's own tick counter and then asks again.
         // The mark is taken before the disconnect, so the record cannot be missed between two reads.
-        Events offlineEvents = new Events(this::exec,
-                ticks -> GameTicks.advance(serverClient(), GameTicks.server(), ticks), evictionReports());
+        Events offlineEvents = connectionEvents();
         long logoutMark = offlineEvents.markInstrumented();
         bot().disconnect();
         String loggedOut = offlineEvents.await(logoutMark, "player_logged_out",
@@ -261,9 +256,8 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         // ---- ASSERT 3: the returner is NOT seated — twice, so a late re-mount cannot hide. ------
         assertFalse("a pilot whose seat was taken while he was offline must NOT come back seated: "
                 + observed, isRiding(riding));
-        // WINDOW: an absence watched for twenty ticks after the reconcile's own dismount record;
-        // both reads — at the reconcile and after the window — are in the message.
-        bot().waitTicks(20);
+        // WINDOW: an absence; nothing records a remount that did not happen.
+        advanceServerAndClient(20);
         JsonObject ridingLater = bot().reportRidingEntity();
         assertFalse("...and must STAY unseated (no delayed re-mount stealing the seat back): at the"
                 + " reconcile " + riding + ", twenty ticks later " + ridingLater,

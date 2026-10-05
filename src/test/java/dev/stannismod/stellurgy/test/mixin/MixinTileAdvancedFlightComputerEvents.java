@@ -334,7 +334,8 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
         TestTrace.recordHere("entry_latch_released", stellurgyTest$posAndShip()
                 + ",\"entryLatched\":" + entryLatched
                 + ",\"shipY\":" + (shipPos == null ? "null" : TestTrace.fmt(shipPos[1]))
-                + ",\"ceiling\":" + self.entryCeiling());
+                + ",\"ceiling\":" + (self.entryCeiling().isPresent()
+                        ? String.valueOf(self.entryCeiling().getAsInt()) : "null"));
     }
 
     private static final String INSTRUMENT_LATCH = "flight_computer_latch_events";

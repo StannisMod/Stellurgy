@@ -288,18 +288,19 @@ public final class PlanetRealizer {
         props.baseOrbitTheta = ownLaw.baseTheta();
         props.orbitTheta = props.baseOrbitTheta;
 
-        props.setAtmosphereDensityDirect(profile.pressure());
         // STATED, never recomputed: the profile's number is the one a telescope already reported, and
         // materialization is the moment it becomes the world's. The albedo is applied below, and after
         // the derivation's second pass a recompute would reproduce this exact value anyway — which is
         // the invariant, not a coincidence to lean on.
         props.setAverageTemp(profile.temperatureKelvin());
-        props.hasOxygen = profile.hasOxygen();
         props.setBulk(profile.massEarths(), profile.radiusEarths());
         props.setTidallyLocked(profile.tidallyLocked());
         props.setHasRings(profile.hasRings());
         props.setMetallicity(profile.metallicity());
         props.setGasGiant(profile.kind() == SystemBodyKind.GAS_GIANT);
+        // Last of the body's facts, because the air is decided by all of them. The profile already
+        // states only what the body keeps, so the total realized here is the total its scan reported.
+        props.realizeAtmosphere(profile.hasOxygen(), profile.pressure());
         props.rotationalPeriod = rotationalPeriodOf(profile, star);
 
         applyTerrain(props, profile.terrain());

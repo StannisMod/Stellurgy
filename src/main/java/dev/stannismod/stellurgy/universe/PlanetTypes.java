@@ -9,6 +9,7 @@ import java.util.function.Predicate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 /**
@@ -227,6 +228,13 @@ public final class PlanetTypes {
      *
      * <p>Astronomy on the left of each comment, the Stellurgy lever it is expressed through on
      * the right. Every number here is a balance knob and none of them is a contract.</p>
+     *
+     * <p>A band that ends at {@link DimensionProperties#MAX_ATM_PRESSURE} means UNBOUNDED ABOVE and is
+     * written that way on purpose. These ceilings used to be the literal value that constant then had,
+     * which made every band a silent bet on it: the day the ceiling moved, worlds denser than the old
+     * figure stopped matching any preset at all and were generated with no type. A band whose upper
+     * limit is a real statement about the world - a desert, an ocean, an earthlike - carries its own
+     * number instead.</p>
      */
     public static List<PlanetTypePreset> stockPresets() {
         List<PlanetTypePreset> l = new ArrayList<>();
@@ -243,7 +251,7 @@ public final class PlanetTypes {
         // Everything past the snow line, thin-aired or thick: Europa and Titan are the same class of
         // world, and which of the two you get is how much nitrogen the gravity managed to keep.
         l.add(PlanetTypePreset.builder("ice").albedo(0.60d).weight(22)
-                .pressure(0, 1600).temperature(0, 200).gravity(1, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 200).gravity(1, 400)
                 .biomes("stellurgy:moondark;10,minecraft:ice_flats;30,minecraft:ice_mountains;20")
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
@@ -251,7 +259,7 @@ public final class PlanetTypes {
         // Tight inner orbits, common around M dwarfs. A molten surface under whatever the rock itself
         // boiled off, which can be a great deal — hence no pressure ceiling.
         l.add(PlanetTypePreset.builder("lava").albedo(0.10d).weight(12)
-                .pressure(0, 1600).temperature(700, 6000).gravity(5, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(700, 6000).gravity(5, 400)
                 .biomes("stellurgy:volcanic;30,stellurgy:volcanicbarren;20,"
                         + "stellurgy:hotdryrock;10")
                 .terrain(TerrainOption.ofNative(0, 1))
@@ -260,7 +268,7 @@ public final class PlanetTypes {
         // Venus-like, and likely common in the hot zone: a thick atmosphere doing the warming, which is
         // why the band is keyed on the PRESSURE floor rather than on where the world orbits.
         l.add(PlanetTypePreset.builder("greenhouse").albedo(0.75d).weight(14)
-                .pressure(150, 1600).temperature(275, 1000).gravity(20, 400)
+                .pressure(150, DimensionProperties.MAX_ATM_PRESSURE).temperature(275, 1000).gravity(20, 400)
                 .biomes("stellurgy:hotdryrock;30,stellurgy:volcanicbarren;10")
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
@@ -268,7 +276,7 @@ public final class PlanetTypes {
         // The commonest planet class in the galaxy, and absent from the Solar System entirely. Defined
         // by MASS, not by climate: a super-Earth is one whether it is frozen or baked.
         l.add(PlanetTypePreset.builder("superearth").albedo(0.30d).weight(16)
-                .pressure(0, 1600).temperature(0, 900).gravity(160, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 900).gravity(160, 400)
                 .biomes("stellurgy:stormland;30,stellurgy:hotdryrock;10")
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
@@ -291,7 +299,7 @@ public final class PlanetTypes {
         // Life without oxygen — the crystal / stormland / alien-forest biomes, all written and nearly
         // unused today. Deliberately narrow: a find, not a background.
         l.add(PlanetTypePreset.builder("exotic").albedo(0.30d).weight(5)
-                .pressure(40, 1600).temperature(200, 430).gravity(10, 220)
+                .pressure(40, DimensionProperties.MAX_ATM_PRESSURE).temperature(200, 430).gravity(10, 220)
                 .biomes("stellurgy:crystalchasms;30,stellurgy:stormland;20,"
                         + "stellurgy:alien_forest;10")
                 .terrain(TerrainOption.ofNative(0, 1))
@@ -309,13 +317,13 @@ public final class PlanetTypes {
         // Its bands are deliberately the widest in the table: a giant is a giant, and nothing else in
         // this list will ever admit one, so a gap here would leave a whole body class untyped.
         l.add(PlanetTypePreset.builder("gasgiant").albedo(0.50d).weight(14).gasGiant(true).tidallyLockable(false)
-                .pressure(0, 1600).temperature(0, 1500).gravity(1, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 1500).gravity(1, 400)
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
 
         // Neptune and Uranus: the same, further out and colder.
         l.add(PlanetTypePreset.builder("icegiant").albedo(0.50d).weight(9).gasGiant(true).tidallyLockable(false)
-                .pressure(0, 1600).temperature(0, 250).gravity(1, 300)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 250).gravity(1, 300)
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
 

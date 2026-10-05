@@ -142,7 +142,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         // splits the wait below in two: the ship COMING INTO EXISTENCE is an event the registry
         // itself records, and only what is left — the client-present LOAD — is a state worth polling
         // for. A red now says which of the two never happened.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
@@ -234,11 +234,10 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
             float pitch = (float) (-Math.toDegrees(Math.atan2(dy, horizontal)));
             bot().setLook(yaw, pitch);
-            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
-            // pick. MEASURED that one is not enough (2026-09-23: deterministic red, with the stand's
-            // own pos-look the only move applied, and still red with twenty ticks after the stand);
-            // the mechanism is NOT established.
-            bot().waitTicks(5);
+            // STIMULUS: the controller's step. MEASURED that one tick is not enough (2026-09-23:
+            // deterministic red, with the stand's own pos-look the only move applied, and still red with
+            // twenty ticks after the stand); the mechanism is NOT established.
+            bot().waitWorldTicks(5);
 
             aim = bot().reportMouseOver();
             if (isSeatUnderCrosshair(aim, seatSubX, seatSubY, seatSubZ)) {
@@ -295,7 +294,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         long pressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
         // STIMULUS: the use key held down across client ticks, as a mouse button is.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
         // The two links a boarding IS, in the order the game commits them: Forge fires

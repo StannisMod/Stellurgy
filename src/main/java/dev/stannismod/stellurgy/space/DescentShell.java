@@ -26,15 +26,6 @@ public final class DescentShell {
     }
 
     /**
-     * The radius, in blocks from {@code body}'s address, at which its atmosphere begins.
-     *
-     * <p>TODO: bodies in the space layer are currently dimensionless points — nothing on
-     * {@link SystemBody} carries a physical radius — so every body answers with the same shell.
-     * Once the galaxy generator gives a body its radius, this method reads it FROM THE BODY and
-     * adds the atmosphere's own depth; nothing else has to change, which is the whole reason this
-     * method exists rather than the constant being read at each call site.</p>
-     */
-    /**
      * How high above {@code body}'s centre its atmosphere ends — the surface a descent triggers at.
      *
      * <p><b>It is the body's own radius plus an atmosphere, and that is a change of kind.</b> This
@@ -71,6 +62,36 @@ public final class DescentShell {
      * line, 100 km over Earth's 6 371 km.
      */
     public static final double ATMOSPHERE_FRACTION = 100d / 6371d;
+
+    /**
+     * The world Y at which a dimension standing for a body of {@code radiusEarths} Earth radii leaves
+     * its atmosphere — the surface {@link #radiusAround} describes, read from inside the world.
+     *
+     * <p><b>Two metrics, one surface.</b> The shell is a radius in CHART blocks; inside a dimension a
+     * block is a metre. The atmosphere's depth is {@link #ATMOSPHERE_FRACTION} of the body's radius in
+     * either metric, so in world blocks it is that depth times
+     * {@link AstronomicalBodyHelper#METRES_PER_CHART_BLOCK}: Earth 100 000, Luna about 27 300. It is
+     * counted from world Y = 0 rather than from the terrain, which stands near 64 — noise against the
+     * line, and stating one origin is what matters.</p>
+     *
+     * <p><b>Never inside the block band</b> ({@link TerrainHeightFinder#MAX_BUILD_Y}): a line a ship can
+     * cross while parked on the ground is not an atmosphere, it is the floor. Only a body of under about
+     * 16 km radius reaches that bound, and for it the takeoff line stands above its shell.</p>
+     *
+     * @param radiusEarths the body's radius; must be positive — a body with no radius has no line,
+     *                     and the caller says so rather than inventing one
+     */
+    public static int orbitLineWorldY(double radiusEarths) {
+        if (!(radiusEarths > 0d)) {
+            throw new IllegalArgumentException("a body with no radius has no atmosphere line: " + radiusEarths);
+        }
+        double depthChartBlocks = radiusEarths * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS * ATMOSPHERE_FRACTION;
+        double depthWorldBlocks = depthChartBlocks * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;
+        if (depthWorldBlocks >= Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) Math.max(TerrainHeightFinder.MAX_BUILD_Y, Math.round(depthWorldBlocks));
+    }
 
     /**
      * How far a ship at {@code distanceToCentre} blocks still has to travel before it crosses

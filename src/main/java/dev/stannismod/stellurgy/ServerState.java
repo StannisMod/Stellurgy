@@ -58,6 +58,9 @@ public final class ServerState {
             new dev.stannismod.stellurgy.space.HyperspaceVoid.ServerPart();
     /** The pending steps of the developer command {@code runtests}. */
     public final IngameTestOrchestrator ingameTests = new IngameTestOrchestrator();
+    /** The subsystem networks — shields, ventilation, heat — of this server's worlds. */
+    public final dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks =
+            dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks.forServer();
     /** The executor the threaded atmosphere fill runs on; shut down by {@link #release()}. */
     public final ThreadPoolExecutor atmosphereFillPool = AtmosphereBlob.newFillPool();
 

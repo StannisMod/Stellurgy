@@ -85,9 +85,10 @@ public interface UniverseSchema {
     }
 
     /**
-     * The generator this schema produces for {@code config}, or the empty generator when the pack
-     * declares no {@code <galaxyGen>} (an authored-anchors-only universe, which is a legitimate world
-     * rather than a missing configuration). Worlds are typed from {@code types}, the save's own
+     * The generator this schema produces for {@code config} — never null: a pack that declares no
+     * {@code <galaxyGen>} is handed {@link GalaxyGenConfig#defaults()}, and one that asks for an
+     * authored-anchors-only universe says {@code procedural="false"}, which is a legitimate world
+     * rather than a missing configuration. Worlds are typed from {@code types}, the save's own
      * planet-type table, and what it reports is remembered in {@code reports}, the galaxy's.
      */
     IGalaxyGenerator generator(GalaxyGenConfig config, PlanetTypes types, ReportOnce reports);
@@ -97,4 +98,15 @@ public interface UniverseSchema {
      * is handed this very instance, so the two can never describe different universes.
      */
     IUniverseLaws laws();
+
+    /**
+     * What this version derives a BODY with — the schema's other half.
+     *
+     * <p>It is here because the half was unnameable, and therefore unmeasurable. A schema's laws
+     * could be fingerprinted and compared at load; its derivation reached a world only through
+     * {@code generator(config)}, so a released version whose planets were re-derived left every
+     * stamp byte-identical and the guard against editing a released version in place could not see
+     * the edit.</p>
+     */
+    IBodyDerivation bodyDerivation();
 }

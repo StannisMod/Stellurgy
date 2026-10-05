@@ -90,7 +90,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // Break the seat WHILE the climb key is still held — the exact latch scenario: the client
         // can no longer send a release (the seat tile is gone), so only the destruction handler
         // stands between the ship and flying the last command forever.
-        Events events = events();
+        Events events = serverEvents();
         long breakMark = events.markInstrumented();
         long breakClientMark = clientEvents().mark();
         String broke = exec("stellurgytest fill 0 " + ship.seatX + " " + ship.seatY + " " + ship.seatZ
@@ -127,10 +127,10 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
             // held, so a surviving latch would be climbing at cruise speed here.
             // EXPERIMENT: the window opens forty ticks after the destruction — the brake's share of
             // the experiment; a hold slower than that reads as motion, loudly, never as a pass.
-            bot().waitTicks(40);
+            advanceServerAndClient(40);
             double y1 = shipY(ship.id);
-            // WINDOW: y1 -> y2, both in the message.
-            bot().waitTicks(60);
+            // WINDOW: the 3-second stability window described above.
+            advanceServerAndClient(60);
             double y2 = shipY(ship.id);
             assertTrue("after the seat is destroyed the ship must HOLD, never fly the dead pilot's "
                             + "last command (y1=" + y1 + " y2=" + y2 + ")",
@@ -166,7 +166,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // window below watches for.
         bot().releaseKey(Keyboard.KEY_R);
 
-        Events events = events();
+        Events events = serverEvents();
         long breakMark = events.markInstrumented();
         long breakClientMark = clientEvents().mark();
         String broke = exec("stellurgytest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
@@ -197,8 +197,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // A brainless ship must never keep thrusting upward: the dead computer's channels die
         // with the tile. (It is free to FALL — only continued powered climb is the defect.)
         double y1 = shipY(ship.id);
-        // WINDOW: y1 -> y2, both in the message; the claim is over their difference.
-        bot().waitTicks(80);
+        // WINDOW: a climb that continues is a value, not an event; no record answers.
+        advanceServerAndClient(80);
         double y2 = shipY(ship.id);
         assertTrue("a ship whose flight computer was destroyed must not keep climbing under the "
                         + "dead computer's last command (y1=" + y1 + " y2=" + y2 + ")",
@@ -246,7 +246,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // The registry's own record of the ship being added, since a mark taken before the assembly
         // was queued: THIS scenario's ship by construction, where the count it replaces is
         // incremented by every neighbour that ever assembled one on this shared world.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,

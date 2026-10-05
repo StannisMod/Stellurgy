@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Set;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.universe.BodyProfile;
@@ -663,6 +665,44 @@ public class PlanetDerivationTest {
         assertEquals("silently substituting a preset would hide the coverage gap for ever",
                 null, types.drawType(900, albedo -> 900, 300, false, 1L,
                         new dev.stannismod.stellurgy.universe.ReportOnce()));
+    }
+
+    /**
+     * <b>A pressure the scan reports is air the world keeps.</b> The air a world is given on landing
+     * is decided from its profile's own facts; a profile that reported a pressure for a world whose
+     * every gas escapes or freezes out would scan as an atmosphere and land as a vacuum — and keep the
+     * warmth of a greenhouse it does not have.
+     *
+     * <p>red-witnessed: with {@code PlanetDerivation#derive} at {@code if (pressure > 0 && BodyAtmosphere.derive(}
+     * made {@code if (false && …}, this fails listing ice worlds reported at {@code p=1} to {@code p=38}
+     * at 53-59 K (2026-10-01).</p>
+     */
+    @Test
+    public void aPressureTheScanReportsIsAirTheWorldKeeps() {
+        int withAir = 0;
+        int airless = 0;
+        List<String> lies = new ArrayList<>();
+        for (long x = 0; x < 600; x++) {
+            StellarBody s = starFor(x);
+            for (BodyProfile p : system(SEED + x, cell(900 + x, 11, 0), s, 8)) {
+                if (p.pressure() <= 0) {
+                    airless++;
+                    continue;
+                }
+                withAir++;
+                long kept = BodyAtmosphere.derive(p.massEarths(), p.radiusEarths(), p.temperatureKelvin(),
+                        p.kind() == SystemBodyKind.GAS_GIANT, p.hasOxygen(),
+                        p.pressure() * (AirState.ONE_ATM / 100L)).getTotalPressure();
+                if (kept <= 0L && lies.size() < 5) {
+                    lies.add(p.toString());
+                }
+            }
+        }
+        // The sweep must reach both sides, or a clean result says nothing about the cold tail where
+        // air freezes out.
+        assertTrue("the sweep must produce worlds with air: " + withAir, withAir >= MIN_ATMOSPHERE_SAMPLE);
+        assertTrue("the sweep must reach airless worlds too: " + airless, airless > 0);
+        assertTrue("a world the scan reports with air must keep some: " + lies, lies.isEmpty());
     }
 
     /** A star archetype that varies across the sweep, so no test measures one kind of system only. */

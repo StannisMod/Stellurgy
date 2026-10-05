@@ -113,8 +113,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     }
 
     /**
-     * <p>red-witnessed: with the descent gate's {@code setInFlight(true)} ({@code EntityRocket#onUpdate}
-     * at {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}) removed: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
+     * <p>red-witnessed: with the descent gate, {@code EntityRocket#onUpdate} at
+     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}, losing the
+     * {@code setInFlight(true)} it guards: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test
@@ -150,6 +151,15 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 info.inFlight);
     }
 
+    /**
+     * <p>red-witnessed: with {@code EntityRocket#onUpdate} at
+     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())} made to fire past
+     * tick 3 and to clear the flag again at once — early, and gone before any state read could see it —
+     * this fails with "and nothing may have set it in flight before its counter passed the timer
+     * (DESCENT_TIMER=40): {… "inFlight":true,"ticksExisted":6 …}" (2026-10-01). The verdict it replaced
+     * was red here only under full-tier load, when the timer had legitimately run out before the log
+     * was read. The two premises before it are arrangements and are not witnessed.</p>
+     */
     @Test
     public void tickBeforeDescentTimerKeepsFlightOff_realTick() throws Exception {
         // Counter-test under real ticking: with ticksExisted well below
@@ -182,10 +192,22 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 info.ticksExisted <= DESCENT_TIMER);
         assertFalse("isInFlight must NOT be set before descent timer expires: " + info.raw(),
                 info.inFlight);
-        assertFalse("and nothing may have set it in flight and back inside the window: "
-                        + events.since(mark, "rocket_flight_set"),
-                Events.anyRecordHasAll(events.since(mark, "rocket_flight_set"),
-                        "e", String.valueOf(id), "inFlight", "true"));
+
+        // Read ONCE, and judged by the rocket's own counter at each write. The server keeps ticking
+        // between commands, so by the time this reads the log the timer may have run out and the gate
+        // fired as it should; a write stamped past DESCENT_TIMER is that, not the defect. Only a true
+        // write stamped at or below the timer is the gate firing early.
+        String writes = events.since(mark, "rocket_flight_set");
+        assertEquals("premise: the flight log lost none of its writes in the window, or an absence below"
+                + " proves nothing: " + writes, 0L, Events.droppedOf(writes, "rocket_flight_set"));
+        assertFalse("premise: the set-state's own write of false must be in the window, or the recorder"
+                + " was not listening: " + writes,
+                Events.recordsWhereAll(writes, "e", String.valueOf(id), "inFlight", "false").isEmpty());
+        for (String write : Events.recordsWhereAll(writes, "e", String.valueOf(id), "inFlight", "true")) {
+            assertTrue("and nothing may have set it in flight before its counter passed the timer ("
+                            + "DESCENT_TIMER=" + DESCENT_TIMER + "): " + write,
+                    Events.number(write, "ticksExisted") > DESCENT_TIMER);
+        }
     }
 
     @Test
@@ -217,9 +239,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     }
 
     /**
-     * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
-     * ({@code EntityRocket#onUpdate} at
-     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this))}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * <p>red-witnessed: with the landing branch's post, {@code EntityRocket#onUpdate} at
+     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this));}, removed: "no `rocket_landed` carrying e = … was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test

@@ -223,7 +223,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // `ship_loaded`, `ship_unloaded`, and the craft never became usable at all. A test server
         // holds its ships loaded from the moment the probes register, which is before any of this.
 
-        Events events = events();
+        Events events = serverEvents();
         long assemblyMark = events.markInstrumented();
         String assemble = assembleFixture(FixtureSite.openAir(cellDim, BX, BZ), VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
@@ -293,7 +293,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // Marks taken BEFORE the move, on BOTH logs: whatever happens to the rider happens during
         // it, and a mark taken afterwards cannot see an edge that has already passed.
         long riderMark = clientEvents().mark();
-        long riderServerMark = events().markInstrumented();
+        long riderServerMark = serverEvents().markInstrumented();
         String tpY = exec("stellurgytest vs teleport-ship-by-id " + cellDim + " " + shipId
                 + " " + BX + " " + EXTREME_Y + " " + BZ);
         assertTrue("teleport-ship to extreme Y must succeed: " + tpY, Reply.of(tpY).ok());
@@ -376,7 +376,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // move at all), not a second coordinate regime, and changing two things at once would make a
         // red unattributable. Well inside the face, so the seam cannot carry the craft mid-leg.
         long secondMark = clientEvents().mark();
-        long secondServerMark = events().markInstrumented();
+        long secondServerMark = serverEvents().markInstrumented();
         String tp2 = exec("stellurgytest vs teleport-ship-by-id " + cellDim + " " + shipId
                 + " " + (BX + SECOND_RELOCATION_X) + " " + EXTREME_Y + " " + BZ);
         assertTrue("the second teleport must succeed: " + tp2, Reply.of(tp2).ok());
@@ -441,13 +441,13 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                         + " not a detail. client=" + riding
                         + "; the client's own mounts: " + clientEvents().since(clientMark, "mount")
                         + "; its dismounts: " + clientEvents().since(clientMark, "dismount")
-                        + "; the server's dismounts: " + events().since(serverMark, "dismount")
+                        + "; the server's dismounts: " + serverEvents().since(serverMark, "dismount")
                         + "; the client's own disconnect: "
                         + clientEvents().since(clientMark, "client_disconnected")
                         + "; the server's logout: "
-                        + events().since(serverMark, "player_logged_out")
+                        + serverEvents().since(serverMark, "player_logged_out")
                         + "; the server's kicks: "
-                        + events().since(serverMark, "server_kicked_player"),
+                        + serverEvents().since(serverMark, "server_kicked_player"),
                 riding.has("posY"));
         return riding;
     }
@@ -462,7 +462,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // client's mounts, the server's dismounts, the logout and the kick all in the message. The
         // marks are taken here because a climb leg has no earlier one of its own.
         long climbClientMark = clientEvents().mark();
-        long climbServerMark = events().mark();
+        long climbServerMark = serverEvents().mark();
         double riderYBefore = requireStillAboard("before the " + label + " climb leg is driven",
                 climbClientMark, climbServerMark).get("posY").getAsDouble();
         // EXPERIMENT: a dose of thrust from the key's arrival — which is a link inside it, so a key
@@ -477,7 +477,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // EXPERIMENT: the comparison is DEFINED six client ticks after the cut — a rider lagging his
         // ship by more than RIDER_TRACKING_TOLERANCE at that offset is the failure. The tolerance is
         // the test's own and was not measured at this offset.
-        bot().waitTicks(6);
+        bot().waitWorldTicks(6);
         double serverDelta = shipY() - yBefore;
         // Through the guard for the same reason as the read before the climb: a pilot who came adrift
         // DURING the leg is the most interesting way this can fail, and a bare read turns it into a
@@ -638,7 +638,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                     inconclusive.add("x=" + x + " " + arrangement);
                     continue;
                 }
-                Events rungLog = events();
+                Events rungLog = serverEvents();
                 long spawnMark = rungLog.markInstrumented();
                 String assemble = assembleFarFixture(x);
                 if (assemble == null) {
@@ -727,7 +727,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 verdicts.put(x, flight.startsWith("OK") ? null : flight);
 
                 exec("stellurgytest player dismount");
-                bot().waitTicks(10);
+                advanceServerAndClient(10);
             }
         } finally {
             // The report is the deliverable and worth MOST when the leg died mid-ladder, so it is
@@ -824,11 +824,11 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      */
     private String farClimbLeg(String farShipId, double yBefore) throws Exception {
         double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
-        PilotThrust.climb(bot(), events(), serverClient(), 0, PilotThrust.DOSE_TICKS,
+        PilotThrust.climb(bot(), serverEvents(), serverClient(), 0, PilotThrust.DOSE_TICKS,
                 "the spike pilot's held vertical key must reach his flight computer");
         // EXPERIMENT: the comparison is DEFINED six client ticks after the cut. The tolerance is the
         // spike's own and was not measured at this offset.
-        bot().waitTicks(6);
+        bot().waitWorldTicks(6);
         double serverDelta = farShipY(farShipId) - yBefore;
         double riderDelta = bot().reportRidingEntity().get("posY").getAsDouble() - riderYBefore;
         String numbers = "serverLift=" + farFmt(serverDelta) + " riderLift=" + farFmt(riderDelta)

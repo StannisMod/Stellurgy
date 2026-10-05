@@ -48,7 +48,7 @@ import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.api.IPlanetaryProvider;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
@@ -214,7 +214,7 @@ public class PlanetEventHandler {
         }
  */
         if (event.getEntity().isInWater()) {
-            if (AtmosphereType.LOWOXYGEN.isImmune(event.getEntityLiving()))
+            if (Atmosphere.LOWOXYGEN.isImmune(event.getEntityLiving()))
                 event.getEntity().setAir(300);
         }
 
@@ -309,7 +309,7 @@ public class PlanetEventHandler {
         AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getWorld());
 
         if (!event.getWorld().isRemote && atmhandler != null &&
-                !atmhandler.getAtmosphereType(event.getPos()).allowsCombustion()) {
+                !atmhandler.allowsCombustionAt(event.getPos())) {
 
             if (event.getPlacedBlock().getBlock() == Blocks.TORCH) {
                 EnumFacing direction = event.getPlacedBlock().getValue(BlockTorch.FACING);
@@ -327,7 +327,7 @@ public class PlanetEventHandler {
         AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getWorld());
 
         if (!event.getWorld().isRemote && direction != null && event.getEntityPlayer() != null && atmhandler != null &&
-                !atmhandler.getAtmosphereType(event.getPos().offset(direction)).allowsCombustion()) {
+                !atmhandler.allowsCombustionAt(event.getPos().offset(direction))) {
 
             if (!event.getEntityPlayer().getHeldItem(event.getHand()).isEmpty()) {
                 if (event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.FLINT_AND_STEEL || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.FIRE_CHARGE || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.BLAZE_POWDER || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.BLAZE_ROD)

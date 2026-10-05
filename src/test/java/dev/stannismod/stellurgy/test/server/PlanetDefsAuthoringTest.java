@@ -185,51 +185,82 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                 + " galacticCoord=\"12,0,-7\" numPlanets=\"0\" numGasGiants=\"0\">\n"
                 // aNestedPlanetIsMadeAChildOfTheBodyItIsWrittenInside
                 + "        <planet name=\"Primus\" DIMID=\"" + PRIMUS + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <planet name=\"PrimusMoon\" DIMID=\"" + PRIMUS_MOON + "\">\n"
+                + "                <mass>1.0</mass>\n"
+                + "                <radius>1.0</radius>\n"
                 + "            </planet>\n"
                 + "        </planet>\n"
                 // aPlanetThatStatesNoDimensionIsGivenAFreeOne
                 + "        <planet name=\"" + UNNUMBERED + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "        </planet>\n"
                 // ...and, AFTER it, a body stating the id the allocator hands out first.
                 + "        <planet name=\"" + STATES_THE_FIRST_FREE_ID + "\" DIMID=\"" + FIRST_FREE + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "        </planet>\n"
                 // aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar: one id stated twice.
                 + "        <planet name=\"" + HOLDS_THE_ID + "\" DIMID=\"" + HELD_TWICE + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "        </planet>\n"
                 + "        <planet name=\"" + STATES_THE_SAME_ID + "\" DIMID=\"" + HELD_TWICE + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "        </planet>\n"
                 // atmosphereAndGravityOutsideTheirRangeAreClampedIntoIt
                 + "        <planet name=\"Heavy\" DIMID=\"" + HEAVY + "\">\n"
-                + "            <atmosphereDensity>5000</atmosphereDensity>\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
+                // Computed from the ceiling: a written-out number stops being "above the maximum"
+                // the moment the maximum moves.
+                + "            <atmosphereDensity>" + (DimensionProperties.MAX_ATM_PRESSURE + 1)
+                + "</atmosphereDensity>\n"
                 + "            <gravitationalMultiplier>900</gravitationalMultiplier>\n"
                 + "        </planet>\n"
                 + "        <planet name=\"Light\" DIMID=\"" + LIGHT + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <atmosphereDensity>-50</atmosphereDensity>\n"
                 + "            <gravitationalMultiplier>-20</gravitationalMultiplier>\n"
                 + "        </planet>\n"
                 // aLaserDrillEntryIsTrimmedCountedAndCopiedOffTheDictionary: whitespace on both
                 // sides of both fields, the way a hand-formatted list is written.
                 + "        <planet name=\"Driller\" DIMID=\"" + DRILLER + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <laserDrillOres> oreIron ; 3 </laserDrillOres>\n"
                 + "        </planet>\n"
                 // aLaserDrillOreThatResolvesToNothingIsSkippedAndThePlanetKept: the unresolvable
                 // name FIRST, so a failure on it is a failure before the good entry is reached.
                 + "        <planet name=\"DrillerUnresolved\" DIMID=\"" + DRILLER_UNRESOLVED + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <laserDrillOres>" + RESERVED_EMPTY_ORE + ";2,oreGold;2</laserDrillOres>\n"
                 + "        </planet>\n"
                 // aTerrainSourceIsReadTolerantlyAndAnUnknownOneKeepsThePlanet
                 + "        <planet name=\"ModTerrain\" DIMID=\"" + MOD_TERRAIN + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <terrainSource> mod_worldtype </terrainSource>\n"
                 + "            <terrainWorldType> flat </terrainWorldType>\n"
                 + "        </planet>\n"
                 + "        <planet name=\"BogusTerrain\" DIMID=\"" + BOGUS_TERRAIN + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <terrainSource>NOT_A_TERRAIN_SOURCE</terrainSource>\n"
                 + "        </planet>\n"
                 // aStatedWeatherLengthEngagesThePlanetsOwnCycleAndNoneLeavesItShared
                 + "        <planet name=\"StatesNoWeather\" DIMID=\"" + STATES_NO_WEATHER + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "        </planet>\n"
                 + "        <planet name=\"StatesAWeatherLength\" DIMID=\"" + STATES_A_WEATHER_LENGTH + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <rainStartLength>3000</rainStartLength>\n"
                 + "        </planet>\n"
                 + "    </star>\n"
@@ -247,6 +278,8 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                 + " numPlanets=\"" + COUNTED_PLANETS + "\""
                 + " numGasGiants=\"" + COUNTED_GAS_GIANTS + "\">\n"
                 + "        <planet name=\"CountedDeclared\" DIMID=\"" + COUNTED_DECLARED + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "        </planet>\n"
                 + "    </star>\n"
                 + "</galaxy>\n";
@@ -432,7 +465,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
         actual.put("Heavy.gravity", heavy.number("gravity"));
         actual.put("Light.atmosphereDensity", light.number("atmosphereDensity"));
         actual.put("Light.gravity", light.number("gravity"));
-        assertEquals("authored 5000 / 900 and -50 / -20 must land on the modelled bounds: "
+        assertEquals("authored ceiling+1 / 900 and -50 / -20 must land on the modelled bounds: "
                 + heavy + " / " + light, expected, actual);
     }
 

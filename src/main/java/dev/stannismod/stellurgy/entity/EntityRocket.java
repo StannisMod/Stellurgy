@@ -99,6 +99,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
 import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.util.*;
 
 
@@ -221,6 +222,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     /** Arms the landing detector: false from engine start until the craft first
      *  leaves the ground, so the liftoff itself can't read as a touchdown. */
     private boolean freeFlightHasLeftGround = false;
+    /** Whether this rocket has already said it is entering a world with no orbit line. Once per entity. */
+    private boolean noOrbitLineReported = false;
     /** Ticks over which the FF client absorbs a server-position correction
      *  (~ the entity updateFrequency, so jitter is smoothed, not snapped). */
     private static final double FF_CLIENT_CORRECT_TICKS = 3.0;
@@ -1399,7 +1402,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         // Cannot even lift itself here, so no amount of fuel gets it to orbit.
         if (stats.getThrustToWeightRatio(gSrc) <= 1f) return false;
         final double a = Math.max(0.0001d, stats.getAcceleration(gSrc));    
-        final double h = Math.max(0.0, stats.orbitHeight - this.posY);
+        final double h = Math.max(0.0, flightOrbitHeight() - this.posY);
 
         long nTicks = (long)Math.ceil(Math.sqrt(2.0 * h / a));
         nTicks += 2L; // small safety buffer
@@ -1597,7 +1600,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             for (Vector3F<Float> vec : stats.getEngineLocations()) {
 
                 AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
-                IAtmosphere atmosphere = null;
+                Atmosphere atmosphere = null;
 
                 if (handler != null)
                     atmosphere = handler.getAtmosphereType(this);
@@ -2171,7 +2174,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                 //Checks heights to see how high the rocket should go
                 //I cannot believe I am doing this but it's not like orbital mechanics exists anyway.... here, have an approximation for it being harder to get to farther moons
-                if (!isInOrbit() && (this.posY > stats.orbitHeight)) {
+                if (!isInOrbit() && (this.posY > flightOrbitHeight())) {
                     onOrbitReached();
                 }
 
@@ -2297,12 +2300,32 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      * @param entryLocationDimID the dimension ID for the dimension the rocket is entering
      * @return integer for world height in blocks the rocket will spawn in at when it reaches the dimension
      */
+    /**
+     * The height this flight reaches orbit at: what its launch wrote, or — for a flight no launch has
+     * stated, such as one loaded mid-flight, since the number is not saved — the world's own line, the
+     * same answer a launch with no guidance computer writes.
+     */
+    private int flightOrbitHeight() {
+        return stats.orbitHeight != StatsRocket.ORBIT_HEIGHT_UNSET ? stats.orbitHeight
+                : getEntryHeight(this.world.provider.getDimension());
+    }
+
     private int getEntryHeight(int entryLocationDimID) {
-        if (entryLocationDimID == StellurgyConfiguration.getCurrentConfig().spaceDimId) {
-            return StellurgyConfiguration.getCurrentConfig().stationClearanceHeight;
-        } else {
-            return StellurgyConfiguration.getCurrentConfig().orbit;
+        java.util.OptionalInt line = DimensionManager.getInstance().transferLineOf(entryLocationDimID);
+        if (line.isPresent()) {
+            return line.getAsInt();
         }
+        // A launch from a world with no line is refused before it starts, so this is reached only by a
+        // rocket already under way into one - a return to the world it left, a station's planet. It
+        // must still come out somewhere: at the top of the block band, said once.
+        if (!noOrbitLineReported) {
+            noOrbitLineReported = true;
+            Stellurgy.logger.warn("[EntityRocket] dim {} has no orbit line (no radius, no stated "
+                    + "<orbitHeight>); this rocket enters it at the top of the block band, Y {}, which "
+                    + "is not that world's atmosphere", entryLocationDimID,
+                    dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+        }
+        return dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y;
     }
 
     private void reachSpaceUnmanned() {
@@ -2847,6 +2870,13 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 .getGravitationalMultiplier())) {
             setError("error.rocket.tooHeavy");
             return; // hard stop; no silent fall-through
+        }
+
+        // A world with no orbit line has no altitude at which "in orbit" begins; launching anyway
+        // would fly to a number nobody chose.
+        if (!DimensionManager.getInstance().transferLineOf(this.world.provider.getDimension()).isPresent()) {
+            setError("error.rocket.noOrbitLine");
+            return;
         }
 
         //Check to see what place we should be going to

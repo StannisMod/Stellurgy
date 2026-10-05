@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
@@ -28,7 +30,6 @@ import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachin
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInputHatch;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
@@ -40,7 +41,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileAstrobodyDataProcessor extends TileMultiPowerConsumer implements IModularInventory, IInventory {
+public class TileAstrobodyDataProcessor extends TileWasteHeatPowerConsumer implements IModularInventory, IInventory {
 
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{

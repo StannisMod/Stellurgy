@@ -84,6 +84,7 @@ public abstract class MixinEntityRocketEvents {
         }
         TestTrace.record(self, "rocket_flight_set", "\"e\":" + self.getEntityId()
                 + ",\"inFlight\":" + inFlight
+                + ",\"ticksExisted\":" + self.ticksExisted
                 + ",\"y\":" + TestTrace.fmt(self.posY)
                 + ",\"motionY\":" + TestTrace.fmt(self.motionY));
     }

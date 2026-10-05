@@ -326,7 +326,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // The mark goes BEFORE the stimulus, so the mount recorded after it can only be this
         // boarding's. markInstrumented, because the mount is a test-mixin record and a mixin that
         // never wove answers with exactly the empty log a boarding that never happened does.
-        Events events = events();
+        Events events = serverEvents();
         long boardMark = events.markInstrumented();
         // The CLIENT's own mark beside it: his client performs the mount when it is told who is
         // riding what, and that is the half read below.
@@ -600,11 +600,10 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
         // overlaps, and that motion is not the pilot's.
-        // EXPERIMENT: SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE ticks for that resolve to end, then ONE
-        // reading. It replaced a loop that sampled until twenty readings agreed; the no-key control
-        // window right below is what proves the ship then sits still, and it reports the drift it
-        // saw rather than a loop's run length.
-        bot().waitTicks(SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE);
+        // EXPERIMENT: the resolve's ticks, then ONE reading. It replaced a loop that sampled until
+        // twenty readings agreed; the no-key control window right below is what proves the ship then
+        // sits still, and it reports the drift it saw rather than a loop's run length.
+        advanceServerAndClient(SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE);
         double yRest = shipPosY();
         scenario().requireArranged("the ship must report an altitude once the post-assembly resolve"
                         + " has had its time, or NO climb measured on it could be attributed to pilot"
@@ -794,7 +793,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // read would report the correction. What it cannot see: a worse excursion between two
         // samples.
         for (int sample = 0; sample < MEASURE_SAMPLES; sample++) {
-            bot().waitTicks(TICKS_PER_SAMPLE);
+            advanceServerAndClient(TICKS_PER_SAMPLE);
             double y = shipPosY();
             if (!Double.isNaN(y)) {
                 worst = Math.max(worst, Math.abs(y - from));

@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.satellite;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
@@ -18,7 +20,6 @@ import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
@@ -27,7 +28,7 @@ import java.util.LinkedList;
 import java.util.List;
 import dev.stannismod.stellurgy.item.*;
 
-public class TileSatelliteBuilder extends TileMultiPowerConsumer implements IModularInventory, IInventory, IButtonInventory {
+public class TileSatelliteBuilder extends TileWasteHeatPowerConsumer implements IModularInventory, IInventory, IButtonInventory {
 
     /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = new Object[][][]{

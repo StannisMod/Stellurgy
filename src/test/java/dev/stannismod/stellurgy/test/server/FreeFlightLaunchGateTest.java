@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ConfigFlag;
 import org.junit.Test;
 
 
@@ -58,20 +59,24 @@ public class FreeFlightLaunchGateTest extends AbstractSharedServerTest {
         String mode = ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         assertTrue("set FREE_FLIGHT failed: " + mode, "FREE_FLIGHT".equals(Reply.of(mode).text("flightMode")));
 
-        // Remove all fuel so canStartFreeFlight() must reject (rocketRequireFuel
-        // defaults true).
-        String drain = ok(client().execute("stellurgytest rocket drain-fuel " + id));
-        assertTrue("drain-fuel failed: " + drain, Reply.of(drain).ok());
+        // The gate is a FUEL gate, so fuel is required for it: the shared harness world starts with
+        // the requirement off. Turned on only after assembly, which judges a rocket's tanks against
+        // the climb to its world's orbit line and is not this test's subject.
+        try (ConfigFlag fuelRequired = ConfigFlag.set(c -> String.join("\n", client().execute(c)),"rocketRequireFuel", true)) {
+            // Remove all fuel so canStartFreeFlight() must reject.
+            String drain = ok(client().execute("stellurgytest rocket drain-fuel " + id));
+            assertTrue("drain-fuel failed: " + drain, Reply.of(drain).ok());
 
-        // Drive prepareLaunch through the redstone-equivalent server entry.
-        String resp = ok(client().execute("stellurgytest rocket ff-prepare-launch " + id));
-        assertTrue("ff-prepare-launch probe failed: " + resp, Reply.of(resp).ok());
-        assertTrue("rocket must be in FREE_FLIGHT mode for this pin: " + resp,
-                Reply.of(resp).bool("isFreeFlight"));
+            // Drive prepareLaunch through the redstone-equivalent server entry.
+            String resp = ok(client().execute("stellurgytest rocket ff-prepare-launch " + id));
+            assertTrue("ff-prepare-launch probe failed: " + resp, Reply.of(resp).ok());
+            assertTrue("rocket must be in FREE_FLIGHT mode for this pin: " + resp,
+                    Reply.of(resp).bool("isFreeFlight"));
 
-        // The gate: no fuel => must NOT enter flight (no on-pad dead-state).
-        assertTrue("fuel-less FF rocket must stay grounded after prepareLaunch "
-                        + "(gate regression — it entered flight): " + resp,
-                (!Reply.of(resp).bool("isInFlight")));
+            // The gate: no fuel => must NOT enter flight (no on-pad dead-state).
+            assertTrue("fuel-less FF rocket must stay grounded after prepareLaunch "
+                            + "(gate regression — it entered flight): " + resp,
+                    (!Reply.of(resp).bool("isInFlight")));
+        }
     }
 }

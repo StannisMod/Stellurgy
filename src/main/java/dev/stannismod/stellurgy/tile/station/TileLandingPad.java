@@ -190,9 +190,18 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
                 }
             ItemStack stack = getStackInSlot(0);
             if (stack.getItem() == LibVulpesItems.itemLinker && ItemLinker.getDimId(stack) != Constants.INVALID_PLANET && event.getEntity() instanceof EntityRocket) {
-                ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack), ItemLinker.getMasterX(stack) + 0.5f, StellurgyConfiguration.getCurrentConfig().orbit, ItemLinker.getMasterZ(stack) + 0.5f);
+                ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack), ItemLinker.getMasterX(stack) + 0.5f, arrivalHeightIn(ItemLinker.getDimId(stack)), ItemLinker.getMasterZ(stack) + 0.5f);
             }
         }
+    }
+
+    /**
+     * The height a rocket linked to {@code dimId} comes into it at — its transfer line, the same answer
+     * the rocket itself gives on arrival (which announces a world with no line).
+     */
+    private static float arrivalHeightIn(int dimId) {
+        return dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().transferLineOf(dimId)
+                .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
     }
 
     @SubscribeEvent
@@ -208,7 +217,7 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
             if (bbCache.intersects(rocket.getEntityBoundingBox())) {
                 if (event.getEntity() instanceof EntityRocket) {
                     ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack),
-                            ItemLinker.getMasterX(stack) + 0.5f, StellurgyConfiguration.getCurrentConfig().orbit, ItemLinker.getMasterZ(stack) + 0.5f);
+                            ItemLinker.getMasterX(stack) + 0.5f, arrivalHeightIn(ItemLinker.getDimId(stack)), ItemLinker.getMasterZ(stack) + 0.5f);
                 }
             }
         }
@@ -290,7 +299,7 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
                 if (rocket instanceof EntityRocket) {
                     if (stack.getItem() == LibVulpesItems.itemLinker && ItemLinker.getDimId(stack) != Constants.INVALID_PLANET) {
                         ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack),
-                                ItemLinker.getMasterX(stack) + 0.5f, StellurgyConfiguration.getCurrentConfig().orbit, ItemLinker.getMasterZ(stack) + 0.5f);
+                                ItemLinker.getMasterX(stack) + 0.5f, arrivalHeightIn(ItemLinker.getDimId(stack)), ItemLinker.getMasterZ(stack) + 0.5f);
                     } else
                         ((EntityRocket) rocket).setOverriddenCoords(Constants.INVALID_PLANET, 0, 0, 0);
                 }

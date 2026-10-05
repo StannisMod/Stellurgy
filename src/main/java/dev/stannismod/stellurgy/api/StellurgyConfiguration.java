@@ -15,9 +15,10 @@ import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.oredict.OreDictionary;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.SealableBlockHandler;
@@ -46,6 +47,7 @@ public class StellurgyConfiguration {
     private final static String PLANET = Constants.CONFIG_CATEGORY_PLANET;
     private final static String OXYGEN = "Oxygen System";
     private final static String ENERGY = "Energy Production";
+    private final static String HEAT = "Ship Thermal System";
     private final static String MISSION = "Resource Collection Missions";
     private final static String PERFORMANCE = "Performance";
     private final static String CLIENT = "Client";
@@ -63,7 +65,7 @@ public class StellurgyConfiguration {
      * by {@link #loadPreInit()}; all but geodeOres, blackHoleGeneratorTiming and orbitalLaserOres are read
      * again (and may be rewritten) by {@link #loadPostInit()}.
      */
-    private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
+    private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
     /**
      * This process's own configuration, read from its file at pre-init. Effectively final, client /
      * dedicated-server lifetime: the reference is never replaced; its fields are filled by
@@ -76,8 +78,6 @@ public class StellurgyConfiguration {
 
     //Only to be set in preinit
     public net.minecraftforge.common.config.Configuration config;
-    @ConfigProperty(needsSync = true)
-    public int orbit = 1000;
     @ConfigProperty(needsSync = true)
     public int stationClearanceHeight = 1000;
     @ConfigProperty(needsSync = true)
@@ -130,7 +130,8 @@ public class StellurgyConfiguration {
     /** Damage taken per second in a vacuum. A configured NUMBER, so it lives with the other
      *  configured numbers: it used to be a public static on {@code AtmosphereVacuum} that the config
      *  loader reached over and wrote, which put a value the server owns in a class that only spends
-     *  it. */
+     *  it. The behaviour that reads it is a row in the hazard table now, and it reads it at the
+     *  moment it hurts somebody rather than snapshotting it at load. */
     @ConfigProperty
     public int vacuumDamage = 1;
     @ConfigProperty
@@ -275,6 +276,105 @@ public class StellurgyConfiguration {
     public boolean laserDrillOresBlackList;
     @ConfigProperty
     public int oxygenVentSize;
+    @ConfigProperty
+    public boolean lifeSupportZones;
+    /**
+     * The oxygen band, the ignition floor and the crew's draw, in the COMPOSITION's own unit rather
+     * than the millionths the config file states them in.
+     * <p>
+     * These are compared against, and subtracted from, a zone's partial pressures every tick, so they
+     * are held in the unit those pressures are in — the conversion happens once, where the file is
+     * read, instead of at every comparison. A config file stays in parts per million because that is
+     * what an oxygen fraction and an exposure limit are quoted in; see {@code AirState.PER_PPM}.
+     */
+    @ConfigProperty
+    public long lifeSupportMinPartialO2;
+    @ConfigProperty
+    public long lifeSupportMaxPartialO2;
+    @ConfigProperty
+    public long lifeSupportCombustionMinPartialO2;
+    @ConfigProperty
+    public long lifeSupportRespirationRate;
+    @ConfigProperty
+    public int lifeSupportAirHeatCapacity;
+    @ConfigProperty
+    public long lifeSupportRecirculatorRate;
+    @ConfigProperty
+    public int lifeSupportRecirculatorPower;
+    @ConfigProperty
+    public long lifeSupportCarbonPerDust;
+    @ConfigProperty
+    public int jettisonPortIntervalTicks;
+    @ConfigProperty
+    public int jettisonPortClearance;
+    @ConfigProperty
+    public int lifeSupportFluidPerAtmBlock;
+    @ConfigProperty
+    public long lifeSupportSeparatorRate;
+    @ConfigProperty
+    public int lifeSupportSeparatorPower;
+    @ConfigProperty
+    public int lifeSupportPlantRate;
+    @ConfigProperty
+    public int lifeSupportPlantPower;
+    @ConfigProperty
+    public int lifeSupportPlantCarbonPerDust;
+    @ConfigProperty
+    public int lifeSupportDuctThroughput;
+    @ConfigProperty
+    public long lifeSupportBreachVentRate;
+    @ConfigProperty
+    public boolean shipHeat;
+    @ConfigProperty
+    public int shipHeatAmbientKelvin;
+    @ConfigProperty
+    public int shipHeatPipeCapacity;
+    @ConfigProperty
+    public int shipHeatAccumulatorCapacity;
+    @ConfigProperty
+    public int shipHeatPipeThroughput;
+    @ConfigProperty
+    public int shipHeatWasteFraction;
+    @ConfigProperty
+    public int shipHeatRadiatorCellPower;
+    @ConfigProperty
+    public int shipHeatRadiatorReferenceKelvin;
+    @ConfigProperty
+    public int shipHeatRadiatorClearance;
+    @ConfigProperty
+    public int shipHeatChillerThroughput;
+    @ConfigProperty
+    public int shipHeatChillerCopFraction;
+    @ConfigProperty
+    public int shipHeatChillerCapacity;
+    @ConfigProperty
+    public int shipHeatStarFluxReferenceKelvin;
+    @ConfigProperty
+    public int shipHeatShieldAttenuation;
+    @ConfigProperty
+    public int planetGreenhouseCeilingAtm;
+    @ConfigProperty
+    public int shipHeatChillerMaxCop;
+    @ConfigProperty
+    public int shipHeatCabinConductionFraction;
+    @ConfigProperty
+    public int shipHeatCrewVeryHotKelvin;
+    @ConfigProperty
+    public int shipHeatCrewSuperheatedKelvin;
+    @ConfigProperty
+    public int shipHeatDriveRefusalKelvin;
+    @ConfigProperty
+    public int shipHeatSlugMarginKelvin;
+    @ConfigProperty
+    public int shipHeatSlugJoulesPerUnit;
+    @ConfigProperty
+    public int shipHeatMeltCheckTicks;
+    @ConfigProperty
+    public int shipHeatDumpThroughput;
+    @ConfigProperty
+    public int shipHeatDumpTriggerKelvin;
+    @ConfigProperty
+    public int shipHeatHullSkinFraction;
     @ConfigProperty
     public int solarGeneratorMult;
     @ConfigProperty
@@ -502,6 +602,27 @@ public class StellurgyConfiguration {
         return proxy == null ? ownConfig : proxy.configInForce(ownConfig);
     }
 
+    /**
+     * A partial pressure or a rate of one, authored in millionths of an atmosphere and returned in
+     * the composition's own unit.
+     * <p>
+     * The single place the two units meet. A person writing a config file thinks in parts per million
+     * because that is how an oxygen fraction and an exposure limit are quoted; the model stores a
+     * thousand times finer so a trace atmosphere still has digits left. Converting HERE, once, is what
+     * lets every comparison downstream be a plain {@code >=} against a zone's own numbers.
+     * <p>
+     * The bound is the one the TYPE imposes and nothing tighter: a Forge integer property, so whatever
+     * fits in one. Deciding here that no pack may want a threshold above one atmosphere would be a
+     * balance opinion wearing a limit's clothes, and a world like Venus is exactly where it would be
+     * wrong. The product cannot overflow either way — the internal unit holds some nine billion
+     * atmospheres.
+     */
+    private static long partialPressure(net.minecraftforge.common.config.Configuration config,
+                                        String key, int defaultPpm, String comment) {
+        return config.get(OXYGEN, key, defaultPpm, comment, 0, Integer.MAX_VALUE).getInt()
+                * AirState.PER_PPM;
+    }
+
     public static void loadPreInit() {
 
         StellurgyConfiguration stellurgyConfig = ownConfig;
@@ -547,6 +668,25 @@ public class StellurgyConfiguration {
         stellurgyConfig.spaceSuitOxygenTime = config.get(OXYGEN, "spaceSuitO2Buffer", 30, "Maximum suit O2 buffer time in minutes.").getInt();
         stellurgyConfig.suitTankCapacity = (float) config.get(OXYGEN, "suitTankCapacity", 1.0f, "Multiplier for suit extra tank capacity.", 0, Float.MAX_VALUE).getDouble();
         stellurgyConfig.scrubberRequiresCartrige = config.get(OXYGEN, "scrubberRequiresCartrige", true, "Require cartridges for oxygen scrubbers.").getBoolean();
+        stellurgyConfig.lifeSupportZones = config.get(OXYGEN, "lifeSupportZones", true, "Track nitrogen/oxygen/CO2 separately inside a sealed zone: crew consume O2 and exhale CO2, and the breathability of the room follows its oxygen partial pressure. When false a sealed zone behaves exactly as it did before, with a fixed breathable atmosphere.").getBoolean();
+        stellurgyConfig.lifeSupportMinPartialO2 = partialPressure(config, "lifeSupportMinPartialO2", 160000, "Oxygen partial pressure below which a zone stops being breathable, in millionths of an atmosphere (210000 is sea-level air).");
+        stellurgyConfig.lifeSupportCombustionMinPartialO2 = partialPressure(config, "lifeSupportCombustionMinPartialO2", 150000, "Oxidiser partial pressure below which nothing will burn, in millionths of an atmosphere. This is NOT the breathing threshold and must not be set to it: a room can be too thin to breathe and still light a torch, which is why the two are separate numbers. Real materials stop burning a little below where a person stops coping, which is where the default sits. Set it to 0 and nothing burns anywhere.");
+        stellurgyConfig.lifeSupportMaxPartialO2 = partialPressure(config, "lifeSupportMaxPartialO2", 300000, "Oxygen partial pressure above which a zone becomes toxic and fire-prone, in millionths of an atmosphere.");
+        stellurgyConfig.lifeSupportRespirationRate = partialPressure(config, "lifeSupportRespirationRate", 2000, "Oxygen a single crew member turns into CO2 each second, in millionths of an atmosphere times the zone volume in blocks. Larger rooms therefore last proportionally longer.");
+        stellurgyConfig.lifeSupportAirHeatCapacity = config.get(OXYGEN, "lifeSupportAirHeatCapacity", 40, "How much heat one block of air at one atmosphere absorbs per kelvin. This is what makes a compartment a heat reservoir rather than an empty space: a big pressurised room warms slowly and holds the warmth, a small or half-pressurised one swings fast, and a vacuum holds nothing at all. Set it to 0 and air stops carrying heat, which leaves every zone reading ambient forever.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportRecirculatorRate = partialPressure(config, "lifeSupportRecirculatorRate", 6000, "CO2 a single recirculator turns back into oxygen each second, in millionths of an atmosphere. At the default it keeps up with three crew in a room of any size.");
+        stellurgyConfig.lifeSupportRecirculatorPower = config.get(OXYGEN, "lifeSupportRecirculatorPower", 400, "Power a recirculator draws per operation. Reversing combustion is endothermic: the energy cost is the point, not a tax.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportCarbonPerDust = partialPressure(config, "lifeSupportCarbonPerDust", 60000, "CO2 that must be regenerated before one carbon dust is produced, in millionths of an atmosphere. At the defaults a recirculator running flat out yields a dust every ten seconds.");
+        stellurgyConfig.jettisonPortIntervalTicks = config.get(OXYGEN, "jettisonPortIntervalTicks", 20, "How often a jettison port tries to throw its contents overboard, in ticks. This is a duty cycle, not a throttle on how much leaves: the port ejects whatever stack it holds, so a faster port empties a busier scrubber line rather than exporting more per firing.", 1, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.jettisonPortClearance = config.get(OXYGEN, "jettisonPortClearance", 3, "How many blocks in front of a jettison port must be empty before it will fire. The port refuses rather than firing into a wall, and it HOLDS its cargo while blocked instead of voiding it, so the only cost of a badly placed port is that nothing leaves.", 1, 64).getInt();
+        stellurgyConfig.lifeSupportFluidPerAtmBlock = config.get(OXYGEN, "lifeSupportFluidPerAtmBlock", 1000, "How many millibuckets of gas one whole atmosphere of partial pressure amounts to in ONE block of room. This is the exchange rate between air in a room and gas in a pipe: at the default, emptying a 20-block cabin of its 0.21 atm of oxygen yields 4200 mB.", 1, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportSeparatorRate = partialPressure(config, "lifeSupportSeparatorRate", 20000, "Partial pressure a separator moves between room and tank each second, in millionths of an atmosphere. At the default it clears a badly stale room in under ten seconds.");
+        stellurgyConfig.lifeSupportSeparatorPower = config.get(OXYGEN, "lifeSupportSeparatorPower", 300, "Power a separator draws per operation.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportPlantRate = config.get(OXYGEN, "lifeSupportPlantRate", 240000, "Regeneration a central life-support plant can supply to its ventilation network each second, in millionths of an atmosphere TIMES the served zone's volume in blocks. Unlike the per-room recirculator this is an absolute amount of gas, so one number can be split across rooms of different sizes: at the default it clears about 13000 millionths per second from a 18-block cabin, or half that from two of them.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportPlantPower = config.get(OXYGEN, "lifeSupportPlantPower", 2000, "Power a central plant draws per second while regenerating at its full rate; a plant running below capacity draws proportionally less. Reversing combustion is endothermic — the energy is the mechanic, and centralising it is what buys the better rate.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportPlantCarbonPerDust = config.get(OXYGEN, "lifeSupportPlantCarbonPerDust", 1200000, "Regeneration work a central plant must do before one carbon dust is produced, in the same millionths-times-blocks unit as lifeSupportPlantRate. The default is the per-room figure scaled to a nominal 20-block cabin, so a plant and a recirculator yield the same dust for the same gas.", 1, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportDuctThroughput = config.get(OXYGEN, "lifeSupportDuctThroughput", 120000, "Regeneration work one ventilation duct block will carry each second, in the same unit as lifeSupportPlantRate. This is a THROUGHPUT, not a gas content: the duct carries a rate, and running a second line is how a ship supports more crew.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportBreachVentRate = partialPressure(config, "lifeSupportBreachVentRate", 50000, "How fast a breached zone loses its air to space, in millionths of an atmosphere per second across all three gases. At the default a sea-level room empties in about twenty seconds, which is the window a player has to close a bulkhead or patch the hull. 0 disables venting: a breached room then keeps its air, which is the pre-3.0.0 behaviour.");
         stellurgyConfig.dropExTorches = config.get(OXYGEN, "dropExtinguishedTorches", false, "Drop an extinguished torch instead of a vanilla torch, when breaking an extinguished torch.").getBoolean();
         sealableBlockWhiteList = config.getStringList("sealableBlockWhiteList", OXYGEN, new String[]{}, "Blocks that should count as sealable. Format: modid:block  for example \"minecraft:chest\"");
         sealableBlockBlackList = config.getStringList("sealableBlockBlackList", OXYGEN, new String[]{}, "Blocks that should not count as sealable.  Format: modid:block  for example \"minecraft:chest\"");
@@ -562,8 +702,6 @@ public class StellurgyConfiguration {
         //Missions
         stellurgyConfig.asteroidMiningTimeMult = config.get(MISSION, "miningMissionTmeMultiplier", 1.0, "Multiplier for mining mission time.").getDouble();
         stellurgyConfig.gasCollectionMult = config.get(MISSION, "gasMissionMultiplier", 1.0, "Multiplier for gas mission time.").getDouble();
-        harvestableGasses = config.getStringList("harvestableGasses", MISSION, new String[]{}, "List of fluid names that can be harvested from any gas giant");
-        spawnableGasses = config.getStringList("spawnableGasses", MISSION, new String[]{"hydrogen;125;1600;1.0", "helium;125;1600;0.9", "helium3;175;1600;0.2", "oxygen;0;124;1.0", "nitrogen;0;124;1.0", "ammonia;0;124;0.75", "methane;0;124;0.25"}, "List of fluids that can generate on gas giants. Format: fluid;minGravity;maxGravity;chance");
         stellurgyConfig.gasHarvestAmountMultiplier = config.get(
             MISSION, "gasHarvestAmountMultiplier", 1.0,
             "Per-mission harvest cap = 64,000 mB × multiplier. Ignored if gasHarvestInfinite=true."
@@ -576,6 +714,32 @@ public class StellurgyConfiguration {
 
 
         //Energy Production
+        stellurgyConfig.shipHeat = config.get(HEAT, "shipHeat", true, "Machines make waste heat, coolant loops carry it and hold it, and a loop that is given more than it can get rid of warms up. When false no block makes or stores heat and every loop reads as ambient, which is how the game behaved before the thermal system existed.").getBoolean();
+        stellurgyConfig.shipHeatAmbientKelvin = config.get(HEAT, "shipHeatAmbientKelvin", 293, "The temperature a coolant loop sits at when it is holding nothing, in kelvin. 293 is room temperature; everything a loop reads above this is heat it is currently carrying.", 1, 5000).getInt();
+        stellurgyConfig.shipHeatPipeCapacity = config.get(HEAT, "shipHeatPipeCapacity", 20, "How much heat one pipe block absorbs per kelvin. At the default a pipe holds about 20000 heat units over the roughly 1000 K between room temperature and the point where a loop starts damaging what it runs through, so a long run is a real heat sink and not just a wire.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatAccumulatorCapacity = config.get(HEAT, "shipHeatAccumulatorCapacity", 1000, "How much heat one accumulator block absorbs per kelvin — fifty pipes' worth at the defaults, which is what makes a block of it worth the space when a jump has to be survived.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatPipeThroughput = config.get(HEAT, "shipHeatPipeThroughput", 200000, "Heat one pipe block will carry each second between the loop and what is attached to it. The default is exactly one mid-game reactor at cruise, so a second reactor wants a second run rather than a longer one.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatWasteFraction = config.get(HEAT, "shipHeatWasteFraction", 300, "How much of the energy a machine spends comes back out as waste heat a coolant loop can pick up, in thousandths. The rest is taken away by the air around the machine, which is why a planetside base needs no thermal build at all.", 0, 1000).getInt();
+        stellurgyConfig.shipHeatRadiatorCellPower = config.get(HEAT, "shipHeatRadiatorCellPower", 6000, "How much heat one radiating cell sheds each second when the loop is at the reference temperature and the surroundings are cold. This is a POINT ON THE CURVE, not the whole answer: the law is quartic, so the same cell sheds far less at a cooler loop temperature and far more at a hotter one, and that is what makes a chiller worth building.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatRadiatorReferenceKelvin = config.get(HEAT, "shipHeatRadiatorReferenceKelvin", 500, "The loop temperature at which a cell sheds exactly shipHeatRadiatorCellPower, in kelvin. Move this and every cell is rescaled without the curve changing shape.", 1, 5000).getInt();
+        stellurgyConfig.shipHeatRadiatorClearance = config.get(HEAT, "shipHeatRadiatorClearance", 10, "How many blocks must be empty in front of a radiating cell for it to work. Anything in the way means the heat comes back to the ship, which is deliberately not modelled — the cell simply stops working and reports where the obstruction is. Rejection is meant to be built with margin, so losing one cell is a degradation and not a failure.", 1, 64).getInt();
+        stellurgyConfig.shipHeatChillerThroughput = config.get(HEAT, "shipHeatChillerThroughput", 120000, "How much heat one chiller shifts from its cold loop to its hot loop each second. This is a SIZE, not a temperature: the chiller sets no temperature anywhere — the heat it moves piles up in the hot loop against that loop's own capacity, and the temperature follows. Build a bigger hot loop and it climbs slower; build more radiators on it and it stops climbing.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatChillerCopFraction = config.get(HEAT, "shipHeatChillerCopFraction", 500, "What fraction of the thermodynamic ideal a real chiller manages, in thousandths. The ideal is Carnot — the efficiency falls as the gap between the two loops widens — so this number cannot buy a machine past physics, only closer to it. 500 is a real machine at half of ideal. The work it spends JOINS the hot side, so the radiators must shed the heat plus the work, and driving the hot loop further costs more for less. That is the tier's ceiling, and it appears rather than being placed.", 1, 1000).getInt();
+        stellurgyConfig.shipHeatChillerCapacity = config.get(HEAT, "shipHeatChillerCapacity", 200, "How much heat one chiller absorbs per kelvin. A chiller is a lump of metal and refrigerant bolted to its hot loop, so it counts as part of that loop's thermal mass — worth ten pipes at the defaults, which is why a hot side with a chiller on it climbs noticeably slower than its pipes alone would explain.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatStarFluxReferenceKelvin = config.get(HEAT, "shipHeatStarFluxReferenceKelvin", 278, "The temperature a radiating cell settles at in unshaded starlight as strong as Earth's, in kelvin. This is how much of a star reaches a ship, stated as a temperature so it can be compared with a loop's own directly: a cell in that much sunlight cannot be cooled below this by any amount of area, and a closer or brighter star scales it. Set it to 0 and starlight stops warming ships entirely.", 0, 5000).getInt();
+        stellurgyConfig.shipHeatShieldAttenuation = config.get(HEAT, "shipHeatShieldAttenuation", 900, "How much of the heat arriving from outside a raised shield keeps off the ship, in thousandths. A shield is sunscreen and never a wall: whatever is written here, the game refuses to let it reach all of it, so a ship parked in a star always heats — slowly, but always. The shield pays for this with its generator's draw, which is itself a heat source, so tanking a star costs you twice.", 0, 1000).getInt();
+        stellurgyConfig.planetGreenhouseCeilingAtm = config.get(PLANET, "planetGreenhouseCeilingAtm", 100, "The thickest atmosphere, in whole atmospheres, whose greenhouse warming is still worked out from the correlation rather than held constant. The correlation is a fit through two known worlds - Earth at 1 and Venus at 92 - so 100 is just past the last of them and everything beyond is extrapolation nobody has measured. Raising this does not make hot worlds hotter in any way that is known to be right; it makes the game answer confidently about pressures the formula was never shown. Set it to 0 to switch the bound off entirely and extrapolate without limit, which is what the game did before the pressure ceiling moved.", 0, 100000).getInt();
+        stellurgyConfig.shipHeatChillerMaxCop = config.get(HEAT, "shipHeatChillerMaxCop", 50, "The most heat one unit of a chiller's work can ever move, however small the gradient it is working against. Carnot says that number climbs without limit as the two loops approach the same temperature, and a machine that can move unlimited heat for nothing is not a machine - so this is where the curve is cut off. It decides how cheap a chiller gets in the easy case and nothing else: across any gradient worth building for, the formula answers well below it.", 1, 1000).getInt();
+        stellurgyConfig.shipHeatCabinConductionFraction = config.get(HEAT, "shipHeatCabinConductionFraction", 2, "How much of the gap between a coolant loop and the air of a sealed room its blocks stand in crosses into that air each second, in thousandths. This is the only thing that makes a hot ship hot to be INSIDE: pipes are objects in a room, and a room with hot pipes in it warms up. At the default a loop that has lost its cooling takes about half a minute to make its cabin hostile, which is time to notice and do something. Set it to 0 and a loop never warms the air around it - the crew rungs below then never fire, and the ship cooks only its own hull.", 0, 1000).getInt();
+        stellurgyConfig.shipHeatCrewVeryHotKelvin = config.get(HEAT, "shipHeatCrewVeryHotKelvin", 323, "How hot a compartment's AIR has to get, in kelvin, before the room itself starts hurting the crew - the same hostile atmosphere a scorching planet presents, with the same suit protecting against it. 323 K is 50 degrees C: survivable in a suit, not survivable in shirtsleeves. This is a SHIP's air, measured where a person is standing, which is why it sits far below the temperature at which a whole PLANET is called too hot - that number is an average over a globe with cold latitudes in it. Set it to 0 to switch this rung off; with shipHeat off nothing warms a room and it never fires anyway.", 0, 5000).getInt();
+        stellurgyConfig.shipHeatCrewSuperheatedKelvin = config.get(HEAT, "shipHeatCrewSuperheatedKelvin", 373, "How hot a compartment's AIR has to get, in kelvin, before it is not merely hostile but lethal - four times the damage of the rung below it. 373 K is boiling water; a suit still buys time, and nothing else does. It sits below the temperature at which things catch fire, so a room burns its crew before it burns itself. Set it to 0 to switch this rung off.", 0, 5000).getInt();
+        stellurgyConfig.shipHeatDriveRefusalKelvin = config.get(HEAT, "shipHeatDriveRefusalKelvin", 773, "How hot the coolant loop a hyperspace drive is bolted to may get, in kelvin, before the drive refuses to fire. 773 K is 500 degrees C - hundreds of degrees above anything a crew survives, so a ship that trips this was flown with nobody left to care. The refusal is FREE: it is raised before the capacitor burst, so a pilot who is told this has lost nothing but the trip. Set it to 0 to switch the check off entirely.", 0, 5000).getInt();
+        stellurgyConfig.shipHeatSlugMarginKelvin = config.get(HEAT, "shipHeatSlugMarginKelvin", 100, "How far below its own melting point a heat slug is charged, in kelvin. This is the margin that keeps a slug a solid object you can eject and pick up again instead of a puddle in the machine, so it is subtracted from every material's usable span. Raise it for a safer, weaker slug.", 0, 5000).getInt();
+        stellurgyConfig.shipHeatSlugJoulesPerUnit = config.get(HEAT, "shipHeatSlugJoulesPerUnit", 1000, "How many real joules one heat unit stands for when a slug's capacity is worked out from its material. The materials table is ordinary physics in SI, and this is the single place those joules become the currency the rest of the thermal system deals in - so it scales every slug at once and changes no material's standing relative to another. At the default a litre of iron is worth about five thousand heat units.", 1, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatMeltCheckTicks = config.get(HEAT, "shipHeatMeltCheckTicks", 20, "How often a coolant loop looks at what it is cooking, in ticks. This is the melting rung: past a material's own limit the block stops being damaged and is gone. Checking is the expensive half - it walks the loop and its neighbours - so this is the freshness of that answer rather than a balance number. Raising it does not make a ship safer, only slower to lose its hull.", 1, 1200).getInt();
+        stellurgyConfig.shipHeatDumpThroughput = config.get(HEAT, "shipHeatDumpThroughput", 40000, "How much heat an emergency dump pushes into the slug it is charging each second. Deliberately well under what a radiator array sheds: the dump buys seconds while something else is fixed, and a value large enough to keep a ship cool would turn an emergency into a cooling system that eats iron.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.shipHeatHullSkinFraction = config.get(HEAT, "shipHeatHullSkinFraction", 350, "How much of the difference between the air a ship encloses and the space outside reaches its outer skin, in thousandths. A hull is insulated, so the skin sits far colder than the cabin — and that gap is the only reason shutting the radiators is worth doing, because an uninsulated hull out-glows the array on its own. At the default a ship running silent is found at roughly a tenth of the distance the same ship is found at with its radiators open. It can never reach zero: whatever is written here, some of the ship's warmth gets out, so going dark buys range and never invisibility.", 0, 1000).getInt();
+        stellurgyConfig.shipHeatDumpTriggerKelvin = config.get(HEAT, "shipHeatDumpTriggerKelvin", 700, "How hot the loop must be before an emergency dump will run at all, in kelvin. Below this it does nothing and costs nothing - a ship that is coping does not throw its cargo overboard. 700 K is far past anything a working ship sits at and short of the temperature at which the drive refuses to fire.", 1, 5000).getInt();
         stellurgyConfig.solarGeneratorMult = config.get(ENERGY, "solarGeneratorMultiplier", 1, "Power produced per tick by the solar generator.").getInt();
         stellurgyConfig.microwaveRecieverMulitplier = (float) config.get(ENERGY, "MicrowaveRecieverMultiplier", 1f, "Multiplier for microwave receiver power output.").getDouble();
         stellurgyConfig.defaultItemTimeBlackHole = config.get(ENERGY, "defaultBurnTime", 500, "Burn time in ticks for items not listed in blackHoleTimings.").getInt();
@@ -649,8 +813,7 @@ public class StellurgyConfiguration {
         stellurgyConfig.fuelCapacityMultiplier = config.get(ROCKET, "fuelCapacityMultiplier", 1f, "Multiplier for fuel tank capacity.").getDouble();
         stellurgyConfig.nuclearCoreThrustRatio = config.get(ROCKET, "nuclearCoreThrustRatio", 1.0, "Multiplier for nuclear core thrust.").getDouble();
         stellurgyConfig.automaticRetroRockets = config.get(ROCKET, "autoRetroRockets", true, "Setting to false will disable the retrorockets that fire automatically on reentry on both player and automated rockets").getBoolean();
-        stellurgyConfig.orbit = config.getInt("orbitHeight", ROCKET, 1000, 255, Integer.MAX_VALUE, "Height required to reach orbit.. This is used by itself when launching from a planet to LEO, which can be either a satellite, a space station, or another point on this planet's surface. It's used in conjunction with the TBI burn when launching to the moon or asteroids. Warp flights will need orbit height + 10x TBI to launch from planets");
-        stellurgyConfig.stationClearanceHeight = config.getInt("stationClearance", ROCKET, 1000, 255, Integer.MAX_VALUE, "Height required to clear a space station. WARNING: This property is not synced with orbitHeight and so will be displayed incorrectly on monitors if not equal to it. Burn length here is used by itself when launching from a station to either another station or the same station, or to the planet it is orbiting. It is used in conjunction with the TBI burn when launching to a moon or asteroid");
+        stellurgyConfig.stationClearanceHeight = config.getInt("stationClearance", ROCKET, 1000, 255, Integer.MAX_VALUE, "Height required to clear a space station. A planet's orbit line is not set here: it is derived from the planet's radius, or stated per planet as <orbitHeight> in the planet file. Burn length here is used by itself when launching from a station to either another station or the same station, or to the planet it is orbiting. It is used in conjunction with the TBI burn when launching to a moon or asteroid");
         stellurgyConfig.transBodyInjection = config.getInt("transBodyInjection", ROCKET, 0, 0, Integer.MAX_VALUE, "How long the burn for trans-body injection is - this is performed soley after entering orbit and is in blocks - WARNING: This property is not taken into account by any machines when determining whether the rocket is fit to fly or not - Rockets that can reach LEO and so are flightworthy may not make TBI and will fall back to the parent planet. When enabled, the burn sequence is [Burn to LEO], [TBI Burn] when launching from a planet to moons or asteroids; and the sequence is [Station clearance burn], [TBI Burn] when launching from a station to a moon or asteroid. This distance varies by object distance");
         stellurgyConfig.asteroidTBIBurnMult = (float) config.get(ROCKET, "asteroidTBIBurnMult", 1.0, "Multiplier for asteroid TBI distance.").getDouble();
         stellurgyConfig.warpTBIBurnMult = (float) config.get(ROCKET, "warpTBIBurnMult", 10.0, "Multiplier for warp TBI distance.").getDouble();
@@ -867,42 +1030,6 @@ public class StellurgyConfiguration {
         logger.info("End registering rocket blacklist blocks");
         blackListRocketBlocksStr = null;
 
-        logger.info("Start registering Harvestable Gasses");
-        for (String str : harvestableGasses) {
-            Fluid fluid = FluidRegistry.getFluid(str);
-            if (fluid == null)
-                logger.warn("'" + str + "' is not a valid Fluid");
-            else
-                AtmosphereRegister.getInstance().registerHarvestableFluid(fluid);
-        }
-        logger.info("End registering Harvestable Gasses");
-        harvestableGasses = null;
-
-        logger.info("Start registering Spawnable Gasses");
-        for (String str : spawnableGasses) {
-
-            String[] splitStr = str.split(";");
-            Fluid fluid = FluidRegistry.getFluid(splitStr[0]);
-            int minGravity = 0;
-            int maxGravity = 1600;
-            double chance = 1.0;
-            if (splitStr.length > 1) {
-                minGravity = Integer.parseInt(splitStr[1]);
-            }
-            if (splitStr.length > 2) {
-                maxGravity = Integer.parseInt(splitStr[2]);
-            }
-            if (splitStr.length > 3) {
-                chance = Double.parseDouble(splitStr[3]);
-            }
-            if (fluid == null)
-                logger.warn("'" + str + "' is not a valid Fluid");
-            else
-                StellurgyFluids.registerGasGiantGas(fluid, minGravity, maxGravity, chance);
-        }
-        logger.info("End registering Spawnable Gasses");
-        spawnableGasses = null;
-
         logger.info("Start registering entity atmosphere bypass");
 
         //Add armor stand by default
@@ -1013,6 +1140,8 @@ public class StellurgyConfiguration {
 
         if (Integer.class.isAssignableFrom(type) || type == int.class)
             out.writeInt((Integer) value);
+        else if (Long.class.isAssignableFrom(type) || type == long.class)
+            out.writeLong((Long) value);
         else if (Float.class.isAssignableFrom(type) || type == float.class)
             out.writeFloat((Float) value);
         else if (Double.class.isAssignableFrom(type) || type == double.class)
@@ -1072,6 +1201,8 @@ public class StellurgyConfiguration {
 
         if (Integer.class.isAssignableFrom(type) || type == int.class)
             return in.readInt();
+        else if (Long.class.isAssignableFrom(type) || type == long.class)
+            return in.readLong();
         else if (Float.class.isAssignableFrom(type) || type == float.class)
             return in.readFloat();
         else if (Double.class.isAssignableFrom(type) || type == double.class)

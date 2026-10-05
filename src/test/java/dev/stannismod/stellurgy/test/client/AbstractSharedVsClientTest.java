@@ -272,7 +272,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
         // The SERVER's refusing mark, for the failure narrative only: it reads both honesty flags
         // and hands back the reason instead of asserting, because a recorder that is not subscribed
         // is a HARNESS gap and this method's whole job is to keep such a gap out of the verdict.
-        Events.MarkOrWhyNot serverMark = events().markIfInstrumented();
+        Events.MarkOrWhyNot serverMark = serverEvents().markIfInstrumented();
         try {
             // THE CHAIN MUST END SEATED, not merely contain a mount. A crossing legitimately takes
             // him off and puts him back, so the window holds several records; a predicate that
@@ -287,8 +287,8 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
                     "the CLIENT must perform the remount after the crossing", tickBudget);
         } catch (AssertionError never) {
             String chain = serverMark.usable()
-                    ? events().since(serverMark.seq, "mount") + " | "
-                            + events().since(serverMark.seq, "dismount")
+                    ? serverEvents().since(serverMark.seq, "mount") + " | "
+                            + serverEvents().since(serverMark.seq, "dismount")
                     : "NO CHAIN: the position-writer recorder was not usable at the mark ("
                             + serverMark.refusal + ")";
             Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
@@ -369,7 +369,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
                             + " before an absent one can be read as a client that kept him seated");
             throw new AssertionError(never.getMessage() + " clientRiding="
                     + bot().reportRidingEntity() + " serverDismountRecord="
-                    + events().since(0L, "dismount"));
+                    + serverEvents().since(0L, "dismount"));
         }
         return bot().reportRidingEntity();
     }
@@ -550,9 +550,8 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
                 + " recipe, and a parked ship cannot be flown: " + unparked,
                 Reply.of(unparked).ok());
-        // WINDOW: from the write (the teleport's own reply) to the read below, over ticks of physics
-        // running unparked — a craft whose adoption did not take is back at its pad here, and the
-        // gate below names where it was sent and where it is.
+        // WINDOW: physics running unparked — a craft whose adoption did not take is back at its pad
+        // here, and the gate below names where it was sent and where it is.
         GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);
 
         String after = shipInfoById(dim, shipId);
@@ -578,7 +577,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      * @param dim the world the craft is ticked in — the clock the dose is counted on
      */
     protected final void climbOnPilotKey(int dim, int thrustTicks, String what) throws Exception {
-        PilotThrust.climb(bot(), events(), serverClient(), dim, thrustTicks, what);
+        PilotThrust.climb(bot(), serverEvents(), serverClient(), dim, thrustTicks, what);
     }
 
     /**
@@ -586,7 +585,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      * is still climbing: the key stays DOWN when this returns, and the caller lets go of it.
      */
     protected final void holdClimbKeyFor(int dim, int thrustTicks, String what) throws Exception {
-        PilotThrust.hold(bot(), events(), serverClient(), dim, thrustTicks, what);
+        PilotThrust.hold(bot(), serverEvents(), serverClient(), dim, thrustTicks, what);
     }
 
     /**
@@ -891,10 +890,10 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      * being true on 2026-09-08: the fixture runs on the server's subsystem now, so a jump advances
      * on the server tick like everything else, and a wait that drove it was a wait moving its own
      * subject. What is left is the reason this exists at all — it takes the PROBE, which
-     * {@code events()} hard-codes, and one scenario reads through an envelope-aware one.</p>
+     * {@code serverEvents()} hard-codes, and one scenario reads through an envelope-aware one.</p>
      */
     protected final Events transitEvents(Events.Probe probe) {
-        return new Events(probe, bot()::waitTicks, evictionReports());
+        return new Events(probe, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictionReports());
     }
 
     /**
@@ -1012,7 +1011,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      * and until then the budget is what bounds it — an over-run window stops itself and says so.</p>
      *
      * @param clientMark  a mark from {@code clientEvents()}, taken before the teleport
-     * @param serverMark  a mark from {@code events()}, taken before the teleport
+     * @param serverMark  a mark from {@code serverEvents()}, taken before the teleport
      * @param recordsEach the gate window's record budget; state it from the length of the fall,
      *                    not from habit
      * @return the landing's {@code deck_contact} records, for the caller's own reading
@@ -1062,7 +1061,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
                 + " nobody asked, not the gate saying no): " + clientEvents().since(clientMark,
                 "deck_gate_window")
                 + " ||| the SERVER's standing verdict, heartbeat only (empty = unchanged, not"
-                + " unasked): " + events().since(serverMark, "deck_gate_decided");
+                + " unasked): " + serverEvents().since(serverMark, "deck_gate_decided");
     }
 
     /** The client-side deck-camera window: poses, the eye, and the two per-client counters. */

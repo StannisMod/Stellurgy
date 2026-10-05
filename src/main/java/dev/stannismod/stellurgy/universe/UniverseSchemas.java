@@ -21,7 +21,9 @@ import java.util.function.Supplier;
  * and even replaced outright, because no world outside the branch was ever generated under it and it
  * therefore owes nobody compatibility. <b>"Shipped" means merged to the release branch</b>, not landed
  * on a feature branch; the freeze begins at the merge, and that is the moment a version stops being
- * editable and starts being history.
+ * editable and starts being history. That freeze binds a STABLE version: an alpha (label {@code 0.x})
+ * stays editable in place after it ships — its leading zero is that promise — and records each such
+ * edit, with its measured blast radius, in its own javadoc.
  *
  * <p>Registering a supplier rather than an instance keeps construction lazy and makes it explicit that
  * a schema is cheap to build and holds no world state.

@@ -788,7 +788,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETes
     //
     // Every link this class waits for happens on the CLIENT — a world rebuilt, a sky packet applied,
     // a frame drawn — so the log read here is the client's, reached through the harness bot rather
-    // than through the server probe the shared `events()` helper wraps. The three reads below are
+    // than through the server probe the shared `serverEvents()` helper wraps. The three reads below are
     // local on purpose: the shared client base is not this group's to edit.
 
     /** How long a client dimension change is given. A world teardown + rebuild, not a value settling. */

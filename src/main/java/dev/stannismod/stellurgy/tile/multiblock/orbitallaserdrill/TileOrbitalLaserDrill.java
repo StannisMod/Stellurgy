@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
@@ -30,7 +32,6 @@ import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.MultiInventory;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
@@ -38,7 +39,7 @@ import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileOrbitalLaserDrill extends TileMultiPowerConsumer implements IGuiCallback, IButtonInventory {
+public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements IGuiCallback, IButtonInventory {
 
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final int POWER_PER_OPERATION = (int) (10000 * StellurgyConfiguration.getCurrentConfig().spaceLaserPowerMult);

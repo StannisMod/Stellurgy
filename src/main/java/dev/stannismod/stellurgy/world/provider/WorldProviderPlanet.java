@@ -20,7 +20,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.commons.lang3.ArrayUtils;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.IPlanetaryProvider;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
@@ -577,7 +577,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     }
 
     @Override
-    public IAtmosphere getAtmosphere(@Nullable BlockPos pos) {
+    public Atmosphere getAtmosphere(@Nullable BlockPos pos) {
         return getDimensionProperties(pos).getAtmosphere();
     }
 

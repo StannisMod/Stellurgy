@@ -41,6 +41,7 @@ public class JumpGateTest {
         long hullOutsideWindow = 0L;
         long storedEnergy = 1_000_000L;
         long flightEnergyCost = 400_000L;
+        double driveCoolantKelvin = 0.0D;
 
         @Override
         public boolean hasNavComputer() {
@@ -100,6 +101,11 @@ public class JumpGateTest {
         @Override
         public long flightEnergyCost() {
             return flightEnergyCost;
+        }
+
+        @Override
+        public double driveCoolantKelvin() {
+            return driveCoolantKelvin;
         }
     }
 

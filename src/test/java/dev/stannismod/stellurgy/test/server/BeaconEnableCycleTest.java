@@ -164,7 +164,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         // `beacon_unregistered` separate them. An earlier attempt put that report in a production LOG
         // and it was unreadable from here — the mod logger writes into the server child's own log,
         // which nothing in this harness captures.
-        Events.MarkOrWhyNot mark = events().markIfInstrumented();
+        Events.MarkOrWhyNot mark = serverEvents().markIfInstrumented();
 
         // Break the controller via place-air. world.setBlockState calls
         // the old block's breakBlock callback in Forge 1.12, which is
@@ -204,7 +204,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
     }
 
     /** The server's ordered event log, read through this tier's command channel. */
-    private Events events() {
+    private Events serverEvents() {
         return new Events(this::exec,
                 ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
     }
@@ -227,7 +227,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
             return "(no mark was taken, so nothing can be said about the sequence: " + mark.refusal
                     + ")";
         }
-        String records = events().since(mark.seq);
+        String records = serverEvents().since(mark.seq);
         // Asked of each record's own `type`. `contains("beacon_")` over the envelope is answered
         // by the INSTRUMENTS list, which names every registered recorder whether or not it wrote
         // anything — so the "no beacon record at all" branch below could never be reached, and
@@ -237,9 +237,18 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
             String type = Events.text(record, "type");
             anyBeacon |= type != null && type.startsWith("beacon_");
         }
-        return anyBeacon ? records
-                : "(no beacon record at all in " + records.length() + " bytes of events — either the "
-                        + "break never reached production, or the recording mixins are not applied)";
+        if (anyBeacon) {
+            return records;
+        }
+        // The ring is bounded, so "none" has a third reading beside "never happened" and "not
+        // recorded": written and then EVICTED. Only the reply's own counters can tell that one apart,
+        // so they travel in exactly the branch that needs them.
+        return "(no beacon record at all in " + records.length() + " bytes of events; evicted since"
+                + " the mark: beacon_break=" + Events.droppedOf(records, "beacon_break")
+                + " beacon_registered=" + Events.droppedOf(records, "beacon_registered")
+                + " beacon_unregistered=" + Events.droppedOf(records, "beacon_unregistered")
+                + " — zero evictions means the break never reached production or the recording mixins"
+                + " are not applied; any eviction means the record may have been written and lost)";
     }
 
     /** True iff the dim's beacon-locations registry contains the triple

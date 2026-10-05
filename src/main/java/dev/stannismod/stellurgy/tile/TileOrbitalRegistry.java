@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
@@ -33,7 +35,6 @@ import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
@@ -61,7 +62,7 @@ import java.util.List;
  *
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
-public class TileOrbitalRegistry extends TileMultiPowerConsumer
+public class TileOrbitalRegistry extends TileWasteHeatPowerConsumer
         implements IModularInventory, IButtonInventory, IGuiCallback, IInventory {
 
     /** Where this registry's lists were scrolled to, on the client. */

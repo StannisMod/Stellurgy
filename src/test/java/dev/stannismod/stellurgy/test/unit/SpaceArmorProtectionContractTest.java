@@ -7,8 +7,11 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
 import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+
+import java.util.Collections;
+import java.util.EnumSet;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -40,47 +43,38 @@ public class SpaceArmorProtectionContractTest {
         return new ItemStack(armor, 1);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: "suit must
+     * protect against HEAT", 2026-09-30.</p>
+     */
     @Test
-    public void protectsAgainstVacuum() {
-        ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);
-        ItemStack stack = new ItemStack(suit, 1);
-        assertTrue("vacuum must be a protected atmosphere",
-                suit.protectsFromSubstance(AtmosphereType.VACUUM, stack, /*commit=*/false));
-    }
-
-    @Test
-    public void protectsAgainstLowOxygenAndPressureExtremes() {
+    public void protectsAgainstEveryKindOfHarmAirCanDo() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);
         ItemStack stack = new ItemStack(suit, 1);
 
-        // Low O2 + every pressure / temperature extreme — these are why the
-        // armor exists; a regression that drops any of them silently kills
-        // players on the affected planet biomes.
-        AtmosphereType[] mustProtect = {
-                AtmosphereType.LOWOXYGEN,
-                AtmosphereType.NOO2,
-                AtmosphereType.HIGHPRESSURE, AtmosphereType.HIGHPRESSURENOO2,
-                AtmosphereType.SUPERHIGHPRESSURE, AtmosphereType.SUPERHIGHPRESSURENOO2,
-                AtmosphereType.VERYHOT, AtmosphereType.VERYHOTNOO2,
-                AtmosphereType.SUPERHEATED, AtmosphereType.SUPERHEATEDNOO2,
-        };
-        for (AtmosphereType atm : mustProtect) {
-            assertTrue("suit must protect against " + atm,
-                    suit.protectsFromSubstance(atm, stack, /*commit=*/false));
+        // Suffocating, decompressing, being crushed, being cooked, being poisoned by too much
+        // oxygen — these are why the armour exists, and dropping any one of them kills players
+        // on the worlds that have it. Asked of the hazard rather than of a list of named
+        // atmospheres, which is what used to go stale every time air was added.
+        for (AtmosphereHazard hazard : AtmosphereHazard.values()) {
+            assertTrue("suit must protect against " + hazard,
+                    suit.protectsFrom(EnumSet.of(hazard), /*needsSuppliedOxygen=*/false, stack,
+                            /*commit=*/false));
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: "air that does
+     * nothing is not a threat", 2026-09-30.</p>
+     */
     @Test
-    public void doesNotProtectAgainstNormalAtmospheres() {
+    public void doesNotProtectWhereThereIsNothingToProtectAgainst() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);
         ItemStack stack = new ItemStack(suit, 1);
-        // Breathable air and pressurised-but-breathable air are not threats —
-        // protectsFromSubstance is also used to decide if the suit ticks down
-        // its tank, so returning true here would needlessly drain it.
-        assertFalse("breathable air is not a threat",
-                suit.protectsFromSubstance(AtmosphereType.AIR, stack, /*commit=*/false));
-        assertFalse("pressurised breathable air is not a threat",
-                suit.protectsFromSubstance(AtmosphereType.PRESSURIZEDAIR, stack, /*commit=*/false));
+        // The same answer decides whether the suit spends anything, so claiming to protect
+        // against harmless air would drain the tank for standing outdoors at home.
+        assertFalse("air that does nothing is not a threat",
+                suit.protectsFrom(Collections.<AtmosphereHazard>emptySet(), false, stack, false));
     }
 
     @Test

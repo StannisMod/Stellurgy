@@ -50,6 +50,12 @@ public final class ForgeTestClientBootstrap {
 
     private final AtomicBoolean bridgeStarted = new AtomicBoolean(false);
     private final AtomicLong clientTicks = new AtomicLong(0L);
+    /**
+     * The client ticks on which the world was live ({@link #publishWorldLiveness}) — the ticks on
+     * which the player could act at all. {@link #clientTicks} also counts the menu and the terrain
+     * screen, where a client drives nothing, so a budget for what the player DOES is spent here.
+     */
+    private final AtomicLong clientWorldTicks = new AtomicLong(0L);
 
     /**
      * Monitor for {@link #clientWorldLive} — the record that the client world is live, published
@@ -441,6 +447,8 @@ public final class ForgeTestClientBootstrap {
                 return ok();
             case "wait_ticks":
                 return waitTicks(request);
+            case "wait_world_ticks":
+                return waitWorldTicks(request);
             case "select_hotbar":
                 return runOnClientThread(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
@@ -1755,6 +1763,36 @@ public final class ForgeTestClientBootstrap {
     }
 
     /**
+     * Its expiry separates the two ways a client can fail to get there, because they are different
+     * findings: a client that stopped ticking, and a client that ticked without a world (in the
+     * menu, on the terrain screen, after a dropped connection).
+     */
+    private JsonObject waitWorldTicks(JsonObject request) {
+        int ticks = boundedInt(request, "ticks", 0, 1000000);
+        long start = clientWorldTicks.get();
+        long allStart = clientTicks.get();
+        long deadline = System.nanoTime()
+                + TimeUnit.MILLISECONDS.toNanos(CLIENT_SIDE_BUDGET_MILLIS);
+
+        while (clientWorldTicks.get() - start < ticks) {
+            if (System.nanoTime() > deadline) {
+                return error("Timed out waiting for " + ticks + " client ticks with a live world: "
+                        + (clientWorldTicks.get() - start) + " had a world, of "
+                        + (clientTicks.get() - allStart) + " client ticks in all"
+                        + (clientTicks.get() == allStart ? " - the client stopped ticking"
+                        : " - the client is ticking without a world"));
+            }
+            try {
+                Thread.sleep(25L);
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+                return error("Interrupted while waiting for world ticks");
+            }
+        }
+        return ok();
+    }
+
+    /**
      * The client side's own budget, DERIVED from the bot's read timeout and deliberately shorter.
      *
      * <p>The relation is the point, not the fraction: an inner deadline equal to the outer one can
@@ -1772,7 +1810,7 @@ public final class ForgeTestClientBootstrap {
      * <p>Every tick, because the property goes both ways: a disconnect or a relog takes the world
      * down, and a waiter that had been told "ready" once would read the gap as readiness.</p>
      */
-    private void publishWorldLiveness() {
+    private boolean publishWorldLiveness() {
         Minecraft mc = Minecraft.getMinecraft();
         boolean live = mc.world != null && mc.player != null && mc.player.connection != null;
         synchronized (clientWorldLock) {
@@ -1781,6 +1819,7 @@ public final class ForgeTestClientBootstrap {
                 clientWorldLock.notifyAll();
             }
         }
+        return live;
     }
 
     /**
@@ -2305,7 +2344,9 @@ public final class ForgeTestClientBootstrap {
                     installNonWarpingMouseHelper();
                 }
                 clientTicks.incrementAndGet();
-                publishWorldLiveness();
+                if (publishWorldLiveness()) {
+                    clientWorldTicks.incrementAndGet();
+                }
                 // Deferred connection teardown: this event runs on the client thread OUTSIDE
                 // the scheduled-task drain, so closing the channel here cannot deadlock
                 // against an inbound packet handler (see pendingConnectionAction).
