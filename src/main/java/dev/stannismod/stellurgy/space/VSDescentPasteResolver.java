@@ -8,8 +8,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
@@ -30,11 +28,12 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  * rigid-teleports the re-assembled ship's pose — carrying its riders — up to
  * {@link #arrivalAltitude}.</p>
  *
- * <p>Safe {@code null} (refuse the descent) only when a world is missing, VS cannot find the ship, or
- * the ship is literally taller than the world's block band.</p>
+ * <p>Safe {@code null} (refuse the descent) only when a world is missing, VS cannot find the ship, the
+ * ship is literally taller than the world's block band, or the destination has no orbit line.</p>
  */
 public final class VSDescentPasteResolver implements DescentController.PasteResolver {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /** Blocks between adjacent paste lanes at a planet's spawn (simultaneous-descent spread). */
@@ -143,11 +142,15 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
             return null;
         }
 
-        DimensionProperties props = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
-                .getDimensionProperties(destPlanetDim);
-        int orbitHeight = props != null ? props.getOrbitHeight()
-                : StellurgyConfiguration.getCurrentConfig().orbit;
-        double arrivalY = arrivalAltitude(orbitHeight, VSIntegration.shipYPositionMaximum());
+        java.util.OptionalInt line = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                .orbitLineOf(destPlanetDim);
+        if (!line.isPresent()) {
+            LOGGER.warn("[SPACE] descent unresolved: dim {} has no orbit line (no radius, no stated "
+                    + "<orbitHeight>), so there is no altitude to arrive under", destPlanetDim);
+            return null;
+        }
+        int orbitHeight = line.getAsInt();
+        double arrivalY = arrivalAltitude(orbitHeight, VSIntegration.shipYPositionMaximum(dst));
 
         // The ship arrives in the air over the paste column, centred on its own footprint, and flies
         // down under its pilot's hand from there.
@@ -156,7 +159,7 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
                         + "shipyard=[{},{}]x[{},{}] orbitHeight={} physicsCeiling={} arrivalY={}",
                 destPlanetDim, laneIndex, pasteX, pasteY, pasteZ, shipHeight,
                 (int) yard.minX, (int) yard.maxX, (int) yard.minZ, (int) yard.maxZ,
-                orbitHeight, VSIntegration.shipYPositionMaximum(), arrivalY);
+                orbitHeight, VSIntegration.shipYPositionMaximum(dst), arrivalY);
         return new DescentController.Landing(pasteX, pasteY, pasteZ, landingPose);
     }
 }

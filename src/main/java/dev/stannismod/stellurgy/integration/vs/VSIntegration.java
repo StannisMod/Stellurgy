@@ -19,8 +19,7 @@ import dev.stannismod.stellurgy.entity.IFlightBackend;
  *
  * <p><b>Boundary rule — do not break:</b> this class MUST NOT import or reference
  * any {@code org.valkyrienskies.*} type, so it is always safe for the JVM to
- * load. Every VS-touching call goes through {@link VSBridge}. The unit test
- * {@code VSIntegrationTest} pins this contract.</p>
+ * load. Every VS-touching call goes through {@link VSBridge}. No test pins this rule.</p>
  *
  * <p><b>What that rule no longer buys, said plainly.</b> It used to end "…so a VS-importing class
  * is never loaded on a Stellurgy install without VS", and the bridge was reached only behind an
@@ -34,6 +33,7 @@ public final class VSIntegration {
     /** Valkyrien Skies Core mod id (the 1.12.2 line). */
     public static final String MODID = "valkyrienskies";
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/vs");
 
     private VSIntegration() {}
@@ -342,22 +342,20 @@ public final class VSIntegration {
     // at every one of these sites — not by asking the world who happens to be around.
 
     /**
-     * The physics mod's hard ceiling for ship altitude (world Y), or
-     * {@code Double.POSITIVE_INFINITY} when the physics mod is absent (nothing clamps, so nothing
-     * caps a trigger line). Any gate that fires on "the ship climbed past altitude H" must derive
-     * its H BELOW this value: the clamp is applied every physics step, so a trigger line at or
-     * above it is physically unreachable and the gate silently never fires.
+     * The physics mod's hard ceiling for ship altitude (world Y) in {@code world}. Any gate that fires
+     * on "the ship climbed past altitude H" must derive its H BELOW this value: the clamp is applied
+     * every physics step, so a trigger line at or above it is physically unreachable and the gate
+     * silently never fires.
      */
-    public static double shipYPositionMaximum() {
-        return VSBridge.shipYPositionMaximum();
+    public static double shipYPositionMaximum(net.minecraft.world.World world) {
+        return VSBridge.shipYPositionMaximum(world);
     }
 
     /**
-     * Widen the physics mod's ship altitude range so it covers at least {@code [floor, ceiling]}
-     * (no-op when the physics mod is absent, and each end moves only if the current value is
-     * narrower). Called once at space-subsystem registration so every slot cell's pose band is
-     * flyable from the first tick - see {@link VSBridge#widenShipAltitudeRange} for why this must be
-     * deterministic rather than teleport-ratcheted.
+     * Widen {@code world}'s ship altitude band so it covers at least {@code [floor, ceiling]} (each
+     * end moves only if the current value is narrower) - see
+     * {@link VSBridge#coverShipAltitudeBand} for why this must be deterministic rather than
+     * teleport-ratcheted.
      *
      * <p>Both ends, not just the top: the cell's pose band is centred on the world origin, so half
      * of it is at negative Y. A ceiling-only call leaves the substrate's stock floor sitting under
@@ -365,8 +363,8 @@ public final class VSIntegration {
      * physics step, which is the shape a reader cannot tell from a ship that simply stopped
      * descending.</p>
      */
-    public static void widenShipAltitudeRange(double floor, double ceiling) {
-        VSBridge.widenShipAltitudeRange(floor, ceiling, LOGGER);
+    public static void coverShipAltitudeBand(net.minecraft.world.World world, double floor, double ceiling) {
+        VSBridge.coverShipAltitudeBand(world, floor, ceiling);
     }
 
     /**
@@ -552,7 +550,7 @@ public final class VSIntegration {
         // so the classification is made HERE, by the code that knows where the ship is going, and the
         // announcer publishes "left for dim N" rather than "gone". Without this a crossing tells
         // every consumer that the craft it is carrying, crew aboard, has ceased to exist.
-        ShipLoadedAnnouncer.declareDeparture(srcShipId,
+        ShipLoadedAnnouncer.declareDeparture(srcWorld, srcShipId,
                 dstWorld == null ? srcWorld.provider.getDimension()
                         : dstWorld.provider.getDimension());
         // Cut a TIGHT box (not the 256-tall column) and paste into clear sky at dstY (above the
@@ -564,7 +562,7 @@ public final class VSIntegration {
             // Nothing was cut, so nothing will leave the registry on account of this crossing. Take
             // the mark back, or a genuine later destruction of this craft would be reported as a
             // departure to a cell it never reached.
-            ShipLoadedAnnouncer.abandonDeparture(srcShipId);
+            ShipLoadedAnnouncer.abandonDeparture(srcWorld, srcShipId);
         }
         // Declare the source FINISHED. It is collected on the next tick of this world whether or not
         // anything had it loaded — which is the case that used to have no collector at all and left a
@@ -993,15 +991,6 @@ public final class VSIntegration {
     }
 
     /**
-     * TEST/HEADLESS: keep VS ships permanently loaded (the {@code permanentlyLoaded} loading setting) so
-     * a player-less server test can observe a freshly assembled ship across probe calls instead of it
-     * auto-unloading.
-     */
-    public static void setShipsPermanentlyLoaded(boolean value) {
-        VSBridge.setShipsPermanentlyLoaded(value);
-    }
-
-    /**
      * Create a flight backend that drives the Valkyrien Skies ship anchored at
      * {@code anchorPos} as a velocity setpoint (model A), or {@code null} when VS is
      * absent. The return type is the Stellurgy-core {@link IFlightBackend}, so a caller in
@@ -1020,6 +1009,37 @@ public final class VSIntegration {
      */
     public static FreeFlightPhysics.Quat getShipAttitude(World world, BlockPos pos) {
         return VSBridge.getShipAttitude(world, pos);
+    }
+
+    /** The attitude the ship managing {@code pos} had at the previous game tick, or {@code null}. */
+    public static FreeFlightPhysics.Quat getShipPrevAttitude(World world, BlockPos pos) {
+        return quat(VSBridge.shipPrevAttitude(world, pos));
+    }
+
+    /**
+     * The attitude of the ship managing {@code pos} at {@code partialTicks} between its previous and
+     * current game tick, or {@code null} if no ship manages it. What a camera locked to the ship
+     * draws: the raw attitude steps at 20 Hz, and a station-keeping ship's hunting then shows as
+     * jitter at any frame rate.
+     */
+    public static FreeFlightPhysics.Quat getShipAttitude(World world, BlockPos pos, float partialTicks) {
+        FreeFlightPhysics.Quat cur = VSBridge.getShipAttitude(world, pos);
+        FreeFlightPhysics.Quat prev = getShipPrevAttitude(world, pos);
+        return cur == null || prev == null ? null : FreeFlightPhysics.slerp(prev, cur, partialTicks);
+    }
+
+    /** {@link #getShipAttitude(World, BlockPos, float)} for the ship {@code shipId}. */
+    public static FreeFlightPhysics.Quat shipAttitudeForId(World world, String shipId, float partialTicks) {
+        if (shipId == null) {
+            return null;
+        }
+        FreeFlightPhysics.Quat cur = shipAttitudeForId(world, shipId);
+        FreeFlightPhysics.Quat prev = quat(VSBridge.shipPrevAttitudeForId(world, shipId));
+        return cur == null || prev == null ? null : FreeFlightPhysics.slerp(prev, cur, partialTicks);
+    }
+
+    private static FreeFlightPhysics.Quat quat(double[] q) {
+        return q == null ? null : new FreeFlightPhysics.Quat(q[0], q[1], q[2], q[3]);
     }
 
     /**

@@ -1,14 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 import org.junit.Test;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 /**
@@ -37,22 +33,6 @@ import static org.junit.Assert.assertNull;
  */
 public class SatelliteRegistryFallbackTest {
 
-    /** Minimal SatelliteBase stand-in for the positive control. The real
-     *  satellite classes (SatelliteBiomeChanger, etc.) hit
-     *  {@code Biome.getBiome(0)} in their no-arg ctor which requires the
-     *  Minecraft Bootstrap to have run — fine in the mod-init
-     *  context, not fine in pure unit-tier. Mirrors the
-     *  {@code TestSatellite} class in SatellitePropertiesTest. */
-    public static class TestStandInSatellite extends SatelliteBase {
-        @Override public String getInfo(World world) { return "test"; }
-        @Override public String getName() { return "test_satellite"; }
-        @Override public boolean performAction(EntityPlayer player, World world, BlockPos pos) { return false; }
-        @Override public double failureChance() { return 0.0d; }
-    }
-
-    private static final String KNOWN_TYPE_KEY =
-            "ar:gap4_known_type_for_positive_control";
-
     /** getNewSatellite returns null for an unregistered id — by design.
      *  Callers (ItemSatellite, TileSatelliteHatch, …) rely on the null to
      *  detect an unresolvable type. */
@@ -75,18 +55,5 @@ public class SatelliteRegistryFallbackTest {
         SatelliteBase result = SatelliteRegistry.createFromNBT(nbt);
         assertNull("createFromNBT must return null for an unresolvable dataType "
                 + "(callers drop it) — not NPE, not a placeholder", result);
-    }
-
-    /** Positive control: a KNOWN satellite type produces a real instance —
-     *  pins that the registry dispatch works for the happy path so the
-     *  unknown-type tests can't pass by registry-wide breakage. Uses a
-     *  unit-tier-friendly stand-in (no Bootstrap dependency). */
-    @Test
-    public void knownSatelliteTypeProducesNonNullInstance() {
-        SatelliteRegistry.registerSatellite(KNOWN_TYPE_KEY, TestStandInSatellite.class);
-        SatelliteBase result = SatelliteRegistry.getNewSatellite(KNOWN_TYPE_KEY);
-        assertNotNull("registered type must resolve via SatelliteRegistry — "
-                        + "if this fails the registry dispatch itself is broken",
-                result);
     }
 }

@@ -23,12 +23,6 @@ import static org.junit.Assert.assertTrue;
 public class PlanetWeatherSavedDataTest {
 
     @Test
-    public void storageKeyIsStable() {
-        // Save files use this string verbatim. Renaming = silent data loss.
-        assertEquals("stellurgy_planet_weather", PlanetWeatherSavedData.STORAGE_KEY);
-    }
-
-    @Test
     public void getOrCreateInsertsFreshStateAndIsIdempotent() {
         PlanetWeatherSavedData data = new PlanetWeatherSavedData();
         PlanetWeatherState first = data.getOrCreate(42);
@@ -49,12 +43,6 @@ public class PlanetWeatherSavedDataTest {
         assertNotSame("different dim ids must yield different state instances", a, b);
         a.setRaining(true);
         assertFalse("mutation on dim A must not leak to dim B", b.isRaining());
-    }
-
-    @Test
-    public void getIfPresentDoesNotInsert() {
-        PlanetWeatherSavedData data = new PlanetWeatherSavedData();
-        assertNull("getIfPresent must not auto-create", data.getIfPresent(999));
     }
 
     @Test

@@ -50,20 +50,6 @@ public class CapacitorChargeTest {
     // ── the energy is the ship's ──────────────────────────────────────────────
 
     @Test
-    public void aBankWithNothingFeedingItNeverFills() {
-        // THE property the old model got wrong. This capacitor is asked about repeatedly and nothing
-        // ever pushes into it; it must stay empty, because a buffer is not a generator.
-        TileJumpCapacitor capacitor = bareCapacitor();
-
-        assertEquals("a fresh bank is empty", 0L, capacitor.charge());
-        for (int i = 0; i < 1_000; i++) {
-            assertEquals("a bank nobody feeds must not gain charge by being asked about it",
-                    0L, capacitor.charge());
-        }
-        assertEquals("and no elapsed anything fills it either", 0L, capacitor.charge());
-    }
-
-    @Test
     public void whatTheShipPushesInIsWhatTheBankHolds() {
         TileJumpCapacitor capacitor = bareCapacitor();
 

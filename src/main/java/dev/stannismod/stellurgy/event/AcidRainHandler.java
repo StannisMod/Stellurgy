@@ -33,6 +33,7 @@ import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
  */
 public class AcidRainHandler {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final DamageSource ACID_RAIN =
             new DamageSource("acidRain").setDamageBypassesArmor();
 

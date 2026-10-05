@@ -19,6 +19,11 @@ import static org.junit.Assert.assertTrue;
  * action, so nothing that happens afterwards can be missed between two reads, and a failure prints
  * the whole chain rather than a number.</p>
  *
+ * <p><b>Where the server's log is read.</b> It is an object of the server's own lifetime, on the
+ * test side ({@code ServerEventLog}), and every read is a call into it on the server thread through
+ * the probe's {@code invoke-static}; {@link #unwrap} takes the log's reply out of the probe's. A
+ * probe answering for another log translates {@link #MARK_COMMAND} and {@link #sinceCommand}.</p>
+ *
  * <p><b>The transport is still polled and that is fine.</b> What matters is that the EVENTS are
  * buffered on the far side: a slow reader loses nothing. A blocking await inside the game would be a
  * deadlock by construction — the tick that must advance for the event to happen is the tick being
@@ -137,10 +142,59 @@ public final class Events {
 
     private final Probe probe;
     private final Step step;
+    /** What has already been announced about evictions from the logs this reads — see {@link EvictionReports}. */
+    private final EvictionReports evictions;
 
-    public Events(Probe probe, Step step) {
+    /**
+     * @param evictions the eviction announcements already made for the logs {@code probe} reads —
+     *                  owned by whatever owns those logs (the class scope of a shared-harness class,
+     *                  the test instance of a per-test boot), never by this short-lived reader
+     */
+    public Events(Probe probe, Step step, EvictionReports evictions) {
         this.probe = probe;
         this.step = step;
+        this.evictions = evictions;
+    }
+
+    /**
+     * The command a mark is asked with — the SERVER's log, called on the server thread through the
+     * probe's {@code invoke-static}. A probe answering for another log (the client bot's) translates
+     * this command; see {@code ClientEvents}.
+     */
+    public static final String MARK_COMMAND =
+            "stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.ServerEventLog markReply";
+
+    /** The prefix of every {@code since} command; the arguments are the mark and, optionally, a type. */
+    public static final String SINCE_COMMAND_PREFIX =
+            "stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.ServerEventLog sinceReply ";
+
+    /** The {@code since} command for {@code mark}, narrowed to {@code type} when it is not null. */
+    public static String sinceCommand(long mark, String type) {
+        return SINCE_COMMAND_PREFIX + mark + (type == null ? "" : " " + type);
+    }
+
+    /**
+     * The log's own reply inside a probe reply: {@code invoke-static} wraps what the method returned
+     * as the escaped string {@code returned}. A reply without it — an error, or a probe that answers
+     * the log's JSON directly — is handed back as it came, so whatever reads it next prints the
+     * whole of it.
+     */
+    public static String unwrap(String reply) {
+        try {
+            JsonElement parsed = new JsonParser().parse(String.valueOf(reply));
+            if (parsed != null && parsed.isJsonObject() && parsed.getAsJsonObject().has("returned")
+                    && parsed.getAsJsonObject().get("returned").isJsonPrimitive()) {
+                return parsed.getAsJsonObject().get("returned").getAsString();
+            }
+        } catch (RuntimeException notJson) {
+            // handed back as it came: the reader's own parse names what was wrong with it
+        }
+        return reply;
+    }
+
+    /** One command to the log, its reply unwrapped. */
+    private String ask(String command) throws Exception {
+        return unwrap(probe.exec(command));
     }
 
     /**
@@ -151,7 +205,7 @@ public final class Events {
      * must never be able to fake.</p>
      */
     public long mark() throws Exception {
-        String reply = probe.exec("stellurgytest events mark");
+        String reply = ask(MARK_COMMAND);
         JsonObject env = envelope(reply);
         assertTrue("the event recorder is not subscribed, so an empty log below would mean nothing:"
                 + " " + reply, env.has("recording") && env.get("recording").getAsBoolean());
@@ -170,7 +224,7 @@ public final class Events {
      */
     public long markInstrumented() throws Exception {
         long seq = mark();
-        String reply = probe.exec("stellurgytest events mark");
+        String reply = ask(MARK_COMMAND);
         JsonObject env = envelope(reply);
         assertTrue("the test-only mixins were never installed, so an absent position write below"
                 + " would mean nothing (is -Dfml.coreMods.load set on this JVM?): " + reply,
@@ -180,36 +234,20 @@ public final class Events {
 
     /** Everything recorded at or after {@code mark}, in order, as the raw reply. */
     public String since(long mark) throws Exception {
-        return read("stellurgytest events since " + mark);
+        return read(sinceCommand(mark, null));
     }
 
     /** The records of one {@code type} at or after {@code mark}, in order, as the raw reply. */
     public String since(long mark, String type) throws Exception {
-        return read("stellurgytest events since " + mark + " " + type);
+        return read(sinceCommand(mark, type));
     }
 
     /**
-     * The highest eviction count REPORTED so far for each record type, so a growing one is announced
-     * once per growth instead of on every read.
+     * The STEP between eviction announcements, in records.
      *
-     * <p><b>A static, and here is its owner and its lifetime</b>: the TEST JVM — the client or the
-     * server process this suite runs in — for as long as that process lives. It holds nothing but
-     * "what has already been printed", no assertion reads it, and a wrong value costs a duplicate
-     * line or a missing one, never a verdict. Two logs (the server's and the client's) share it and
-     * count separately, so the blind spot is named rather than engineered away: a growth on the
-     * quieter side is masked while the busier side's total is higher. Announcing the busy side is
-     * the point.</p>
-     */
-    private static final java.util.Map<String, Long> REPORTED_EVICTIONS =
-            new java.util.concurrent.ConcurrentHashMap<>();
-
-    /**
-     * The log's per-type ring depth ({@code TestEventLog.CAPACITY_PER_TYPE}), as the STEP between
-     * eviction announcements.
-     *
-     * <p>Copied rather than read: the constant lives in the production-side log and this is a test
-     * reading its own output over a probe channel. It is a reporting cadence, not an assertion — a
-     * drift between the two costs a line said early or late and nothing else.</p>
+     * <p>A reporting cadence, not an assertion, and shared by both logs this reads — the server's
+     * ({@code ServerEventLog.CAPACITY_PER_TYPE}, 4096 a type) and the harness client's — so it is
+     * not read from either. A wrong value costs a line said early or late and nothing else.</p>
      */
     private static final long RING_DEPTH_PER_TYPE = 256L;
 
@@ -228,13 +266,13 @@ public final class Events {
      * A run that evicts nothing says nothing, which is what makes a run that does stand out.</p>
      */
     private String read(String command) throws Exception {
-        String reply = probe.exec(command);
-        announceEvictions(reply);
+        String reply = ask(command);
+        announceEvictions(reply, evictions);
         return reply;
     }
 
-    /** @see #read(String) — split out so any other reader of a log reply can announce the same. */
-    public static void announceEvictions(String reply) {
+    /** @see #read(String) — what was already announced is {@code reports}'s, the owner of the logs. */
+    private static void announceEvictions(String reply, EvictionReports reports) {
         JsonObject env;
         try {
             env = envelope(reply);
@@ -255,7 +293,7 @@ public final class Events {
             if (now <= 0L) {
                 continue;
             }
-            Long before = REPORTED_EVICTIONS.get(byType.getKey());
+            Long before = reports.lastAnnounced(byType.getKey());
             // A RING'S WORTH since the last line, not every record. These counters climb on every
             // read of a chatty type, so "announce on growth" alone is a line per read — 821 of them
             // in one class, which is the same silence wearing a different coat. One ring's depth is
@@ -264,7 +302,7 @@ public final class Events {
             if (before != null && now < before + RING_DEPTH_PER_TYPE) {
                 continue;
             }
-            REPORTED_EVICTIONS.merge(byType.getKey(), now, Math::max);
+            reports.announced(byType.getKey(), now);
             System.out.println("[events] RING EVICTED `" + byType.getKey() + "` — " + now
                     + " records dropped so far (+" + (before == null ? now : now - before)
                     + " since this was last said). Any window of this type that straddles the"
@@ -451,7 +489,7 @@ public final class Events {
      *  launch-time coremod may never have queued the test-only mixins, and the two silences are
      *  identical from a test. */
     public MarkOrWhyNot markIfInstrumented() throws Exception {
-        String reply = probe.exec("stellurgytest events mark");
+        String reply = ask(MARK_COMMAND);
         JsonObject env = envelope(reply);
         boolean live = env.has("recording") && env.get("recording").getAsBoolean();
         boolean woven = env.has("mixins") && env.get("mixins").getAsBoolean();
@@ -596,7 +634,7 @@ public final class Events {
     public String await(long mark, String type, String what, int tickBudget) throws Exception {
         String reply = "";
         for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = probe.exec("stellurgytest events since " + mark + " " + type);
+            reply = ask(sinceCommand(mark, type));
             if (eventsOf(reply).size() > 0) {
                 return reply;
             }
@@ -612,7 +650,7 @@ public final class Events {
      *
      * <p>An empty result has four causes and only one of them is an answer, so a failure that does
      * not separate them sends its reader to the wrong subsystem. Both probes emit the same four
-     * envelope keys ({@code TestProbeCommand}'s reply and the client bridge's {@code event_since}),
+     * envelope keys ({@code ServerEventLog}'s reply and the client bridge's {@code event_since}),
      * so this is true of either log.</p>
      */
     private static final String TRIAGE = ". An empty result has four causes and the reply below tells"

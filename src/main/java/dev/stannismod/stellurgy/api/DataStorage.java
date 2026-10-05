@@ -177,6 +177,7 @@ public class DataStorage {
         ATMOSPHEREDENSITY(5),
         MASS(6);
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         public final int id;
 
         DataType(int id) {

@@ -32,42 +32,39 @@ import static org.junit.Assert.assertTrue;
  * <p>The malformed trigger mirrors the integration fixture: a non-numeric
  * {@code <rainMarker>} throws deep inside {@code readPlanetFromNode}, which
  * the per-planet isolation must catch-and-skip.</p>
+ *
+ * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-public class PlanetDefsFaultToleranceTest {
+@SeededWorld(PlanetDefsFaultToleranceTest.Galaxy.class)
+public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
 
     private static final int GOOD_DIM = 9401;
     private static final int BAD_DIM = 9402;
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
 
-    @Before
-    public void writeDirtyFixture() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-planetdefs-fault-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
-                + planetXml("GoodPlanet", GOOD_DIM,
-                        "")
-                + planetXml("BadWeatherPlanet", BAD_DIM,
-                        "            <rainMarker>NOT_A_NUMBER</rainMarker>\n")
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+    /** The galaxy this class's one shared server boots over. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(dev.stannismod.stellurgy.test.client.GameDirSeed seed) {
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
+                    + planetXml("GoodPlanet", GOOD_DIM,
+                            "")
+                    + planetXml("BadWeatherPlanet", BAD_DIM,
+                            "            <rainMarker>NOT_A_NUMBER</rainMarker>\n")
+                    + "    </star>\n"
+                    + "</galaxy>\n";
+            seed.planetDefs(xml, PlanetDefsFaultToleranceTest.class);
+        }
     }
 
     private static String planetXml(String name, int dim, String extraElements) {
         return "        <planet name=\"" + name + "\" DIMID=\"" + dim + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
@@ -86,24 +83,18 @@ public class PlanetDefsFaultToleranceTest {
                 + "        </planet>\n";
     }
 
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
-    }
-
     @Test
     public void serverBootsWithMalformedPlanetSkipped() throws Exception {
         // The assertion that matters most is implicit in this line: before the
         // #77 fix a malformed planet killed the JVM during startup (silent
         // exitJava), so startWith() would fail with "server process exited
         // before becoming ready".
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
         // Membership of a SET of integers, asked of one. It used to be asked of the rendering —
         // `dimList.contains("9402")` — and those digits match anywhere in the blob: the negative
         // claim below would fail for a tick time carrying them, and the positive one above would
         // pass with the dimension absent as long as something printed 94010 or 19401.
-        DimList dimList = DimList.of(String.join("\n", harness.client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
         assertTrue("well-formed planet must survive a dirty planetDefs.xml: " + dimList,
                 dimList.holds(GOOD_DIM));
         assertFalse("malformed planet must be skipped, not registered: " + dimList,
@@ -111,7 +102,7 @@ public class PlanetDefsFaultToleranceTest {
 
         // The good planet is fully functional, not just listed.
         String info = String.join("\n",
-                harness.client().execute("stellurgytest planet info " + GOOD_DIM));
+                client().execute("stellurgytest planet info " + GOOD_DIM));
         assertTrue("good planet must round-trip its config: " + info,
                 "GoodPlanet".equals(Reply.of(info).text("name")));
     }

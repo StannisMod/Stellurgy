@@ -9,6 +9,7 @@ import java.util.function.Predicate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 /**
@@ -34,13 +35,15 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  *       kind of world commoner in exact proportion.</li>
  * </ul>
  *
- * <p>Static state, server-side authored config — the same lifetime and the same reset points as the
- * star catalogue it is loaded beside.</p>
+ * <p>An immutable value. The table a save runs with is held by that server's galaxy
+ * ({@code DimensionManager.getPlanetTypes()}), read from the save's planet file when the server starts,
+ * and handed to the universe schema's derivation; nothing in the process holds "the current table".</p>
  */
 public final class PlanetTypes {
 
     // A self-contained logger rather than Stellurgy.logger: loading the mod class triggers Forge
     // bootstrap, which would break pure unit tests of the derivation this class feeds.
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Universe");
 
     /**
@@ -50,41 +53,50 @@ public final class PlanetTypes {
      */
     public static final String UNCLASSIFIED = "unclassified";
 
+    private final List<PlanetTypePreset> presets;
+
     /**
-     * Whether a foreign {@code WorldType} of this name exists in the running modset. A seam, so the
-     * filter is unit-testable without a Minecraft registry; production resolves it against
-     * {@code WorldType.byName}.
+     * Whether a foreign {@code WorldType} of this name exists in the running modset. Production
+     * resolves it against {@code WorldType.parseWorldType}; a unit test hands in its own.
      */
-    private static volatile Predicate<String> worldTypeAvailable = PlanetTypes::worldTypeIsRegistered;
+    private final Predicate<String> worldTypeAvailable;
 
-    private static volatile List<PlanetTypePreset> presets = stockPresets();
-
-    private PlanetTypes() {
+    private PlanetTypes(List<PlanetTypePreset> presets, Predicate<String> worldTypeAvailable) {
+        this.presets = presets;
+        this.worldTypeAvailable = worldTypeAvailable;
     }
 
     // ─── The catalogue ─────────────────────────────────────────────────────────
 
-    /** Every preset currently in force, in authored order. Never empty. */
-    public static List<PlanetTypePreset> presets() {
+    /** The code-shipped table. */
+    public static PlanetTypes stock() {
+        return new PlanetTypes(stockPresets(), PlanetTypes::worldTypeIsRegistered);
+    }
+
+    /**
+     * The table a planet file authors (its {@code <planetType>} elements). {@code null} or empty means
+     * the file states none, and the code-shipped table is in force.
+     */
+    public static PlanetTypes authored(List<PlanetTypePreset> authored) {
+        if (authored == null || authored.isEmpty()) {
+            return stock();
+        }
+        return new PlanetTypes(Collections.unmodifiableList(new ArrayList<>(authored)),
+                PlanetTypes::worldTypeIsRegistered);
+    }
+
+    /** This table, judging terrain availability by {@code probe} instead of the running modset. */
+    public PlanetTypes withWorldTypeAvailability(Predicate<String> probe) {
+        return new PlanetTypes(presets, probe);
+    }
+
+    /** Every preset in this table, in authored order. Never empty. */
+    public List<PlanetTypePreset> presets() {
         return presets;
     }
 
-    /** Install an authored table (the {@code <planetType>} elements). An empty list restores stock. */
-    public static void setPresets(List<PlanetTypePreset> authored) {
-        if (authored == null || authored.isEmpty()) {
-            presets = stockPresets();
-            return;
-        }
-        presets = Collections.unmodifiableList(new ArrayList<>(authored));
-    }
-
-    /** Restore the code-shipped table — the world-unload / config-reset path. */
-    public static void resetToStock() {
-        presets = stockPresets();
-    }
-
     /** The preset of that name, or {@code null}. */
-    public static PlanetTypePreset byName(String name) {
+    public PlanetTypePreset byName(String name) {
         if (name == null) {
             return null;
         }
@@ -94,11 +106,6 @@ public final class PlanetTypes {
             }
         }
         return null;
-    }
-
-    /** Override the {@code WorldType}-availability probe (tests, or an addon with its own registry). */
-    public static void setWorldTypeAvailability(Predicate<String> probe) {
-        worldTypeAvailable = probe == null ? PlanetTypes::worldTypeIsRegistered : probe;
     }
 
     // ─── The draws ─────────────────────────────────────────────────────────────
@@ -119,7 +126,7 @@ public final class PlanetTypes {
      *
      * @param temperatureForAlbedo what this world's surface temperature would be at a given albedo
      */
-    public static List<PlanetTypePreset> candidates(int pressure,
+    public List<PlanetTypePreset> candidates(int pressure,
                                                     DoubleToIntFunction temperatureForAlbedo,
                                                     int gravityPercent, boolean gasGiant) {
         List<PlanetTypePreset> out = new ArrayList<>();
@@ -141,9 +148,10 @@ public final class PlanetTypes {
      * substituted and no preset is invented: the answer is {@code null}, and the caller reports the
      * world as {@link #UNCLASSIFIED}. A silent substitution would hide the authoring gap forever.</p>
      */
-    public static PlanetTypePreset drawType(int pressure,
+    public PlanetTypePreset drawType(int pressure,
                                             DoubleToIntFunction temperatureForAlbedo,
-                                            int gravityPercent, boolean gasGiant, long hash) {
+                                            int gravityPercent, boolean gasGiant, long hash,
+                                            ReportOnce reports) {
         List<PlanetTypePreset> admitting = candidates(pressure, temperatureForAlbedo, gravityPercent,
                 gasGiant);
         if (admitting.isEmpty()) {
@@ -151,7 +159,7 @@ public final class PlanetTypes {
             // than one of the types that declined it — an author widening a range needs to know where
             // the world actually sits, not where the last candidate would have put it.
             int neutral = temperatureForAlbedo.applyAsInt(AstronomicalBodyHelper.EARTH_ALBEDO);
-            if (SystemContent.reportOnce("noPlanetType:" + gasGiant + ':' + pressure / 50 + ':'
+            if (reports.first("noPlanetType:" + gasGiant + ':' + pressure / 50 + ':'
                     + neutral / 25 + ':' + gravityPercent / 25)) {
                 LOGGER.warn("no planet type admits a world at pressure {}, {} K, gravity {}% (gasGiant={})"
                         + " - it will be reported as '{}'. Widen a <planetType> range to cover it.",
@@ -178,7 +186,7 @@ public final class PlanetTypes {
      * modset can actually run. Never {@code null}: a preset whose every entry names a missing mod falls
      * back to Stellurgy's own generator, which is the one thing always present.
      */
-    public static TerrainOption drawTerrain(PlanetTypePreset preset, long hash) {
+    public TerrainOption drawTerrain(PlanetTypePreset preset, long hash, ReportOnce reports) {
         if (preset == null) {
             return TerrainOption.ofNative(0, 1);
         }
@@ -190,7 +198,7 @@ public final class PlanetTypes {
             }
         }
         if (available.isEmpty()) {
-            if (SystemContent.reportOnce("noTerrain:" + preset.name())) {
+            if (reports.first("noTerrain:" + preset.name())) {
                 LOGGER.warn("planet type '{}' has no runnable terrain source in this modset (every "
                         + "<gen> entry names a WorldType that is not registered) - falling back to the "
                         + "native generator.", preset.name());
@@ -220,6 +228,13 @@ public final class PlanetTypes {
      *
      * <p>Astronomy on the left of each comment, the Stellurgy lever it is expressed through on
      * the right. Every number here is a balance knob and none of them is a contract.</p>
+     *
+     * <p>A band that ends at {@link DimensionProperties#MAX_ATM_PRESSURE} means UNBOUNDED ABOVE and is
+     * written that way on purpose. These ceilings used to be the literal value that constant then had,
+     * which made every band a silent bet on it: the day the ceiling moved, worlds denser than the old
+     * figure stopped matching any preset at all and were generated with no type. A band whose upper
+     * limit is a real statement about the world - a desert, an ocean, an earthlike - carries its own
+     * number instead.</p>
      */
     public static List<PlanetTypePreset> stockPresets() {
         List<PlanetTypePreset> l = new ArrayList<>();
@@ -236,7 +251,7 @@ public final class PlanetTypes {
         // Everything past the snow line, thin-aired or thick: Europa and Titan are the same class of
         // world, and which of the two you get is how much nitrogen the gravity managed to keep.
         l.add(PlanetTypePreset.builder("ice").albedo(0.60d).weight(22)
-                .pressure(0, 1600).temperature(0, 200).gravity(1, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 200).gravity(1, 400)
                 .biomes("stellurgy:moondark;10,minecraft:ice_flats;30,minecraft:ice_mountains;20")
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
@@ -244,7 +259,7 @@ public final class PlanetTypes {
         // Tight inner orbits, common around M dwarfs. A molten surface under whatever the rock itself
         // boiled off, which can be a great deal — hence no pressure ceiling.
         l.add(PlanetTypePreset.builder("lava").albedo(0.10d).weight(12)
-                .pressure(0, 1600).temperature(700, 6000).gravity(5, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(700, 6000).gravity(5, 400)
                 .biomes("stellurgy:volcanic;30,stellurgy:volcanicbarren;20,"
                         + "stellurgy:hotdryrock;10")
                 .terrain(TerrainOption.ofNative(0, 1))
@@ -253,7 +268,7 @@ public final class PlanetTypes {
         // Venus-like, and likely common in the hot zone: a thick atmosphere doing the warming, which is
         // why the band is keyed on the PRESSURE floor rather than on where the world orbits.
         l.add(PlanetTypePreset.builder("greenhouse").albedo(0.75d).weight(14)
-                .pressure(150, 1600).temperature(275, 1000).gravity(20, 400)
+                .pressure(150, DimensionProperties.MAX_ATM_PRESSURE).temperature(275, 1000).gravity(20, 400)
                 .biomes("stellurgy:hotdryrock;30,stellurgy:volcanicbarren;10")
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
@@ -261,7 +276,7 @@ public final class PlanetTypes {
         // The commonest planet class in the galaxy, and absent from the Solar System entirely. Defined
         // by MASS, not by climate: a super-Earth is one whether it is frozen or baked.
         l.add(PlanetTypePreset.builder("superearth").albedo(0.30d).weight(16)
-                .pressure(0, 1600).temperature(0, 900).gravity(160, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 900).gravity(160, 400)
                 .biomes("stellurgy:stormland;30,stellurgy:hotdryrock;10")
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
@@ -284,7 +299,7 @@ public final class PlanetTypes {
         // Life without oxygen — the crystal / stormland / alien-forest biomes, all written and nearly
         // unused today. Deliberately narrow: a find, not a background.
         l.add(PlanetTypePreset.builder("exotic").albedo(0.30d).weight(5)
-                .pressure(40, 1600).temperature(200, 430).gravity(10, 220)
+                .pressure(40, DimensionProperties.MAX_ATM_PRESSURE).temperature(200, 430).gravity(10, 220)
                 .biomes("stellurgy:crystalchasms;30,stellurgy:stormland;20,"
                         + "stellurgy:alien_forest;10")
                 .terrain(TerrainOption.ofNative(0, 1))
@@ -302,13 +317,13 @@ public final class PlanetTypes {
         // Its bands are deliberately the widest in the table: a giant is a giant, and nothing else in
         // this list will ever admit one, so a gap here would leave a whole body class untyped.
         l.add(PlanetTypePreset.builder("gasgiant").albedo(0.50d).weight(14).gasGiant(true).tidallyLockable(false)
-                .pressure(0, 1600).temperature(0, 1500).gravity(1, 400)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 1500).gravity(1, 400)
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
 
         // Neptune and Uranus: the same, further out and colder.
         l.add(PlanetTypePreset.builder("icegiant").albedo(0.50d).weight(9).gasGiant(true).tidallyLockable(false)
-                .pressure(0, 1600).temperature(0, 250).gravity(1, 300)
+                .pressure(0, DimensionProperties.MAX_ATM_PRESSURE).temperature(0, 250).gravity(1, 300)
                 .terrain(TerrainOption.ofNative(0, 1))
                 .build());
 

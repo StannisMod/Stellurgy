@@ -13,6 +13,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 
 public class DataNetwork {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DataType[] DATA_TYPES = DataType.values();
 
     private final CopyOnWriteArraySet<EndpointRef> sources = new CopyOnWriteArraySet<>();

@@ -14,8 +14,8 @@ import net.minecraft.util.math.BlockPos;
 /**
  * The tier-2 <b>planet descent</b>: how a ship in space drops onto a planet — the inverse of the
  * {@link ShipEntryController} ascent on-ramp. Descent is by PROXIMITY: the flight computer's tick
- * detects that a SETTLED slot-world ship whose pilot is flying has closed within
- * {@link ShipEntryController#DESCENT_RADIUS_BLOCKS} of a descend-target body's POI and calls
+ * detects that a SETTLED slot-world ship has crossed a descend-target body's
+ * {@link DescentShell} and calls
  * {@link #requestDescent}; this controller then:
  *
  * <ol>
@@ -37,6 +37,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public final class DescentController {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /** Ticks a ship waits after a refused/failed descent before the proximity check may re-fire. */
@@ -114,8 +115,8 @@ public final class DescentController {
     }
 
     /**
-     * Which body a craft at {@code craftAt} has closed within {@code radiusBlocks} of, at
-     * {@code tick} — the NEAREST one, or {@code null} if none.
+     * Which body a craft at {@code craftAt} has crossed the descent shell of
+     * ({@link DescentShell#radiusAround}), at {@code tick} — the NEAREST one, or {@code null} if none.
      *
      * <p><b>Both positions are ABSOLUTE, evaluated at the same tick, and that is the whole point of
      * this method.</b> The proximity check used to read an in-cell delta and filter the candidates
@@ -134,7 +135,7 @@ public final class DescentController {
      * whatever candidates it is handed, which is exactly what it was before. It restores the trigger
      * without pretending to answer the larger question.</p>
      *
-     * <p>Nearest rather than first: two bodies can be inside the radius at once — a moon and its
+     * <p>Nearest rather than first: a craft can be inside two shells at once — a close moon and its
      * planet, when the craft is between them — and "whichever the list happened to hold first" is
      * a landing site chosen by iteration order.</p>
      *
@@ -142,7 +143,7 @@ public final class DescentController {
      */
     public static dev.stannismod.stellurgy.universe.SystemBody nearestDescentTarget(
             java.util.List<dev.stannismod.stellurgy.universe.SystemBody> candidates,
-            AbsolutePos craftAt, long tick, long radiusBlocks) {
+            AbsolutePos craftAt, long tick) {
         if (candidates == null || craftAt == null) {
             return null;
         }
@@ -153,7 +154,10 @@ public final class DescentController {
                 continue;
             }
             double distance = craftAt.distanceTo(body.absoluteAt(tick));
-            if (!shouldTriggerDescent(true, distance, radiusBlocks) || distance >= nearestDistance) {
+            // Each body's OWN shell: crossing it is entering that body's atmosphere, so a planet and
+            // its moon are approached at different ranges.
+            if (!shouldTriggerDescent(true, distance, DescentShell.radiusAround(body))
+                    || distance >= nearestDistance) {
                 continue;
             }
             nearest = body;

@@ -42,11 +42,9 @@ public class PacketConfigSync extends BasePacket {
 
     @Override
     public void executeClient(EntityPlayer thePlayer) {
-        try {
-            StellurgyConfiguration.loadConfigFromServer(config);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // Kept by the connection it came over, and gone with it — there is nothing to restore when the
+        // client leaves.
+        dev.stannismod.stellurgy.Stellurgy.proxy.adoptServerConfig(config);
     }
 
     @Override

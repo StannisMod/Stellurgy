@@ -6,8 +6,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.util.Constants.NBT;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent.PlayerTickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -27,7 +25,14 @@ import java.util.*;
 
 public class SpaceObjectManager implements ISpaceObjectManager {
     public static final int WARPDIMID = Integer.MIN_VALUE;
-    private final static SpaceObjectManager spaceObjectManager = new SpaceObjectManager();
+    /**
+     * The kinds of space object a save can hold, by the name written into it. Effectively final,
+     * client/dedicated-server lifetime: filled by {@link #registerSpaceObjectType} from the mod's init
+     * and only read after.
+     */
+    private static final Map<String, Class<?>> TYPES_BY_NAME = new HashMap<>();
+    /** Effectively final, process lifetime: filled only by SpaceObjectManager.registerSpaceObjectType. */
+    private static final Map<Class<?>, String> NAMES_BY_TYPE = new HashMap<>();
     private int nextId = 1;
     private long nextStationTransitionTick = -1;
     //station ids to object
@@ -36,24 +41,23 @@ public class SpaceObjectManager implements ISpaceObjectManager {
     private HashMap<Integer, List<ISpaceObject>> spaceStationOrbitMap;
     private HashMap<Integer, Long> temporaryDimensions;                //Stores a list of temporary dimensions to time they vanish
     private HashMap<Integer, Integer> temporaryDimensionPlayerNumber;
-    private HashMap<String, Class> nameToClass;
-    private HashMap<Class, String> classToString;
 
-    private SpaceObjectManager() {
+    /**
+     * The stations one side knows: the running server's, built when it starts and dropped when it
+     * stops, or a client connection's, built on connect and dropped with it.
+     */
+    public SpaceObjectManager() {
         stationLocations = new HashMap<>();
         spaceStationOrbitMap = new HashMap<>();
-        nameToClass = new HashMap<>();
-        classToString = new HashMap<>();
         temporaryDimensions = new HashMap<>();
     }
 
     /**
-     * The {@link SpaceObjectManager} is used for tasks such as managing space stations and orbiting worlds
-     *
-     * @return the {@link SpaceObjectManager} registered with the DimensionManager
+     * The stations as the CALLER's side knows them: the running server's on a server thread, the
+     * connection's on the client's. Throws when that side has none.
      */
     public static SpaceObjectManager getSpaceManager() {
-        return spaceObjectManager;
+        return Stellurgy.proxy.getSpaceObjectManager();
     }
 
     /**
@@ -84,9 +88,13 @@ public class SpaceObjectManager implements ISpaceObjectManager {
      * @param str   key with which to register the spaceObject type
      * @param clazz class of space object to register
      */
-    public void registerSpaceObjectType(String str, Class<?> clazz) {
-        nameToClass.put(str, clazz);
-        classToString.put(clazz, str);
+    public static void registerSpaceObjectType(String str, Class<?> clazz) {
+        if (TYPES_BY_NAME.containsKey(str) || NAMES_BY_TYPE.containsKey(clazz)) {
+            throw new IllegalStateException("space object type " + str + " / " + clazz.getName()
+                    + " is already registered; types are registered once, at init");
+        }
+        TYPES_BY_NAME.put(str, clazz);
+        NAMES_BY_TYPE.put(clazz, str);
     }
 
     /**
@@ -95,8 +103,8 @@ public class SpaceObjectManager implements ISpaceObjectManager {
      * @param id string identifier of the spaceobject
      * @return a new instance of the spaceobject or null if not registered
      */
-    public ISpaceObject getNewSpaceObjectFromIdentifier(String id) {
-        Class clazz = nameToClass.get(id);
+    public static ISpaceObject getNewSpaceObjectFromIdentifier(String id) {
+        Class<?> clazz = TYPES_BY_NAME.get(id);
 
         try {
             return (ISpaceObject) clazz.newInstance();
@@ -106,8 +114,8 @@ public class SpaceObjectManager implements ISpaceObjectManager {
         return null;
     }
 
-    public String getIdentifierFromClass(Class<? extends ISpaceObject> clazz) {
-        return classToString.get(clazz);
+    public static String getIdentifierFromClass(Class<? extends ISpaceObject> clazz) {
+        return NAMES_BY_TYPE.get(clazz);
     }
 
     /**
@@ -222,6 +230,20 @@ public class SpaceObjectManager implements ISpaceObjectManager {
         PacketHandler.sendToAll(new PacketSpaceStationInfo(spaceObject.getId(), spaceObject));
     }
 
+    /**
+     * A client's half of a station's removal: drops it from what this connection knows and sends
+     * nothing — the removal itself is the server's.
+     */
+    public void forgetSpaceObject(int id) {
+        ISpaceObject station = stationLocations.remove(id);
+        if (station != null) {
+            List<ISpaceObject> orbit = spaceStationOrbitMap.get(station.getOrbitingPlanetId());
+            if (orbit != null) {
+                orbit.remove(station);
+            }
+        }
+    }
+
     public void unregisterSpaceObject(int id) {
         temporaryDimensions.remove(id);
         temporaryDimensionPlayerNumber.remove(id);
@@ -252,15 +274,16 @@ public class SpaceObjectManager implements ISpaceObjectManager {
     }
 
     /**
-     * Event designed to teleport a player to the spawn point for the station if he'she falls out of the world in space
+     * Teleports a player who falls out of the world in space back to the station's spawn point, and
+     * bounces a player off the walls between station cells. Run for every player tick on both sides;
+     * only the server's half asks a manager.
      * TODO: prevent inf loop if nowhere to fall!
      */
-    @SubscribeEvent
-    public void onPlayerTick(@Nonnull PlayerTickEvent event) {
+    static void confinePlayerInSpace(@Nonnull PlayerTickEvent event) {
         if (event.player.world.provider.getDimension() == StellurgyConfiguration.getCurrentConfig().spaceDimId) {
 
             if (event.player.posY < 0 && !event.player.world.isRemote) {
-                ISpaceObject spaceObject = getSpaceStationFromBlockCoords(event.player.getPosition());
+                ISpaceObject spaceObject = getSpaceManager().getSpaceStationFromBlockCoords(event.player.getPosition());
                 if (spaceObject != null) {
 
                     HashedBlockPosition loc = spaceObject.getSpawnLocation();
@@ -303,8 +326,8 @@ public class SpaceObjectManager implements ISpaceObjectManager {
         }
     }
 
-    @SubscribeEvent
-    public void onServerTick(TickEvent.ServerTickEvent event) {
+    /** Lands every station whose warp transit is due. Server only, once per server tick. */
+    void tickTransitions() {
         if (DimensionManager.getWorld(StellurgyConfiguration.getCurrentConfig().spaceDimId) == null)
             return;
 
@@ -329,13 +352,6 @@ public class SpaceObjectManager implements ISpaceObjectManager {
 
     }
 
-    public void onServerStopped() {
-        stationLocations.clear();
-        spaceStationOrbitMap.clear();
-        temporaryDimensions.clear();
-        nextStationTransitionTick = -1;
-    }
-	
 	/*@SubscribeEvent
 	public void onPlayerTransition(PlayerEvent.PlayerChangedDimensionEvent event) {
 		
@@ -420,7 +436,7 @@ public class SpaceObjectManager implements ISpaceObjectManager {
         Stellurgy.proxy.fireFogBurst(station);
 
 
-        ((DimensionProperties) station.getProperties()).setAtmosphereDensityDirect(0);
+        ((DimensionProperties) station.getProperties()).realizeAtmosphere(false, 0);
         nextStationTransitionTick = (int) (StellurgyConfiguration.getCurrentConfig().travelTimeMultiplier * timeDelta) + Stellurgy.proxy.getWorldTimeUniversal(0);
         station.beginTransition(nextStationTransitionTick);
 
@@ -435,7 +451,7 @@ public class SpaceObjectManager implements ISpaceObjectManager {
             NBTTagCompound nbtTag = new NBTTagCompound();
             spaceObject.writeToNbt(nbtTag);
 
-            nbtTag.setString("type", classToString.get(spaceObject.getClass()));
+            nbtTag.setString("type", NAMES_BY_TYPE.get(spaceObject.getClass()));
             if (temporaryDimensions.containsKey(spaceObject.getId())) {
                 nbtTag.setLong("expireTime", temporaryDimensions.get(spaceObject.getId()));
                 nbtTag.setInteger("numPlayers", temporaryDimensionPlayerNumber.get(spaceObject.getId()));
@@ -458,7 +474,7 @@ public class SpaceObjectManager implements ISpaceObjectManager {
         for (int i = 0; i < list.tagCount(); i++) {
             NBTTagCompound tag = list.getCompoundTagAt(i);
             try {
-                ISpaceObject spaceObject = (ISpaceObject) nameToClass.get(tag.getString("type")).newInstance();
+                ISpaceObject spaceObject = (ISpaceObject) TYPES_BY_NAME.get(tag.getString("type")).newInstance();
                 spaceObject.readFromNbt(tag);
 
 

@@ -25,6 +25,10 @@ public final class RealClientHarness implements AutoCloseable {
      *  overload to supply distinct usernames per client — the server's PlayerList
      *  keys on username, so two clients sharing this constant would collide. */
     private static final String CLIENT_USERNAME = "ForgeTestClient";
+    /**
+     * A constant: a final {@code boolean} read once from {@code os.name}, which a running JVM does not
+     * change.
+     */
     private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
     private static final int NORMAL_PRIORITY_CLASS = 0x00000020;
     private static final int CREATE_NEW_PROCESS_GROUP = 0x00000200;
@@ -464,7 +468,8 @@ public final class RealClientHarness implements AutoCloseable {
         PROCESS_INFORMATION processInformation = new PROCESS_INFORMATION();
         startupInfo.write();
         processInformation.write();
-        boolean created = Kernel32Native.INSTANCE.CreateProcessW(
+        Kernel32Native kernel32 = Kernel32Native.load();
+        boolean created = kernel32.CreateProcessW(
                 new WString(javaBinary.toAbsolutePath().toString()),
                 new WString(buildCommandLine(commandLineArgs)),
                 null,
@@ -484,7 +489,7 @@ public final class RealClientHarness implements AutoCloseable {
         }
 
         processInformation.read();
-        Kernel32Native.INSTANCE.CloseHandle(processInformation.hThread);
+        kernel32.CloseHandle(processInformation.hThread);
         NativeClientProcess nativeProcess =
                 new NativeClientProcess(processInformation.hProcess, processInformation.dwProcessId);
         startWindowSuppressor(nativeProcess, processInformation.dwProcessId);
@@ -766,7 +771,7 @@ public final class RealClientHarness implements AutoCloseable {
             java.lang.reflect.Field handleField = process.getClass().getDeclaredField("handle");
             handleField.setAccessible(true);
             long handle = handleField.getLong(process);
-            return Kernel32Native.INSTANCE.GetProcessId(new Pointer(handle));
+            return Kernel32Native.load().GetProcessId(new Pointer(handle));
         } catch (Throwable t) {
             return -1;
         }
@@ -809,6 +814,12 @@ public final class RealClientHarness implements AutoCloseable {
         Thread watcher = new Thread(new Runnable() {
             @Override
             public void run() {
+                final User32Native user32;
+                try {
+                    user32 = User32Native.load();
+                } catch (Throwable unavailable) {
+                    return; // Best-effort, like every call below: no user32, no suppression.
+                }
                 final IntByReference windowPid = new IntByReference();
                 // Off-screen moves are once-per-window (a moved window stays moved); track by hwnd.
                 final java.util.Set<Long> moved = new java.util.HashSet<Long>();
@@ -816,21 +827,21 @@ public final class RealClientHarness implements AutoCloseable {
                     @Override
                     public boolean callback(Pointer hWnd, Pointer lParam) {
                         windowPid.setValue(0);
-                        User32Native.INSTANCE.GetWindowThreadProcessId(hWnd, windowPid);
+                        user32.GetWindowThreadProcessId(hWnd, windowPid);
                         if (windowPid.getValue() != pid
-                                || !User32Native.INSTANCE.IsWindowVisible(hWnd)) {
+                                || !user32.IsWindowVisible(hWnd)) {
                             return true;
                         }
                         if (iconify) {
-                            if (!User32Native.INSTANCE.IsIconic(hWnd)) {
-                                User32Native.INSTANCE.SetWindowPos(hWnd, Pointer.NULL,
+                            if (!user32.IsIconic(hWnd)) {
+                                user32.SetWindowPos(hWnd, Pointer.NULL,
                                         -32000, -32000, 0, 0, SWP_FLAGS);
-                                User32Native.INSTANCE.ShowWindow(hWnd, SW_FORCEMINIMIZE);
+                                user32.ShowWindow(hWnd, SW_FORCEMINIMIZE);
                                 System.out.println("[forge-test] suppressed client window pid="
                                         + pid + " mode=minimized");
                             }
                         } else if (moved.add(Pointer.nativeValue(hWnd))) {
-                            User32Native.INSTANCE.SetWindowPos(hWnd, Pointer.NULL,
+                            user32.SetWindowPos(hWnd, Pointer.NULL,
                                     -32000, -32000, 0, 0, SWP_FLAGS);
                             System.out.println("[forge-test] suppressed client window pid="
                                     + pid + " mode=offscreen");
@@ -840,7 +851,7 @@ public final class RealClientHarness implements AutoCloseable {
                 };
                 while (process.isAlive()) {
                     try {
-                        User32Native.INSTANCE.EnumWindows(suppressor, Pointer.NULL);
+                        user32.EnumWindows(suppressor, Pointer.NULL);
                     } catch (Throwable ignored) {
                         // Best-effort — a JNA hiccup must never fail the run.
                     }
@@ -876,6 +887,7 @@ public final class RealClientHarness implements AutoCloseable {
     private static final class NativeClientProcess extends Process {
         private final Pointer processHandle;
         private final int processId;
+        private final Kernel32Native kernel32 = Kernel32Native.load();
 
         private NativeClientProcess(Pointer processHandle, int processId) {
             this.processHandle = processHandle;
@@ -904,7 +916,7 @@ public final class RealClientHarness implements AutoCloseable {
 
         @Override
         public int waitFor() throws InterruptedException {
-            int waitResult = Kernel32Native.INSTANCE.WaitForSingleObject(processHandle, -1);
+            int waitResult = kernel32.WaitForSingleObject(processHandle, -1);
             if (waitResult == WAIT_FAILED) {
                 throw new IllegalStateException("WaitForSingleObject failed for client process " + processId);
             }
@@ -914,7 +926,7 @@ public final class RealClientHarness implements AutoCloseable {
         @Override
         public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException {
             long timeoutMillis = unit.toMillis(timeout);
-            int waitResult = Kernel32Native.INSTANCE.WaitForSingleObject(processHandle, (int) Math.min(Integer.MAX_VALUE, timeoutMillis));
+            int waitResult = kernel32.WaitForSingleObject(processHandle, (int) Math.min(Integer.MAX_VALUE, timeoutMillis));
             if (waitResult == WAIT_FAILED) {
                 throw new IllegalStateException("WaitForSingleObject failed for client process " + processId);
             }
@@ -924,7 +936,7 @@ public final class RealClientHarness implements AutoCloseable {
         @Override
         public int exitValue() {
             IntByReference code = new IntByReference();
-            if (!Kernel32Native.INSTANCE.GetExitCodeProcess(processHandle, code)) {
+            if (!kernel32.GetExitCodeProcess(processHandle, code)) {
                 throw new IllegalThreadStateException("Unable to query exit code for client process " + processId);
             }
             int value = code.getValue();
@@ -936,7 +948,7 @@ public final class RealClientHarness implements AutoCloseable {
 
         @Override
         public void destroy() {
-            Kernel32Native.INSTANCE.TerminateProcess(processHandle, 1);
+            kernel32.TerminateProcess(processHandle, 1);
         }
 
         @Override
@@ -947,16 +959,23 @@ public final class RealClientHarness implements AutoCloseable {
 
         @Override
         public boolean isAlive() {
-            return Kernel32Native.INSTANCE.WaitForSingleObject(processHandle, 0) == WAIT_TIMEOUT;
+            return kernel32.WaitForSingleObject(processHandle, 0) == WAIT_TIMEOUT;
         }
 
         private void closeHandle() {
-            Kernel32Native.INSTANCE.CloseHandle(processHandle);
+            kernel32.CloseHandle(processHandle);
         }
     }
 
     private interface Kernel32Native extends Library {
-        Kernel32Native INSTANCE = Native.loadLibrary("kernel32", Kernel32Native.class);
+        /**
+         * A proxy onto the OS library for the one caller that asked. Not held in a static: a JNA
+         * proxy carries a mutable function cache and a disposable native library handle, so it is
+         * not an immutable value. JNA caches the loaded library itself.
+         */
+        static Kernel32Native load() {
+            return Native.loadLibrary("kernel32", Kernel32Native.class);
+        }
 
         boolean CreateProcessW(WString lpApplicationName,
                                WString lpCommandLine,
@@ -986,7 +1005,10 @@ public final class RealClientHarness implements AutoCloseable {
     }
 
     private interface User32Native extends Library {
-        User32Native INSTANCE = Native.loadLibrary("user32", User32Native.class);
+        /** A proxy onto the OS library for the one caller that asked; see {@link Kernel32Native#load}. */
+        static User32Native load() {
+            return Native.loadLibrary("user32", User32Native.class);
+        }
 
         boolean EnumWindows(WndEnumProc lpEnumFunc, Pointer lParam);
 
@@ -1137,14 +1159,16 @@ public final class RealClientHarness implements AutoCloseable {
          * {@code CallbackInfoReturnable} made {@code KeyBindings} fail to load, crashed the client at
          * postInit, and reported itself as "Failed to start real client harness" across THIRTY test
          * classes. The message naming the exact fix was on disk the whole time.</p>
+         *
+         * <p>A constant: an unmodifiable list of strings over a backing list nothing else references.</p>
          */
-        private static final String[] FATAL_MARKERS = {
-            "Critical injection failure",
-            "InvalidMixinException",
-            "InvalidInjectionException",
-            "Mixin apply for mod",
-            "MixinTransformerError",
-        };
+        private static final java.util.List<String> FATAL_MARKERS = java.util.Collections.unmodifiableList(
+                java.util.Arrays.asList(
+                        "Critical injection failure",
+                        "InvalidMixinException",
+                        "InvalidInjectionException",
+                        "Mixin apply for mod",
+                        "MixinTransformerError"));
 
         private static Thread pump(InputStream input, Path logFile) throws IOException {
             Thread thread = new Thread(() -> {

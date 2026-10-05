@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
@@ -17,13 +19,13 @@ import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import java.util.List;
 
-public class TilePrecisionAssembler extends TileMultiblockMachine implements IModularInventory, IProgressBar {
+public class TilePrecisionAssembler extends TileWasteHeatMachine implements IModularInventory, IProgressBar {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = new Object[][][]{{{LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock},
             {LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock},
             {LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock}},

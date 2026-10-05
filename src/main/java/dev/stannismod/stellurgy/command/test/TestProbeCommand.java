@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.command.test;
 
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.satellite.SatelliteSpyTelescope;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
 import net.minecraft.block.state.IBlockState;
@@ -21,7 +21,7 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
@@ -54,14 +54,6 @@ import java.util.Map;
  * protocol of the reusable test framework.</p>
  */
 public class TestProbeCommand extends CommandBase {
-
-    /**
-     * The event types that make up a position-writer timeline: who moved a body, who seated it and
-     * who stood it up. Named once, because two verbs read the same slice for the same reason.
-     */
-    // A body can be moved by being PLACED or by being handed a velocity, and a report that counts
-    // only the first reads as "nothing moved it" for the second.
-    private static final String[] WRITER_EVENTS = {"pos_jump", "vel_jump", "mount", "dismount"};
 
     @Override
     @Nonnull
@@ -191,6 +183,9 @@ public class TestProbeCommand extends CommandBase {
                 case "vent":
                     handleVent(server, sender, tail(args));
                     break;
+                case "jettison":
+                    handleJettison(server, sender, tail(args));
+                    break;
                 case "item":
                     handleItem(server, sender, tail(args));
                     break;
@@ -218,6 +213,15 @@ public class TestProbeCommand extends CommandBase {
                 case "scrubber":
                     handleScrubber(server, sender, tail(args));
                     break;
+                case "separator":
+                    handleSeparator(server, sender, tail(args));
+                    break;
+                case "subnet":
+                    handleSubsystemNetwork(server, sender, tail(args));
+                    break;
+                case "heat":
+                    handleHeat(server, sender, tail(args));
+                    break;
                 case "gascharge":
                     handleGasCharge(server, sender, tail(args));
                     break;
@@ -239,9 +243,6 @@ public class TestProbeCommand extends CommandBase {
                 case "player":
                     handlePlayer(server, sender, tail(args));
                     break;
-                case "events":
-                    handleEvents(sender, tail(args));
-                    break;
                 case "seal-detector":
                     handleSealDetector(server, sender, tail(args));
                     break;
@@ -259,6 +260,9 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "sound":
                     handleSound(server, sender, tail(args));
+                    break;
+                case "oredict":
+                    handleOreDict(sender, tail(args));
                     break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
@@ -329,7 +333,7 @@ public class TestProbeCommand extends CommandBase {
                 info.put("shieldStored", emitter.getEnergyStored());
                 info.put("shieldMax", emitter.getMaxEnergyStored());
                 info.put("radius", emitter.getRadius());
-                info.put("requested", emitter.getRequestedShieldEnergy());
+                info.put("requested", emitter.getRequested());
                 // P2 (D134-3/4): the emitter's tier, its tier-scaled recharge throughput (the per-zone
                 // regen cap), the passive-maintenance draw this tick, and how much it actually received
                 // this tick — so a test can assert the throughput cap and the tier scaling.
@@ -346,7 +350,7 @@ public class TestProbeCommand extends CommandBase {
                 info.put("worldZ", wc.z);
                 info.put("shipFramed", emitter.isShipFramed());
                 info.put("frameReady", emitter.isFrameReady());
-                info.put("priority", emitter.getShieldPriority());
+                info.put("priority", emitter.getPriority());
                 // P4 (D134-5/6): the emitter's domain, the priority group that lists it (if any), and its
                 // carried access credential — so a test can assert group push-down and code rotation.
                 String domainId = dev.stannismod.stellurgy.affs.world.shield.ShieldDomains.forBlock(
@@ -365,7 +369,7 @@ public class TestProbeCommand extends CommandBase {
                 info.put("kind", "generator");
                 info.put("shieldStored", gen.getShieldStored());
                 info.put("feStored", gen.getFeStored());
-                info.put("available", gen.getAvailableShieldEnergy());
+                info.put("available", gen.getAvailable());
             } else if (tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldCable) {
                 // P6: a cable's transport cap, so a test can compare the two limiters (transport vs the
                 // emitter's recharge throughput) without pinning either magnitude.
@@ -379,8 +383,8 @@ public class TestProbeCommand extends CommandBase {
                 info.put("kind", "accumulator");
                 info.put("shieldStored", acc.getShieldStored());
                 info.put("shieldMax", acc.getMaxShieldStored());
-                info.put("available", acc.getAvailableShieldEnergy());
-                info.put("free", acc.getFreeShieldCapacity());
+                info.put("available", acc.getAvailable());
+                info.put("free", acc.getFreeCapacity());
             } else {
                 info.put("error", "not a shield tile");
                 info.put("tileClass", tile == null ? "null" : tile.getClass().getName());
@@ -445,14 +449,17 @@ public class TestProbeCommand extends CommandBase {
             // emitters <dim> — list every LOADED emitter in the dimension with its subspace block pos,
             // its world centre, and its frame state. On a VS ship the world centre is the hull-mapped
             // centre (far from the subspace pos), which is exactly what a ship-frame e2e verifies: the
-            // shell tracks the flying ship. Uses the static registry, so it finds a ship's emitter once
-            // the ship (and its chunk) is loaded, without the test knowing the subspace coordinates.
+            // shell tracks the flying ship. Reads the world's own emitter registry, so it finds a ship's
+            // emitter once the ship (and its chunk) is loaded, without the test knowing the subspace
+            // coordinates. An unloaded dimension has no world and therefore no emitters.
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             java.util.List<Map<String, Object>> emitters = new java.util.ArrayList<>();
-            for (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator e
-                    : dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator.getActiveGenerators()) {
-                if (e == null || e.isInvalid() || e.getWorld() == null
-                        || e.getWorld().provider.getDimension() != dim) {
+            net.minecraft.world.WorldServer emitterWorld = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            java.util.Set<dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator> loaded = emitterWorld == null
+                    ? java.util.Collections.<dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator>emptySet()
+                    : dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator.getActiveGenerators(emitterWorld);
+            for (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator e : loaded) {
+                if (e == null || e.isInvalid()) {
                     continue;
                 }
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -534,7 +541,72 @@ public class TestProbeCommand extends CommandBase {
             if (args.length >= 6) {
                 emitter.setPriority(parseIntOr(args[5], 0));
             }
-            send(sender, "{\"ok\":true,\"priority\":" + emitter.getShieldPriority() + "}");
+            send(sender, "{\"ok\":true,\"priority\":" + emitter.getPriority() + "}");
+            return;
+        }
+        if (args.length >= 5 && "console-info".equalsIgnoreCase(args[0])) {
+            // console-info <dim> <x> <y> <z> — what a shield CONSOLE is currently displaying, as
+            // opposed to what the network state says. The two can disagree, and that disagreement is
+            // the bug class this verb exists to make visible. Read out of the console's
+            // own writeToNBT, so it reports the same fields production persists rather than a
+            // parallel accessor that could drift from them.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole)) {
+                send(sender, "{\"error\":\"not a TileEntityShieldConsole\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            net.minecraft.nbt.NBTTagCompound shown =
+                    tile.writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+            send(sender, "{\"ok\":true"
+                    + ",\"networkConnected\":" + shown.getBoolean("networkConnected")
+                    + ",\"networkStatus\":" + shown.getInteger("networkStatus")
+                    + ",\"cableCount\":" + shown.getInteger("cableCount")
+                    + ",\"sourceAvailable\":" + shown.getInteger("sourceAvailable")
+                    + ",\"sinkRequested\":" + shown.getInteger("sinkRequested")
+                    + ",\"deliveredFlow\":" + shown.getInteger("deliveredFlow")
+                    + ",\"resistanceBias\":" + shown.getDouble("shieldEnergyResistanceBias") + "}");
+            return;
+        }
+        if (args.length >= 6 && "console-bias".equalsIgnoreCase(args[0])) {
+            // console-bias <dim> <x> <y> <z> <0..1> — drive the console's own
+            // applyShieldEnergyResistanceBias, the method its GUI slider calls. The setting is
+            // console-OWNED and console-persisted, which is the property a restart test pins.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            double bias;
+            try {
+                bias = Double.parseDouble(args[5]);
+            } catch (NumberFormatException badNumber) {
+                send(sender, "{\"error\":\"bias must be a number\",\"got\":\"" + escapeJson(args[5]) + "\"}");
+                return;
+            }
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole)) {
+                send(sender, "{\"error\":\"not a TileEntityShieldConsole\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole consoleTile =
+                    (dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole) tile;
+            consoleTile.applyShieldEnergyResistanceBias(bias);
+            send(sender, "{\"ok\":true,\"resistanceBias\":"
+                    + consoleTile.getShieldEnergyResistanceBias() + "}");
             return;
         }
         if (args.length >= 6 && "group".equalsIgnoreCase(args[0])) {
@@ -686,44 +758,20 @@ public class TestProbeCommand extends CommandBase {
      * condition that could never be false; they went with it on 2026-09-22.</p>
      */
     private void handleVs(ICommandSender sender, String[] args) {
-        // motion-trace reset — drop every recorded ring, so a leg starts from an empty recorder.
-        // motion-trace <dim> <afcX> <afcY> <afcZ> [windowMs] — the flight recorder's account of how
-        // SMOOTHLY the ship driven by that flight computer moved over the trailing window: the
-        // physics-thread channel (the clock its velocity integrates on), the server-tick channel
-        // (the clock its command is republished on), and — when this JVM is also the client, i.e. a
-        // single-player session — the client tick and per-frame channels. Each reports the interval
-        // distribution of its own clock and the displacement distribution of the thing it watches,
-        // plus two named pathologies: `hitches` (a beat that arrived late) and `stalls` (a sample
-        // that barely moved while its neighbours did). A jerk is one of those two, on one of these
-        // four clocks, and they are not fixed by the same thing.
-        if (args.length >= 1 && "motion-trace".equalsIgnoreCase(args[0])) {
-            if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                dev.stannismod.stellurgy.command.test.MotionTrace.reset();
-                send(sender, "{\"ok\":true,\"reset\":true}");
-                return;
-            }
-            if (args.length < 5) {
-                send(sender, "{\"error\":\"usage: vs motion-trace <dim> <afcX> <afcY> <afcZ>"
-                        + " [windowMs] | vs motion-trace reset\"}");
-                return;
-            }
-            long key = dev.stannismod.stellurgy.command.test.MotionTrace.keyOf(
-                    parseIntOr(args[1], Integer.MIN_VALUE), parseIntOr(args[2], 0),
-                    parseIntOr(args[3], 0), parseIntOr(args[4], 0));
-            long windowMs = args.length >= 6 ? parseIntOr(args[5], 10000) : 10000;
-            send(sender, "{\"ok\":true,\"windowMs\":" + windowMs
-                    + ",\"serverChunkLoads\":"
-                    + dev.stannismod.stellurgy.command.test.MotionTrace.serverChunkLoads
-                    + "," + dev.stannismod.stellurgy.command.test.MotionTrace.serverSummary(key, windowMs)
-                    + ",\"client\":"
-                    + dev.stannismod.stellurgy.command.test.MotionTrace.clientSummary() + "}");
-            return;
-        }
-        // permaload <bool> — keep VS ships permanently loaded (headless has no player to hold a ship
-        // loaded, so a freshly assembled ship auto-unloads between probe calls).
+        // permaload <bool> — whether this test server holds every ship loaded with no player near it.
+        // The switch is the test side's, on the server object; reached by name so a released jar,
+        // which has no test classes, carries none.
         if (args.length >= 2 && "permaload".equalsIgnoreCase(args[0])) {
             boolean v = Boolean.parseBoolean(args[1]);
-            dev.stannismod.stellurgy.integration.vs.VSIntegration.setShipsPermanentlyLoaded(v);
+            try {
+                Class.forName("dev.stannismod.stellurgy.test.trace.ShipLoadHold")
+                        .getMethod("set", net.minecraft.server.MinecraftServer.class, boolean.class)
+                        .invoke(null, sender.getServer(), v);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"ok\":false,\"reason\":\"no test-side ship load hold: "
+                        + escapeJson(String.valueOf(e)) + "\"}");
+                return;
+            }
             send(sender, "{\"ok\":true,\"permanentlyLoaded\":" + v + "}");
             return;
         }
@@ -1797,40 +1845,35 @@ public class TestProbeCommand extends CommandBase {
             probeApplySeatInput(sender, seat, args, 3);
             return;
         }
-        // arrival-trace - the SERVER JVM's position-writer timeline around ship crossings, as one
-        // readable line: every deliberate placement, mount and dismount, each naming the code that
-        // did it. Read-only, no waits; the client half is read from the client JVM through its own
-        // event log (`event_since` on the bridge).
-        //
-        // The records come from the event log, which test-only mixins feed. They used to come from
-        // ungated statics in the production tree: eleven hand-tagged call sites plus a per-tick
-        // sampler, all of them building formatted strings on the position-writer path of every
-        // crossing in a shipped game, for nobody. An observation a test wants belongs to the test
-        // side; the mixins that record these live in the test source set and a released jar carries
-        // none of them.
+        // arrival-trace - the crosser's own census of the last arrival: why its re-seat stopped, what
+        // its cut took, and what already sat in the departure's lane. Read-only, no waits. The
+        // position-writer timeline around the crossing is not here: it is in the server's ordered
+        // event log (`pos_jump`, `mount`, `dismount`, ...), read by the test through its own reader.
         if (args.length >= 1 && "arrival-trace".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.SpaceSubsystem census = liveStack();
+            if (census == null) {
+                send(sender, "{\"error\":\"production ledger not live\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.VSShipCrosser crosser = census.crosser;
             send(sender, "{\"ok\":true"
-                    + ",\"recording\":" + TestEventLog.isRecording()
-                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled()
-                    + ",\"count\":" + TestEventLog.count(WRITER_EVENTS)
-                    + ",\"events\":\"" + TestEventLog.dump(WRITER_EVENTS) + "\""
-                    // Why the last re-seat did NOT seat everyone, in the re-seat's own words: whether a
+                    // Why the crosser's last re-seat did NOT seat everyone, in the re-seat's own words: whether a
                     // ship claims the arrival point, how many seat tiles the scan reached, and per seat
                     // the three things the match discriminates on. Empty means the last re-seat seated
                     // everyone - it is cleared on success, so "" is a real answer, not a missing one.
                     // The arrival re-seat has no other voice: it gives up SILENTLY (only the DEPARTURE
                     // boarding leg logs on exhaustion), so without this a failed arrival re-seat leaves
                     // nothing behind at all.
-                    + ",\"reseatBlock\":\"" + dev.stannismod.stellurgy.space.CrewTransfer.lastReseatBlock() + "\""
+                    + ",\"reseatBlock\":\"" + crosser.lastReseatBlock() + "\""
                     // What the last arrival CUT was about to take. The re-seat block says where the
                     // placement stopped; this says whether the hull it is placing people on is even
                     // the one that jumped. The cut runs once, long before a stalled arrival speaks,
                     // so it has no other witness.
-                    + ",\"arrivalCut\":\"" + dev.stannismod.stellurgy.space.VSShipCrosser.lastArrivalCut() + "\""
+                    + ",\"arrivalCut\":\"" + crosser.lastArrivalCut() + "\""
                     // ...and what was already parked in the lane the last DEPARTURE took. A lane
                     // holding two ships is visible at the arrival; which of them got there first is
                     // only visible here.
-                    + ",\"departLane\":\"" + dev.stannismod.stellurgy.space.VSShipCrosser.lastDepartLane() + "\""
+                    + ",\"departLane\":\"" + crosser.lastDepartLane() + "\""
                     + "}");
             return;
         }
@@ -2271,17 +2314,17 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             if ("off".equals(mode)) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.disable();
+                Stellurgy.serverState().shipLocalMove.disable();
             } else if (!"status".equals(mode)) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.enable(subject, requested);
+                Stellurgy.serverState().shipLocalMove.enable(subject, requested);
             }
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("mode", dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getMode().name());
-            m.put("enabled", dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.isEnabled());
+            m.put("mode", Stellurgy.serverState().shipLocalMove.getMode().name());
+            m.put("enabled", Stellurgy.serverState().shipLocalMove.isEnabled());
             m.put("targetEntityId",
-                    dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getTargetEntityId());
-            m.put("fires", dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getFires());
-            double[] sf = dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getShipFramePos();
+                    Stellurgy.serverState().shipLocalMove.getTargetEntityId());
+            m.put("fires", Stellurgy.serverState().shipLocalMove.getFires());
+            double[] sf = Stellurgy.serverState().shipLocalMove.getShipFramePos();
             if (sf != null) {
                 m.put("frameX", sf[0]);
                 m.put("frameY", sf[1]);
@@ -2360,7 +2403,7 @@ public class TestProbeCommand extends CommandBase {
             boolean standArmed = standMode != null
                     && standMode != dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.OFF;
             if (standArmed) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl
+                Stellurgy.serverState().shipLocalMove
                         .enable(stand.getEntityId(), standMode);
             }
             world.spawnEntity(stand);
@@ -2378,34 +2421,6 @@ public class TestProbeCommand extends CommandBase {
         // living entity's movement in a ship frame. Pins the gate that keeps a body standing on world
         // terrain near a ship (its box overlaps the ship's world AABB) from being dropped through the
         // floor into the ship's empty subspace.
-        // spawn-diag [reset] — READ-ONLY snapshot (or reset) of the VS spawn diagnostics
-        // (VSIntegration.spawn* statics, written by MixinWorldServerShipManager). Localises where a
-        // queued+named tier-2 ship dies: spawnNewShipsRuns=0 -> never processed;
-        // runs>0 & maxShips=0 -> processed but addShip skipped/threw; maxShips>=1 -> registered then destroyed.
-        if (args.length >= 1 && "spawn-diag".equalsIgnoreCase(args[0])) {
-            if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                SpawnDiag.reset();
-                send(sender, "{\"ok\":true,\"reset\":true}");
-                return;
-            }
-            send(sender, "{\"ok\":true,\"spawnNewShipsRuns\":"
-                    + SpawnDiag.spawnNewShipsRuns
-                    + ",\"spawnNewShipsReturns\":"
-                    + SpawnDiag.spawnNewShipsReturns
-                    + ",\"lastSpawnQueueSize\":"
-                    + SpawnDiag.lastSpawnQueueSize
-                    + ",\"maxShips\":"
-                    + SpawnDiag.spawnDiagMaxShips
-                    + ",\"lastFoundSetSize\":"
-                    + SpawnDiag.lastFoundSetSize
-                    + ",\"lastCleanHouse\":"
-                    + SpawnDiag.lastCleanHouse
-                    + ",\"lastBlacklistSize\":"
-                    + SpawnDiag.lastBlacklistSize
-                    + ",\"floodShape\":\""
-                    + SpawnDiag.lastFloodShape + "\"}");
-            return;
-        }
         if (args.length >= 3 && "would-take-over".equalsIgnoreCase(args[0])) {
             net.minecraft.server.MinecraftServer server = sender.getServer();
             net.minecraft.world.WorldServer world = server == null ? null
@@ -2712,7 +2727,7 @@ public class TestProbeCommand extends CommandBase {
             boolean armed = armMode != null
                     && armMode != dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.OFF;
             if (armed) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl
+                Stellurgy.serverState().shipLocalMove
                         .enable(item.getEntityId(), armMode);
             }
             world.spawnEntity(item);
@@ -2745,7 +2760,7 @@ public class TestProbeCommand extends CommandBase {
         if ("observe".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.OBSERVE;
         if ("takeover".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.CANCEL;
         if ("shipframe".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.SHIP_FRAME;
-        if ("status".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getMode();
+        if ("status".equals(word)) return Stellurgy.serverState().shipLocalMove.getMode();
         return null;
     }
 
@@ -2915,12 +2930,12 @@ public class TestProbeCommand extends CommandBase {
     // --- Transit e2e state (persists across probe calls so a test can tick the state machine; server
     //     main thread only). The production transit manager (SpaceSubsystem) no-ops in test mode, so the
     //     transit e2e drives its OWN manager here, exactly as the space-manager probe drives its own pool.
-    private static dev.stannismod.stellurgy.space.SpaceManager transitMgr;
-    private static dev.stannismod.stellurgy.space.ShipTransitManager transitTm;
+    private dev.stannismod.stellurgy.space.SpaceManager transitMgr;
+    private dev.stannismod.stellurgy.space.ShipTransitManager transitTm;
     /** The transit fixture's whole stack, built by the production factory. */
-    private static dev.stannismod.stellurgy.space.SpaceSubsystem transitStack;
-    private static dev.stannismod.stellurgy.space.GalacticCoord transitOrigin;
-    private static dev.stannismod.stellurgy.space.GalacticCoord transitTarget;
+    private dev.stannismod.stellurgy.space.SpaceSubsystem transitStack;
+    private dev.stannismod.stellurgy.space.GalacticCoord transitOrigin;
+    private dev.stannismod.stellurgy.space.GalacticCoord transitTarget;
 
     /**
      * The DURABLE ship id of the craft the current transit fixture built, or {@code null} when this
@@ -2939,9 +2954,9 @@ public class TestProbeCommand extends CommandBase {
      * outliving the scenario that set it, and a setup that left the previous value in place would hand
      * its jump a stranger's name.</p>
      */
-    private static java.util.UUID transitDurableId;
+    private java.util.UUID transitDurableId;
     /** The last exported transit records (the persist e2e simulates a restart by rebuilding from these). */
-    private static java.util.List<dev.stannismod.stellurgy.space.TransitRecord> transitExport;
+    private java.util.List<dev.stannismod.stellurgy.space.TransitRecord> transitExport;
 
     // --- Entry e2e state. The manager and the ledger used to be remembered here too, as the SERVER's
     //     own pair, "so the fixture's verbs need not look them up again" — and what that bought was a
@@ -2949,7 +2964,28 @@ public class TestProbeCommand extends CommandBase {
     //     resolves them from `liveStack()` now; what remains below is the only entry state a fixture
     //     genuinely OWNS, because the scenario created it and nothing else can give it back.
     /** The scratch slot worlds `entry-setup` appended to the pool; unloaded by `entry-clear`. */
-    private static int[] entrySlotDims;
+    private int[] entrySlotDims;
+
+    /**
+     * What `space gen-install` replaced on the save's universe registry — its generator and its world
+     * seed — held until `space gen-reset` puts them back. {@code null}: nothing is installed.
+     */
+    private dev.stannismod.stellurgy.universe.IGalaxyGenerator parkedGenerator;
+    private long parkedWorldSeed;
+
+    /**
+     * Per block `seal-detector add-block-ban` touched: whether it was on the seal handler's ban list
+     * and on its allow list before the first add, which `remove-block-ban` puts back.
+     */
+    private final java.util.Map<net.minecraft.block.Block, boolean[]> parkedSealLists = new java.util.HashMap<>();
+
+    /** The `weight` verbs' own engine and what was added to it; rebuilt after every addition. */
+    private final java.util.Map<String, Double> probeWeightOverrides = new java.util.LinkedHashMap<>();
+    private final java.util.Map<String, Double> probeWeightRegex = new java.util.LinkedHashMap<>();
+    private dev.stannismod.stellurgy.util.WeightEngine probeWeights;
+    /** The config's two weight scales before `weight` first changed them; `weight reset` puts them back. */
+    private Double parkedMaterialScale;
+    private Double parkedFuelScale;
 
     /**
      * The chunk tickets `chunk hold` is holding. Probe-local fixture state, written and read only by
@@ -2958,11 +2994,11 @@ public class TestProbeCommand extends CommandBase {
      * worlds, and the second must be held before the arrival, not after it. `chunk release` drops
      * them all, which is what keeps "cumulative" from meaning "forgotten".
      */
-    private static final java.util.List<net.minecraftforge.common.ForgeChunkManager.Ticket>
+    private final java.util.List<net.minecraftforge.common.ForgeChunkManager.Ticket>
             heldChunks = new java.util.ArrayList<>();
 
     /** Drop every held ticket. Idempotent — an {@code @After} may call it blind. */
-    private static void releaseHeldChunks() {
+    private void releaseHeldChunks() {
         for (net.minecraftforge.common.ForgeChunkManager.Ticket t : heldChunks) {
             net.minecraftforge.common.ForgeChunkManager.releaseTicket(t);
         }
@@ -3129,14 +3165,36 @@ public class TestProbeCommand extends CommandBase {
                     new dev.stannismod.stellurgy.api.dimension.solar.StellarBody();
             star.setId(starId);
             star.setName(args.length > 4 ? args[4] : ("probe-star-" + starId));
+            // telescope system <sx> <sy> <sz> [name] [retinue] [size] [temperature]
+            // [retinue]: how many worlds the system asks the generator in force to derive around the
+            // star, the pack's own knob (StellarBody.setMaxRetinueBodies). Without it a minted system
+            // is its star alone, and a look that named its bodies writes exactly what a look that
+            // wrote only its address writes - one entry at the anchor - so the two are not tellable
+            // apart. Derived worlds exist only under a generator that derives (an installed
+            // procedural one); the reply's `retinue` is what was ASKED, not what was derived.
+            if (args.length > 5) {
+                star.setMaxRetinueBodies(parseIntOr(args[5], 0));
+            }
+            // [size] [temperature]: the star's bulk, in Suns and in the mod's hundredths of Sol — the
+            // two numbers its brightness is made of. Stated by a caller that places the star against
+            // an aperture; left unstated, the star keeps what a fresh StellarBody holds.
+            if (args.length > 7) {
+                star.setSize((float) parseDoubleOr(args[6], star.getSize()));
+                star.setTemperature(parseIntOr(args[7], star.getTemperature()));
+            }
             dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().addStar(star);
             dev.stannismod.stellurgy.space.GalacticCoord cell =
                     dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
             reg.place(cell, starId);
+            // The star's own bulk ships with the reply, because it is what the star's brightness is
+            // made of: a caller placing it at a distance chosen against an aperture needs the two
+            // numbers the photometry reads, not an assumption about what a fresh star holds.
             send(sender, "{\"ok\":true,\"starId\":" + starId + ",\"name\":\"" + star.getName()
-                    + "\",\"cellKey\":\"" + cell.cellKey() + "\"}");
+                    + "\",\"cellKey\":\"" + cell.cellKey() + "\",\"size\":" + star.getSize()
+                    + ",\"temperature\":" + star.getTemperature()
+                    + ",\"retinue\":" + star.getMaxRetinueBodies() + "}");
             return;
         }
 
@@ -3162,6 +3220,21 @@ public class TestProbeCommand extends CommandBase {
         dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope = observatoryAt(world, pos);
         if (scope == null) {
             send(sender, "{\"error\":\"no observatory at that position\"}");
+            return;
+        }
+
+        if ("whole-system".equalsIgnoreCase(verb) && args.length >= 6) {
+            telescopeWholeSystem(sender, world, scope, args[5]);
+            return;
+        }
+
+        if ("entries".equalsIgnoreCase(verb) && args.length >= 8) {
+            telescopeEntries(server, sender, scope, args);
+            return;
+        }
+
+        if ("sees".equalsIgnoreCase(verb) && args.length >= 8) {
+            telescopeSees(server, sender, scope, args);
             return;
         }
 
@@ -3283,6 +3356,216 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
+     * {@code telescope whole-system <dim> <x> <y> <z> <true|false>} — set the OPERATOR's choice of
+     * whether a detection is followed to the system's bodies or written down as an address alone.
+     *
+     * <p>Pressed through the machine's own button handler ({@code useNetworkData} with the toggle's
+     * packet id), the path a GUI click takes on the server, so the probe arranges the choice the way a
+     * player makes it and never writes the field. The operator is a {@code FakePlayer}: the handler
+     * reopens the GUI for whoever pressed, and Forge's {@code openGui} is a no-op for a fake player,
+     * which is the one kind of player a headless server can supply. The button is a TOGGLE, so it is
+     * pressed only when the machine's current choice differs from the one asked for.</p>
+     *
+     * <p>The packet id is read off the tile by the constant's NAME rather than restated here: a
+     * renumbered button then still works, and a renamed one answers an error instead of pressing some
+     * other button. Replies {@code wholeSystem} as the machine reports it AFTER the press, and
+     * {@code pressed}.</p>
+     */
+    private void telescopeWholeSystem(ICommandSender sender, net.minecraft.world.WorldServer world,
+                                      dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope,
+                                      String wantedArg) {
+        boolean wanted = Boolean.parseBoolean(wantedArg);
+        boolean pressed = false;
+        if (scope.isCharacterisingWholeSystem() != wanted) {
+            byte toggle;
+            try {
+                java.lang.reflect.Field id = dev.stannismod.stellurgy.tile.multiblock.TileObservatory.class
+                        .getDeclaredField("TOGGLE_WHOLE_SYSTEM");
+                id.setAccessible(true);
+                toggle = id.getByte(null);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"ok\":false,\"reason\":\"no whole-system button on the observatory\","
+                        + "\"msg\":\"" + escapeJson(String.valueOf(e.getMessage())) + "\"}");
+                return;
+            }
+            scope.useNetworkData(net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(world),
+                    net.minecraftforge.fml.relauncher.Side.SERVER, toggle,
+                    new net.minecraft.nbt.NBTTagCompound());
+            pressed = true;
+        }
+        boolean now = scope.isCharacterisingWholeSystem();
+        send(sender, "{\"ok\":" + (now == wanted) + ",\"pressed\":" + pressed
+                + ",\"wholeSystem\":" + now + "}");
+    }
+
+    /**
+     * {@code telescope entries <dim> <x> <y> <z> <sx> <sy> <sz>} — what the crystal in this machine
+     * holds about ONE system: the system whose neighbourhood owns cell {@code (sx,sy,sz)}.
+     *
+     * <p>Read-only. A survey writes every system it registered onto one crystal, so a count of the
+     * crystal answers "did it find something" and never "what did it make of THIS system".</p>
+     *
+     * <p>{@code bodies} is how many DISTINCT records the system's bodies make — production's own body
+     * list ({@code systemBodiesAt}) keyed by production's own record identity
+     * ({@code TelescopeScan.entryFor(..).identityKey()}) — and {@code held} is how many of those exact
+     * identities the crystal holds, so a reader compares the two without restating either rule. The
+     * system's bare address is the record {@code TelescopeScan.entryForSystem} writes for its anchor;
+     * {@code atAnchor} is whether the crystal holds that identity, and {@code beyondAddress} how many
+     * of the system's body identities OTHER than it the crystal holds. So a look that made the bodies
+     * out leaves {@code held == bodies}, one that wrote the address alone leaves {@code atAnchor} with
+     * {@code beyondAddress == 0}, and one that never registered the system leaves neither.
+     * {@code namedDims} is the dimensions among this system's records.</p>
+     *
+     * <p>{@code foreign} counts the crystal's OTHER records whose coordinate the registry attributes to
+     * this system ({@code anchorForCell}) without being one of its bodies — an address the survey wrote
+     * for a seat this system's neighbourhood shadows. They are listed in {@code foreignCells} and are
+     * not part of {@code held}. {@code ok:false} with a {@code reason} when no system owns the cell or
+     * there is no crystal, never an empty count.</p>
+     */
+    private void telescopeEntries(MinecraftServer server, ICommandSender sender,
+                                  dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope,
+                                  String[] args) {
+        dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+        if (reg == null) {
+            send(sender, "{\"ok\":false,\"reason\":\"registry unavailable\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.space.GalacticCoord cell =
+                dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(parseLongOr(args[5], 0L),
+                        parseLongOr(args[6], 0L), parseLongOr(args[7], 0L), 0L, 0L, 0L);
+        java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> anchor = reg.anchorForCell(cell);
+        if (!anchor.isPresent()) {
+            send(sender, "{\"ok\":false,\"reason\":\"noSystem\",\"cell\":\"" + cell.cellKey() + "\"}");
+            return;
+        }
+        net.minecraft.item.ItemStack stack = scope.getStackInSlot(
+                dev.stannismod.stellurgy.tile.multiblock.TileObservatory.SLOT_CRYSTAL);
+        if (!dev.stannismod.stellurgy.item.ItemMemoryCrystal.isCrystal(stack)) {
+            send(sender, "{\"ok\":false,\"reason\":\"noCrystal\"}");
+            return;
+        }
+        String anchorKey = anchor.get().cellKey();
+        java.util.Set<String> bodyKeys = new java.util.LinkedHashSet<>();
+        for (dev.stannismod.stellurgy.universe.SystemBody body : reg.systemBodiesAt(anchor.get())) {
+            bodyKeys.add(dev.stannismod.stellurgy.universe.TelescopeScan.entryFor(body, 0L, null)
+                    .identityKey());
+        }
+        // The identity of the system's bare address, as production writes one.
+        String anchorIdentity = dev.stannismod.stellurgy.universe.TelescopeScan.entryForSystem(anchor.get(),
+                reg.systemForCoord(anchor.get()).orElse(null), 0L).identityKey();
+        int held = 0;
+        int beyondAddress = 0;
+        int listed = 0;
+        boolean atAnchor = false;
+        java.util.List<Integer> namedDims = new java.util.ArrayList<>();
+        java.util.List<String> foreignCells = new java.util.ArrayList<>();
+        StringBuilder records = new StringBuilder("[");
+        for (dev.stannismod.stellurgy.navigation.CrystalEntry entry
+                : dev.stannismod.stellurgy.item.ItemMemoryCrystal.memoryOf(stack).list()) {
+            String identity = entry.identityKey();
+            boolean isAddress = anchorIdentity.equals(identity);
+            boolean isBody = bodyKeys.contains(identity);
+            if (isAddress || isBody) {
+                Map<String, Object> one = new LinkedHashMap<>();
+                one.put("cell", entry.coord().cellKey());
+                one.put("kind", entry.kind() == null ? null : entry.kind().name());
+                one.put("dim", entry.dimId());
+                one.put("identity", identity);
+                records.append(listed++ > 0 ? "," : "").append(jsonMap(one));
+                atAnchor |= isAddress;
+                if (isBody) {
+                    held++;
+                }
+                if (isBody && !isAddress) {
+                    beyondAddress++;
+                }
+                if (entry.namesBody()) {
+                    namedDims.add(entry.dimId());
+                }
+                continue;
+            }
+            java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> owner =
+                    reg.anchorForCell(entry.coord());
+            if (owner.isPresent() && anchorKey.equals(owner.get().cellKey())) {
+                foreignCells.add(entry.coord().cellKey());
+            }
+        }
+        records.append(']');
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("anchor", anchorKey);
+        out.put("bodies", bodyKeys.size());
+        out.put("held", held);
+        out.put("atAnchor", atAnchor);
+        out.put("beyondAddress", beyondAddress);
+        out.put("namedDims", namedDims);
+        out.put("foreign", foreignCells.size());
+        out.put("foreignCells", foreignCells);
+        String json = jsonMap(out);
+        send(sender, json.substring(0, json.length() - 1) + ",\"records\":" + records + "}");
+    }
+
+    /**
+     * {@code telescope sees <dim> <x> <y> <z> <sx> <sy> <sz>} — how bright every system the look at
+     * cell {@code (sx,sy,sz)} holds appears FROM THIS OBSERVATORY: production's own photometry,
+     * read-only, for a caller ARRANGING a system on one side of an aperture.
+     *
+     * <p>The numbers are the detection stage's own ({@code TelescopeScan.detect}) asked with no
+     * aperture at all, so nothing is filtered out and nothing is resolved or written: per system, its
+     * {@code anchor}, {@code apparentMagnitude} (dust included), {@code distanceLy} and
+     * {@code extinction}. Beside them, the aperture the game is configured with RIGHT NOW —
+     * {@code limit} and {@code resolveLimit} ({@code TelescopeScan.limitMagnitude} /
+     * {@code resolveLimitMagnitude}) and the concealment threshold {@code obscuredAt}. It does not say
+     * whether anything registers: comparing a magnitude to a limit is the decision a survey makes,
+     * and a caller that wants that verdict runs the survey. A magnitude that is not finite (a system
+     * whose primary emits nothing) is written {@code null}.</p>
+     */
+    private void telescopeSees(MinecraftServer server, ICommandSender sender,
+                               dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope,
+                               String[] args) {
+        dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+        dev.stannismod.stellurgy.space.GalacticCoord origin = scope.scanOrigin();
+        if (reg == null || origin == null) {
+            send(sender, "{\"ok\":false,\"reason\":\"" + (reg == null ? "noRegistry" : "noOrigin") + "\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.space.GalacticCoord look =
+                dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(parseLongOr(args[5], 0L),
+                        parseLongOr(args[6], 0L), parseLongOr(args[7], 0L), 0L, 0L, 0L);
+        StringBuilder seen = new StringBuilder("[");
+        int n = 0;
+        for (dev.stannismod.stellurgy.universe.TelescopeScan.Detection hit
+                : dev.stannismod.stellurgy.universe.TelescopeScan.detect(reg, look, origin,
+                        Double.POSITIVE_INFINITY)) {
+            Map<String, Object> one = new LinkedHashMap<>();
+            one.put("anchor", hit.anchor().cellKey());
+            one.put("apparentMagnitude", finiteOrNull(hit.apparentMagnitude()));
+            one.put("distanceLy", finiteOrNull(hit.distanceLightYears()));
+            one.put("extinction", finiteOrNull(hit.extinctionMagnitudes()));
+            seen.append(n++ > 0 ? "," : "").append(jsonMap(one));
+        }
+        seen.append(']');
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("origin", origin.cellKey());
+        out.put("look", look.cellKey());
+        out.put("limit", dev.stannismod.stellurgy.universe.TelescopeScan.limitMagnitude());
+        out.put("resolveLimit", dev.stannismod.stellurgy.universe.TelescopeScan.resolveLimitMagnitude());
+        out.put("obscuredAt", dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig()
+                .telescopeObscuredAtMagnitudes);
+        out.put("count", n);
+        String json = jsonMap(out);
+        send(sender, json.substring(0, json.length() - 1) + ",\"systems\":" + seen + "}");
+    }
+
+    /** {@code value} when it is a finite number, else {@code null} — JSON has no infinity. */
+    private static Double finiteOrNull(double value) {
+        return Double.isInfinite(value) || Double.isNaN(value) ? null : value;
+    }
+
+    /**
      * The scan half of a telescope reply. The cell COUNT ships with the corners it was computed
      * from, and the deadline with the clock it is measured against, so a stuck number says which
      * component is stuck. {@code side} is stated because every field here is the server's answer.
@@ -3297,7 +3580,8 @@ public class TestProbeCommand extends CommandBase {
         long now = world.getTotalWorldTime();
         dev.stannismod.stellurgy.space.GalacticCoord origin = scope.scanOrigin();
         dev.stannismod.stellurgy.universe.RegionScan.Tuning tuning =
-                dev.stannismod.stellurgy.universe.RegionScan.Tuning.fromConfig();
+                dev.stannismod.stellurgy.universe.RegionScan.Tuning.fromConfig(
+                        dev.stannismod.stellurgy.universe.UniverseRegistry.get(world).generator());
         StringBuilder out = new StringBuilder();
         out.append(",\"side\":\"server\",\"now\":").append(now)
                 .append(",\"origin\":").append(origin == null ? "null" : "\"" + origin.cellKey() + "\"")
@@ -3338,7 +3622,7 @@ public class TestProbeCommand extends CommandBase {
                     // The reach in BOTH forms, and the stride that relates them: a survey that
                     // resolves nothing must be able to say whether it is looking at the wrong scale.
                     .append(",\"distance\":").append(scan.distanceCells())
-                    .append(",\"distanceLy\":").append(scan.distanceLightYears())
+                    .append(",\"distanceLy\":").append(scan.distanceLightYears(tuning.laws()))
                     .append(",\"stride\":").append(scan.strideCells())
                     .append(",\"start\":").append(scan.startTick())
                     .append(",\"stepDeadline\":").append(scan.stepDeadline())
@@ -3539,6 +3823,10 @@ public class TestProbeCommand extends CommandBase {
             info.put("hullMeasured", coverage != null);
             info.put("hullOutsideWindow", coverage == null ? 0L : coverage.uncoveredBlocks());
             info.put("storedEnergy", drive.storedEnergy());
+            // What the thermal refusal actually READ, in thousandths of a kelvin. Reported beside the
+            // verdict on purpose: "allowed:false" alone cannot tell a drive that is too hot from a
+            // drive whose coolant the ship never found, and those are opposite bugs.
+            info.put("driveCoolantMilliK", Math.round(nav.driveCoolantKelvin() * 1000.0D));
             info.put("speedBlocksPerTick", nav.plannedSpeed());
             info.put("transitTicks", nav.plannedTransitTicks());
             info.put("flightEnergyCost", nav.flightEnergyCost());
@@ -3829,7 +4117,7 @@ public class TestProbeCommand extends CommandBase {
                 targetAbs = absTriple(aimAt);
             }
             if (targetDim != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET) {
-                slotWorld = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims().contains(targetDim);
+                slotWorld = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().contains(targetDim);
                 dev.stannismod.stellurgy.universe.UniverseRegistry reg =
                         dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
                 java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> where =
@@ -3893,7 +4181,7 @@ public class TestProbeCommand extends CommandBase {
                 // a real planet. Reported without loading the world, so it is safe to ask about a
                 // body a caller has not decided to visit yet.
                 .append(",\"slotWorld\":").append(
-                        dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims().contains(b.dimId()))
+                        dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().contains(b.dimId()))
                 .append('}');
     }
 
@@ -3903,58 +4191,6 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.tileentity.TileEntity te = world.getTileEntity(pos);
         return te instanceof dev.stannismod.stellurgy.tile.TileNavigationComputer
                 ? (dev.stannismod.stellurgy.tile.TileNavigationComputer) te : null;
-    }
-
-    /**
-     * The real proxy, parked while {@code space aim-clock} has a mirror installed. Non-null means a
-     * mirror IS installed, which is what {@code aim-clock off} restores and what the status field
-     * reports, so a test can never mistake "restored" for "was never installed".
-     */
-    private static dev.stannismod.stellurgy.common.CommonProxy parkedProxy;
-
-    /**
-     * A proxy that answers {@code getWorldTimeUniversal} the way {@code ClientProxy} does — with the
-     * total time of the world the driver is currently IN, ignoring the dimension it was asked about.
-     *
-     * <p>This exists because the divergence it produces cannot otherwise be exhibited by this test
-     * harness: the harness always runs a dedicated server, where the real proxy honours the argument
-     * and is therefore correct. The DRIVER of the defect is not "being in single-player" — it is an
-     * accessor answering with a clock that is not the overworld's — and that is what this
-     * reproduces, faithfully rather than by an invented number: every dimension but the overworld
-     * carries its own clock, so the value here is a real per-dimension clock, not a synthetic skew.</p>
-     */
-    private static final class MirroredDimClockProxy
-            extends dev.stannismod.stellurgy.common.CommonProxy {
-        private final int mirrored;
-        private final long lagTicks;
-
-        /** Answer with {@code mirrored}'s own clock. */
-        MirroredDimClockProxy(int mirrored) {
-            this.mirrored = mirrored;
-            this.lagTicks = 0L;
-        }
-
-        /** Answer with the SPACE clock minus a fixed lag - a per-dimension clock's effect, sized. */
-        MirroredDimClockProxy(long lagTicks) {
-            this.mirrored = Integer.MIN_VALUE;
-            this.lagTicks = lagTicks;
-        }
-
-        @Override
-        public long getWorldTimeUniversal(int id) {
-            // The argument is DELIBERATELY ignored - that is the behaviour being reproduced.
-            if (mirrored == Integer.MIN_VALUE) {
-                // The lag is sized AGAINST THE SPACE CLOCK, because the split between the two is the
-                // quantity a caller reasons about: it computes the miss a stale aim should produce,
-                // and it is asserted before any aim is read. Anchoring the lag on a world's counter
-                // instead would make the split whatever the gap between that world and the subsystem
-                // happened to be - a number the test never chose and cannot check.
-                return dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() - lagTicks;
-            }
-            net.minecraft.world.WorldServer world =
-                    net.minecraftforge.common.DimensionManager.getWorld(mirrored);
-            return world == null ? 0L : world.getTotalWorldTime();
-        }
     }
 
     /**
@@ -3979,7 +4215,7 @@ public class TestProbeCommand extends CommandBase {
                         parseLongOr(args[1], 0L), parseLongOr(args[2], 0L), parseLongOr(args[3], 0L),
                         0L, 0L, 0L);
         dev.stannismod.stellurgy.universe.IGalaxyGenerator gen =
-                dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator();
+                reg.generator();
         long seed = reg.worldSeed();
         java.util.List<dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderNebula> drawn =
                 dev.stannismod.stellurgy.space.SkyNebulaeProducer.around(gen, seed, cell);
@@ -4023,7 +4259,7 @@ public class TestProbeCommand extends CommandBase {
         int steps = Math.max(1, Math.min(4096, parseIntOr(args[1], 64)));
         long stride = Math.max(1L, parseLongOr(args[2], 1L));
         dev.stannismod.stellurgy.universe.IGalaxyGenerator gen =
-                dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator();
+                reg.generator();
         long seed = reg.worldSeed();
         for (int i = 0; i < steps; i++) {
             dev.stannismod.stellurgy.space.GalacticCoord cell =
@@ -4097,7 +4333,7 @@ public class TestProbeCommand extends CommandBase {
                 dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                         parseLongOr(args[4], 0L), parseLongOr(args[5], 0L), parseLongOr(args[6], 0L),
                         0L, 0L, 0L);
-        double column = dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+        double column = reg.generator()
                 .columnDensityBetween(reg.worldSeed(), from, to);
         double magnitudes = reg.extinctionBetween(from, to);
         send(sender, "{\"ok\":true,\"from\":\"" + from.cellKey() + "\",\"to\":\"" + to.cellKey()
@@ -4129,8 +4365,8 @@ public class TestProbeCommand extends CommandBase {
 
         // bodies: what the sky in a slot world is BEING TOLD to draw, read from the server side.
         //
-        // The client store the renderer reads (PacketSystemBodiesSync.CLIENT_BODIES) is a private
-        // static that only the test harness can reach, so a player looking at an empty sky has no
+        // The client store the renderer reads is the client's view of the server, which only the
+        // test harness can reach, so a player looking at an empty sky has no
         // way to tell WHICH half is empty: the ledger (no settled ship -> nothing is produced for
         // anyone), the registry (a cell with genuinely nothing in it), or the drawing. This reports
         // the first two exactly, so "I see no planet" stops being a guess. Read-only.
@@ -4295,7 +4531,7 @@ public class TestProbeCommand extends CommandBase {
             // that persisted a slot id across the restart (a ledger entry, a saved player) has to be
             // checked against this list rather than assumed stable.
             StringBuilder slots = new StringBuilder();
-            for (Integer d : dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims()) {
+            for (Integer d : dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims()) {
                 if (slots.length() > 0) {
                     slots.append(',');
                 }
@@ -4308,7 +4544,7 @@ public class TestProbeCommand extends CommandBase {
             // Forge's free-id scan cannot see Stellurgy's body ids (a gas giant is never registered with
             // Forge), which is exactly how the two collided.
             StringBuilder collisions = new StringBuilder();
-            for (Integer d : dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims()) {
+            for (Integer d : dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims()) {
                 if (dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
                         .getDimensionPropertiesOrNull(d) != null) {
                     if (collisions.length() > 0) {
@@ -4319,7 +4555,7 @@ public class TestProbeCommand extends CommandBase {
             }
             send(sender, "{\"registered\":"
                     + (spaceStack != null)
-                    + ",\"pool\":" + dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims().size()
+                    + ",\"pool\":" + dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().size()
                     + ",\"slotDims\":[" + slots + "]"
                     + ",\"slotDimsAlsoBodies\":[" + collisions + "]"
                     + ",\"ledger\":" + (led == null ? -1 : led.size())
@@ -4333,7 +4569,7 @@ public class TestProbeCommand extends CommandBase {
                     // fault, and therefore the only way to wait for the WORLD AUTOSAVE rather than for
                     // a save some command asked for.
                     + ",\"saveFaultArmed\":"
-                    + dev.stannismod.stellurgy.space.SpaceSubsystem.isSaveFaultArmed() + "}");
+                    + (spaceStack != null && spaceStack.isSaveFaultArmed()) + "}");
             return;
         }
         // occupy <sx> <sy> <sz>: hold cell (sx,sy,sz) live in the PRODUCTION space manager (an
@@ -4600,10 +4836,10 @@ public class TestProbeCommand extends CommandBase {
         // pool changed. Registering a second pool would not merely waste dimension ids, it would shift
         // the slot ids out from under everything already bound to the first one.
         if (args.length >= 1 && "pool-idempotence".equalsIgnoreCase(args[0])) {
-            java.util.List<Integer> before = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims();
-            int[] returned = dev.stannismod.stellurgy.space.SpaceSlotPool.registerPool(
+            java.util.List<Integer> before = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims();
+            int[] returned = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerPool(
                     Math.max(1, before.size()));
-            java.util.List<Integer> after = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims();
+            java.util.List<Integer> after = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims();
             boolean sameIds = returned.length == before.size();
             for (int i = 0; sameIds && i < returned.length; i++) {
                 sameIds = returned[i] == before.get(i);
@@ -4622,7 +4858,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
-            dev.stannismod.stellurgy.space.SpaceSubsystem.armSaveFaultOnce();
+            liveStack().armSaveFaultOnce();
             send(sender, "{\"ok\":true,\"armed\":true}");
             return;
         }
@@ -4665,8 +4901,8 @@ public class TestProbeCommand extends CommandBase {
         // 3x3 deck has no propulsion (it can neither hold station nor climb), so a test that must FLY
         // builds the real with-pilot-seat fixture in the empty origin cell with the real assembler.
         if (args.length >= 1 && "transit-setup-empty".equalsIgnoreCase(args[0])) {
-            int[] transitSlots = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(2);
-            dev.stannismod.stellurgy.space.HyperspaceWorld.register();
+            int[] transitSlots = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(2);
+            dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.register();
             // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
             // clock, its own manager, a binder narrowed so the two could not fight over the pool —
             // and the server never ticked it, so every transit e2e had to drive the jump by hand
@@ -4704,8 +4940,8 @@ public class TestProbeCommand extends CommandBase {
         // a bot and carry it through the jump. Returns the ship anchor, the ship's world position (for
         // `space enter`), and the pilot seat's post-assembly subspace position (for `seat-mount-at`).
         if (args.length >= 1 && "transit-setup-piloted".equalsIgnoreCase(args[0])) {
-            int[] transitSlots = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(2);
-            dev.stannismod.stellurgy.space.HyperspaceWorld.register();
+            int[] transitSlots = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(2);
+            dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.register();
             // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
             // clock, its own manager, a binder narrowed so the two could not fight over the pool —
             // and the server never ticked it, so every transit e2e had to drive the jump by hand
@@ -5191,7 +5427,7 @@ public class TestProbeCommand extends CommandBase {
             // claims it.
             transitTm = new dev.stannismod.stellurgy.space.ShipTransitManager(
                     transitMgr,
-                    dev.stannismod.stellurgy.space.HyperspaceWorld.lanes(),
+                    dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.lanes(),
                     new dev.stannismod.stellurgy.space.VSShipCrosser());
             transitTm.setFrames(dev.stannismod.stellurgy.space.SpaceSubsystem::cellFrameOriginAt);
             for (dev.stannismod.stellurgy.space.TransitRecord r : transitExport) {
@@ -5246,7 +5482,7 @@ public class TestProbeCommand extends CommandBase {
             // `spaceCellPoolSize` (10 by default) is the number a server runs on, so it is the number
             // a scenario should be arranged against too: a fixture that needs a bigger pool than
             // production has is testing a world the player never gets.
-            java.util.List<Integer> pool = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims();
+            java.util.List<Integer> pool = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims();
             entrySlotDims = new int[pool.size()];
             for (int i = 0; i < entrySlotDims.length; i++) {
                 entrySlotDims[i] = pool.get(i);
@@ -5268,7 +5504,7 @@ public class TestProbeCommand extends CommandBase {
             // loads until a first jump. (The `transit-setup-*` probes arrange the SAME server stack;
             // they hold their own handles to it only because their report describes a target cell the
             // SCENARIO chose, which no world reader can supply.)
-            dev.stannismod.stellurgy.space.HyperspaceWorld.register();
+            dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.register();
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"dims\":[");
             for (int i = 0; i < entrySlotDims.length; i++) {
                 if (i > 0) sb.append(',');
@@ -5460,7 +5696,8 @@ public class TestProbeCommand extends CommandBase {
                     (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) gateTe;
             boolean gatePlanetSide = !(gateWorld.provider
                     instanceof dev.stannismod.stellurgy.space.WorldProviderSpaceSlot);
-            int gateCeiling = gateAfc.entryCeiling();
+            java.util.OptionalInt gateLine = gateAfc.entryCeiling();
+            String gateCeiling = gateLine.isPresent() ? String.valueOf(gateLine.getAsInt()) : "null";
             double[] gatePose = dev.stannismod.stellurgy.integration.vs.VSIntegration
                     .getShipWorldPosition(gateWorld, gateAfcPos);
             gate.append(",\"afcResolved\":true");
@@ -5520,13 +5757,12 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"ceiling\":").append(gateCeiling);
             // The two numbers the ceiling is derived FROM, beside it: a ceiling that will not be
             // crossed says nothing about which of the two put it there.
-            dev.stannismod.stellurgy.dimension.DimensionProperties gateProps =
-                    dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
-                            .getDimensionProperties(gateWorld.provider.getDimension());
-            gate.append(",\"orbitHeight\":").append(gateProps != null ? gateProps.getOrbitHeight()
-                    : dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().orbit);
+            java.util.OptionalInt gateOrbitLine = dev.stannismod.stellurgy.dimension.DimensionManager
+                    .getInstance().orbitLineOf(gateWorld.provider.getDimension());
+            gate.append(",\"orbitHeight\":").append(gateOrbitLine.isPresent()
+                    ? String.valueOf(gateOrbitLine.getAsInt()) : "null");
             gate.append(",\"physicsCeiling\":").append(
-                    dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum());
+                    dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum(gateWorld));
             if (gatePose == null) {
                 // The pose is what the trigger reads; without it the check cannot fire at all, and
                 // that is a different answer from "it fired and said no".
@@ -5537,9 +5773,9 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"shipX\":").append(gatePose[0]).append(",\"shipY\":").append(gatePose[1])
                     .append(",\"shipZ\":").append(gatePose[2]);
             gate.append(",\"wouldTrigger\":").append(gateCtl != null && gatePlanetSide
-                    && !gateAfc.isEntryLatched()
+                    && !gateAfc.isEntryLatched() && gateLine.isPresent()
                     && dev.stannismod.stellurgy.space.ShipEntryController
-                            .shouldTriggerEntry(!gatePlanetSide, gatePose[1], gateCeiling));
+                            .shouldTriggerEntry(!gatePlanetSide, gatePose[1], gateLine.getAsInt()));
             send(sender, gate.append('}').toString());
             return;
         }
@@ -6257,7 +6493,7 @@ public class TestProbeCommand extends CommandBase {
         // beside the new value so a caller can see that it did not move.
         if (args.length >= 2 && "set-clock".equalsIgnoreCase(args[0])) {
             long before = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
-            dev.stannismod.stellurgy.space.SpaceSubsystem.setSpaceClock(
+            dev.stannismod.stellurgy.Stellurgy.serverState().setSpaceClock(
                     parseLongOr(args[1], before));
             net.minecraft.world.WorldServer overworld = server.getWorld(0);
             send(sender, "{\"ok\":true,\"before\":" + before + ",\"spaceClock\":"
@@ -6278,71 +6514,16 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             long before = overworld.getTotalWorldTime();
-            overworld.getWorldInfo().setWorldTotalTime(parseLongOr(args[1], before));
+            // `set-world-clock behind-space <ticks>` puts the overworld exactly that far behind the
+            // space clock as read in THIS command. Two commands cannot: the server ticks between
+            // them, so a split computed from an earlier reply arrives larger than asked.
+            long target = args.length >= 3 && "behind-space".equalsIgnoreCase(args[1])
+                    ? dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() - parseLongOr(args[2], 0L)
+                    : parseLongOr(args[1], before);
+            overworld.getWorldInfo().setWorldTotalTime(target);
             send(sender, "{\"ok\":true,\"before\":" + before + ",\"overworld\":"
                     + overworld.getTotalWorldTime() + ",\"spaceClock\":"
                     + dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() + "}");
-            return;
-        }
-        // aim-clock mirror <dim> | aim-clock off: install or remove a proxy that answers
-        // getWorldTimeUniversal with <dim>'s OWN total time, ignoring the dimension it was asked
-        // about — the behaviour a client-side proxy has, and the driver of the arrival-distance
-        // defect. Only a JVM whose server is the client's own produces it naturally, and this
-        // harness has no such tier, so a test that wants to exercise it installs it here and removes
-        // it in a finally.
-        //
-        // The mirrored value is a REAL per-dimension clock, not an invented skew: every dimension
-        // but the overworld advances only while it ticks, which is exactly why the two disagree in
-        // play. Installing REFUSES when <dim> is not loaded — a mirror that silently fell back to
-        // the overworld would make the whole arrangement a no-op and read as "fixed".
-        //
-        // Reports every clock it can see on BOTH legs, because the interesting quantity is the SPLIT
-        // between them: a test that asserts an aim without asserting the split it created cannot
-        // tell a fixed build from an arrangement that never diverged.
-        if (args.length >= 2 && "aim-clock".equalsIgnoreCase(args[0])) {
-            String mode = args[1];
-            boolean installed;
-            int mirrored = Integer.MIN_VALUE;
-            if ("off".equalsIgnoreCase(mode)) {
-                if (parkedProxy != null) {
-                    dev.stannismod.stellurgy.Stellurgy.proxy = parkedProxy;
-                    parkedProxy = null;
-                }
-                installed = false;
-            } else if ("lag".equalsIgnoreCase(mode) && args.length >= 3) {
-                // The same defect, SIZED: the accessor answers a fixed number of ticks behind the
-                // space clock. What a per-dimension clock does in play is lag by however long its
-                // world was not ticking; naming the lag is what lets a test compute the miss it
-                // should see rather than only observe that one happened.
-                long lag = parseLongOr(args[2], 0L);
-                if (parkedProxy == null) {
-                    parkedProxy = dev.stannismod.stellurgy.Stellurgy.proxy;
-                }
-                dev.stannismod.stellurgy.Stellurgy.proxy = new MirroredDimClockProxy(lag);
-                installed = true;
-            } else if ("mirror".equalsIgnoreCase(mode) && args.length >= 3) {
-                mirrored = parseIntOr(args[2], Integer.MIN_VALUE);
-                if (net.minecraftforge.common.DimensionManager.getWorld(mirrored) == null) {
-                    send(sender, "{\"error\":\"mirror dim not loaded\",\"dim\":" + mirrored + "}");
-                    return;
-                }
-                if (parkedProxy == null) {
-                    parkedProxy = dev.stannismod.stellurgy.Stellurgy.proxy;
-                }
-                dev.stannismod.stellurgy.Stellurgy.proxy = new MirroredDimClockProxy(mirrored);
-                installed = true;
-            } else {
-                send(sender, "{\"error\":\"usage: space aim-clock mirror <dim> | space aim-clock off\"}");
-                return;
-            }
-            net.minecraft.world.WorldServer overworld = server.getWorld(0);
-            send(sender, "{\"ok\":true,\"installed\":" + installed
-                    + ",\"mirrored\":" + mirrored
-                    + ",\"spaceClock\":"
-                    + dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock()
-                    + ",\"overworld\":" + (overworld == null ? -1L : overworld.getTotalWorldTime())
-                    + ",\"proxyClock\":"
-                    + dev.stannismod.stellurgy.Stellurgy.proxy.getWorldTimeUniversal(0) + "}");
             return;
         }
         // cell-info <sx> <sy> <sz>  OR  cell-info <cellKey>
@@ -6417,11 +6598,108 @@ public class TestProbeCommand extends CommandBase {
             send(sender, out.toString());
             return;
         }
-        // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator and bind a
-        // seed. A world with no <galaxyGen> in its planetDefs runs the authored-anchors-only default, so
-        // without this there are no procedural systems to realize at all and every test about them would
-        // be a test about an empty universe. `gen-reset` puts the default back; a shared-server class
-        // MUST call it, because the generator is a JVM global.
+        // gen-config: READ-ONLY. The generator the save's universe registry has in force, by simple
+        // class name, and — for a procedural one — the configuration that generator was BUILT from,
+        // read off the generator itself rather than off the pack's staging field: the question a pack
+        // author asks is "what does the running universe use", and the answer to that lives past
+        // UniverseRegistry.populate, where the schema turns the staged config into a generator.
+        // `config` is null for a generator that carries none (an authored-anchors-only universe), so
+        // "no procedural sky" is a value and not a missing field.
+        if (args.length >= 1 && "gen-config".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.IGalaxyGenerator inForce = reg.generator();
+            dev.stannismod.stellurgy.universe.GalaxyGenConfig cfg =
+                    inForce instanceof dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator
+                            ? ((dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator) inForce).config()
+                            : null;
+            StringBuilder out = new StringBuilder("{\"generator\":\"")
+                    .append(inForce == null ? "null" : inForce.getClass().getSimpleName()).append('"');
+            if (cfg == null) {
+                out.append(",\"config\":null}");
+                send(sender, out.toString());
+                return;
+            }
+            Map<String, Object> scalars = new LinkedHashMap<>();
+            scalars.put("density", cfg.density);
+            scalars.put("minSpacing", cfg.minSpacing);
+            scalars.put("galaxySpacing", cfg.galaxySpacing);
+            scalars.put("galaxyDensity", cfg.galaxyDensity);
+            String scalarJson = jsonMap(scalars);
+            out.append(",\"config\":").append(scalarJson, 0, scalarJson.length() - 1);
+            out.append(",\"starTypes\":[");
+            for (int i = 0; i < cfg.starTypes.size(); i++) {
+                dev.stannismod.stellurgy.universe.GalaxyGenConfig.StarType t = cfg.starTypes.get(i);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("temperature", t.temperature);
+                m.put("minSize", t.minSize);
+                m.put("maxSize", t.maxSize);
+                m.put("weight", t.weight);
+                out.append(i > 0 ? "," : "").append(jsonMap(m));
+            }
+            out.append("],\"galaxyTypes\":[");
+            for (int i = 0; i < cfg.galaxyTypes.size(); i++) {
+                dev.stannismod.stellurgy.universe.GalaxyGenConfig.GalaxyType t = cfg.galaxyTypes.get(i);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("name", t.name);
+                m.put("profile", t.profile.name());
+                m.put("minRadiusLy", t.minRadiusLy);
+                m.put("maxRadiusLy", t.maxRadiusLy);
+                m.put("scaleHeightRatio", t.scaleHeightRatio);
+                m.put("armCount", t.armCount);
+                m.put("rotationSpeedKmS", t.rotationSpeedKmS);
+                m.put("coreRadiusFraction", t.coreRadiusFraction);
+                m.put("minSatellites", t.minSatellites);
+                m.put("maxSatellites", t.maxSatellites);
+                m.put("weight", t.weight);
+                out.append(i > 0 ? "," : "").append(jsonMap(m));
+            }
+            out.append("],\"reservedGalaxies\":[");
+            for (int i = 0; i < cfg.reservedGalaxies.size(); i++) {
+                out.append(i > 0 ? "," : "").append('"')
+                        .append(escapeJson(cfg.reservedGalaxies.get(i).toString())).append('"');
+            }
+            out.append("]}}");
+            send(sender, out.toString());
+            return;
+        }
+        // anchor <starId>: READ-ONLY. The galactic anchor the registry holds as DECLARED for a star —
+        // the galaxy it was declared against ("home" or "gx,gy,gz") and its galaxy-local cell — as
+        // populate() applied it from the pack's staged anchors. `declared:false` for a star that
+        // declared none, which is a value: such a star gets a fallback coordinate, not a declaration.
+        if (args.length >= 2 && "anchor".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            int starId = parseIntOr(args[1], Integer.MIN_VALUE);
+            if (reg == null || starId == Integer.MIN_VALUE) {
+                send(sender, "{\"error\":\"registry unavailable or invalid star id\",\"value\":\""
+                        + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.GalacticAnchor declared = reg.declaredAnchorFor(starId);
+            // `cell`: where the registry PLACED the star — the absolute cell its system is anchored at,
+            // declared or fallback; null when it holds no placement for that id.
+            java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> placed = reg.coordForSystem(starId);
+            String cell = placed.isPresent() ? "\"" + placed.get().cellKey() + "\"" : "null";
+            if (declared == null) {
+                send(sender, "{\"starId\":" + starId + ",\"declared\":false,\"cell\":" + cell + "}");
+                return;
+            }
+            send(sender, "{\"starId\":" + starId + ",\"cell\":" + cell + ",\"declared\":true,\"galaxy\":\""
+                    + escapeJson(declared.galaxy().toString()) + "\",\"local\":["
+                    + declared.local().sectorX() + "," + declared.local().sectorY() + ","
+                    + declared.local().sectorZ() + "]}");
+            return;
+        }
+        // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator at a test's
+        // own density and bind a seed — the shipped configuration is sparse, so a test that needs
+        // procedural systems close to it asks for them here. `gen-reset` puts back the generator and the seed the save
+        // had before the first install; a shared-server class MUST call it, because the generator and
+        // the seed are the server's.
         //
         // The GALAXY lattice keeps its shipped parameters. A caller near the origin is inside the home
         // galaxy's core, where the profile is at its densest, so <density> alone says how full the sky
@@ -6438,8 +6716,13 @@ public class TestProbeCommand extends CommandBase {
             long seed = args.length >= 4 ? parseLongOr(args[3], 0L) : reg.worldSeed();
             dev.stannismod.stellurgy.universe.GalaxyGenConfig genDefaults =
                     dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults();
-            dev.stannismod.stellurgy.universe.UniverseRegistry.attachGenerator(
+            if (parkedGenerator == null) {
+                parkedGenerator = reg.generator();
+                parkedWorldSeed = reg.worldSeed();
+            }
+            reg.attachGenerator(
                     new dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator(
+                            dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports(),
                             new dev.stannismod.stellurgy.universe.GalaxyGenConfig(minSpacing, density,
                                     genDefaults.galaxySpacing, genDefaults.galaxyDensity, null, null)));
             reg.bindWorldSeed(seed);
@@ -6447,8 +6730,33 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if (args.length >= 1 && "gen-reset".equalsIgnoreCase(args[0])) {
-            dev.stannismod.stellurgy.universe.UniverseRegistry.detachGenerator();
-            send(sender, "{\"ok\":true}");
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            boolean restored = parkedGenerator != null && reg != null;
+            if (restored) {
+                reg.attachGenerator(parkedGenerator);
+                reg.bindWorldSeed(parkedWorldSeed);
+                parkedGenerator = null;
+            }
+            send(sender, "{\"ok\":true,\"restored\":" + restored + "}");
+            return;
+        }
+        // gen-empty: the void between authored anchors, as a pack's procedural="false" would have it —
+        // for a scenario whose subject must not share its sky with the save's procedural field.
+        // `gen-reset` puts back what was in force before, exactly as after gen-install.
+        if (args.length >= 1 && "gen-empty".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            if (parkedGenerator == null) {
+                parkedGenerator = reg.generator();
+                parkedWorldSeed = reg.worldSeed();
+            }
+            reg.detachGenerator();
+            send(sender, "{\"ok\":true,\"generator\":\"" + reg.generator().getClass().getSimpleName() + "\"}");
             return;
         }
         // find-procedural <radiusInSuperCells>: the first body a ship could land on that has NO dimension
@@ -6468,7 +6776,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             long r = parseIntOr(args[1], 8);
-            long s = Math.max(1L, dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+            long s = Math.max(1L, reg.generator()
                     .minSpacingCells());
             for (long x = -r; x <= r; x++) {
                 for (long y = -r; y <= r; y++) {
@@ -6520,7 +6828,7 @@ public class TestProbeCommand extends CommandBase {
             }
             boolean giantOnly = args.length >= 3 && "giant".equalsIgnoreCase(args[2]);
             long r = parseIntOr(args[1], 8);
-            long s = Math.max(1L, dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+            long s = Math.max(1L, reg.generator()
                     .minSpacingCells());
             for (long x = -r; x <= r; x++) {
                 for (long y = -r; y <= r; y++) {
@@ -6579,6 +6887,43 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":false,\"reason\":\"no moon in range\"}");
             return;
         }
+        // find-giant <radius>: the first GAS GIANT in a box of `radius` minimum spacings each way,
+        // reported by its cellKey and its `variant` among the cell's realizable bodies — the pair
+        // `realize` takes. A giant has no surface, so realizing it registers properties and no world.
+        if (args.length >= 2 && "find-giant".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            long r = parseIntOr(args[1], 8);
+            long s = Math.max(1L, reg.generator().minSpacingCells());
+            for (long x = -r; x <= r; x++) {
+                for (long y = -r; y <= r; y++) {
+                    for (long z = -r; z <= r; z++) {
+                        dev.stannismod.stellurgy.space.GalacticCoord probe =
+                                dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+                                        x * s, y * s, z * s, 0L, 0L, 0L);
+                        for (dev.stannismod.stellurgy.universe.SystemBody b : reg.systemBodiesAt(probe)) {
+                            if (b.kind() != dev.stannismod.stellurgy.universe.SystemBodyKind.GAS_GIANT) {
+                                continue;
+                            }
+                            java.util.OptionalInt variant = reg.variantOf(b);
+                            if (!variant.isPresent()) {
+                                continue; // an identity that does not separate: never guessed
+                            }
+                            send(sender, "{\"ok\":true,\"cellKey\":\"" + b.name().cellKey()
+                                    + "\",\"variant\":" + variant.getAsInt()
+                                    + ",\"family\":" + reg.realizableBodiesAt(b.name()).size() + "}");
+                            return;
+                        }
+                    }
+                }
+            }
+            send(sender, "{\"ok\":false,\"reason\":\"no gas giant in range\"}");
+            return;
+        }
         // derived <sx> <sy> <sz>: what the DERIVATION says about the body in that cell, without
         // realizing anything. This is the answer a telescope gives from across the system, and the whole
         // point of it is that a landing has to agree with it — so a test compares this against the
@@ -6618,11 +6963,12 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             dev.stannismod.stellurgy.universe.BodyProfile p =
-                    dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+                    reg.generator()
                             .derivation().derive(reg.worldSeed(),
                             anchor.get(), target.name(), variant, star.get(),
                             target.kind() == dev.stannismod.stellurgy.universe.SystemBodyKind.MOON,
-                            target.orbitalDistance());
+                            target.orbitalDistance(),
+                            dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
             send(sender, "{\"ok\":true,\"type\":\"" + p.typeName() + "\",\"orbitalDist\":"
                     + p.orbitalDistance() + ",\"mass\":" + p.massEarths() + ",\"radius\":"
                     + p.radiusEarths() + ",\"gravity\":" + p.gravityPercent() + ",\"pressure\":"
@@ -6697,7 +7043,7 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"radius\":" + props.getRadius() + ",\"gravity\":"
                     + Math.round(props.getGravitationalMultiplier() * 100f) + ",\"pressure\":"
                     + props.getAtmosphereDensity() + ",\"temperature\":" + props.getAverageTemp()
-                    + ",\"oxygen\":" + props.hasOxygen + ",\"locked\":" + props.isTidallyLocked()
+                    + ",\"oxygen\":" + props.hasOxygen() + ",\"locked\":" + props.isTidallyLocked()
                     + ",\"metallicity\":" + props.getMetallicity() + ",\"gasGiant\":"
                     + props.isGasGiant() + ",\"terrainSource\":\"" + props.getTerrainSource()
                     // Moon-ness, and the dimension it hangs off. Reported because a moon whose parent
@@ -6795,7 +7141,7 @@ public class TestProbeCommand extends CommandBase {
             // auto-unload and no lag-corrupted response capture): place a marker in cell A, rebind
             // through cell B (which must not see A's marker), place a marker in B, rebind back to A.
             // Pass iff A's marker persisted and B's marker did not bleed into A (folder isolation).
-            int slot = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
+            int slot = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1)[0];
             net.minecraft.util.math.BlockPos p1 = new net.minecraft.util.math.BlockPos(0, 64, 0);
             net.minecraft.util.math.BlockPos p2 = new net.minecraft.util.math.BlockPos(1, 64, 1);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
@@ -6835,7 +7181,7 @@ public class TestProbeCommand extends CommandBase {
             // enough free slots that nothing is ever evicted, and the probe reports pass=false while
             // measuring nothing - the eviction it exists to test never happens.
             final int[] scratchSlot =
-                    dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1);
+                    dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1);
             dev.stannismod.stellurgy.space.SlotBinder ownSlotOnly =
                     new dev.stannismod.stellurgy.space.SlotBinder() {
                         private final dev.stannismod.stellurgy.space.PoolSlotBinder real =
@@ -6930,7 +7276,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 1 && "vs-assemble".equalsIgnoreCase(args[0])) {
             // Assemble a small VS ship in a fresh pool slot (a 3x3x3 stone cube floating in void).
             String cell = args.length >= 2 ? args[1] : "deep";
-            int slot = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
+            int slot = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
                     dev.stannismod.stellurgy.space.SpaceSlotPool.loadScratch(slot, cell);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
@@ -6992,7 +7338,7 @@ public class TestProbeCommand extends CommandBase {
             // Does Valkyrien Skies' per-world ship manager attach to a dynamically-created pool
             // world? (Layer-1 gate: VS ships can only live in a slot if VS lights up there.)
             String cell = args.length >= 2 ? args[1] : "vscap";
-            int slot = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
+            int slot = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
                     dev.stannismod.stellurgy.space.SpaceSlotPool.loadScratch(slot, cell);
             boolean support = dev.stannismod.stellurgy.integration.vs.VSIntegration.hasShipSupport(w);
@@ -7032,7 +7378,7 @@ public class TestProbeCommand extends CommandBase {
         }
         if (args.length >= 1 && "pool-register".equalsIgnoreCase(args[0])) {
             int n = args.length >= 2 ? parseIntOr(args[1], 1) : 1;
-            int[] ids = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(n);
+            int[] ids = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(n);
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"dims\":[");
             for (int i = 0; i < ids.length; i++) {
                 if (i > 0) sb.append(',');
@@ -7540,7 +7886,16 @@ public class TestProbeCommand extends CommandBase {
             info.put("orbitTheta", props.orbitTheta);
             info.put("rotationalPeriod", props.rotationalPeriod);
             info.put("hasRings", props.hasRings);
-            info.put("hasOxygen", props.hasOxygen);
+            info.put("hasOxygen", props.hasOxygen());
+            // What the outdoor air is made of, by substance, in the composition's own unit.
+            info.put("gases", gasesOf(props.getAir()));
+            // What a gas harvester here is offered, by gas name in the order it is offered — the
+            // planet's own answer, not one rebuilt from "gases" above.
+            List<String> harvestable = new java.util.ArrayList<>();
+            for (dev.stannismod.stellurgy.atmosphere.gas.Gas gas : props.getHarvestableGases()) {
+                harvestable.add(gas.name());
+            }
+            info.put("harvestable", harvestable);
             info.put("seaLevel", props.getSeaLevel());
             info.put("rainStartLength", props.getRainStartLength());
             info.put("thunderStartLength", props.getThunderStartLength());
@@ -7555,6 +7910,70 @@ public class TestProbeCommand extends CommandBase {
             info.put("skyColor", floatArrayToList(props.skyColor));
             info.put("sunriseSunsetColors", floatArrayToList(props.sunriseSunsetColors));
             send(sender, jsonMap(info));
+            return;
+        }
+        // stellurgytest planet authored <dim> — READ-ONLY, STRICT. What the running game holds for a
+        // body that a pack's planetDefs.xml described, in the fields the loader DECIDES rather than
+        // copies: its place in the hierarchy (parent AND children, because the link is two-sided and
+        // either half can be lost alone), the clamped atmosphere and gravity, the terrain source and
+        // world type, whether its authored weather engages its own cycle, and the laser-drill ore
+        // list as resolved stacks. Unlike `planet info` this resolves through the STRICT lookup, so an
+        // id naming no body answers `found:false` instead of describing the overworld.
+        if (args.length >= 2 && "authored".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null) {
+                send(sender, "{\"dim\":" + dim + ",\"found\":false}");
+                return;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("found", true);
+            info.put("name", props.getName());
+            info.put("parent", props.getParentPlanet());
+            List<Integer> children = new java.util.ArrayList<>(props.getChildPlanets());
+            Collections.sort(children);
+            info.put("children", children);
+            info.put("atmosphereDensity", props.getAtmosphereDensity());
+            info.put("gravity", props.getGravitationalMultiplier());
+            info.put("terrainSource", props.getTerrainSource().name());
+            info.put("terrainWorldType", props.getTerrainWorldType());
+            info.put("usesCustomWorldInfo", props.usesCustomWorldInfo());
+            String head = jsonMap(info);
+            StringBuilder out = new StringBuilder(head.substring(0, head.length() - 1))
+                    .append(",\"laserDrillOres\":[");
+            for (int i = 0; i < props.laserDrillOres.size(); i++) {
+                net.minecraft.item.ItemStack ore = props.laserDrillOres.get(i);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("item", ore.getItem().getRegistryName() == null
+                        ? "null" : ore.getItem().getRegistryName().toString());
+                m.put("meta", ore.getMetadata());
+                m.put("count", ore.getCount());
+                out.append(i > 0 ? "," : "").append(jsonMap(m));
+            }
+            out.append("]}");
+            send(sender, out.toString());
+            return;
+        }
+        // stellurgytest planet named <name> — READ-ONLY. Every REGISTERED dimension whose body
+        // carries exactly this name, so a body whose id the pack did not state (and the allocator
+        // chose) can be found by what the pack DID state. A list, never "the first": two bodies of
+        // one name are an answer, not a lookup to resolve.
+        if (args.length >= 2 && "named".equalsIgnoreCase(args[0])) {
+            String wanted = args[1];
+            List<Integer> dims = new java.util.ArrayList<>();
+            for (Integer registered : DimensionManager.getInstance().getRegisteredDimensions()) {
+                DimensionProperties props = DimensionManager.getInstance()
+                        .getDimensionPropertiesOrNull(registered);
+                if (props != null && wanted.equals(props.getName())) {
+                    dims.add(registered);
+                }
+            }
+            Collections.sort(dims);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("name", wanted);
+            out.put("dims", dims);
+            send(sender, jsonMap(out));
             return;
         }
         // stellurgytest planet set-temp <dim> <kelvin>
@@ -7575,13 +7994,104 @@ public class TestProbeCommand extends CommandBase {
             out.put("ok", true);
             out.put("dim", dim);
             out.put("averageTemperature", props.getAverageTemp());
-            out.put("hasOxygen", props.hasOxygen);
+            out.put("hasOxygen", props.hasOxygen());
             out.put("atmosphereDensity", props.getAtmosphereDensity());
             out.put("atmosphere", props.getAtmosphere().getUnlocalizedName());
             send(sender, jsonMap(out));
             return;
         }
+        // stellurgytest planet add-gas <dim> <gasName> <amount>
+        // Puts real gas into a planet's air through the exchange production uses (the terraformer's),
+        // so a test can give a world a trace of something its derivation never would — or put back,
+        // exactly, the air a snapshot recorded. <amount> is in the composition's own unit, the one
+        // `planet info`'s "gases" reports.
+        if (args.length >= 4 && "add-gas".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            dev.stannismod.stellurgy.atmosphere.gas.Gas gas =
+                    dev.stannismod.stellurgy.atmosphere.gas.GasRegistry.byName(args[2]);
+            long amount = parseLongOr(args[3], -1L);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null || gas == null || amount <= 0L) {
+                send(sender, "{\"error\":\"unknown planet, unknown gas or non-positive amount\",\"dim\":"
+                        + dim + ",\"gas\":\"" + escapeJson(args[2]) + "\",\"amount\":" + amount + "}");
+                return;
+            }
+            dev.stannismod.stellurgy.atmosphere.AirState portion =
+                    dev.stannismod.stellurgy.atmosphere.AirState.vacuum();
+            portion.add(gas, amount, props.getAverageTemp());
+            props.addToAtmosphere(portion);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("dim", dim);
+            out.put("hasOxygen", props.hasOxygen());
+            out.put("atmosphereDensity", props.getAtmosphereDensity());
+            out.put("gases", gasesOf(props.getAir()));
+            send(sender, jsonMap(out));
+            return;
+        }
+        // orbit-line <dim> [<blocks>|unset]: a world's atmosphere<->orbit line as production reads it,
+        // and - with a second argument - the planet file's own <orbitHeight> for it, stated or cleared,
+        // which is how a test arranges a low line without writing a whole galaxy. Absence is a value:
+        // `line` and `entryCeiling` are null for a world that has no line.
+        if (args.length >= 2 && "orbit-line".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"unknown planet\",\"dim\":" + dim + "}");
+                return;
+            }
+            if (args.length >= 3) {
+                int stated = "unset".equalsIgnoreCase(args[2]) ? DimensionProperties.ORBIT_HEIGHT_UNSET
+                        : parseIntOr(args[2], Integer.MIN_VALUE);
+                if (stated == Integer.MIN_VALUE) {
+                    send(sender, "{\"error\":\"the line is a whole number of blocks or 'unset'\",\"dim\":"
+                            + dim + "}");
+                    return;
+                }
+                props.setOrbitHeight(stated);
+            }
+            java.util.OptionalInt line = DimensionManager.getInstance().orbitLineOf(dim);
+            net.minecraft.world.World world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("dim", dim);
+            out.put("stated", props.hasCustomOrbitHeight());
+            out.put("radius", props.getRadius());
+            out.put("line", line.isPresent() ? (Object) line.getAsInt() : null);
+            out.put("loaded", world != null);
+            out.put("entryCeiling", line.isPresent() && world != null
+                    ? (Object) dev.stannismod.stellurgy.space.ShipEntryController.effectiveEntryCeiling(
+                            line.getAsInt(),
+                            dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum(world))
+                    : null);
+            send(sender, jsonMap(out));
+            return;
+        }
         send(sender, "{\"error\":\"unknown planet subcommand\"}");
+    }
+
+    /**
+     * For a living entity: its health, and the type of the damage it last took — vanilla keeps that
+     * for 40 ticks after the hit and answers none after, so "none" means no hit in the last two
+     * seconds, not no hit ever. Empty for anything not alive in that sense.
+     */
+    private static String livingFields(net.minecraft.entity.Entity entity) {
+        if (!(entity instanceof net.minecraft.entity.EntityLivingBase)) {
+            return "";
+        }
+        net.minecraft.entity.EntityLivingBase living = (net.minecraft.entity.EntityLivingBase) entity;
+        net.minecraft.util.DamageSource last = living.getLastDamageSource();
+        return ",\"health\":" + living.getHealth()
+                + ",\"lastDamageType\":\"" + (last == null ? "none" : escapeJson(last.getDamageType())) + "\"";
+    }
+
+    /** A composition as {@code {gasName: amount}}, the amount in the composition's own unit. */
+    private static Map<String, Object> gasesOf(dev.stannismod.stellurgy.atmosphere.AirState air) {
+        Map<String, Object> gases = new LinkedHashMap<>();
+        for (Map.Entry<dev.stannismod.stellurgy.atmosphere.gas.Gas, Long> entry : air.composition().entrySet()) {
+            gases.put(entry.getKey().name(), entry.getValue());
+        }
+        return gases;
     }
 
     private static List<Double> floatArrayToList(float[] arr) {
@@ -7784,6 +8294,32 @@ public class TestProbeCommand extends CommandBase {
             handleRocketLaunch(server, sender, args);
             return;
         }
+        if ("stats-from-nbt".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /stellurgytest rocket stats-from-nbt <entityId> — the PUBLIC factory
+            // StatsRocket.createFromNBT, fed exactly what the rocket's own stats write.
+            // The rocket's stats are written by StatsRocket.writeToNBT (the production writer),
+            // that compound is handed to StatsRocket.createFromNBT (the API factory a dependent
+            // mod reads stats through), and what the factory returned is written again by the
+            // same writer. Both compounds are reported as their NBT text so the caller compares
+            // what went in with what came out; the verb computes no verdict of its own. Nothing
+            // inside Stellurgy calls the factory, so this verb is the only thing that exercises it.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            net.minecraft.nbt.NBTTagCompound written = new net.minecraft.nbt.NBTTagCompound();
+            rocket.stats.writeToNBT(written);
+            dev.stannismod.stellurgy.api.StatsRocket restored =
+                    dev.stannismod.stellurgy.api.StatsRocket.createFromNBT(written);
+            net.minecraft.nbt.NBTTagCompound rewritten = new net.minecraft.nbt.NBTTagCompound();
+            restored.writeToNBT(rewritten);
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"written\":\"" + escapeJson(written.toString())
+                    + "\",\"rewritten\":\"" + escapeJson(rewritten.toString()) + "\"}");
+            return;
+        }
         if ("fuel".equalsIgnoreCase(args[0]) && args.length >= 2) {
             // /stellurgytest rocket fuel <entityId> — exposes stats.getFuelAmount /
             // getFuelCapacity per FuelType + primary rocket fuel type.
@@ -7894,7 +8430,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
                 return;
             }
-            int eventCountBefore = RocketEventRecorder.orbitReachedCount;
+            int eventCountBefore = rocketEvents.orbitReachedCount;
             try {
                 rocket.onOrbitReached();
             } catch (RuntimeException e) {
@@ -7906,7 +8442,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"entityId\":" + entityId
                     + ",\"isInOrbit\":" + rocket.isInOrbit()
                     + ",\"orbitReachedEventDelta\":"
-                    + (RocketEventRecorder.orbitReachedCount - eventCountBefore) + "}");
+                    + (rocketEvents.orbitReachedCount - eventCountBefore) + "}");
             return;
         }
         if ("dismantle".equalsIgnoreCase(args[0]) && args.length >= 2) {
@@ -7918,7 +8454,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
                 return;
             }
-            int eventCountBefore = RocketEventRecorder.dismantleCount;
+            int eventCountBefore = rocketEvents.dismantleCount;
             try {
                 rocket.deconstructRocket();
             } catch (RuntimeException e) {
@@ -7929,36 +8465,35 @@ public class TestProbeCommand extends CommandBase {
             }
             send(sender, "{\"ok\":true,\"entityId\":" + entityId
                     + ",\"dismantleEventDelta\":"
-                    + (RocketEventRecorder.dismantleCount - eventCountBefore) + "}");
+                    + (rocketEvents.dismantleCount - eventCountBefore) + "}");
             return;
         }
         if ("event-counts".equalsIgnoreCase(args[0])) {
-            // /stellurgytest rocket event-counts — dump global counters for the
-            // 4 RocketEvent types. The recorder is registered once
-            // statically (see RocketEventRecorder.ensureRegistered).
-            RocketEventRecorder.ensureRegistered();
-            send(sender, "{\"launch\":" + RocketEventRecorder.launchCount
-                    + ",\"preLaunch\":" + RocketEventRecorder.preLaunchCount
-                    + ",\"orbitReached\":" + RocketEventRecorder.orbitReachedCount
-                    + ",\"dismantle\":" + RocketEventRecorder.dismantleCount + "}");
+            // /stellurgytest rocket event-counts — dump this server's counters for the
+            // 4 RocketEvent types. The recorder is registered with the command.
+            rocketEvents.ensureRegistered();
+            send(sender, "{\"launch\":" + rocketEvents.launchCount
+                    + ",\"preLaunch\":" + rocketEvents.preLaunchCount
+                    + ",\"orbitReached\":" + rocketEvents.orbitReachedCount
+                    + ",\"dismantle\":" + rocketEvents.dismantleCount + "}");
             return;
         }
         if ("event-payloads".equalsIgnoreCase(args[0])) {
             // Gap #6 — dump last-observed entity id + dim per event type.
-            RocketEventRecorder.ensureRegistered();
+            rocketEvents.ensureRegistered();
             StringBuilder out = new StringBuilder("{");
-            out.append("\"launchEntityId\":").append(RocketEventRecorder.lastLaunchEntityId)
-                    .append(",\"launchDim\":").append(RocketEventRecorder.lastLaunchDim);
-            out.append(",\"preLaunchEntityId\":").append(RocketEventRecorder.lastPreLaunchEntityId)
-                    .append(",\"preLaunchDim\":").append(RocketEventRecorder.lastPreLaunchDim);
-            out.append(",\"orbitReachedEntityId\":").append(RocketEventRecorder.lastOrbitReachedEntityId)
-                    .append(",\"orbitReachedDim\":").append(RocketEventRecorder.lastOrbitReachedDim);
-            out.append(",\"dismantleEntityId\":").append(RocketEventRecorder.lastDismantleEntityId)
-                    .append(",\"dismantleDim\":").append(RocketEventRecorder.lastDismantleDim);
-            out.append(",\"landedEntityId\":").append(RocketEventRecorder.lastLandedEntityId)
-                    .append(",\"landedDim\":").append(RocketEventRecorder.lastLandedDim);
-            out.append(",\"deOrbitingEntityId\":").append(RocketEventRecorder.lastDeOrbitingEntityId)
-                    .append(",\"deOrbitingDim\":").append(RocketEventRecorder.lastDeOrbitingDim);
+            out.append("\"launchEntityId\":").append(rocketEvents.lastLaunchEntityId)
+                    .append(",\"launchDim\":").append(rocketEvents.lastLaunchDim);
+            out.append(",\"preLaunchEntityId\":").append(rocketEvents.lastPreLaunchEntityId)
+                    .append(",\"preLaunchDim\":").append(rocketEvents.lastPreLaunchDim);
+            out.append(",\"orbitReachedEntityId\":").append(rocketEvents.lastOrbitReachedEntityId)
+                    .append(",\"orbitReachedDim\":").append(rocketEvents.lastOrbitReachedDim);
+            out.append(",\"dismantleEntityId\":").append(rocketEvents.lastDismantleEntityId)
+                    .append(",\"dismantleDim\":").append(rocketEvents.lastDismantleDim);
+            out.append(",\"landedEntityId\":").append(rocketEvents.lastLandedEntityId)
+                    .append(",\"landedDim\":").append(rocketEvents.lastLandedDim);
+            out.append(",\"deOrbitingEntityId\":").append(rocketEvents.lastDeOrbitingEntityId)
+                    .append(",\"deOrbitingDim\":").append(rocketEvents.lastDeOrbitingDim);
             out.append('}');
             send(sender, out.toString());
             return;
@@ -7968,25 +8503,25 @@ public class TestProbeCommand extends CommandBase {
             // Subsequent prepareLaunch() calls fire the event, which is
             // then cancelled, preventing LAUNCH_COUNTER from being set
             // to 200. Tests MUST disarm in @After.
-            ensurePreLaunchCancellerRegistered();
-            preLaunchObservedCount = 0;
-            preLaunchCancelledCount = 0;
-            cancelNextPreLaunch = true;
+            preLaunchCanceller.ensureRegistered();
+            preLaunchCanceller.observed = 0;
+            preLaunchCanceller.cancelled = 0;
+            preLaunchCanceller.cancelNext = true;
             send(sender, "{\"ok\":true,\"armed\":true}");
             return;
         }
         if ("disarm-prelaunch-cancel".equalsIgnoreCase(args[0])) {
-            cancelNextPreLaunch = false;
+            preLaunchCanceller.cancelNext = false;
             send(sender, "{\"ok\":true,\"armed\":false"
-                    + ",\"observedSinceArm\":" + preLaunchObservedCount
-                    + ",\"cancelledSinceArm\":" + preLaunchCancelledCount + "}");
+                    + ",\"observedSinceArm\":" + preLaunchCanceller.observed
+                    + ",\"cancelledSinceArm\":" + preLaunchCanceller.cancelled + "}");
             return;
         }
         if ("prelaunch-cancel-counts".equalsIgnoreCase(args[0])) {
-            ensurePreLaunchCancellerRegistered();
-            send(sender, "{\"ok\":true,\"armed\":" + cancelNextPreLaunch
-                    + ",\"observed\":" + preLaunchObservedCount
-                    + ",\"cancelled\":" + preLaunchCancelledCount + "}");
+            preLaunchCanceller.ensureRegistered();
+            send(sender, "{\"ok\":true,\"armed\":" + preLaunchCanceller.cancelNext
+                    + ",\"observed\":" + preLaunchCanceller.observed
+                    + ",\"cancelled\":" + preLaunchCanceller.cancelled + "}");
             return;
         }
         if ("info".equalsIgnoreCase(args[0]) && args.length >= 2) {
@@ -8639,13 +9174,13 @@ public class TestProbeCommand extends CommandBase {
         }
         if ("event-counts-full".equalsIgnoreCase(args[0])) {
             // extended counter dump including landed + deOrbiting.
-            RocketEventRecorder.ensureRegistered();
-            send(sender, "{\"launch\":" + RocketEventRecorder.launchCount
-                    + ",\"preLaunch\":" + RocketEventRecorder.preLaunchCount
-                    + ",\"orbitReached\":" + RocketEventRecorder.orbitReachedCount
-                    + ",\"dismantle\":" + RocketEventRecorder.dismantleCount
-                    + ",\"landed\":" + RocketEventRecorder.landedCount
-                    + ",\"deOrbiting\":" + RocketEventRecorder.deOrbitingCount + "}");
+            rocketEvents.ensureRegistered();
+            send(sender, "{\"launch\":" + rocketEvents.launchCount
+                    + ",\"preLaunch\":" + rocketEvents.preLaunchCount
+                    + ",\"orbitReached\":" + rocketEvents.orbitReachedCount
+                    + ",\"dismantle\":" + rocketEvents.dismantleCount
+                    + ",\"landed\":" + rocketEvents.landedCount
+                    + ",\"deOrbiting\":" + rocketEvents.deOrbitingCount + "}");
             return;
         }
         if ("set-flight-mode".equalsIgnoreCase(args[0]) && args.length >= 3) {
@@ -9157,26 +9692,48 @@ public class TestProbeCommand extends CommandBase {
      * <p>Tests MUST {@code disarm-prelaunch-cancel} in {@code @After} —
      * leaving the flag armed would silently break every subsequent rocket
      * test in the shared harness.</p>
+     *
+     * <p>This command's, so this server's: it leaves the bus with the server's overworld.</p>
      */
-    private static volatile boolean cancelNextPreLaunch = false;
-    private static volatile boolean preLaunchCancellerRegistered = false;
-    private static volatile int preLaunchObservedCount = 0;
-    private static volatile int preLaunchCancelledCount = 0;
+    private final PreLaunchCanceller preLaunchCanceller = new PreLaunchCanceller();
 
-    private static synchronized void ensurePreLaunchCancellerRegistered() {
-        if (preLaunchCancellerRegistered) return;
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new Object() {
-            @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
-            public void onPreLaunch(
-                    dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent event) {
-                preLaunchObservedCount++;
-                if (cancelNextPreLaunch) {
-                    event.setCanceled(true);
-                    preLaunchCancelledCount++;
-                }
+    private static final class PreLaunchCanceller extends ServerScopedListener {
+        volatile boolean cancelNext;
+        volatile int observed;
+        volatile int cancelled;
+
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onPreLaunch(
+                dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent event) {
+            observed++;
+            if (cancelNext) {
+                event.setCanceled(true);
+                cancelled++;
             }
-        });
-        preLaunchCancellerRegistered = true;
+        }
+    }
+
+    /**
+     * A test-only bus listener with the lifetime of the server whose command built it: registered at
+     * most once, and unregistered when that server's overworld unloads, which it does when the server
+     * stops — so a listener of one server never counts or cancels anything of the next.
+     */
+    private abstract static class ServerScopedListener {
+        private boolean registered;
+
+        final synchronized void ensureRegistered() {
+            if (!registered) {
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
+                registered = true;
+            }
+        }
+
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public final void onOverworldUnload(net.minecraftforge.event.world.WorldEvent.Unload event) {
+            if (!event.getWorld().isRemote && event.getWorld().provider.getDimension() == 0) {
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(this);
+            }
+        }
     }
 
     private void handleRocketAssemble(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -9789,8 +10346,8 @@ public class TestProbeCommand extends CommandBase {
             // /stellurgytest station warp-collision <destDim> [count] — C066 repro. Creates
             // `count` stations (default 3), puts ALL into the warp orbit (WARPDIMID) with
             // an already-elapsed transition, forces the "arrived" entry branch, then
-            // invokes SpaceObjectManager.onServerTick(null) directly and catches
-            // (onServerTick never dereferences its event arg). On the buggy live for-each
+            // invokes the station server-tick handler directly and catches
+            // (it never dereferences its event arg). On the buggy live for-each
             // (moveStationToBody removes the arriving station from the same list being
             // iterated) 3+ same-tick arrivals throw a ConcurrentModificationException (with
             // exactly 2 the LinkedList silently drops the 2nd instead — 3 exercises the
@@ -9826,7 +10383,7 @@ public class TestProbeCommand extends CommandBase {
             boolean threw = false;
             String exClass = "";
             try {
-                mgr.onServerTick(null);
+                dev.stannismod.stellurgy.stations.SpaceObjectManagerEvents.onServerTick(null);
             } catch (Throwable t) {
                 threw = true;
                 exClass = t.getClass().getSimpleName();
@@ -11013,10 +11570,12 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.item.ItemStack carrier = new net.minecraft.item.ItemStack(primaryItem, 1, 30);
             dev.stannismod.stellurgy.api.satellite.SatelliteProperties existing =
                     dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperty(carrier);
+            boolean registeredCarrier = false;
             if (existing == null || !bogusType.equals(existing.getSatelliteType())) {
                 dev.stannismod.stellurgy.api.satellite.SatelliteProperties sp =
                         new dev.stannismod.stellurgy.api.satellite.SatelliteProperties(100, 1000, bogusType, 100, 1.0f);
                 dev.stannismod.stellurgy.api.SatelliteRegistry.registerSatelliteProperty(carrier, sp);
+                registeredCarrier = true;
             }
             // Load the four critical slots (mirror press-build) with the bogus
             // MAIN carrier in the core/primary slot 0.
@@ -11040,6 +11599,8 @@ public class TestProbeCommand extends CommandBase {
             } catch (Throwable t) {
                 outcome = t.getClass().getSimpleName();
                 if (t.getStackTrace().length > 0) topFrame = t.getStackTrace()[0].toString();
+            } finally {
+                if (registeredCarrier) unregisterSatelliteProperty(carrier);
             }
             send(sender, "{\"ok\":true,\"bogusType\":\"" + escapeJson(bogusType) + "\""
                     + ",\"getNewSatelliteNull\":true"
@@ -11085,10 +11646,12 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.item.ItemStack carrier = new net.minecraft.item.ItemStack(primaryItem, 1, 30);
             dev.stannismod.stellurgy.api.satellite.SatelliteProperties existing =
                     dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperty(carrier);
+            boolean registeredCarrier = false;
             if (existing == null || !bogusType.equals(existing.getSatelliteType())) {
                 dev.stannismod.stellurgy.api.satellite.SatelliteProperties sp =
                         new dev.stannismod.stellurgy.api.satellite.SatelliteProperties(100, 1000, bogusType, 100, 1.0f);
                 dev.stannismod.stellurgy.api.SatelliteRegistry.registerSatelliteProperty(carrier, sp);
+                registeredCarrier = true;
             }
             // Chassis (slot 11) first — slots 0-6 read through the chassis's embedded
             // inventory — then the bogus MAIN carrier into core slot 0.
@@ -11104,6 +11667,8 @@ public class TestProbeCommand extends CommandBase {
             } catch (Throwable t) {
                 outcome = t.getClass().getSimpleName();
                 if (t.getStackTrace().length > 0) topFrame = t.getStackTrace()[0].toString();
+            } finally {
+                if (registeredCarrier) unregisterSatelliteProperty(carrier);
             }
             send(sender, "{\"ok\":true,\"bogusType\":\"" + escapeJson(bogusType) + "\""
                     + ",\"getNewSatelliteNull\":true"
@@ -11290,7 +11855,7 @@ public class TestProbeCommand extends CommandBase {
                 powerStorage += sp.getPowerStorage();
             if (flag == dev.stannismod.stellurgy.api.satellite.SatelliteProperties.Property.DATA.getFlag())
                 maxData += sp.getMaxDataStorage();
-            weight += dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getWeight(stack);
+            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(stack);
         }
         dev.stannismod.stellurgy.api.satellite.SatelliteProperties finalProps =
                 new dev.stannismod.stellurgy.api.satellite.SatelliteProperties(
@@ -11661,8 +12226,7 @@ public class TestProbeCommand extends CommandBase {
             // already-linked tiles simply unify onto id1.
             int shared;
             if (id1 == -1 && id2 == -1) {
-                shared = dev.stannismod.stellurgy.wirelessdata.NetworkRegistry
-                        .dataNetwork(world).getNewNetworkID();
+                shared = Stellurgy.serverState().wirelessNetworks(world).getNewNetworkID();
             } else if (id1 == -1) {
                 shared = id2;
             } else if (id2 == -1) {
@@ -11742,8 +12306,7 @@ public class TestProbeCommand extends CommandBase {
                 // Mirror the GUI mode toggle: re-register on the wireless data
                 // network as source or sink under the new mode, if it exists.
                 dev.stannismod.stellurgy.wirelessdata.DataNetwork network =
-                        dev.stannismod.stellurgy.wirelessdata.NetworkRegistry
-                                .dataNetwork(world).getNetwork(netId);
+                        Stellurgy.serverState().wirelessNetworks(world).getNetwork(netId);
                 if (network != null) {
                     network.removeFromAll(tile);
                     if (extract) {
@@ -11812,8 +12375,7 @@ public class TestProbeCommand extends CommandBase {
                         (dev.stannismod.stellurgy.tile.TileWirelessTransceiver) tile;
                 int netId = t.getWirelessNetworkId();
                 dev.stannismod.stellurgy.wirelessdata.DataNetwork network =
-                        dev.stannismod.stellurgy.wirelessdata.NetworkRegistry
-                                .dataNetwork(world).getNetwork(netId);
+                        Stellurgy.serverState().wirelessNetworks(world).getNetwork(netId);
                 boolean networkExists = network != null;
                 BlockPos selfPos = tile.getPos();
                 boolean isSource = networkExists && wirelessEndpointMatches(network, "sources", selfPos);
@@ -11881,7 +12443,7 @@ public class TestProbeCommand extends CommandBase {
             int x = parseIntOr(args[2], 0);
             int y = parseIntOr(args[3], 0);
             int z = parseIntOr(args[4], 0);
-            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(dim);
+            AtmosphereHandler handler = atmosphereOfLoaded(dim);
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("dim", dim);
             info.put("pos", new int[]{x, y, z});
@@ -11892,15 +12454,44 @@ public class TestProbeCommand extends CommandBase {
                     send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
                     return;
                 }
-                IAtmosphere atm = props.getAtmosphere();
+                Atmosphere atm = props.getAtmosphere();
                 info.put("source", "dimension-default");
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
             } else {
-                IAtmosphere atm = handler.getAtmosphereType(new BlockPos(x, y, z));
+                BlockPos pos = new BlockPos(x, y, z);
+                Atmosphere atm = handler.getAtmosphereType(pos);
                 info.put("source", "block-handler");
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
+                // What the AIR itself says, beside what its label says. The two are reported
+                // separately on purpose: the label carries a hand-assigned combustion flag and the
+                // air carries a measurement, and a test about which of them a mechanic obeys can
+                // only be written if it can see both.
+                info.put("labelCombustible", atm.allowsCombustion());
+                info.put("combustible", handler.allowsCombustionAt(pos));
+                // The statements production holds true here — what a detector and the readout see,
+                // indoors or out — asked of production rather than rebuilt from the fields below.
+                List<String> statements = new java.util.ArrayList<>();
+                for (dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion assertion
+                        : dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion.values()) {
+                    if (dev.stannismod.stellurgy.atmosphere.AtmosphereAssertions.holdsAt(handler, pos, assertion)) {
+                        statements.add(assertion.name());
+                    }
+                }
+                info.put("statements", statements);
+                dev.stannismod.stellurgy.atmosphere.AirState air = handler.getAirStateAt(pos);
+                if (air != null) {
+                    info.put("breathableAir", air.isBreathableAir());
+                    info.put("toxic", air.isToxic());
+                    info.put("corrosionMilli", Math.round(air.corrosionIndex() * 1000.0D));
+                    Map<String, Object> gases = new LinkedHashMap<>();
+                    for (Map.Entry<dev.stannismod.stellurgy.atmosphere.gas.Gas, Long> entry
+                            : air.composition().entrySet()) {
+                        gases.put(entry.getKey().name(), entry.getValue());
+                    }
+                    info.put("gases", gases);
+                }
             }
             send(sender, jsonMap(info));
             return;
@@ -11944,11 +12535,10 @@ public class TestProbeCommand extends CommandBase {
                 if (tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector) {
                     try {
                         java.lang.reflect.Field f = dev.stannismod.stellurgy.tile.atmosphere
-                                .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                                .TileAtmosphereDetector.class.getDeclaredField("assertionToDetect");
                         f.setAccessible(true);
-                        dev.stannismod.stellurgy.api.IAtmosphere mode =
-                                (dev.stannismod.stellurgy.api.IAtmosphere) f.get(tile);
-                        info.put("detectorMode", mode == null ? "null" : mode.getUnlocalizedName());
+                        Object mode = f.get(tile);
+                        info.put("detectorMode", mode == null ? "null" : ((Enum<?>) mode).name());
                     } catch (ReflectiveOperationException ignored) {
                         info.put("detectorMode", "reflect-failed");
                     }
@@ -11957,12 +12547,15 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        if ("cached-for-player".equalsIgnoreCase(args[0])) {
-            // read AtmosphereHandler.prevAtmosphere via reflection
-            // so tests can assert dim-change cache invalidation. The map
-            // is private static HashMap<EntityPlayer, IAtmosphere>, keyed
-            // by reference; we report the current cached IAtmosphere
-            // (or null) for the first connected player.
+        if ("for-player".equalsIgnoreCase(args[0])) {
+            // What the per-entity gate answers for the first connected player, RIGHT NOW: the same
+            // call every effect path makes, asked live.
+            //
+            // It used to reflect into AtmosphereHandler.prevAtmosphere instead. That map existed
+            // only to let an edge-triggered sync compare against the previous answer; once the sync
+            // became periodic nothing read it, and a probe reading it was measuring an artefact of
+            // its own instrument — a value written once a second, on a phase of the player's own
+            // ticksExisted, which a poll could catch one send stale.
             java.util.List<net.minecraft.entity.player.EntityPlayerMP> ps =
                     server.getPlayerList().getPlayers();
             if (ps.isEmpty() && fakePlayer != null) {
@@ -11973,28 +12566,32 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             net.minecraft.entity.player.EntityPlayerMP player = ps.get(0);
-            try {
-                java.lang.reflect.Field f =
-                        AtmosphereHandler
-                                .class.getDeclaredField("prevAtmosphere");
-                f.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                        dev.stannismod.stellurgy.api.IAtmosphere> map =
-                        (java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                                dev.stannismod.stellurgy.api.IAtmosphere>) f.get(null);
-                dev.stannismod.stellurgy.api.IAtmosphere cached = map.get(player);
-                send(sender, "{\"ok\":true,\"player\":\""
-                        + escapeJson(player.getName()) + "\""
-                        + ",\"hasCachedAtmosphere\":" + (cached != null)
-                        + ",\"cachedAtmosphere\":\""
-                        + escapeJson(cached == null ? "" : cached.getUnlocalizedName())
-                        + "\"}");
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"could not read prevAtmosphere: "
-                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
-                        + "\"}");
-            }
+            dev.stannismod.stellurgy.atmosphere.AtmosphereHandler handler =
+                    dev.stannismod.stellurgy.atmosphere.AtmosphereHandler
+                            .getOxygenHandler(player.world);
+            // A player a craft's deck holds has his living update run in the deck's frame, so every
+            // effect path asks the gate about the cell at his deck point, in the craft's shipyard.
+            // Asked here, outside that update, his position is the world point the frame was undone
+            // to, and the gate would answer about the air outside the hull he stands in. So the
+            // question is put to the cell the update puts it to: the same floor/ceil/floor rounding
+            // the entity form applies to the position the frame installs.
+            double[] deckPoint = dev.stannismod.stellurgy.integration.vs.DeckFrameTick.heldDeckPoint(player);
+            dev.stannismod.stellurgy.api.atmosphere.Atmosphere atm = handler == null ? null
+                    : deckPoint == null ? handler.getAtmosphereType(player)
+                    : handler.getAtmosphereType(new net.minecraft.util.math.BlockPos(
+                            (int) Math.floor(deckPoint[0]), (int) Math.ceil(deckPoint[1]),
+                            (int) Math.floor(deckPoint[2])));
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"deckFrame\":" + (deckPoint != null)
+                    + ",\"hasHandler\":" + (handler != null)
+                    + ",\"hasAtmosphere\":" + (atm != null)
+                    + ",\"atmosphere\":\""
+                    + escapeJson(atm == null ? "" : atm.getUnlocalizedName()) + "\""
+                    // The name AND what it means, so a test about whether the player can breathe
+                    // where he stands does not have to be written against a label.
+                    + ",\"breathable\":" + (atm != null && atm.isBreathable())
+                    + "}");
             return;
         }
         if (args.length >= 5 && "detector-force-sample".equalsIgnoreCase(args[0])) {
@@ -12025,32 +12622,10 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"tile not TileAtmosphereDetector\"}");
                 return;
             }
-            dev.stannismod.stellurgy.api.IAtmosphere mode;
-            try {
-                java.lang.reflect.Field f = dev.stannismod.stellurgy.tile.atmosphere
-                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
-                f.setAccessible(true);
-                mode = (dev.stannismod.stellurgy.api.IAtmosphere) f.get(tile);
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
-                        + escapeJson(e.getMessage()) + "\"}");
-                return;
-            }
-            AtmosphereHandler atmh =
-                    AtmosphereHandler.getOxygenHandler(dim);
-            boolean detected;
-            if (atmh == null) {
-                detected = mode == AtmosphereType.AIR;
-            } else {
-                detected = false;
-                for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
-                    if (!world.getBlockState(pos.offset(dir)).isOpaqueCube()
-                            && mode == atmh.getAtmosphereType(pos.offset(dir))) {
-                        detected = true;
-                        break;
-                    }
-                }
-            }
+            // Asks the DETECTOR, rather than carrying a second copy of its sampling loop. The copy
+            // that used to live here is exactly the kind that survives a refactor by compiling.
+            boolean detected = ((dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector) tile)
+                    .statementHolds();
             dev.stannismod.stellurgy.block.BlockRedstoneEmitter emitter =
                     (dev.stannismod.stellurgy.block.BlockRedstoneEmitter) state.getBlock();
             boolean was = emitter.getState(world, state, pos);
@@ -12067,7 +12642,7 @@ public class TestProbeCommand extends CommandBase {
             int x = parseIntOr(args[2], 0);
             int y = parseIntOr(args[3], 0);
             int z = parseIntOr(args[4], 0);
-            String atmName = args[5];
+            String assertionName = args[5];
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -12079,20 +12654,35 @@ public class TestProbeCommand extends CommandBase {
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            dev.stannismod.stellurgy.api.IAtmosphere target =
-                    dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister.getInstance().getAtmosphere(atmName);
+            // The detector watches a STATEMENT about the air now, not a named atmosphere. Rejecting
+            // an unknown one loudly matters more here than anywhere: this reflects straight into the
+            // field, so a silent default would leave a test asserting against a detector watching
+            // something else entirely.
+            dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion target = null;
+            for (dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion candidate
+                    : dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion.values()) {
+                if (candidate.name().equalsIgnoreCase(assertionName)) {
+                    target = candidate;
+                    break;
+                }
+            }
             if (target == null) {
-                send(sender, "{\"error\":\"unknown atmosphere name\",\"name\":\""
-                        + escapeJson(atmName) + "\"}");
+                send(sender, "{\"error\":\"unknown assertion\",\"name\":\""
+                        + escapeJson(assertionName) + "\",\"known\":"
+                        + jsonStringArray(java.util.Arrays.asList(
+                                java.util.Arrays.stream(
+                                        dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion.values())
+                                        .map(Enum::name).toArray(String[]::new)))
+                        + "}");
                 return;
             }
             try {
                 java.lang.reflect.Field f = dev.stannismod.stellurgy.tile.atmosphere
-                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                        .TileAtmosphereDetector.class.getDeclaredField("assertionToDetect");
                 f.setAccessible(true);
                 f.set(tile, target);
                 tile.markDirty();
-                send(sender, "{\"ok\":true,\"detectorMode\":\"" + escapeJson(atmName) + "\"}");
+                send(sender, "{\"ok\":true,\"detectorMode\":\"" + escapeJson(target.name()) + "\"}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
@@ -12161,7 +12751,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"cleared\":" + n + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value> | detector-output <dim> <x> <y> <z> | detector-set-mode <dim> <x> <y> <z> <atmName> | extinguish-at <dim> <x> <y> <z> | torch-block-add <blockId> | torch-block-clear\"}");
+        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value> | detector-output <dim> <x> <y> <z> | detector-set-mode <dim> <x> <y> <z> <assertion> | extinguish-at <dim> <x> <y> <z> | torch-block-add <blockId> | torch-block-clear\"}");
     }
 
     // Oxygen probe -------------------------------------------------------
@@ -12174,7 +12764,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"player not found\",\"name\":\"" + escapeJson(name) + "\"}");
                 return;
             }
-            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(player.world.provider.getDimension());
+            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(player.world);
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("name", name);
             info.put("dim", player.world.provider.getDimension());
@@ -12182,7 +12772,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("posY", player.posY);
             info.put("posZ", player.posZ);
             if (handler != null) {
-                IAtmosphere atm = handler.getAtmosphereType(player);
+                Atmosphere atm = handler.getAtmosphereType(player);
                 info.put("atmosphere", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
                 info.put("pressure", handler.getAtmospherePressure(player));
@@ -12871,7 +13461,7 @@ public class TestProbeCommand extends CommandBase {
      * <p>Tests MUST restore the original value in {@code @After}, otherwise
      * subsequent tests on the shared harness inherit the flipped state.</p>
      */
-    private static final java.util.Set<String> CONFIG_WHITELIST =
+    private final java.util.Set<String> configWhitelist =
             new java.util.LinkedHashSet<>(java.util.Arrays.asList(
                     "allowTerraformNonStellurgy",
                     "terraformRequiresFluid",
@@ -12881,6 +13471,15 @@ public class TestProbeCommand extends CommandBase {
                     // mechanic and its tuning knobs from the test JVM.
                     "advancedWeightSystem",
                     "minLaunchTWR",
+                    // Read by StatsRocket.getThrust at every call, so a runtime flip reaches the
+                    // next launch: the launch-gate tests drive one craft across the threshold by
+                    // the multiplier alone, which is the only way to show the multiplier is applied
+                    // to the thrust the gate compares.
+                    "rocketThrustMultiplier",
+                    // Whether the flight model weighs a rocket by the gravity of the body it stands
+                    // on. A launch-gate test reads it as a premise: the gate and the flight model
+                    // can only be asked to agree about local gravity while the model applies it.
+                    "gravityAffectsFuel",
                     "partsWearSystem",
                     "increaseWearIntensityProb",
                     "enableCustomPlanetWeather",
@@ -12911,22 +13510,94 @@ public class TestProbeCommand extends CommandBase {
                     // How much dust a survey sees through, in magnitudes. Flippable at runtime so a
                     // test can drive BOTH sides of concealment against one generated cloud.
                     "telescopeObscuredAtMagnitudes",
+                    // How much brighter than the aperture's limit a system must be before its bodies
+                    // are made out, in magnitudes. Read at every detection, so a runtime flip reaches
+                    // the next survey: a test states the shipped margin rather than inheriting
+                    // whatever an earlier scenario left, and can take it to zero to show that zero
+                    // makes everything detectable resolvable.
+                    "telescopeResolveMarginMagnitudes",
                     // The research master switch. A survey is instant without it and paced by the
                     // time curve with it, so both halves of boundary B need it flippable at runtime.
-                    "planetsMustBeDiscovered"));
+                    "planetsMustBeDiscovered",
+                    // The oxygen band. A test of the combiner's governor has to know where the
+                    // ceiling IS to assert that gas stopped there; hard-coding the default would
+                    // make the assertion re-state a tuned number instead of the rule it enforces.
+                    "lifeSupportMaxPartialO2",
+                    "lifeSupportMinPartialO2",
+                    // The ventilation plant's supply and a duct's capacity: a priority test needs a
+                    // real DEFICIT, and the honest way to create one is to turn the supply down
+                    // rather than to build a contrived amount of demand.
+                    "lifeSupportPlantRate",
+                    "lifeSupportDuctThroughput",
+                    // The thermal system's master switch, so its disableability can be pinned from
+                    // both sides in one server, plus the two capacities: a test that a bigger loop
+                    // heats slower has to be able to CHANGE the capacity, or it is asserting a
+                    // tuned number rather than the relation between capacity and temperature.
+                    "shipHeat",
+                    // What air and coolant sit at with nothing in them. Read far more often than
+                    // written: a test that arranges a zone hotter than the room has to know what the
+                    // room IS, and hard-coding it would restate a tuned number.
+                    "shipHeatAmbientKelvin",
+                    "shipHeatPipeCapacity",
+                    "shipHeatAccumulatorCapacity",
+                    "shipHeatWasteFraction",
+                    // The radiator's reference point and its clearance: an area-linearity test has to
+                    // build cells rather than tune them, but a clearance test needs the RULE's
+                    // distance to place an obstruction at, and hard-coding the default would make
+                    // the assertion restate a tuned number instead of the rule it enforces.
+                    "shipHeatRadiatorCellPower",
+                    "shipHeatRadiatorClearance",
+                    // The chiller's lift and its COP: a heat-pump test asserts a RELATION between
+                    // what was radiated, what left the loop and what was paid, and it needs the COP
+                    // to state that relation without restating a tuned number.
+                    "shipHeatChillerThroughput",
+                    "shipHeatChillerCopFraction",
+                    // How strong a star is, and how much of it a shield keeps off. A test of what a
+                    // ship DOES with the flux needs the flux to be a variable — the alternative is to
+                    // fly the rig to a brighter star, which is a test of the universe layer and not of
+                    // this one. The attenuation is here for the opposite reason: the clause is that no
+                    // configuration can reach total immunity, so the test has to be able to ASK for it.
+                    "shipHeatStarFluxReferenceKelvin",
+                    "shipHeatShieldAttenuation",
+                    // What a block of air holds per kelvin. A mixing test asserts a RELATION between
+                    // two zones' capacities, and it has to be able to switch the reservoir off
+                    // entirely to show that the relation is what carries the result.
+                    "lifeSupportAirHeatCapacity",
+                    // Where the failure ladder's rungs sit. A test of a rung has to arrange a room or
+                    // a loop on the far side of its threshold, and it must do that by READING the
+                    // threshold: hard-coding one would make the assertion restate a tuned number
+                    // instead of the rule that a room past it turns hostile.
+                    "shipHeatCrewVeryHotKelvin",
+                    "shipHeatCrewSuperheatedKelvin",
+                    "shipHeatDriveRefusalKelvin",
+                    // How often the melting rung looks. A test drives the domain through a probe,
+                    // and world time does not advance inside one probe call - so the interval is
+                    // set to 1 to make the sweep run on the tick the test asks for rather than on
+                    // whichever tick the phase happens to land on.
+                    "shipHeatMeltCheckTicks",
+                    // The dump's trigger and rate. A test of "it runs only when the ship is
+                    // already losing" has to arrange BOTH sides of that threshold, and naming the
+                    // temperature in the test instead would restate the tuned number.
+                    "shipHeatDumpTriggerKelvin",
+                    "shipHeatDumpThroughput",
+                    // How much of a ship's warmth reaches its outer skin. Here for the same reason
+                    // the shield's attenuation is: the clause is that no configuration can make a
+                    // ship invisible, so a test has to be able to ASK for a perfectly cold skin and
+                    // watch the game refuse it.
+                    "shipHeatHullSkinFraction"));
 
     private void handleConfig(ICommandSender sender, String[] args) {
         if (args.length == 0) {
             send(sender, "{\"error\":\"missing subcommand — try get <key> | set <key> <value>\","
-                    + "\"whitelist\":" + jsonStringArray(CONFIG_WHITELIST) + "}");
+                    + "\"whitelist\":" + jsonStringArray(configWhitelist) + "}");
             return;
         }
         if ("get".equalsIgnoreCase(args[0]) && args.length >= 2) {
             String key = args[1];
-            if (!CONFIG_WHITELIST.contains(key)) {
+            if (!configWhitelist.contains(key)) {
                 send(sender, "{\"error\":\"key not in whitelist\",\"key\":\""
                         + escapeJson(key) + "\",\"whitelist\":"
-                        + jsonStringArray(CONFIG_WHITELIST) + "}");
+                        + jsonStringArray(configWhitelist) + "}");
                 return;
             }
             try {
@@ -12944,10 +13615,10 @@ public class TestProbeCommand extends CommandBase {
         if ("set".equalsIgnoreCase(args[0]) && args.length >= 3) {
             String key = args[1];
             String rawValue = args[2];
-            if (!CONFIG_WHITELIST.contains(key)) {
+            if (!configWhitelist.contains(key)) {
                 send(sender, "{\"error\":\"key not in whitelist\",\"key\":\""
                         + escapeJson(key) + "\",\"whitelist\":"
-                        + jsonStringArray(CONFIG_WHITELIST) + "}");
+                        + jsonStringArray(configWhitelist) + "}");
                 return;
             }
             try {
@@ -13012,6 +13683,9 @@ public class TestProbeCommand extends CommandBase {
         if (type == boolean.class || type == Boolean.class) return Boolean.parseBoolean(raw);
         if (type == int.class || type == Integer.class) {
             try { return Integer.parseInt(raw); } catch (NumberFormatException e) { return null; }
+        }
+        if (type == long.class || type == Long.class) {
+            try { return Long.parseLong(raw); } catch (NumberFormatException e) { return null; }
         }
         if (type == double.class || type == Double.class) {
             try { return Double.parseDouble(raw); } catch (NumberFormatException e) { return null; }
@@ -13090,7 +13764,19 @@ public class TestProbeCommand extends CommandBase {
                 dims.append(attached.get(i).getId());
             }
             dims.append(']');
+            // The BODY the star holds under each id, by name, beside the ids above. The star keys its
+            // bodies by dimension id, so it can hold a different body under an id than the
+            // dimension registry does — and the id alone cannot show that.
+            StringBuilder bodies = new StringBuilder("[");
+            for (int i = 0; attached != null && i < attached.size(); i++) {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("dim", attached.get(i).getId());
+                body.put("name", attached.get(i).getName());
+                bodies.append(i > 0 ? "," : "").append(jsonMap(body));
+            }
+            bodies.append(']');
             send(sender, "{\"ok\":true,\"id\":" + id
+                    + ",\"planetBodies\":" + bodies
                     + ",\"isBlackHole\":" + star.isBlackHole()
                     + ",\"planets\":" + (attached == null ? 0 : attached.size())
                     + ",\"numPlanets\":" + star.getNumPlanets()
@@ -13140,22 +13826,18 @@ public class TestProbeCommand extends CommandBase {
             info.put("name", props.getName());
             info.put("originalAtmosphere", reflectInt(props, "originalAtmosphereDensity"));
             info.put("currentAtmosphere", props.getAtmosphereDensity());
-            // Safe access to terraforming proxy state — these methods may NPE if
-            // proxylists hasn't been initialized for the dim yet.
-            try {
-                boolean inited = DimensionProperties.proxylists.isinitialized(dim);
-                info.put("proxyInitialized", inited);
-                if (inited) {
-                    info.put("protectingBlockCount",
-                            DimensionProperties.proxylists.getProtectingBlocksForDimension(dim).size());
-                    info.put("chunksFullyTerraformed",
-                            DimensionProperties.proxylists.getChunksFullyTerraformed(dim).size());
-                    info.put("chunksFullyBiomeChanged",
-                            DimensionProperties.proxylists.getChunksFullyBiomeChanged(dim).size());
-                    info.put("helperPresent", DimensionProperties.proxylists.gethelper(dim) != null);
-                }
-            } catch (Exception e) {
-                info.put("proxyError", e.getClass().getSimpleName() + ": " + e.getMessage());
+            // Terraforming state lives in the planet's world, so it is readable only while that
+            // world is loaded.
+            net.minecraft.world.World world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            info.put("worldLoaded", world != null);
+            if (world != null) {
+                dev.stannismod.stellurgy.dimension.TerraformingRecord record =
+                        dev.stannismod.stellurgy.dimension.TerraformingRecord.of(world);
+                info.put("protectingBlockCount", record.protectingBlocks().size());
+                info.put("chunksFullyTerraformed", record.terraformedChunks().size());
+                info.put("chunksFullyBiomeChanged", record.biomeChangedChunks().size());
+                info.put("helperPresent",
+                        dev.stannismod.stellurgy.util.TerraformingHelper.of(world) != null);
             }
             send(sender, jsonMap(info));
             return;
@@ -15481,8 +16163,9 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
-     * {@code /stellurgytest invoke-static <class> <method> [int...]} — call a static method taking only
-     * {@code int}s on the SERVER thread, and reply with what it returned.
+     * {@code /stellurgytest invoke-static <class> <method> [arg...]} — call a static method whose
+     * parameters are {@code int}, {@code long} or {@code String} on the SERVER thread, and reply with
+     * what it returned.
      *
      * <p>The server-side twin of the client harness's {@code invoke_static_int}, and it exists for
      * the same reason: an instrument that accumulates per tick lives in the JVM that ticks, and the
@@ -15490,28 +16173,35 @@ public class TestProbeCommand extends CommandBase {
      * client-side window could be opened by a test and a server-side one could not, so an instrument
      * written for "both sides" armed only the client and every server half printed empty.</p>
      *
+     * <p>The method is found by name and argument COUNT, and each argument is converted to the type
+     * its parameter declares. An all-{@code int} signature is tried first, which is the only form this
+     * verb took until the server's event log needed a {@code long} sequence and a {@code String}
+     * type. Two candidates that both accept the arguments are refused as ambiguous rather than one
+     * picked.</p>
+     *
      * <p>Generic on purpose: this class names no test class, the caller does. A failure — no such
      * class, no such method, the method threw — is an error reply naming it, never an empty
      * {@code ok}.</p>
      */
     private void handleInvokeStatic(ICommandSender sender, String[] args) {
         if (args.length < 2) {
-            send(sender, "{\"error\":\"usage: /stellurgytest invoke-static <class> <method> [int...]\"}");
+            send(sender, "{\"error\":\"usage: /stellurgytest invoke-static <class> <method> [arg...]\"}");
             return;
         }
-        Class<?>[] types = new Class<?>[args.length - 2];
-        Object[] values = new Object[args.length - 2];
-        for (int i = 2; i < args.length; i++) {
-            types[i - 2] = int.class;
-            try {
-                values[i - 2] = Integer.parseInt(args[i]);
-            } catch (NumberFormatException e) {
-                send(sender, "{\"error\":\"not an int: " + escapeJson(args[i]) + "\"}");
+        String[] given = java.util.Arrays.copyOfRange(args, 2, args.length);
+        try {
+            java.lang.reflect.Method method = invokableStatic(Class.forName(args[0]), args[1], given);
+            if (method == null) {
+                send(sender, "{\"error\":\"invoke-static " + escapeJson(args[0] + "#" + args[1])
+                        + ": no static method of that name takes " + given.length
+                        + " int/long/String argument(s) these values convert to\"}");
                 return;
             }
-        }
-        try {
-            java.lang.reflect.Method method = Class.forName(args[0]).getDeclaredMethod(args[1], types);
+            Class<?>[] types = method.getParameterTypes();
+            Object[] values = new Object[given.length];
+            for (int i = 0; i < given.length; i++) {
+                values[i] = convertArgument(types[i], given[i]);
+            }
             method.setAccessible(true);
             Object result = method.invoke(null, values);
             send(sender, "{\"ok\":true,\"returned\":\""
@@ -15522,6 +16212,61 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"error\":\"invoke-static " + escapeJson(args[0] + "#" + args[1])
                     + " failed: " + escapeJson(String.valueOf(cause)) + "\"}");
         }
+    }
+
+    /**
+     * The static method {@link #handleInvokeStatic} calls: the all-{@code int} one when every value
+     * is an int and it exists, otherwise the single {@code name}/arity match whose parameters the
+     * values convert to; null when there is none, and an {@link IllegalArgumentException} naming
+     * both when two match.
+     */
+    private static java.lang.reflect.Method invokableStatic(Class<?> owner, String name, String[] given) {
+        Class<?>[] allInts = new Class<?>[given.length];
+        java.util.Arrays.fill(allInts, int.class);
+        java.lang.reflect.Method found = null;
+        for (java.lang.reflect.Method m : owner.getDeclaredMethods()) {
+            if (!m.getName().equals(name) || m.getParameterCount() != given.length
+                    || !java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                    || !acceptsAll(m.getParameterTypes(), given)) {
+                continue;
+            }
+            if (java.util.Arrays.equals(m.getParameterTypes(), allInts)) {
+                return m;
+            }
+            if (found != null) {
+                throw new IllegalArgumentException("ambiguous: " + found + " and " + m
+                        + " both accept " + java.util.Arrays.toString(given));
+            }
+            found = m;
+        }
+        return found;
+    }
+
+    private static boolean acceptsAll(Class<?>[] types, String[] given) {
+        for (int i = 0; i < types.length; i++) {
+            try {
+                convertArgument(types[i], given[i]);
+            } catch (IllegalArgumentException notThisType) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** One invoke-static argument as its parameter's type; {@link IllegalArgumentException} when it
+     *  does not convert or the type is not one the verb carries. */
+    private static Object convertArgument(Class<?> type, String text) {
+        if (type == int.class) {
+            return Integer.parseInt(text);
+        }
+        if (type == long.class) {
+            return Long.parseLong(text);
+        }
+        if (type == String.class) {
+            return text;
+        }
+        throw new IllegalArgumentException("invoke-static carries int, long and String only, not "
+                + type.getName());
     }
 
     private void handlePlace(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -17604,7 +18349,7 @@ public class TestProbeCommand extends CommandBase {
      * and in nothing else, and two copies of a reply this wide would drift in exactly the way
      * a reader cannot see: a field present in one and stale in the other.</p>
      */
-    private static void sendTransitReport(net.minecraft.command.ICommandSender sender) {
+    private void sendTransitReport(net.minecraft.command.ICommandSender sender) {
         int crossing = transitStack != null && transitDurableId != null
                 && transitStack.cellCrossings.isCarrying(transitDurableId) ? 1 : 0;
         int inTransit = transitTm.inTransitCount();
@@ -17663,7 +18408,7 @@ public class TestProbeCommand extends CommandBase {
                 // probe asking about a transit that does not exist under that key.
                 + ",\"crewDim\":" + transitTm.crewDimensionOf(
                         transitDurableId == null ? "t" : transitDurableId.toString())
-                + ",\"hyperDim\":" + dev.stannismod.stellurgy.space.HyperspaceWorld.dimId()
+                + ",\"hyperDim\":" + dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId()
                 // How many arrived ships are still retrying their crew re-seat. This tells a
                 // never-seated crew apart from a re-seat that RAN OUT of retries: >0 means the
                 // loop is still trying (the caller simply stopped ticking), 0 with an unseated
@@ -17675,6 +18420,12 @@ public class TestProbeCommand extends CommandBase {
 
     private static dev.stannismod.stellurgy.space.SpaceSubsystem liveStack() {
         return dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
+    }
+
+    /** The atmosphere handler of dimension {@code dim}'s world, or {@code null} when it is not loaded or has none. */
+    private static AtmosphereHandler atmosphereOfLoaded(int dim) {
+        WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+        return world == null ? null : AtmosphereHandler.getOxygenHandler(world);
     }
 
     /**
@@ -18391,6 +19142,10 @@ public class TestProbeCommand extends CommandBase {
                     else builder.append('"').append(escapeJson(item.toString())).append('"');
                 }
                 builder.append(']');
+            } else if (v instanceof Map) {
+                // A nested object, so a caller reading a composition gets JSON rather than a Java
+                // map's toString wrapped in quotes.
+                builder.append(jsonMap((Map<String, ?>) v));
             } else {
                 builder.append('"').append(escapeJson(v.toString())).append('"');
             }
@@ -18399,8 +19154,83 @@ public class TestProbeCommand extends CommandBase {
         return builder.toString();
     }
 
+    /**
+     * Take back a satellite property this probe registered for one repro. The item-property registry
+     * is the game's for the life of the JVM and has no removal API, so an orphan left here would be
+     * seen by every later build. The registry keys by stack identity, so the same stack removes it.
+     */
+    @SuppressWarnings("unchecked")
+    private static void unregisterSatelliteProperty(net.minecraft.item.ItemStack key) {
+        try {
+            java.lang.reflect.Field f = dev.stannismod.stellurgy.api.SatelliteRegistry.class
+                    .getDeclaredField("itemPropertiesRegistry");
+            f.setAccessible(true);
+            ((java.util.Map<net.minecraft.item.ItemStack, ?>) f.get(null)).remove(key);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("cannot take back the probe's satellite property", e);
+        }
+    }
+
     private static String escapeJson(String s) {
         return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    // Ore dictionary probes ----------------------------------------
+
+    /**
+     * {@code /stellurgytest oredict ...} — READ-ONLY views of Forge's ore dictionary that never
+     * RESERVE a name. {@code OreDictionary.getOres(String)} creates the entry it is asked about, so a
+     * probe built on it would turn "this name is unknown" into "this name is reserved and empty" by
+     * the act of asking; both sub-verbs below go through the non-creating lookup.
+     * <ul>
+     *   <li>{@code get <name>} — {@code exists} (reserved at all), {@code entries} (how many stacks
+     *       are registered under it) and {@code first}: the FIRST registered stack as the dictionary
+     *       holds it — its item, meta and count — or {@code null}. The count is reported because the
+     *       stacks the dictionary hands out are its own prototypes, and a caller that mutates one
+     *       instead of copying it changes what every later reader of that name receives;</li>
+     *   <li>{@code empty} — every name that is reserved but has NO registered stack: the names a
+     *       pack can reference that resolve to nothing because the mod providing them is absent.</li>
+     * </ul>
+     */
+    private void handleOreDict(ICommandSender sender, String[] args) {
+        if (args.length >= 2 && "get".equalsIgnoreCase(args[0])) {
+            String name = args[1];
+            boolean exists = net.minecraftforge.oredict.OreDictionary.doesOreNameExist(name);
+            List<net.minecraft.item.ItemStack> stacks =
+                    net.minecraftforge.oredict.OreDictionary.getOres(name, false);
+            StringBuilder out = new StringBuilder("{\"name\":\"").append(escapeJson(name))
+                    .append("\",\"exists\":").append(exists)
+                    .append(",\"entries\":").append(stacks.size())
+                    .append(",\"first\":");
+            if (stacks.isEmpty()) {
+                out.append("null");
+            } else {
+                net.minecraft.item.ItemStack first = stacks.get(0);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("item", first.getItem().getRegistryName() == null
+                        ? "null" : first.getItem().getRegistryName().toString());
+                m.put("meta", first.getMetadata());
+                m.put("count", first.getCount());
+                out.append(jsonMap(m));
+            }
+            out.append('}');
+            send(sender, out.toString());
+            return;
+        }
+        if (args.length >= 1 && "empty".equalsIgnoreCase(args[0])) {
+            List<String> names = new java.util.ArrayList<>();
+            for (String name : net.minecraftforge.oredict.OreDictionary.getOreNames()) {
+                if (net.minecraftforge.oredict.OreDictionary.getOres(name, false).isEmpty()) {
+                    names.add(name);
+                }
+            }
+            Collections.sort(names);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("names", names);
+            send(sender, jsonMap(out));
+            return;
+        }
+        send(sender, "{\"error\":\"usage: /stellurgytest oredict get <name> | empty\"}");
     }
 
     // Item / enchantment registry probes -------------------------
@@ -18462,20 +19292,40 @@ public class TestProbeCommand extends CommandBase {
      *   set-regex <pattern> <weight>  — register a regex rule
      *   material-scale <value>        — set StellurgyConfiguration.weightMaterialScale
      *   fuel-scale <value>            — set StellurgyConfiguration.fuelMassScale
+     *
+     * <p>The tables are the PROBE's own engine, built from the shipped defaults plus what {@code set}
+     * and {@code set-regex} added — never the game's, whose file is written back at server stop. The
+     * two scales are the running config's; {@code reset} puts back what they were before the first
+     * change.</p>
      */
     private void handleWeight(ICommandSender sender, String[] args) {
-        dev.stannismod.stellurgy.util.WeightEngine we = dev.stannismod.stellurgy.util.WeightEngine.INSTANCE;
         if (args.length == 0) {
             send(sender, "{\"error\":\"unknown weight subcommand — try reset|item|fluid|set|set-regex|material-scale|fuel-scale\"}");
             return;
         }
+        dev.stannismod.stellurgy.api.StellurgyConfiguration config =
+                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig();
+        if (probeWeights == null) {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            probeWeights = dev.stannismod.stellurgy.util.WeightEngine.fromJson("{\"individual\":"
+                    + gson.toJson(probeWeightOverrides) + ",\"byRegex\":" + gson.toJson(probeWeightRegex) + "}");
+        }
+        dev.stannismod.stellurgy.util.WeightEngine we = probeWeights;
         Map<String, Object> info = new LinkedHashMap<>();
         String verb = args[0].toLowerCase();
         switch (verb) {
             case "reset":
-                we.resetTables();
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().weightMaterialScale = 1.0;
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
+                probeWeightOverrides.clear();
+                probeWeightRegex.clear();
+                probeWeights = null;
+                if (parkedMaterialScale != null) {
+                    config.weightMaterialScale = parkedMaterialScale;
+                    parkedMaterialScale = null;
+                }
+                if (parkedFuelScale != null) {
+                    config.fuelMassScale = parkedFuelScale;
+                    parkedFuelScale = null;
+                }
                 info.put("reset", true);
                 info.put("materialCount", we.materialCount());
                 break;
@@ -18505,22 +19355,29 @@ public class TestProbeCommand extends CommandBase {
                 break;
             }
             case "set":
-                we.setIndividual(args[1], Double.parseDouble(args[2]));
+                probeWeightOverrides.put(args[1], Double.parseDouble(args[2]));
+                probeWeights = null;
                 info.put("set", args[1]);
                 info.put("value", Double.parseDouble(args[2]));
                 break;
             case "set-regex":
-                we.setRegex(args[1], Double.parseDouble(args[2]));
+                probeWeightRegex.put(args[1], Double.parseDouble(args[2]));
+                probeWeights = null;
                 info.put("regex", args[1]);
                 info.put("value", Double.parseDouble(args[2]));
                 break;
             case "material-scale":
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().weightMaterialScale = Double.parseDouble(args[1]);
-                we.clearResolveCache();
+                if (parkedMaterialScale == null) {
+                    parkedMaterialScale = config.weightMaterialScale;
+                }
+                config.weightMaterialScale = Double.parseDouble(args[1]);
                 info.put("materialScale", Double.parseDouble(args[1]));
                 break;
             case "fuel-scale":
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().fuelMassScale = Double.parseDouble(args[1]);
+                if (parkedFuelScale == null) {
+                    parkedFuelScale = config.fuelMassScale;
+                }
+                config.fuelMassScale = Double.parseDouble(args[1]);
                 info.put("fuelScale", Double.parseDouble(args[1]));
                 break;
             default:
@@ -18981,6 +19838,773 @@ public class TestProbeCommand extends CommandBase {
         return null;
     }
 
+    // Jettison-port probe ----------------------------------------------
+
+    /**
+     * {@code /stellurgytest jettison load <dim> <x> <y> <z> <itemId> <count>} — put a stack in the port's
+     * slot, the way a hopper would.
+     * <p>
+     * {@code /stellurgytest jettison info <dim> <x> <y> <z>} — what the port holds, whether its exit is
+     * clear, and how many loose item entities are floating within a few blocks of it:
+     *
+     * <pre>
+     * {"ok":true,"held":"stellurgy:carbonDust","heldCount":1,"obstruction":0,"ejected":0}
+     * </pre>
+     *
+     * <p>{@code ejected} is the assertion the contract actually needs — "the dust LEFT" is a claim
+     * about the world, not about the slot, and a port that merely voided its contents would empty
+     * its slot exactly as convincingly. {@code obstruction} is reported as a DISTANCE rather than a
+     * flag so a red test says which block to go and look at.</p>
+     */
+    private void handleJettison(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5
+                || !("load".equalsIgnoreCase(args[0]) || "info".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown jettison subcommand — try load <dim> <x> <y> <z>"
+                    + " <itemId> <count> | info <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(x, y, z);
+        TileEntity tile = world.getTileEntity(pos);
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort)) {
+            send(sender, "{\"error\":\"not a TileJettisonPort\",\"tileClass\":\""
+                    + escapeJson(tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort port =
+                (dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort) tile;
+
+        if ("load".equalsIgnoreCase(args[0])) {
+            if (args.length < 7) {
+                send(sender, "{\"error\":\"usage: load <dim> <x> <y> <z> <itemId> <count>\"}");
+                return;
+            }
+            net.minecraft.item.Item item =
+                    ForgeRegistries.ITEMS.getValue(new ResourceLocation(args[5]));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(args[5]) + "\"}");
+                return;
+            }
+            port.setInventorySlotContents(0,
+                    new net.minecraft.item.ItemStack(item, Math.max(1, parseIntOr(args[6], 1))));
+            send(sender, "{\"ok\":true,\"loaded\":\"" + escapeJson(args[5]) + "\"}");
+            return;
+        }
+
+        net.minecraft.item.ItemStack held = port.getStackInSlot(0);
+        // Loose items only, and only close by: the port's own muzzle offset puts an ejected stack
+        // well under a block away, so a wider box would start counting the world's litter.
+        java.util.List<net.minecraft.entity.item.EntityItem> loose = world.getEntitiesWithinAABB(
+                net.minecraft.entity.item.EntityItem.class,
+                new net.minecraft.util.math.AxisAlignedBB(pos).grow(4.0D));
+        send(sender, "{\"ok\":true,\"held\":\""
+                + escapeJson(held.isEmpty() ? "" : held.getItem().getRegistryName().toString())
+                + "\",\"heldCount\":" + held.getCount()
+                + ",\"obstruction\":" + port.getObstruction()
+                + ",\"ejected\":" + loose.size() + "}");
+    }
+
+    // Subsystem-network probe ------------------------------------------
+
+    /**
+     * {@code /stellurgytest subnet info <domain> <dim> <x> <y> <z>} — the network the block at this
+     * position belongs to, in whichever domain was named ({@code lifesupport}, {@code shield},
+     * {@code heat}).
+     *
+     * <p>Naming the domain is the point: it is how a test can ask whether two subsystems laid
+     * through the same wall stayed apart, which is otherwise only inferable from gas that did or
+     * did not move. {@code inNetwork:false} means this position is in no network of that domain —
+     * emitted as a value, with the counters at zero beside it, so the reply parses the same either
+     * way.
+     *
+     * <pre>
+     * {"ok":true,"domain":"lifesupport","inNetwork":true,"connected":true,"status":5,
+     *  "cables":3,"sources":1,"sinks":1,"sourceAvailable":12000,"sinkRequested":2700000,
+     *  "cableCapacity":18000,"deliveredFlow":6000,"saturatedCables":1,"members":5,
+     *  "heatStored":0,"heatCapacity":0,"heatGeneration":0,"temperatureMilliK":0}
+     * </pre>
+     *
+     * <p>The four heat fields describe a coolant loop's reservoir and are zero in every other
+     * domain. A loop does not distribute anything the way the other two do — it is one body at one
+     * temperature — so what a heat test reads out of this verb is {@code temperatureMilliK} and the
+     * {@code heatStored}/{@code heatCapacity} it came from, rather than {@code deliveredFlow}.
+     */
+    private void handleSubsystemNetwork(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 3
+                || !("info".equalsIgnoreCase(args[0]) || "solve".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown subnet subcommand — try info <domain> <dim> <x> <y> <z>"
+                    + " | solve <domain> <dim> <ticks>\"}");
+            return;
+        }
+        String domainName = args[1].toLowerCase(java.util.Locale.ROOT);
+        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain domain;
+        // "all" solves EVERY domain once per tick, which is what the game does. Solving one domain
+        // N times and then another N times is a different experiment wherever two subsystems feed
+        // each other within a tick — a machine hands its waste heat to a coolant loop, and a buffer
+        // that only holds a moment's worth loses the rest to the air if nothing collects it in time.
+        boolean everyDomain = "all".equals(domainName);
+        if (everyDomain) {
+            domain = null;
+        } else if ("lifesupport".equals(domainName)) {
+            domain = dev.stannismod.stellurgy.atmosphere.LifeSupportNetwork.DOMAIN;
+        } else if ("shield".equals(domainName)) {
+            domain = dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager.DOMAIN;
+        } else if ("heat".equals(domainName)) {
+            domain = dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN;
+        } else {
+            send(sender, "{\"error\":\"unknown domain\",\"domain\":\"" + escapeJson(domainName)
+                    + "\",\"known\":[\"lifesupport\",\"shield\",\"heat\",\"all\"]}");
+            return;
+        }
+        if (everyDomain && !"solve".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"'all' names no single network to report on — use it with solve\"}");
+            return;
+        }
+        int dim = parseIntOr(args[2], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer solveWorld = server.getWorld(dim);
+        if (solveWorld == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        // /stellurgytest subnet solve <domain> <dim> <ticks> — run the network's own per-tick work N times.
+        //
+        // A probe executes ON the server thread, so it holds the tick loop while it runs: waiting on
+        // wall-clock does not buy world ticks, and a network solved in a WorldTickEvent is therefore
+        // unreachable from a test the way a force-ticked tile is not. Measured before this verb
+        // existed: 300 requested ticks of waiting produced FOUR solves. This drives the same public
+        // entry point the event handler calls, so it exercises production and not a copy of it.
+        if ("solve".equalsIgnoreCase(args[0])) {
+            int ticks = args.length >= 4 ? parseIntOr(args[3], 1) : 1;
+            ticks = Math.max(0, Math.min(20000, ticks));
+            int domainsSolved = everyDomain
+                    ? dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry.domains().size()
+                    : 1;
+            for (int i = 0; i < ticks; i++) {
+                if (everyDomain) {
+                    for (dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain each
+                            : dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry.domains()) {
+                        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager
+                                .tick(each, solveWorld);
+                    }
+                } else {
+                    dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager
+                            .tick(domain, solveWorld);
+                }
+            }
+            send(sender, "{\"ok\":true,\"domain\":\"" + escapeJson(domainName)
+                    + "\",\"ticksSolved\":" + ticks + ",\"domainsSolved\":" + domainsSolved + "}");
+            return;
+        }
+
+        if (args.length < 6) {
+            send(sender, "{\"error\":\"usage: info <domain> <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int x = parseIntOr(args[3], 0);
+        int y = parseIntOr(args[4], 0);
+        int z = parseIntOr(args[5], 0);
+        net.minecraft.world.WorldServer world = solveWorld;
+        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState state =
+                dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager
+                        .getState(domain, world, new BlockPos(x, y, z));
+
+        StringBuilder out = new StringBuilder("{\"ok\":true");
+        out.append(",\"domain\":\"").append(escapeJson(domainName)).append('"');
+        out.append(",\"inNetwork\":").append(state != null);
+        out.append(",\"connected\":").append(state != null && state.isConnected());
+        out.append(",\"status\":").append(state == null ? 0 : state.getStatus());
+        out.append(",\"cables\":").append(state == null ? 0 : state.getCableCount());
+        out.append(",\"sources\":").append(state == null ? 0 : state.getSourceCount());
+        out.append(",\"sinks\":").append(state == null ? 0 : state.getSinkCount());
+        out.append(",\"sourceAvailable\":").append(state == null ? 0 : state.getSourceAvailable());
+        out.append(",\"sinkRequested\":").append(state == null ? 0 : state.getSinkRequested());
+        out.append(",\"cableCapacity\":").append(state == null ? 0 : state.getCableCapacity());
+        out.append(",\"deliveredFlow\":").append(state == null ? 0 : state.getDeliveredFlow());
+        out.append(",\"saturatedCables\":").append(state == null ? 0 : state.getSaturatedCables());
+        out.append(",\"members\":").append(state == null ? 0 : state.getMemberPositions().size());
+        // The thermal reservoir, in every state and never as a dropped key: a loop that is holding
+        // nothing and a position that is in no loop are both legitimate answers, and a test that
+        // parses one of them must not throw on the other. Temperature is emitted in milli-kelvin
+        // because the envelope's numbers are read as integers, and beside the two quantities it was
+        // computed from, so a temperature that will not move can be attributed to Q or to C.
+        dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState heatState =
+                state instanceof dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState
+                        ? (dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState) state
+                        : null;
+        out.append(",\"heatStored\":").append(heatState == null ? 0L : heatState.getStoredHeat());
+        out.append(",\"heatCapacity\":").append(heatState == null ? 0L : heatState.getHeatCapacity());
+        out.append(",\"heatGeneration\":").append(heatState == null ? 0 : heatState.getGenerationThisTick());
+        out.append(",\"temperatureMilliK\":").append(heatState == null
+                ? 0L
+                : Math.round(heatState.getTemperatureKelvin() * 1000.0D));
+        // Rejection, and the two numbers that make the blocked state readable: how many machines on
+        // the loop CAN shed heat, and how much working surface they actually have between them. Three
+        // exchangers reporting two cells is one obstructed cell, which is a degradation and not a
+        // failure — and `heat read` on the cell itself says how far away the obstruction is.
+        // `pumpedOut` and `pumpedIn` are the two ends of a chiller, deliberately reported per LOOP: a
+        // pump's defect is that the second is not larger than the first by the work it paid.
+        out.append(",\"heatRejected\":").append(heatState == null ? 0L : heatState.getRejectedThisTick());
+        out.append(",\"exchangers\":").append(heatState == null ? 0 : heatState.getExchangerCount());
+        out.append(",\"radiatingCells\":").append(heatState == null ? 0 : heatState.getRadiatingCells());
+
+        out.append(",\"pumpedOut\":").append(heatState == null ? 0L : heatState.getPumpedOutThisTick());
+        out.append(",\"delivered\":").append(heatState == null ? 0L : heatState.getDeliveredThisTick());
+        out.append(",\"pumpedIn\":").append(heatState == null ? 0L : heatState.getPumpedInThisTick());
+        out.append(",\"heatWork\":").append(heatState == null ? 0L : heatState.getWorkThisTick());
+        out.append(",\"pumps\":").append(heatState == null ? 0 : heatState.getPumpPositions().size());
+        // What the outside is putting into ONE radiating cell, in thousandths of a heat unit per tick,
+        // BEFORE any shield. Reported per cell rather than per loop so it can be compared straight
+        // against what a cell radiates, and unshielded so that a shielded ship and a ship parked
+        // somewhere cold are distinguishable — the shield's effect is `heatRejected` minus this.
+        out.append(",\"incidentFluxMilli\":").append(heatState == null
+                ? 0L
+                : Math.round(heatState.getIncidentFluxPerCell() * 1000.0D));
+        // Heat taken out of compartment AIR this tick — the third figure a conservation check across
+        // the air/coolant boundary needs, beside `delivered` and `work`, all from one tick.
+        out.append(",\"airTaken\":").append(heatState == null ? 0L : heatState.getAirTakenThisTick());
+        out.append('}');
+        send(sender, out.toString());
+    }
+
+    // Coolant-loop block probe -----------------------------------------
+
+    /**
+     * {@code /stellurgytest heat set|read <dim> <x> <y> <z> [amount]} — the energy written down on ONE
+     * block of a coolant loop.
+     *
+     * <p>Deliberately per BLOCK, where {@code subnet info heat} answers per LOOP. That is the split
+     * the design makes: a loop is the thing with a temperature, and a block is the thing with a
+     * name and therefore the thing that gets saved. A test about persistence has to address the
+     * side that persists, and reading the loop would not distinguish "the energy came back from the
+     * blocks" from "the loop happened to be re-derived".</p>
+     *
+     * <p>{@code set} goes through the tile's own {@code setStoredHeat}, which is the same call the
+     * per-tick physics makes — the probe supplies a starting state, it does not implement one.</p>
+     *
+     * <pre>
+     * {"ok":true,"isLoopBlock":true,"heatStored":4530,"heatCapacity":20,"isRadiator":true,
+     *  "obstruction":0,"radiatingCells":1,"facing":"up","rejected":264}
+     * </pre>
+     */
+    private void handleHeat(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 5 && "emitter".equalsIgnoreCase(args[0])) {
+            handleHeatEmitter(server, sender, args);
+            return;
+        }
+        if (args.length >= 6 && "cycle".equalsIgnoreCase(args[0])) {
+            handleHeatCycle(server, sender, args);
+            return;
+        }
+        if (args.length >= 5 && "signature".equalsIgnoreCase(args[0])) {
+            handleHeatSignature(server, sender, args);
+            return;
+        }
+        if (args.length >= 5 && "silent".equalsIgnoreCase(args[0])) {
+            handleHeatSilent(server, sender, args);
+            return;
+        }
+        if (args.length >= 5 && "dump".equalsIgnoreCase(args[0])) {
+            // The emergency dump's own state: what the slug it holds has taken, what it can still
+            // take, and whether the port is clear. Reported separately because "charge went to zero"
+            // is BOTH "nothing happened" and "it fired", and a test must be able to tell those apart.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 0));
+            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.heat.TileHeatDump)) {
+                send(sender, "{\"ok\":true,\"isDump\":false,\"charge\":0,\"headroom\":0,"
+                        + "\"hasStack\":false,\"obstruction\":0}");
+                return;
+            }
+            dev.stannismod.stellurgy.tile.heat.TileHeatDump dump =
+                    (dev.stannismod.stellurgy.tile.heat.TileHeatDump) tile;
+            net.minecraft.item.ItemStack held = dump.getStackInSlot(0);
+            if (args.length >= 7 && "load".equalsIgnoreCase(args[5])) {
+                net.minecraft.item.Item item = net.minecraft.item.Item.getByNameOrId(args[6]);
+                if (item == null) {
+                    send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(args[6]) + "\"}");
+                    return;
+                }
+                dump.setInventorySlotContents(0, new net.minecraft.item.ItemStack(item, 1));
+                held = dump.getStackInSlot(0);
+            }
+            send(sender, "{\"ok\":true,\"isDump\":true,\"charge\":"
+                    + dev.stannismod.stellurgy.tile.heat.TileHeatDump.chargeOf(held)
+                    + ",\"headroom\":" + dump.headroom()
+                    + ",\"hasStack\":" + (!held.isEmpty())
+                    + ",\"obstruction\":" + dump.getObstruction()
+                    + ",\"chargedThisTick\":" + dump.getChargedThisTick()
+                    + ",\"powered\":" + dump.isPowered()
+                    + ",\"request\":" + dump.getSinkRequestPerTick(9999.0D) + "}");
+            return;
+        }
+        if (args.length >= 2 && "item".equalsIgnoreCase(args[0])) {
+            // The same question asked of an ITEM rather than a position: an item has no collision
+            // boxes, so this is the path that falls back to the shape of the block it would place.
+            net.minecraft.item.Item item = net.minecraft.item.Item.getByNameOrId(args[1]);
+            int meta = args.length >= 3 ? parseIntOr(args[2], 0) : 0;
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(item, 1, meta);
+            dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial material =
+                    dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.of(stack);
+            long volume = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                    .volumeMillilitres(stack);
+            send(sender, "{\"ok\":true,\"item\":\"" + escapeJson(args[1])
+                    + "\",\"material\":\"" + escapeJson(material == null ? "" : material.name())
+                    + "\",\"volumeMilliLitres\":" + volume
+                    + ",\"capacity\":" + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                            .slugCapacity(material, volume) + "}");
+            return;
+        }
+        if (args.length >= 5 && "material".equalsIgnoreCase(args[0])) {
+            // What the block at this position IS, thermally: which substance, how much of it, and
+            // therefore how much heat it can take. Volume is reported separately from capacity on
+            // purpose - a block whose substance is unknown still has a size, and reading one number
+            // could not tell "nothing there" from "nobody described this metal".
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 0));
+            net.minecraft.block.Block block = world.getBlockState(pos).getBlock();
+            dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial material =
+                    dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.of(
+                            new net.minecraft.item.ItemStack(block));
+            send(sender, "{\"ok\":true,\"block\":\"" + escapeJson(String.valueOf(block.getRegistryName()))
+                    + "\",\"material\":\"" + escapeJson(material == null ? "" : material.name())
+                    + "\",\"volumeMilliLitres\":"
+                    + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                            .volumeMillilitres(world, pos)
+                    + ",\"capacity\":"
+                    + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE
+                            .blockCapacity(world, pos)
+                    + ",\"ceilingKelvin\":" + (material == null ? 0 : material.ceilingKelvin()) + "}");
+            return;
+        }
+        if (args.length >= 5 && "material".equalsIgnoreCase(args[0])) {
+            handleHeatMaterial(server, sender, args);
+            return;
+        }
+        if (args.length < 5
+                || !("set".equalsIgnoreCase(args[0]) || "read".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown heat subcommand — try set <dim> <x> <y> <z> <amount>"
+                    + " | read <dim> <x> <y> <z> | cycle <dim> <x> <y> <z> <charge> [ticks] | material <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+        // Absence is a VALUE here, with the quantities zero beside it: "there is no loop block at
+        // this position" and "the loop block here is holding nothing" are both real answers and a
+        // test must be able to parse either without the reply changing shape.
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock)) {
+            send(sender, "{\"ok\":true,\"isLoopBlock\":false,\"heatStored\":0,\"heatCapacity\":0}");
+            return;
+        }
+        dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock loopBlock =
+                (dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock) tile;
+        if ("set".equalsIgnoreCase(args[0])) {
+            if (args.length < 6) {
+                send(sender, "{\"error\":\"usage: set <dim> <x> <y> <z> <amount>\"}");
+                return;
+            }
+            loopBlock.setStoredHeat(parseLongOr(args[5], 0L));
+        }
+        // A radiating cell answers two more things, and every loop block answers them so the reply
+        // keeps one shape: a plain pipe is simply never obstructed and never sheds anything.
+        boolean isRadiator = loopBlock instanceof dev.stannismod.stellurgy.tile.heat.TileHeatRadiator;
+        dev.stannismod.stellurgy.tile.heat.TileHeatRadiator radiator = isRadiator
+                ? (dev.stannismod.stellurgy.tile.heat.TileHeatRadiator) loopBlock
+                : null;
+        send(sender, "{\"ok\":true,\"isLoopBlock\":true,\"heatStored\":" + loopBlock.getStoredHeat()
+                + ",\"heatCapacity\":" + loopBlock.getHeatCapacity()
+                + ",\"isRadiator\":" + isRadiator
+                + ",\"obstruction\":" + (radiator == null ? 0 : radiator.getObstruction())
+                + ",\"radiatingCells\":" + (radiator == null ? 0 : radiator.getExchangeCells())
+                + ",\"facing\":\"" + (radiator == null ? "none" : radiator.getRadiatingFacing().getName())
+                + "\",\"rejected\":" + (radiator == null ? 0L : radiator.getRejectedThisTick()) + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat material <dim> <x> <y> <z>} - what the block standing there is worth
+     * thermally: which material the table resolved it to, how much SUBSTANCE is actually there, and
+     * the capacity those two produce.
+     *
+     * <p>The volume is the interesting field and it is why this verb exists. It comes off the block's
+     * own collision boxes, so a slab answers half a cubic metre and a staircase three quarters, while
+     * the block's bounding box would say "one" for both. A test that could only see the capacity could
+     * not tell a wrong material from a wrong volume - they multiply.</p>
+     *
+     * <pre>
+     * {"ok":true,"block":"minecraft:iron_block","material":"iron","volumeMilliLitres":1000000,
+     *  "capacity":5384,"ceilingKelvin":1811}
+     * </pre>
+     *
+     * <p>{@code material} is the empty string where the table knows nothing about the block, and the
+     * capacity is then 0 - absence is a value here, not an error.</p>
+     */
+    private void handleHeatMaterial(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial material =
+                dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.of(
+                        new net.minecraft.item.ItemStack(world.getBlockState(pos).getBlock()));
+        long volume = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                .volumeMillilitres(world, pos);
+        long capacity = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE
+                .blockCapacity(world, pos);
+        send(sender, "{\"ok\":true,\"material\":\"" + (material == null ? "" : material.name())
+                + "\",\"volumeMillilitres\":" + volume
+                + ",\"capacity\":" + capacity
+                + ",\"ceilingKelvin\":" + (material == null ? 0 : material.ceilingKelvin()) + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat cycle <dim> <x> <y> <z> <charge> [ticks]} — charge a whole coolant loop to
+     * exactly {@code charge} and advance it, in ONE call.
+     *
+     * <p>It has to be one call. A probe holds the server thread while it runs, but <b>between</b>
+     * calls the world ticks normally, and the heat domain is ticked by the ordinary
+     * {@code WorldTickEvent} like everything else — so a test that charged a loop with one command
+     * and measured it with the next was measuring whatever was left after some natural ticks had
+     * already shed heat. That is not a small error: two loops with different radiating area cool at
+     * different rates in the gap, so the very ratio such a test exists to measure is the thing the
+     * gap corrupts. Measured 2026-08-17, and it read exactly like a broken area law.</p>
+     *
+     * <p>Charging is per LOOP, not per block: the queried block takes all of it and every other
+     * member is zeroed, so the loop holds the stated number and nothing else. Then the domain's own
+     * public tick runs {@code ticks} times — production, not a copy of it.</p>
+     *
+     * <pre>
+     * {"ok":true,"inLoop":true,"charged":8000,"ticks":1,"rejected":79,"heatStored":7921,
+     *  "heatCapacity":80,"temperatureMilliK":392012,"exchangers":1,"radiatingCells":1,
+     *  "pumpedOut":0,"pumpedIn":0,"work":0,"pumps":0,"incidentFluxMilli":60712}
+     * </pre>
+     *
+     * <p>{@code rejected} is SIGNED. Negative means the cells took heat in rather than shedding it,
+     * which is what a radiator under a star does, and a test reading it must not assume otherwise.</p>
+     */
+    private void handleHeatCycle(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        long charge = parseLongOr(args[5], 0L);
+        int ticks = args.length >= 7 ? Math.max(0, Math.min(20000, parseIntOr(args[6], 1))) : 1;
+
+        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState raw =
+                dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager.getState(
+                        dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN, world, pos);
+        if (!(raw instanceof dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState)) {
+            send(sender, "{\"ok\":true,\"inLoop\":false,\"charged\":0,\"ticks\":0,\"rejected\":0,"
+                    + "\"heatStored\":0,\"heatCapacity\":0,\"temperatureMilliK\":0,\"exchangers\":0,"
+                    + "\"radiatingCells\":0}");
+            return;
+        }
+
+        for (BlockPos member : raw.getMemberPositions()) {
+            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(member);
+            if (tile instanceof dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock) {
+                ((dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock) tile)
+                        .setStoredHeat(member.equals(pos) ? charge : 0L);
+            }
+        }
+        // A BOLTED machine is part of the loop's thermal mass without being a member of its graph
+        // (a chiller is a lump of metal in contact with the coolant), so a sweep over members alone
+        // leaves it holding whatever it accumulated during the ticks that ran between two probe
+        // calls — and the loop then starts at `charge` PLUS that, which is not what this verb says
+        // it does. Measured 2026-08-17: a loop charged to 0 reported 10700, of which 4460 was the
+        // chiller's own share carried over.
+        for (BlockPos pumpPos : ((dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState) raw)
+                .getPumpPositions()) {
+            net.minecraft.tileentity.TileEntity bolted = world.getTileEntity(pumpPos);
+            if (bolted instanceof dev.stannismod.stellurgy.subsystem.heat.IHeatNode) {
+                ((dev.stannismod.stellurgy.subsystem.heat.IHeatNode) bolted).setStoredHeat(0L);
+            }
+        }
+        for (int i = 0; i < ticks; i++) {
+            dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager.tick(
+                    dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN, world);
+        }
+
+        dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState after =
+                (dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState)
+                        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager.getState(
+                                dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN, world, pos);
+        if (after == null) {
+            send(sender, "{\"ok\":true,\"inLoop\":false,\"charged\":" + charge + ",\"ticks\":" + ticks
+                    + ",\"rejected\":0,\"heatStored\":0,\"heatCapacity\":0,\"temperatureMilliK\":0,"
+                    + "\"exchangers\":0,\"radiatingCells\":0}");
+            return;
+        }
+        send(sender, "{\"ok\":true,\"inLoop\":true,\"charged\":" + charge + ",\"ticks\":" + ticks
+                + ",\"rejected\":" + after.getRejectedThisTick()
+                + ",\"heatStored\":" + after.getStoredHeat()
+                + ",\"heatCapacity\":" + after.getHeatCapacity()
+                + ",\"sunk\":" + after.getSunkThisTick()
+                + ",\"temperatureMilliK\":" + Math.round(after.getTemperatureKelvin() * 1000.0D)
+                + ",\"exchangers\":" + after.getExchangerCount()
+                + ",\"radiatingCells\":" + after.getRadiatingCells()
+                + ",\"pumpedOut\":" + after.getPumpedOutThisTick()
+                + ",\"delivered\":" + after.getDeliveredThisTick()
+                + ",\"pumpedIn\":" + after.getPumpedInThisTick()
+                + ",\"work\":" + after.getWorkThisTick()
+                + ",\"pumps\":" + after.getPumpPositions().size()
+                + ",\"incidentFluxMilli\":" + Math.round(after.getIncidentFluxPerCell() * 1000.0D)
+                + ",\"airTaken\":" + after.getAirTakenThisTick() + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat signature <dim> <x> <y> <z> [sensorRange]} — what a passive sensor sees of
+     * the whole ship this block belongs to.
+     *
+     * <p>Both terms are reported separately and neither is derived from the other, because that is
+     * the clause: total radiated power drives the range a ship is DETECTED from, radiance drives how
+     * well a seeker can LOCK it, and the two are different questions about the same object. A test
+     * that could only read one of them could not tell a compact hot array from a large cool one.</p>
+     *
+     * <p>{@code sensorRange} is the range at which the asking sensor would find the reference ship;
+     * the reported range is what THIS signature gives that same sensor. It is an argument rather than
+     * a constant because sensor quality belongs to the sensor, not to the thermal model.</p>
+     *
+     * <pre>
+     * {"ok":true,"isBody":true,"loops":2,"radiatingCells":9,"sizeBlocks":214,"hullCellsMilli":214000,
+     *  "cabinMilliK":293000,"skinMilliK":102550,"peakMilliK":500000,"radiatedPowerMilli":300000,
+     *  "radianceMilli":300000,"detectionRangeMilli":1000000,"referencePowerMilli":19200000,
+     *  "silent":false,"radiators":9}
+     * </pre>
+     */
+    /**
+     * {@code heat emitter <dim> <x> <y> <z>} — does the machine at this position OFFER a coolant loop
+     * the heat its work leaves behind, and how much is it holding right now.
+     *
+     * <p>The question is about WIRING rather than thermodynamics, and it has to be asked in a world
+     * because the capability object is populated by the mod's own load: a unit context has a null
+     * `HEAT_EMITTER`, where `hasCapability` answers TRUE by accident and the cast then throws.</p>
+     *
+     * <pre>{"ok":true,"present":true,"pending":0}</pre>
+     */
+    private void handleHeatEmitter(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"ok\":false,\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(Integer.parseInt(args[2]), Integer.parseInt(args[3]),
+                Integer.parseInt(args[4]));
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+        if (tile == null) {
+            send(sender, "{\"ok\":true,\"present\":false,\"pending\":0,\"tile\":\"none\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.api.capability.IHeatEmitter emitter =
+                dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter.get(tile);
+        send(sender, "{\"ok\":true,\"present\":" + (emitter != null)
+                + ",\"pending\":" + (emitter == null ? 0 : emitter.getPendingHeat())
+                + ",\"tile\":\"" + tile.getClass().getSimpleName() + "\"}");
+    }
+
+    private void handleHeatSignature(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        double sensorRange = args.length >= 6 ? parseIntOr(args[5], 2000) : 2000;
+        dev.stannismod.stellurgy.subsystem.heat.ThermalBody body =
+                dev.stannismod.stellurgy.subsystem.heat.ThermalBody.at(world, pos);
+        if (body == null) {
+            send(sender, "{\"ok\":true,\"isBody\":false,\"loops\":0,\"radiatingCells\":0,"
+                    + "\"sizeBlocks\":0,\"hullCellsMilli\":0,\"cabinMilliK\":0,\"skinMilliK\":0,"
+                    + "\"peakMilliK\":0,\"radiatedPowerMilli\":0,\"radianceMilli\":0,"
+                    + "\"detectionRangeMilli\":0,\"silent\":false,\"radiators\":0}");
+            return;
+        }
+        dev.stannismod.stellurgy.subsystem.heat.ThermalSignature signature = body.signature();
+        int cells = 0;
+        for (dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState loop : body.loops()) {
+            cells += loop.getRadiatingCells();
+        }
+        send(sender, "{\"ok\":true,\"isBody\":true,\"loops\":" + body.loops().size()
+                + ",\"radiatingCells\":" + cells
+                + ",\"sizeBlocks\":" + body.sizeBlocks()
+                + ",\"hullCellsMilli\":" + Math.round(body.hullCells() * 1000.0D)
+                + ",\"cabinMilliK\":" + Math.round(body.cabinKelvin() * 1000.0D)
+                + ",\"skinMilliK\":" + Math.round(body.skinKelvin() * 1000.0D)
+                + ",\"peakMilliK\":" + Math.round(signature.peakKelvin() * 1000.0D)
+                + ",\"radiatedPowerMilli\":" + Math.round(signature.radiatedPower() * 1000.0D)
+                + ",\"radianceMilli\":" + Math.round(signature.radiance() * 1000.0D)
+                + ",\"detectionRangeMilli\":"
+                + Math.round(signature.detectionRangeBlocks(sensorRange) * 1000.0D)
+                + ",\"referencePowerMilli\":"
+                + Math.round(dev.stannismod.stellurgy.subsystem.heat.ThermalSignature
+                        .referencePower() * 1000.0D)
+                + ",\"silent\":" + body.isRunningSilent()
+                + ",\"radiators\":" + body.radiators().size() + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat silent <dim> <x> <y> <z> <on|off>} — shut every sink on this ship, or open
+     * them again.
+     *
+     * <p>Ship-wide and in one call, because that is what the control is: a pilot decides to go dark,
+     * not to shut cell 34. The verb exists because the station that will carry that control is not
+     * built yet and the MECHANIC is — a test may not wait on a GUI to pin what closing the sinks
+     * does.</p>
+     *
+     * <pre>
+     * {"ok":true,"isBody":true,"changed":9,"silent":true,"radiators":9}
+     * </pre>
+     */
+    private void handleHeatSilent(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        boolean closed = args.length < 6 || "on".equalsIgnoreCase(args[5])
+                || "true".equalsIgnoreCase(args[5]);
+        dev.stannismod.stellurgy.subsystem.heat.ThermalBody body =
+                dev.stannismod.stellurgy.subsystem.heat.ThermalBody.at(world, pos);
+        if (body == null) {
+            send(sender, "{\"ok\":true,\"isBody\":false,\"changed\":0,\"silent\":false,\"radiators\":0}");
+            return;
+        }
+        int changed = body.setSinksClosed(closed);
+        send(sender, "{\"ok\":true,\"isBody\":true,\"changed\":" + changed
+                + ",\"silent\":" + body.isRunningSilent()
+                + ",\"radiators\":" + body.radiators().size() + "}");
+    }
+
+    // Gas separator state probe ---------------------------------------
+
+    /**
+     * {@code /stellurgytest separator info <dim> <x> <y> <z>} — the gas separator's direction, its tank
+     * and the air cell it has resolved.
+     *
+     * <p>The direction matters to a test as a PREMISE: a combine-path assertion that fails
+     * without it cannot say whether the machine refused to act or was never flipped in the first
+     * place. {@code hasServedCell} is the same distinction one step further down — a machine
+     * walled in by solid blocks and a machine whose governor is holding the line both move no gas.
+     *
+     * <pre>
+     * {
+     *   "ok": true,
+     *   "isSeparator": true,
+     *   "combining": true|false,       // false = split (room to tank), true = combine (tank to room)
+     *   "hasServedCell": true|false,
+     *   "servedCell": [x,y,z],         // all zeroes when hasServedCell is false
+     *   "tankFluid": "oxygen"|"none",
+     *   "tankAmount": &lt;int&gt;,
+     *   "tankCapacity": &lt;int&gt;,
+     *   "energyStored": &lt;int&gt;
+     * }
+     * </pre>
+     */
+    private void handleSeparator(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5 || !"info".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown separator subcommand — try info <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator)) {
+            send(sender, "{\"error\":\"not a TileGasSeparator\",\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator separator =
+                (dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator) tile;
+
+        BlockPos served = separator.findServedCell();
+        boolean hasServed = served != null;
+        BlockPos reported = hasServed ? served : BlockPos.ORIGIN;
+
+        // Tank. Reported as "none" with a zero amount rather than a dropped field, so an empty
+        // tank parses the same way a full one does.
+        String tankFluid = "none";
+        int tankAmount = 0, tankCapacity = 0;
+        net.minecraftforge.fluids.capability.IFluidHandler fluidH = findFluidHandler(tile);
+        if (fluidH != null) {
+            for (net.minecraftforge.fluids.capability.IFluidTankProperties p : fluidH.getTankProperties()) {
+                tankCapacity += p.getCapacity();
+                if (p.getContents() != null) {
+                    tankAmount += p.getContents().amount;
+                    tankFluid = p.getContents().getFluid().getName();
+                }
+            }
+        }
+
+        int energyStored = 0;
+        net.minecraftforge.energy.IEnergyStorage es = null;
+        for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
+            if (tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir)) {
+                es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir);
+                break;
+            }
+        }
+        if (es == null && tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)) {
+            es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+        }
+        if (es != null) energyStored = es.getEnergyStored();
+
+        send(sender, "{\"ok\":true,\"isSeparator\":true"
+                + ",\"combining\":" + separator.isCombining()
+                + ",\"hasServedCell\":" + hasServed
+                + ",\"servedCell\":[" + reported.getX() + "," + reported.getY() + ","
+                + reported.getZ() + "]"
+                + ",\"tankFluid\":\"" + escapeJson(tankFluid) + "\""
+                + ",\"tankAmount\":" + tankAmount
+                + ",\"tankCapacity\":" + tankCapacity
+                + ",\"energyStored\":" + energyStored + "}");
+    }
+
     // Oxygen vent state probe -----------------------------------------
 
     /**
@@ -18995,6 +20619,12 @@ public class TestProbeCommand extends CommandBase {
      *   "isSealed": true|false,        // private TileOxygenVent.isSealed
      *   "blobSize": &lt;int&gt;,             // AtmosphereHandler.getBlobSize(vent)
      *   "blobAtmosphere": "...",       // current AreaBlob atmosphere unlocalized name
+     *   "airN2": &lt;long&gt;,              // zone gas partial pressures, BILLIONTHS of an atm;
+     *   "airO2": &lt;long&gt;,              //   -1 means the position is in no zone at all
+     *   "airCO2": &lt;long&gt;,
+     *   "airPressure": &lt;int&gt;,          // their sum in hundredths of an atm (100 = 1.00 atm)
+     *   "airTempMilliK": &lt;int&gt;,        // the zone air's temperature, thousandths of a kelvin
+     *   "airHeatCapacity": &lt;long&gt;,     // heat units per kelvin: pressure x volume, the mixing weight
      *   "hasFluid": true|false,        // private TileOxygenVent.hasFluid
      *   "fluidAmount": &lt;int&gt;,          // tank contents
      *   "energyStored": &lt;int&gt;
@@ -19002,6 +20632,107 @@ public class TestProbeCommand extends CommandBase {
      * </pre>
      */
     private void handleVent(MinecraftServer server, ICommandSender sender, String[] args) {
+        // /stellurgytest vent setair <dim> <x> <y> <z> <n2> <o2> <co2> [milliK] — overwrite the gas
+        // contents of the zone containing this position, and optionally its TEMPERATURE. Nothing in
+        // production can put a chosen amount of CO2 into a room short of parking crew in it for
+        // minutes, so a test that wants to drive the regeneration path needs this the same way it
+        // needs `energy inject`. The temperature is optional and defaults to ambient: a mixing test
+        // has to be able to arrange two zones that genuinely differ, and no production path sets a
+        // compartment's temperature directly.
+        if (args.length >= 8 && "setair".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            // The composition's own unit — nano-atmospheres — not the millionths a config file is
+            // written in. A probe reports what the state holds and must be able to write the same
+            // thing back, and a gas giant's partial pressures do not fit an int.
+            long n2 = parseLongOr(args[5], 0L);
+            long o2 = parseLongOr(args[6], 0L);
+            long co2 = parseLongOr(args[7], 0L);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
+                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.atmosphere.AtmosphereHandler handler = atmosphereOfLoaded(dim);
+            if (handler == null) {
+                send(sender, "{\"error\":\"no atmosphere handler for dim\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.atmosphere.AirState written =
+                    args.length >= 9 && args[8].indexOf('=') < 0
+                            ? new dev.stannismod.stellurgy.atmosphere.AirState(n2, o2, co2,
+                                    parseIntOr(args[8], 0))
+                            : new dev.stannismod.stellurgy.atmosphere.AirState(n2, o2, co2);
+            // Any further argument of the form <gas>=<amount> puts that SUBSTANCE in the room. The
+            // three named gases cover what life support moves around; a poison or an acid is a gas
+            // like any other to the model, and nothing in production can put one in a room on demand.
+            for (int i = 8; i < args.length; i++) {
+                int split = args[i].indexOf('=');
+                if (split <= 0) {
+                    continue;
+                }
+                dev.stannismod.stellurgy.atmosphere.gas.Gas gas =
+                        dev.stannismod.stellurgy.atmosphere.gas.GasRegistry
+                                .byName(args[i].substring(0, split));
+                if (gas == null) {
+                    send(sender, "{\"error\":\"unknown gas\",\"name\":\""
+                            + escapeJson(args[i].substring(0, split)) + "\"}");
+                    return;
+                }
+                written.add(gas, parseLongOr(args[i].substring(split + 1), 0L),
+                        written.getTemperatureKelvin());
+            }
+            boolean ok = handler.setAirState(
+                    (dev.stannismod.stellurgy.api.util.IBlobHandler) tile, written);
+            if (ok)
+                handler.refreshDerivedAtmosphereAt(new BlockPos(x, y + 1, z));
+            send(sender, "{\"ok\":" + ok + "}");
+            return;
+        }
+
+        // /stellurgytest vent priority <dim> <x> <y> <z> <value> — set a zone's ventilation priority
+        // through the SERVER half of the production path: the same useNetworkData branch the GUI
+        // button's packet lands in, clamp included. The button itself is a client concern; this
+        // drives what the server does when it arrives.
+        if (args.length >= 5 && "priority".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            // With no value this READS instead of writing — a restart test needs to ask what
+            // survived without first overwriting it.
+            boolean write = args.length >= 6;
+            int value = write ? parseIntOr(args[5], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
+                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent vent =
+                    (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile;
+            if (write) {
+                net.minecraft.nbt.NBTTagCompound payload = new net.minecraft.nbt.NBTTagCompound();
+                payload.setInteger("zonePriority", value);
+                vent.useNetworkData(null, net.minecraftforge.fml.relauncher.Side.SERVER, (byte) 4, payload);
+            }
+            send(sender, "{\"ok\":true,\"wrote\":" + write
+                    + ",\"priority\":" + vent.getZonePriority() + "}");
+            return;
+        }
+
+        // /stellurgytest vent reseal <dim> <x> <y> <z> — force a one-shot
         // /stellurgytest vent reseal <dim> <x> <y> <z> — force a one-shot
         // addBlock(handler, pos) on a vent's blob. Production runs the same
         // call inside performFunction every 100 world-time ticks, but
@@ -19024,9 +20755,7 @@ public class TestProbeCommand extends CommandBase {
             }
             dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent vent =
                     (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile;
-            AtmosphereHandler handler =
-                    AtmosphereHandler
-                            .getOxygenHandler(dim);
+            AtmosphereHandler handler = atmosphereOfLoaded(dim);
             if (handler == null) {
                 send(sender, "{\"error\":\"no atmosphere handler for dim\"}");
                 return;
@@ -19142,9 +20871,7 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
 
-        AtmosphereHandler handler =
-                AtmosphereHandler
-                        .getOxygenHandler(dim);
+        AtmosphereHandler handler = atmosphereOfLoaded(dim);
         // Blob lookup throws NPE if the vent hasn't yet had performFunction
         // called once (which is what registers the blob). Guard for that.
         int blobSize;
@@ -19159,9 +20886,39 @@ public class TestProbeCommand extends CommandBase {
         }
         String blobAtm = "no-handler";
         if (handler != null) {
-            dev.stannismod.stellurgy.api.IAtmosphere atm =
+            dev.stannismod.stellurgy.api.atmosphere.Atmosphere atm =
                     handler.getAtmosphereType(new BlockPos(x, y + 1, z));
             blobAtm = atm == null ? "null" : atm.getUnlocalizedName();
+        }
+
+        // Gas contents of the zone this vent anchors. Reported as -1 where the position is in no
+        // zone at all, so a caller can tell "no zone" from "a zone holding nothing".
+        long airN2 = -1L, airO2 = -1L, airCo2 = -1L;
+        int airPressure = -1, airTempMilliK = -1;
+        long airHeatCapacity = -1L;
+        // "zone" when the position is in a live zone, "none" otherwise. This field describes the
+        // POSITION fields below and nothing else: -1 has meant "in no zone" since INV-ATM-19 was
+        // pinned, and a probe may not quietly widen what an existing field answers. The vent's own
+        // held gases are reported SEPARATELY (ventAir*), because a vent holding air is not the same
+        // claim as a position being in a zone — a blob starts out earth-like whether or not it has
+        // ever sealed.
+        String airSource = "none";
+        if (handler != null) {
+            dev.stannismod.stellurgy.atmosphere.AirState air =
+                    handler.getAirStateAt(new BlockPos(x, y + 1, z));
+            if (air != null) {
+                airSource = "zone";
+            }
+            if (air != null) {
+                airN2 = air.getNitrogen();
+                airO2 = air.getOxygen();
+                airCo2 = air.getCarbonDioxide();
+                airPressure = air.getPressureCentiAtm();
+                airTempMilliK = air.getTemperatureMilliK();
+                // The zone's own volume decides its capacity, so the readout has to ask the handler
+                // for it rather than report a figure per block that no test could compare.
+                airHeatCapacity = air.getHeatCapacity(handler.getBlobSizeAt(new BlockPos(x, y + 1, z)));
+            }
         }
 
         // Tank contents.
@@ -19192,6 +20949,39 @@ public class TestProbeCommand extends CommandBase {
         out.append(",\"isSealed\":").append(isSealed);
         out.append(",\"blobSize\":").append(blobSize);
         out.append(",\"blobAtmosphere\":\"").append(escapeJson(blobAtm)).append('"');
+        out.append(",\"airN2\":").append(airN2);
+        out.append(",\"airO2\":").append(airO2);
+        out.append(",\"airCO2\":").append(airCo2);
+        out.append(",\"airPressure\":").append(airPressure);
+        out.append(",\"airSource\":\"").append(airSource).append('"');
+        // Air as a RESERVOIR: what it is at, and how much it takes to move it. The capacity is the
+        // half a mixing test needs, because two zones at the same pressure and different volumes mix
+        // by their capacities and would otherwise look like they should meet in the middle.
+        out.append(",\"airTempMilliK\":").append(airTempMilliK);
+        out.append(",\"airHeatCapacity\":").append(airHeatCapacity);
+        // The gases this VENT holds, independent of whether its position resolves to a zone. While
+        // a breached room is losing its air the graph is already empty, so the position fields
+        // above say -1 and only these can see the loss happening. Zeros once it is vacuum, which is
+        // a state and not an absence; ventHasAir separates "no air left" from "no state at all".
+        long ventN2 = 0L, ventO2 = 0L, ventCo2 = 0L;
+        int ventPressure = 0;
+        boolean ventHasAir = false;
+        if (handler != null && tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) {
+            dev.stannismod.stellurgy.atmosphere.AirState held = handler.getAirState(
+                    (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile);
+            if (held != null) {
+                ventHasAir = true;
+                ventN2 = held.getNitrogen();
+                ventO2 = held.getOxygen();
+                ventCo2 = held.getCarbonDioxide();
+                ventPressure = held.getPressureCentiAtm();
+            }
+        }
+        out.append(",\"ventHasAir\":").append(ventHasAir);
+        out.append(",\"ventAirN2\":").append(ventN2);
+        out.append(",\"ventAirO2\":").append(ventO2);
+        out.append(",\"ventAirCO2\":").append(ventCo2);
+        out.append(",\"ventAirPressure\":").append(ventPressure);
         out.append(",\"hasFluid\":").append(hasFluid);
         out.append(",\"fluidAmount\":").append(fluidAmount);
         out.append(",\"energyStored\":").append(energyStored);
@@ -19498,6 +21288,7 @@ public class TestProbeCommand extends CommandBase {
                     + (entity instanceof net.minecraft.entity.item.EntityItem
                             ? ",\"itemCount\":" + ((net.minecraft.entity.item.EntityItem) entity).getItem().getCount()
                             : "")
+                    + livingFields(entity)
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }
@@ -20047,73 +21838,6 @@ public class TestProbeCommand extends CommandBase {
      *       (i.e. {@code openContainer != inventoryContainer}).</li>
      * </ul>
      */
-    /**
-     * {@code /stellurgytest events mark} and {@code /stellurgytest events since <seq>} — the ordered log of what
-     * HAPPENED on this side, so a test can wait for an event rather than sample a value.
-     *
-     * <p>The mark is taken BEFORE the action under test; the read afterwards returns everything since
-     * it, in order. See {@link TestEventLog} for why a poll cannot do this.</p>
-     *
-     * <p>Both replies carry {@code recording} and {@code dropped}: an empty log must never be
-     * confusable with a recorder that was never subscribed, nor with a ring that overflowed.</p>
-     */
-    private void handleEvents(ICommandSender sender, String[] args) {
-        if (args.length >= 1 && "mark".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"ok\":true,\"seq\":" + TestEventLog.mark()
-                    + ",\"recording\":" + TestEventLog.isRecording()
-                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled() + "}");
-            return;
-        }
-        if (args.length >= 2 && "since".equalsIgnoreCase(args[0])) {
-            long from = (long) parseDoubleOr(args[1], 0);
-            String wanted = args.length >= 3 ? args[2] : null;
-            // The records are rendered FIRST and the envelope assembled around them, so that every
-            // envelope key - `count` above all - precedes the records in the reply. A reader takes the
-            // first `"count":` it sees; with the count trailing the array, a record whose payload
-            // carried a `count` field of its own was read as the envelope's, and a chain whose link
-            // HAD been recorded failed as "never recorded" (measured 2026-09-05 on `crew_captured`
-            // with a crew of 0: the payload said count:0, the envelope said count:1, and the reader
-            // believed the payload).
-            StringBuilder records = new StringBuilder();
-            int n = 0;
-            for (TestEventLog.Record r : TestEventLog.since(from)) {
-                if (wanted != null && !wanted.equalsIgnoreCase(r.type)) {
-                    continue;
-                }
-                if (n++ > 0) {
-                    records.append(',');
-                }
-                records.append("{\"seq\":").append(r.seq)
-                        .append(",\"tick\":").append(r.tick)
-                        .append(",\"side\":\"").append(r.side).append('"')
-                        .append(",\"type\":\"").append(r.type).append('"');
-                if (!r.payload.isEmpty()) {
-                    records.append(',').append(r.payload);
-                }
-                records.append('}');
-            }
-            StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
-                    .append(TestEventLog.isRecording())
-                    .append(",\"mixins\":").append(TestEventLog.areMixinsInstalled())
-                    .append(",\"dropped\":").append(TestEventLog.dropped())
-                    .append(",\"droppedByType\":{").append(TestEventLog.droppedByType()).append('}')
-                    // Which observation points have EXECUTED. Carried on every read because an empty
-                    // `events` list is only an answer once this says somebody was looking.
-                    .append(",\"instruments\":").append(TestEventLog.instrumentsEntered())
-                    .append(",\"from\":").append(from)
-                    .append(",\"count\":").append(n)
-                    .append(",\"events\":[").append(records).append("]}");
-            send(sender, sb.toString());
-            return;
-        }
-        if (args.length >= 1 && "reset".equalsIgnoreCase(args[0])) {
-            TestEventLog.reset();
-            send(sender, "{\"ok\":true}");
-            return;
-        }
-        send(sender, "{\"error\":\"usage: events mark | events since <seq> [type] | events reset\"}");
-    }
-
     private void handlePlayer(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 1) {
             send(sender, "{\"error\":\"usage: /stellurgytest player inv-bypass <add|remove|status> | open-container\"}");
@@ -20187,10 +21911,10 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             int ticks = parseIntOr(args[1], 0);
-            if (!fakeTickerRegistered) {
-                net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new FakePlayerTicker());
-                fakeTickerRegistered = true;
+            if (fakeTicker == null) {
+                fakeTicker = new FakePlayerTicker();
             }
+            fakeTicker.ensureRegistered();
             fakeLivingTicksRemaining = ticks;
             send(sender, "{\"ok\":true,\"ticks\":" + ticks + "}");
             return;
@@ -20209,15 +21933,13 @@ public class TestProbeCommand extends CommandBase {
             String action = args[1].toLowerCase(java.util.Locale.ROOT);
             switch (action) {
                 case "add":
-                    dev.stannismod.stellurgy.util.RocketInventoryHelper
-                            .addPlayerToInventoryBypass(player);
+                    Stellurgy.serverState().rocketInventory.addPlayerToInventoryBypass(player);
                     send(sender, "{\"ok\":true,\"action\":\"add\",\"player\":\""
                             + escapeJson(player.getName()) + "\""
                             + ",\"inBypass\":true}");
                     return;
                 case "remove":
-                    dev.stannismod.stellurgy.util.RocketInventoryHelper
-                            .removePlayerFromInventoryBypass(player);
+                    Stellurgy.serverState().rocketInventory.removePlayerFromInventoryBypass(player);
                     send(sender, "{\"ok\":true,\"action\":\"remove\",\"player\":\""
                             + escapeJson(player.getName()) + "\""
                             + ",\"inBypass\":"
@@ -20466,9 +22188,7 @@ public class TestProbeCommand extends CommandBase {
                         .append("}");
             }
             String atmos = "?";
-            AtmosphereHandler ah =
-                    AtmosphereHandler.getOxygenHandler(
-                            player.world.provider.getDimension());
+            AtmosphereHandler ah = AtmosphereHandler.getOxygenHandler(player.world);
             if (ah != null) {
                 atmos = ah.getAtmosphereType(player).getUnlocalizedName();
             }
@@ -20479,7 +22199,8 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"riding\":\""
                     + escapeJson(player.getRidingEntity() == null ? ""
                             : player.getRidingEntity().getClass().getSimpleName()) + "\""
-                    + ",\"grace\":" + player.getEntityData().getLong("stellurgyRocketTransferGrace")
+                    + ",\"grace\":" + player.getEntityData().getLong(
+                            dev.stannismod.stellurgy.atmosphere.RocketTransferGrace.KEY)
                     + ",\"worldTime\":" + player.world.getTotalWorldTime()
                     + ",\"atmos\":\"" + escapeJson(atmos) + "\""
                     + ",\"health\":" + player.getHealth()
@@ -20586,9 +22307,7 @@ public class TestProbeCommand extends CommandBase {
             // the isDaytime() check with this event).
             boolean sleepingTimeOk = net.minecraftforge.event.ForgeEventFactory
                     .fireSleepingTimeCheck(player, bedPos);
-            AtmosphereHandler sleepAtm =
-                    AtmosphereHandler.getOxygenHandler(
-                            sleepWorld.provider.getDimension());
+            AtmosphereHandler sleepAtm = AtmosphereHandler.getOxygenHandler(sleepWorld);
             String bedAtmos = sleepAtm == null ? "none"
                     : sleepAtm.getAtmosphereType(bedPos).getUnlocalizedName();
             boolean bedBreathable = sleepAtm != null
@@ -21733,7 +23452,7 @@ public class TestProbeCommand extends CommandBase {
     // path that eventually calls EntityPlayerMP.sendMessage(ITextComponent)
     // is observed — there's no production-side instrumentation to
     // forget to add.
-    private static final java.util.concurrent.ConcurrentLinkedDeque<String> chatLog =
+    private final java.util.concurrent.ConcurrentLinkedDeque<String> chatLog =
             new java.util.concurrent.ConcurrentLinkedDeque<>();
     private static final String CHAT_TAP_HANDLER_NAME = "ar-test-chat-tap";
     private static final int CHAT_LOG_MAX = 64;
@@ -21758,7 +23477,7 @@ public class TestProbeCommand extends CommandBase {
         }
     }
 
-    private static void installChatTap(net.minecraft.entity.player.EntityPlayerMP player) {
+    private void installChatTap(net.minecraft.entity.player.EntityPlayerMP player) {
         // Idempotency is keyed on the live channel's pipeline rather than
         // a per-UUID flag because the FG6 client harness may reconnect
         // mid-suite (new channel, same UUID); a UUID-set would then leave
@@ -21809,47 +23528,47 @@ public class TestProbeCommand extends CommandBase {
     // name compiles but throws NoSuchMethodError at run time. Resolve
     // the method reflectively, caching the lookup, and fall back to
     // direct field access if neither name is available.
-    private static volatile java.lang.reflect.Method SPACKETCHAT_GET_COMPONENT;
-    private static volatile boolean SPACKETCHAT_LOOKUP_DONE;
-    private static volatile java.lang.reflect.Field SPACKETCHAT_COMPONENT_FIELD;
+    private volatile java.lang.reflect.Method spacketChatGetComponent;
+    private volatile boolean spacketChatLookupDone;
+    private volatile java.lang.reflect.Field spacketChatComponentField;
 
-    private static net.minecraft.util.text.ITextComponent readSPacketChatComponent(
+    private net.minecraft.util.text.ITextComponent readSPacketChatComponent(
             net.minecraft.network.play.server.SPacketChat pkt) {
-        if (!SPACKETCHAT_LOOKUP_DONE) {
-            synchronized (TestProbeCommand.class) {
-                if (!SPACKETCHAT_LOOKUP_DONE) {
+        if (!spacketChatLookupDone) {
+            synchronized (this) {
+                if (!spacketChatLookupDone) {
                     for (String name : new String[]{"getChatComponent", "func_148915_a"}) {
                         try {
                             java.lang.reflect.Method m =
                                     net.minecraft.network.play.server.SPacketChat.class.getMethod(name);
                             if (net.minecraft.util.text.ITextComponent.class.isAssignableFrom(m.getReturnType())) {
                                 m.setAccessible(true);
-                                SPACKETCHAT_GET_COMPONENT = m;
+                                spacketChatGetComponent = m;
                                 break;
                             }
                         } catch (NoSuchMethodException ignored) { /* try next */ }
                     }
-                    if (SPACKETCHAT_GET_COMPONENT == null) {
+                    if (spacketChatGetComponent == null) {
                         for (String fname : new String[]{"chatComponent", "field_148919_a"}) {
                             try {
                                 java.lang.reflect.Field f =
                                         net.minecraft.network.play.server.SPacketChat.class.getDeclaredField(fname);
                                 f.setAccessible(true);
-                                SPACKETCHAT_COMPONENT_FIELD = f;
+                                spacketChatComponentField = f;
                                 break;
                             } catch (NoSuchFieldException ignored) { /* try next */ }
                         }
                     }
-                    SPACKETCHAT_LOOKUP_DONE = true;
+                    spacketChatLookupDone = true;
                 }
             }
         }
         try {
-            if (SPACKETCHAT_GET_COMPONENT != null) {
-                return (net.minecraft.util.text.ITextComponent) SPACKETCHAT_GET_COMPONENT.invoke(pkt);
+            if (spacketChatGetComponent != null) {
+                return (net.minecraft.util.text.ITextComponent) spacketChatGetComponent.invoke(pkt);
             }
-            if (SPACKETCHAT_COMPONENT_FIELD != null) {
-                return (net.minecraft.util.text.ITextComponent) SPACKETCHAT_COMPONENT_FIELD.get(pkt);
+            if (spacketChatComponentField != null) {
+                return (net.minecraft.util.text.ITextComponent) spacketChatComponentField.get(pkt);
             }
         } catch (ReflectiveOperationException ignored) { /* fall through */ }
         return null;
@@ -21924,9 +23643,59 @@ public class TestProbeCommand extends CommandBase {
      * mutation) without going through a tile entity.
      */
     private void handleBlock(MinecraftServer server, ICommandSender sender, String[] args) {
+        // /stellurgytest block activate <dim> <x> <y> <z> [sneak] — drive the block's own
+        // onBlockActivated with a player, exactly as a right-click does. `sneak` (default false)
+        // sets isSneaking first, which is how a block tells "open me" from "toggle me".
+        //
+        // The server tier has no client to click with, and the client bot's interactBlock is
+        // client-side only, so without this a sneak-click behaviour can only be tested by calling
+        // the tile method directly — which pins the tile and leaves the block's dispatch, the very
+        // half that decides WHICH action a click means, unexercised.
+        if (args.length >= 5 && "activate".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            boolean sneak = args.length >= 6 && Boolean.parseBoolean(args[5]);
+            net.minecraft.world.WorldServer activateWorld = server.getWorld(dim);
+            if (activateWorld == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos target = new BlockPos(x, y, z);
+            net.minecraft.block.state.IBlockState targetState = activateWorld.getBlockState(target);
+            // Forge's own FakePlayer, not the bare `player ensure-fake` one: it is what production
+            // already sees when something clicks a block with no client behind it, and it no-ops
+            // exactly the calls that need a connection (sendStatusMessage, openGui). The bare test
+            // player would take the tick loop down with an NPE on the first status message.
+            java.util.List<net.minecraft.entity.player.EntityPlayerMP> connected =
+                    server.getPlayerList().getPlayers();
+            boolean headless = connected.isEmpty();
+            net.minecraft.entity.player.EntityPlayer clicker = headless
+                    ? net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(activateWorld)
+                    : connected.get(0);
+            boolean wasSneaking = clicker.isSneaking();
+            clicker.setSneaking(sneak);
+            boolean handled;
+            try {
+                handled = targetState.getBlock().onBlockActivated(activateWorld, target, targetState,
+                        clicker, net.minecraft.util.EnumHand.MAIN_HAND,
+                        net.minecraft.util.EnumFacing.UP, 0.5f, 0.5f, 0.5f);
+            } finally {
+                clicker.setSneaking(wasSneaking);
+            }
+            net.minecraft.util.ResourceLocation clicked = targetState.getBlock().getRegistryName();
+            send(sender, "{\"ok\":true,\"pos\":[" + x + "," + y + "," + z + "]"
+                    + ",\"block\":\"" + escapeJson(clicked == null ? "null" : clicked.toString()) + "\""
+                    + ",\"sneaking\":" + sneak
+                    + ",\"handled\":" + handled
+                    + ",\"player\":\"" + escapeJson(clicker.getName()) + "\""
+                    + ",\"fakePlayer\":" + headless + "}");
+            return;
+        }
         if (args.length < 5
                 || !("at".equalsIgnoreCase(args[0]) || "biome-at".equalsIgnoreCase(args[0]))) {
-            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z> | biome-at <dim> <x> <y> <z>\"}");
+            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z> | biome-at <dim> <x> <y> <z> | activate <dim> <x> <y> <z> [sneak]\"}");
             return;
         }
         boolean biomeMode = "biome-at".equalsIgnoreCase(args[0]);
@@ -21990,18 +23759,23 @@ public class TestProbeCommand extends CommandBase {
                         + escapeJson(blockId) + "\"}");
                 return;
             }
-            dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE
-                    .addUnsealableBlock(block);
+            dev.stannismod.stellurgy.util.SealableBlockHandler handler =
+                    dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE;
+            if (!parkedSealLists.containsKey(block)) {
+                parkedSealLists.put(block, new boolean[]{handler.isBlockBanned(block),
+                        handler.getOverriddenSealableBlocks().contains(block)});
+            }
+            handler.addUnsealableBlock(block);
             send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
                     + "\",\"action\":\"added-to-blockBanList\"}");
             return;
         }
         if (args.length >= 2 && "remove-block-ban".equalsIgnoreCase(args[0])) {
             // /stellurgytest seal-detector remove-block-ban <block-id> — undo of
-            // add-block-ban. Reaches the package-private blockBanList via
-            // reflection because SealableBlockHandler has no public removal
-            // API for the block ban list (addSealableBlock would also flip
-            // into the allow list, which is not the right undo here).
+            // add-block-ban: puts the block back on exactly the lists it was on
+            // before the first add. Leaving the ban list reaches the private
+            // blockBanList via reflection, because production has no removal from
+            // it and is not given one for a probe.
             String blockId = args[1];
             net.minecraft.block.Block block =
                     resolveBlock(blockId);
@@ -22010,17 +23784,28 @@ public class TestProbeCommand extends CommandBase {
                         + escapeJson(blockId) + "\"}");
                 return;
             }
-            try {
-                java.lang.reflect.Field f = dev.stannismod.stellurgy.util.SealableBlockHandler
-                        .class.getDeclaredField("blockBanList");
-                f.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                java.util.List<net.minecraft.block.Block> list =
-                        (java.util.List<net.minecraft.block.Block>) f.get(
-                                dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE);
-                boolean removed = list.remove(block);
+            boolean[] before = parkedSealLists.remove(block);
+            if (before == null) {
                 send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
-                        + "\",\"removed\":" + removed + "}");
+                        + "\",\"removed\":false}");
+                return;
+            }
+            dev.stannismod.stellurgy.util.SealableBlockHandler handler =
+                    dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE;
+            try {
+                if (before[1]) {
+                    handler.addSealableBlock(block); // also leaves the ban list
+                } else if (!before[0]) {
+                    java.lang.reflect.Field f = dev.stannismod.stellurgy.util.SealableBlockHandler
+                            .class.getDeclaredField("blockBanList");
+                    f.setAccessible(true);
+                    @SuppressWarnings("unchecked")
+                    java.util.List<net.minecraft.block.Block> list =
+                            (java.util.List<net.minecraft.block.Block>) f.get(handler);
+                    list.remove(block);
+                }
+                send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
+                        + "\",\"removed\":" + !before[0] + "}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
@@ -22816,12 +24601,12 @@ public class TestProbeCommand extends CommandBase {
         }
         String sub = args[0].toLowerCase();
         if ("tick-counter".equals(sub)) {
-            // PlanetEventHandler.time is the simplest wiring smoke: it
+            // The planet handler's tick count is the simplest wiring smoke: it
             // increments on every ServerTickEvent.END phase. If the
             // subscription was lost, the value freezes at zero or wherever
             // the last successful tick left it.
             Map<String, Object> out = new LinkedHashMap<>();
-            out.put("time", dev.stannismod.stellurgy.event.PlanetEventHandler.time);
+            out.put("time", Stellurgy.serverState().planetEvents.ticks());
             // World total time as a cross-check: if the world is also frozen
             // (e.g. server paused), our counter wouldn't advance for a
             // legitimate reason — surface both so the test author can
@@ -22839,12 +24624,12 @@ public class TestProbeCommand extends CommandBase {
             // less fragile: verify the well-known static field initial-state
             // contracts that only run if the @Mod init phase completed.
             Map<String, Object> out = new LinkedHashMap<>();
-            // PlanetEventHandler.time is 0 before any ServerTickEvent fires
-            // and >0 after at least one. Either way the field MUST be
+            // The planet handler's tick count is 0 before any ServerTickEvent fires
+            // and >0 after at least one. Either way it MUST be
             // readable (regression would be a ClassNotFoundException or a
             // static initializer crash).
             try {
-                long t = dev.stannismod.stellurgy.event.PlanetEventHandler.time;
+                long t = Stellurgy.serverState().planetEvents.ticks();
                 out.put("planetEventHandler", "loaded");
                 out.put("planetEventHandlerTime", t);
             } catch (Throwable e) {
@@ -22894,9 +24679,7 @@ public class TestProbeCommand extends CommandBase {
             out.put("loaded", world != null);
             out.put("worldInfoClass", world == null ? "null"
                     : world.getWorldInfo().getClass().getName());
-            out.put("hasAtmosphereHandler",
-                    AtmosphereHandler
-                            .hasAtmosphereHandler(dim));
+            out.put("hasAtmosphereHandler", atmosphereOfLoaded(dim) != null);
             out.put("isStellurgyPlanet",
                     dev.stannismod.stellurgy.dimension.DimensionManager
                             .getInstance().isDimensionCreated(dim));
@@ -22909,21 +24692,9 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if ("transitions".equals(sub)) {
-            // PlanetEventHandler.transitionMap is package-private static;
-            // reach it via reflection just for read-back. The size of the
-            // queue is the only piece test code legitimately needs.
-            try {
-                java.lang.reflect.Field f =
-                        dev.stannismod.stellurgy.event.PlanetEventHandler
-                                .class.getDeclaredField("transitionMap");
-                f.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                java.util.List<?> list = (java.util.List<?>) f.get(null);
-                send(sender, "{\"ok\":true,\"size\":" + list.size() + "}");
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"could not read transitionMap\",\"msg\":\""
-                        + escapeJson(e.getMessage()) + "\"}");
-            }
+            // The size of the queue is the only piece test code legitimately needs.
+            send(sender, "{\"ok\":true,\"size\":"
+                    + Stellurgy.serverState().planetEvents.pendingTransitions() + "}");
             return;
         }
         send(sender, "{\"error\":\"unknown event subcommand — try tick-counter | handlers | dim-side-effects <dim> | transitions\"}");
@@ -22941,8 +24712,8 @@ public class TestProbeCommand extends CommandBase {
     // to keep them hot. Stellurgy already registers a
     // LoadingCallback in WorldEvents (mod-side, persistent), so
     // requesting tickets here piggy-backs on that registration.
-    private static final java.util.Map<String, net.minecraftforge.common.ForgeChunkManager.Ticket>
-            CHUNK_TICKETS = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<String, net.minecraftforge.common.ForgeChunkManager.Ticket>
+            chunkTickets = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static String ticketKey(int dim, int cx, int cz) {
         return dim + ":" + cx + ":" + cz;
@@ -22974,7 +24745,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             String key = ticketKey(dim, cx, cz);
-            net.minecraftforge.common.ForgeChunkManager.Ticket existing = CHUNK_TICKETS.get(key);
+            net.minecraftforge.common.ForgeChunkManager.Ticket existing = chunkTickets.get(key);
             if (existing != null) {
                 send(sender, "{\"ok\":true,\"already\":true,\"dim\":" + dim
                         + ",\"cx\":" + cx + ",\"cz\":" + cz + "}");
@@ -22990,7 +24761,7 @@ public class TestProbeCommand extends CommandBase {
             }
             net.minecraftforge.common.ForgeChunkManager.forceChunk(ticket,
                     new net.minecraft.util.math.ChunkPos(cx, cz));
-            CHUNK_TICKETS.put(key, ticket);
+            chunkTickets.put(key, ticket);
             send(sender, "{\"ok\":true,\"dim\":" + dim
                     + ",\"cx\":" + cx + ",\"cz\":" + cz + "}");
             return;
@@ -23045,7 +24816,7 @@ public class TestProbeCommand extends CommandBase {
             int cx = parseIntOr(args[2], Integer.MIN_VALUE);
             int cz = parseIntOr(args[3], Integer.MIN_VALUE);
             String key = ticketKey(dim, cx, cz);
-            net.minecraftforge.common.ForgeChunkManager.Ticket t = CHUNK_TICKETS.remove(key);
+            net.minecraftforge.common.ForgeChunkManager.Ticket t = chunkTickets.remove(key);
             if (t != null) {
                 net.minecraftforge.common.ForgeChunkManager.releaseTicket(t);
                 send(sender, "{\"ok\":true,\"released\":\"" + key + "\"}");
@@ -23055,19 +24826,19 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if ("release-all".equals(sub)) {
-            int n = CHUNK_TICKETS.size();
-            for (net.minecraftforge.common.ForgeChunkManager.Ticket t : CHUNK_TICKETS.values()) {
+            int n = chunkTickets.size();
+            for (net.minecraftforge.common.ForgeChunkManager.Ticket t : chunkTickets.values()) {
                 try { net.minecraftforge.common.ForgeChunkManager.releaseTicket(t); }
                 catch (RuntimeException ignored) {}
             }
-            CHUNK_TICKETS.clear();
+            chunkTickets.clear();
             send(sender, "{\"ok\":true,\"released\":" + n + "}");
             return;
         }
         if ("list".equals(sub)) {
             StringBuilder sb = new StringBuilder("{\"tickets\":[");
             boolean first = true;
-            for (String k : CHUNK_TICKETS.keySet()) {
+            for (String k : chunkTickets.keySet()) {
                 if (!first) sb.append(',');
                 first = false;
                 sb.append("\"").append(k).append("\"");
@@ -23375,28 +25146,21 @@ public class TestProbeCommand extends CommandBase {
                 .getResource(slashed + ".class") != null;
     }
 
-    /**
-     * global event-bus listener that counts RocketEvent fires.
-     * Registered lazily on first /stellurgytest rocket event-counts query.
-     * Static counters are visible to all probe handlers and to the
-     * launch/orbit-reached/dismantle probes which include
-     * "*EventDelta" fields in their responses for inline cause-effect
-     * verification.
-     */
     /** Headless-tier test player (see `/stellurgytest player ensure-fake`).
      *  A BARE EntityPlayerMP, deliberately NOT a Forge FakePlayer:
      *  PlayerAdvancements.grantCriterion hard-refuses FakePlayer instances
      *  (Forge policy), and advancement grants are part of what the server
      *  tier pins. It is never spawned into a world (a connectionless player
      *  in the EntityTracker NPEs), so the FakePlayer no-ops aren't needed. */
-    private static net.minecraft.entity.player.EntityPlayerMP fakePlayer;
-    private static volatile int fakeLivingTicksRemaining = 0;
-    private static boolean fakeTickerRegistered = false;
+    private net.minecraft.entity.player.EntityPlayerMP fakePlayer;
+    private volatile int fakeLivingTicksRemaining = 0;
+    private FakePlayerTicker fakeTicker;
+
 
     /** Posts one LivingUpdateEvent per server tick for the fake player while
      *  `tick-living` has remaining budget — the un-spawned test player never
      *  ticks, so this supplies the once-per-tick cadence a real player has. */
-    public static final class FakePlayerTicker {
+    public final class FakePlayerTicker extends ServerScopedListener {
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onServerTick(net.minecraftforge.fml.common.gameevent.TickEvent.ServerTickEvent event) {
             if (event.phase != net.minecraftforge.fml.common.gameevent.TickEvent.Phase.END) return;
@@ -23408,38 +25172,38 @@ public class TestProbeCommand extends CommandBase {
         }
     }
 
-    public static final class RocketEventRecorder {
-        public static volatile int launchCount = 0;
-        public static volatile int preLaunchCount = 0;
-        public static volatile int orbitReachedCount = 0;
-        public static volatile int dismantleCount = 0;
-        public static volatile int landedCount = 0;
-        public static volatile int deOrbitingCount = 0;
+    /**
+     * Event-bus listener that counts RocketEvent fires, for this command's server: registered when
+     * the server registers this command. Its counters are read by the count verbs and by the
+     * launch/orbit-reached/dismantle probes, which include "*EventDelta" fields in their responses
+     * for inline cause-effect verification.
+     */
+    final RocketEventRecorder rocketEvents = new RocketEventRecorder();
+
+    public static final class RocketEventRecorder extends ServerScopedListener {
+        public volatile int launchCount = 0;
+        public volatile int preLaunchCount = 0;
+        public volatile int orbitReachedCount = 0;
+        public volatile int dismantleCount = 0;
+        public volatile int landedCount = 0;
+        public volatile int deOrbitingCount = 0;
 
         // Gap #6 payload pins — last-observed entity id + dim for each
         // event type, so tests can verify subscribers receive the right
         // payload (not just that the event fired). Defaults to -1 so a
         // missed event is distinguishable from "fired with entityId=0".
-        public static volatile int lastLaunchEntityId = -1;
-        public static volatile int lastLaunchDim = Integer.MIN_VALUE;
-        public static volatile int lastPreLaunchEntityId = -1;
-        public static volatile int lastPreLaunchDim = Integer.MIN_VALUE;
-        public static volatile int lastOrbitReachedEntityId = -1;
-        public static volatile int lastOrbitReachedDim = Integer.MIN_VALUE;
-        public static volatile int lastDismantleEntityId = -1;
-        public static volatile int lastDismantleDim = Integer.MIN_VALUE;
-        public static volatile int lastLandedEntityId = -1;
-        public static volatile int lastLandedDim = Integer.MIN_VALUE;
-        public static volatile int lastDeOrbitingEntityId = -1;
-        public static volatile int lastDeOrbitingDim = Integer.MIN_VALUE;
-
-        private static volatile boolean registered = false;
-
-        public static synchronized void ensureRegistered() {
-            if (registered) return;
-            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RocketEventRecorder());
-            registered = true;
-        }
+        public volatile int lastLaunchEntityId = -1;
+        public volatile int lastLaunchDim = Integer.MIN_VALUE;
+        public volatile int lastPreLaunchEntityId = -1;
+        public volatile int lastPreLaunchDim = Integer.MIN_VALUE;
+        public volatile int lastOrbitReachedEntityId = -1;
+        public volatile int lastOrbitReachedDim = Integer.MIN_VALUE;
+        public volatile int lastDismantleEntityId = -1;
+        public volatile int lastDismantleDim = Integer.MIN_VALUE;
+        public volatile int lastLandedEntityId = -1;
+        public volatile int lastLandedDim = Integer.MIN_VALUE;
+        public volatile int lastDeOrbitingEntityId = -1;
+        public volatile int lastDeOrbitingDim = Integer.MIN_VALUE;
 
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onLaunch(

@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
@@ -33,7 +34,7 @@ import static org.junit.Assert.assertTrue;
  * {@code M1PlanetToPlanetMilestoneE2ETest} (leg 7b: a jump beside the moon is carried into its zone,
  * seated, and keeps station there).</p>
  *
- * <p>Inside a zone the seam is a sphere, not the cube face {@code VSShipCellSeamE2ETest} flies
+ * <p>Inside a zone the seam is a sphere, not the cube face {@code VSShipCellSeamTest} flies
  * through. The decision and the naming are pinned on the real solar arithmetic by
  * {@code ZoneCrossingAimsAtTheRightCellTest}; what nothing else shows is a REAL ship doing it: the
  * controller arming on the sphere for a craft its cube predicate calls "inside", the carry cutting and
@@ -68,8 +69,6 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
     /** How much WORLD an async crossing is allowed to settle in, in server ticks — thirty seconds. */
     private static final int SETTLE_TICKS = 600;
 
-    /** A world Y comfortably above the default orbit ceiling (StellurgyConfiguration.orbit = 1000). */
-    private static final int ABOVE_CEILING_Y = 1200;
 
     /** Float noise on a commanded rate read back through a double, not a tolerance. */
     private static final double EXACTLY_ZERO = 1e-9;
@@ -332,8 +331,9 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * re-address every craft in the planet's cell, the craft's own computer carries it in the moment
      * after the entry paste (the class note) and the method fails in its ARRANGEMENT — "the throttle
      * could not be released — the craft's ledger row is now … @19_0_0.-7_0_-2" — before the control
-     * is asked. That null is witnessed on the same inversion by
-     * {@code ZoneCrossingAimsAtTheRightCellTest#aCraftInThePlanetsOwnCellOutsideEveryMoonsSphereIsLeftAlone}.</p>
+     * is asked. That null was witnessed on the same inversion by the integration-tier zone-crossing
+     * test's planet's-own-cell, outside-every-moon's-sphere case, which was removed on 2026-10-02 with
+     * the fast-tier tests that needed a running server; nothing in the tree witnesses it now.</p>
      */
     @Test
     public void aCraftFreshFromThePlanetFlownIntoItsMoonsSphereIsCarriedIntoTheMoonsZone()
@@ -522,7 +522,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 Reply.of(held).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 "
-                + padVsId + " " + (int) onPad.x + " " + ABOVE_CEILING_Y + " " + (int) onPad.z)).ok());
+                + padVsId + " " + (int) onPad.x + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) onPad.z)).ok());
         // Marked BEFORE the unpark, which is what lets the entry start: it is announced once.
         long entryMark = events.mark();
         exec("stellurgytest vs unpark-by-id 0 " + padVsId);
@@ -744,9 +744,5 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 }

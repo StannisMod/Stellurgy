@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import java.util.HashSet;
 import java.util.Set;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
@@ -49,7 +51,6 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
@@ -65,7 +66,14 @@ import java.util.Random;
 import java.util.Map;
 import dev.stannismod.stellurgy.Stellurgy;
 
-public class TileObservatory extends TileMultiPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
+public class TileObservatory extends TileWasteHeatPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
+
+    /** Where this observatory's asteroid list was scrolled to, on the client. */
+    private final dev.stannismod.stellurgy.inventory.modules.ScrollMemory listScroll =
+            new dev.stannismod.stellurgy.inventory.modules.ScrollMemory();
 
     private static final org.apache.logging.log4j.Logger LOGGER =
             org.apache.logging.log4j.LogManager.getLogger("Stellurgy|Observatory");
@@ -336,7 +344,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             // Once per load: the stride is the installed generator's, and that is fixed for a world.
             if (stepLightYears <= 0d) {
                 stepLightYears = dev.stannismod.stellurgy.universe.UniverseScale
-                        .lightYearsForCells(RegionScan.Tuning.fromConfig().strideCells());
+                        .lightYearsForCells(scanTuning().strideCells());
                 markDirty();
             }
             completeRegionScanIfDue();
@@ -463,7 +471,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         characteriseWholeSystem = !nbt.hasKey("scanWholeSystem") || nbt.getBoolean("scanWholeSystem");
 
         if (world != null && world.isRemote && prevSeed != lastSeed) {
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
+            listScroll.clear();
         }
     }
 
@@ -583,7 +591,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
 
             int g = 0;
             Asteroid asteroidSmol;
-            if (lastButton != -1 && lastType != null && !lastType.isEmpty() && (asteroidSmol = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(lastType)) != null) {
+            if (lastButton != -1 && lastType != null && !lastType.isEmpty() && (asteroidSmol = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(lastType)) != null) {
                 List<StackEntry> harvestList = asteroidSmol.getHarvest(lastSeed + lastButton, Math.max(1 - ((Math.min(getDataAmt(DataType.COMPOSITION), 2000) + Math.min(getDataAmt(DataType.MASS), 2000)) / 4000f), 0));
                 for (StackEntry entry : harvestList) {
                     ItemStack s = entry.stack;
@@ -621,12 +629,12 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             int totalAmountAllowed = 10;
             float totalWeight = 0;
 
-            List<String> keys = new ArrayList<>(StellurgyConfiguration.getCurrentConfig().asteroidTypes.keySet());
+            List<String> keys = new ArrayList<>(dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().keySet());
             Collections.sort(keys);
 
             List<Asteroid> viableTypes = new LinkedList<>();
             for (String str : keys) {
-                Asteroid asteroid = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(str);
+                Asteroid asteroid = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(str);
                 if (asteroid != null && asteroid.distance <= getMaxDistance()) {
                     totalWeight += asteroid.getProbability();
                     viableTypes.add(asteroid);
@@ -694,7 +702,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             // ---- LEFT asteroid list: wheel-enabled + cached
             if (lastSeed != -1) {
                 modules.add(dev.stannismod.stellurgy.Stellurgy.proxy
-                    .createObservatoryAsteroidListPan(baseX, baseY, list2, sizeX, sizeY));
+                    .createScrollListPan(baseX, baseY, list2, sizeX, sizeY, listScroll));
             }
 
 
@@ -845,7 +853,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         // Re-aiming mid-sweep is allowed and costs only the cell in flight: every cell already
         // resolved is already written to the crystal, so there is nothing else to lose.
         RegionScan aimed = buildScan(() -> RegionScan.directed(origin, dirX, dirY, dirZ, distanceSteps,
-                world.getTotalWorldTime(), RegionScan.Tuning.fromConfig()));
+                world.getTotalWorldTime(), scanTuning()));
         if (aimed == null) {
             return false;
         }
@@ -893,6 +901,12 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
      * <p>Passive and active are one mode at a time: an observatory staring into deep space genuinely
      * cannot watch what is close, and a second set of scanners is the expensive cure.</p>
      */
+    /** The survey tuning for the sky of this server's save. Server side only. */
+    private RegionScan.Tuning scanTuning() {
+        return RegionScan.Tuning.fromConfig(
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(world).generator());
+    }
+
     public boolean beginPassiveSweep() {
         if (world == null || world.isRemote) {
             return false;
@@ -903,7 +917,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         }
         int radius = Math.max(0, StellurgyConfiguration.getCurrentConfig().telescopePassiveRadiusSteps);
         RegionScan sweep = buildScan(() -> RegionScan.local(origin, radius,
-                world.getTotalWorldTime(), RegionScan.Tuning.fromConfig()));
+                world.getTotalWorldTime(), scanTuning()));
         if (sweep == null) {
             return false;
         }
@@ -1262,7 +1276,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             lastType = ""; // since scan resets it
             isOpen = nbt.getBoolean("io");
 
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
+            listScroll.clear();
 
             if (pendingReopenAfterSeedSync) {
                 pendingReopenAfterSeedSync = false;
@@ -1294,7 +1308,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                 if (id == PICK_DIRECTION) {
                     scanDirection = (scanDirectionIndex() + 1) % SCAN_DIRECTIONS.length;
                 } else {
-                    int reach = RegionScan.Tuning.fromConfig().maxRangeSteps();
+                    int reach = scanTuning().maxRangeSteps();
                     scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger("d")));
                 }
                 markDirty();
@@ -1684,10 +1698,6 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         lastSeed = -1;
         lastButton = -1;
         lastType = "";
-        if (world != null && world.isRemote) {
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
-        }
-
 
         savedDataBusNbt.clear();
     }
@@ -1696,10 +1706,6 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
     public void onChunkUnload() {
         super.onChunkUnload();
         dataCables.clear();
-        if (world != null && world.isRemote) {
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
-        }
-
 
         savedDataBusNbt.clear();
     }

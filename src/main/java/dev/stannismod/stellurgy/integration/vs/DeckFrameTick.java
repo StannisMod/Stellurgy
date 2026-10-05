@@ -238,7 +238,7 @@ public final class DeckFrameTick {
         }
         // A hold that names ANOTHER craft for him outranks the episode this deck opened by where he
         // stood: let go, and he is taken again, declared craft first.
-        String declared = DeckHold.heldShipId(player);
+        String declared = dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.heldShipId(player);
         if (episode != null && declared != null && !declared.equals(episode.shipId)) {
             release(player, "declaredElsewhere");
             episode = null;
@@ -889,7 +889,9 @@ public final class DeckFrameTick {
         // already said which craft this body belongs to, and where two hulls overlap a spatial pick
         // and that declaration differ - measured 2026-09-30, a crew member arriving from hyperspace
         // was taken by a hull that merely overlapped his, and the hold waiting for his own expired.
-        String declared = DeckHold.heldShipId(entity);
+        // A hold has no client half: a client body declares nothing.
+        String declared = world.isRemote ? null
+                : dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.heldShipId(entity);
         if (declared != null) {
             candidates.remove(declared);
             candidates.add(0, declared);

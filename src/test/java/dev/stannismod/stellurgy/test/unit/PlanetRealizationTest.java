@@ -33,25 +33,22 @@ import static org.junit.Assert.assertTrue;
  */
 public class PlanetRealizationTest {
 
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     /** How far a procedural planet must travel in a year, in blocks, to be GOING ROUND its star
      *  rather than standing at a fixed point. The TEST'S OWN sensitivity bar. */
     private static final double ORBITED_BLOCKS = 1000d;
 
     private static final long SEED = 0x5EED5EEDL;
 
-    @After
-    public void resetSeams() {
-        UniverseRegistry.detachGenerator();
-        UniverseRegistry.setStarLookup(null);
-    }
-
     /** The shipped spacing: a system sampled here is a system the game ships. */
     private static final int SPACING = GalaxyGenConfig.DEFAULT_MIN_SPACING;
 
     /** A dense, void-free galaxy, so the first super-cell probed holds a system. */
-    private static UniverseRegistry registryWithProceduralGalaxy() {
-        UniverseRegistry reg = new UniverseRegistry();
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(
+    private UniverseRegistry registryWithProceduralGalaxy() {
+        UniverseRegistry reg = testUniverse.newRegistry();
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),
                 new GalaxyGenConfig(SPACING, 1.0d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                         GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null)));
         reg.bindWorldSeed(SEED);
@@ -397,7 +394,7 @@ public class PlanetRealizationTest {
         assertTrue("a pinned system must have a star", before.isPresent());
 
         // A pack edit: a different spacing, a different density, a whole different galaxy.
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),
                 new GalaxyGenConfig(SPACING / 2, 0.2d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                         GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null)));
 

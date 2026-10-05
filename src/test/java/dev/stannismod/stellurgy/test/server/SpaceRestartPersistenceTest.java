@@ -1,0 +1,422 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.EvictionReports;
+import dev.stannismod.stellurgy.test.LedgerEntry;
+import dev.stannismod.stellurgy.test.MaterializedCell;
+import dev.stannismod.stellurgy.test.SubsystemStatus;
+import dev.stannismod.stellurgy.test.Reply;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Before;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Server e2e for tier-2 space persistence across a REAL server restart: two separate server JVMs
+ * over one and the same world directory.
+ *
+ * <p>Every other test of this subsystem drives a probe-local stack and simulates a restart in
+ * process, which cannot see the failures that only a genuine reboot produces — a snapshot that is
+ * marked dirty too late to be written, an id that was minted per session and silently changed, a
+ * restore hook that never runs because the production wiring stood down. This test closes that gap
+ * by using the production path end to end: the shipped server-start hook builds the subsystem, the
+ * shipped world-save hook writes it, the process really exits, and the shipped server-started hook
+ * on the SECOND boot is what has to bring the state back from disk.</p>
+ *
+ * <p>The production subsystem registers on a harness server like on any other
+ * ({@code SpaceSubsystem#shouldRegister} stands down only for a subsystem already built in the JVM),
+ * so no config is seeded. Nothing here touches physics — what is under test is the persistence of the
+ * server's record of where ships are, not a loaded ship.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject — every scenario here boots a server, stops it,
+ * and boots a second one over the same world root. The two subsystem reads that need no restart (the
+ * pool registered twice, a ship the ledger never settled) run in {@code SystemBodiesFeedFollowsTheCellTest}.
+ * Probe-driven, so a mechanics test and not a player's path: no {@code E2E} in its name.</p>
+ */
+public class SpaceRestartPersistenceTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
+
+    /** Stable across both boots — the whole point is that the SECOND server recognises it. */
+    private static final String SHIP_ID = "2f8c1f6a-4d3b-4c11-9a7e-0b5d6e7f8a90";
+    /** An arbitrary but exact galactic address; asserted back verbatim after the reboot. */
+    private static final String SECTOR_X = "7";
+    private static final String SECTOR_Y = "-3";
+    private static final String SECTOR_Z = "11";
+
+    /**
+     * How long to wait for the world autosave to reach an armed save fault. Vanilla saves every 900
+     * ticks, i.e. 45 s at a full tick rate, and a harness server under fork contention runs slower than
+     * that — so the wait is scaled the way every other hard ceiling in this suite is, and is generous:
+     * its only cost on a healthy build is that it ends early, the moment the fault reports it fired.
+     */
+    /**
+     * World an armed autosave fault is given to fire in: 3 000 server ticks - three and a bit
+     * autosave intervals at vanilla's 900. The old form was 150 s of wall clock, a fact about the
+     * machine standing in for "a few autosaves".
+     */
+    private static final int AUTOSAVE_WAIT_TICKS = 3_000;
+
+    private Path root;
+    private RealDedicatedServerHarness harness;
+
+    @Before
+    public void seedWorldDirectory() throws Exception {
+        Assume.assumeTrue(
+                "Server harness disabled — set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
+                Boolean.parseBoolean(System.getProperty(
+                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
+
+        root = Files.createTempDirectory("forge-server-space-restart-");
+    }
+
+    @After
+    public void stopHarness() throws Exception {
+        if (harness != null) {
+            harness.close();
+            harness = null;
+        }
+    }
+
+    private String exec(String cmd) throws Exception {
+        return String.join("\n", harness.client().execute(cmd));
+    }
+
+    /**
+     * This boot's reader of the server's ordered event log.
+     *
+     * <p>Built per call rather than held in a field: this class starts and stops its own servers —
+     * that is its subject — and a reader captured on one boot would be addressing a process that has
+     * exited.</p>
+     */
+    private Events serverEvents() {
+        return new Events(this::exec,
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
+    }
+
+    // THERE IS NO `assumeProductionSubsystemAvailable()` ANY MORE — six scenarios opened with it and
+    // all six assert `status.registered` on the next line, which asks the same question and FAILS
+    // instead of vanishing. The condition it skipped on cannot arise (the substrate is compiled into
+    // this jar), and `Assume` skips SILENTLY, so had it ever been true these six would have left the
+    // run without reddening anything. Removed 2026-09-22.
+
+    @Test
+    public void aSettledShipsGalacticPositionSurvivesAServerReboot() throws Exception {
+        // --- boot 1: the production subsystem comes up and records a ship ------------------------
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        // If this fails the rest of the test is meaningless rather than wrong: the production wiring
+        // never registered, so nothing below would be exercising it. Say so explicitly.
+        assertTrue("the production space subsystem must be live on boot 1 (config opt-in) — "
+                + "without it this test would silently assert nothing: " + status.raw(),
+                status.registered);
+
+        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        assertTrue("the ship must be recorded in the production ledger: " + settled,
+                Reply.of(settled).ok());
+
+        LedgerEntry beforeSave = ledger(SHIP_ID);
+        assertTrue("sanity: the ledger must hold the ship BEFORE the reboot, or a green result "
+                + "after it would prove nothing: " + beforeSave.raw(), beforeSave.found);
+
+        // Deliberately NO explicit save here. The ship is recorded and the server is then simply
+        // stopped, which is what an operator does and the harshest honest case: the shutdown save is
+        // the only one that ever runs, and it is the last one there will be. An implementation that
+        // merely marks its snapshot dirty during that save has already missed it, and nothing writes
+        // map storage afterwards — so the ship would be silently lost. Saving twice here would hide
+        // exactly that, by letting a second pass write what the first one dirtied.
+
+        // --- the reboot: this process really exits ----------------------------------------------
+        harness.close();
+        harness = null;
+
+        // --- boot 2: a brand new JVM, same world directory ---------------------------------------
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
+
+        LedgerEntry restored = ledger(SHIP_ID);
+        assertTrue("a ship settled before the reboot must still be known after it — this is the "
+                + "contract that a player's ship is not lost by restarting the server: "
+                + restored.raw(),
+                restored.found);
+        assertEquals("it must come back at the SAME galactic address, not merely exist: "
+                        + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.cellKey());
+        assertEquals("and it must come back settled, not in some default state: " + restored.raw(),
+                "SETTLED", restored.state());
+    }
+
+    /**
+     * The slot dimension the subsystem attributes to a restored ship must name the world its cell is
+     * ACTUALLY bound to on THIS boot.
+     *
+     * <p>Slot dim ids are minted per boot and handed out in whatever order cells happen to be
+     * materialized, so the id a ship's cell held last session says nothing about this one. A record
+     * that carries one across a restart points the departure crossing at a world that either does not
+     * exist or holds somebody else's cell — and the pilot pays a capacitor charge for a jump that
+     * never leaves. Persisting the galactic coordinate is not enough on its own: the coordinate is
+     * what survives a restart, the dimension is what has to be re-derived from it.</p>
+     *
+     * <p>The reboot alone does not produce the divergence. The pool hands out the same ids in the
+     * same order, so a ship whose cell is materialized first on boot 2 lands back on the id it had
+     * and the assertion below would pass without ever exercising the staleness. Boot 2 therefore
+     * materializes a DIFFERENT cell first, which takes the slot the ship used to hold and forces its
+     * cell onto another one — the same cross-session shift a real server produces when its players
+     * do not happen to reach their ships in the order they left them. The shift is asserted rather
+     * than assumed, so a pool that stopped shifting fails here instead of quietly making this test
+     * vacuous.</p>
+     */
+    @Test
+    public void aRestoredShipsSlotDimNamesTheWorldItsCellIsActuallyIn() throws Exception {
+        // --- boot 1: settle the ship; its cell is materialized into whatever slot is free first ----
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("the production space subsystem must be live on boot 1 — without it nothing below "
+                + "is exercising the shipped wiring: " + status.raw(), status.registered);
+
+        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        assertTrue("the ship must be recorded in the production ledger: " + settled,
+                Reply.of(settled).ok());
+        int slotBeforeReboot = jsonInt(settled, "slotDim");
+
+        // --- the reboot: this process really exits -----------------------------------------------
+        harness.close();
+        harness = null;
+
+        // --- boot 2: a brand new JVM, same world directory ---------------------------------------
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
+
+        // Take the ship's old slot with an unrelated cell BEFORE its own cell is made live, so the
+        // ship's cell is forced onto a different slot than it held last session.
+        MaterializedCell decoy = MaterializedCell.at(this::exec, "1 1 1")
+                .requireMaterialized("the decoy cell must materialize");
+        assertEquals("the decoy must land on the slot the ship's cell held before the reboot — that is "
+                + "what makes the ship's own cell move: " + decoy.raw(),
+                slotBeforeReboot, decoy.slotDim());
+
+        MaterializedCell live = MaterializedCell.at(this::exec,
+                        SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z)
+                .requireMaterialized("the ship's own cell must materialize");
+        int liveSlot = live.slotDim();
+        assertNotEquals("the arrangement must actually move the ship's cell onto a different slot; "
+                + "if it did not, this test proves nothing about a stale id: " + live.raw(),
+                slotBeforeReboot, liveSlot);
+
+        LedgerEntry restored = ledger(SHIP_ID);
+        assertTrue("a ship settled before the reboot must still be known after it: "
+                + restored.raw(), restored.found);
+        assertEquals("the slot dim attributed to the restored ship must be the one its cell is live "
+                + "in now, not the one it happened to occupy last session — a departure resolves its "
+                + "origin world from this id: " + restored.raw(),
+                liveSlot, restored.slotDim());
+        assertEquals("and that dimension must be bound to the ship's OWN cell. This is the assertion "
+                + "that fails loudest in play: a stale id can still resolve to a live world, and the "
+                + "crossing would then cut a ship out of a cell belonging to somebody else: "
+                + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.slotCell());
+    }
+
+    /**
+     * A save point that cannot record a ship it has been told is flying must keep the fleet it already
+     * persisted, rather than storing an empty one over it.
+     *
+     * <p><b>The state this arranges is the one a real crash produced.</b> A ship in flight is deliberately
+     * absent from the stored settled list — the in-flight jump record is what carries it — so the two
+     * halves of the durable record are only ever right together. In the playtest that started this, the
+     * half that fetches the jumps died half-way through a save; the half that empties the settled list had
+     * already run; and what reached the disk said the world contained no ships at all. The next flush made
+     * that permanent and the pilot came back to a world that had forgotten he ever owned a ship.</p>
+     *
+     * <p>Reproducing the class-loading accident itself is neither possible nor the point. What matters is
+     * the STATE it left the save point in — the ledger saying "flying", nothing carrying it — and that is
+     * arrangeable directly. A save may then legitimately do only one of two things: record the ship, or
+     * record nothing at all. It may not record its absence.</p>
+     *
+     * <p><b>What makes this able to fail.</b> The instrument is not the forced save: it is the SHUTDOWN
+     * save, which the neighbouring reboot test already proves runs and writes. So a forced save that
+     * silently did nothing cannot turn this green — it would leave the shutdown save to write the same
+     * emptied fleet, and the assertion below would still be the thing that catches it. The one thing the
+     * forced save is load-bearing for is laying down a good snapshot BEFORE the bad state exists; if that
+     * failed, this test goes red, never quietly green.</p>
+     */
+    @Test
+    public void aSavePointThatCannotRecordAFlyingShipKeepsTheFleetItAlreadyPersisted() throws Exception {
+        // --- boot 1 -------------------------------------------------------------------------------
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
+                status.registered);
+
+        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        assertTrue("the ship must be recorded in the production ledger: " + settled,
+                Reply.of(settled).ok());
+
+        // Lay a good snapshot on disk. Everything below is about what the NEXT save does to it.
+        String saved = exec("stellurgytest space save-now");
+        assertTrue("the forced save must have run: " + saved, Reply.of(saved).ok());
+
+        // Now the state the crash left behind: the ledger says this ship is flying, and no jump carries
+        // it. Both halves are asserted, because "the ship is somewhere else" and "the ship is nowhere"
+        // are the same reading from the settled list alone.
+        String flying = exec("stellurgytest space ledger-transit " + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z
+                + " " + SHIP_ID);
+        assertTrue("arrangement: the ledger must now call the ship in-flight: " + flying,
+                "IN_TRANSIT".equals(Reply.of(flying).text("state")));
+        SubsystemStatus midStatus = SubsystemStatus.read(this::exec);
+        assertEquals("arrangement: and NO jump may be carrying it — that is the whole condition under "
+                        + "test, and with a jump in flight this test would prove nothing: " + midStatus.raw(),
+                0, midStatus.transits);
+        assertEquals("arrangement: the subsystem must still hold the ship, or the save has nothing to "
+                + "lose: " + midStatus.raw(), 1, midStatus.ledger);
+
+        String savedAgain = exec("stellurgytest space save-now");
+        assertTrue("the second save must also have run: " + savedAgain, Reply.of(savedAgain).ok());
+
+        // --- the reboot ---------------------------------------------------------------------------
+        harness.close();
+        harness = null;
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
+
+        LedgerEntry restored = ledger(SHIP_ID);
+        assertTrue("the ship must survive a save point that could not record it — a save is allowed to "
+                + "be one cycle stale, never to erase a fleet: " + restored.raw(),
+                restored.found);
+        assertEquals("and it must come back at the address the last GOOD save recorded: "
+                        + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.cellKey());
+    }
+
+    /**
+     * A save point that fails part-way leaves both the fleet and the server standing.
+     *
+     * <p><b>What "fails" means here, precisely.</b> The gathering the handler does before it writes is
+     * meant to be total, so nothing can be made to break it from outside — which is exactly why the
+     * subsystem exposes a one-shot armed fault instead. What it stands in for is a mistake in that
+     * gather: a null nobody expected, a collection changed under an iterator. The handler undertakes to
+     * survive THAT and lose one stale cycle. It deliberately does not undertake to survive an
+     * {@link Error} — a broken class loader or an exhausted heap is not a condition a save handler can
+     * mend, and a crash report is worth more than a line swallowed every forty-five seconds. The fleet
+     * does not rest on that distinction: the gather touches the store only once it holds every value,
+     * so a throw of any kind leaves the previous snapshot whole (which is the leg above).</p>
+     *
+     * <p><b>Which save the fault has to land in is the whole design of this test.</b> A save asked for
+     * by a command cannot demonstrate anything here: vanilla's command dispatch catches {@code
+     * Throwable}, so a handler that throws under a {@code /save-all} is caught two frames up and the
+     * server survives on the broken build as readily as on the fixed one. The save that can take the
+     * server down is the WORLD AUTOSAVE, raised straight out of the server tick with nothing between it
+     * and the tick loop's crash handler — the crash report this task came from names that exact stack.
+     * So this arms the fault and then WAITS for the periodic autosave to walk into it, which is why the
+     * test is slow. The fault going un-armed is the witness that it really fired; without that, a wait
+     * that was merely too short would read as "the server survived".</p>
+     *
+     * <p><b>Red witness</b>: delete the {@code catch} around the save handler's body. The poll below
+     * then dies reporting that the server process exited.</p>
+     */
+    @Test
+    public void aSavePointThatFailsPartWayLeavesBothTheFleetAndTheServerStanding() throws Exception {
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
+                status.registered);
+
+        String settled = exec("stellurgytest space ledger-settle " + SHIP_ID + " "
+                + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
+        assertTrue("the ship must be recorded in the production ledger: " + settled,
+                Reply.of(settled).ok());
+
+        // Marked before the arming: the fire is announced once and the fault does not exist yet.
+        long faultMark = serverEvents().mark();
+        String armed = exec("stellurgytest space save-fault-once");
+        assertTrue("the fault must actually be armed, or nothing below is exercising a failed save: "
+                + armed, Reply.of(armed).bool("armed"));
+        assertTrue("and the subsystem must agree it is armed: " + SubsystemStatus.read(this::exec).raw(),
+                SubsystemStatus.read(this::exec).saveFaultArmed);
+
+        // Wait for the world autosave to walk into the fault, on the record written from inside the
+        // throw's own branch. An autosave is scheduled on the SERVER's tick counter (every 900
+        // ticks), so waiting for one is waiting for ticks — the fork multiplier this budget once
+        // carried was compensating for a busy box delivering fewer per second, which is what a tick
+        // budget removes.
+        //
+        // The poll it replaces read the ARMED FLAG, which is level-triggered on an edge: the flag is
+        // false before the arming and false after the firing, so a reading only means anything
+        // relative to the arming that preceded it, and nothing in the reading says which side of it
+        // the reader is on. The record says the fault FIRED.
+        serverEvents().await(faultMark, "save_fault_fired",
+                "no autosave reached the armed fault within " + AUTOSAVE_WAIT_TICKS + " ticks, so"
+                        + " this run never exercised a failing save at all and its green would be"
+                        + " worth nothing", AUTOSAVE_WAIT_TICKS);
+
+        // Read AFTER the fault fired, and it is a liveness check as much as a reading: on an
+        // unguarded handler the server is gone by now and exec() reports the dead process.
+        SubsystemStatus live = SubsystemStatus.read(this::exec);
+
+        // It fired, from the server tick, and the server is still answering.
+        assertTrue("the server must still be running after a save point failed — a failed save costs a "
+                + "stale cycle, not the process: " + live.raw(), live.registered);
+
+        // And it is not wedged: an ordinary save still works afterwards.
+        String recovered = exec("stellurgytest space save-now");
+        assertTrue("the next save must work normally: " + recovered, Reply.of(recovered).ok());
+
+        harness.close();
+        harness = null;
+        harness = RealDedicatedServerHarness.startWith(root, false);
+
+        LedgerEntry restored = ledger(SHIP_ID);
+        assertTrue("and the ship the failing save was holding must still be there: "
+                + restored.raw(), restored.found);
+        assertEquals("at its own address: " + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.cellKey());
+    }
+
+    /** What the production ledger holds about one ship, refusing a reply that is not a reading. */
+    private LedgerEntry ledger(String shipId) throws Exception {
+        return LedgerEntry.forShip(this::exec, shipId);
+    }
+
+    /** The value of a numeric JSON field in a probe response. Fails the test if it is absent. */
+    private static int jsonInt(String json, String field) {
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
+    }
+}

@@ -20,6 +20,7 @@ import net.minecraft.util.math.ChunkPos;
 
 @SuppressWarnings("WeakerAccess")
 public class ShipChunkAllocator {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     @java.lang.SuppressWarnings("all")
     private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(ShipChunkAllocator.class);
     /**

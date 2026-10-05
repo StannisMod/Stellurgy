@@ -103,7 +103,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // deregistered it itself, which pinned the mechanism rather than the promise - and the mechanism
         // it pinned was the one that leaked a ship per crossing. What the crossing owes is that the world
         // it left does not keep the ship it moved, and that is asserted where it belongs, in
-        // VSCrossingLeavesNoShipBehindE2ETest.
+        // VSCrossingLeavesNoShipBehindTest.
         assertTrue("crossing did not carry the aboard rider: " + cross,
                 extractInt(cross, "ridersCarried") >= 1);
 
@@ -137,12 +137,6 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
     @org.junit.After
     public void resetPermaload() throws Exception {
         // Shared-harness state-leak contract: don't leave "permanently loaded" set for later tests.
-    }
-
-    // --- helpers ------------------------------------------------------------------------------------
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
     }
 
     /** Poll for a loaded VS ship (the assembly is deferred to the ship manager's own tick, which

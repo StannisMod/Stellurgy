@@ -43,7 +43,7 @@ public abstract class MixinDeckFrameTickShove {
                                                           double localY, double localZ, double carryX,
                                                           double carryY, double carryZ, boolean grounded,
                                                           CallbackInfo ci) {
-        TestTrace.instrumentHere("ship_frame_travel_shove");
+        TestTrace.instrument(entity, "ship_frame_travel_shove");
         if (entity == null || entity.world == null || !entity.world.isRemote
                 || !(entity instanceof EntityPlayer)) {
             return;
@@ -53,8 +53,8 @@ public abstract class MixinDeckFrameTickShove {
             return;
         }
         entity.setPosition(entity.posX, entity.posY + blocks, entity.posZ);
-        TestTrace.recordHere("ship_frame_travel_shove",
-                "\"blocks\":" + blocks + ",\"toY\":" + TestTrace.fmt(entity.posY)
+        TestTrace.record(entity, "ship_frame_travel_shove",
+                "\"e\":" + entity.getEntityId() + ",\"blocks\":" + blocks + ",\"toY\":" + TestTrace.fmt(entity.posY)
                         + ",\"ship\":\"" + TestTrace.json(shipId) + "\",\"by\":\"deckFrame\"");
     }
 }

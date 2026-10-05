@@ -10,8 +10,10 @@ import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraftforge.common.BiomeManager;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.dimension.TerraformingRecord;
 import dev.stannismod.stellurgy.world.ChunkManagerPlanet;
 import dev.stannismod.stellurgy.world.ChunkProviderPlanet;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 import java.util.*;
 
@@ -58,11 +60,29 @@ public class TerraformingHelper {
         return !decorationqueue.isEmpty();
     }
 
-    public TerraformingHelper(int dimension, List<BiomeManager.BiomeEntry> biomes, HashSet<ChunkPos> generated_chunks, HashSet<ChunkPos> biomechanged_chunks){
-        this.dimId = dimension;
-        this.props = DimensionManager.getInstance().getDimensionProperties(dimension);
+    /** The helper working on {@code world} now, or {@code null} when none has been started there. */
+    public static TerraformingHelper of(World world) {
+        return WorldRuntime.of(world, Slot.class, Slot::new).helper;
+    }
+
+    /** Makes {@code helper} the one working on its world, replacing any earlier one. */
+    public static void install(TerraformingHelper helper) {
+        WorldRuntime.of(helper.world, Slot.class, Slot::new).helper = helper;
+    }
+
+    /**
+     * The helper of one world: its work queues and its generators, never persisted, dropped with the
+     * world object. A runtime part of the world, because what it works on is that world's chunks.
+     */
+    private static final class Slot {
+        private volatile TerraformingHelper helper;
+    }
+
+    public TerraformingHelper(World world, List<BiomeManager.BiomeEntry> biomes, Set<ChunkPos> generated_chunks, Set<ChunkPos> biomechanged_chunks){
+        this.dimId = world.provider.getDimension();
+        this.props = DimensionManager.getInstance().getDimensionProperties(dimId);
         this.biomeList = biomes;
-        this.world = net.minecraftforge.common.DimensionManager.getWorld(dimId);
+        this.world = world;
         this.chunkMgrTerraformed = new ChunkManagerPlanet(world, world.getWorldInfo().getGeneratorOptions(), biomeList);
         this.terraformingqueue = new ArrayList<>();
         this.biomechangingqueue = new ArrayList<>();
@@ -206,7 +226,7 @@ public class TerraformingHelper {
     public TerraformingType get_chunk_type(int x, int z) {
 
         TerraformingType type = TerraformingType.ALLOWED;
-        for (BlockPos i : DimensionProperties.proxylists.getProtectingBlocksForDimension(props.getId())) {
+        for (BlockPos i : TerraformingRecord.of(world).protectingBlocks()) {
             //System.out.println("found protecting block at "+i.getX()+":"+i.getY()+":"+i.getZ());
             ChunkPos cpos = getChunkPosFromBlockPos(i);
             int dx = cpos.x - x;
@@ -331,8 +351,8 @@ public class TerraformingHelper {
     }
 
     public void set_chunk_biomechanged(ChunkPos pos){ // mark a chunk ready for terraforming
-        props.add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(pos);
-        DimensionProperties.proxylists.getChunksFullyBiomeChanged(props.getId()).add(pos); // set it fully biome changed
+        props.add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(this, pos);
+        TerraformingRecord.of(world).markBiomeChanged(pos);
 
     }
     public void generate_new_chunkdata(ChunkPos cpos){
@@ -378,6 +398,6 @@ public class TerraformingHelper {
 
     public void setChunkFullyGenerated(int x, int z) {
         getChunkFromList(x,z).chunk_fully_generated = true;
-        DimensionProperties.proxylists.getChunksFullyTerraformed(props.getId()).add(new ChunkPos(x,z));
+        TerraformingRecord.of(world).markTerraformed(new ChunkPos(x,z));
     }
 }

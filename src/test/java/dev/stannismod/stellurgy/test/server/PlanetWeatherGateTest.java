@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -36,8 +37,11 @@ import static org.junit.Assert.assertTrue;
  * <p>All three fixture planets keep a non-default marker so
  * {@code usesCustomWorldInfo()} engages the custom cycle; the live state is read
  * back through {@code stellurgytest weather get}.</p>
+ *
+ * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-public class PlanetWeatherGateTest {
+@SeededWorld(PlanetWeatherGateTest.Galaxy.class)
+public class PlanetWeatherGateTest extends AbstractSharedServerTest {
 
     /**
      * Ticks the weather cycle is given to announce a dimension.
@@ -54,35 +58,29 @@ public class PlanetWeatherGateTest {
     private static final int DIM_THICK_RAIN  = 9112; // density 100, rainMarker 1  -> must rain
     private static final int DIM_DRY_THUNDER = 9113; // density 100, thunder 1 / rain -1 -> no thunder
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
 
-    @Before
-    public void writeFixture() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-weather-gate-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"3\" numGasGiants=\"0\">\n"
-                + planetXml("ThinRainPlanet",  DIM_THIN_RAIN,   /*density*/ 10,  /*rainMarker*/ 1,  /*thunderMarker*/ 0)
-                + planetXml("ThickRainPlanet", DIM_THICK_RAIN,  /*density*/ 100, /*rainMarker*/ 1,  /*thunderMarker*/ 0)
-                + planetXml("DryThunderPlanet", DIM_DRY_THUNDER, /*density*/ 100, /*rainMarker*/ -1, /*thunderMarker*/ 1)
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+    /** The galaxy this class's one shared server boots over. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(dev.stannismod.stellurgy.test.client.GameDirSeed seed) {
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"3\" numGasGiants=\"0\">\n"
+                    + planetXml("ThinRainPlanet",  DIM_THIN_RAIN,   /*density*/ 10,  /*rainMarker*/ 1,  /*thunderMarker*/ 0)
+                    + planetXml("ThickRainPlanet", DIM_THICK_RAIN,  /*density*/ 100, /*rainMarker*/ 1,  /*thunderMarker*/ 0)
+                    + planetXml("DryThunderPlanet", DIM_DRY_THUNDER, /*density*/ 100, /*rainMarker*/ -1, /*thunderMarker*/ 1)
+                    + "    </star>\n"
+                    + "</galaxy>\n";
+            seed.planetDefs(xml, PlanetWeatherGateTest.class);
+        }
     }
 
     private static String planetXml(String name, int dim, int density, int rainMarker, int thunderMarker) {
         return "        <planet name=\"" + name + "\" DIMID=\"" + dim + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
@@ -102,16 +100,10 @@ public class PlanetWeatherGateTest {
                 + "        </planet>\n";
     }
 
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
-    }
-
     @Test
     public void atmosphereGatesRainAndThunderRequiresRain() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        DimList dimList = DimList.of(String.join("\n", harness.client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
         for (int dim : new int[]{DIM_THIN_RAIN, DIM_THICK_RAIN, DIM_DRY_THUNDER}) {
             assertTrue("fixture dim " + dim + " not registered: " + dimList,
                     dimList.holds(dim));
@@ -156,7 +148,7 @@ public class PlanetWeatherGateTest {
         // does not exist until that read pins it, so no weather change for this dimension can have
         // been announced before this line, and the wait below cannot open a window the record has
         // already passed through.
-        long mark = events().mark();
+        long mark = serverEvents().mark();
         DimWeather first = weather(dim);
         if (first.raining) {
             return first; // it is already raining; there is no transition left to wait for
@@ -166,7 +158,7 @@ public class PlanetWeatherGateTest {
         // The poll it replaces asked the probe for the state every few ticks — a reading of a LEVEL
         // where the subject is an EDGE, so it could tell neither when the rain began nor, on the
         // dimension that never rains, whether the cycle had run at all.
-        events().awaitMatching(mark, "planet_weather_changed",
+        serverEvents().awaitMatching(mark, "planet_weather_changed",
                 reply -> Events.recordsWhereAll(reply,
                         "dim", String.valueOf(dim), "raining", "true").size() > 0,
                 "carrying dim = " + dim + " and raining = true",
@@ -185,7 +177,7 @@ public class PlanetWeatherGateTest {
      */
     private DimWeather weatherAfterCycle(int dim) throws Exception {
         // Marked before the constructing read, for the reason weatherUntilRaining gives.
-        long mark = events().mark();
+        long mark = serverEvents().mark();
         // The constructing read: its VALUE is discarded, its side effect is the point — this is
         // what pins the dimension and calls initDimension, so the cycle below runs on a real world.
         // Read through the reader even so: a world that could not be brought up must fail HERE and
@@ -196,7 +188,7 @@ public class PlanetWeatherGateTest {
         // whole question for these two planets: the atmosphere gate and a -1 rain marker each force
         // the sky clear on EVERY tick rather than accumulating toward it, so the state the first
         // tick leaves is the state every later tick leaves.
-        events().awaitMatching(mark, "planet_weather_changed",
+        serverEvents().awaitMatching(mark, "planet_weather_changed",
                 reply -> !Events.recordsWhere(reply, "dim", String.valueOf(dim)).isEmpty(),
                 "carrying dim = " + dim,
                 "the weather cycle must run on dim " + dim + " before its sky can be judged",
@@ -205,21 +197,21 @@ public class PlanetWeatherGateTest {
         // And across the whole stretch, not only at the read: a sky that rained on one tick and
         // cleared on the next is the defect, and the read alone would call it clear.
         assertTrue("dim " + dim + " rained at some tick since its world came up, whatever it reads"
-                        + " now (" + now.raw() + "): " + events().since(mark, "planet_weather_changed"),
-                Events.recordsWhereAll(events().since(mark, "planet_weather_changed"),
+                        + " now (" + now.raw() + "): " + serverEvents().since(mark, "planet_weather_changed"),
+                Events.recordsWhereAll(serverEvents().since(mark, "planet_weather_changed"),
                         "dim", String.valueOf(dim), "raining", "true").isEmpty());
         return now;
     }
 
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", harness.client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
                 .requireDim(dim);
     }
 
     /** This boot's reader of the server's ordered event log — the harness is this class's own. */
-    private Events events() {
-        return new Events(cmd -> String.join("\n", harness.client().execute(cmd)),
-                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+    private Events serverEvents() {
+        return new Events(cmd -> String.join("\n", client().execute(cmd)),
+                ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
 }

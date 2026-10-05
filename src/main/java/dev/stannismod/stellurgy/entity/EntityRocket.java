@@ -99,10 +99,14 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
 import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.util.*;
 
 
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class EntityRocket extends EntityRocketBase implements INetworkEntity, IModularInventory, IProgressBar, IButtonInventory, ISelectionNotify, IPlanetDefiner {
 
     // set to 2 seconds because keyboard event is not sent to server
@@ -150,7 +154,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      *  (climb, cruise, strafe, or just cancelling gravity in a hover), which the
      *  classic {@code areEnginesRunning} (motionY&gt;0) missed &rarr; intermittent sound. */
     private static final DataParameter<Float> FF_ENGINE_POWER = EntityDataManager.createKey(EntityRocket.class, DataSerializers.FLOAT);
-    private static long ERROR_DISPLAY_TIME = 100;
+    private static final long ERROR_DISPLAY_TIME = 100;
     //Offset for buttons linking to the tileEntityGrid
     private final int tilebuttonOffset = 3;
     public StorageChunk storage;
@@ -186,6 +190,15 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      *  {@link IFlightBackend}). Legacy backend owns the entity transform
      *  exactly as before; a ship-physics backend would own displacement instead. */
     private final IFlightBackend flightBackend = new LegacyFlightBackend();
+    /** What this client's pilot is commanding this rocket; written only on the client. */
+    private final dev.stannismod.stellurgy.client.PilotCommand pilotCommand =
+            new dev.stannismod.stellurgy.client.PilotCommand();
+
+    /** What this client's pilot is commanding this rocket. */
+    public dev.stannismod.stellurgy.client.PilotCommand pilotCommand() {
+        return pilotCommand;
+    }
+
     /** FF attitude source of truth (body&rarr;world quaternion).
      *  Integrated by BODY rates on the server; on the client it is the smoothed
      *  local estimate (predict from input + slerp toward the replicated
@@ -209,6 +222,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     /** Arms the landing detector: false from engine start until the craft first
      *  leaves the ground, so the liftoff itself can't read as a touchdown. */
     private boolean freeFlightHasLeftGround = false;
+    /** Whether this rocket has already said it is entering a world with no orbit line. Once per entity. */
+    private boolean noOrbitLineReported = false;
     /** Ticks over which the FF client absorbs a server-position correction
      *  (~ the entity updateFrequency, so jitter is smoothed, not snapped). */
     private static final double FF_CLIENT_CORRECT_TICKS = 3.0;
@@ -519,7 +534,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     @Override
     public String getTextOverlay() {
 
-        ERROR_DISPLAY_TIME = 100;
         if (this.world.getTotalWorldTime() < this.lastErrorTime + ERROR_DISPLAY_TIME)
             return errorStr;
 
@@ -1381,13 +1395,14 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
         if (isInOrbit()) return true;   // already at orbit
 
-        if (stats.getThrust() <= stats.getWeight()) return false;
-
         final DimensionProperties src = DimensionManager.getInstance()
                 .getDimensionProperties(this.world.provider.getDimension());
-        final float gSrc = Math.max(0.01f, src.getGravitationalMultiplier()); 
+        final float gSrc = Math.max(0.01f, src.getGravitationalMultiplier());
+
+        // Cannot even lift itself here, so no amount of fuel gets it to orbit.
+        if (stats.getThrustToWeightRatio(gSrc) <= 1f) return false;
         final double a = Math.max(0.0001d, stats.getAcceleration(gSrc));    
-        final double h = Math.max(0.0, stats.orbitHeight - this.posY);
+        final double h = Math.max(0.0, flightOrbitHeight() - this.posY);
 
         long nTicks = (long)Math.ceil(Math.sqrt(2.0 * h / a));
         nTicks += 2L; // small safety buffer
@@ -1443,8 +1458,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULAR.ordinal(), player.world, this.getEntityId(), -1, 0);
 
         //Only handle the bypass on the server
-        if (!world.isRemote)
-            RocketInventoryHelper.addPlayerToInventoryBypass(player);
+        if (!world.isRemote && player instanceof EntityPlayerMP)
+            Stellurgy.serverState().rocketInventory.addPlayerToInventoryBypass((EntityPlayerMP) player);
     }
 
     @Override
@@ -1584,8 +1599,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         if (world.isRemote && areEnginesRunning()) {
             for (Vector3F<Float> vec : stats.getEngineLocations()) {
 
-                AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
-                IAtmosphere atmosphere = null;
+                AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
+                Atmosphere atmosphere = null;
 
                 if (handler != null)
                     atmosphere = handler.getAtmosphereType(this);
@@ -2159,7 +2174,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                 //Checks heights to see how high the rocket should go
                 //I cannot believe I am doing this but it's not like orbital mechanics exists anyway.... here, have an approximation for it being harder to get to farther moons
-                if (!isInOrbit() && (this.posY > stats.orbitHeight)) {
+                if (!isInOrbit() && (this.posY > flightOrbitHeight())) {
                     onOrbitReached();
                 }
 
@@ -2285,12 +2300,32 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      * @param entryLocationDimID the dimension ID for the dimension the rocket is entering
      * @return integer for world height in blocks the rocket will spawn in at when it reaches the dimension
      */
+    /**
+     * The height this flight reaches orbit at: what its launch wrote, or — for a flight no launch has
+     * stated, such as one loaded mid-flight, since the number is not saved — the world's own line, the
+     * same answer a launch with no guidance computer writes.
+     */
+    private int flightOrbitHeight() {
+        return stats.orbitHeight != StatsRocket.ORBIT_HEIGHT_UNSET ? stats.orbitHeight
+                : getEntryHeight(this.world.provider.getDimension());
+    }
+
     private int getEntryHeight(int entryLocationDimID) {
-        if (entryLocationDimID == StellurgyConfiguration.getCurrentConfig().spaceDimId) {
-            return StellurgyConfiguration.getCurrentConfig().stationClearanceHeight;
-        } else {
-            return StellurgyConfiguration.getCurrentConfig().orbit;
+        java.util.OptionalInt line = DimensionManager.getInstance().transferLineOf(entryLocationDimID);
+        if (line.isPresent()) {
+            return line.getAsInt();
         }
+        // A launch from a world with no line is refused before it starts, so this is reached only by a
+        // rocket already under way into one - a return to the world it left, a station's planet. It
+        // must still come out somewhere: at the top of the block band, said once.
+        if (!noOrbitLineReported) {
+            noOrbitLineReported = true;
+            Stellurgy.logger.warn("[EntityRocket] dim {} has no orbit line (no radius, no stated "
+                    + "<orbitHeight>); this rocket enters it at the top of the block band, Y {}, which "
+                    + "is not that world's atmosphere", entryLocationDimID,
+                    dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+        }
+        return dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y;
     }
 
     private void reachSpaceUnmanned() {
@@ -2303,7 +2338,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
             ItemStack stack = storage.getGuidanceComputer().getStackInSlot(0);
 
-            Asteroid asteroid = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(((ItemAsteroidChip) stack.getItem()).getType(stack));
+            Asteroid asteroid = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(((ItemAsteroidChip) stack.getItem()).getType(stack));
 
             if (asteroid != null) {
                 asteroidDrillingMult = asteroid.timeMultiplier;
@@ -2830,9 +2865,18 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         }
 
 
-        if (!this.stats.canLaunch()) {
+        if (!this.stats.canLaunch(DimensionManager.getInstance()
+                .getDimensionProperties(this.world.provider.getDimension())
+                .getGravitationalMultiplier())) {
             setError("error.rocket.tooHeavy");
             return; // hard stop; no silent fall-through
+        }
+
+        // A world with no orbit line has no altitude at which "in orbit" begins; launching anyway
+        // would fly to a number nobody chose.
+        if (!DimensionManager.getInstance().transferLineOf(this.world.provider.getDimension()).isPresent()) {
+            setError("error.rocket.noOrbitLine");
+            return;
         }
 
         //Check to see what place we should be going to
@@ -2996,7 +3040,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             for (Entity e : passengers) {
                 dev.stannismod.stellurgy.atmosphere.RocketTransferGrace.stamp(
                         e, worldserver.getTotalWorldTime());
-                PlanetEventHandler.addDelayedTransition(new TransitionEntity(
+                Stellurgy.serverState().planetEvents.addDelayedTransition(new TransitionEntity(
                         worldserver.getTotalWorldTime() + ++timeOffset,
                         e,
                         dimensionIn,
@@ -3454,7 +3498,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         } else if (id > BUTTON_ID_OFFSET) {
             TileEntity tile = storage.getGUITiles().get(id - BUTTON_ID_OFFSET - tilebuttonOffset);
 
-            RocketGuiNavigation.rememberIfRocketGuiReturnTile(player, this, tile);
+            if (!world.isRemote)
+                Stellurgy.serverState().rocketGuiReturns.rememberIfRocketGuiReturnTile(player, this, tile);
             //Welcome to super hack time with packets
             //Due to the fact the client uses the player's current world to open the gui, we have to move the client between worlds for a bit
             PacketHandler.sendToPlayer(new PacketEntity(this, (byte) PacketType.CHANGEWORLD.ordinal()), player);
@@ -3825,10 +3870,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
         boolean ret = !this.isDead && this.getDistance(entity) < 64;
-        if (!ret)
-            RocketInventoryHelper.removePlayerFromInventoryBypass(entity);
-
-        RocketInventoryHelper.updateTime(entity, world.getWorldTime());
+        if (!ret && entity instanceof EntityPlayerMP)
+            Stellurgy.serverState().rocketInventory.removePlayerFromInventoryBypass((EntityPlayerMP) entity);
 
         return ret;
     }

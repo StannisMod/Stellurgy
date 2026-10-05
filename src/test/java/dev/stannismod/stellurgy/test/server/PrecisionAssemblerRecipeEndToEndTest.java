@@ -19,11 +19,6 @@ public class PrecisionAssemblerRecipeEndToEndTest extends AbstractSharedServerTe
     private static final String TILE_SHORT  = "TilePrecisionAssembler";
 
     @Test
-    public void precisionAssemblerFixtureValidates() throws Exception {
-        MachineRecipeEndToEndKit.runFixtureValidates(client(), FIXTURE_KEY, 400, 70, 400);
-    }
-
-    @Test
     public void precisionAssemblerRunsFirstRegisteredRecipe() throws Exception {
         MachineRecipeEndToEndKit.runFirstRecipeEndToEnd(client(),
                 FIXTURE_KEY, TILE_SHORT, 500, 70, 400);

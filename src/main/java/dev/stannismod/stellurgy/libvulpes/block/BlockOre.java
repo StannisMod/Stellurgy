@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
 public class BlockOre extends Block implements INamedMetaBlock {
 	
 	public dev.stannismod.stellurgy.libvulpes.api.material.Material[] ores = new dev.stannismod.stellurgy.libvulpes.api.material.Material[16];
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static final PropertyInteger VARIANT = PropertyInteger.create("varient", 0, 15);
 	public byte numBlocks;
 	public AllowedProducts product;

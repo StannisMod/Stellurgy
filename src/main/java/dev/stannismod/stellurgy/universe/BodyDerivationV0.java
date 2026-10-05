@@ -10,13 +10,24 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  * documented next to the observations they come from, and this class is only the handle a schema holds
  * it by. A version 2 is a second implementation of {@link IBodyDerivation}, not an edit here.
  *
- * <p>Stateless, so one instance serves every world.
+ * <p>It carries one thing, the planet-type table its worlds are typed from, because that table is the
+ * save's own (authored in its planet file). {@link #INSTANCE} carries the code-shipped table — the
+ * derivation of a generator that has no save to read one from.
  */
 public final class BodyDerivationV0 implements IBodyDerivation {
 
-    public static final BodyDerivationV0 INSTANCE = new BodyDerivationV0();
+    /**
+     * Effectively final, client/dedicated-server lifetime: built at class initialisation from the
+     * code-shipped table, which is immutable, and never written again.
+     */
+    public static final BodyDerivationV0 INSTANCE = new BodyDerivationV0(PlanetTypes.stock());
 
-    private BodyDerivationV0() {
+    /** Effectively final, process lifetime: set once when the object is built. */
+    private final PlanetTypes types;
+
+    /** Version 0's laws, typing worlds from {@code types}. */
+    public BodyDerivationV0(PlanetTypes types) {
+        this.types = types;
     }
 
     @Override
@@ -62,14 +73,15 @@ public final class BodyDerivationV0 implements IBodyDerivation {
 
     @Override
     public BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
-                              StellarBody star, boolean moon, long orbitalDistance) {
-        return PlanetDerivation.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance);
+                              StellarBody star, boolean moon, long orbitalDistance, ReportOnce reports) {
+        return PlanetDerivation.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance, types,
+                reports);
     }
 
     @Override
     public BodyProfile deriveRogue(long seed, GalacticCoord bodyCell, int variant,
-                                   double giantFraction) {
-        return PlanetDerivation.deriveRogue(seed, bodyCell, variant, giantFraction);
+                                   double giantFraction, ReportOnce reports) {
+        return PlanetDerivation.deriveRogue(seed, bodyCell, variant, giantFraction, types, reports);
     }
 
     @Override

@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import com.mojang.realmsclient.gui.ChatFormatting;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
@@ -19,14 +21,14 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPan;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleImage;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileBiomeScanner extends TileMultiPowerConsumer {
+public class TileBiomeScanner extends TileWasteHeatPowerConsumer {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
 
             {{null, null, null, null, null},

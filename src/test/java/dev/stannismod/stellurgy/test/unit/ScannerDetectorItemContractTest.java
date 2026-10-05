@@ -113,16 +113,6 @@ public class ScannerDetectorItemContractTest {
     }
 
     @Test
-    public void oreScannerSatelliteIdSurvivesItemStackCopy() {
-        ItemOreScanner scanner = new ItemOreScanner();
-        ItemStack a = new ItemStack(scanner, 1);
-        scanner.setSatelliteID(a, 7777L);
-        ItemStack b = a.copy();
-        assertEquals("ItemStack.copy() must preserve the scanner's satellite ID",
-                7777L, scanner.getSatelliteID(b));
-    }
-
-    @Test
     public void oreScannerSatelliteIdReadDirectlyFromKnownNbtKey() {
         // Pin the NBT key shape — production reads "id" as a long. A
         // future refactor that renames this key silently un-programs

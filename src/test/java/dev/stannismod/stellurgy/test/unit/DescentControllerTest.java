@@ -12,6 +12,7 @@ import net.minecraft.util.math.BlockPos;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.CrewTransfer;
 import dev.stannismod.stellurgy.space.DescentController;
+import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipCrossingService;
 import dev.stannismod.stellurgy.space.ShipEntryController;
@@ -25,6 +26,7 @@ import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -44,7 +46,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class DescentControllerTest {
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID SHIP = UUID.fromString("00000000-0000-0000-0000-0000000000BB");
+    /**
+     * A constant: a {@code BlockPos} built with {@code new} is immutable: three final ints (not the mutable
+     * subclass).
+     */
     private static final BlockPos AFC = new BlockPos(2, 70, 2);
     private static final int SLOT_DIM = 10;
     private static final int PLANET_DIM = 3;
@@ -70,7 +77,11 @@ public class DescentControllerTest {
         boolean failCross;
         final List<String> messages = new ArrayList<>();
         final List<Integer> reseatDims = new ArrayList<>();
-        /** The identity the cross hands back — every settle half must address THIS ship. */
+        /**
+         * The identity the cross hands back — every settle half must address THIS ship.
+         *
+         * <p>A constant: a {@code UUID} is an immutable value: two final longs.</p>
+         */
         static final UUID CROSSED_SHIP = UUID.fromString("11111111-2222-3333-4444-555555555555");
         /** What the settle actually named when it re-seated; a null here is a position lookup. */
         final List<UUID> reseatShipUuids = new ArrayList<>();
@@ -459,13 +470,13 @@ public class DescentControllerTest {
      * Every tier stayed green over it: they all ask the registry which bodies are somewhere, and
      * none of them puts a craft next to a moon and asks what the trigger makes of it.</p>
      *
-     * <p>The craft is placed in EARTH's cell, one third of a descent radius from Luna, at a tick
+     * <p>The craft is placed in EARTH's cell, a third of Luna's own descent shell from Luna, at a tick
      * where Luna is a long way from its parent — so a reading that took the two as sharing a frame,
      * or that compared cell names, gets the wrong answer rather than an unlucky one.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with {@code DescentController#nearestDescentTarget} at {@code double distance = craftAt.distanceTo(body.absoluteAt(tick))} measuring to
+     * <p>red-witnessed: 2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code double distance = craftAt.distanceTo(body.absoluteAt(tick))} measuring to
      * each body's position at tick 0 instead of at the tick asked, this fails with "a craft a third of
-     * a descent radius from a moon must find the MOON … was not:&lt;null&gt;". That inversion breaks
+     * a moon's shell from it must find the MOON … was not:&lt;null&gt;". That inversion breaks
      * the reading of a body's LIVE position. The other half of the defect this test is named for —
      * a candidate list drawn from the craft's own cell — lives in the caller,
      * {@code TileAdvancedFlightComputer#descendTargetsIn} at {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))}, and NO test pins that call:
@@ -473,90 +484,142 @@ public class DescentControllerTest {
      */
     @Test
     public void aCraftClosedOnAMoonFindsItEvenThoughItIsInAnotherCell() {
-        long r = ShipEntryController.DESCENT_RADIUS_BLOCKS;
         long tick = (long) (LUNA_PERIOD_TICKS / 4d); // a quarter turn: Luna is off Earth's own axis
 
         SystemBody earth = earth();
         SystemBody luna = luna();
         List<SystemBody> system = java.util.Arrays.asList(sol(), earth, luna);
+        long earthShell = DescentShell.radiusAround(earth);
+        long lunaShell = DescentShell.radiusAround(luna);
 
         // ARRANGEMENT, stated as measurement rather than assumed: the two bodies really are in
-        // different cells, and Luna really is far enough from Earth that "near Luna" and "near
-        // Earth" cannot be the same place.
+        // different cells, and their shells really do not meet, so "near Luna" and "near Earth"
+        // cannot be the same place.
         assertNotEquals("arrangement: the moon must not be in its parent's cell",
                 earth.name().cellKey(), luna.name().cellKey());
         double separation = earth.absoluteAt(tick).distanceTo(luna.absoluteAt(tick));
-        assertTrue("arrangement: the moon must be well outside a descent radius of its parent "
-                + "(separation " + separation + ", radius " + r + ")", separation > r * 4d);
+        assertTrue("arrangement: the moon's shell must lie well clear of its parent's (separation "
+                + separation + ", shells " + earthShell + " + " + lunaShell + ")",
+                separation > (earthShell + lunaShell) * 4d);
 
-        AbsolutePos nearLuna = luna.absoluteAt(tick).plus(r / 3L, 0L, 0L);
-        assertSame("a craft a third of a descent radius from a moon must find the MOON",
-                luna, DescentController.nearestDescentTarget(system, nearLuna, tick, r));
+        AbsolutePos nearLuna = luna.absoluteAt(tick).plus(lunaShell / 3L, 0L, 0L);
+        assertSame("a craft a third of a moon's shell from it must find the MOON",
+                luna, DescentController.nearestDescentTarget(system, nearLuna, tick));
 
-        AbsolutePos nearEarth = earth.absoluteAt(tick).plus(r / 3L, 0L, 0L);
-        assertSame("and one beside the planet must still find the PLANET",
-                earth, DescentController.nearestDescentTarget(system, nearEarth, tick, r));
+        AbsolutePos nearEarth = earth.absoluteAt(tick).plus(earthShell / 3L, 0L, 0L);
+        assertSame("and one inside the planet's shell must still find the PLANET",
+                earth, DescentController.nearestDescentTarget(system, nearEarth, tick));
 
         // The negative leg, without which "it found something" is satisfiable by a method that
         // always answers with the first candidate.
-        AbsolutePos outside = luna.absoluteAt(tick).plus(r * 3L, 0L, 0L);
-        assertTrue("arrangement: the far point must be out of range of the planet as well",
-                outside.distanceTo(earth.absoluteAt(tick)) > r);
+        AbsolutePos outside = luna.absoluteAt(tick).plus(lunaShell * 3L, 0L, 0L);
+        assertTrue("arrangement: the far point must be outside the planet's shell as well",
+                outside.distanceTo(earth.absoluteAt(tick)) > earthShell);
         assertNull("nothing is in range out there",
-                DescentController.nearestDescentTarget(system, outside, tick, r));
+                DescentController.nearestDescentTarget(system, outside, tick));
     }
 
     /**
-     * Between a moon and its planet, both in range, the NEAREST one is chosen.
+     * <b>Each body is approached at ITS OWN shell, not at one radius shared by all.</b>
      *
-     * <p>Not a tidiness clause: the two overlap for real — a moon orbits at a few parent radii and
-     * both descent shells reach out from their own bodies — so "whichever the candidate list
-     * happened to hold first" is a landing site decided by iteration order, and the list's order is
-     * the registry's, which no pilot can see.</p>
+     * <p>This test fails if production breaks the contract that <b>a descent fires where the body's
+     * atmosphere begins</b> — {@link DescentShell#radiusAround}, which grows with the body. The
+     * trigger compared every body against one flat 512-block radius until 2026-10-05, a fiftieth of
+     * an Earth: a pilot flew through the whole bulk of the world before anything happened, while the
+     * arrival standoff and the range read-out already used the shell.</p>
      *
-     * <p>red-witnessed: 2026-09-30 (re-run after the radius was widened off the threshold and both
-     * candidates were asserted in range), with {@code DescentController#nearestDescentTarget} at {@code if (!shouldTriggerDescent(true, distance, radiusBlocks) || distance >= nearestDistance)} keeping
-     * the FIRST in-range candidate instead of the nearer one, this fails with "beside the moon, the
+     * <p>The craft stands between the flat radius and the shell, on both sides of the shell, for a
+     * planet and for its moon — the shells differ, so a single radius cannot get all four right.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code shouldTriggerDescent(true, distance, DescentShell.radiusAround(body))}
+     * comparing against {@code ShipEntryController.DESCENT_RADIUS_BLOCKS} instead, this fails with
+     * "inside the planet's shell but far outside the old flat radius, the PLANET … was not:&lt;null&gt;".</p>
+     */
+    @Test
+    public void eachBodyIsEnteredAtItsOwnShell() {
+        long tick = (long) (LUNA_PERIOD_TICKS / 4d);
+        SystemBody earth = earth();
+        SystemBody luna = luna();
+        List<SystemBody> system = java.util.Arrays.asList(sol(), earth, luna);
+        long earthShell = DescentShell.radiusAround(earth);
+        long lunaShell = DescentShell.radiusAround(luna);
+        assertTrue("arrangement: the two shells must differ, or one radius could serve both ("
+                + earthShell + " / " + lunaShell + ")", earthShell > lunaShell * 2L);
+        assertTrue("arrangement: each shell must lie well beyond the flat proximity radius ("
+                + lunaShell + " against " + ShipEntryController.DESCENT_RADIUS_BLOCKS + ")",
+                lunaShell > ShipEntryController.DESCENT_RADIUS_BLOCKS * 4L);
+
+        assertSame("inside the planet's shell but far outside the old flat radius, the PLANET",
+                earth, DescentController.nearestDescentTarget(system,
+                        earth.absoluteAt(tick).plus(earthShell - 100L, 0L, 0L), tick));
+        assertNull("just outside the planet's shell, nothing",
+                DescentController.nearestDescentTarget(system,
+                        earth.absoluteAt(tick).plus(earthShell + 100L, 0L, 0L), tick));
+        assertSame("inside the moon's shell, the MOON",
+                luna, DescentController.nearestDescentTarget(system,
+                        luna.absoluteAt(tick).plus(lunaShell - 100L, 0L, 0L), tick));
+        assertNull("just outside the moon's shell, nothing",
+                DescentController.nearestDescentTarget(system,
+                        luna.absoluteAt(tick).plus(lunaShell + 100L, 0L, 0L), tick));
+    }
+
+    /**
+     * Inside two shells at once, the NEAREST body is chosen.
+     *
+     * <p>Not a tidiness clause: "whichever the candidate list happened to hold first" is a landing
+     * site decided by iteration order, and the list's order is the registry's, which no pilot can
+     * see. A body with a radius carries a shell only 1.57 % beyond its surface, so two of them meet
+     * only when they nearly touch; two bodies with NO radius carry the flat proximity sphere, and that
+     * is the pair built here — a moon 600 blocks from its planet, both 512-block spheres, with the
+     * craft in the lens where both reach.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code || distance >= nearestDistance)} keeping
+     * the FIRST in-range candidate instead of the nearer one, this fails with "nearer the moon, the
      * moon expected same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;".</p>
      */
     @Test
-    public void withAMoonAndItsPlanetBothInRangeTheNearestWins() {
-        SystemBody earth = earth();
-        SystemBody luna = luna();
+    public void insideTwoShellsTheNearestBodyWins() {
         long tick = 0L;
-        List<SystemBody> system = java.util.Arrays.asList(sol(), earth, luna);
+        SystemBody planet = planet(SystemBody.RADIUS_UNKNOWN);
+        SystemBody moon = moonOf(planet, 600d / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT,
+                SystemBody.RADIUS_UNKNOWN, 0.0123d);
+        List<SystemBody> system = java.util.Arrays.asList(sol(), planet, moon);
 
-        double separation = earth.absoluteAt(tick).distanceTo(luna.absoluteAt(tick));
-        // A radius that holds both from EITHER probe point, with room to spare. It was
-        // `separation + 1000`, and the probe beside the moon — 1 000 blocks further out along the
-        // same axis — then stood exactly on the planet's threshold, in range or not by a rounding.
-        long wide = (long) (separation * 2d);
+        AbsolutePos planetAt = planet.absoluteAt(tick);
+        AbsolutePos moonAt = moon.absoluteAt(tick);
+        dev.stannismod.stellurgy.space.BlockDelta axis = moonAt.minus(planetAt);
+        double separation = planetAt.distanceTo(moonAt);
+        // Two probes on the axis between them, a third and two thirds of the way across.
+        AbsolutePos nearerPlanet = planetAt.plus(Math.round(axis.dx() / 3d), Math.round(axis.dy() / 3d),
+                Math.round(axis.dz() / 3d));
+        AbsolutePos nearerMoon = planetAt.plus(Math.round(axis.dx() * 2d / 3d),
+                Math.round(axis.dy() * 2d / 3d), Math.round(axis.dz() * 2d / 3d));
+        // ARRANGEMENT, as the quantity the trigger compares: each probe is inside BOTH shells, so each
+        // answer below is a CHOICE between two candidates, not the only one left.
+        for (AbsolutePos probe : java.util.Arrays.asList(nearerPlanet, nearerMoon)) {
+            assertTrue("arrangement: each probe must be inside the planet's shell (separation "
+                    + separation + ")", probe.distanceTo(planetAt) <= DescentShell.radiusAround(planet));
+            assertTrue("arrangement: each probe must be inside the moon's shell (separation "
+                    + separation + ")", probe.distanceTo(moonAt) <= DescentShell.radiusAround(moon));
+        }
 
-        AbsolutePos justOffLuna = luna.absoluteAt(tick).plus(1_000L, 0L, 0L);
-        AbsolutePos justOffEarth = earth.absoluteAt(tick).plus(1_000L, 0L, 0L);
-        // ARRANGEMENT, as the quantity the threshold compares: both bodies are in range of both
-        // probes, so each answer below is a CHOICE between two candidates, not the only one left.
-        assertTrue("arrangement: beside the moon, the planet must be in range too",
-                justOffLuna.distanceTo(earth.absoluteAt(tick)) < wide);
-        assertTrue("arrangement: beside the planet, the moon must be in range too",
-                justOffEarth.distanceTo(luna.absoluteAt(tick)) < wide);
+        assertSame("nearer the moon, the moon", moon,
+                DescentController.nearestDescentTarget(system, nearerMoon, tick));
+        assertSame("nearer the planet, the planet", planet,
+                DescentController.nearestDescentTarget(system, nearerPlanet, tick));
 
-        assertSame("beside the moon, the moon", luna,
-                DescentController.nearestDescentTarget(system, justOffLuna, tick, wide));
-
-        assertSame("beside the planet, the planet", earth,
-                DescentController.nearestDescentTarget(system, justOffEarth, tick, wide));
-
-        // A body nobody can stand on is never the answer, however near: the star is at the anchor
-        // and this radius reaches it.
+        // A body nobody can stand on is never the answer, however near: the star is at the anchor.
         AbsolutePos atTheAnchor = sol().absoluteAt(tick);
         assertNull("a star is not a descent target at any distance",
                 DescentController.nearestDescentTarget(
-                        java.util.Collections.singletonList(sol()), atTheAnchor, tick, wide));
+                        java.util.Collections.singletonList(sol()), atTheAnchor, tick));
     }
 
     // ---- fixture: Sol, Earth and Luna, built the way SystemContent builds them -----------------
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord ANCHOR = GalacticCoord.ORIGIN;
     private static final double EARTH_PERIOD_TICKS = 365.25d * 24_000d;
     private static final double LUNA_PERIOD_TICKS =
@@ -579,8 +642,13 @@ public class DescentControllerTest {
 
     /** Earth: its own galactic cell, riding its orbit, standing still inside that cell. */
     private static SystemBody earth() {
+        return planet(1d);
+    }
+
+    /** A planet of one Earth mass and the given radius, where Earth stands. */
+    private static SystemBody planet(double radiusEarths) {
         return new SystemBody(ANCHOR, CellFrame.of(AbsolutePos.ofCellName(ANCHOR), earthOrbit()),
-                BodyEphemeris.STATIC, SystemBodyKind.PLANET, 1, 1, 100, 1d, 1d);
+                BodyEphemeris.STATIC, SystemBodyKind.PLANET, 1, 1, 100, radiusEarths, 1d);
     }
 
     /**
@@ -588,11 +656,16 @@ public class DescentControllerTest {
      * inside that cell — the shape production builds, which is the whole subject here.
      */
     private static SystemBody luna() {
-        BodyEphemeris moonOrbit = BodyEphemeris.orbit(
-                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS,
+        return moonOf(earth(), AstronomicalBodyHelper.MOON_REFERENCE_UNITS, 0.2727d, 0.0123d);
+    }
+
+    /** A moon of {@code parent} at {@code distUnits}, built as {@link #luna} is. */
+    private static SystemBody moonOf(SystemBody parent, double distUnits, double radiusEarths,
+                                     double massEarths) {
+        BodyEphemeris moonOrbit = BodyEphemeris.orbit(distUnits,
                 0d, 0d, false, LUNA_PERIOD_TICKS,
-                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
-        long zoneCell = dev.stannismod.stellurgy.space.ZoneScale.cellBlocks(earth(), sol(),
+                AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
+        long zoneCell = dev.stannismod.stellurgy.space.ZoneScale.cellBlocks(parent, sol(),
                 Math.round(moonOrbit.offsetAt(0L).length()), 0L);
         dev.stannismod.stellurgy.space.BlockDelta at0 = moonOrbit.offsetAt(0L);
         GalacticCoord name = GalacticCoord.inZone(ANCHOR.cellKey(), zoneCell,
@@ -602,6 +675,6 @@ public class DescentControllerTest {
                 0L, 0L, 0L);
         return new SystemBody(name,
                 CellFrame.within(CellFrame.of(AbsolutePos.ofCellName(ANCHOR), earthOrbit()), moonOrbit),
-                BodyEphemeris.STATIC, SystemBodyKind.MOON, 2, 1, 100, 0.2727d, 0.0123d);
+                BodyEphemeris.STATIC, SystemBodyKind.MOON, 2, 1, 100, radiusEarths, massEarths);
     }
 }

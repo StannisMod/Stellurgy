@@ -18,7 +18,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 
-import dev.stannismod.stellurgy.command.test.SpawnDiag;
+import dev.stannismod.stellurgy.test.trace.SpawnMemory;
 
 /**
  * Reads WHERE a queued tier-2 ship dies inside Valkyrien Skies' own spawn pass — from the tests,
@@ -59,7 +59,7 @@ public abstract class MixinWorldServerShipManagerDiag {
      */
     @Inject(method = "spawnNewShips", at = @At("HEAD"), require = 0)
     private void stellurgyTest$noteSpawnEntry(CallbackInfo ci) {
-        SpawnDiag.noteSpawnEntry(spawnQueue.size());
+        SpawnMemory.here().noteSpawnEntry(spawnQueue.size());
     }
 
     /**
@@ -69,8 +69,8 @@ public abstract class MixinWorldServerShipManagerDiag {
      */
     @Inject(method = "spawnNewShips", at = @At("RETURN"), require = 0)
     private void stellurgyTest$noteSpawnResult(CallbackInfo ci) {
-        SpawnDiag.noteSpawnReturn();
-        SpawnDiag.noteQueryableCount(ValkyrienUtils.getQueryableData(world).getShips().size());
+        SpawnMemory.here().noteSpawnReturn();
+        SpawnMemory.here().noteQueryableCount(ValkyrienUtils.getQueryableData(world).getShips().size());
     }
 
     /**
@@ -102,7 +102,7 @@ public abstract class MixinWorldServerShipManagerDiag {
                             + ",\"found\":" + detector.foundSet.size()
                             + ",\"bedrock\":" + detector.cleanHouse
                             + ",\"refused\":" + refused);
-            SpawnDiag.noteDetector(detector.foundSet.size(), detector.cleanHouse, stellurgyTest$blacklistSize());
+            SpawnMemory.here().noteDetector(detector.foundSet.size(), detector.cleanHouse, stellurgyTest$blacklistSize());
             if (detector.foundSet.size() > FLOOD_SHAPE_THRESHOLD) {
                 stellurgyTest$recordFloodShape(detector, pos, floodWorld);
             }
@@ -135,14 +135,15 @@ public abstract class MixinWorldServerShipManagerDiag {
             }
         }
         net.minecraft.block.Block far = floodWorld.getBlockState(farthest).getBlock();
-        SpawnDiag.noteFloodShape("bbox=[" + minX + ".." + maxX + "," + minY + ".." + maxY + ","
+        SpawnMemory.here().noteFloodShape("bbox=[" + minX + ".." + maxX + "," + minY + ".." + maxY + ","
                 + minZ + ".." + maxZ + "] anchor=" + anchor.getX() + "," + anchor.getY() + "," + anchor.getZ()
                 + " farthest=" + farthest.getX() + "," + farthest.getY() + "," + farthest.getZ()
                 + "(" + far.getRegistryName() + ")");
     }
 
-    /** VS's {@code ShipSpawnDetector.blacklist} is a private static Set that {@code syncWithConfig}
-     *  rebuilds non-atomically (clear, then repopulate). Its size at flood time catches that window. */
+    /** VS's {@code ShipSpawnDetector.blacklist}: a private static Set that {@code syncWithConfig}
+     *  swaps in whole. Its size at flood time says which configured set the flood ran against
+     *  ({@code -2}: not built yet). */
     private static int stellurgyTest$blacklistSize() {
         try {
             java.lang.reflect.Field f = Class.forName(

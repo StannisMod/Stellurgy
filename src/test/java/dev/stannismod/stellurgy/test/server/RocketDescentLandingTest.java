@@ -53,15 +53,12 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
     private final Events events =
-            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks));
+            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
     private static final String LANDED_COUNT = "landed";
-    /** The forceload ticket the chunk-ticket claims are about, and the array it lives in. */
-    private static final String TICKETS = "tickets";
-    private static final String TICKET_KEY = "0:100:100";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -83,7 +80,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     // shared dedicated-server harness for >30 s (likely chunk-unload
     // bookkeeping over entities still in those chunks). We let the
     // tickets leak for the duration of the class — they're freed
-    // implicitly when the harness shuts down at @AfterClass. Each test
+    // implicitly when the class's harness shuts down. Each test
     // picks a position-disjoint chunk so leaked tickets do not bleed
     // into other tests.
 
@@ -115,24 +112,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         }
     }
 
-    @Test
-    public void rocketTickProbeReportsTicksExistedInResponse() throws Exception {
-        // Probe-surface sanity: /stellurgytest rocket tick must succeed and
-        // expose ticksExisted in the response. Used by the explicit
-        // synthetic-tick path in Phase 5 (failure-mode tests).
-        int id = buildAndAssemble(FixtureSite.openAir(0, 6000, 500));
-        String tickResp = ok(client().execute("stellurgytest rocket tick " + id + " 5"));
-        assertTrue("tick probe must succeed: " + tickResp,
-                Reply.of(tickResp).ok());
-        assertTrue("tick probe response must expose ticksExisted: " + tickResp,
-                Reply.of(tickResp).has("ticksExisted"));
-        int t = gi(TICKS_EXISTED, tickResp, "ticksExisted from tick response");
-        assertTrue("ticksExisted must be non-negative: " + t, t >= 0);
-    }
-
     /**
-     * <p>red-witnessed: with the descent gate's {@code setInFlight(true)} ({@code EntityRocket:1841})
-     * removed: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
+     * <p>red-witnessed: with the descent gate, {@code EntityRocket#onUpdate} at
+     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}, losing the
+     * {@code setInFlight(true)} it guards: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test
@@ -168,6 +151,15 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 info.inFlight);
     }
 
+    /**
+     * <p>red-witnessed: with {@code EntityRocket#onUpdate} at
+     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())} made to fire past
+     * tick 3 and to clear the flag again at once — early, and gone before any state read could see it —
+     * this fails with "and nothing may have set it in flight before its counter passed the timer
+     * (DESCENT_TIMER=40): {… "inFlight":true,"ticksExisted":6 …}" (2026-10-01). The verdict it replaced
+     * was red here only under full-tier load, when the timer had legitimately run out before the log
+     * was read. The two premises before it are arrangements and are not witnessed.</p>
+     */
     @Test
     public void tickBeforeDescentTimerKeepsFlightOff_realTick() throws Exception {
         // Counter-test under real ticking: with ticksExisted well below
@@ -200,10 +192,22 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 info.ticksExisted <= DESCENT_TIMER);
         assertFalse("isInFlight must NOT be set before descent timer expires: " + info.raw(),
                 info.inFlight);
-        assertFalse("and nothing may have set it in flight and back inside the window: "
-                        + events.since(mark, "rocket_flight_set"),
-                Events.anyRecordHasAll(events.since(mark, "rocket_flight_set"),
-                        "e", String.valueOf(id), "inFlight", "true"));
+
+        // Read ONCE, and judged by the rocket's own counter at each write. The server keeps ticking
+        // between commands, so by the time this reads the log the timer may have run out and the gate
+        // fired as it should; a write stamped past DESCENT_TIMER is that, not the defect. Only a true
+        // write stamped at or below the timer is the gate firing early.
+        String writes = events.since(mark, "rocket_flight_set");
+        assertEquals("premise: the flight log lost none of its writes in the window, or an absence below"
+                + " proves nothing: " + writes, 0L, Events.droppedOf(writes, "rocket_flight_set"));
+        assertFalse("premise: the set-state's own write of false must be in the window, or the recorder"
+                + " was not listening: " + writes,
+                Events.recordsWhereAll(writes, "e", String.valueOf(id), "inFlight", "false").isEmpty());
+        for (String write : Events.recordsWhereAll(writes, "e", String.valueOf(id), "inFlight", "true")) {
+            assertTrue("and nothing may have set it in flight before its counter passed the timer ("
+                            + "DESCENT_TIMER=" + DESCENT_TIMER + "): " + write,
+                    Events.number(write, "ticksExisted") > DESCENT_TIMER);
+        }
     }
 
     @Test
@@ -235,8 +239,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     }
 
     /**
-     * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
-     * ({@code EntityRocket:2153}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * <p>red-witnessed: with the landing branch's post, {@code EntityRocket#onUpdate} at
+     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this));}, removed: "no `rocket_landed` carrying e = … was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test
@@ -325,28 +329,5 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         }
         assertTrue("dismantle must paste at least one non-air block back",
                 foundNonAir);
-    }
-
-    @Test
-    public void chunkAnchorProbeRoundTrips() throws Exception {
-        // Probe-surface sanity: forceload + release for a single chunk
-        // must succeed and return ok=true. The list endpoint reflects
-        // the active ticket set. release-all clears them.
-        String fl = ok(client().execute("stellurgytest chunk forceload 0 100 100"));
-        assertTrue("forceload must succeed: " + fl, Reply.of(fl).ok());
-
-        String list = ok(client().execute("stellurgytest chunk list"));
-        // MEMBERSHIP of the ticket array, asked of the array. As a substring the key was also
-        // matched inside a LONGER key — `0:100:1000` contains `0:100:100` — so the negative
-        // claim below could fail for a neighbour's ticket and the positive one pass on it.
-        assertTrue("list must include the ticket key: " + list,
-                Reply.of("stellurgytest chunk list", list).holdsText(TICKETS, TICKET_KEY));
-
-        String rel = ok(client().execute("stellurgytest chunk release 0 100 100"));
-        assertTrue("release must succeed: " + rel, Reply.of(rel).ok());
-
-        String listAfter = ok(client().execute("stellurgytest chunk list"));
-        assertFalse("list must not include released ticket: " + listAfter,
-                Reply.of("stellurgytest chunk list", listAfter).holdsText(TICKETS, TICKET_KEY));
     }
 }

@@ -22,6 +22,10 @@ import static org.junit.Assert.assertTrue;
  * client-side chip is the carrier of the ID; what really survives is the
  * dim's serialised satellite registry — the assertion below pins that
  * server-side behaviour.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class SatelliteIdChipPersistenceTest {
 

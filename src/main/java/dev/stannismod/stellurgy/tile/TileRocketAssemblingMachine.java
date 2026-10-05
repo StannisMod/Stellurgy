@@ -31,7 +31,6 @@ import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
 import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine.ErrorCodes;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import dev.stannismod.stellurgy.util.WeightEngine;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
@@ -59,7 +58,10 @@ import dev.stannismod.stellurgy.block.*;
  * Purpose: validate the rocket structure as well as give feedback to the player as to what needs to be
  * changed to complete the rocket structure
  * Also will be used to "build" the rocket components from the placed frames, control fuel flow etc
- **/
+ *
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements ITickable, IButtonInventory, INetworkMachine, IDataSync, IModularInventory, IProgressBar, ILinkableTile {
 
     protected static final ResourceLocation backdrop = new ResourceLocation("stellurgy", "textures/gui/rocketBuilder.png");
@@ -199,6 +201,15 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
     }
 
+    // A server stop unloads worlds without unloading their chunks, so onChunkUnload never runs then;
+    // without this the machine, and its world, stayed on the process-wide bus after the server.
+    @SubscribeEvent
+    public void onWorldUnload(net.minecraftforge.event.world.WorldEvent.Unload event) {
+        if (event.getWorld() == world) {
+            unregisterFromBus();
+        }
+    }
+
     public ErrorCodes getStatus() {
         return status;
     }
@@ -257,17 +268,18 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         return stats.getThrust();
     }
 
-    public float getNeededThrust() {
-        // With the weight system off there is no TWR launch gate (see
-        // StatsRocket.canLaunch), so there is no thrust requirement to display.
-        if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-            return 0;
-        }
-        return getWeight() * (float) StellurgyConfiguration.getCurrentConfig().minLaunchTWR;
+    /**
+     * The launch gate's own verdict on the craft this assembler last scanned, asked of the craft as
+     * it will stand when fully fuelled ({@code StatsRocket#withTanksFull}) at the gravity of the world
+     * it is being assembled in. A craft the assembler builds can therefore launch from here full.
+     */
+    public boolean canLaunchFullFromHere() {
+        return stats.withTanksFull().canLaunch(getGravityMultiplier());
     }
 
+    /** The thrust-to-weight ratio the launch gate judges here: tanks full, this world's gravity. */
     public float getThrustToWeightRatio() {
-        return stats.getThrustToWeightRatio();
+        return stats.withTanksFull().getThrustToWeightRatio(getGravityMultiplier());
     }
 
     public boolean hasEnoughFuel(@Nonnull FuelType fuelType) {
@@ -291,7 +303,12 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
         float fueltime = (float) stats.getFuelCapacity(fuelType) / stats.getBaseFuelRate(fuelType);
         float s_can = aAvg / 2f * fueltime * fueltime;
-        float target_s = 1 * StellurgyConfiguration.getCurrentConfig().orbit - this.getPos().getY(); // for way back *2
+        // The climb a launch from HERE needs; a world with no line has no orbit to reach.
+        java.util.OptionalInt line = DimensionManager.getInstance().transferLineOf(world.provider.getDimension());
+        if (!line.isPresent()) {
+            return false;
+        }
+        float target_s = line.getAsInt() - this.getPos().getY();
         return s_can > target_s;
     }
 
@@ -482,7 +499,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                             }
 
                             if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                                weight += WeightEngine.INSTANCE.getWeight(world, currBlockPos);
+                                weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
                             } else {
                                 weight += 1;
                             }
@@ -637,7 +654,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 // one somebody removed it from.
                 status = ErrorCodes.NOGUIDANCE;
 
-            } else if (getThrust() <= getNeededThrust()) {
+            } else if (getThrust() <= 0 || !canLaunchFullFromHere()) {
                 status = ErrorCodes.NOENGINES;
 
             } else if (StellurgyConfiguration.getCurrentConfig().rocketRequireFuel && thrustBipropellant > 0
@@ -645,9 +662,14 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 // Biprop engines require BOTH bipropellant AND oxidizer capacity
                 status = ErrorCodes.NOFUEL;
 
-            } else if (((thrustBipropellant > 0)      && !hasEnoughFuel(FuelType.LIQUID_BIPROPELLANT))
+            } else if (scannedFlightComputerPos == null
+                    && (((thrustBipropellant > 0)      && !hasEnoughFuel(FuelType.LIQUID_BIPROPELLANT))
                     || ((thrustMonopropellant > 0)    && !hasEnoughFuel(FuelType.LIQUID_MONOPROPELLANT))
-                    || ((thrustNuclearTotalLimit > 0) && !hasEnoughFuel(FuelType.NUCLEAR_WORKING_FLUID))) {
+                    || ((thrustNuclearTotalLimit > 0) && !hasEnoughFuel(FuelType.NUCLEAR_WORKING_FLUID)))) {
+                // "Can its tanks carry it to orbit" is asked of a ROCKET only. A rocket's one flight
+                // is a climb to its world's orbit line, so a build that cannot make it is no rocket;
+                // a ship with a flight computer is flown, and is a legitimate craft for flights that
+                // never leave the planet.
                 status = ErrorCodes.NOFUEL;
 
             } else {
@@ -829,7 +851,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                     }
                     for (net.minecraft.entity.Entity passenger : mount.getPassengers()) {
                         if (passenger instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                            dev.stannismod.stellurgy.space.AssemblyCrewRebind.enqueue(
+                            dev.stannismod.stellurgy.Stellurgy.spaceSubsystem().crewRebind.enqueue(
                                     (net.minecraft.world.WorldServer) world,
                                     (net.minecraft.entity.player.EntityPlayerMP) passenger,
                                     mount.getEntityId(), shipAnchor,
@@ -1528,37 +1550,39 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
 
 
     protected enum ErrorCodes {
-        SUCCESS(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.success")),
-        NOFUEL(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nofuel")),
-        NOSEAT(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.noseat")),
-        NOENGINES(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.noengines")),
-        NOGUIDANCE(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.noguidance")),
-        UNSCANNED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.unscanned")),
-        SUCCESS_STATION(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.success_station")),
-        EMPTY(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.empty")),
-        FINISHED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.finished")),
-        INCOMPLETESTRCUTURE(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.incompletestructure")),
-        NOSATELLITEHATCH(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nosatellitehatch")),
-        NOSATELLITECHIP(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nosatellitechip")),
-        OUTPUTBLOCKED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.outputblocked")),
-        INVALIDBLOCK(LibVulpes.proxy.getLocalizedString("msg.rocketbuild.invalidblock")),
-        COMBINEDTHRUST(LibVulpes.proxy.getLocalizedString("msg.rocketbuild.combinedthrust")),
-        ALREADY_ASSEMBLED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.alreadyassembled")),
-        UNSCANNED_STATION(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.unscanned_station")),
-        FAIL_CUT(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fail_cut")),
-        NOINTAKE(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nointake")),
-        NOTANK(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.notank")),
-        MULTIPLEFLIGHTCOMPUTERS(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.multipleflightcomputers")),
-        MULTIPLEPILOTSEATS(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.multiplepilotseats"));
+        SUCCESS("msg.rocketbuilder.success"),
+        NOFUEL("msg.rocketbuilder.nofuel"),
+        NOSEAT("msg.rocketbuilder.noseat"),
+        NOENGINES("msg.rocketbuilder.noengines"),
+        NOGUIDANCE("msg.rocketbuilder.noguidance"),
+        UNSCANNED("msg.rocketbuilder.unscanned"),
+        SUCCESS_STATION("msg.rocketbuilder.success_station"),
+        EMPTY("msg.rocketbuilder.empty"),
+        FINISHED("msg.rocketbuilder.finished"),
+        INCOMPLETESTRCUTURE("msg.rocketbuilder.incompletestructure"),
+        NOSATELLITEHATCH("msg.rocketbuilder.nosatellitehatch"),
+        NOSATELLITECHIP("msg.rocketbuilder.nosatellitechip"),
+        OUTPUTBLOCKED("msg.rocketbuilder.outputblocked"),
+        INVALIDBLOCK("msg.rocketbuild.invalidblock"),
+        COMBINEDTHRUST("msg.rocketbuild.combinedthrust"),
+        ALREADY_ASSEMBLED("msg.rocketbuilder.alreadyassembled"),
+        UNSCANNED_STATION("msg.rocketbuilder.unscanned_station"),
+        FAIL_CUT("msg.rocketbuilder.fail_cut"),
+        NOINTAKE("msg.rocketbuilder.nointake"),
+        NOTANK("msg.rocketbuilder.notank"),
+        MULTIPLEFLIGHTCOMPUTERS("msg.rocketbuilder.multipleflightcomputers"),
+        MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats");
 
-        String code;
+        /** Effectively final, process lifetime: set once when the object is built. */
+        private final String translationKey;
 
-        ErrorCodes(String code) {
-            this.code = code;
+        ErrorCodes(String translationKey) {
+            this.translationKey = translationKey;
         }
 
+        /** Translated at every call, so a language change shows on the next status line. */
         public String getErrorCode() {
-            return code;
+            return LibVulpes.proxy.getLocalizedString(translationKey);
         }
     }
 

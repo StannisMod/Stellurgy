@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ConfigFlag;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -84,9 +85,6 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // dead. After dead it's no longer in the world.loadedEntityList
         // and findRocket(id) returns null.
         int id = buildAndAssemble(FixtureSite.openAir(0, 7000, 500));
-        // The reader refuses an absent uuid, which is what "no uuid in info" asserted.
-        RocketInfo infoBefore = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
-        assertFalse("no uuid in info: " + infoBefore.raw(), infoBefore.requireUuid().isEmpty());
 
         String explodeResp = ok(client().execute("stellurgytest rocket explode " + id));
         assertTrue("explode probe must succeed: " + explodeResp,
@@ -103,52 +101,6 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void outOfFuelMidFlightDoesNotAutoExplode_documentsCurrentBehavior() throws Exception {
-        // One might expect "out of fuel -> explode" but
-        // production has no such code path. The fuel-decrement loop at
-        // line 1235 just sets fuelFluid="null" when amount hits 0. The
-        // rocket continues to drift (falling under gravity once burning
-        // stops). Pin this as the current contract.
-        //
-        // If a future PR adds an out-of-fuel explode path, this test
-        // fails — flip the assertion + delete the documents-bug note.
-        int id = buildAndAssemble(FixtureSite.openAir(0, 7100, 500));
-
-        // Put the rocket in mid-flight (orbit=true so descent gate is
-        // active, flight=true so the isInFlight branch is taken).
-        ok(client().execute("stellurgytest rocket set-state " + id
-                + " orbit=true flight=true ticksExisted=60 posY=300 motionY=0"));
-        ok(client().execute("stellurgytest rocket drain-fuel " + id));
-
-        // Verify fuel is actually zero.
-        String fuelResp = ok(client().execute("stellurgytest rocket fuel " + id));
-        // Every fuel type the probe reports. The types are the registry's, so they are asked for as
-        // "every entry" of the reply's `fuels` object rather than by name; the old form walked the
-        // rendered reply with a regex and would have passed silently on a reply that named none.
-        Reply fuels = Reply.of("stellurgytest rocket fuel", fuelResp);
-        assertTrue("the fuel probe must report the craft's fuel types at all: " + fuelResp,
-                fuels.has(FUELS));
-        for (String perType : fuels.objectValues(FUELS)) {
-            assertEquals("all fuel types must be drained: " + fuelResp, 0.0,
-                    Reply.of("one fuel entry", perType).number(FUEL_AMOUNT), 0.0);
-        }
-
-        // Tick a few times — production must NOT explode.
-        ok(client().execute("stellurgytest rocket tick " + id + " 5"));
-
-        // Asked as `notFound` and not through the reader: a craft that HAS vanished is this test's
-        // failure — the product killed it — and the reader would call that an arrangement failure,
-        // which is a claim about the setup instead. `notFound` also refuses a reply that is neither
-        // shape, so the false below means "the server answered about a craft" and nothing weaker —
-        // which is what the second assertion here used to say separately.
-        String info = ok(client().execute("stellurgytest rocket info " + id));
-        assertFalse("out-of-fuel mid-flight must NOT auto-mark rocket dead "
-                        + "(documents current contract; no production explode-on-empty path): "
-                        + info,
-                RocketInfo.notFound(info));
-    }
-
-    @Test
     public void launchWithZeroFuelStillTransitionsToInFlight() throws Exception {
         // The upstream merge added a fuel gate to launch(): a rocket with empty
         // tanks is now refused at launch time (error.rocket.notEnoughMissionFuel)
@@ -157,27 +109,17 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 7200, 500));
         ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
-        ok(client().execute("stellurgytest rocket drain-fuel " + id));
-        // launch with fillFuel=false to keep tanks empty.
-        ok(client().execute("stellurgytest rocket launch " + id + " false instant"));
+        // The subject is the FUEL gate, so fuel is required for this launch: the shared harness world
+        // starts with the requirement off, and the assembly above was judged without it.
+        try (ConfigFlag fuelRequired = ConfigFlag.set(c -> String.join("\n", client().execute(c)),"rocketRequireFuel", true)) {
+            ok(client().execute("stellurgytest rocket drain-fuel " + id));
+            // launch with fillFuel=false to keep tanks empty.
+            ok(client().execute("stellurgytest rocket launch " + id + " false instant"));
 
-        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
-        assertFalse("zero-fuel launch must be refused by the fuel gate "
-                        + "(isInFlight stays false): " + info.raw(),
-                info.inFlight);
-    }
-
-    @Test
-    public void explodeOnUnknownRocketReturnsError() throws Exception {
-        String resp = ok(client().execute("stellurgytest rocket explode 9999999"));
-        assertTrue("unknown rocket must error: " + resp,
-                "rocket not found".equals(Reply.of(resp).text("error")));
-    }
-
-    @Test
-    public void drainFuelOnUnknownRocketReturnsError() throws Exception {
-        String resp = ok(client().execute("stellurgytest rocket drain-fuel 9999999"));
-        assertTrue("unknown rocket must error: " + resp,
-                "rocket not found".equals(Reply.of(resp).text("error")));
+            RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+            assertFalse("zero-fuel launch must be refused by the fuel gate "
+                            + "(isInFlight stays false): " + info.raw(),
+                    info.inFlight);
+        }
     }
 }

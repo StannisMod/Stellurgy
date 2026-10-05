@@ -108,7 +108,7 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
      *  populate(...) can drop tree decorations on top of fixture cells
      *  AFTER the fixture's setBlockState, making attemptCompleteStructure
      *  refuse to attempt validation. See /stellurgytest chunk warmup javadoc. */
-    private static void warmup(int blockX, int blockZ) throws Exception {
+    private void warmup(int blockX, int blockZ) throws Exception {
         int cx1 = (blockX - 16) >> 4;
         int cz1 = (blockZ - 16) >> 4;
         int cx2 = (blockX + 16) >> 4;

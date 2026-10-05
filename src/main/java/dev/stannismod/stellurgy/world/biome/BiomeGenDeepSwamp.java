@@ -18,6 +18,7 @@ import java.util.Random;
 
 public class BiomeGenDeepSwamp extends Biome {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private final static WorldGenNoTree noTree = new WorldGenNoTree(false);
 
     public BiomeGenDeepSwamp(BiomeProperties properties) {

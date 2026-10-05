@@ -26,6 +26,9 @@ public final class StellurgyTestConstants {
      * <p>MEASURED through the same law the departure prices a jump with, never written down. It was
      * written down once, as 4M, from a probe comment that predated the cell growing to 32M — and the
      * speeds derived from it put a "hyperspace" fixture 2 560 ticks from its destination.</p>
+     *
+     * <p>A constant: a final {@code long} computed once from the static cell frames, a pure function of
+     * constants.</p>
      */
     public static final long FIXTURE_CELL_SPACING_BLOCKS = (long) Math.ceil(
             CellFrames.STATIC.distanceBetween(
@@ -84,6 +87,18 @@ public final class StellurgyTestConstants {
     public static final int TEST_PLANET_VACUUM_DIM = 9002;
     public static final int TEST_PLANET_MOON_DIM = 9003;
     public static final int TEST_PLANET_RINGED_DIM = 9004;
+
+    /**
+     * Parts per million of an atmosphere, in the unit a composition is actually stored in.
+     * <p>
+     * Air is written here as FRACTIONS — 210 000 ppm of oxygen is a fifth of an atmosphere, whatever
+     * the model counts in underneath. A scenario that spelled the internal number instead would have
+     * to be rewritten every time the resolution changes, and would say nothing about what the room
+     * IS while it did.
+     */
+    public static long ppm(long partsPerMillion) {
+        return partsPerMillion * dev.stannismod.stellurgy.atmosphere.AirState.PER_PPM;
+    }
 
     private StellurgyTestConstants() {}
 

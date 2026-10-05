@@ -66,6 +66,7 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
  */
 public final class SpaceEventHandler {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /** How many ticks to keep retrying a seating before giving up and leaving the player standing. */
@@ -78,8 +79,6 @@ public final class SpaceEventHandler {
      * pays nothing at all — it refreshes on its own event. {@code tunable}.
      */
     private static final int RECORD_REFRESH_TICKS = 20;
-
-    private int sinceRecordRefresh;
 
     /** A player who has been placed aboard and is waiting for his seat to exist. */
     private static final class PendingSeat {
@@ -95,20 +94,34 @@ public final class SpaceEventHandler {
         }
     }
 
-    private final List<PendingSeat> pendingSeats = new ArrayList<>();
-
     /**
-     * player -> the ship whose cell was materialized for him at login, so the occupant refcount that
-     * materialize took can be handed back when he leaves. A refcount is a claim on one of a small
-     * fixed pool of slot worlds; leaking one per login would exhaust the pool.
+     * What this handler holds for one server's players. The handler is registered once for the whole
+     * process; this part lives in the server's {@link dev.stannismod.stellurgy.ServerState} and dies
+     * with it, so nothing queued for a player of one server is delivered in the next - a notice queued
+     * for a login that never completed used to be.
      */
-    private final java.util.Map<UUID, UUID> heldCells = new java.util.HashMap<>();
+    public static final class ServerPart {
+        private int sinceRecordRefresh;
 
-    /**
-     * Players who came back aboard a ship the server has no record of, waiting to be told so. Written
-     * while their save file is read (no connection yet) and drained once they have actually joined.
-     */
-    private final java.util.Set<UUID> pendingShipLostNotices = new java.util.HashSet<>();
+        private final List<PendingSeat> pendingSeats = new ArrayList<>();
+
+        /**
+         * player -> the ship whose cell was materialized for him at login, so the occupant refcount that
+         * materialize took can be handed back when he leaves. A refcount is a claim on one of a small
+         * fixed pool of slot worlds; leaking one per login would exhaust the pool.
+         */
+        private final java.util.Map<UUID, UUID> heldCells = new java.util.HashMap<>();
+
+        /**
+         * Players who came back aboard a ship the server has no record of, waiting to be told so. Written
+         * while their save file is read (no connection yet) and drained once they have actually joined.
+         */
+        private final java.util.Set<UUID> pendingShipLostNotices = new java.util.HashSet<>();
+    }
+
+    private static ServerPart part() {
+        return dev.stannismod.stellurgy.Stellurgy.serverState().spaceEvents;
+    }
 
     // --- pre-spawn client sync -------------------------------------------------------------------
 
@@ -172,13 +185,13 @@ public final class SpaceEventHandler {
                 // A seat is re-taken by mounting it; a crew member who was on his feet is not
                 // "seated late", he is placed on his deck point - which the deck hold owns, because
                 // it must also pin him against world gravity while his client re-captures.
-                pendingSeats.add(new PendingSeat(player.getUniqueID(), aboard, placement.dimension));
+                part().pendingSeats.add(new PendingSeat(player.getUniqueID(), aboard, placement.dimension));
             }
             if (placement.reason == LoginRestore.Reason.ABOARD_SETTLED) {
                 // The materialize above took an occupant refcount on his behalf; remember it so his
                 // logout gives it back. Without the pairing the cell is pinned to a pool slot for the
                 // rest of the server's life and the pool bleeds one slot per restored player.
-                heldCells.put(player.getUniqueID(), placement.shipId);
+                part().heldCells.put(player.getUniqueID(), placement.shipId);
             }
         } else if (placement.reason == LoginRestore.Reason.NO_TAG
                 || placement.reason == LoginRestore.Reason.SHIP_UNKNOWN) {
@@ -193,7 +206,7 @@ public final class SpaceEventHandler {
             // where he was or is an ordinary login. He cannot be told here — his connection is not
             // assigned until later in the login sequence, and both send paths dereference it — so the
             // notice is queued for the moment he is actually on the server.
-            pendingShipLostNotices.add(player.getUniqueID());
+            part().pendingShipLostNotices.add(player.getUniqueID());
             // He is being put down in the plain world, so EVERYTHING that bound him to a ship or a
             // cell has to let go — not just the aboard record cleared above. This branch undid one
             // of six bindings for as long as it was the only code that knew the operation existed;
@@ -232,10 +245,10 @@ public final class SpaceEventHandler {
                     dev.stannismod.stellurgy.network.PacketSpaceClockSync.current(),
                     (EntityPlayerMP) event.player);
         }
-        if (pendingShipLostNotices.isEmpty()) {
+        if (part().pendingShipLostNotices.isEmpty()) {
             return;
         }
-        if (pendingShipLostNotices.remove(event.player.getUniqueID())) {
+        if (part().pendingShipLostNotices.remove(event.player.getUniqueID())) {
             event.player.sendMessage(
                     new net.minecraft.util.text.TextComponentTranslation(LoginRestore.MSG_SHIP_UNKNOWN));
         }
@@ -256,7 +269,7 @@ public final class SpaceEventHandler {
         UUID playerId = event.player.getUniqueID();
         releaseHeldCell(playerId);
         // He is gone; a queued seating for him is dead work.
-        Iterator<PendingSeat> it = pendingSeats.iterator();
+        Iterator<PendingSeat> it = part().pendingSeats.iterator();
         while (it.hasNext()) {
             if (playerId.equals(it.next().playerId)) {
                 it.remove();
@@ -277,13 +290,13 @@ public final class SpaceEventHandler {
      * Opposite intent, so the two stay separate methods and neither calls the other.</p>
      */
     public boolean holdsCellClaimFor(net.minecraft.entity.player.EntityPlayer player) {
-        return heldCells.containsKey(player.getUniqueID());
+        return part().heldCells.containsKey(player.getUniqueID());
     }
 
     /** @return whether a claim was actually given back */
     public boolean releaseCellClaim(net.minecraft.entity.player.EntityPlayer player) {
         UUID playerId = player.getUniqueID();
-        if (!heldCells.containsKey(playerId)) {
+        if (!part().heldCells.containsKey(playerId)) {
             return false;
         }
         releaseHeldCell(playerId);
@@ -292,7 +305,7 @@ public final class SpaceEventHandler {
 
     public boolean hasQueuedSeating(net.minecraft.entity.player.EntityPlayer player) {
         UUID playerId = player.getUniqueID();
-        for (PendingSeat seat : pendingSeats) {
+        for (PendingSeat seat : part().pendingSeats) {
             if (playerId.equals(seat.playerId)) {
                 return true;
             }
@@ -308,11 +321,11 @@ public final class SpaceEventHandler {
      */
     public boolean releaseQueuedSeating(net.minecraft.entity.player.EntityPlayer player) {
         UUID playerId = player.getUniqueID();
-        return pendingSeats.removeIf(seat -> playerId.equals(seat.playerId));
+        return part().pendingSeats.removeIf(seat -> playerId.equals(seat.playerId));
     }
 
     private void releaseHeldCell(UUID playerId) {
-        UUID shipId = heldCells.remove(playerId);
+        UUID shipId = part().heldCells.remove(playerId);
         SpaceSubsystem stack = Stellurgy.spaceSubsystem();
         if (shipId == null || stack == null) {
             return;
@@ -377,17 +390,18 @@ public final class SpaceEventHandler {
         if (server == null) {
             return;
         }
-        if (++sinceRecordRefresh >= RECORD_REFRESH_TICKS) {
-            sinceRecordRefresh = 0;
+        ServerPart part = part();
+        if (++part.sinceRecordRefresh >= RECORD_REFRESH_TICKS) {
+            part.sinceRecordRefresh = 0;
             for (EntityPlayerMP player : server.getPlayerList().getPlayers()) {
                 AboardRecord.reconcile(player);
             }
         }
         syncSpaceClock(server);
-        if (pendingSeats.isEmpty()) {
+        if (part.pendingSeats.isEmpty()) {
             return;
         }
-        Iterator<PendingSeat> it = pendingSeats.iterator();
+        Iterator<PendingSeat> it = part.pendingSeats.iterator();
         while (it.hasNext()) {
             PendingSeat pending = it.next();
             EntityPlayerMP player = server.getPlayerList().getPlayerByUUID(pending.playerId);
@@ -433,7 +447,7 @@ public final class SpaceEventHandler {
         // rather than by a crossing that just created the ship; that is NOT the same as having no
         // identity, and reseat resolves the name to a uuid rather than scanning by position.
         return CrewTransfer.reseat(world, anchor, Collections.singletonList(rider),
-                pending.aboard.shipId, null);
+                pending.aboard.shipId, null).seated;
     }
 
     // --- the divergence hook ---------------------------------------------------------------------
@@ -474,7 +488,7 @@ public final class SpaceEventHandler {
 
     /** Whether {@code dimId} is one of the subsystem's own worlds (a pool slot or hyperspace). */
     private static boolean isSubsystemWorld(int dimId) {
-        return SpaceSlotPool.slotDims().contains(dimId) || dimId == HyperspaceWorld.dimId();
+        return dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().contains(dimId) || dimId == dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
     }
 
     /**

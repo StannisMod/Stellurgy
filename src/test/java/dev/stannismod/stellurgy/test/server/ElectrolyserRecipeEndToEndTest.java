@@ -11,11 +11,6 @@ public class ElectrolyserRecipeEndToEndTest extends AbstractSharedServerTest {
     private static final String TILE_SHORT  = "TileElectrolyser";
 
     @Test
-    public void electrolyserFixtureValidates() throws Exception {
-        MachineRecipeEndToEndKit.runFixtureValidates(client(), FIXTURE_KEY, 400, 70, 400);
-    }
-
-    @Test
     public void electrolyserRunsFirstRegisteredRecipe() throws Exception {
         MachineRecipeEndToEndKit.runFirstRecipeEndToEnd(client(),
                 FIXTURE_KEY, TILE_SHORT, 500, 70, 400);

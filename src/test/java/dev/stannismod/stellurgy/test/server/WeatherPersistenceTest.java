@@ -29,6 +29,10 @@ import static org.junit.Assert.assertTrue;
  * Manages two harness lifecycles directly against the same workDir — not a
  * fit for {@link AbstractHeadlessServerTest} (which auto-manages a single
  * fresh-dir harness).
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class WeatherPersistenceTest {
 
@@ -56,6 +60,8 @@ public class WeatherPersistenceTest {
                 + "          isBlackHole=\"false\" diskAngle=\"70\" "
                 + "          numPlanets=\"1\" numGasGiants=\"0\">\n"
                 + "        <planet name=\"PersistencePlanet\" DIMID=\"" + FIXTURE_DIM + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"

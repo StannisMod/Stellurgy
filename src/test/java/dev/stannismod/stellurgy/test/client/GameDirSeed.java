@@ -41,6 +41,18 @@ public final class GameDirSeed {
     private String planetDefsDeclaredBy;
 
     /**
+     * The seed every shared harness world starts from: fuel is not required to fly
+     * ({@code rockets/rocketsRequireFuel=false}). A rocket's fuel adequacy is judged against the climb
+     * to its world's orbit line, which is a body's own atmosphere — 100 000 blocks on Earth — and a
+     * scenario whose subject is not fuel must not stand or fall on whether a fixture's tanks reach it.
+     * A scenario whose subject IS a fuel gate turns the requirement on at runtime
+     * ({@code stellurgytest config set rocketRequireFuel true}) and restores it.
+     */
+    public static GameDirSeed forTheSharedHarness() {
+        return new GameDirSeed().config("rockets", "B:rocketsRequireFuel", false, GameDirSeed.class);
+    }
+
+    /**
      * One config key, in Forge's own {@code stellurgy.cfg} spelling.
      *
      * @param section the config section, e.g. {@code performance}, {@code rockets}, {@code planet}
@@ -91,8 +103,11 @@ public final class GameDirSeed {
         return config.isEmpty() && planetDefs == null;
     }
 
-    /** Write what was declared into {@code root}, and return a one-line description for the log. */
-    String writeInto(Path root) throws IOException {
+    /**
+     * Write what was declared into {@code root}, and return a one-line description for the log.
+     * Public because the shared SERVER scope seeds its world the same way.
+     */
+    public String writeInto(Path root) throws IOException {
         Path stellurgyConfigDir = root.resolve("config").resolve("advRocketry");
         Files.createDirectories(stellurgyConfigDir);
         StringBuilder described = new StringBuilder();

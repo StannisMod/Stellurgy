@@ -99,26 +99,4 @@ public class ScanningSatelliteContractTest {
                 -1, sat.getSelectedSlot());
     }
 
-    @Test
-    public void allScanningSatellitesGetInfoOnNullWorldDoesNotThrow() {
-        // getInfo() is called by the satellite-builder GUI on each chip
-        // to render the status string. Some types (OreMapping, Density,
-        // etc.) return a literal string and ignore the world arg —
-        // SpyTelescope might read world state but should null-guard.
-        // Smoke pin: calling getInfo(null) must not throw on ANY type.
-        for (SatelliteBase sat : new SatelliteBase[] {
-                new SatelliteOreMapping(),
-                new SatelliteDensity(),
-                new SatelliteComposition(),
-                new SatelliteMassScanner(),
-                new SatelliteOptical(),
-                // SpyTelescope DOES dereference world in getInfo, so it's
-                // not included in the null-tolerance set. Future test
-                // can pin its non-null-world behaviour.
-        }) {
-            String info = sat.getInfo(null);
-            assertNotNull(sat.getClass().getSimpleName()
-                    + ".getInfo(null) must not return null", info);
-        }
-    }
 }

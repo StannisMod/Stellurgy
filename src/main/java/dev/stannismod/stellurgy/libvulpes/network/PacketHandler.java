@@ -35,23 +35,31 @@ import java.util.EnumMap;
 
 public class PacketHandler {
 	
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	private static Class<?> defaultChannelPipeline;
-	private static int discriminatorNumber = 0;
-	private static Codec codec = new Codec();
-	public static EnumMap<Side, FMLEmbeddedChannel> channels; //= NetworkRegistry.INSTANCE.newChannel("libVulpes", codec);
-	
-	public static PacketHandler INSTANCE = new PacketHandler();
-	
+	/** The next discriminator. Effectively final, process lifetime: advanced only by
+	 * {@link #addDiscriminator} during pre-init. */
+	private int discriminatorNumber = 0;
+	/** Effectively final, process lifetime: built with this object. */
+	private final Codec codec = new Codec();
+	/** The channel pair. Effectively final, process lifetime: created by the constructor, which
+	 * {@code LibVulpes.preInit} runs; never replaced. Each send sets the channel's target attributes
+	 * immediately before it writes - the same idiom as Forge's SimpleNetworkWrapper - so the last
+	 * target a send named stays referenced until the next send; it is never read by anything but that
+	 * next write. */
+	public final EnumMap<Side, FMLEmbeddedChannel> channels;
+
+	/** The libVulpes channel. Built in pre-init by its owner, {@code LibVulpes} ({@code packets}). */
 	public PacketHandler() {
-		codec = new Codec();
 		channels = NetworkRegistry.INSTANCE.newChannel("libVulpes", codec);
 	}
 
-	public static void init() {
-		if (!channels.isEmpty()) // avoid duplicate inits..
-			return;
+	/** The channels of the one handler the mod built, for the static send API below. */
+	private static EnumMap<Side, FMLEmbeddedChannel> channels() {
+		return dev.stannismod.stellurgy.Stellurgy.instance.libVulpes.packets.channels;
 	}
-	
+
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static Method generateName;
     static {
         try
@@ -130,44 +138,44 @@ public class PacketHandler {
     
 
 	public static final void sendToServer(BasePacket packet) {
-		channels.get(Side.CLIENT).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.TOSERVER);
-		channels.get(Side.CLIENT).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		channels().get(Side.CLIENT).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.TOSERVER);
+		channels().get(Side.CLIENT).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 
 	public static final void sendToPlayersTrackingEntity(BasePacket packet, Entity entity) {
 		for( EntityPlayer player : ((WorldServer)entity.world).getEntityTracker().getTrackingPlayers(entity)) {
 
-			channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.PLAYER);
-			channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(player);
-			channels.get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+			channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.PLAYER);
+			channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(player);
+			channels().get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 		}
 	}
 
 	public static final void sendToAll(BasePacket packet) {
-		channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.ALL);
-		channels.get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.ALL);
+		channels().get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 	public static final void sendToPlayer(BasePacket packet, EntityPlayer player) {
 		//INSTANCE.sendTo(packet, (EntityPlayerMP)player);
-		channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.PLAYER);
-		channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(player);
-		channels.get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.PLAYER);
+		channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(player);
+		channels().get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 
 	}
 
 	public static final void sendToDispatcher(BasePacket packet, NetworkManager netman) {
-		channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.DISPATCHER);
-		channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(NetworkDispatcher.get(netman));
-		channels.get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.DISPATCHER);
+		channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(NetworkDispatcher.get(netman));
+		channels().get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 	public static final void sendToNearby(BasePacket packet,int dimId, int x, int y, int z, double dist) {
 		//INSTANCE.sendToAllAround(packet, new TargetPoint(dimId, x, y, z, dist));
-		channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.ALLAROUNDPOINT);
-		channels.get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(new NetworkRegistry.TargetPoint(dimId, x, y, z,dist));
-		channels.get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.ALLAROUNDPOINT);
+		channels().get(Side.SERVER).attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(new NetworkRegistry.TargetPoint(dimId, x, y, z,dist));
+		channels().get(Side.SERVER).writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 	public static final void sendToNearby(BasePacket packet,int dimId, BlockPos pos, double dist) {

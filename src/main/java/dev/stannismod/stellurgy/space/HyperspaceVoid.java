@@ -60,6 +60,8 @@ import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
  * population to apply to. Hyperspace is not thin air; there is nothing out there to be equipped for.
  *
  * <p>Server main thread only.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class HyperspaceVoid {
 
@@ -88,8 +90,18 @@ public final class HyperspaceVoid {
      * argument against stands, written at {@link #pruneDeparted} below: a returning player is placed
      * by the login restore, which is *a fresh judgement, not a continuation*, so resuming his
      * countdown where it stopped asserts something about a situation he may no longer be in.</p>
+     *
+     * <p>Held in the server's {@link dev.stannismod.stellurgy.ServerState}, not on this handler: the
+     * handler is registered once for the whole process, and a count kept on it would carry a player's
+     * fall into the next server of the same client.</p>
      */
-    private final Map<UUID, Integer> adriftTicks = new HashMap<>();
+    public static final class ServerPart {
+        private final Map<UUID, Integer> adriftTicks = new HashMap<>();
+    }
+
+    private static Map<UUID, Integer> adriftTicks() {
+        return dev.stannismod.stellurgy.Stellurgy.serverState().hyperspaceVoid.adriftTicks;
+    }
 
     /**
      * Let go of the drift this player has accumulated, answering whether there was any.
@@ -99,12 +111,12 @@ public final class HyperspaceVoid {
      * {@link dev.stannismod.stellurgy.player.PlayerRelease}.</p>
      */
     public boolean releaseDrift(net.minecraft.entity.player.EntityPlayer player) {
-        return adriftTicks.remove(player.getUniqueID()) != null;
+        return adriftTicks().remove(player.getUniqueID()) != null;
     }
 
     /** Is this player part-way through a run of adrift ticks? */
     public boolean isDrifting(net.minecraft.entity.player.EntityPlayer player) {
-        return adriftTicks.containsKey(player.getUniqueID());
+        return adriftTicks().containsKey(player.getUniqueID());
     }
 
 
@@ -117,7 +129,8 @@ public final class HyperspaceVoid {
         if (server == null) {
             return;
         }
-        int hyperDim = HyperspaceWorld.dimId();
+        int hyperDim = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
+        Map<UUID, Integer> adriftTicks = adriftTicks();
         if (hyperDim == Integer.MIN_VALUE) {
             adriftTicks.clear(); // no hyperspace this boot: nobody can be adrift in it
             return;
@@ -167,6 +180,7 @@ public final class HyperspaceVoid {
      * logs back in is placed by the login restore, which is a fresh judgement, not a continuation.
      */
     private void pruneDeparted(MinecraftServer server) {
+        Map<UUID, Integer> adriftTicks = adriftTicks();
         if (adriftTicks.isEmpty()) {
             return;
         }

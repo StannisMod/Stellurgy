@@ -48,6 +48,8 @@ public final class ClientBot implements Closeable {
      * minutes, inside this. A slow world load was therefore delivered as "the client bridge did not
      * answer", and the client's own "Timed out waiting for the client world to load" could not
      * reach anyone by construction.</p>
+     *
+     * <p>A constant: a final {@code long} computed from a fixed duration.</p>
      */
     public static final long READ_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
 
@@ -103,6 +105,16 @@ public final class ClientBot implements Closeable {
 
     public void waitTicks(int ticks) throws IOException {
         JsonObject command = command("wait_ticks");
+        command.addProperty("ticks", ticks);
+        assertOk(execute(command));
+    }
+
+    /**
+     * Only the ticks on which the player can act: {@link #waitTicks} also counts the menu and the
+     * terrain screen. Its failure says whether the client stopped ticking or ticked without a world.
+     */
+    public void waitWorldTicks(int ticks) throws IOException {
+        JsonObject command = command("wait_world_ticks");
         command.addProperty("ticks", ticks);
         assertOk(execute(command));
     }

@@ -1,0 +1,144 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.TransitSetup;
+import dev.stannismod.stellurgy.test.ShipReadiness;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.ShipIdentity;
+import dev.stannismod.stellurgy.test.ShipInfo;
+
+import org.junit.Test;
+
+
+import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+
+/**
+ * E2E: can a restored in-flight tier-2 jump rebuild its ship by PASTING a block snapshot into the target
+ * cell? A ship departs into hyperspace; its {@code StorageChunk} snapshot is re-cut from the parked
+ * hyperspace ship by the periodic refresh (driven on demand here — it is deliberately NOT on the save
+ * path, where a physics-world call once cost a whole fleet). We then simulate a restart in-process: the
+ * live transit manager is discarded (its parked
+ * hyperspace ship is orphaned and can never arrive) and the transit is rebuilt from the exported record
+ * alone. The restored transit holds no hyperspace ship, so it can only complete through
+ * {@code VSShipCrosser.completeRestored} / {@code VSIntegration.pasteAndAssemble} — the snapshot NBT is read
+ * back into a StorageChunk, pasted into the target cell, and re-VSed. If that paste/assembly path were
+ * broken, no VS-managed ship would appear in the target cell and this test would fail.
+ *
+ * <p><b>Scope (honest boundary):</b> this exercises the restore + snapshot-PASTE path in real VS worlds, but
+ * it is an IN-PROCESS simulation — it hands the exported records straight back to the manager. It does NOT
+ * go through the store's on-disk NBT (that serialization is unit-pinned by {@code ShipLedgerDataTest} +
+ * {@code TransitRecordTest}), and the JVM does not actually restart (so hyperspace is not truly wiped). A
+ * genuine two-boot restart driving the production {@code onServerStarted}/{@code onWorldSave} wiring needs
+ * the harness's test-mode standdown lifted, which is a later transit-persistence increment.</p>
+ *
+ * <p>Complements {@code VSShipTransitTest} (the LIVE hyperspace crossing) and the deterministic
+ * {@code ShipTransitManagerTest} (the restored state machine with a fake crosser). Gated on the server's
+ * real VS presence (run with); skips cleanly otherwise.</p>
+ */
+public class VSShipTransitPersistTest extends AbstractSharedServerTest {
+
+    private static final int ARRIVAL_TICKS = 400;
+
+    @Test
+    public void aRestoredInFlightJumpRebuildsItsShipByPastingItsSnapshotIntoTheTargetCell() throws Exception {
+
+        // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
+
+        // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
+        int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
+        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
+                loadedShips(originDim) >= 1);
+
+        // Depart into hyperspace. We deliberately do NOT tick the transit yet: it stays parked in hyperspace
+        // while we re-cut its snapshot (the save-point cut is of a PARKED ship).
+        // Marked BEFORE the command whose effect is awaited.
+        long transitMark = events.mark();
+        String begin = exec("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
+                + " " + HYPERSPACE_JUMP_SPEED);
+        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
+
+        // Re-cut the parked ship's block snapshot, ONCE.
+        //
+        // Read the REFRESH's own count, not the export's hasSnapshot. Every transit carries a
+        // snapshot from the instant it departs — the floor cut of the source ship, taken before the
+        // departure crossing so that a save in the pre-assembly window is never snapshot-less — so
+        // hasSnapshot is true whether or not hyperspace was ever read, and asserting on it would
+        // make the claim that the PARKED ship was re-cut a statement about a cut that never
+        // happened.
+        //
+        // This used to be a retry loop, described as waiting for "the async hyperspace assembly".
+        // It was not an observation: every iteration PERFORMED the refresh, so the loop retried an
+        // operation rather than waiting for one — and the operation succeeds on its first attempt
+        // (measured across this tier at one fork and at six). A retry around a synchronous command
+        // turns "it failed" into "it failed several times", which is the same verdict later and with
+        // less to say about why.
+        String lastRefresh = exec("stellurgytest space transit-refresh");
+        assertTrue("the parked hyperspace ship was never re-cut into a persisted snapshot; last="
+                + lastRefresh, extractInt(lastRefresh, "refreshed") >= 1);
+
+        String lastExport = exec("stellurgytest space transit-export");
+        assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "
+                + "paste: " + lastExport, Reply.of(lastExport).bool("hasSnapshot"));
+
+        // Simulate a restart in-process: rebuild the transit from the exported record alone (the live
+        // manager, and its parked hyperspace ship, are thrown away). Note: this reuses the in-memory record;
+        // the on-disk NBT round-trip is unit-pinned separately (ShipLedgerDataTest + TransitRecordTest).
+        String restore = exec("stellurgytest space transit-restore");
+        assertTrue("restore did not recreate the in-flight transit: " + restore,
+                (Reply.of(restore).integer("inTransit") == 1));
+
+        // The RESTORED transit arrives on the server's own tick, like any other -- no pump. With no
+        // live hyperspace ship it can only get there by pasting its snapshot into the target cell,
+        // so the arrival production announces IS the proof that path ran.
+        String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
+                "the restored jump never completed; the durable record now reads "
+                        + exec("stellurgytest space transit-export"),
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
+        int targetDim = extractInt(arrived, "dim");
+        assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
+
+        // The snapshot-restored ship must load + be VS-managed in the TARGET cell. Restored arrivals paste in
+        // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
+        // ONLY through the persisted snapshot — the live ship was discarded.
+        assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
+                + "); countAll=" + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
+        // Named rather than approached: the cell's ship count now carries the ids it counted, so
+        // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
+        // this replaced would answer in the same shape if the cell held two.
+        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly"
+                + " failed); id=" + arrivedId,
+                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
+    }
+
+    @org.junit.After
+    public void resetPermaload() throws Exception {
+    }
+
+    // --- helpers (mirror VSShipTransitTest) ------------------------------------------------------
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+
+    /**
+     * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
+     *
+     * <p>On the SERVER's clock, not {@code dim}'s: the world asked about is the one that may not have
+     * started ticking, and budgeting against it would measure the wait with what it waits for.</p>
+     */
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
+    }
+
+    private static int extractInt(String json, String key) {
+        return Reply.of(json).integer(key);
+    }
+}

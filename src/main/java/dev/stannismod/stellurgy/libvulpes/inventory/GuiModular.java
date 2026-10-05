@@ -29,6 +29,11 @@ public class GuiModular extends GuiContainer {
         hasSlots = includePlayerInv;
     }
 
+    /** The modules this screen shows, top level, in draw order. */
+    public List<ModuleBase> modules() {
+        return modules;
+    }
+
     @Override
     public void initGui() {
         super.initGui();

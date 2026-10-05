@@ -26,13 +26,14 @@ import javax.annotation.Nullable;
 public class BlockFieldGenerator extends Block implements ITileEntityProvider, IHasItemBlock {
 
     public static final int TIER_COUNT = 4;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyInteger TIER = PropertyInteger.create("tier", 0, TIER_COUNT - 1);
 
     public BlockFieldGenerator(final String name, final Material material) {
         super(material);
         this.setUnlocalizedName(name);
         this.setRegistryName(AdvancedForceFieldSystem.MODID, name);
-        this.setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        this.setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         this.setHardness(3.0F);
         this.setResistance(6.0F);
         this.setSoundType(SoundType.METAL);

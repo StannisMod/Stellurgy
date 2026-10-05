@@ -14,7 +14,6 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * terraformer powered cycle on a Stellurgy-native planet.
@@ -61,39 +60,57 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
     private static final int CX_NO_POWER = 600;
     private static final int CZ = 200;
 
+    /**
+     * How many derived bodies the arrangement may draw before concluding the star yields no world
+     * with a surface. The TEST's own bound: the derivation states a gas giant as one (it has no world
+     * to load), so the draw that lands on one is passed over, and a star that derives this many giants
+     * in a row is an arrangement failure worth reporting rather than a reason to keep drawing.
+     */
+    private static final int MAX_BODIES_DRAWN = 8;
+
     /** Per-method dim id, allocated in @Before and torn down in @After. */
     private int newDim = -1;
+    /** Every body this method's arrangement generated, the surfaceless ones it passed over included. */
+    private final Set<Integer> generated = new HashSet<>();
 
     @Before
     public void generatePlanet() throws Exception {
-        Set<Integer> before = stellurgyDims();
         // The world is DERIVED, not rolled: /ar planet generate lost its three randomness arguments
-        // with the legacy generator behind them, so the same command on the same seed now mints the
-        // same planet.
-        exec("ar planet generate 0 Phase1aTerraformer");
-        Set<Integer> diff = stellurgyDims();
-        diff.removeAll(before);
-        assertEquals("planet generate must add exactly one dim — diff=" + diff,
-                1, diff.size());
-        newDim = diff.iterator().next();
+        // with the legacy generator behind them, so the same command on the same seed mints the same
+        // sequence of bodies — and some of them are gas giants, which have no world to build on.
+        String lastLoad = "";
+        for (int drawn = 0; drawn < MAX_BODIES_DRAWN && newDim == -1; drawn++) {
+            Set<Integer> before = stellurgyDims();
+            exec("ar planet generate 0 Phase1aTerraformer" + drawn);
+            Set<Integer> diff = stellurgyDims();
+            diff.removeAll(before);
+            assertEquals("planet generate must add exactly one dim — diff=" + diff,
+                    1, diff.size());
+            int dim = diff.iterator().next();
+            generated.add(dim);
 
-        // Force-load the new dim so subsequent block/fluid/energy probes
-        // can find a live WorldServer for it.
-        String load = exec("stellurgytest dim load " + newDim);
-        assertTrue("dim load did not report loaded:true — " + load,
-                Reply.of(load).bool("loaded"));
+            // Force-load the new dim so subsequent block/fluid/energy probes can find a live
+            // WorldServer for it. A body that cannot load has no surface; draw the next one.
+            lastLoad = exec("stellurgytest dim load " + dim);
+            if (Reply.of(lastLoad).bool("loaded")) {
+                newDim = dim;
+            }
+        }
+        assertTrue("no generated body within " + MAX_BODIES_DRAWN + " draws had a world to load — "
+                + lastLoad, newDim != -1);
     }
 
     @After
     public void cleanupPlanet() throws Exception {
-        if (newDim != -1) {
+        for (int dim : generated) {
             try {
-                exec("ar planet delete " + newDim);
+                exec("ar planet delete " + dim);
             } catch (Exception ignored) {
                 // Best-effort cleanup; harness teardown will reclaim anyway.
             }
-            newDim = -1;
         }
+        generated.clear();
+        newDim = -1;
     }
 
     /** Powered + fueled + enabled multiblock on a native planet must
@@ -256,7 +273,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  dim-load handshake has regressed and the powered-cycle assertions
      *  below would fail for an irrelevant reason. */
     private void assertDimIsNativeStellurgyPlanet() throws Exception {
-        DimInfo info = DimInfo.forDim(WorldCommandFixtures::exec, newDim);
+        DimInfo info = DimInfo.forDim(this::exec, newDim);
         assertTrue("dim info missing isStellurgyPlanet:true — " + info.raw(), info.stellurgyPlanet);
         // The terraformer gate also needs WorldProviderPlanet, asked of the field that names the
         // provider: the `contains` this replaces would have been answered by the save folder or by
@@ -319,7 +336,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      * {@code ar planet list}. Nothing here claims anything about that command's output; both read
      * {@code DimensionManager.getInstance().getRegisteredDimensions()}.
      */
-    private static Set<Integer> stellurgyDims() throws Exception {
+    private Set<Integer> stellurgyDims() throws Exception {
         Set<Integer> ids = new HashSet<>();
         for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list")).intArray("stellurgyDimensions")) {
             ids.add(dim);

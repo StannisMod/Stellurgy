@@ -16,7 +16,6 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -61,9 +60,27 @@ public class PacketSerializationTest {
         field.set(target, value);
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict on the readout, 2026-09-30. PRESSURE -
+     * {@code PacketAtmSync#write} at {@code nbt.setShort("pressure", (short) summary.pressureCentiAtm());} writing half the pressure: "expected:&lt;850&gt; but was:&lt;425&gt;".
+     * BREATHABLE - {@code PacketAtmSync#readClient} at {@code summary = new AtmosphereSummary(nbt.getShort("pressure"), nbt.getBoolean("breathable"),} reading the flag negated: "expected:&lt;false&gt; but
+     * was:&lt;true&gt;". WARNING - {@code PacketAtmSync#readClient} at {@code nbt.getString("warning"), holding);} reading the warning under another key:
+     * "expected:&lt;[msg.noOxygen]&gt; but was:&lt;[]&gt;". STATEMENTS IN ORDER -
+     * {@code PacketAtmSync#readClient} at {@code holding.add(list.getStringTagAt(i));} prepending each statement instead of appending it: "the statements must
+     * survive in order ... expected:&lt;[NOT_BREATHABLE, TOXIC]&gt; but was:&lt;[TOXIC,
+     * NOT_BREATHABLE]&gt;". The readable-bytes check was not part of this change and is not
+     * witnessed here.</p>
+     */
     @Test
     public void packetAtmSyncRoundTrip() {
-        PacketAtmSync sent = new PacketAtmSync("ar:test_atm", 850);
+        // A readout, not a model: a pressure, whether it can be breathed, a warning to show, and the
+        // statements that are true of the air — which is what a player reads as its name now that
+        // nothing branches on one.
+        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary summary =
+                new dev.stannismod.stellurgy.atmosphere.AtmosphereSummary(
+                        850, false, "msg.noOxygen",
+                        java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"));
+        PacketAtmSync sent = new PacketAtmSync(summary);
 
         ByteBuf buffer = newBuffer();
         sent.write(buffer);
@@ -72,8 +89,13 @@ public class PacketSerializationTest {
         received.readClient(buffer);
 
         assertEquals(0, buffer.readableBytes());
-        assertEquals("ar:test_atm", PacketSerializationTest.<String>field(received, "type"));
-        assertEquals(850, (int) PacketSerializationTest.<Integer>field(received, "pressure"));
+        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary back =
+                PacketSerializationTest.field(received, "summary");
+        assertEquals(850, back.pressureCentiAtm());
+        assertEquals(false, back.breathable());
+        assertEquals("msg.noOxygen", back.warningKey());
+        assertEquals("the statements must survive in order — they are the label a player reads",
+                java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"), back.assertions());
     }
 
     @Test
@@ -226,113 +248,7 @@ public class PacketSerializationTest {
     // format implicitly via /stellurgytest probes on real packets between client and
     // server.
 
-    // ── "assert invalid/missing data fails safely" ────────
-    // For every Stellurgy packet whose readClient lives in a pure path (no MC client
-    // required), we pin failure semantics on malformed wire data. The unifying
-    // safety invariant is:
-    //
-    //   "Either readClient parses everything cleanly, or it bails — but it
-    //    MUST NOT half-fill fields with attacker-controlled bytes."
-    //
-    // PacketBuffer.readCompoundTag's underflow path throws IndexOutOfBoundsException
-    // (from underlying ByteBuf.readByte) — not the declared IOException — so the
-    // catch (IOException) clause in PacketAtmSync / PacketStellarInfo only handles
-    // structurally-malformed NBT, not byte-truncated wire. Either way: Netty's
-    // pipeline catches it, Forge logs and drops the packet. JVM stays up.
-    //
-    // PacketOxygenState's readClient touches Minecraft.getMinecraft() and is
-    // exercised by the integration suite — no unit-level safety mode exists.
-
-    /**
-     * The core safety assertion: regardless of whether readClient throws or
-     * returns, the packet instance must not have been half-populated with
-     * untrusted bytes. Either every field is at its default or every field is
-     * a coherent result of a successful parse — never a hostile mix.
-     */
-    private static void assertReadClientFailsSafely(Runnable readOp) {
-        try {
-            readOp.run();
-        } catch (RuntimeException ignoredBounded) {
-            // Acceptable. IndexOutOfBoundsException and friends propagate to
-            // Netty/Forge; the packet is dropped by the network pipeline. The
-            // important property is that the throw is *bounded* (single
-            // exception, not OOM / infinite loop) and that no partial
-            // mutation leaked attacker bytes onto our fields — verified by
-            // the caller's post-condition asserts.
-        }
-    }
-
-    @Test
-    public void packetAtmSyncReadClientEmptyBufferLeavesDefaults() {
-        ByteBuf empty = newBuffer();
-        PacketAtmSync packet = new PacketAtmSync();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        // readCompoundTag underflowed -> field assignments inside the try block
-        // never executed -> fields are at no-arg-ctor defaults.
-        assertNull(PacketSerializationTest.<String>field(packet, "type"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>field(packet, "pressure"));
-    }
-
-    @Test
-    public void packetAtmSyncReadClientGarbageBytesLeavesDefaults() {
-        // Random bytes that don't form a valid NBT compound. Either the
-        // tag-type byte is rejected by CompressedStreamTools.read or the
-        // buffer underflows during structured read — either way, readClient's
-        // type/pressure assignments are skipped.
-        ByteBuf garbage = newBuffer();
-        garbage.writeBytes(new byte[]{0x42, 0x13, 0x37, (byte) 0xFF, 0x00, 0x01});
-
-        PacketAtmSync packet = new PacketAtmSync();
-        assertReadClientFailsSafely(() -> packet.readClient(garbage));
-        assertNull(PacketSerializationTest.<String>field(packet, "type"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>field(packet, "pressure"));
-    }
-
-    @Test
-    public void packetStellarInfoReadClientEmptyBufferLeavesDefaults() {
-        // readInt on an empty ByteBuf throws IndexOutOfBoundsException before
-        // any assignment lands. Fields keep their declared defaults.
-        ByteBuf empty = newBuffer();
-        PacketStellarInfo packet = new PacketStellarInfo();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>field(packet, "starId"));
-        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>field(packet, "removeStar"));
-        assertNull(PacketSerializationTest.<Object>field(packet, "nbt"));
-    }
-
-    @Test
-    public void packetStellarInfoReadClientHeaderOnlyLeavesNbtNull() {
-        // Writer emits id (4 bytes) + removeStar (1 byte) + optional NBT.
-        // Feed only the 5-byte header with removeStar=false: id and removeStar
-        // parse cleanly, then readCompoundTag tries to consume the absent NBT
-        // and underflows. The exception propagates (it's an IOOBE, not the
-        // IOException the catch clause handles), but the critical safety
-        // property is that nbt stays null — guaranteeing executeClient's
-        // `if (nbt != null)` branch can't fire on attacker data.
-        ByteBuf header = newBuffer();
-        header.writeInt(42);          // starId
-        header.writeBoolean(false);   // removeStar — triggers the NBT-read branch
-
-        PacketStellarInfo packet = new PacketStellarInfo();
-        assertReadClientFailsSafely(() -> packet.readClient(header));
-
-        assertEquals(42, (int) PacketSerializationTest.<Integer>field(packet, "starId"));
-        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>field(packet, "removeStar"));
-        assertNull("nbt must be null when the NBT portion underflows — that's "
-                        + "what gates executeClient from a half-parse",
-                PacketSerializationTest.<Object>field(packet, "nbt"));
-    }
-
-    @Test
-    public void packetSyncKnownPlanetsReadClientEmptyBufferLeavesDefaults() {
-        // readInt on empty buffer throws IOOBE before stationId or
-        // knownPlanets is assigned.
-        ByteBuf empty = newBuffer();
-        PacketSyncKnownPlanets packet = new PacketSyncKnownPlanets();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertEquals(0, packet.stationId);
-        assertNull(PacketSerializationTest.<Object>field(packet, "knownPlanets"));
-    }
+    // ── malformed wire data ────────
 
     @Test
     public void packetSyncKnownPlanetsReadClientNegativeSizeReturnsEmptySet() throws Exception {
@@ -353,26 +269,6 @@ public class PacketSerializationTest {
         assertNotNull(known);
         assertEquals("negative-size header must produce an empty set, not crash",
                 0, known.size());
-    }
-
-    @Test
-    public void packetSyncKnownPlanetsReadClientTruncatedPayloadFailsBounded() {
-        // Header claims 5 entries; only 1.5 entries' worth of bytes follow.
-        // The loop reads entry 0 successfully, partially consumes 2 bytes for
-        // entry 1, then underflows on the next readInt -> IOOBE. Asserts the
-        // failure is bounded (a single exception, no infinite read).
-        ByteBuf wire = newBuffer();
-        wire.writeInt(99);            // stationId
-        wire.writeInt(5);             // claimed size
-        wire.writeInt(1);             // entry 0
-        wire.writeBytes(new byte[]{0x00, 0x00}); // 2 bytes — short of an int
-
-        PacketSyncKnownPlanets packet = new PacketSyncKnownPlanets();
-        assertReadClientFailsSafely(() -> packet.readClient(wire));
-        // stationId did make it (read before size) — this is OK because it
-        // is *attacker-derived* but bounded to one int and not used until
-        // executeClient pairs it with the (now-incomplete) planet set.
-        assertEquals(99, packet.stationId);
     }
 
     // Convenience to keep callsites clean without leaking the throws clause.

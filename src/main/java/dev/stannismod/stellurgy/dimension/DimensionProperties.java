@@ -18,17 +18,18 @@ import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.BiomeManager;
 import net.minecraftforge.common.BiomeManager.BiomeEntry;
 import net.minecraftforge.common.util.Constants.NBT;
-import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.SidedProxy;
 import org.apache.commons.lang3.ArrayUtils;
 import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
+import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
-import dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.Afuckinginterface;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketSatellite;
@@ -50,6 +51,9 @@ import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.util.*;
 
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class DimensionProperties implements Cloneable, IDimensionProperties {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
@@ -65,7 +69,20 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public static final ResourceLocation shadow = new ResourceLocation("stellurgy:textures/planets/shadow.png");
     public static final ResourceLocation shadow3 = new ResourceLocation("stellurgy:textures/planets/shadow3.png");
 
-    public static final int MAX_ATM_PRESSURE = 1600;
+    /**
+     * The ceiling on a planet's atmospheric pressure, in hundredths of an atmosphere.
+     * <p>
+     * <b>It is a property of the TYPE, not a statement about worlds.</b> The old value said 16
+     * atmospheres, which quietly declared Venus (92) unrepresentable and a gas giant absurd — a
+     * balance opinion wearing a constant's clothes. What a ceiling is legitimately for is keeping the
+     * arithmetic that reads this from overflowing, so it is derived from `int` with three orders of
+     * magnitude of headroom: every consumer either divides, compares, or widens to double, and the
+     * largest scaling any of them applies is nowhere near a thousand.
+     * <p>
+     * It exists at all only while pressure is an authored integer. Once a planet carries a
+     * composition and its pressure is the SUM of what is in it, there is nothing here to clamp.
+     */
+    public static final int MAX_ATM_PRESSURE = Integer.MAX_VALUE / 1000;
     public static final int MIN_ATM_PRESSURE = 0;
     public static final int MIN_DISTANCE = 1;
     public static final int MAX_GRAVITY = 400;
@@ -97,7 +114,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public float[] ringColor;
     public float gravitationalMultiplier;
     public long orbitalDist;
-    public boolean hasOxygen;
     public boolean colorOverride;
     //Used in solar panels
     public double peakInsolationMultiplier;
@@ -144,11 +160,18 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     private int thunderMarker;  // -1 - never thunder, 1 - always thunder, 0 - regular weather
     private boolean acidicRain;  // rain on this planet harms unprotected players under open sky
 
-    IAtmosphere atmosphereType;
+    Atmosphere atmosphereType;
     StellarBody star;
     int starId;
     private int originalAtmosphereDensity;
-    private int atmosphereDensity;
+    /**
+     * What this world's outdoor air is made of — the one authority on it. The pressure and whether
+     * there is oxygen are READ from it ({@link #getAtmosphereDensity}, {@link #hasOxygen}); nothing
+     * stores either beside it. Realized once, at creation ({@link #realizeAtmosphere}), and after that
+     * changed only by exchanges that move real gas ({@link #addToAtmosphere},
+     * {@link #setAtmosphereDensity}).
+     */
+    private AirState air;
     private String name;
     //public ExtendedBiomeProperties biomeProperties;
     private LinkedList<BiomeEntry> allowedBiomes;
@@ -174,24 +197,20 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     //Satellites
     private HashMap<Long, SatelliteBase> satellites;
     private HashMap<Long, SatelliteBase> tickingSatellites;
-    private List<Fluid> harvestableAtmosphere;
     private List<SpawnListEntryNBT> spawnableEntities;
     private HashSet<HashedBlockPosition> beaconLocations;
     private IBlockState oceanBlock;
     private IBlockState fillerBlock;
     private int seaLevel;
     /**
-     * Per-dim atmosphere&harr;orbit line (blocks): the world-Y a tier-2 ship must climb past to
-     * enter space, and the reference the descent/gravity-well side reads. The SINGLE owner of the
-     * ceiling — nothing else may hard-code an orbit line. Sentinel {@link #ORBIT_HEIGHT_UNSET}
-     * (the default) falls back to the global {@code StellurgyConfiguration.orbit}; XML-overridable per
-     * planet. Value is {@code tunable}. The hardcoded 256..456 atmosphere-density taper
-     * ({@link #getAtmosphereDensityAtHeight}) is visual-only and never a gate.
+     * The planet file's own atmosphere&harr;orbit line (world Y), or {@link #ORBIT_HEIGHT_UNSET} when
+     * the file states none and the line is the body's ({@link #orbitLine}). The 256..456
+     * atmosphere-density taper ({@link #getAtmosphereDensityAtHeight}) is visual-only and never a gate.
      */
     private int orbitHeight;
     private int generatorType;
 
-    /** Sentinel for {@link #orbitHeight}: no per-dim override — use the global config value. */
+    /** Sentinel for {@link #orbitHeight}: the file states no line, so the body's own is used. */
     public static final int ORBIT_HEIGHT_UNSET = -1;
     // How terrain is produced (orthogonal to generatorType, which stays the NATIVE sub-flavour selector).
     private TerrainSource terrainSource = TerrainSource.NATIVE;
@@ -255,18 +274,21 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     /** Lazily-built, never persisted: this world's own scaled copy of the shared climate ore table. */
     private transient OreGenProperties scaledOreCache;
     private transient double scaledOreCacheFor = Double.NaN;
+    /** Whether {@link TerrainResolution} has already said this planet's authored terrain is unusable. */
+    private transient boolean terrainFallbackWarned;
+
+    /** {@code true} the first time it is asked: the terrain fallback is reported once per planet. */
+    boolean firstTerrainFallbackWarning() {
+        if (terrainFallbackWarned) {
+            return false;
+        }
+        terrainFallbackWarned = true;
+        return true;
+    }
 
     /** Sentinel for {@link #mass} / {@link #radius}: nobody has stated one. */
     public static final double BULK_UNSET = 0d;
     //public int target_sea_level;
-
-    // modId must be declared explicitly: this @SidedProxy lives outside the @Mod class, and the jar
-    // now ships more than one @Mod. FML's implicit owner resolution matches the target class name
-    // against the @Mod class names, which fails for a field in a non-@Mod class when >1 mod is present,
-    // leaving this proxy uninjected (null). Naming the owning mod bypasses that resolution.
-    @SidedProxy(modId = Constants.modId, serverSide = "dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.serverlists", clientSide = "dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.clientlists")
-    public static Afuckinginterface proxylists;
-
 
     public List<ChunkPos> terraformingChunksAlreadyAdded;
 
@@ -298,7 +320,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         tickingSatellites = new HashMap<>();
         isNativeDimension = true;
         skyRenderOverride = false;
-        hasOxygen = true;
         colorOverride = false;
         peakInsolationMultiplier = -1;
         peakInsolationMultiplierWithoutAtmosphere = -1;
@@ -316,7 +337,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         canDecorate = true;
 
         customIcon = "";
-        harvestableAtmosphere = new LinkedList<>();
         spawnableEntities = new LinkedList<>();
         beaconLocations = new HashSet<>();
         seaLevel = 63;
@@ -336,27 +356,27 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     public void load_terraforming_helper(boolean reset) {
-        if (!net.minecraftforge.common.DimensionManager.getWorld(getId()).isRemote) {
-
-            if (!proxylists.isinitialized(getId())){
-                proxylists.initdim(getId());
-            }
+        World world = net.minecraftforge.common.DimensionManager.getWorld(getId());
+        if (world == null) {
+            throw new IllegalStateException("planet " + getId() + " is not loaded; its terraforming lives in its world");
+        }
+        if (!world.isRemote) {
+            TerraformingRecord record = TerraformingRecord.of(world);
 
             getAverageTemp();
             getViableBiomes(false);
             if (reset) {
-                proxylists.getChunksFullyTerraformed(getId()).clear();
-                proxylists.getChunksFullyBiomeChanged(getId()).clear();
+                record.forgetProgress();
                 terraformingChunksAlreadyAdded.clear();
             }
 
-            System.out.println("load helper with protecting blocks: " + proxylists.getProtectingBlocksForDimension(getId()).size() + " (" + reset + ")");
+            System.out.println("load helper with protecting blocks: " + record.protectingBlocks().size() + " (" + reset + ")");
 
-            proxylists.sethelper(getId(), new TerraformingHelper(getId(), getBiomesEntries(getViableBiomes(false)), proxylists.getChunksFullyTerraformed(getId()), proxylists.getChunksFullyBiomeChanged(getId())));
+            TerraformingHelper.install(new TerraformingHelper(world, getBiomesEntries(getViableBiomes(false)), record.terraformedChunks(), record.biomeChangedChunks()));
 
             System.out.println("num biomes: "+ getViableBiomes(false).size());
 
-            Collection<Chunk> list = (net.minecraftforge.common.DimensionManager.getWorld(getId())).getChunkProvider().getLoadedChunks();
+            Collection<Chunk> list = ((net.minecraft.world.WorldServer) world).getChunkProvider().getLoadedChunks();
             System.out.println("add chunks to tf list");
             if (!list.isEmpty()) {
                 for (Chunk chunk : list) {
@@ -368,48 +388,30 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
     }
 
-    public void registerProtectingBlock(BlockPos p) {
-        boolean already_registered = false;
-        for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
-            if (i.equals(p)) {
-                already_registered = true;
-                break;
-            }
-        }
-        //System.out.println("register protecting block called");
-        if (!already_registered) {
-            proxylists.getProtectingBlocksForDimension(getId()).add(p);
-            //System.out.println("block registered");
-            if (proxylists.gethelper(getId()) != null) {
-                proxylists.gethelper(getId()).recalculate_chunk_status();
+    public static void registerProtectingBlock(World world, BlockPos p) {
+        if (TerraformingRecord.of(world).addProtectingBlock(p)) {
+            TerraformingHelper helper = TerraformingHelper.of(world);
+            if (helper != null) {
+                helper.recalculate_chunk_status();
             }
         }
     }
 
-    public void unregisterProtectingBlock(BlockPos p) {
-        for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
-            if (i.equals(p)) {
-                proxylists.getProtectingBlocksForDimension(getId()).remove(i);
-                if (proxylists.gethelper(getId()) != null)
-                    proxylists.gethelper(getId()).recalculate_chunk_status();
-                break;
+    public static void unregisterProtectingBlock(World world, BlockPos p) {
+        if (TerraformingRecord.of(world).removeProtectingBlock(p)) {
+            TerraformingHelper helper = TerraformingHelper.of(world);
+            if (helper != null) {
+                helper.recalculate_chunk_status();
             }
         }
     }
 
-    public void add_block_to_terraforming_queue(BlockPos p) {
-        proxylists.gethelper(getId()).add_position_to_queue(p);
-    }
-    public void add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(ChunkPos pos){
+    public void add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(TerraformingHelper helper, ChunkPos pos){
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                    add_block_to_terraforming_queue(new BlockPos(pos.x * 16 + x, 0, pos.z * 16 + z));
+                    helper.add_position_to_queue(new BlockPos(pos.x * 16 + x, 0, pos.z * 16 + z));
             }
         }
-    }
-
-    public void add_block_to_biomechanging_queue(BlockPos p) {
-        proxylists.gethelper(getId()).add_position_to_biomechanging_queue(p);
     }
 
     synchronized boolean chunk_was_added_to_terraforming_list_if_not_add_it(ChunkPos pos){
@@ -427,15 +429,16 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     //if it already was biomechanged fully, add it directly to terraforming queue
     public void add_chunk_to_terraforming_list(Chunk chunk) {
 
-        if (proxylists.gethelper(getId()) != null) {
+        TerraformingHelper helper = TerraformingHelper.of(chunk.getWorld());
+        if (helper != null) {
 
-            boolean chunk_was_already_done = proxylists.getChunksFullyTerraformed(getId()).contains(new ChunkPos(chunk.x,chunk.z));; // do not add a chunk if it is already fully terraformed
+            boolean chunk_was_already_done = TerraformingRecord.of(chunk.getWorld()).isTerraformed(new ChunkPos(chunk.x,chunk.z)); // do not add a chunk if it is already fully terraformed
             if (chunk_was_already_done)
                 return;
 
             //System.out.println("add chunk to terraforming list: "+chunk.x+":"+chunk.z);
 
-            chunkdata current_chunk = proxylists.gethelper(getId()).getChunkFromList(chunk.x, chunk.z);
+            chunkdata current_chunk = helper.getChunkFromList(chunk.x, chunk.z);
             if (current_chunk == null || !current_chunk.chunk_fully_biomechanged) {
 
                 if(chunk_was_added_to_terraforming_list_if_not_add_it(new ChunkPos(chunk.x,chunk.z)))
@@ -447,7 +450,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
                     for (int z = 0; z < 16; z++) {
                         if (current_chunk == null || !current_chunk.fully_generated[x][z])
                             // if a position in the chunk is already fully generated, skip
-                            add_block_to_biomechanging_queue(new BlockPos(chunk.x * 16 + x, 0, chunk.z * 16 + z));
+                            helper.add_position_to_biomechanging_queue(new BlockPos(chunk.x * 16 + x, 0, chunk.z * 16 + z));
 
                     }
                 }
@@ -455,7 +458,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
                 if(chunk_was_added_to_terraforming_list_if_not_add_it(new ChunkPos(chunk.x,chunk.z)))
                     return;
 
-                add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(new ChunkPos(chunk.x,chunk.z));
+                add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(helper, new ChunkPos(chunk.x,chunk.z));
             }
         }
     }
@@ -496,6 +499,11 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public void copyData(DimensionProperties props) {
         this.satellites = props.satellites;
         this.tickingSatellites = props.tickingSatellites;
+        // The air is authored once, at creation, and the SAVED state is its authority ever after: a
+        // world re-read from its planet file would otherwise be re-derived from a flag and a total, and
+        // every gas an exchange put in or took out since would be lost on the next load.
+        this.air = props.air.copy();
+        this.originalAtmosphereDensity = props.originalAtmosphereDensity;
     }
 
 
@@ -515,12 +523,12 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public OreGenProperties getOreGenProperties(World world) {
         if (oreProperties != null)
             return oreProperties;
-        OreGenProperties climate = OreGenProperties.getOresForPressure(
+        OreGenProperties climate = dev.stannismod.stellurgy.Stellurgy.serverState().oreTable.getOresForPressure(
                 AtmosphereTypes.getAtmosphereTypeFromValue(originalAtmosphereDensity),
                 Temps.getTempFromValue(getAverageTemp()));
         if (climate == null || metallicity == 1d)
             return climate;
-        // The climate table is a SHARED static object — one instance per (pressure, temperature) cell,
+        // The climate table is a SHARED object — one instance per (pressure, temperature) cell,
         // handed to every world that lands in it — so a per-planet scaling must never mutate it. This
         // world gets its own copy instead, cached because ore generation asks per chunk.
         if (scaledOreCache == null || scaledOreCacheFor != metallicity) {
@@ -543,15 +551,16 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         // One AU. The two 100s that used to sit here were NOT the same quantity — a distance
         // and an atmosphere density — and only one of them is a distance unit.
         orbitalDist = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
-        originalAtmosphereDensity = atmosphereDensity =
-                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.ATM_PRESSURE_UNITS_PER_ATMOSPHERE;
+        // Sea-level Earth air: what this constructor has always meant by a world nobody described —
+        // one atmosphere with oxygen — now stated as the gases it is made of.
+        air = AirState.earthLike();
+        originalAtmosphereDensity = getAtmosphereDensity();
         childPlanets = new HashSet<>();
         requiredArtifacts = new LinkedList<>();
         parentPlanet = Constants.INVALID_PLANET;
         starId = 0;
         averageTemperature = 100;
         hasRings = false;
-        harvestableAtmosphere = new LinkedList<>();
         spawnableEntities = new LinkedList<>();
         beaconLocations = new HashSet<>();
         seaLevel = 63;
@@ -676,8 +685,20 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         this.scaledOreCacheFor = Double.NaN;
     }
 
-    public List<Fluid> getHarvestableGasses() {
-        return harvestableAtmosphere;
+    /**
+     * What can be taken out of this world's air: every gas present in it that something has bottled
+     * as a fluid, in registry order. Presence is availability — there is no second list, so a gas the
+     * air gains is offered and a gas it loses is withdrawn, with nothing to keep in step. A gas with
+     * no registered fluid is measured but not offered: nothing could hold it.
+     */
+    public List<Gas> getHarvestableGases() {
+        List<Gas> offered = new ArrayList<>();
+        for (Gas gas : GasRegistry.all()) {
+            if (air.partialPressure(gas) > 0L && gas.fluid() != null) {
+                offered.add(gas);
+            }
+        }
+        return offered;
     }
 
     public List<ItemStack> getRequiredArtifacts() {
@@ -748,10 +769,15 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             this.star.addPlanet(this);
     }
 
-    public void setStar(int id) {
+    /**
+     * Names the host star by id, and links it as well when {@code galaxy} already holds that star — a
+     * body read from a planet file names its star before the star is registered.
+     */
+    public void setStar(int id, IGalaxy galaxy) {
         this.starId = id;
-        if (DimensionManager.getInstance().getStar(id) != null)
-            setStar(DimensionManager.getInstance().getStar(id));
+        StellarBody registered = galaxy.getStar(id);
+        if (registered != null)
+            setStar(registered);
     }
 
     public StellarBody getStarData() {
@@ -837,7 +863,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public void removeBeaconLocation(World world, HashedBlockPosition pos) {
         beaconLocations.remove(pos);
 
-        if (beaconLocations.isEmpty() && !StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets.contains(getId()))
+        if (beaconLocations.isEmpty() && !DimensionManager.getInstance().getInitiallyKnownPlanets().contains(getId()))
             DimensionManager.getInstance().knownPlanets.remove(getId());
 
         //LAAZZY
@@ -853,20 +879,14 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         if (!customIcon.isEmpty()) {
             try {
-                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + ".png";
-                if (TextureResources.planetResources.containsKey(resource_location))
-                    return TextureResources.planetResources.get(resource_location);
-
-                ResourceLocation new_resource = new ResourceLocation(resource_location);
-                TextureResources.planetResources.put(resource_location, new_resource);
-                return new_resource;
+                return new ResourceLocation("stellurgy:textures/planets/" + customIcon.toLowerCase() + ".png");
             } catch (IllegalArgumentException e) {
                 return PlanetIcons.UNKNOWN.resource;
             }
 
         }
 
-        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity);
+        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity());
         Temps tempType = Temps.getTempFromValue(getAverageTemp());
 
         if (isStar() && getStarData().isBlackHole())
@@ -904,20 +924,14 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         if (!customIcon.isEmpty()) {
             try {
-                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + "leo.jpg";
-                if (TextureResources.planetResources.containsKey(resource_location))
-                    return TextureResources.planetResources.get(resource_location);
-
-                ResourceLocation new_resource = new ResourceLocation(resource_location);
-                TextureResources.planetResources.put(resource_location, new_resource);
-                return new_resource;
+                return new ResourceLocation("stellurgy:textures/planets/" + customIcon.toLowerCase() + "leo.jpg");
 
             } catch (IllegalArgumentException e) {
                 return PlanetIcons.UNKNOWN.resource;
             }
         }
 
-        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity);
+        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity());
         Temps tempType = Temps.getTempFromValue(getAverageTemp());
 
 
@@ -1079,17 +1093,103 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
 
+    /** One hundredth of an atmosphere in the composition's unit: the step of the density readout. */
+    private static final long CENTI_ATM = AirState.ONE_ATM / 100L;
+
+    /**
+     * The surface pressure, 100 = 1 atm — the SUM of what the air holds.
+     * <p>
+     * Rounded rather than truncated: a derived composition shares its total between gases by rounding
+     * each share, so the parts can sum to a few billionths under the total they were cut from, and a
+     * truncating readout would report such a world one step thinner than it was made.
+     */
     public int getAtmosphereDensity() {
-        return atmosphereDensity;
+        return (int) Math.min(Integer.MAX_VALUE, Math.round(air.getTotalPressure() / (double) CENTI_ATM));
     }
 
-    //TODO: allow for more exotic atmospheres
+    /** Whether this world's air holds any free oxygen at all — read from the air, never stored. */
+    public boolean hasOxygen() {
+        return air.getOxygen() > 0L;
+    }
 
+    /** What this world's outdoor air is made of, as an independent copy: editing it changes nothing. */
+    public AirState getAir() {
+        return air.copy();
+    }
+
+    /**
+     * Give this world its air, from its finished facts — the ONE way a world's composition comes into
+     * being. Call it after the mass, the radius, the temperature and giant-ness are final: the gases
+     * that stay are decided by all four ({@link BodyAtmosphere#derive}).
+     *
+     * @param oxygenated    whether this world's own roll gave it free oxygen
+     * @param statedDensity the total its source states, 100 = 1 atm; zero or less is an airless world,
+     *                      and needs no bulk
+     * @throws IllegalArgumentException for a positive density on a body with no mass or radius: what
+     *                                  such a body could hold has no answer
+     */
+    public void realizeAtmosphere(boolean oxygenated, int statedDensity) {
+        air = statedDensity <= 0 ? AirState.vacuum()
+                : BodyAtmosphere.derive(mass, radius, getAverageTemp(), isGasGiant, oxygenated,
+                statedDensity * CENTI_ATM);
+        originalAtmosphereDensity = getAtmosphereDensity();
+    }
+
+    /**
+     * Give this world exactly the air its author stated — the creation door for an authored body,
+     * beside {@link #realizeAtmosphere} for a derived one. Authoring overrides derivation, so nothing
+     * about the body is consulted; the gases arrive at this world's temperature, so set that first.
+     */
+    public void authorAtmosphere(AirState stated) {
+        AirState authored = AirState.vacuum();
+        for (Map.Entry<Gas, Long> entry : stated.composition().entrySet()) {
+            authored.add(entry.getKey(), entry.getValue(), getAverageTemp());
+        }
+        air = authored;
+        originalAtmosphereDensity = getAtmosphereDensity();
+    }
+
+    /**
+     * Put gas into this world's air — an exchange that moves real substance, so the pressure rises by
+     * exactly what came in and a gas the air did not hold before is now part of it. The portion
+     * arrives at this world's temperature.
+     */
+    public void addToAtmosphere(AirState portion) {
+        for (Map.Entry<Gas, Long> entry : portion.composition().entrySet()) {
+            air.add(entry.getKey(), entry.getValue(), getAverageTemp());
+        }
+        atmosphereChanged();
+    }
+
+    /**
+     * Thicken or thin the whole mix to this total, every gas in its own proportion.
+     * <p>
+     * Scaling cannot create a gas, so an airless world has nothing to scale: asking one for air is
+     * refused rather than answered with a composition nobody chose. Gas reaches such a world through
+     * {@link #addToAtmosphere}, which says WHICH.
+     *
+     * @throws IllegalStateException for a positive total asked of a world whose air holds nothing
+     */
     public void setAtmosphereDensity(int atmosphereDensity) {
+        long target = Math.max(0, atmosphereDensity) * CENTI_ATM;
+        long total = air.getTotalPressure();
+        if (total <= 0L && target > 0L) {
+            throw new IllegalStateException("dimension " + getId() + " holds no gas to thicken to "
+                    + atmosphereDensity + "; add a named gas instead");
+        }
+        AirState scaled = new AirState(0L, 0L, 0L, air.getTemperatureMilliK());
+        if (target > 0L) {
+            for (Map.Entry<Gas, Long> entry : air.composition().entrySet()) {
+                scaled.add(entry.getKey(), Math.round(entry.getValue() * ((double) target / total)),
+                        air.getTemperatureKelvin());
+            }
+        }
+        air = scaled;
+        atmosphereChanged();
+    }
 
-        int prevAtm = this.atmosphereDensity;
-        this.atmosphereDensity = atmosphereDensity;
-
+    /** Everything that follows a change of the air while the world is in play. */
+    private void atmosphereChanged() {
         // The ONE input that changes while a world is in play — the terraformer thickens or thins the
         // air, and the greenhouse term moves with it. Everything else a temperature is derived from
         // (the stars, the orbit, the albedo) is fixed when the world is materialized, and is STATED
@@ -1099,12 +1199,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         load_terraforming_helper(true);
 
-
         PacketHandler.sendToAll(new PacketDimInfo(getId(), this));
-    }
-
-    public void setAtmosphereDensityDirect(int atmosphereDensity) {
-        originalAtmosphereDensity = this.atmosphereDensity = atmosphereDensity;
     }
 
     /**
@@ -1117,38 +1212,33 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     /**
      * @return the default atmosphere of this dimension
      */
-    public IAtmosphere getAtmosphere() {
-        if (hasAtmosphere() && hasOxygen) {
-            if (averageTemperature >= 900)
-                return AtmosphereType.SUPERHEATED;
-            if (Temps.getTempFromValue(getAverageTemp()) == Temps.TOOHOT)
-                return AtmosphereType.VERYHOT;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
-                return AtmosphereType.SUPERHIGHPRESSURE;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
-                return AtmosphereType.HIGHPRESSURE;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.LOW)
-                return AtmosphereType.LOWOXYGEN;
-            return AtmosphereType.AIR;
-        } else if (hasAtmosphere() && !hasOxygen) {
-            if (averageTemperature >= 900)
-                return AtmosphereType.SUPERHEATEDNOO2;
-            if (Temps.getTempFromValue(averageTemperature) == Temps.TOOHOT)
-                return AtmosphereType.VERYHOTNOO2;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
-                return AtmosphereType.SUPERHIGHPRESSURENOO2;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
-                return AtmosphereType.HIGHPRESSURENOO2;
-            return AtmosphereType.NOO2;
-        }
-        return AtmosphereType.VACUUM;
+    public Atmosphere getAtmosphere() {
+        if (!hasAtmosphere())
+            return Atmosphere.VACUUM;
+        // Heat and pressure are the PLANET's rungs, and whether oxygen is present only picks the
+        // variant on them. Below them the air answers for itself, against the same band a room is
+        // judged by — so a trace of oxygen reads as too little oxygen, not as none, and a dense
+        // oxygen world can be one a person cannot breathe for the oxygen alone.
+        boolean oxygen = hasOxygen();
+        if (averageTemperature >= 900)
+            return oxygen ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;
+        if (Temps.getTempFromValue(averageTemperature) == Temps.TOOHOT)
+            return oxygen ? Atmosphere.VERYHOT : Atmosphere.VERYHOTNOO2;
+        AtmosphereTypes band = AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity());
+        if (band == AtmosphereTypes.SUPERHIGHPRESSURE)
+            return oxygen ? Atmosphere.SUPERHIGHPRESSURE : Atmosphere.SUPERHIGHPRESSURENOO2;
+        if (band == AtmosphereTypes.HIGHPRESSURE)
+            return oxygen ? Atmosphere.HIGHPRESSURE : Atmosphere.HIGHPRESSURENOO2;
+        if (!oxygen)
+            return Atmosphere.NOO2;
+        return air.oxygenRung(Atmosphere.AIR);
     }
 
     /**
      * @return true if the planet has an atmosphere
      */
     public boolean hasAtmosphere() {
-        return AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity).compareTo(AtmosphereTypes.NONE) < 0;
+        return AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()).compareTo(AtmosphereTypes.NONE) < 0;
     }
 
     /**
@@ -1380,8 +1470,8 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         World world = (net.minecraftforge.common.DimensionManager.getWorld(getId()));
         //world has to be loaded
         if (world != null) {
-            if (proxylists.gethelper(getId()) != null) {
-                TerraformingHelper t = proxylists.gethelper(getId());
+            TerraformingHelper t = TerraformingHelper.of(world);
+            if (t != null) {
                 if (t.has_blocks_in_dec_queue()) {
                     //if (new Random().nextInt(100) < 50) {
                     for (int i = 0; i < 5; i++) {
@@ -1483,7 +1573,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         Random random = new Random(System.nanoTime());
 
-        if (atmosphereDensity > AtmosphereTypes.LOW.value && random.nextInt(3) == 0 && not_terraforming) {
+        if (getAtmosphereDensity() > AtmosphereTypes.LOW.value && random.nextInt(3) == 0 && not_terraforming) {
             List<Biome> list = new LinkedList<>(StellurgyBiomes.instance.getSingleBiome());
 
             while (list.size() > 1) {
@@ -1501,7 +1591,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         }
 
 
-        if (atmosphereDensity <= AtmosphereTypes.LOW.value) {
+        if (getAtmosphereDensity() <= AtmosphereTypes.LOW.value) {
             viableBiomes.add(StellurgyBiomes.moonBiome);
             viableBiomes.add(StellurgyBiomes.moonBiomeDark);
         } else if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.TOOHOT)) {
@@ -1552,7 +1642,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             viableBiomes = ZUtils.copyRandomElements(viableBiomes, maxBiomesPerPlanet);
         }
 
-        if (atmosphereDensity > AtmosphereTypes.HIGHPRESSURE.value && Temps.getTempFromValue(averageTemperature).isInRange(Temps.NORMAL, Temps.HOT))
+        if (getAtmosphereDensity() > AtmosphereTypes.HIGHPRESSURE.value && Temps.getTempFromValue(averageTemperature).isInRange(Temps.NORMAL, Temps.HOT))
             viableBiomes.addAll(StellurgyBiomes.instance.getHighPressureBiomes());
 
         return viableBiomes;
@@ -2005,14 +2095,9 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         orbitalPhi = nbt.getDouble("orbitPhi");
         rotationalPhi = nbt.getDouble("rotationalPhi");
         isRetrograde = nbt.getBoolean("isRetrograde");
-        hasOxygen = nbt.getBoolean("hasOxygen");
         colorOverride = nbt.getBoolean("colorOverride");
-        atmosphereDensity = nbt.getInteger("atmosphereDensity");
-
-        if (nbt.hasKey("originalAtmosphereDensity"))
-            originalAtmosphereDensity = nbt.getInteger("originalAtmosphereDensity");
-        else
-            originalAtmosphereDensity = atmosphereDensity;
+        air = AirState.readFromNBT(nbt.getCompoundTag("air"));
+        originalAtmosphereDensity = nbt.getInteger("originalAtmosphereDensity");
 
         peakInsolationMultiplier = nbt.getDouble("peakInsolationMultiplier");
         peakInsolationMultiplierWithoutAtmosphere = nbt.getDouble("peakInsolationMultiplierWithoutAtmosphere");
@@ -2086,21 +2171,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         parentPlanet = nbt.getInteger("parentPlanet");
         this.setStar(DimensionManager.getInstance().getStar(nbt.getInteger("starId")));
 
-        if (isGasGiant) {
-            NBTTagList fluidList = nbt.getTagList("fluids", NBT.TAG_STRING);
-            getHarvestableGasses().clear();
-
-            for (int i = 0; i < fluidList.tagCount(); i++) {
-                Fluid fluid = FluidRegistry.getFluid(fluidList.getStringTagAt(i));
-                if (fluid != null)
-                    getHarvestableGasses().add(fluid);
-            }
-
-            //Do not allow empty atmospheres, at least not yet
-            if (getHarvestableGasses().isEmpty())
-                getHarvestableGasses().addAll(AtmosphereRegister.getInstance().getHarvestableGasses());
-        }
-
         if (nbt.hasKey("oceanBlock")) {
             Block block = Block.REGISTRY.getObject(new ResourceLocation(nbt.getString("oceanBlock")));
             if (block == Blocks.AIR) {
@@ -2153,114 +2223,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             nbt.setTag("satallites", allSatelliteNBT);
         }   }
 
-    //terraforming data
-    public void read_terraforming_data(NBTTagCompound nbt){
-
-        int dimid =getId();
-        if (!proxylists.isinitialized(dimid)){
-            proxylists.initdim(dimid);
-        }
-
-        if (nbt.hasKey("fullyGeneratedChunks")) {
-
-            NBTTagList list = nbt.getTagList("fullyGeneratedChunks", NBT.TAG_COMPOUND);
-            if (!list.hasNoTags())
-                proxylists.setChunksFullyTerraformed(dimid, new HashSet<ChunkPos>());
-            for (NBTBase entry : list) {
-                assert entry instanceof NBTTagCompound;
-                int x = ((NBTTagCompound) entry).getInteger("x");
-                int z = ((NBTTagCompound) entry).getInteger("z");
-                System.out.println("Chunk fully terraformed: " + x + ":" + z);
-
-                boolean chunk_was_already_done = false;
-                for (ChunkPos i : proxylists.getChunksFullyTerraformed(dimid)) {
-                    if (x == i.x && z == i.z) {
-                        chunk_was_already_done = true;
-                        break;
-                    }
-                }
-                if (!chunk_was_already_done)
-                    proxylists.getChunksFullyTerraformed(dimid).add(new ChunkPos(x, z));
-                else System.out.println("Chunk is already in list: " + x + ":" + z);
-            }
-        }
-
-        if (nbt.hasKey("fullyBiomeChangedChunks")) {
-
-            NBTTagList list = nbt.getTagList("fullyBiomeChangedChunks", NBT.TAG_COMPOUND);
-            if (!list.hasNoTags())
-                proxylists.setChunksFullyBiomeChanged(dimid, new HashSet<ChunkPos>());
-            for (NBTBase entry : list) {
-                assert entry instanceof NBTTagCompound;
-                int x = ((NBTTagCompound) entry).getInteger("x");
-                int z = ((NBTTagCompound) entry).getInteger("z");
-                System.out.println("Chunk fully biome changed: " + x + ":" + z);
-
-                boolean chunk_was_already_done = false;
-                for (ChunkPos i : proxylists.getChunksFullyBiomeChanged(dimid)) {
-                    if (x == i.x && z == i.z) {
-                        chunk_was_already_done = true;
-                        break;
-                    }
-                }
-                if (!chunk_was_already_done)
-                    proxylists.getChunksFullyBiomeChanged(dimid).add(new ChunkPos(x, z));
-                else System.out.println("Chunk is already in list: " + x + ":" + z);
-            }
-        }
-
-        if (nbt.hasKey("terraformingProtectedBlocks")) {
-
-            NBTTagList list = nbt.getTagList("terraformingProtectedBlocks", NBT.TAG_COMPOUND);
-            if (!list.hasNoTags())
-                proxylists.setProtectingBlocksForDimension(dimid, new ArrayList<>());
-            for (NBTBase entry : list) {
-                assert entry instanceof NBTTagCompound;
-                int x = ((NBTTagCompound) entry).getInteger("x");
-                int z = ((NBTTagCompound) entry).getInteger("z");
-                int y = ((NBTTagCompound) entry).getInteger("y");
-                proxylists.getProtectingBlocksForDimension(dimid).add(new BlockPos(x, y, z));
-                System.out.println("read protecting block at " + x + ":" + y + ":" + z + " - - " + proxylists.getProtectingBlocksForDimension(dimid).size());
-            }
-        }
-    }
-    public void write_terraforming_data(NBTTagCompound nbt) {
-        // write terraforming data
-
-        int dimid = getId();
-        if (!proxylists.isinitialized(dimid)){
-            return;
-        }
-        NBTTagList list = new NBTTagList();
-        for (ChunkPos pos : proxylists.getChunksFullyTerraformed(dimid)) {
-            NBTTagCompound entry = new NBTTagCompound();
-            entry.setInteger("x", pos.x);
-            entry.setInteger("z", pos.z);
-            list.appendTag(entry);
-        }
-        nbt.setTag("fullyGeneratedChunks", list);
-
-        list = new NBTTagList();
-        for (ChunkPos pos : proxylists.getChunksFullyBiomeChanged(dimid)) {
-            NBTTagCompound entry = new NBTTagCompound();
-            entry.setInteger("x", pos.x);
-            entry.setInteger("z", pos.z);
-            list.appendTag(entry);
-        }
-        nbt.setTag("fullyBiomeChangedChunks", list);
-
-        list = new NBTTagList();
-            for (BlockPos pos : proxylists.getProtectingBlocksForDimension(dimid)) {
-                NBTTagCompound entry = new NBTTagCompound();
-                entry.setInteger("x", pos.getX());
-                entry.setInteger("y", pos.getY());
-                entry.setInteger("z", pos.getZ());
-                list.appendTag(entry);
-            }
-            nbt.setTag("terraformingProtectedBlocks", list);
-
-
-    }
     /**
      * What is known ON this body: the planets a launch pad standing here may be aimed at, beyond the
      * ones everybody knows.
@@ -2462,9 +2424,10 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         nbt.setDouble("orbitPhi", orbitalPhi);
         nbt.setDouble("rotationalPhi", rotationalPhi);
         nbt.setBoolean("isRetrograde", isRetrograde);
-        nbt.setBoolean("hasOxygen", hasOxygen);
         nbt.setBoolean("colorOverride", colorOverride);
-        nbt.setInteger("atmosphereDensity", atmosphereDensity);
+        NBTTagCompound airTag = new NBTTagCompound();
+        air.writeToNBT(airTag);
+        nbt.setTag("air", airTag);
         nbt.setInteger("originalAtmosphereDensity", originalAtmosphereDensity);
         nbt.setDouble("peakInsolationMultiplier", peakInsolationMultiplier);
         nbt.setDouble("peakInsolationMultiplierWithoutAtmosphere", peakInsolationMultiplierWithoutAtmosphere);
@@ -2518,16 +2481,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         }
 
         nbt.setInteger("parentPlanet", parentPlanet);
-
-        if (isGasGiant) {
-            NBTTagList fluidList = new NBTTagList();
-
-            for (Fluid f : getHarvestableGasses()) {
-                fluidList.appendTag(new NBTTagString(f.getName()));
-            }
-
-            nbt.setTag("fluids", fluidList);
-        }
 
         if (oceanBlock != null) {
             nbt.setString("oceanBlock", Block.REGISTRY.getNameForObject(oceanBlock.getBlock()).toString());
@@ -2601,7 +2554,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
      * @return the density of the atmosphere at the given height
      */
     public float getAtmosphereDensityAtHeight(double y) {
-        return atmosphereDensity * MathHelper.clamp((float) (1 + (256 - y) / 200f), 0f, 1f) / 100f;
+        return getAtmosphereDensity() * MathHelper.clamp((float) (1 + (256 - y) / 200f), 0f, 1f) / 100f;
     }
 
     /**
@@ -2706,21 +2659,31 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     /**
-     * The atmosphere&harr;orbit line of this dimension (blocks of world Y): per-dim override when
-     * set, else the global {@code StellurgyConfiguration.orbit}. Single owner of the ceiling for the
-     * tier-2 entry check and the descent/gravity-well reads.
+     * The atmosphere&harr;orbit line of this dimension (blocks of world Y): the planet file's
+     * {@code <orbitHeight>} when it states one, else the line the BODY's radius puts there
+     * ({@link dev.stannismod.stellurgy.space.DescentShell#orbitLineWorldY}) — the same surface a
+     * descent crosses from outside. Read by a ship's takeoff, a descent's arrival height and a
+     * rocket's climb alike.
+     *
+     * <p><b>Empty for a dimension that is not a body with a size</b> — a world of another mod, the
+     * station and warp dimensions — unless its file states a line. There is no atmosphere to end
+     * there, and a number standing in for one would be a takeoff line nobody chose; the reader
+     * refuses instead and says why.</p>
      */
-    public int getOrbitHeight() {
+    public OptionalInt orbitLine() {
         if (orbitHeight != ORBIT_HEIGHT_UNSET) {
-            return orbitHeight;
+            return OptionalInt.of(orbitHeight);
         }
-        StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
-        return cfg != null ? cfg.orbit : 1000;
+        if (radius > BULK_UNSET) {
+            return OptionalInt.of(dev.stannismod.stellurgy.space.DescentShell.orbitLineWorldY(radius));
+        }
+        return OptionalInt.empty();
     }
 
-    /** Set the per-dim orbit height, or {@link #ORBIT_HEIGHT_UNSET} to fall back to the config. */
+    /** Set the per-dim orbit height, or {@link #ORBIT_HEIGHT_UNSET} to derive it from the body. */
     public void setOrbitHeight(int height) {
-        this.orbitHeight = height < 0 ? ORBIT_HEIGHT_UNSET : Math.max(255, height);
+        this.orbitHeight = height < 0 ? ORBIT_HEIGHT_UNSET
+                : Math.max(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y, height);
     }
 
     /** Whether an explicit per-dim orbit height is set (drives conditional XML/NBT export). */
@@ -3025,6 +2988,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         FRIGID(175),
         SNOWBALL(0);
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final int temp;
 
         Temps(int i) {
@@ -3081,6 +3045,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         LOW(25),
         NONE(0);
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final int value;
 
         AtmosphereTypes(int value) {
@@ -3108,6 +3073,9 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         }
     }
 
+    /**
+     * Every field of this object is effectively final, process lifetime: set once when the object is built.
+     */
     public enum PlanetIcons {
         EARTHLIKE(new ResourceLocation("stellurgy:textures/planets/Earthlike.png")),
         LAVA(new ResourceLocation("stellurgy:textures/planets/Lava.png")),

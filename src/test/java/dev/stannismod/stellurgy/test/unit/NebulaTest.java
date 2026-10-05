@@ -38,7 +38,7 @@ public class NebulaTest {
     private static final long SEED = 0xC10DDL;
 
     private static ClusteredGalaxyGenerator gen() {
-        return new ClusteredGalaxyGenerator(GalaxyGenConfig.defaults());
+        return new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),GalaxyGenConfig.defaults());
     }
 
     private static StarCluster clusterOfType(GalaxyGenConfig.ClusterType type) {

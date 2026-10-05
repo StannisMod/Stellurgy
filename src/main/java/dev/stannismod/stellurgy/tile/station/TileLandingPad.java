@@ -13,8 +13,10 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
+import dev.stannismod.stellurgy.api.RocketEvent;
 import dev.stannismod.stellurgy.api.RocketEvent.RocketDismantleEvent;
 import dev.stannismod.stellurgy.api.RocketEvent.RocketLandedEvent;
 import dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent;
@@ -54,16 +56,49 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
         super(1);
         inventory.setCanInsertSlot(0, true);
         inventory.setCanExtractSlot(0, true);
-        MinecraftForge.EVENT_BUS.register(this);
         blockPos = new LinkedList<>();
         moduleNameTextbox = new ModuleTextBox(this, 40, 30, 60, 12, 9);
         name = "";
     }
 
+    // The pad listens on the process-wide bus only while it stands in a world: registered when it is
+    // added to one, released by whichever of invalidate / chunk unload / world unload comes first.
+    // World unload is the one a server stop sends - it never unloads chunks, so onChunkUnload alone
+    // left every loaded pad, and its world, on the bus for the rest of the JVM.
+    private boolean registeredBus = false;
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (!registeredBus) {
+            MinecraftForge.EVENT_BUS.register(this);
+            registeredBus = true;
+        }
+    }
+
+    private void unregisterFromBus() {
+        if (registeredBus) {
+            MinecraftForge.EVENT_BUS.unregister(this);
+            registeredBus = false;
+        }
+    }
+
+    @SubscribeEvent
+    public void onWorldUnload(WorldEvent.Unload event) {
+        if (event.getWorld() == world) {
+            unregisterFromBus();
+        }
+    }
+
+    /** Rocket events are posted for every world on one bus; a pad answers only its own. */
+    private boolean isInMyWorld(RocketEvent event) {
+        return world != null && event.getEntity().world == world;
+    }
+
     @Override
     public void invalidate() {
         super.invalidate();
-        MinecraftForge.EVENT_BUS.unregister(this);
+        unregisterFromBus();
         for (HashedBlockPosition pos : blockPos) {
             TileEntity tile = world.getTileEntity(pos.getBlockPos());
             if (tile instanceof IMultiblock)
@@ -91,7 +126,7 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
     @Override
     public void onChunkUnload() {
         super.onChunkUnload();
-        MinecraftForge.EVENT_BUS.unregister(this);
+        unregisterFromBus();
     }
 
     @Override
@@ -143,6 +178,7 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
 
     @SubscribeEvent
     public void onRocketLand(RocketLandedEvent event) {
+        if (!isInMyWorld(event)) return;
         EntityRocketBase rocket = (EntityRocketBase) event.getEntity();
 
         AxisAlignedBB bbCache = new AxisAlignedBB(this.getPos().add(-1, 0, -1), this.getPos().add(1, 2, 1));
@@ -154,13 +190,23 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
                 }
             ItemStack stack = getStackInSlot(0);
             if (stack.getItem() == LibVulpesItems.itemLinker && ItemLinker.getDimId(stack) != Constants.INVALID_PLANET && event.getEntity() instanceof EntityRocket) {
-                ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack), ItemLinker.getMasterX(stack) + 0.5f, StellurgyConfiguration.getCurrentConfig().orbit, ItemLinker.getMasterZ(stack) + 0.5f);
+                ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack), ItemLinker.getMasterX(stack) + 0.5f, arrivalHeightIn(ItemLinker.getDimId(stack)), ItemLinker.getMasterZ(stack) + 0.5f);
             }
         }
     }
 
+    /**
+     * The height a rocket linked to {@code dimId} comes into it at — its transfer line, the same answer
+     * the rocket itself gives on arrival (which announces a world with no line).
+     */
+    private static float arrivalHeightIn(int dimId) {
+        return dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().transferLineOf(dimId)
+                .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+    }
+
     @SubscribeEvent
     public void onRocketLaunch(RocketPreLaunchEvent event) {
+        if (!isInMyWorld(event)) return;
 
         ItemStack stack = getStackInSlot(0);
         if (stack.getItem() == LibVulpesItems.itemLinker && ItemLinker.getDimId(stack) != Constants.INVALID_PLANET) {
@@ -171,7 +217,7 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
             if (bbCache.intersects(rocket.getEntityBoundingBox())) {
                 if (event.getEntity() instanceof EntityRocket) {
                     ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack),
-                            ItemLinker.getMasterX(stack) + 0.5f, StellurgyConfiguration.getCurrentConfig().orbit, ItemLinker.getMasterZ(stack) + 0.5f);
+                            ItemLinker.getMasterX(stack) + 0.5f, arrivalHeightIn(ItemLinker.getDimId(stack)), ItemLinker.getMasterZ(stack) + 0.5f);
                 }
             }
         }
@@ -179,7 +225,7 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
 
     @SubscribeEvent
     public void onRocketDismantle(RocketDismantleEvent event) {
-        if (world == null || world.isRemote || world.provider == null) return;
+        if (world == null || world.isRemote || world.provider == null || !isInMyWorld(event)) return;
         if (world.provider.getDimension() != StellurgyConfiguration.getCurrentConfig().spaceDimId) return;
 
         // Make sure this is actually a rocket
@@ -253,7 +299,7 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
                 if (rocket instanceof EntityRocket) {
                     if (stack.getItem() == LibVulpesItems.itemLinker && ItemLinker.getDimId(stack) != Constants.INVALID_PLANET) {
                         ((EntityRocket) rocket).setOverriddenCoords(ItemLinker.getDimId(stack),
-                                ItemLinker.getMasterX(stack) + 0.5f, StellurgyConfiguration.getCurrentConfig().orbit, ItemLinker.getMasterZ(stack) + 0.5f);
+                                ItemLinker.getMasterX(stack) + 0.5f, arrivalHeightIn(ItemLinker.getDimId(stack)), ItemLinker.getMasterZ(stack) + 0.5f);
                     } else
                         ((EntityRocket) rocket).setOverriddenCoords(Constants.INVALID_PLANET, 0, 0, 0);
                 }

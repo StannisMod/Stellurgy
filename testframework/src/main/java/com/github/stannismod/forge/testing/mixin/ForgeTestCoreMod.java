@@ -6,7 +6,6 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -50,23 +49,13 @@ import zone.rong.mixinbooter.IEarlyMixinLoader;
  * own test-only mixins ships {@value #CONSUMER_INDEX} in its TEST resources, one config file name per
  * line ({@code #} starts a comment); every copy of that resource on the classpath is read here and
  * its configs are queued alongside the harness's own. This inverts the dependency — the harness
- * offers the moment, the consumer names the file — and it keeps the same honesty property: what was
- * queued is readable afterwards via {@link #queuedConfigs()}, so a test can tell "the mixin recorded
- * nothing" from "the config was never accepted".</p>
+ * offers the moment, the consumer names the file. What was queued is printed in the launch log; a
+ * consumer proves its OWN configuration applied the way the harness proves its own — by what the
+ * configuration weaves (a recorder that hangs on {@code MinecraftServer} by one of its mixins answers
+ * only if the configuration was applied), so a test can tell "the mixin recorded nothing" from "the config was never accepted".</p>
  */
 @MCVersion("1.12.2")
 public class ForgeTestCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
-
-    /**
-     * Whether MixinBooter actually asked for our configuration.
-     *
-     * <p>Read back by the harness so a test can tell "nothing happened" from "nobody was listening".
-     * It is deliberately set HERE rather than optimistically at bootstrap: the config being ACCEPTED
-     * is a checkable fact, while "we called something" is not. And the config is
-     * {@code required:true}, so a config that is accepted but cannot be applied stops the client at
-     * launch instead of quietly recording nothing.</p>
-     */
-    private static volatile boolean configQueued;
 
     /** Classpath resource a consuming project ships to name its own test-only mixin configs. */
     public static final String CONSUMER_INDEX = "META-INF/forge-test-mixins.txt";
@@ -74,45 +63,34 @@ public class ForgeTestCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
     /** The harness's own configuration — always queued. */
     private static final String OWN_CONFIG = "mixins.forgetestframework.json";
 
-    /** Every configuration name handed to MixinBooter, in the order it was handed over. */
-    private static volatile List<String> queuedConfigs = Collections.emptyList();
-
     /**
-     * Why consumer discovery produced nothing, when it failed. Never {@code null}-swallowed: a
-     * consumer whose index cannot be read must be able to see that, rather than reading an empty
-     * recorder as "the event did not happen".
+     * Hand MixinBooter the harness's configuration and every consumer's.
+     *
+     * <p>Nothing is remembered here. "Was the harness configuration applied" is answered by what the
+     * configuration itself weaves — the client's and the server's test bridges live on
+     * {@code Minecraft} and {@code MinecraftServer} through its mixins, and refuse to run without
+     * them — which is a stronger fact than "MixinBooter asked us", and the config is
+     * {@code required:true} besides. A consumer discovery that failed is printed here, in the line
+     * that names what was queued.</p>
      */
-    private static volatile String discoveryError;
-
-    public static boolean isConfigQueued() {
-        return configQueued;
-    }
-
-    public static List<String> queuedConfigs() {
-        return queuedConfigs;
-    }
-
-    public static String discoveryError() {
-        return discoveryError;
-    }
-
     @Override
     public List<String> getMixinConfigs() {
         List<String> configs = new ArrayList<>();
         configs.add(OWN_CONFIG);
-        configs.addAll(discoverConsumerConfigs());
-        configQueued = true;
-        queuedConfigs = Collections.unmodifiableList(configs);
+        StringBuilder discoveryError = new StringBuilder();
+        configs.addAll(discoverConsumerConfigs(discoveryError));
         System.out.println("[forge-test-framework] queueing mixin configs " + configs
-                + (discoveryError == null ? "" : " (consumer discovery failed: " + discoveryError + ")"));
+                + (discoveryError.length() == 0 ? "" : " (consumer discovery failed: " + discoveryError + ")"));
         return configs;
     }
 
     /**
      * Read every {@value #CONSUMER_INDEX} on the classpath. Uses this class's own loader, which at
-     * this point is the {@code LaunchClassLoader} carrying the full test classpath.
+     * this point is the {@code LaunchClassLoader} carrying the full test classpath. A failure is
+     * appended to {@code error}, never swallowed: a consumer whose index cannot be read must be able
+     * to see that, rather than reading an empty recorder as "the event did not happen".
      */
-    private static List<String> discoverConsumerConfigs() {
+    private static List<String> discoverConsumerConfigs(StringBuilder error) {
         List<String> found = new ArrayList<>();
         try {
             Enumeration<URL> indexes = ForgeTestCoreMod.class.getClassLoader().getResources(CONSUMER_INDEX);
@@ -132,7 +110,7 @@ public class ForgeTestCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
                 }
             }
         } catch (Exception e) {
-            discoveryError = e.getClass().getSimpleName() + ": " + e.getMessage();
+            error.append(e.getClass().getSimpleName()).append(": ").append(e.getMessage());
         }
         return found;
     }

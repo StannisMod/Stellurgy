@@ -72,11 +72,17 @@ public abstract class MixinEntityShipLocalMove {
             ci.cancel();
             return;
         }
-        if (!ShipLocalMoveControl.shouldTakeOver(self)) {
+        // Server-side only: the client keeps predicting with vanilla rules, so a mistake here cannot
+        // strand a player, only desync him for a tick.
+        if (self.world == null || self.world.isRemote) {
             return;
         }
-        ShipLocalMoveControl.markFired();
-        switch (ShipLocalMoveControl.getMode()) {
+        ShipLocalMoveControl control = dev.stannismod.stellurgy.Stellurgy.serverState().shipLocalMove;
+        if (!control.shouldTakeOver(self)) {
+            return;
+        }
+        control.markFired();
+        switch (control.getMode()) {
             case OBSERVE:
                 return; // fire only; prove the injection exists
             case CANCEL:
@@ -85,7 +91,7 @@ public abstract class MixinEntityShipLocalMove {
             case SHIP_FRAME:
                 // Resolve in the ship's frame. If that cannot be done (aboard no loaded ship, or the
                 // transform is unavailable this tick), fall through to vanilla rather than freeze.
-                if (ShipLocalMove.resolve(self, x, y, z)) {
+                if (ShipLocalMove.resolve(control, self, x, y, z)) {
                     ci.cancel();
                 }
                 return;

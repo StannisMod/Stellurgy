@@ -1,12 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.ClassScope;
+import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
+import com.github.stannismod.forge.testing.junit.ScopedTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
-import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.FixMethodOrder;
@@ -15,15 +16,15 @@ import org.junit.rules.TestName;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
+import org.junit.runner.RunWith;
 import org.junit.runners.MethodSorters;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.EvictionReports;
 
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.PlayerState;
@@ -43,7 +44,7 @@ import static org.junit.Assert.assertTrue;
  * 101.8 s and print <b>two distinct client pids</b>. A four-scenario run on ONE shared harness
  * costs <b>73.8 s of boot plus 2.1-3.7 s per scenario</b>. Boot is 25-35x the scenario, and better
  * than 95 % of this tier's wall clock. {@code build.gradle}'s {@code forkEvery 1L} then makes the
- * whole tier's floor equal to its LONGEST class, so the 27-method {@code FreeFlightModeE2ETest}
+ * whole tier's floor equal to its LONGEST class, so the 27-method {@code FreeFlightModeTest}
  * pins it at ~35 min in one fork while the other seven idle.</p>
  *
  * <h2>What a subclass owes</h2>
@@ -89,22 +90,45 @@ import static org.junit.Assert.assertTrue;
  * <p>The chat backlog is the dangerous one, and it is why the pilot for this base class was chosen
  * to be a chat-asserting test: a scenario that proves "the player was told X" by searching the last
  * N chat lines passes on the PREVIOUS scenario's identical line, with no stimulus behind it at all.
- * {@code ItemSealDetectorPlayerMessagesE2ETest} has three methods expecting the same message.</p>
+ * {@code ItemSealDetectorPlayerMessagesTest} has three methods expecting the same message.</p>
  *
  * <p>So {@link #resetBetweenScenarios} does the reset and then <b>asserts the world is clean</b>. A
  * reset nobody checks is indistinguishable from no reset.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public abstract class AbstractSharedClientE2ETest {
+@RunWith(ClassScopeRunner.class)
+@ClassScope(SharedClientScope.class)
+public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedClientScope> {
 
-    private static RealDedicatedServerHarness sharedServer;
-    private static RealClientHarness sharedClient;
-    /** Set once the shared harness stops answering; every later scenario then fails FAST. */
-    private static final AtomicBoolean HARNESS_DEAD = new AtomicBoolean(false);
-    private static String firstFailure;
-    /** Scenario name -> its plot. Stable within a run because the method order is pinned. */
-    private static final Map<String, Plot> PLOTS = new HashMap<>();
-    private static int nextPlotIndex;
+    /**
+     * This class run's pair, its liveness, its first failure and its plots — handed over by the
+     * runner before any rule or {@code @Before} of this instance runs.
+     */
+    private SharedClientScope shared;
+
+    @Override
+    public final void attachScope(SharedClientScope scope) {
+        this.shared = scope;
+    }
+
+    /** What this class run shares beyond the pair itself — a value the class keeps across scenarios. */
+    protected final SharedClientScope scope() {
+        return shared;
+    }
+
+    /**
+     * The eviction announcements already made by this test instance's readers of the two logs (the
+     * server's and the client's, read through one instance). Per INSTANCE, not per class run: a
+     * subclass may build its readers in field initialisers, which run in the constructor — before the
+     * runner attaches the scope. No assertion reads it; the price is the cadence of the "RING
+     * EVICTED" lines.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    /** Hand this to every {@link Events} this test builds. */
+    protected final EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /**
      * Where this class's plot allocation STARTS, from {@code -PplotOffset=N} (default 0).
@@ -118,20 +142,10 @@ public abstract class AbstractSharedClientE2ETest {
      * <p>With this, a scenario can be run alone on plot #N — one variable moved, the other held.
      * Belongs in no gate and no default: it changes where fixtures stand, which is the one thing the
      * allocator exists to decide.</p>
+     *
+     * <p>A constant: a final {@code int} read once from a system property the test JVM is launched with.</p>
      */
     private static final int PLOT_OFFSET = Integer.getInteger("stellurgytest.plot.offset", 0);
-    /** Which concrete class the live pair was booted for; null when nothing is up. */
-    private static Class<?> bootedFor;
-
-    /** The client's start-time framebuffer switch, read by the harness as it launches the child. */
-    private static final String CLIENT_FBO_PROPERTY = "forge.test.client.fbo";
-    /**
-     * What {@link #CLIENT_FBO_PROPERTY} held before this class claimed it, and whether it claimed it
-     * at all. CLEAR MEANS RESTORE: a null here is a real state (the property was unset), so the flag
-     * is what says "we changed it", never the value.
-     */
-    private static String displacedFboProperty;
-    private static boolean fboPropertyClaimed;
 
     /**
      * Never cleared in an {@code @After}. JUnit runs {@code @After} BEFORE
@@ -157,7 +171,7 @@ public abstract class AbstractSharedClientE2ETest {
             // "Is the harness still there?" is the difference between one broken contract and a
             // whole group reporting the same corpse — so it is an INPUT to the verdict, not an
             // afterthought. Ask it of the CLIENT, which is the half that dies.
-            boolean groupAlreadyDown = HARNESS_DEAD.get();
+            boolean groupAlreadyDown = shared.harnessDead;
             // Do not ping a corpse we already buried — but then do not REPORT a liveness we never
             // measured either. Printing "harnessAlive=true" for a scenario aborted BECAUSE the
             // harness is dead is a field that states the opposite of the truth, and this class
@@ -168,11 +182,12 @@ public abstract class AbstractSharedClientE2ETest {
             Scenario.Phase effective =
                     Scenario.classify(e, scenario, alive, groupAlreadyDown);
             if (!alive) {
-                HARNESS_DEAD.set(true);
+                shared.harnessDead = true;
             }
-            if (firstFailure == null) {
-                firstFailure = description.getMethodName();
+            if (shared.firstFailure == null) {
+                shared.firstFailure = description.getMethodName();
             }
+            String firstFailure = shared.firstFailure;
 
             StringBuilder out = new StringBuilder();
             out.append('\n');
@@ -246,7 +261,8 @@ public abstract class AbstractSharedClientE2ETest {
     /**
      * Boot the class's pair once, on its FIRST scenario.
      *
-     * <p>It is not a {@code @BeforeClass} because a static method cannot ask the subclass anything —
+     * <p>It is not done when the class scope opens ({@link SharedClientScope}), for the reason it was
+     * never a {@code @BeforeClass}: neither has a test instance to ask anything —
      * and what it has to ask is {@link #seedGameDirectory}, which is the whole point: "this class
      * writes its own config" stopped being a reason to leave the shared harness on 2026-08-23, and
      * the only thing that had made it one was that a static boot could not see the declaration.</p>
@@ -266,95 +282,12 @@ public abstract class AbstractSharedClientE2ETest {
                 Boolean.parseBoolean(System.getProperty(
                         AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
 
-        if (bootedFor == getClass() && sharedServer != null) {
+        // One scope per class run, closed by the runner when the class ends, so a pair that is up
+        // is this class's pair.
+        if (shared.booted()) {
             return;
         }
-        // A previous class's pair in the same JVM (the tier runs forkEvery=1, so this is a
-        // belt-and-braces path rather than the usual one): close it before starting another, or the
-        // second boot contends with a live server for ports and disk.
-        if (sharedServer != null || sharedClient != null) {
-            closeSharedHarness();
-        }
-
-        HARNESS_DEAD.set(false);
-        firstFailure = null;
-        PLOTS.clear();
-        nextPlotIndex = PLOT_OFFSET;
-
-        GameDirSeed seed = new GameDirSeed();
-        seedGameDirectory(seed);
-
-        long startedNanos = System.nanoTime();
-        String seeded = "";
-        if (seed.isEmpty()) {
-            sharedServer = RealDedicatedServerHarness.start();
-        } else {
-            java.nio.file.Path root =
-                    java.nio.file.Files.createTempDirectory("forge-shared-client-");
-            seeded = seed.writeInto(root);
-            sharedServer = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
-        }
-        // The client's start-time options come from system properties the harness reads as it
-        // launches the child, so a class that needs one sets it HERE, around the boot, and the value
-        // it displaced goes back in closeSharedHarness. Set, not assumed: a scenario that measures
-        // pixels asserts the option took (see ClientBot.setFramebuffer's own `previous`).
-        if (clientNeedsFramebuffer()) {
-            displacedFboProperty = System.getProperty(CLIENT_FBO_PROPERTY);
-            fboPropertyClaimed = true;
-            System.setProperty(CLIENT_FBO_PROPERTY, "true");
-        }
-        try {
-            sharedClient = RealClientHarness.start(sharedServer);
-        } catch (Exception startupFailure) {
-            try {
-                sharedServer.close();
-            } catch (Exception cleanup) {
-                startupFailure.addSuppressed(cleanup);
-            }
-            sharedServer = null;
-            throw startupFailure;
-        }
-        bootedFor = getClass();
-        // The number this whole base class exists to amortise — print it so a run can be audited
-        // against the claim rather than against a memory of it. The seed is printed with it: a
-        // scenario whose premise is a config value must be able to show that value was there.
-        System.out.println("[shared-harness] boot ms="
-                + (System.nanoTime() - startedNanos) / 1_000_000L
-                + " — one server JVM + one client JVM for " + getClass().getSimpleName()
-                + (seeded.isEmpty() ? " (no seeded game directory)" : " seeded:" + seeded));
-    }
-
-    @AfterClass
-    public static void closeSharedHarness() throws Exception {
-        Exception deferred = null;
-        if (sharedClient != null) {
-            try {
-                sharedClient.close();
-            } catch (Exception e) {
-                deferred = e;
-            }
-            sharedClient = null;
-        }
-        if (sharedServer != null) {
-            try {
-                sharedServer.close();
-            } catch (Exception e) {
-                if (deferred == null) deferred = e;
-                else deferred.addSuppressed(e);
-            }
-            sharedServer = null;
-        }
-        bootedFor = null;
-        if (fboPropertyClaimed) {
-            if (displacedFboProperty == null) {
-                System.clearProperty(CLIENT_FBO_PROPERTY);
-            } else {
-                System.setProperty(CLIENT_FBO_PROPERTY, displacedFboProperty);
-            }
-            displacedFboProperty = null;
-            fboPropertyClaimed = false;
-        }
-        if (deferred != null) throw deferred;
+        shared.boot(this, PLOT_OFFSET);
     }
 
     /**
@@ -386,22 +319,35 @@ public abstract class AbstractSharedClientE2ETest {
     }
 
     private void failFastWhenTheGroupIsAlreadyDown() {
-        if (HARNESS_DEAD.get()) {
+        if (shared.harnessDead) {
             throw new AssertionError("E2E verdict=CASCADE scenario=" + testName.getMethodName()
                     + " — the shared harness died earlier in this class (first failure: "
-                    + firstFailure + "). This scenario never ran; read that one instead.");
+                    + shared.firstFailure + "). This scenario never ran; read that one instead.");
         }
     }
 
     private void resetBetweenScenarios() throws Exception {
         final Plot.Lane lane = lane();
-        Plot plot = PLOTS.computeIfAbsent(testName.getMethodName(),
-                name -> Plot.forScenario(nextPlotIndex++, name, 0, lane));
+        Plot plot = shared.plots.computeIfAbsent(testName.getMethodName(),
+                name -> Plot.forScenario(shared.nextPlotIndex++, name, 0, lane));
         scenario = new Scenario(testName.getMethodName(), subsystem(), plot);
 
         // SERVER side first: its commands echo harness markers into the chat the client reset is
         // about to clear. Doing it the other way round leaves the markers behind and the clean
         // assertion below fails for a reason that has nothing to do with the previous scenario.
+        // A DEAD player is not a dirty one, and it is asked before anything below can disguise it.
+        // `set-health 20` on a body that already died puts health back on an entity the server has
+        // finished with and that will never be respawned — the client's death screen is then closed
+        // by the client reset, every gate in this method passes, and from here on no slot write
+        // reaches the client, so each later scenario fails at its own equip naming an item instead
+        // of the death. Measured 2026-10-03: six scenarios of one group, all downstream of one fall.
+        String bodyOnServer = String.join("\n", serverClient().execute("stellurgytest player health"));
+        if (Reply.of(bodyOnServer).has("health") && Reply.of(bodyOnServer).number("health") <= 0) {
+            org.junit.Assert.fail("a previous scenario KILLED the shared player, and no reset can bring"
+                    + " that body back — this scenario and every one after it is downstream of that"
+                    + " death. The last death the server recorded: "
+                    + Events.lastRecord(serverEvents().since(0L, "player_died")) + "; server body: " + bodyOnServer);
+        }
         serverClient().execute("clear @a");
         // The harness server runs gamemode=1 (RealDedicatedServerHarness writes it into
         // server.properties), and a scenario that needs survival — a vacuum-damage or a
@@ -424,7 +370,7 @@ public abstract class AbstractSharedClientE2ETest {
                 "discardClientWindows");
         // This scenario's pilot-input delivery chain, both halves, from here on. Twenty-one failure
         // messages print it; before it was a window, its counts were the JVM's since boot.
-        seatDelivery = SeatDelivery.open(this::exec, bot(), events(), clientEvents());
+        seatDelivery = SeatDelivery.open(this::exec, bot(), serverEvents(), clientEvents());
         // A family of scenarios can carry a channel this base knows nothing about — a seat the
         // player is still riding, a subsystem flag it switched on. It runs HERE, before the
         // teleport, because a player still bound to a vehicle is not moved by /tp: the plot
@@ -530,6 +476,16 @@ public abstract class AbstractSharedClientE2ETest {
         assertEquals("after the between-scenario release the player must be bound to nothing, or the"
                 + " next scenario inherits its predecessor's ship, cell or hold: " + stillBound,
                 0, Reply.of(stillBound).arrayLength("bound"));
+        // FALL DISTANCE, after the placement and for the same reason as health: it is state of the
+        // shared body that the previous scenario wrote and nobody restores. The plot is open air, so
+        // a creative player falls through every scenario, and creative only skips the damage — the
+        // distance keeps adding up, and vanilla /tp does not clear it (`CommandTP` sets `onGround`
+        // and leaves `fallDistance` alone). The first scenario after a long one that switches to
+        // survival and puts him on a block then lands the whole inheritance at once: measured
+        // 2026-10-03, a 77-point `fall` death on a one-block step, after a slow GUI scenario.
+        String fallReset = exec("stellurgytest player set-fall-distance 0");
+        assertTrue("the between-scenario reset must clear the fall distance the previous scenario"
+                + " accumulated: " + fallReset, Reply.of(fallReset).ok());
 
         // Health is restored HERE: after the teleport, and with the settle wait below still between
         // it and the client reset. Both halves of that placement were paid for in a gate.
@@ -546,7 +502,7 @@ public abstract class AbstractSharedClientE2ETest {
         // before the reset, these two left one marker behind and every scenario in the tier failed
         // its own backlog-is-empty guard. The server answers over its own control socket now and the
         // harness refuses to start without one, so no such line exists.
-        long hurtMark = events().mark();
+        long hurtMark = serverEvents().mark();
         // The CLIENT's mark for the same write, taken here because the packet it produces is what
         // the gate below waits for. It survives `resetClientState` — that resets the screen and the
         // chat, both client-owned display state, and does not touch the event log.
@@ -665,7 +621,7 @@ public abstract class AbstractSharedClientE2ETest {
                     + "; server reports "
                     + String.join("\n", serverClient().execute("stellurgytest player health"))
                     + "\n  damage taken during this reset: "
-                    + events().since(hurtMark, "living_hurt"));
+                    + serverEvents().since(hurtMark, "living_hurt"));
         }
 
         // The world the CLIENT actually renders, asserted rather than inferred from the teleport
@@ -712,7 +668,7 @@ public abstract class AbstractSharedClientE2ETest {
      * <p>One {@code x,z} pair cannot tell the two causes apart, and they need opposite fixes: a
      * client that never received the teleport is a round-trip that was read too early, while one
      * that received it and ended up elsewhere has a SECOND WRITER owning the body. Measured
-     * 2026-08-12 — four scenarios of {@code VSShipFlightTelemetryE2ETest} red in two of three
+     * 2026-08-12 — four scenarios of {@code VSShipFlightTelemetryTest} red in two of three
      * identical tier runs, each printing one coordinate pair outside every plot in the lane, with
      * {@code harnessAlive=true}; nothing in the message distinguished the two, and the mode stayed
      * unattributable for a session.</p>
@@ -738,7 +694,7 @@ public abstract class AbstractSharedClientE2ETest {
             last = bot().reportState();
             trail.append(' ').append(describePlayerPoint(last));
             arrived |= isInsidePlot(last, plot);
-            bot().waitTicks(5);
+            advanceServerAndClient(5);
         }
         // WHO OWNS THIS BODY, asked of the server on a scenario that has already lost its verdict —
         // so the chat markers these commands echo can no longer disturb anything.
@@ -821,7 +777,7 @@ public abstract class AbstractSharedClientE2ETest {
         // scenario's failure, which is the whole reason this method existed in longhand.
         Events.MarkOrWhyNot mark;
         try {
-            mark = events().markIfInstrumented();
+            mark = serverEvents().markIfInstrumented();
         } catch (Exception unreachable) {
             plotMarkFailure = "the event log could not be marked: " + unreachable;
             return;
@@ -840,7 +796,11 @@ public abstract class AbstractSharedClientE2ETest {
             return "(not asked: " + (plotMarkFailure.isEmpty() ? "no mark was taken" : plotMarkFailure)
                     + ")";
         }
-        return askServer("stellurgytest events since " + plotMark + " pos_jump");
+        try {
+            return serverEvents().since(plotMark, "pos_jump");
+        } catch (Exception unavailable) {
+            return "(unavailable: " + unavailable + ")";
+        }
     }
 
     /** A server probe asked from a diagnostic: its own failure must never replace the one being told. */
@@ -1076,7 +1036,7 @@ public abstract class AbstractSharedClientE2ETest {
     private static final int HAND_LINK_BUDGET_TICKS = 200;
 
     /**
-     * How long the chat fence is given to reach the client, in client ticks: a deadline for one
+     * How long the chat fence is given to reach the client, in ticks: a deadline for one
      * packet's delivery, the same order as the other single-packet links here — not a settle.
      */
     private static final int CHAT_FENCE_TICKS = 200;
@@ -1224,15 +1184,15 @@ public abstract class AbstractSharedClientE2ETest {
     }
 
     protected final RealDedicatedServerHarness server() {
-        return sharedServer;
+        return shared.server;
     }
 
     protected final com.github.stannismod.forge.testing.server.TestClient serverClient() {
-        return sharedServer.client();
+        return shared.server.client();
     }
 
     protected final ClientBot bot() {
-        return sharedClient.bot();
+        return shared.client.bot();
     }
 
     /** Runs a server probe and joins its reply — the shape every Stellurgy client test already uses. */
@@ -1265,22 +1225,38 @@ public abstract class AbstractSharedClientE2ETest {
      * sample.
      *
      * <p>Offered here because the alternative is what keeps happening: a scenario that needs one
-     * trace reaches for {@code exec("stellurgytest events …")} and a regex of its own. That shape is right
+     * trace reaches for a raw log command and a regex of its own. That shape is right
      * in exactly one place — the between-scenario reset below, which must never fail a whole class
      * because a recorder was unavailable, and so REMEMBERS an unusable mark instead of throwing.
      * Copied into a scenario the exemption inverts: a silent empty log becomes "it never happened",
      * which is the one answer an instrument must not be able to fake. {@link Events#mark} asserts
      * the recorder is subscribed and {@link Events#markInstrumented} additionally asserts the
      * test-only mixins were woven — the two independent silences behind an empty position trace.
+     *
+     * <p>A wait whose client is deliberately out of the world uses {@link #connectionEvents()}.</p>
      */
-    protected final Events events() {
-        return new Events(this::exec, bot()::waitTicks);
+    protected final Events serverEvents() {
+        return new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks),
+                evictionReports());
+    }
+
+    /**
+     * The same log for a CONNECTION window — between a disconnect and the reconnect — where the
+     * client has no world by design.
+     *
+     * <p>Still two clocks: a disconnect is performed on the client's next tick, not when it is asked
+     * for, so a server-only deadline can run out before the channel has even closed; and
+     * {@link #serverEvents()}'s world ticks would stall for the whole window.</p>
+     */
+    protected final Events connectionEvents() {
+        return new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks),
+                evictionReports());
     }
 
     /**
      * The CLIENT's ordered event log, behind the same verbs.
      *
-     * <p>Offered beside {@link #events()} because the two logs answer different questions and a
+     * <p>Offered beside {@link #serverEvents()} because the two logs answer different questions and a
      * scenario picks by SUBJECT, not by convenience: a body released and reclaimed inside a hull is
      * the client's fact — the server rebases an {@code EntityPlayerMP}'s position instead of
      * releasing at all, so its probe reports "still tracked" straight through a release the client
@@ -1288,9 +1264,46 @@ public abstract class AbstractSharedClientE2ETest {
      *
      * <p>{@link Events#markInstrumented} must never be called on this one: the client reply carries
      * no {@code mixins} flag. {@link ClientEvents} says why, and what to assert instead.</p>
+     *
+     * <p>Two clocks, because most of what the client records is driven by a server packet. A wait
+     * whose client is deliberately out of the world uses {@link #clientConnectionEvents()}.</p>
      */
     protected final Events clientEvents() {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks),
+                evictionReports());
+    }
+
+    /** The client's log for a CONNECTION window: a kick or a disconnect is recorded after the world is gone. */
+    protected final Events clientConnectionEvents() {
+        return ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks),
+                evictionReports());
+    }
+
+    /**
+     * A WINDOW in which one side drives what the other observes — client input the server must
+     * judge, server motion the client must render. A window whose subject is the client's own
+     * simulation alone (a vanilla client timer, the player's own flight) is
+     * {@code bot().waitWorldTicks}; one whose subject and reader are the server alone, with no client
+     * input in flight, is {@link GameTicks#advance}.
+     */
+    protected final void advanceServerAndClient(int ticks) throws Exception {
+        GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks).ticks(ticks);
+    }
+
+    /**
+     * For a window whose failure is the client losing its world (a disconnect that must not happen),
+     * where world ticks would stall and report a stalled clock instead of the window's own verdict.
+     */
+    protected final void advanceServerAndAllClientTicks(int ticks) throws Exception {
+        GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks).ticks(ticks);
+    }
+
+    protected final void advanceWorldAndClient(int dim, int ticks) throws Exception {
+        worldAndClient(dim).ticks(ticks);
+    }
+
+    protected final Events.Step worldAndClient(int dim) {
+        return GameTicks.serverAndClient(serverClient(), GameTicks.world(dim), bot()::waitWorldTicks);
     }
 
     /**
@@ -1360,10 +1373,10 @@ public abstract class AbstractSharedClientE2ETest {
     private static final int PING_TIMEOUT_MS = 5_000;
 
     private boolean pingClient() {
-        if (sharedClient == null) {
+        if (shared.client == null) {
             return false;
         }
-        return sharedClient.bot().isAlive(PING_TIMEOUT_MS);
+        return shared.client.bot().isAlive(PING_TIMEOUT_MS);
     }
 
     private String renderStateBundle(Scenario s) {

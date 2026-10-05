@@ -4,35 +4,57 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.nbt.NBTTagString;
 import net.minecraft.network.PacketBuffer;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereSummary;
+import dev.stannismod.stellurgy.client.ClientAtmosphere;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
+/**
+ * What the air around you looks like, for drawing.
+ * <p>
+ * <b>It used to send the atmosphere's NAME</b>, and the client looked that name up in a registry to
+ * get an object it then asked questions of. Two things were wrong with that. The client held a model
+ * it could interrogate, so a mechanic could quietly come to depend on the client's answer; and
+ * behaviour keyed on a string, which is the coupling the whole gas model exists to remove.
+ * <p>
+ * What crosses now is a finished readout — a pressure, whether it can be breathed, a warning to show,
+ * and the statements that are true of it, which is what a player reads as its name. None of it is
+ * decided client-side, so staleness costs a lagging line of text and nothing else.
+ */
 public class PacketAtmSync extends BasePacket {
 
-    String type;
-    int pressure;
+    private AtmosphereSummary summary;
 
-    public PacketAtmSync(String type, int pressure) {
-        this.type = type;
-        this.pressure = pressure;
+    public PacketAtmSync(AtmosphereSummary summary) {
+        this.summary = summary;
     }
 
     public PacketAtmSync() {
-
+        this.summary = AtmosphereSummary.UNKNOWN;
     }
 
     @Override
     public void write(ByteBuf out) {
         NBTTagCompound nbt = new NBTTagCompound();
 
-        nbt.setString("type", type);
-        nbt.setShort("pressure", (short) pressure);
-        PacketBuffer packetBuffer = new PacketBuffer(out);
+        nbt.setShort("pressure", (short) summary.pressureCentiAtm());
+        nbt.setBoolean("breathable", summary.breathable());
+        nbt.setString("warning", summary.warningKey());
+        // The statements travel by NAME, never by ordinal: inserting one in the middle of the enum
+        // would otherwise re-label every readout in flight.
+        NBTTagList holding = new NBTTagList();
+        for (String assertion : summary.assertions()) {
+            holding.appendTag(new NBTTagString(assertion));
+        }
+        nbt.setTag("holds", holding);
 
-        packetBuffer.writeCompoundTag(nbt);
+        new PacketBuffer(out).writeCompoundTag(nbt);
     }
 
     @Override
@@ -41,8 +63,13 @@ public class PacketAtmSync extends BasePacket {
 
         try {
             NBTTagCompound nbt = packetBuffer.readCompoundTag();
-            type = nbt.getString("type");
-            pressure = nbt.getShort("pressure");
+            List<String> holding = new ArrayList<>();
+            NBTTagList list = nbt.getTagList("holds", 8);
+            for (int i = 0; i < list.tagCount(); i++) {
+                holding.add(list.getStringTagAt(i));
+            }
+            summary = new AtmosphereSummary(nbt.getShort("pressure"), nbt.getBoolean("breathable"),
+                    nbt.getString("warning"), holding);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -55,8 +82,7 @@ public class PacketAtmSync extends BasePacket {
 
     @Override
     public void executeClient(EntityPlayer thePlayer) {
-        dev.stannismod.stellurgy.client.ClientAtmosphere.accept(
-                AtmosphereRegister.getInstance().getAtmosphere(type), pressure);
+        ClientAtmosphere.of(thePlayer.world).accept(summary);
     }
 
     @Override

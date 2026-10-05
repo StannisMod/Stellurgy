@@ -7,11 +7,15 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 import dev.stannismod.stellurgy.armor.ItemSpaceChest;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -29,11 +33,10 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Coverage scope:</p>
  * <ol>
- *   <li>{@link ItemSpaceArmor#protectsFromSubstance} matrix — every
- *       {@link AtmosphereType} maps to the expected protect/no-protect
- *       answer. A regression that drops one of the hazard types from
- *       the production OR-chain silently exposes players to that
- *       atmosphere.</li>
+ *   <li>{@link ItemSpaceArmor#protectsFrom} matrix — the suit answers for
+ *       every hazard the model can raise, and for nothing where there is
+ *       no hazard. Swept over the enum rather than over a written-out
+ *       list, so a hazard added later is covered the day it exists.</li>
  *   <li>Empty-stack contracts for {@code getNumSlots},
  *       {@code getComponents}, {@code getComponentInSlot} — a freshly
  *       crafted suit has no NBT compound; production callers rely on
@@ -74,62 +77,61 @@ public class SpaceArmorContractTest {
         return new ItemStack(armor, 1);
     }
 
-    // ───────────────────── protectsFromSubstance matrix ──────────────────
+    // ───────────────────── the protection matrix ─────────────────────────
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: "space armor must
+     * protect from HEAT", 2026-09-30.</p>
+     */
     @Test
-    public void protectsFromVacuumAndAllHazardAtmospheres() {
+    public void protectsFromEveryHazardTheModelCanRaise() {
         ItemSpaceArmor armor = chest();
         ItemStack stack = stackOf(armor);
-        // Every hazard type in the production OR-chain must be protected.
-        AtmosphereType[] hazards = {
-                AtmosphereType.VACUUM,
-                AtmosphereType.HIGHPRESSURE,
-                AtmosphereType.SUPERHIGHPRESSURE,
-                AtmosphereType.VERYHOT,
-                AtmosphereType.SUPERHEATED,
-                AtmosphereType.LOWOXYGEN,
-                AtmosphereType.NOO2,
-                AtmosphereType.HIGHPRESSURENOO2,
-                AtmosphereType.SUPERHIGHPRESSURENOO2,
-                AtmosphereType.VERYHOTNOO2,
-                AtmosphereType.SUPERHEATEDNOO2,
-        };
-        for (AtmosphereType type : hazards) {
-            assertTrue("space armor must protect from " + type,
-                    armor.protectsFromSubstance(type, stack, /*commit=*/false));
+        // Swept over the enum, not over a list somebody has to remember to extend: a suit that
+        // stopped being proof against one kind of harm would be a design decision, and this is
+        // where it has to be made deliberately rather than by omission.
+        for (AtmosphereHazard hazard : AtmosphereHazard.values()) {
+            assertTrue("space armor must protect from " + hazard,
+                    armor.protectsFrom(EnumSet.of(hazard), /*needsSuppliedOxygen=*/false, stack,
+                            /*commit=*/false));
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: "air that raises
+     * no hazard needs no protecting from", 2026-09-30.</p>
+     */
     @Test
-    public void doesNotProtectFromBreathableAndPressurizedAir() {
+    public void protectsFromNothingWhereThereIsNoHazard() {
         ItemSpaceArmor armor = chest();
         ItemStack stack = stackOf(armor);
-        // Production contract: the OR-chain in protectsFromSubstance lists
-        // only hazard types. AIR and PRESSURIZEDAIR (the safe atmospheres)
-        // must fall through to false; otherwise the protect-cost branch
-        // would fire for routine gameplay (e.g. overworld tick).
-        assertFalse("must NOT consume protection on breathable AIR",
-                armor.protectsFromSubstance(AtmosphereType.AIR, stack, false));
-        assertFalse("must NOT consume protection on PRESSURIZEDAIR",
-                armor.protectsFromSubstance(AtmosphereType.PRESSURIZEDAIR, stack, false));
+        // Being asked about air that is doing nothing must answer no — the answer is also what
+        // decides whether wearing the suit costs anything, so a yes here would spend the tank
+        // for standing in a meadow.
+        assertFalse("air that raises no hazard needs no protecting from",
+                armor.protectsFrom(Collections.<AtmosphereHazard>emptySet(), false, stack, false));
     }
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes whenever it is acted on: "protect
+     * decision must be commit-invariant for [] expected:&lt;true&gt; but was:&lt;false&gt;",
+     * 2026-09-30. This asks the base piece, whose answer never read the commit flag; the chest that
+     * does spend on commit ({@code ItemSpaceChest#protectsFrom} at {@code if (!super.protectsFrom(hazards, needsSuppliedOxygen, stack, commitProtection))}) is not what it calls.</p>
+     */
     @Test
-    public void protectsFromSubstanceIsPureWithRespectToCommitFlag() {
-        // commit=true vs commit=false must report identical decisions —
-        // the boolean only matters in subclasses that consume durability
-        // on commit. ItemSpaceArmor itself is durability-less
-        // (isDamageable returns false), so the answer must be commit-
-        // invariant.
+    public void theProtectionDecisionIsTheSameWhetherOrNotItIsActedOn() {
+        // Asking must not change the answer: the commit flag exists so that speculative callers
+        // do not spend anything, and a piece whose VERDICT moved with it would make every such
+        // caller a liar. ItemSpaceArmor consumes nothing, so both readings must agree.
         ItemSpaceArmor armor = chest();
         ItemStack stack = stackOf(armor);
-        for (AtmosphereType type : new AtmosphereType[]{
-                AtmosphereType.VACUUM, AtmosphereType.AIR,
-                AtmosphereType.LOWOXYGEN, AtmosphereType.HIGHPRESSURE}) {
-            boolean withCommit = armor.protectsFromSubstance(type, stack, true);
-            boolean withoutCommit = armor.protectsFromSubstance(type, stack, false);
-            assertEquals(
-                    "protect decision must be commit-invariant for " + type,
+        for (Set<AtmosphereHazard> hazards : java.util.Arrays.asList(
+                EnumSet.of(AtmosphereHazard.DECOMPRESSION),
+                EnumSet.of(AtmosphereHazard.SUFFOCATION, AtmosphereHazard.HEAT),
+                Collections.<AtmosphereHazard>emptySet())) {
+            boolean withCommit = armor.protectsFrom(hazards, false, stack, true);
+            boolean withoutCommit = armor.protectsFrom(hazards, false, stack, false);
+            assertEquals("protect decision must be commit-invariant for " + hazards,
                     withCommit, withoutCommit);
         }
     }

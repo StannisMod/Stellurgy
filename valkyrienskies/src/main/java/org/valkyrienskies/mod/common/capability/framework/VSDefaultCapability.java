@@ -35,6 +35,7 @@ import org.valkyrienskies.mod.common.util.jackson.VSJacksonUtil;
 @ParametersAreNonnullByDefault
 @MethodsReturnNonnullByDefault
 public abstract class VSDefaultCapability<K> {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     @java.lang.SuppressWarnings("all")
     private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(VSDefaultCapability.class);
     private final ObjectMapper mapper;

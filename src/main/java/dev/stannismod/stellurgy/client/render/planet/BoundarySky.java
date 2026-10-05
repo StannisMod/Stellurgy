@@ -34,8 +34,9 @@ import java.util.List;
  * including cells with nothing to descend to. A boundary belongs to a BODY: it is drawn around the
  * body's own bearing, at the angle that body's shell actually subtends.</p>
  *
- * <p>The body data comes from {@link PacketSystemBodiesSync#bodiesForDim(int)} (the shared
- * server-&gt;client render channel), keyed on {@code world.provider.getDimension()}. Bodies flagged
+ * <p>The body data is the server's sky broadcast ({@link PacketSystemBodiesSync}) as the client's
+ * {@link dev.stannismod.stellurgy.client.ServerView} holds it, keyed on
+ * {@code world.provider.getDimension()}. Bodies flagged
  * {@link PacketSystemBodiesSync.RenderBody#descendTarget} are highlighted so the pilot can see which
  * body the ship will descend into once inside its proximity radius.</p>
  *
@@ -95,8 +96,8 @@ public class BoundarySky extends IRenderHandler {
 
     @Override
     public void render(float partialTicks, WorldClient world, Minecraft mc) {
-        List<PacketSystemBodiesSync.RenderBody> bodies =
-                PacketSystemBodiesSync.bodiesForDim(world.provider.getDimension());
+        dev.stannismod.stellurgy.client.ServerView server = dev.stannismod.stellurgy.client.ServerView.current();
+        List<PacketSystemBodiesSync.RenderBody> bodies = server.skyBodies(world.provider.getDimension());
 
         GlStateManager.pushMatrix();
         GlStateManager.disableFog();
@@ -109,8 +110,7 @@ public class BoundarySky extends IRenderHandler {
 
         // The backdrop: the clouds and the starfield, in the one order that is right for both. The
         // billboards below are meant to sit in front of all of it.
-        drawBackdrop(
-                PacketSystemBodiesSync.nebulaeForDim(world.provider.getDimension()));
+        drawBackdrop(server.skyNebulae(world.provider.getDimension()));
 
         // In hyperspace this same provider serves the transit lanes, and the two things below are
         // both wrong there: the ring marks a descent boundary in a world nothing descends to, and
@@ -143,7 +143,7 @@ public class BoundarySky extends IRenderHandler {
 
         // One billboard per synced body.
         if (bodies != null && !bodies.isEmpty()) {
-            boolean labels = SkyLabels.enabled();
+            boolean labels = SkyLabels.enabled(world);
             for (PacketSystemBodiesSync.RenderBody body : bodies) {
                 drawBody(buffer, body, labels);
             }

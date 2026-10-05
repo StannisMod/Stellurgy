@@ -37,9 +37,8 @@ import java.util.Map;
  * {@code writeInt(slotDimId)}, {@code writeInt(nebulaCount)} and, per cloud,
  * {@code writeFloat(dirX/dirY/dirZ)}, {@code writeFloat(angularRadius)},
  * {@code writeInt(appearanceOrdinal)}, {@code writeFloat(opacity)}.
- * {@code executeClient} stashes the decoded payload into client-side static maps (idempotent overwrite)
- * that {@link #bodiesForDim(int)} and {@link #nebulaeForDim(int)} read; {@code read} and
- * {@code executeServer} are never used.</p>
+ * {@code executeClient} hands the decoded payload to the client's view of the server, replacing the
+ * previous broadcast whole; {@code read} and {@code executeServer} are never used.</p>
  *
  * <p>The nebula half rides this packet rather than one of its own because it answers the same question
  * — what does the sky of this cell show — keyed by the same cell&rarr;slot binding and cleared by the
@@ -163,12 +162,6 @@ public final class PacketSystemBodiesSync extends BasePacket {
                     + ",look=" + appearanceOrdinal + ",opacity=" + opacity + "}";
         }
     }
-
-    /** Client-side render store: slot dim id -> bodies to draw. Read by the sky renderer via {@link #bodiesForDim}. */
-    private static final Map<Integer, List<RenderBody>> CLIENT_BODIES = new LinkedHashMap<>();
-
-    /** Client-side render store: slot dim id -> nebulae to draw. Read via {@link #nebulaeForDim}. */
-    private static final Map<Integer, List<RenderNebula>> CLIENT_NEBULAE = new LinkedHashMap<>();
 
     /** The decoded payload carried by this instance (server: what to send; client: what was received). */
     private Map<Integer, List<RenderBody>> byDim = new LinkedHashMap<>();
@@ -320,27 +313,10 @@ public final class PacketSystemBodiesSync extends BasePacket {
     @Override
     @SideOnly(Side.CLIENT)
     public void executeClient(EntityPlayer player) {
-        CLIENT_BODIES.clear();
-        CLIENT_BODIES.putAll(byDim);
-        CLIENT_NEBULAE.clear();
-        CLIENT_NEBULAE.putAll(nebulaeByDim);
+        dev.stannismod.stellurgy.client.ServerView.current().acceptSky(byDim, nebulaeByDim);
     }
 
     @Override
     public void executeServer(EntityPlayerMP player) {
-    }
-
-    /** Client render read: the bodies to draw in {@code slotDimId}. Never null &mdash; an empty list when none. */
-    @SideOnly(Side.CLIENT)
-    public static List<RenderBody> bodiesForDim(int slotDimId) {
-        List<RenderBody> bodies = CLIENT_BODIES.get(slotDimId);
-        return bodies == null ? Collections.<RenderBody>emptyList() : bodies;
-    }
-
-    /** Client render read: the nebulae to draw in {@code slotDimId}. Never null. */
-    @SideOnly(Side.CLIENT)
-    public static List<RenderNebula> nebulaeForDim(int slotDimId) {
-        List<RenderNebula> clouds = CLIENT_NEBULAE.get(slotDimId);
-        return clouds == null ? Collections.<RenderNebula>emptyList() : clouds;
     }
 }

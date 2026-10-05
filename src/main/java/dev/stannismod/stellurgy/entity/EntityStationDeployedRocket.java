@@ -28,9 +28,11 @@ import dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent;
 import dev.stannismod.stellurgy.api.StatsRocket;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.client.SoundRocketEngine;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.mission.GasHarvest;
 import dev.stannismod.stellurgy.mission.MissionGasCollection;
 import dev.stannismod.stellurgy.network.PacketSatellite;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
@@ -45,6 +47,7 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -352,17 +355,10 @@ public class EntityStationDeployedRocket extends EntityRocket {
         }
 
 
-        DimensionProperties props = DimensionManager.getEffectiveDimId(world, this.getPosition());
-        if (props.isGasGiant()) {
-            try {
-                atmText.setText(props.getHarvestableGasses().get(gasId).getLocalizedName(new FluidStack(props.getHarvestableGasses().get(gasId), 1)));
-            } catch (IndexOutOfBoundsException e) {
-                gasId = 0;
-                atmText.setText(props.getHarvestableGasses().get(gasId).getLocalizedName(new FluidStack(props.getHarvestableGasses().get(gasId), 1)));
-            }
-        } else {
-            atmText.setText(LibVulpes.proxy.getLocalizedString("msg.entityDeployedRocket.notGasGiant"));
-        }
+        List<Gas> offered = offeredGases();
+        if (gasId < 0 || gasId >= offered.size())
+            gasId = 0;
+        showSelection(offered);
         modules.add(new ModuleButton(170, 114, 1, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonLeft, 5, 8));
         modules.add(atmText);
         modules.add(new ModuleButton(240, 114, 2, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonRight, 5, 8));
@@ -373,30 +369,16 @@ public class EntityStationDeployedRocket extends EntityRocket {
     @Override
     @SideOnly(Side.CLIENT)
     public void onInventoryButtonPressed(int buttonId) {
-        DimensionProperties props;
+        int offered;
         switch (buttonId) {
             case 0:
                 PacketHandler.sendToServer(new PacketEntity(this, (byte) EntityRocket.PacketType.DECONSTRUCT.ordinal()));
                 break;
             case 1:
-                props = DimensionManager.getEffectiveDimId(world, this.getPosition());
-                if (props.isGasGiant()) {
-                    gasId++;
-                    if (gasId < 0)
-                        gasId = (short) (props.getHarvestableGasses().size() - 1);
-                    else if (gasId > props.getHarvestableGasses().size() - 1)
-                        gasId = 0;
-                    PacketHandler.sendToServer(new PacketEntity(this, (byte) EntityRocket.PacketType.MENU_CHANGE.ordinal()));
-                }
-                break;
             case 2:
-                props = DimensionManager.getEffectiveDimId(world, this.getPosition());
-                if (props.isGasGiant()) {
-                    gasId--;
-                    if (gasId < 0)
-                        gasId = (short) (props.getHarvestableGasses().size() - 1);
-                    else if (gasId > props.getHarvestableGasses().size() - 1)
-                        gasId = 0;
+                offered = offeredGases().size();
+                if (offered > 0) {
+                    gasId = wrapped(buttonId == 1 ? gasId + 1 : gasId - 1, offered);
                     PacketHandler.sendToServer(new PacketEntity(this, (byte) EntityRocket.PacketType.MENU_CHANGE.ordinal()));
                 }
                 break;
@@ -434,14 +416,15 @@ public class EntityStationDeployedRocket extends EntityRocket {
         DimensionProperties properties = (DimensionProperties) spaceObj.getProperties().getParentProperties();
 
         //Make sure gas id is valid, or abort
-        if (gasId >= properties.getHarvestableGasses().size() || gasId < 0) {
+        List<Gas> offered = properties.getHarvestableGases();
+        if (gasId >= offered.size() || gasId < 0) {
             setInOrbit(true);
             return;
         }
 
         // --- Plan harvest & cap duration by what we can actually get ---
-        final net.minecraftforge.fluids.Fluid targetFluid =
-                properties.getHarvestableGasses().get(gasId);
+        final Gas targetGas = offered.get(gasId);
+        final net.minecraftforge.fluids.Fluid targetFluid = targetGas.fluid();
 
         // (1) config harvest cap (mB)
         final boolean infinite = StellurgyConfiguration.getCurrentConfig().gasHarvestInfinite;
@@ -466,26 +449,13 @@ public class EntityStationDeployedRocket extends EntityRocket {
         // (3) final planned harvest for this mission
         this.plannedHarvestMb = Math.max(0, Math.min(harvestCapMb, freeMb));
 
-        // (4) duration = min( baseCurveTime(capForTiming), ceil(plannedHarvest / rate) )
-        // Keep your curve and denominator 25
+        // (4) duration, at the rate the chosen gas's partial pressure allows. The curve is read at
+        // the tank size capped by the harvest cap, so a small harvest does not time as a full tank.
         final int liquidCapacity = safeTagInt(stats, "liquidCapacity");
-        final int intake        = safeTagInt(stats, "intakePower");
-        final long rate         = DENOM_PER_INTAKE * (long) Math.max(1, intake); // mB/s
-
-        final long durationSeconds;
-        if (intake <= 0 || this.plannedHarvestMb <= 0) {
-            durationSeconds = 180L; // safety default
-        } else {
-            // IMPORTANT: cap the capacity used by the curve to the harvest cap,
-            // so durations match the table when harvest is smaller than tank size.
-            final int capForTiming = infinite ? liquidCapacity : Math.min(liquidCapacity, harvestCapMb);
-
-            double effCapMb  = computeEffectiveCapacityMb(capForTiming);
-            long baseSeconds = (long) Math.floor(effCapMb / (double) rate);
-            long capSeconds  = (long) Math.ceil((double) this.plannedHarvestMb / (double) rate);
-
-            durationSeconds = Math.max(1L, Math.min(baseSeconds, capSeconds));
-        }
+        final int intake         = safeTagInt(stats, "intakePower");
+        final int capForTiming   = infinite ? liquidCapacity : Math.min(liquidCapacity, harvestCapMb);
+        final long durationSeconds = GasHarvest.missionSeconds(this.plannedHarvestMb, capForTiming, intake,
+                properties.getAir().partialPressure(targetGas));
         final long durationTicks = Math.max(1L, durationSeconds * 20L);
 
 
@@ -550,19 +520,14 @@ public class EntityStationDeployedRocket extends EntityRocket {
 
         if (id == PacketType.MENU_CHANGE.ordinal()) {
 
-            DimensionProperties props = DimensionManager.getEffectiveDimId(world, this.getPosition());
-            if (props.isGasGiant()) {
-
-                gasId = nbt.getShort("gas");
-                if (gasId < 0)
-                    gasId = (short) (props.getHarvestableGasses().size() - 1);
-                else if (gasId > props.getHarvestableGasses().size() - 1)
-                    gasId = 0;
+            List<Gas> offered = offeredGases();
+            if (!offered.isEmpty()) {
+                gasId = wrapped(nbt.getShort("gas"), offered.size());
 
                 if (!world.isRemote)
                     PacketHandler.sendToNearby(new PacketEntity(this, (byte) PacketType.MENU_CHANGE.ordinal()), world.provider.getDimension(), (int) posX, (int) posY, (int) posZ, 64d);
-                else//index out of bounds somewhere here
-                    atmText.setText(props.getHarvestableGasses().get(gasId).getLocalizedName(new FluidStack(props.getHarvestableGasses().get(gasId), 1)));
+                else
+                    showSelection(offered);
             }
         } else
             super.useNetworkData(player, side, id, nbt);
@@ -593,32 +558,24 @@ public class EntityStationDeployedRocket extends EntityRocket {
         return (v instanceof Number) ? Math.max(0, ((Number) v).intValue()) : 0;
     }    
 
-    // --- Nonlinear gas mission timing (alpha = 0.2) ---
-    // effectiveCapacity = BASE_CAP * (liquidCapacity / BASE_CAP)^ALPHA
-    // baseSeconds       = floor( effectiveCapacity / (DENOM_PER_INTAKE * intakePower) )
-    // finalSeconds      = min(baseSeconds, ceil(plannedHarvestMb / (DENOM_PER_INTAKE * intakePower)))
-    private static final long BASE_CAP = 64_000L;       // 64,000 mB (64 buckets)
-    private static final double ALPHA = 0.2d;           // gentle sublinear scaling
-    private static final long DENOM_PER_INTAKE = 25L;   // you picked "25 * intakePower"
-
-    // Returns the effective capacity (mB) from your nonlinear curve.
-    private static double computeEffectiveCapacityMb(int liquidCapacity) {
-        double ratio = Math.max(1.0d, ((double) liquidCapacity) / (double) BASE_CAP);
-        return (double) BASE_CAP * Math.pow(ratio, ALPHA);
+    /** The gases this rocket may be set to collect where it stands: none unless it orbits a giant. */
+    private List<Gas> offeredGases() {
+        DimensionProperties props = DimensionManager.getEffectiveDimId(world, this.getPosition());
+        return props != null && props.isGasGiant() ? props.getHarvestableGases() : Collections.<Gas>emptyList();
     }
 
-    private static long computeMissionDurationSeconds(int liquidCapacity, int intakePower) {
-        // default fallback if bad data
-        if (intakePower <= 0) return 180L; // 3 minutes safety default
+    /** One step past either end of the list comes round to the other end. */
+    private static short wrapped(int index, int size) {
+        return (short) (index < 0 ? size - 1 : index >= size ? 0 : index);
+    }
 
-        // scale in double to avoid precision loss, clamp ratio >= 1 to avoid shrinking below base
-        double ratio = Math.max(1.0d, ((double) liquidCapacity) / (double) BASE_CAP);
-        double effectiveCapacity = (double) BASE_CAP * Math.pow(ratio, ALPHA);
-
-        long denom = DENOM_PER_INTAKE * (long) Math.max(1, intakePower);
-        long secs = (long) Math.floor(effectiveCapacity / (double) denom);
-
-        return Math.max(1L, secs); // never zero
+    private void showSelection(List<Gas> offered) {
+        if (offered.isEmpty()) {
+            atmText.setText(LibVulpes.proxy.getLocalizedString("msg.entityDeployedRocket.notGasGiant"));
+            return;
+        }
+        net.minecraftforge.fluids.Fluid fluid = offered.get(gasId).fluid();
+        atmText.setText(fluid.getLocalizedName(new FluidStack(fluid, 1)));
     }
 
     // Consume ascent fuel exactly like the parent rocket does.
@@ -697,17 +654,10 @@ public class EntityStationDeployedRocket extends EntityRocket {
     // TOP integration
     @javax.annotation.Nullable
     public net.minecraftforge.fluids.Fluid getSelectedHarvestGas() {
-        DimensionProperties props = DimensionManager.getEffectiveDimId(world, this.getPosition());
-
-        if (props == null || !props.isGasGiant() || props.getHarvestableGasses().isEmpty()) {
+        List<Gas> offered = offeredGases();
+        if (offered.isEmpty()) {
             return null;
         }
-
-        int idx = gasId;
-        if (idx < 0 || idx >= props.getHarvestableGasses().size()) {
-            idx = 0;
-        }
-
-        return props.getHarvestableGasses().get(idx);
+        return offered.get(gasId < 0 || gasId >= offered.size() ? 0 : gasId).fluid();
     }
 }

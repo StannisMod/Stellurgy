@@ -1,0 +1,21 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"sss",
+	"sis",
+	"pmp"
+    ],
+    "key":
+    {
+        "s": { "type": "forge:ore_dict", "ore": "plateSteel" },
+        "i": { "item": "minecraft:iron_block" },
+        "p": { "type": "forge:ore_dict", "ore": "plateIron" },
+        "m": { "type": "forge:ore_dict", "ore": "blockMotor" }
+    },
+    "result":
+    {
+        "item": "stellurgy:heatdump",
+        "count": 1
+    }
+}

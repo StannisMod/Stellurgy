@@ -45,14 +45,14 @@ public abstract class MixinDeckFrameReseatPass {
         if (world == null) {
             return;
         }
-        TestTrace.instrumentHere("deck_reseat_pass_events");
+        TestTrace.instrument(world, "deck_reseat_pass_events");
         TravelPassMemory pass = TravelPassMemory.of(SideTrace.of(world));
         double maxStep = pass.takeReseatPassMax();
         int bodies = pass.takeDeckFrameReseats();
         if (bodies <= 0) {
             return;
         }
-        TestTrace.recordHere("deck_reseat_pass",
+        TestTrace.record(world, "deck_reseat_pass",
                 "\"remote\":" + world.isRemote + ",\"bodies\":" + bodies
                         + ",\"maxStep\":" + maxStep + ",\"by\":\"deckFrame\"");
     }

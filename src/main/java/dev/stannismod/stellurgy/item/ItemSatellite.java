@@ -242,7 +242,7 @@ public class ItemSatellite extends ItemIdWithName {
                 else if (f == SatelliteProperties.Property.DATA.getFlag())
                     dataMax += p.getMaxDataStorage();
             }
-            weight += dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getWeight(s);
+            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(s);
         }
 
         // Match assembly semantics: base buffer is always present

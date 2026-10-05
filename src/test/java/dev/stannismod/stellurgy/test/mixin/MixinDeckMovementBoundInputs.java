@@ -36,7 +36,7 @@ public abstract class MixinDeckMovementBoundInputs {
     /** Step worth reporting, in blocks — above ordinary walking, below the wild ones. */
     private static final double REPORT_ABOVE_BLOCKS = 1.0;
 
-    @Shadow @Final private static java.util.Map<java.util.UUID, Long> LAST_SEEN_TICK;
+    @Shadow @Final private java.util.Map<java.util.UUID, Long> lastSeenTick;
 
     /**
      * What the bound is about to judge AGAINST, read before it overwrites it: the world ticks since it
@@ -46,25 +46,25 @@ public abstract class MixinDeckMovementBoundInputs {
      * adjacent in the ring.
      */
     @Inject(method = "accepts", at = @At("HEAD"), remap = false)
-    private static void stellurgyTest$recordInterval(EntityPlayerMP player,
+    private void stellurgyTest$recordInterval(EntityPlayerMP player,
                                               double fromX, double fromY, double fromZ,
                                               double toX, double toY, double toZ,
                                               CallbackInfoReturnable<Boolean> cir) {
-        TestTrace.instrumentHere("deck_movement_bound_interval");
+        TestTrace.instrument(player, "deck_movement_bound_interval");
         final double dx = toX - fromX, dy = toY - fromY, dz = toZ - fromZ;
         if (player == null || player.world == null
                 || Math.sqrt(dx * dx + dy * dy + dz * dz) <= REPORT_ABOVE_BLOCKS) {
             return;
         }
-        Long previous = LAST_SEEN_TICK.get(player.getUniqueID());
-        TestTrace.recordHere("deck_movement_bound_interval",
+        Long previous = lastSeenTick.get(player.getUniqueID());
+        TestTrace.record(player, "deck_movement_bound_interval",
                 "\"who\":\"" + TestTrace.json(player.getName()) + "\""
                         + ",\"ticksSinceLastJudged\":"
                         + (previous == null ? "null" : String.valueOf(player.world.getTotalWorldTime() - previous)));
     }
 
     @Inject(method = "accepts", at = @At("RETURN"), remap = false)
-    private static void stellurgyTest$recordStep(EntityPlayerMP player,
+    private void stellurgyTest$recordStep(EntityPlayerMP player,
                                           double fromX, double fromY, double fromZ,
                                           double toX, double toY, double toZ,
                                           CallbackInfoReturnable<Boolean> cir) {

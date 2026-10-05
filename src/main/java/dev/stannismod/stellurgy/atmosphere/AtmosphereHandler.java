@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.atmosphere;
 
 import net.minecraft.block.material.Material;
+import net.minecraft.entity.EntityLivingBase;
+import dev.stannismod.stellurgy.atmosphere.hazard.Poisoning;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.player.EntityPlayer;
@@ -13,11 +15,9 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingEvent.LivingUpdateEvent;
 import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerChangedDimensionEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.AreaBlob;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.event.AtmosphereEvent;
 import dev.stannismod.stellurgy.api.util.IBlobHandler;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
@@ -31,18 +31,49 @@ import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public class AtmosphereHandler {
-    public static final DamageSource vacuumDamage = new DamageSource("Vacuum").setDamageBypassesArmor().setDamageIsAbsolute();
-    public static final DamageSource lowOxygenDamage = new DamageSource("LowOxygen").setDamageBypassesArmor().setDamageIsAbsolute();
-    public static final DamageSource heatDamage = new DamageSource("Heat").setDamageBypassesArmor().setDamageIsAbsolute();
-    public static final DamageSource oxygenToxicityDamage = new DamageSource("OxygenToxicity").setDamageBypassesArmor().setDamageIsAbsolute();
-    private static final int MAX_BLOB_RADIUS = ((StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1) ? 256 : StellurgyConfiguration.getCurrentConfig().oxygenVentSize;
-    // What the CLIENT was last told about the air around its player used to live here, as three
-    // public statics with a comment saying they were the client's. They are `ClientAtmosphere` now:
-    // a comment cannot stop a server-side path from reading them, and one did.
-    private static HashMap<Integer, AtmosphereHandler> dimensionOxygen = new HashMap<>();
-    private static HashMap<EntityPlayer, IAtmosphere> prevAtmosphere = new HashMap<>();
+    /** The atmosphere damage sources. Effectively final, process lifetime: written only by
+     *  {@link #createDamageSources}, which the mod calls in pre-init - not at whichever moment of play
+     *  first touched this class. */
+    public static DamageSource vacuumDamage, lowOxygenDamage, heatDamage, oxygenToxicityDamage;
+
+    /** Called once by the mod in pre-init. */
+    public static void createDamageSources() {
+        if (vacuumDamage != null) {
+            throw new IllegalStateException("atmosphere damage sources are created once per process");
+        }
+        vacuumDamage = new DamageSource("Vacuum").setDamageBypassesArmor().setDamageIsAbsolute();
+        lowOxygenDamage = new DamageSource("LowOxygen").setDamageBypassesArmor().setDamageIsAbsolute();
+        heatDamage = new DamageSource("Heat").setDamageBypassesArmor().setDamageIsAbsolute();
+        oxygenToxicityDamage = new DamageSource("OxygenToxicity").setDamageBypassesArmor().setDamageIsAbsolute();
+    }
+    /**
+     * Read from the config in force at each use. It was a static snapshot taken whenever this class was
+     * first touched - the first world load, possibly a client's while connected to another server - and
+     * then kept for the process, past any config reload.
+     */
+    private static int maxBlobRadius() {
+        StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
+        return ((config.atmosphereHandleBitMask & 1) == 1) ? 256 : config.oxygenVentSize;
+    }
+    /**
+     * What a WORLD keeps for this subsystem ({@link WorldRuntime}): its handler, if it has one, and the
+     * depth of structure writes in flight into it. Both die with the world object.
+     */
+    private static final class WorldAtmosphere {
+        AtmosphereHandler handler;
+        int structurePasteDepth;
+    }
+
+    private static WorldAtmosphere of(World world) {
+        return WorldRuntime.of(world, WorldAtmosphere.class, WorldAtmosphere::new);
+    }
+
     private HashMap<IBlobHandler, AreaBlob> blobs;
     private int dimId;
 
@@ -52,35 +83,37 @@ public class AtmosphereHandler {
     }
 
     /**
-     * Registers the Atmosphere handler for the dimension given
+     * Registers the Atmosphere handler for the server world given
      *
-     * @param dimId the dimension id to register the dimension for
+     * @param world the world to register the handler for
      */
-    public static void registerWorld(int dimId) {
+    public static void registerWorld(World world) {
+        int dimId = world.provider.getDimension();
 
         //If O2 is allowed and
         DimensionProperties dimProp = DimensionManager.getInstance().getDimensionProperties(dimId);
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen && dimProp.hasSurface() && (StellurgyConfiguration.getCurrentConfig().overrideGCAir || dimId != StellurgyConfiguration.getCurrentConfig().MoonId || dimProp.isNativeDimension)) {
+        if (StellurgyConfiguration.getCurrentConfig().enableOxygen && dimProp.hasSurface() && (StellurgyConfiguration.getCurrentConfig().overrideGCAir || dimId != dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getMoonId() || dimProp.isNativeDimension)) {
 
             //dunno how, but double registering could happen.
             //don't let old registered handler survive in the background forever
-            if (dimensionOxygen.containsKey(dimId)) {
-                unregisterWorld(dimId);
-            }
+            unregisterWorld(world);
 
             AtmosphereHandler handler = new AtmosphereHandler(dimId);
-            dimensionOxygen.put(dimId, handler);
+            of(world).handler = handler;
             MinecraftForge.EVENT_BUS.register(handler);
         }
     }
 
     /**
-     * Unregisters the Atmosphere handler for the dimension given
+     * Unregisters the Atmosphere handler of the world given; called when that world unloads, which
+     * every server world does when its server stops.
      *
-     * @param dimId the dimension id to register the dimension for
+     * @param world the world to unregister the handler of
      */
-    public static void unregisterWorld(int dimId) {
-        AtmosphereHandler handler = dimensionOxygen.remove(dimId);
+    public static void unregisterWorld(World world) {
+        WorldAtmosphere atmosphere = of(world);
+        AtmosphereHandler handler = atmosphere.handler;
+        atmosphere.handler = null;
 
         if (handler != null) {
             handler.blobs.clear();
@@ -90,36 +123,16 @@ public class AtmosphereHandler {
     }
 
     /**
-     * Proper Clearing on ServerStopped
+     * @return true if the world has an AtmosphereHandler Object associated with it; a client world
+     *         never does
      */
-    public static void clear() {
-        for (AtmosphereHandler handler : new LinkedList<>(dimensionOxygen.values())) {
-            if (handler != null) {
-                handler.blobs.clear();
-
-                MinecraftForge.EVENT_BUS.unregister(handler);
-            }
-        }
-        dimensionOxygen.clear();
-        prevAtmosphere.clear();
-        // The client's copy is NOT cleared here any more. This runs when the SERVER stops, which is
-        // the wrong owner for it — and it used to put `currentPressure` back to 0, a value every
-        // reader treats as a real reading of zero pressure rather than as "nothing received yet".
-        // `ClientAtmosphere.reset()` on disconnect owns that now, and its absent value says absent.
+    public static boolean hasAtmosphereHandler(World world) {
+        return of(world).handler != null;
     }
 
     /**
-     * @return true if the dimension has an AtmosphereHandler Object associated with it
-     */
-    public static boolean hasAtmosphereHandler(int dimId) {
-        return dimensionOxygen.containsKey(dimId);
-    }
-
-    /** Nesting depth of multi-block structure writes in flight on the server thread. */
-    private static int structurePasteDepth = 0;
-
-    /**
-     * Open a multi-block structure write: until the matching {@link #endStructurePaste()}, the
+     * Open a multi-block structure write into {@code world}: until the matching
+     * {@link #endStructurePaste(World)}, the
      * environmental block CONVERSIONS below (burn, vaporize) are held off.
      *
      * <p>They ask whether a block is exposed to the local atmosphere, and answer it from the world
@@ -135,22 +148,24 @@ public class AtmosphereHandler {
      * in the world lives by.</p>
      *
      * <p>Server thread only, like every other path through this class; nesting is counted so an
-     * inner paste cannot re-arm the conversions while an outer one is still running.</p>
+     * inner paste cannot re-arm the conversions while an outer one is still running. Counted per
+     * world, so a write into one world holds off nothing in another.</p>
      */
-    public static void beginStructurePaste() {
-        structurePasteDepth++;
+    public static void beginStructurePaste(World world) {
+        of(world).structurePasteDepth++;
     }
 
-    /** Close a write opened by {@link #beginStructurePaste()}. Always call from a finally. */
-    public static void endStructurePaste() {
-        if (structurePasteDepth > 0) {
-            structurePasteDepth--;
+    /** Close a write opened by {@link #beginStructurePaste(World)}. Always call from a finally. */
+    public static void endStructurePaste(World world) {
+        WorldAtmosphere atmosphere = of(world);
+        if (atmosphere.structurePasteDepth > 0) {
+            atmosphere.structurePasteDepth--;
         }
     }
 
-    /** Whether a multi-block structure write is in flight. @see #beginStructurePaste() */
-    public static boolean isStructurePasteInFlight() {
-        return structurePasteDepth > 0;
+    /** Whether a multi-block structure write into {@code world} is in flight. @see #beginStructurePaste(World) */
+    public static boolean isStructurePasteInFlight(World world) {
+        return of(world).structurePasteDepth > 0;
     }
 
     //Called from setBlock in World.class
@@ -161,7 +176,7 @@ public class AtmosphereHandler {
         if (StellurgyConfiguration.getCurrentConfig().enableOxygen && !world.isRemote && world.getChunkFromBlockCoords(new BlockPos(bpos)).isLoaded()) {
             HashedBlockPosition pos = new HashedBlockPosition(bpos);
 
-            AtmosphereHandler handler = getOxygenHandler(world.provider.getDimension());
+            AtmosphereHandler handler = getOxygenHandler(world);
 
             //Bonus chests cause world gen to begin before loading the world
             //Because atmosphere handlers are created at world load time
@@ -171,7 +186,7 @@ public class AtmosphereHandler {
 
             //Block handling for what should and shouldn't exist or what should be on fire
             //Things should be on fire
-            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATED) {
+            if (!isStructurePasteInFlight(world) && handler.getAtmosphereType(bpos) == Atmosphere.SUPERHEATED) {
                 if (world.getBlockState(bpos).getBlock().isLeaves(world.getBlockState(bpos), world, bpos)) {
                     world.setBlockToAir(bpos);
                 } else if (world.getBlockState(bpos).getMaterial() == Material.CACTUS) {
@@ -218,7 +233,7 @@ public class AtmosphereHandler {
              */
 
             //Gasses should automatically vaporize and dissipate
-            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == AtmosphereType.VACUUM) {
+            if (!isStructurePasteInFlight(world) && handler.getAtmosphereType(bpos) == Atmosphere.VACUUM) {
                 if (world.getBlockState(bpos).getMaterial() == Material.WATER && world.getBlockState(bpos).getBlock() instanceof IFluidBlock) {
                     IFluidBlock fluidblock = (IFluidBlock) world.getBlockState(bpos).getBlock();
                     if (fluidblock.getFluid().isGaseous())
@@ -231,7 +246,7 @@ public class AtmosphereHandler {
             every updated water causes the water next to it to update -> stackoverflow -> server goes boom
 
 
-            if (handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATED || handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATEDNOO2 || handler.getAtmosphereType(bpos) == AtmosphereType.VERYHOT || handler.getAtmosphereType(bpos) == AtmosphereType.VERYHOTNOO2) {
+            if (handler.getAtmosphereType(bpos) == Atmosphere.SUPERHEATED || handler.getAtmosphereType(bpos) == Atmosphere.SUPERHEATEDNOO2 || handler.getAtmosphereType(bpos) == Atmosphere.VERYHOT || handler.getAtmosphereType(bpos) == Atmosphere.VERYHOTNOO2) {
                 if (world.getBlockState(bpos).getMaterial() == Material.WATER && world.getBlockState(bpos).getValue(BlockLiquid.LEVEL) == 0) {
                     world.setBlockToAir(bpos);
                 }
@@ -239,7 +254,7 @@ public class AtmosphereHandler {
              */
 
 
-            List<AreaBlob> nearbyBlobs = handler.getBlobWithinRadius(pos, MAX_BLOB_RADIUS);
+            List<AreaBlob> nearbyBlobs = handler.getBlobWithinRadius(pos, maxBlobRadius());
             for (AreaBlob blob : nearbyBlobs) {
 
                 if (blob.getBlobMaxRadius() > pos.getDistance(blob.getRootPosition())) {
@@ -260,24 +275,39 @@ public class AtmosphereHandler {
     }
 
     /**
-     * @param dimNumber dimension number for which to get the oxygenhandler
-     * @return the oxygen handler for the planet or null if none exists
+     * @param world the world for which to get the oxygenhandler
+     * @return the oxygen handler for the planet or null if none exists; a client world has none
      */
     @Nullable
-    public static AtmosphereHandler getOxygenHandler(int dimNumber) {
+    public static AtmosphereHandler getOxygenHandler(World world) {
         //Get your oxyclean!
-        return dimensionOxygen.get(dimNumber);
+        return of(world).handler;
     }
 
     @SubscribeEvent
     public void onTick(LivingUpdateEvent event) {
         Entity entity = event.getEntity();
         if (!entity.world.isRemote && entity.world.provider.getDimension() == this.dimId) {
-            IAtmosphere atmosType = getAtmosphereType(entity);
+            respire(event.getEntityLiving());
+            Atmosphere atmosType = getAtmosphereType(entity);
 
-            if (entity instanceof EntityPlayer && atmosType != prevAtmosphere.get(entity)) {
-                AtmosphereType.sendToRealPlayer(new PacketAtmSync(atmosType.getUnlocalizedName(), getAtmospherePressure(entity)), (EntityPlayer) entity);
-                prevAtmosphere.put((EntityPlayer) entity, atmosType);
+            // Once a second per player, and phased by the PLAYER rather than by the world clock:
+            // `ticksExisted` differs between them because they joined at different moments, so the
+            // sends spread themselves out instead of every player on the server being told at once.
+            // The period is the thing that matters; the phase is what must not be shared.
+            //
+            // Periodic rather than edge-triggered, because there is no edge any more. The old packet
+            // fired when a COARSE LABEL changed, which worked only while the answer was one of
+            // fourteen names; a composition slides, and a readout that waited for it to cross a
+            // boundary would sit stale for as long as the room stayed nominally the same.
+            //
+            // NOTHING IS REMEMBERED BETWEEN SENDS, and that is the point. The edge-triggered send
+            // needed the previous answer to compare against, and kept a per-player map to hold it;
+            // a periodic send needs no such comparison, so the map went with it. Re-adding one to
+            // "avoid recomputing" would be state nothing reads.
+            if (entity instanceof EntityPlayer && isSyncTick(entity.ticksExisted)) {
+                Atmosphere.sendToRealPlayer(new PacketAtmSync(AtmosphereSummary.of(this, entity)),
+                        (EntityPlayer) entity);
             }
 
             // Connectionless player-shaped entities (FakePlayers, headless
@@ -290,6 +320,13 @@ public class AtmosphereHandler {
                 return;
             }
 
+            EntityLivingBase living = event.getEntityLiving();
+            if (!StellurgyConfiguration.getCurrentConfig().bypassEntity.contains(entity.getClass())) {
+                // Under water or in lava nothing is breathed, which clears a dose like clean air.
+                boolean breathesNothing = living.isInLava() || living.isInsideOfMaterial(Material.WATER);
+                Poisoning.tick(living, () -> breathesNothing ? null : getAirAround(entity));
+            }
+
             if (atmosType.canTick() &&
                     !(event.getEntityLiving().isInLava() || event.getEntityLiving().isInsideOfMaterial(Material.WATER))) {
                 AtmosphereEvent event2 = new AtmosphereEvent.AtmosphereTickEvent(entity, atmosType);
@@ -300,9 +337,179 @@ public class AtmosphereHandler {
         }
     }
 
-    @SubscribeEvent
-    public void onPlayerChangeDim(PlayerChangedDimensionEvent event) {
-        prevAtmosphere.remove(event.player);
+    /**
+     * The zone containing this entity, or null if it is in none.
+     * <p>
+     * This is the ONE place the new life-support code turns an entity into a zone. The three
+     * public queries below still build the key inline, and all four share the same known defect:
+     * the key is world-frame while a blob aboard an assembled ship is subspace-frame (see the
+     * atmosphere subsystem doc). Deliberately not worked around here — a fourth, differently-wrong
+     * lookup would make the real fix harder, not easier.
+     */
+    @Nullable
+    private AtmosphereBlob getBlobContaining(@Nonnull Entity entity) {
+        return getBlobContaining(new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ)));
+    }
+
+    @Nullable
+    private AtmosphereBlob getBlobContaining(@Nonnull HashedBlockPosition pos) {
+        for (AreaBlob blob : blobs.values()) {
+            if (blob instanceof AtmosphereBlob && blob.contains(pos))
+                return (AtmosphereBlob) blob;
+        }
+        return null;
+    }
+
+    /**
+     * The gas contents of the zone this position sits in, or null if it is in none. A machine that
+     * treats the air of the room it stands in works through this.
+     */
+    @Nullable
+    public AirState getAirStateAt(@Nonnull BlockPos pos) {
+        if (!StellurgyConfiguration.getCurrentConfig().enableOxygen)
+            return null;
+        AtmosphereBlob blob = getBlobContaining(new HashedBlockPosition(pos));
+        return blob == null ? null : blob.getAirState();
+    }
+
+    /**
+     * Whether a fire can start at this position.
+     * <p>
+     * <b>Asked of the AIR, never of the atmosphere's label.</b> A type carries a hand-assigned
+     * combustion flag that was derived from BREATHABILITY, so a zone too thin to breathe reads as
+     * combustible on the label while its own oxidiser says otherwise. Everything that lights, ignites
+     * or refuses to ignite asks here, so there is one answer and it comes from the gas.
+     * <p>
+     * Where there is no zone — outdoors, on a planet — the planet's own air answers, by the same
+     * predicate: indoors and outdoors are two holders of one kind of air.
+     */
+    public boolean allowsCombustionAt(@Nonnull BlockPos pos) {
+        AirState air = getAirAround(pos);
+        return air != null && air.allowsCombustion();
+    }
+
+    /**
+     * The air at this position: the zone's where there is one, the planet's outdoors. Null only when
+     * the world has no properties to ask. Indoors and outdoors are two holders of one kind of air, so
+     * every question about the air at a place is asked of this.
+     */
+    @Nullable
+    public AirState getAirAround(@Nonnull BlockPos pos) {
+        AirState air = getAirStateAt(pos);
+        if (air != null) {
+            return air;
+        }
+        DimensionProperties outside = DimensionManager.getInstance().getDimensionProperties(dimId);
+        return outside == null ? null : outside.getAir();
+    }
+
+    /** The same, at an entity: the zone it stands in, by the zone lookup the effects use. */
+    @Nullable
+    private AirState getAirAround(@Nonnull Entity entity) {
+        AtmosphereBlob blob = getBlobContaining(entity);
+        if (blob != null) {
+            return blob.getAirState();
+        }
+        DimensionProperties outside = DimensionManager.getInstance().getDimensionProperties(dimId);
+        return outside == null ? null : outside.getAir();
+    }
+
+    /**
+     * How many cells the zone containing this position has, or 0 if it is in none. A machine that
+     * converts between a room's partial pressures and a tank's millibuckets needs the volume it is
+     * dividing by.
+     */
+    public int getBlobSizeAt(@Nonnull BlockPos pos) {
+        AtmosphereBlob blob = getBlobContaining(new HashedBlockPosition(pos));
+        return blob == null ? 0 : blob.getBlobSize();
+    }
+
+    /**
+     * Re-derive and publish the atmosphere of the zone this position sits in, after something
+     * changed its gases. A no-op where there is no zone, or where the vent has not declared one
+     * breathable — the vent stays the authority on whether a zone is maintained at all.
+     */
+    /**
+     * The same refresh, for a caller that owns the zone rather than a position inside it. A vent
+     * knows its blob by identity; making it name a cell would be guessing at its own geometry.
+     */
+    public void refreshDerivedAtmosphere(@Nonnull IBlobHandler handler) {
+        AreaBlob blob = blobs.get(handler);
+        if (blob instanceof AtmosphereBlob && isLifeSupportManaged((AtmosphereBlob) blob))
+            blob.setData(((AtmosphereBlob) blob).getAirState().deriveAtmosphere());
+    }
+
+    public void refreshDerivedAtmosphereAt(@Nonnull BlockPos pos) {
+        AtmosphereBlob blob = getBlobContaining(new HashedBlockPosition(pos));
+        if (blob != null && isLifeSupportManaged(blob))
+            blob.setData(blob.getAirState().deriveAtmosphere());
+    }
+
+    /**
+     * Whether life support may act on this zone's gases at all — a question about the MACHINE
+     * holding the zone, never about the atmosphere the zone currently shows.
+     * <p>
+     * The distinction is not academic. Asking the published value ("is it breathable, or is it
+     * already what these gases derive to?") reads correctly only while the two agree, and the
+     * whole purpose of a refresh is the moment they stop: a zone that has just gone stale shows
+     * low-oxygen while its gases now derive to something else, so the gate closes exactly when it
+     * is needed and the zone latches on the first hazard it ever reaches — never getting worse as
+     * the crew keep breathing, and never recoverable by a recirculator or a combiner either.
+     * <p>
+     * A planet's own atmosphere is excluded by the same rule for the honest reason: nothing is
+     * maintaining it.
+     */
+    private boolean isLifeSupportManaged(@Nonnull AtmosphereBlob blob) {
+        return blob.getBlobHandler().isMaintainingAtmosphere();
+    }
+
+    /**
+     * A breathing entity turns some of its zone's oxygen into carbon dioxide, and the zone's
+     * breathability follows.
+     * <p>
+     * The vent stays the authority on whether a zone is MAINTAINED at all: this only refines a
+     * zone the vent has already declared breathable, so an unpowered or unsealed room keeps
+     * reverting to the dimension default exactly as before. Consumption is divided by the zone
+     * volume, so a bigger cabin buys proportionally more time on the same lungs.
+     */
+    private void respire(@Nullable net.minecraft.entity.EntityLivingBase entity) {
+        StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
+        if (entity == null || !config.enableOxygen || !config.lifeSupportZones)
+            return;
+        // Once a second, not once a tick, because the rate is expressed per second. Phased on the
+        // ENTITY's own age rather than world time: a shared `% 20` clock would make every living
+        // thing in the world respire on the same tick, and world time does not advance under a
+        // force-ticking harness at all.
+        if (entity.ticksExisted % 20 != 0)
+            return;
+
+        AtmosphereBlob blob = getBlobContaining(entity);
+        if (blob == null || !isLifeSupportManaged(blob))
+            return;
+
+        int volume = Math.max(1, blob.getBlobSize());
+        blob.getAirState().respire(config.lifeSupportRespirationRate / volume);
+        blob.setData(blob.getAirState().deriveAtmosphere());
+    }
+
+    /** How often a player is told what the air looks like. Once a second, at twenty ticks. */
+    public static final int SYNC_PERIOD_TICKS = 20;
+
+    /**
+     * Whether this is the tick on which a player of this AGE is told about the air.
+     * <p>
+     * <b>A function of the player's own age, and of nothing else.</b> That is the whole rule: the
+     * PERIOD is shared — everyone hears once a second — but the PHASE is not, because players join at
+     * different moments and so carry different ages. Written against a world clock instead, the same
+     * period would serve every player on the server on the same tick, which is the one thing a
+     * routine broadcast must never do.
+     * <p>
+     * Extracted so it can be asked without a world. The decision used to be an inline modulo, which
+     * is the shape that quietly becomes {@code world.getTotalWorldTime()} one day and takes nothing
+     * red with it.
+     */
+    public static boolean isSyncTick(int ticksExisted) {
+        return ticksExisted % SYNC_PERIOD_TICKS == 0;
     }
 
     //Called from World.setBlockMetaDataWithNotify
@@ -315,7 +522,7 @@ public class AtmosphereHandler {
 			if(handler == null)
 				return; //WTF
 
-			for(AreaBlob blob : handler.getBlobWithinRadius(pos, MAX_BLOB_RADIUS)) {
+			for(AreaBlob blob : handler.getBlobWithinRadius(pos, maxBlobRadius())) {
 
 				if(blob.contains(pos) && !blob.isPositionAllowed(world, pos))
 					blob.removeBlock(x, y, z);
@@ -328,32 +535,29 @@ public class AtmosphereHandler {
 		}
 	}*/
 
-    @SubscribeEvent
-    public void onPlayerLogoutEvent(PlayerLoggedOutEvent event) {
-        prevAtmosphere.remove(event.player);
-    }
-
     /**
-     * Let go of the two things this subsystem remembers about a player, answering whether the one
-     * that MATTERS was there: the atmosphere it last told his client about, and the post-transfer
-     * grace window in which the suit check is suppressed.
+     * Let go of what this subsystem remembers about a player, answering whether it was there: the
+     * post-transfer grace window in which the suit check is suppressed.
      *
      * <p>The grace is what the answer is about. It is five seconds during which an airless world
      * does him no harm — correct for the arrival it was opened for, and a silently disabled safety
      * check for anything he does next. A player handed back to the world carrying one is being
-     * measured against a gate that was told to stand down. The remembered atmosphere is a client
-     * notification cache: dropping it costs one redundant packet and is not worth reporting.</p>
+     * measured against a gate that was told to stand down.</p>
      *
-     * <p>Static because both stores are, and called by
-     * {@link dev.stannismod.stellurgy.player.PlayerRelease}.</p>
+     * <p>It used to release a second thing beside it — the atmosphere last reported to this
+     * player's client, kept so an edge-triggered sync could compare against it. That cache is gone
+     * with the edge: the readout is sent periodically now and nothing is remembered between sends,
+     * so there is nothing here to forget.</p>
+     *
+     * <p>Called by {@link dev.stannismod.stellurgy.player.PlayerRelease}.</p>
      */
     public static boolean releasePlayer(EntityPlayer player) {
-        prevAtmosphere.remove(player);
         return RocketTransferGrace.clear(player, player.world.getTotalWorldTime());
     }
 
+
     private void onBlockRemove(HashedBlockPosition pos) {
-        List<AreaBlob> blobs = getBlobWithinRadius(pos, MAX_BLOB_RADIUS);
+        List<AreaBlob> blobs = getBlobWithinRadius(pos, maxBlobRadius());
         for (AreaBlob blob : blobs) {
             //Make sure that a block can actually be attached to the blob
             for (EnumFacing dir : EnumFacing.VALUES)
@@ -394,7 +598,7 @@ public class AtmosphereHandler {
         if (blob == null) {
             blob = new AtmosphereBlob(handler);
             blobs.put(handler, blob);
-            blob.setData(AtmosphereType.PRESSURIZEDAIR);
+            blob.setData(Atmosphere.PRESSURIZEDAIR);
         }
     }
 
@@ -411,7 +615,7 @@ public class AtmosphereHandler {
         if (blob == null) {
             blob = blob2;
             blobs.put(handler, blob);
-            blob.setData(AtmosphereType.PRESSURIZEDAIR);
+            blob.setData(Atmosphere.PRESSURIZEDAIR);
         }
     }
 
@@ -456,22 +660,22 @@ public class AtmosphereHandler {
      */
     public boolean addBlock(@Nonnull IBlobHandler handler, @Nonnull HashedBlockPosition pos) {
         AreaBlob blob = blobs.get(handler);
-        blob.addBlock(pos, getBlobWithinRadius(pos, MAX_BLOB_RADIUS));
+        blob.addBlock(pos, getBlobWithinRadius(pos, maxBlobRadius()));
         return !blob.getLocations().isEmpty();
     }
 
     /**
      * @param pos2
-     * @return AtmosphereType at this location
+     * @return Atmosphere at this location
      */
     @Nonnull
-    public IAtmosphere getAtmosphereType(@Nonnull BlockPos pos2) {
+    public Atmosphere getAtmosphereType(@Nonnull BlockPos pos2) {
         if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
             HashedBlockPosition pos = new HashedBlockPosition(pos2);
 
             for (AreaBlob blob : blobs.values()) {
                 if (blob.contains(pos)) {
-                    IAtmosphere atmosphere = (IAtmosphere) blob.getData();
+                    Atmosphere atmosphere = (Atmosphere) blob.getData();
 
                     if (atmosphere != null)
                         return atmosphere;
@@ -481,14 +685,14 @@ public class AtmosphereHandler {
             return getDefaultAtmosphereType();
         }
 
-        return AtmosphereType.AIR;
+        return Atmosphere.AIR;
     }
 
     /**
      * @return the default atmosphere type used by this planet
      */
     @Nonnull
-    public IAtmosphere getDefaultAtmosphereType() {
+    public Atmosphere getDefaultAtmosphereType() {
         return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();
     }
 
@@ -499,18 +703,18 @@ public class AtmosphereHandler {
      * @return The atmosphere type this entity is inside of
      */
     @Nullable
-    public IAtmosphere getAtmosphereType(@Nonnull Entity entity) {
+    public Atmosphere getAtmosphereType(@Nonnull Entity entity) {
         if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
             HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
             for (AreaBlob blob : blobs.values()) {
                 if (blob.contains(pos)) {
-                    return (IAtmosphere) blob.getData();
+                    return (Atmosphere) blob.getData();
                 }
             }
 
             return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();
         }
-        return AtmosphereType.AIR;
+        return Atmosphere.AIR;
     }
 
     /**
@@ -539,7 +743,7 @@ public class AtmosphereHandler {
         if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
             HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
             for (AreaBlob blob : blobs.values()) {
-                IAtmosphere atmosphere = (IAtmosphere) blob.getData();
+                Atmosphere atmosphere = (Atmosphere) blob.getData();
                 if (blob.contains(pos) && atmosphere != null && atmosphere.isImmune(entity)) {
                     return true;
                 }
@@ -562,10 +766,35 @@ public class AtmosphereHandler {
      * Changes the atmosphere type of this blob
      *
      * @param handler the handler for the blob
-     * @param data    the AtmosphereType to set this blob to.
+     * @param data    the Atmosphere to set this blob to.
      */
-    public void setAtmosphereType(@Nonnull IBlobHandler handler, @Nonnull IAtmosphere data) {
+    public void setAtmosphereType(@Nonnull IBlobHandler handler, @Nonnull Atmosphere data) {
         blobs.get(handler).setData(data);
+    }
+
+    /**
+     * The gas contents of this handler's zone, or null if it has no zone (or none that carries
+     * gases). Callers that persist a zone across a save go through here rather than holding the
+     * blob, which the handler owns and rebuilds.
+     */
+    @Nullable
+    public AirState getAirState(@Nonnull IBlobHandler handler) {
+        AreaBlob blob = blobs.get(handler);
+        return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).getAirState() : null;
+    }
+
+    /**
+     * Restore gas contents into this handler's zone. No-op when the zone does not exist yet, so a
+     * caller loading from NBT before its blob is registered must retry rather than assume.
+     *
+     * @return true if the zone existed and took the state
+     */
+    public boolean setAirState(@Nonnull IBlobHandler handler, @Nonnull AirState airState) {
+        AreaBlob blob = blobs.get(handler);
+        if (!(blob instanceof AtmosphereBlob))
+            return false;
+        ((AtmosphereBlob) blob).setAirState(airState);
+        return true;
     }
 
     /**
@@ -574,15 +803,15 @@ public class AtmosphereHandler {
      * @param handler the handler for the blob
      */
     @Nonnull
-    public IAtmosphere getAtmosphereType(@Nonnull IBlobHandler handler) {
+    public Atmosphere getAtmosphereType(@Nonnull IBlobHandler handler) {
         if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            IAtmosphere atmosphere = (IAtmosphere) blobs.get(handler).getData();
+            Atmosphere atmosphere = (Atmosphere) blobs.get(handler).getData();
             if (atmosphere != null)
                 return atmosphere;
             else
                 return getDefaultAtmosphereType();
         }
 
-        return AtmosphereType.AIR;
+        return Atmosphere.AIR;
     }
 }

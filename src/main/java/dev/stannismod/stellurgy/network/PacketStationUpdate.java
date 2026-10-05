@@ -149,7 +149,7 @@ public class PacketStationUpdate extends BasePacket {
                 break;
             }
             case SIGNAL_WHITE_BURST:
-                PlanetEventHandler.runBurst(Minecraft.getMinecraft().world.getTotalWorldTime() + 20, 20);
+                PlanetEventHandler.runBurst(thePlayer.world, 20);
                 break;
             case ALTITUDE_UPDATE:
                 spaceObject.setOrbitalDistance(orbitalDistance);

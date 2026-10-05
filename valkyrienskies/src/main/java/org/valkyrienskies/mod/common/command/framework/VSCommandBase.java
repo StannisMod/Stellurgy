@@ -34,14 +34,21 @@ public class VSCommandBase<K> extends CommandBase {
     private String usage = null;
     /**
      * These are ITypeConverters that do not need to be instantiated multiple times and are
-     * singletons or effectively static.
+     * singletons or effectively static. Final and unmodifiable, lifetime the process: built by this
+     * class's initialiser from two fixed converters, whenever the class is first touched — the same
+     * table in every lifetime, computed from nothing a server, a config or a registry can change.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     @SuppressWarnings("rawtypes")
-    private static final Map<Class, ITypeConverter> pureConverters = new HashMap<>();
+    private static final Map<Class, ITypeConverter> pureConverters;
 
     static {
-        pureConverters.put(World.class, new WorldConverter());
-        pureConverters.put(Vec3d.class, new Vec3dDataConverter());
+        @SuppressWarnings("rawtypes")
+        Map<Class, ITypeConverter> converters = new HashMap<>();
+        converters.put(World.class, new WorldConverter());
+        converters.put(Vec3d.class, new Vec3dDataConverter());
+        pureConverters = java.util.Collections.unmodifiableMap(converters);
     }
 
     VSCommandBase(Class<K> cmdClass) {

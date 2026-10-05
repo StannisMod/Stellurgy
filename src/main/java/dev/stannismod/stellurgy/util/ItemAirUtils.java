@@ -8,7 +8,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyAPI;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.armor.IFillableArmor;
 import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 
@@ -16,6 +16,7 @@ import javax.annotation.Nonnull;
 
 public class ItemAirUtils implements IFillableArmor {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final ItemAirUtils INSTANCE = new ItemAirUtils();
 
     /**
@@ -162,11 +163,19 @@ public class ItemAirUtils implements IFillableArmor {
             return ItemAirUtils.INSTANCE.getMaxAir(this.stack);
         }
 
+        /**
+          * Enchanted ordinary armour, which is the other way to survive out there. Its chest spends a
+          * unit of air every tick WHATEVER is outside — unlike the space suit it carries no extractor,
+          * so thin air buys it nothing. That asymmetry is deliberate and predates the hazard table;
+          * what changed here is only that the question no longer names an atmosphere.
+          */
         @Override
-        public boolean protectsFromSubstance(IAtmosphere atmosphere, @Nonnull ItemStack stack, boolean commitProtection) {
+        public boolean protectsFrom(java.util.Set<dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard> hazards,
+                                    boolean needsSuppliedOxygen, @Nonnull ItemStack stack,
+                                    boolean commitProtection) {
             if (!stack.isEmpty() && stack.getItem() instanceof ItemArmor) {
                 if (((ItemArmor) stack.getItem()).armorType == EntityEquipmentSlot.CHEST)
-                    return decrementAir(stack, 1) == 1;
+                    return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;
 
                 return true;
             }

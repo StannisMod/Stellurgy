@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntity;
@@ -12,13 +14,13 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.List;
 
-public class TileElectricArcFurnace extends TileMultiblockMachine implements IModularInventory {
+public class TileElectricArcFurnace extends TileWasteHeatMachine implements IModularInventory {
 
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{null, null, null, null, null},
                     {null, 'P', StellurgyBlocks.blockBlastBrick, 'P', null},

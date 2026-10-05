@@ -285,6 +285,16 @@ public class TileRocketMonitoringStation extends TileEntity
         }
     }
 
+    // A server stop unloads worlds without unloading their chunks, so onChunkUnload never runs then;
+    // without this the station, and its world, stayed on the process-wide bus after the server.
+    @SubscribeEvent
+    public void onWorldUnload(net.minecraftforge.event.world.WorldEvent.Unload event) {
+        if (event.getWorld() == world && registeredBus) {
+            MinecraftForge.EVENT_BUS.unregister(this);
+            registeredBus = false;
+        }
+    }
+
 
     // --- Redstone power caching via block neighbor callbacks ---
 
@@ -1178,7 +1188,8 @@ public class TileRocketMonitoringStation extends TileEntity
 
     @Override
     public int getTotalProgress(int id) {
-        if (id == 0) return StellurgyConfiguration.getCurrentConfig().orbit;
+        if (id == 0) return DimensionManager.getInstance().transferLineOf(world.provider.getDimension())
+                .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
         if (id == 1) return 1000;
         if (id == 2) return (world.isRemote ? maxFuelLevel : (snapFuelCap > 0 ? snapFuelCap : lastKnownFuelCap));
         if (id == 6) return (world.isRemote ? maxFuelLevel : (snapOxCap   > 0 ? snapOxCap   : lastKnownOxCap));

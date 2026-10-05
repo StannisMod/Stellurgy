@@ -16,7 +16,6 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
 import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import dev.stannismod.stellurgy.util.WeightEngine;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
@@ -270,7 +269,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                         }
 
                         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                            weight += WeightEngine.INSTANCE.getWeight(world, currPos);
+                            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currPos);
                         } else {
                             weight += 1f; // fallback: count blocks
                         }
@@ -386,7 +385,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                     || (thrustMonopropellant > 0 && totalFuelUse > monopropellantfuelUse)
                     || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
                 status = ErrorCodes.COMBINEDTHRUST;
-            } else if (getThrust() <= getNeededThrust()) {
+            } else if (getThrust() <= 0 || !canLaunchFullFromHere()) {
                 status = ErrorCodes.NOENGINES;
             } else if (((int) stats.getStatTag("intakePower")) <= 0) {
                 status = ErrorCodes.NOINTAKE;
@@ -415,6 +414,11 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
 
 
     private boolean hasEnoughFuelUnmanned(@Nonnull FuelType family) {
+        // Fuel not required means no fuel adequacy to judge: the base rate is 0 by design then, and
+        // the burn-time arithmetic below would read that as "cannot reach" and refuse every build.
+        if (!dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) {
+            return true;
+        }
         // SD flight: acceleration in entity code is ≈ 0.005 blocks/tick^2
         final float a_station = 0.005f;
         final float targetS   = 128f;  // SD rocket switches to orbit after ~128 blocks

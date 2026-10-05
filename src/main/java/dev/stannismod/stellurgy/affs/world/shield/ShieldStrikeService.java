@@ -30,8 +30,8 @@ public final class ShieldStrikeService {
                 || strike.getImpactEnergy() <= 0) {
             return ShieldStrikeResult.passed();
         }
-        // Cheap global short-circuit before any per-generator geometry.
-        if (!TileEntityFieldGenerator.hasActiveGenerators()) {
+        // Cheap short-circuit before any per-generator geometry.
+        if (!TileEntityFieldGenerator.hasActiveGenerators(world)) {
             return ShieldStrikeResult.passed();
         }
 

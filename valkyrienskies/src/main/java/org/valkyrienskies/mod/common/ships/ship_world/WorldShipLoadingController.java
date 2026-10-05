@@ -180,7 +180,7 @@ class WorldShipLoadingController {
         // Finally, send each player their update packet
         playerPacketMap.forEach((player, packet) -> {
             if (!player.hasDisconnected()) {
-                ValkyrienSkiesMod.physWrapperNetwork.sendTo(packet, player);
+                dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.physWrapperNetwork.sendTo(packet, player);
             }
         });
     }

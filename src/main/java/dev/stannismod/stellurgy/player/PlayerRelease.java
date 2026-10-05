@@ -87,11 +87,11 @@ public final class PlayerRelease {
                     }
 
                     public boolean isBound(EntityPlayer player) {
-                        return DeckHold.isHeld(player);
+                        return dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.isHeld(player);
                     }
 
                     public boolean release(EntityPlayer player) {
-                        return DeckHold.releaseHold(player);
+                        return dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.releaseHold(player);
                     }
                 },
                 new Binding() {

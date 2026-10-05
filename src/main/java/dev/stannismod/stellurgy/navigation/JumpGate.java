@@ -6,6 +6,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 
 /**
@@ -21,11 +22,11 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  *       confirm anyway; flying into a bad idea on purpose is a decision the game leaves to him.</li>
  * </ul>
  *
- * <p>The gate is a <b>composite</b>: this class owns the clauses every jump has (a nav computer
- * aboard, a known position, a target, a drive, the burst that opens the window, the energy for the
- * flight) and the fixed order of the stages, while later subsystems register their own predicates
- * into the stage that belongs to them. Order matters only for which message the pilot reads first —
- * every predicate is free, so all of them run.</p>
+ * <p>This class owns every clause a jump has (a nav computer aboard, a known position, a target, a
+ * drive, the burst that opens the window, the energy for the flight) and the fixed order of the
+ * stages, so there is exactly one place that decides whether a ship may jump. A new precondition is
+ * a clause added here, never a gate of its own. Order matters only for which message the pilot reads
+ * first — every clause is free, so all of them run.</p>
  */
 public final class JumpGate {
 
@@ -149,6 +150,22 @@ public final class JumpGate {
             return 0L;
         }
 
+        /**
+         * How hot the coolant the drive is bolted to is running, in kelvin, or {@code 0} when nothing
+         * measured it - no coolant loop against the generator, or a world where ships carry no heat
+         * at all.
+         *
+         * <p>Zero rather than ambient, and unlike its neighbours it is NOT "the answer a ship with no
+         * drive would give": an unmeasured temperature must not refuse a jump. Every other default
+         * here refuses because the missing thing is a machine the ship genuinely lacks, and a ship
+         * with no capacitor cannot jump however the question is asked. A drive with no thermometer on
+         * it is a different case - the drive is there and it works - so the safe direction reverses,
+         * and a context that predates this clause simply never trips it.</p>
+         */
+        default double driveCoolantKelvin() {
+            return 0.0D;
+        }
+
         /** Energy stored aboard the ship and reachable by the drive. */
         default long storedEnergy() {
             return 0L;
@@ -160,7 +177,7 @@ public final class JumpGate {
         }
     }
 
-    /** A registered check. Returns its objection, or {@code null} when it is satisfied. */
+    /** One clause. Returns its objection, or {@code null} when it is satisfied. */
     public interface Predicate {
         Objection check(ShipContext ship);
     }
@@ -221,6 +238,8 @@ public final class JumpGate {
     public static final String MSG_NO_DRIVE = "msg.jumpgate.nodrive";
     /** The window does not enclose the whole hull — possible, and it will cost the hull. */
     public static final String MSG_WINDOW_UNDERSIZED = "msg.jumpgate.windowundersized";
+    /** The drive's coolant is too hot for it to fire. Free, and it clears itself once the loop sheds. */
+    public static final String MSG_DRIVE_OVERHEATED = "msg.jumpgate.driveoverheated";
     /** There is no capacitor for the drive to draw from — nothing aboard can ever open a window. */
     public static final String MSG_NO_CAPACITOR = "msg.jumpgate.nocapacitor";
     /**
@@ -234,47 +253,36 @@ public final class JumpGate {
     /** Not enough energy aboard for the whole flight — possible, and it may end early. */
     public static final String MSG_ENERGY_SHORTFALL = "msg.jumpgate.energyshortfall";
 
-    private static final Map<Stage, List<Predicate>> REGISTERED = new EnumMap<>(Stage.class);
-
-    static {
-        reset();
-    }
+    /**
+     * Every clause, by stage. Built once when the class loads and never changed after.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
+    private static final Map<Stage, List<Predicate>> CLAUSES = clauses();
 
     private JumpGate() {
     }
 
-    /**
-     * Add a predicate to {@code stage}. Subsystems that own a jump precondition register it here rather
-     * than building a gate of their own, so there is exactly one place that decides whether a ship may
-     * jump — and exactly one order in which the pilot hears about it.
-     */
-    public static synchronized void register(Stage stage, Predicate predicate) {
-        if (stage != null && predicate != null) {
-            REGISTERED.get(stage).add(predicate);
-        }
-    }
-
-    /** Drop every registered predicate and restore the built-in navigation clauses. */
-    public static synchronized void reset() {
-        REGISTERED.clear();
+    private static Map<Stage, List<Predicate>> clauses() {
+        Map<Stage, List<Predicate>> clauses = new EnumMap<>(Stage.class);
         for (Stage stage : Stage.values()) {
-            REGISTERED.put(stage, new ArrayList<Predicate>());
+            clauses.put(stage, new ArrayList<Predicate>());
         }
-        REGISTERED.get(Stage.NAVIGATION).add(new Predicate() {
+        clauses.get(Stage.NAVIGATION).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 return ship.hasNavComputer() ? null
                         : new Objection(Severity.HARD, MSG_NO_NAV_COMPUTER);
             }
         });
-        REGISTERED.get(Stage.NAVIGATION).add(new Predicate() {
+        clauses.get(Stage.NAVIGATION).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 return ship.positionKnown() ? null
                         : new Objection(Severity.HARD, MSG_POSITION_UNKNOWN);
             }
         });
-        REGISTERED.get(Stage.NAVIGATION).add(new Predicate() {
+        clauses.get(Stage.NAVIGATION).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 // A target need not be a KNOWN address - a hand-typed coordinate is a legal, if
@@ -283,7 +291,7 @@ public final class JumpGate {
                         : new Objection(Severity.HARD, MSG_NO_TARGET);
             }
         });
-        REGISTERED.get(Stage.NAVIGATION).add(new Predicate() {
+        clauses.get(Stage.NAVIGATION).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 // HARD, and deliberately not a mere advisory: the alternative is to fly at the
@@ -295,7 +303,7 @@ public final class JumpGate {
                         : new Objection(Severity.HARD, MSG_TARGET_LOST);
             }
         });
-        REGISTERED.get(Stage.NAVIGATION).add(new Predicate() {
+        clauses.get(Stage.NAVIGATION).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 // A jump to the cell the ship is ALREADY in is not a short trip - it is not a trip.
@@ -312,17 +320,14 @@ public final class JumpGate {
                         : new Objection(Severity.HARD, MSG_ALREADY_THERE);
             }
         });
-        // The drive clauses are built in rather than registered by the machine subsystem, because the
-        // failure mode of a missed registration is the one that must never happen: a gate that has
-        // forgotten to ask about the drive waves through a ship with no drive, silently and forever.
-        REGISTERED.get(Stage.DRIVE).add(new Predicate() {
+        clauses.get(Stage.DRIVE).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 return ship.drivePower() > 0L ? null
                         : new Objection(Severity.HARD, MSG_NO_DRIVE);
             }
         });
-        REGISTERED.get(Stage.DRIVE).add(new Predicate() {
+        clauses.get(Stage.DRIVE).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 // Advisory, not a veto: a hull that pokes out of the window can still jump. What is
@@ -331,7 +336,26 @@ public final class JumpGate {
                         : new Objection(Severity.ADVISORY, MSG_WINDOW_UNDERSIZED);
             }
         });
-        REGISTERED.get(Stage.POWER).add(new Predicate() {
+        clauses.get(Stage.DRIVE).add(new Predicate() {
+            @Override
+            public Objection check(ShipContext ship) {
+                // The thermal rung of the failure ladder, and the only one that acts on a machine
+                // rather than on a body: past this temperature the drive will not fire at all.
+                //
+                // HARD rather than advisory, and it belongs HERE rather than at the commit point,
+                // because both halves of that are the same fact - the check is free, so a pilot who
+                // is refused has lost nothing, and a refusal raised after the burst is one he has
+                // already paid for. There is nothing to confirm past: a drive this hot does not
+                // become willing because the pilot means it.
+                int refusalKelvin = StellurgyConfiguration.getCurrentConfig().shipHeatDriveRefusalKelvin;
+                if (ship.drivePower() <= 0L || refusalKelvin <= 0) {
+                    return null; // no drive is already refused above; no threshold means no clause
+                }
+                return ship.driveCoolantKelvin() < refusalKelvin ? null
+                        : new Objection(Severity.HARD, MSG_DRIVE_OVERHEATED);
+            }
+        });
+        clauses.get(Stage.POWER).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 // Hard, because this one is physics: without the burst the window does not open at
@@ -354,7 +378,7 @@ public final class JumpGate {
                 return new Objection(Severity.HARD, MSG_CAPACITOR_LOW);          // wait
             }
         });
-        REGISTERED.get(Stage.SUPPLY).add(new Predicate() {
+        clauses.get(Stage.SUPPLY).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
                 // Advisory by ruling: running out on the way is a flight that ends early, not a
@@ -366,17 +390,21 @@ public final class JumpGate {
                         : new Objection(Severity.ADVISORY, MSG_ENERGY_SHORTFALL);
             }
         });
+        for (Stage stage : Stage.values()) {
+            clauses.put(stage, Collections.unmodifiableList(clauses.get(stage)));
+        }
+        return Collections.unmodifiableMap(clauses);
     }
 
     /** Ask whether {@code ship} may jump. Free, read-only, and side-effect free. */
-    public static synchronized Verdict check(ShipContext ship) {
+    public static Verdict check(ShipContext ship) {
         List<Objection> objections = new ArrayList<>();
         if (ship == null) {
             objections.add(new Objection(Severity.HARD, MSG_NO_NAV_COMPUTER));
             return new Verdict(objections);
         }
         for (Stage stage : Stage.values()) {
-            for (Predicate predicate : REGISTERED.get(stage)) {
+            for (Predicate predicate : CLAUSES.get(stage)) {
                 Objection objection = predicate.check(ship);
                 if (objection != null) {
                     objections.add(objection);

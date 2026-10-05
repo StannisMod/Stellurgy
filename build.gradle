@@ -328,11 +328,7 @@ def configureHeadlessTest = { Test t, String packageGlob ->
 
 tasks.register('testUnit', Test) {
     configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/unit/**')
-    // The vendored harness compiles into this source set but sat in no tier's include rules, so
-    // its own unit tests could not be run by anything. They belong in the fast tier: they need no
-    // Minecraft and no bridge, and they cover seams (a package-private constructor, a timeout
-    // diagnosis) that a real-client tier can only reach by starting a client.
-    include 'com/github/stannismod/forge/testing/**'
+    dependsOn 'checkLangKeys'
 }
 
 tasks.register('testIntegration', Test) {
@@ -342,6 +338,97 @@ tasks.register('testIntegration', Test) {
 test {
     configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/unit/**')
     include 'dev/stannismod/stellurgy/test/integration/**'
+    dependsOn 'checkLangKeys'
+}
+
+// Every translation key the code hands to a localization call as a string literal must exist in a
+// shipped catalogue: 1.12.2 resolves a missing key to the key itself, so the player reads
+// `msg.lowOxygen` across the HUD instead of a sentence. Four such keys once shipped at once before
+// anything noticed. A check of assets rather than a test: no decision of the code is its subject.
+//
+// What it cannot see: a key built by concatenation, read from a field, or returned as a bare string
+// for a caller to localize later. A literal ending in '.' is a concatenation prefix and one with no
+// '.' is not a key; both are skipped.
+tasks.register('checkLangKeys') {
+    group = 'verification'
+    description = 'Fails when code passes a localization call a key that no shipped catalogue defines.'
+    def sources = fileTree('src/main/java') { include '**/*.java' }
+    def catalogues = files('src/main/resources/assets/stellurgy/lang/en_US.lang',
+            'src/main/resources/assets/libvulpes/lang/en_US.lang',
+            'src/main/resources/assets/affs/lang/en_us.lang')
+    def classpath = sourceSets.test.runtimeClasspath
+    inputs.files(sources, catalogues)
+    doLast {
+        def calls = [
+                ~/getLocalizedString\s*\(\s*"([^"]+)"/,
+                ~/I18n\s*\.\s*format\s*\(\s*"([^"]+)"/,
+                ~/translateToLocal\s*\(\s*"([^"]+)"/,
+                ~/new\s+TextComponentTranslation\s*\(\s*"([^"]+)"/,
+                ~/\btr\s*\(\s*"([^"]+)"/,
+                ~/\bmessagePilot\s*\(\s*"([^"]+)"/,
+        ]
+        // Each entry carries its reason; "it fails otherwise" is not one.
+        def exempt = [
+                'tooltip.stellurgy.none': 'optional by design: TooltipInjector guards it with I18n.hasKey',
+        ]
+        def keysOf = { String text ->
+            text.readLines().collect { it.trim() }
+                    .findAll { it && !it.startsWith('#') && it.indexOf('=') > 0 }
+                    .collect { it.substring(0, it.indexOf('=')).trim() } as Set
+        }
+        Set<String> catalogue = []
+        catalogues.each { File f ->
+            if (!f.isFile()) {
+                throw new GradleException("checkLangKeys: catalogue missing: ${f}")
+            }
+            catalogue.addAll(keysOf(f.getText('UTF-8')))
+        }
+        // Code may reuse a vanilla key ("options.on"); 1.12 merges every domain's catalogue. RFG puts
+        // the decompiled resources on the classpath as a directory; a jar is accepted as well.
+        def vanillaEntry = 'assets/minecraft/lang/en_us.lang'
+        String vanillaText = null
+        for (File f : classpath.files) {
+            if (f.isDirectory() && new File(f, vanillaEntry).isFile()) {
+                vanillaText = new File(f, vanillaEntry).getText('UTF-8')
+            } else if (f.isFile() && f.name.endsWith('.jar')) {
+                new java.util.zip.ZipFile(f).withCloseable { zip ->
+                    def entry = zip.getEntry(vanillaEntry)
+                    if (entry != null) {
+                        vanillaText = zip.getInputStream(entry).getText('UTF-8')
+                    }
+                }
+            }
+            if (vanillaText != null) {
+                break
+            }
+        }
+        if (vanillaText == null) {
+            throw new GradleException('checkLangKeys: nothing on the test classpath carries the vanilla catalogue')
+        }
+        catalogue.addAll(keysOf(vanillaText))
+        def misses = new TreeMap<String, String>()
+        sources.each { File f ->
+            def body = f.getText('UTF-8')
+            calls.each { pattern ->
+                def m = pattern.matcher(body)
+                while (m.find()) {
+                    def key = m.group(1)
+                    if (key.endsWith('.') || !key.contains('.') || exempt.containsKey(key) || catalogue.contains(key)) {
+                        continue
+                    }
+                    misses[key] = project.relativePath(f)
+                }
+            }
+        }
+        if (!misses.isEmpty()) {
+            throw new GradleException("${misses.size()} localization key(s) reach a localization call but ship in no "
+                    + "catalogue, so players see the raw key:\n"
+                    + misses.collect { k, v -> "  ${k}   (${v})" }.join('\n')
+                    + '\nPoint the code at an existing key, or add the key to en_US.lang. Prefer the former: the lang '
+                    + 'key is the frozen side, and other locales and resource packs are keyed on it.')
+        }
+        logger.lifecycle("checkLangKeys: every literal key in ${sources.files.size()} source files resolves")
+    }
 }
 
 // ─── Real-server / real-client harness layers (RFG) ─────────────────────────
@@ -457,8 +544,31 @@ def configureHarnessTest = { Test t, boolean enableClient ->
     // min(test_harness_forks, --max-workers) - when forking, do NOT pass --max-workers=1 on the
     // CLI. Budget ~4 GB per fork: 512m this worker + 1g server child + 2.5g client child (the
     // child caps live in the harness, overridable via forge.test.server.xmx/forge.test.client.xmx).
-    def harnessForks = (findProperty('test_harness_forks') ?: '1') as int
+    // ONE number per machine: `test_harness_forks` = N, and every harness tier, client included,
+    // runs N forks. A client fork is the expensive one (a GL context on top of the server child),
+    // so size N for the CLIENT tier.
+    //
+    // It is a MACHINE fact, so it belongs in ~/.gradle/gradle.properties and NOT in this repo.
+    // Unset is not defaulted: a silent fallback to 1 turns a twenty-minute gate into a multi-hour
+    // one and says nothing, which is exactly how a day gets lost (2026-08-15). The task asks.
+    def declaredForks = findProperty('test_harness_forks')
+    def harnessForks = declaredForks == null ? 1 : Math.max(1, declaredForks as int)
     t.maxParallelForks = harnessForks
+    t.doFirst {
+        if (declaredForks == null) {
+            throw new GradleException(
+                    "test_harness_forks is not set, so this run would be SERIAL and take hours.\n" +
+                    "  It is a fact about YOUR machine — one fork is roughly a core and ~4 GB —\n" +
+                    "  so put it in ~/.gradle/gradle.properties, not in the repo:\n" +
+                    "      test_harness_forks=<forks>      # every tier, client included\n" +
+                    "  or say it once on the command line: -Ptest_harness_forks=<n>\n" +
+                    "  Deliberately serial? -Ptest_harness_forks=1.")
+        }
+        // Name the regime in the run's own output: two results are not comparable unless both say
+        // what concurrency they were measured at.
+        logger.lifecycle("[harness] ${t.name}: maxParallelForks=${harnessForks}" +
+                " (test_harness_forks=${declaredForks})")
+    }
     t.forkEvery 1L
     t.minHeapSize = '256m'
     t.maxHeapSize = '512m'

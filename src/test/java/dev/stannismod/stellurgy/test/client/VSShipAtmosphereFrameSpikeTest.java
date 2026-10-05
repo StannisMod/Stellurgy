@@ -57,7 +57,7 @@ import static org.junit.Assert.assertTrue;
  * cabin, say - still resolves the world default.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETest {
+public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
 
     /**
      * How far apart the subspace and world frames must be, in blocks, for their comparison to mean
@@ -75,7 +75,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     }
 
     private static final String ATM_TYPE = "type";
-    private static final String CACHED_ATM = "cachedAtmosphere";
+    private static final String PLAYER_ATM = "atmosphere";
     private static final String BLOB_SIZE = "blobSize";
     private static final String WORLD_X = "worldX";
     private static final String WORLD_Y = "worldY";
@@ -129,8 +129,10 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
      * <p>red-witnessed: with {@code AtmosphereBlob#addBlock} refusing any block beyond |x| &gt; 1 000 000
      * on entry, ahead of {@code if (blobHandler.canFormBlob())} — the subspace side of the frame split: "RESULT-1: a vent in a
      * sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…
-     * \"blobSize\":0)", 2026-09-28. The two waits before it are arrangement links (the ship's id, the
-     * ship usable).</p>
+     * \"blobSize\":0)", 2026-09-28, and again on 2026-09-30 after the gate read gained its
+     * resolved-something refusal (the three CONTROL checks, that refusal included, stayed green). The
+     * two waits before it are arrangement links (the ship's id, the ship usable), and the refusal is a
+     * premise; none of them is witnessed.</p>
      *
      * <p>RESULT-3 red-witnessed: with the server player's living update run outside the deck's frame -
      * {@code DeckFrameTick#updatePlayer} never called, the tree before {@code MixinNetHandlerPlayerDeckFrame}
@@ -182,7 +184,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
                 "the client must be AT the build site before the assembly, because a client near the"
                         + " ship is what makes the physics mod load it");
 
-        Events loadEvents = events();
+        Events loadEvents = serverEvents();
         long spawnMark = loadEvents.markInstrumented();
         String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
@@ -290,9 +292,11 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         assertTrue("oxygen inject failed",
                 Reply.of(exec("stellurgytest fluid inject 0 " + x + " " + (y - 1) + " " + z + " oxygen 16000")
                         ).ok());
-        exec("stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 1");
+        String firstTick = "stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 1";
+        Reply.of(firstTick, exec(firstTick)).requireOk(firstTick);
         String reseal = exec("stellurgytest vent reseal 0 " + x + " " + (y - 1) + " " + z);
-        exec("stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 5");
+        String settle = "stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 5";
+        Reply.of(settle, exec(settle)).requireOk(settle);
         return reseal;
     }
 
@@ -321,13 +325,12 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
      * for "the gate resolved him to what he was already in" as for "the gate never ran".</p>
      */
     private String cachedAtmosphereWithPlayerAt(double x, double y, double z) throws Exception {
-        long mark = events().markInstrumented();
+        long mark = serverEvents().markInstrumented();
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
-        // EXPERIMENT: GATE_WORLD_TICKS of dim 0's clock, which is a dose of gate evaluations, not a
-        // budget — both legs of this test are in dim 0, and `tp` has already moved the server's copy
-        // of him by the time the command answers.
+        // EXPERIMENT: a dose of gate evaluations, not a budget — both legs of this test are in dim 0,
+        // and `tp` has already moved the server's copy of him by the time the command answers.
         GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);
-        String changes = events().since(mark, "player_atmosphere_changed");
+        String changes = serverEvents().since(mark, "player_atmosphere_changed");
 
         // AN ABSENCE IS AN ANSWER HERE, and this is what makes it one. One leg of this test expects
         // the gate to resolve the player into a sealed cabin and the other expects it NOT to — that
@@ -337,17 +340,25 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         Events.assertInstrumentRan(changes, "atmosphere_change_events",
                 "whether the per-entity atmosphere gate changed its mind about this player");
 
-        // The RESOLUTION itself is a state, not an event, and is read as one. The record above says
-        // a change HAPPENED and when; it cannot say what the player is resolved to now, because the
-        // answer when nothing changed is the value already in the cache. Reading both is the point:
-        // the pair separates "he was moved into a different atmosphere" from "he is in the same one
-        // he was in", which is exactly the difference between this test's two legs.
-        String resp = exec("stellurgytest atmosphere cached-for-player");
-        Reply mReply = Reply.of(resp);
-        String cached = mReply.has(CACHED_ATM) ? mReply.text(CACHED_ATM) : "";
-        System.out.println("[S1/gate] at (" + x + "," + y + "," + z + ") cached=" + cached
+        // The RESOLUTION itself is a state, not an event, and is read as one — LIVE, by asking the
+        // gate the same question every effect path asks it. The record above says a change HAPPENED
+        // and when; it cannot say what the player is resolved to now, because when nothing changed
+        // there is no record to read. Reading both is the point: the pair separates "he was moved
+        // into a different atmosphere" from "he is in the same one he was in", which is exactly the
+        // difference between this test's two legs.
+        String command = "stellurgytest atmosphere for-player";
+        Reply mReply = Reply.of(command, exec(command)).requireOk(command);
+        // The verb writes `"atmosphere":""` when the gate resolved NOTHING, and RESULT-3 asks only
+        // that the answer is not PressurizedAir — so an unresolved player would read as the finding.
+        // "Resolved to nothing" is a different defect from "resolved to the wrong air", and it is
+        // refused here as that rather than counted as either answer.
+        assertTrue("the per-entity gate must resolve SOME atmosphere for the player at (" + x + ","
+                + y + "," + z + "), or neither leg is a reading: " + mReply,
+                mReply.bool("hasHandler") && mReply.bool("hasAtmosphere"));
+        String resolved = mReply.text(PLAYER_ATM);
+        System.out.println("[S1/gate] at (" + x + "," + y + "," + z + ") resolved=" + resolved
                 + " changes=" + changes);
-        return cached;
+        return resolved;
     }
 
     /**

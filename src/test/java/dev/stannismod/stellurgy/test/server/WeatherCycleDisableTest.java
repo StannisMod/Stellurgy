@@ -31,58 +31,50 @@ import static org.junit.Assert.assertTrue;
  * that we've just made rain, one weather tick suppresses the rain when the flag
  * is ON (custom cycle runs) but leaves it raining when the flag is OFF (vanilla
  * delegation). The marker stays set across both cases; only the config flips.</p>
+ *
+ * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-public class WeatherCycleDisableTest {
+@SeededWorld(WeatherCycleDisableTest.Galaxy.class)
+public class WeatherCycleDisableTest extends AbstractSharedServerTest {
 
     private static final int FIXTURE_DIM = 9301;
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
 
-    @Before
-    public void writePlanetFixture() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-weather-disable-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"1\" numGasGiants=\"0\">\n"
-                + "        <planet name=\"WeatherDisablePlanet\" DIMID=\"" + FIXTURE_DIM + "\">\n"
-                + "            <isKnown>true</isKnown>\n"
-                + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
-                + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
-                + "            <gravitationalMultiplier>100</gravitationalMultiplier>\n"
-                + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
-                + "            <orbitalTheta>0</orbitalTheta>\n"
-                + "            <orbitalPhi>0</orbitalPhi>\n"
-                + "            <retrograde>false</retrograde>\n"
-                + "            <averageTemperature>250</averageTemperature>\n"
-                + "            <rotationalPeriod>24000</rotationalPeriod>\n"
-                + "            <atmosphereDensity>100</atmosphereDensity>\n"
-                + "            <generateCraters>false</generateCraters>\n"
-                + "            <generateCaves>true</generateCaves>\n"
-                + "            <generateVolcanos>false</generateVolcanos>\n"
-                + "        </planet>\n"
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-    }
-
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
+    /** The galaxy this class's one shared server boots over. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(dev.stannismod.stellurgy.test.client.GameDirSeed seed) {
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"1\" numGasGiants=\"0\">\n"
+                    + "        <planet name=\"WeatherDisablePlanet\" DIMID=\"" + FIXTURE_DIM + "\">\n"
+                    + "            <mass>1.0</mass>\n"
+                    + "            <radius>1.0</radius>\n"
+                    + "            <isKnown>true</isKnown>\n"
+                    + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
+                    + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
+                    + "            <gravitationalMultiplier>100</gravitationalMultiplier>\n"
+                    + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
+                    + "            <orbitalTheta>0</orbitalTheta>\n"
+                    + "            <orbitalPhi>0</orbitalPhi>\n"
+                    + "            <retrograde>false</retrograde>\n"
+                    + "            <averageTemperature>250</averageTemperature>\n"
+                    + "            <rotationalPeriod>24000</rotationalPeriod>\n"
+                    + "            <atmosphereDensity>100</atmosphereDensity>\n"
+                    + "            <generateCraters>false</generateCraters>\n"
+                    + "            <generateCaves>true</generateCaves>\n"
+                    + "            <generateVolcanos>false</generateVolcanos>\n"
+                    + "        </planet>\n"
+                    + "    </star>\n"
+                    + "</galaxy>\n";
+            seed.planetDefs(xml, WeatherCycleDisableTest.class);
+        }
     }
 
     private String cmd(String c) throws Exception {
-        return String.join("\n", harness.client().execute(c));
+        return String.join("\n", client().execute(c));
     }
 
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
@@ -92,7 +84,6 @@ public class WeatherCycleDisableTest {
 
     @Test
     public void customWeatherCycleRunsOnlyWhenConfigEnabled() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
         DimList dimList = DimList.of(cmd("stellurgytest dim list"));
         assertTrue("fixture dim not registered: " + dimList, dimList.holds(FIXTURE_DIM));
@@ -102,6 +93,16 @@ public class WeatherCycleDisableTest {
         // lifetime, so the later config-off sub-case operates on the same wrapped,
         // overworld-isolated WorldInfo — isolating the updateWeather() gate from the
         // separate (already-tested) wrapping gate.
+        // The flag is put back as this scenario found it: the server is shared with the class run.
+        String flagBefore = Reply.of(cmd("stellurgytest config get enableCustomPlanetWeather")).text("value");
+        try {
+            customWeatherCycleRunsOnlyWhenConfigEnabledBody();
+        } finally {
+            cmd("stellurgytest config set enableCustomPlanetWeather " + flagBefore);
+        }
+    }
+
+    private void customWeatherCycleRunsOnlyWhenConfigEnabledBody() throws Exception {
         assertTrue(Reply.of(cmd("stellurgytest config set enableCustomPlanetWeather true")).ok());
         DimWeather wrapped = weather(FIXTURE_DIM);
         // Anchor on the probe's named worldInfoClass field, not a bare substring

@@ -138,17 +138,6 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
     private static final double DISCONTINUITY_FLOOR_BLOCKS = 4.0;
     private static final double DISCONTINUITY_TICKS = 4.0;
 
-    /** Diagnostic only — nothing branches on these; a test reads them to see what it produced. The
-     *  two tick counters answer the question the design turns on: how often a pose actually arrives
-     *  for the tick that shows it, which is what decides whether prediction is bridging a gap or
-     *  betting against information already in hand. */
-    public static volatile double lastResidualBlocks;
-    public static volatile double maxResidualBlocks;
-    public static volatile long discontinuitiesAdopted;
-    public static volatile long ticksShownFromPacket;
-    public static volatile long ticksExtrapolated;
-    public static volatile double maxShownStepBlocks;
-
     /** The craft's declared pose, advanced by its declared motion between packets. */
     @Nonnull
     private ShipTransform declaredTransform;
@@ -317,7 +306,6 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
         if (!aligned) {
             // Nothing has arrived: the pose this craft was loaded at stands.
             captureTickEnd();
-            noteShownStep();
             return;
         }
         final ShipTransform before = curTickTransform;
@@ -338,11 +326,9 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
             skipped = due.tick - shownTick - 1;
             shownTick = due.tick;
             take(due);
-            ticksShownFromPacket++;
         } else if (!realign) {
             // Nothing arrived: the craft keeps doing what it last said it was doing.
             shownTick++;
-            ticksExtrapolated++;
         }
         // REALIGN: the pose for the tick already shown by prediction arrived this tick, and nothing
         // newer. Predicting a further tick would leave the client permanently a tick ahead of the
@@ -358,7 +344,6 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
 
         curTickTransform = composeShown();
         captureTickEnd();
-        noteShownStep();
     }
 
     /** Take an arrived pose as the craft's declared state at its own tick. */
@@ -415,17 +400,12 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
             // it, through the space between.
             residualPos.zero();
             residualRot.identity();
-            discontinuitiesAdopted++;
         } else {
             residualPos.set(dx, dy, dz);
             final Quaterniondc shownRot = shown.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
             final Quaterniondc declaredRot = declaredTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
             // residual = shown * declared^-1, left-multiplied, so it composes onto the declared rotation
             residualRot.set(declaredRot).invert().premul(shownRot).normalize();
-        }
-        lastResidualBlocks = error;
-        if (error > maxResidualBlocks) {
-            maxResidualBlocks = error;
         }
     }
 
@@ -476,17 +456,6 @@ public class DeclaredMotionTransformInterpolator implements ITransformInterpolat
         tickEndPos.set(curTickTransform.getPosX(), curTickTransform.getPosY(), curTickTransform.getPosZ());
         tickEndRot.set(curTickTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL));
         haveShownStep = true;
-    }
-
-    /** How far the shown pose just moved — the number a body standing on it has to be carried by. */
-    private void noteShownStep() {
-        final double dx = tickEndPos.x - prevTickEndPos.x;
-        final double dy = tickEndPos.y - prevTickEndPos.y;
-        final double dz = tickEndPos.z - prevTickEndPos.z;
-        final double step = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (step > maxShownStepBlocks) {
-            maxShownStepBlocks = step;
-        }
     }
 
     @Override

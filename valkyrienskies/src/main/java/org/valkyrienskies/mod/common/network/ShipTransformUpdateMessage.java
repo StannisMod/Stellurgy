@@ -56,6 +56,7 @@ public class ShipTransformUpdateMessage implements IMessage {
         }
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ObjectMapper serializer = VSJacksonUtil.getPacketMapper();
     final Map<UUID, ShipPoseAndMotion> shipTransforms;
     int dimensionID;

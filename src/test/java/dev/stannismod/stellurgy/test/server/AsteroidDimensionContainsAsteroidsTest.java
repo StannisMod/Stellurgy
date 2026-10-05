@@ -75,8 +75,4 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
         Assume.assumeTrue("Only overworld registered — skipping", false);
         return -1;
     }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 }

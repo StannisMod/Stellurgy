@@ -16,8 +16,11 @@ import java.util.Map;
 
 public class BucketHandler {
 	
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static final BucketHandler INSTANCE = new BucketHandler();
+	/** Effectively final, process lifetime: filled only by BucketHandler.registerBucket. */
 	private static Map<Block, Item> bucketMap = new HashMap<>();
+	/** Effectively final, process lifetime: filled only by BucketHandler.registerBucket. */
 	private static Map<Fluid, Item> itemMap = new HashMap<>();
 
 	@SubscribeEvent

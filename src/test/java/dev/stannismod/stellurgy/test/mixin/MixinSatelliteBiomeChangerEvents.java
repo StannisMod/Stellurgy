@@ -29,7 +29,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * {@code satellite} (the long id the registry knows it by), {@code dim} (the satellite's own
  * dimension, the world {@code tickEntity} will terraform in), {@code x, z} of the requested centre,
  * {@code queued} (the size of the work list AFTER this call — cumulative, capped by production's
- * {@code MAX_SIZE}, so two requests in a row show the second's total, not its delta), {@code who}
+ * {@code maxQueuedBlocks}, so two requests in a row show the second's total, not its delta), {@code who}
  * (the requesting player, or {@code "null"} for a terminal pull with no player) and {@code remote}.</p>
  *
  * <h2>The seam</h2>

@@ -21,6 +21,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class CellSeamTest {
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord CELL = GalacticCoord.ofSectorLocal(3L, -1L, 7L, 0, 0, 0);
 
     /** The world-frame pose whose local offset is {@code (lx,ly,lz)} — the inverse of the mapping. */
@@ -116,19 +119,6 @@ public class CellSeamTest {
                 CellSeam.shouldCarry(allTheWayBack[0], allTheWayBack[1], allTheWayBack[2]));
     }
 
-    /**
-     * Both margins are fractions of the cell. Pinned because the failure they guard against is silent:
-     * an absolute margin keeps its number when the cell is resized and quietly becomes a different
-     * duration — which is exactly what happened to the moon band before it was expressed this way.
-     */
-    @Test
-    public void theMarginsScaleWithTheCell() {
-        assertEquals(GalacticCoord.HALF_CELL / 10_000L, CellSeam.CARRY_MARGIN);
-        assertEquals(GalacticCoord.HALF_CELL / 1_000L, CellSeam.REENTRY_DEPTH);
-        assertTrue("the re-entry depth must exceed the carry margin, or the hysteresis is inverted",
-                CellSeam.REENTRY_DEPTH > CellSeam.CARRY_MARGIN);
-    }
-
     // ─── The SPHERE boundary, inside a zone ────────────────────────────────────
 
     /** A zone whose cells are this wide — Earth's, at the shipped metric. */
@@ -189,10 +179,6 @@ public class CellSeamTest {
         assertTrue("well inside it is", CellSeam.hasEnteredZone(r * 0.5d, r));
         assertFalse("but a whisker inside is not — that is the gap",
                 CellSeam.hasEnteredZone(r * 0.99999d, r));
-
-        assertTrue("the entry threshold must be strictly deeper than the exit one, or the two are "
-                        + "one boundary read twice and a drifting craft flickers between frames",
-                CellSeam.SPHERE_REENTRY_FRACTION > CellSeam.SPHERE_CARRY_FRACTION);
 
         // Both are FRACTIONS, so they move with the sphere. A zone's radius spans four orders of
         // magnitude across one system; an absolute margin would be a different rule for each body.

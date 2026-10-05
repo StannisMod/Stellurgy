@@ -1,15 +1,9 @@
 package dev.stannismod.stellurgy.test.integration;
 
-import org.junit.After;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.common.CommonProxy;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-
-import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -17,12 +11,11 @@ import static org.junit.Assert.assertTrue;
 /**
  * {@code orbitalAngleWrapsCorrectly}.
  *
- * <p>Lives in the integration layer because {@link AstronomicalBodyHelper#getOrbitalTheta}
- * dereferences {@code Stellurgy.proxy}, and merely loading
- * {@code Stellurgy.class} triggers {@code FluidRegistry.enableUniversalBucket()}
- * which only succeeds after Forge bootstrap. {@link MinecraftBootstrap#ensure()}
- * sets that up. The rest of the pure-math tests (no proxy dereference)
- * live in {@code unit/AstronomicalBodyHelperTest}.</p>
+ * <p>Pins the orbit law through {@link AstronomicalBodyHelper#getOrbitalThetaAt}, which takes the
+ * tick it is evaluated at — so the test states each tick instead of replacing the sided proxy that
+ * {@link AstronomicalBodyHelper#getOrbitalTheta} reads the current one from. Lives in the
+ * integration layer because the helper class references {@code Stellurgy}, whose loading needs the
+ * Forge bootstrap {@link MinecraftBootstrap#ensure()} sets up.</p>
  *
  * <p>The production formula is</p>
  * <pre>
@@ -37,25 +30,6 @@ public class AstronomicalBodyHelperOrbitalThetaTest {
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
-    }
-
-    private Object originalProxy;
-    private final ControllableProxy stub = new ControllableProxy();
-
-    @Before
-    public void installControllableProxy() throws Exception {
-        Field proxyField = Stellurgy.class.getDeclaredField("proxy");
-        proxyField.setAccessible(true);
-        originalProxy = proxyField.get(null);
-        stub.fakeTime = 0L;
-        proxyField.set(null, stub);
-    }
-
-    @After
-    public void restoreOriginalProxy() throws Exception {
-        Field proxyField = Stellurgy.class.getDeclaredField("proxy");
-        proxyField.setAccessible(true);
-        proxyField.set(null, originalProxy);
     }
 
     /**
@@ -76,50 +50,32 @@ public class AstronomicalBodyHelperOrbitalThetaTest {
         final long oneOrbitTicks = (long) (24000d * period);
 
         // Phase 0: t=0 -> θ=0.
-        stub.fakeTime = 0L;
-        assertEquals(0.0, AstronomicalBodyHelper.getOrbitalTheta(distance, solarSize), 1e-9);
+        assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(distance, solarSize, 0L), 1e-9);
 
         // Phase π/2: quarter orbit.
-        stub.fakeTime = oneOrbitTicks / 4;
         assertEquals(Math.PI / 2,
-                AstronomicalBodyHelper.getOrbitalTheta(distance, solarSize), 1e-6);
+                AstronomicalBodyHelper.getOrbitalThetaAt(distance, solarSize, oneOrbitTicks / 4), 1e-6);
 
         // Phase π: half orbit.
-        stub.fakeTime = oneOrbitTicks / 2;
         assertEquals(Math.PI,
-                AstronomicalBodyHelper.getOrbitalTheta(distance, solarSize), 1e-6);
+                AstronomicalBodyHelper.getOrbitalThetaAt(distance, solarSize, oneOrbitTicks / 2), 1e-6);
 
         // Wrap: a full orbit -> back to θ=0 (modulo collapses to 0).
-        stub.fakeTime = oneOrbitTicks;
         assertEquals(0.0,
-                AstronomicalBodyHelper.getOrbitalTheta(distance, solarSize), 1e-6);
+                AstronomicalBodyHelper.getOrbitalThetaAt(distance, solarSize, oneOrbitTicks), 1e-6);
 
         // Wrap across many orbits: 7 full + a quarter -> θ should still be π/2.
-        stub.fakeTime = oneOrbitTicks * 7L + oneOrbitTicks / 4L;
         assertEquals("multiple wraps must collapse to the same cardinal phase",
                 Math.PI / 2,
-                AstronomicalBodyHelper.getOrbitalTheta(distance, solarSize), 1e-6);
+                AstronomicalBodyHelper.getOrbitalThetaAt(distance, solarSize,
+                        oneOrbitTicks * 7L + oneOrbitTicks / 4L), 1e-6);
 
         // Stress: a world time near the long-arithmetic safe ceiling. The
         // result must still fit cleanly in [0, 2π) — no NaN, no Infinity.
-        stub.fakeTime = Long.MAX_VALUE / 1024L;
-        double huge = AstronomicalBodyHelper.getOrbitalTheta(distance, solarSize);
+        double huge = AstronomicalBodyHelper.getOrbitalThetaAt(distance, solarSize, Long.MAX_VALUE / 1024L);
         assertTrue("θ must be a real number even at huge world times: " + huge,
                 !Double.isNaN(huge) && !Double.isInfinite(huge));
         assertTrue("θ must remain in [0, 2π): " + huge,
                 huge >= 0.0 && huge < 2.0 * Math.PI);
-    }
-
-    /**
-     * Overrides only {@code getWorldTimeUniversal}; everything else inherits
-     * from {@link CommonProxy} (and is unused by this test).
-     */
-    private static final class ControllableProxy extends CommonProxy {
-        long fakeTime;
-
-        @Override
-        public long getWorldTimeUniversal(int id) {
-            return fakeTime;
-        }
     }
 }

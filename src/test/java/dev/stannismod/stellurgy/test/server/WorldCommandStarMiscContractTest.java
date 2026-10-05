@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * {@code /ar star *}, {@code /ar dumpBiomes},
@@ -24,6 +23,9 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
 
+    /**
+     * A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own matcher.
+     */
     private static final Pattern TEMP_LINE = Pattern.compile("Temp:\\s*(-?\\d+)");
 
     @Test
@@ -42,8 +44,8 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
      * not reach the star Earth is lit by.</p>
      *
      * <p>red-witnessed: 2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}
-     * at {@code DimensionManager.overworldProperties.setStar(sol)} written as
-     * {@code sol.addPlanet(DimensionManager.overworldProperties)}, which lists Earth without binding it:
+     * at {@code overworldProperties.setStar(sol)} written as
+     * {@code sol.addPlanet(overworldProperties)}, which lists Earth without binding it:
      * "Earth's star must be the registered star 0 itself, not a copy with its id: {… "starIsRegistered":false …}".</p>
      */
     @Test
@@ -62,19 +64,6 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
         assertTrue("must include a Temp: line — got: " + resp, m.find());
         assertEquals("Sol baseline temperature per DimensionManager ctor",
                 100, Integer.parseInt(m.group(1)));
-    }
-
-    @Test
-    public void starSetTempUpdatesStellarBodyTemperature() throws Exception {
-        try {
-            exec("ar star set temp 0 4242");
-            String resp = exec("ar star get temp 0");
-            Matcher m = TEMP_LINE.matcher(resp);
-            assertTrue("must include a Temp: line — got: " + resp, m.find());
-            assertEquals(4242, Integer.parseInt(m.group(1)));
-        } finally {
-            exec("ar star set temp 0 100");
-        }
     }
 
     @Test

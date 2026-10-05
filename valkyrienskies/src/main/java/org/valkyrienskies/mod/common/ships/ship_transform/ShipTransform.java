@@ -25,6 +25,7 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public class ShipTransform {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     @java.lang.SuppressWarnings("all")
     private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(ShipTransform.class);
     /**

@@ -16,6 +16,11 @@ import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 @Mixin(AbstractClientPlayer.class)
 public abstract class MixinsAbstractClientPlayer implements IShipPilotClient {
 
+    /** Which pilot edge keys were down at this player's previous sample — this player's own input,
+     *  gone with the player object. */
+    @org.spongepowered.asm.mixin.Unique
+    private final boolean[] vs$keysDownLastTick = new boolean[PilotControlsMessage.EDGE_KEYS];
+
     @Override
     public void onClientTick() {
         if (isPiloting()) {
@@ -32,10 +37,10 @@ public abstract class MixinsAbstractClientPlayer implements IShipPilotClient {
             type = ControllerInputType.CaptainsChair;
         }
         // System.out.println(blockBeingControlled);
-        keyMessage.assignKeyBooleans(shipPiloting, type);
+        keyMessage.assignKeyBooleans(shipPiloting, type, vs$keysDownLastTick);
         keyMessage.controlBlockPos = blockBeingControlled;
 
-        ValkyrienSkiesMod.controlNetwork.sendToServer(keyMessage);
+        dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.controlNetwork.sendToServer(keyMessage);
     }
 
 }

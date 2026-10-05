@@ -8,7 +8,7 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import dev.stannismod.stellurgy.api.StellurgyFluids;
 import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.armor.IFillableArmor;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
@@ -269,17 +269,24 @@ public class ItemSpaceChest extends ItemSpaceArmor implements IFillableArmor {
         //return Configuration.spaceSuitOxygenTime*1200; //30 minutes;
     }
 
+    /**
+      * The chest is the piece that costs something, and only where there is nothing outside to work
+      * with: the suit carries an extractor, so thin-but-oxygenated air is concentrated for free and
+      * only air with no oxidiser at all is drawn from the tank. That used to be decided by asking the
+      * atmosphere's LABEL whether things burn in it — a flag assigned by hand, and the wrong question
+      * besides. The hazard says it directly now.
+      */
     @Override
-    public boolean protectsFromSubstance(@Nonnull IAtmosphere atmosphere, @Nonnull ItemStack stack, boolean commitProtection) {
+    public boolean protectsFrom(@Nonnull java.util.Set<dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard> hazards,
+                                boolean needsSuppliedOxygen, @Nonnull ItemStack stack,
+                                boolean commitProtection) {
 
-        if (!super.protectsFromSubstance(atmosphere, stack, commitProtection))
+        if (!super.protectsFrom(hazards, needsSuppliedOxygen, stack, commitProtection))
             return false;
 
-        // Assume for now that the space suit has a built in O2 extractor and can magically handle pressure
-        if (atmosphere.allowsCombustion())
+        if (!needsSuppliedOxygen)
             return true;
 
-        // If the atmosphere allows for combustion, it probably has O2, TODO: atmosphere with non O2 oxidizers
         boolean commitAndDecrement = commitProtection && ((IFillableArmor) StellurgyItems.itemSpaceSuit_Chest).decrementAir(stack, 1) > 0;
         boolean noncommitAndHasAir = !commitProtection && ((IFillableArmor) StellurgyItems.itemSpaceSuit_Chest).getAirRemaining(stack) > 0;
         return noncommitAndHasAir || commitAndDecrement;

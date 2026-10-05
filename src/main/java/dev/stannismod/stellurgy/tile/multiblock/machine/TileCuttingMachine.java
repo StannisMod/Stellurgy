@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -17,12 +19,12 @@ import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.List;
 
-public class TileCuttingMachine extends TileMultiblockMachine implements IModularInventory {
+public class TileCuttingMachine extends TileWasteHeatMachine implements IModularInventory {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
             {{'I', 'c', 'O'},
                     {LibVulpesBlocks.motors, StellurgyBlocks.blockSawBlade, 'P'}}};

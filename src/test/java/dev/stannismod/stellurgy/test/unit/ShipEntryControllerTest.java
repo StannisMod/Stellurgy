@@ -44,7 +44,12 @@ public class ShipEntryControllerTest {
      *  assertion that the entry line drops below it. */
     private static final int ORBIT_CLAMP = 1000;
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID SHIP = UUID.fromString("00000000-0000-0000-0000-0000000000AA");
+    /**
+     * A constant: a {@code BlockPos} built with {@code new} is immutable: three final ints (not the mutable
+     * subclass).
+     */
     private static final BlockPos AFC = new BlockPos(1, 65, 1);
     private static final int LAUNCH_DIM = 0;
 
@@ -73,7 +78,11 @@ public class ShipEntryControllerTest {
         final List<Integer> pinned = new ArrayList<>();
         final List<double[]> teleports = new ArrayList<>();
         final List<Integer> reseatDims = new ArrayList<>();
-        /** The identity the cross hands back — every settle half must address THIS ship. */
+        /**
+         * The identity the cross hands back — every settle half must address THIS ship.
+         *
+         * <p>A constant: a {@code UUID} is an immutable value: two final longs.</p>
+         */
         static final UUID CROSSED_SHIP = UUID.fromString("11111111-2222-3333-4444-555555555555");
         /** What each settle half actually named; a null is a position lookup, i.e. the defect. */
         final List<UUID> reseatShipUuids = new ArrayList<>();

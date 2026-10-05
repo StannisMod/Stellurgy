@@ -14,8 +14,8 @@ package dev.stannismod.stellurgy.test;
  * multiplies a specific failure: a "find the X" query answering with a DIFFERENT scenario's object,
  * so the assertion passes on scaffolding the test never built. Three queries in the client suite are
  * already global and would do exactly this — {@code stellurgytest rocket list 0} in
- * {@code RocketBuilderGuiE2ETest} and {@code FreeFlightModeE2ETest}, {@code stellurgytest station list} in
- * {@code SpaceDimGuardE2ETest}.</p>
+ * {@code RocketBuilderGuiE2ETest} and {@code FreeFlightModeTest}, {@code stellurgytest station list} in
+ * {@code SpaceDimGuardTest}.</p>
  *
  * <p>The defence is spatial and it is deliberately dumb: <b>one plot per scenario, never
  * recycled</b>. Nothing has to be cleaned up afterwards, because nothing else is ever going to look
@@ -64,8 +64,8 @@ public final class Plot {
      *
      * <p>A flat harness world would make every coordinate equally good and was tried on 2026-08-14;
      * it cost more heap, more wall clock and three unexplained reds, so the survey stands.
-     * <b>Do not move these numbers without re-running the survey</b> —
-     * {@code FixtureGroundOnPinnedSeedTest} asserts every ground fixture's own surface.</p>
+     * <b>Do not move these numbers without re-running the survey</b> — nothing in the suite checks
+     * a ground fixture's surface, so a wrong number shows up only as a fixture standing in a hole.</p>
      */
     public static final int CLEAN_GROUND_X = 7096;
     /** @see #CLEAN_GROUND_X */
@@ -127,6 +127,8 @@ public final class Plot {
          * is air and therefore terrain-independent. <b>Do not move it</b> — that green is what makes
          * it a default rather than a guess. A scenario that needs GROUND is on its own terrain and
          * should declare its own lane.
+         *
+         * <p>A constant: a {@code Lane} is an immutable value: four final ints.</p>
          */
         public static final Lane DEFAULT = new Lane(4000, 4000, SIZE);
     }
@@ -159,6 +161,28 @@ public final class Plot {
      */
     public static Plot forScenario(int index, String owner, int dim, Lane lane) {
         return new Plot(index, owner, dim, lane);
+    }
+
+    private Plot(Plot same, int dim) {
+        this.index = same.index;
+        this.owner = same.owner;
+        this.dim = dim;
+        this.originX = same.originX;
+        this.originZ = same.originZ;
+        this.size = same.size;
+    }
+
+    /**
+     * THIS scenario's patch of ground in ANOTHER world — the same footprint, in {@code dim}.
+     *
+     * <p>For a scenario whose subject stands somewhere other than the overworld (a craft built on a
+     * moon). The non-overlap argument carries over unchanged: the footprint is a function of this
+     * plot's index, which is unique within the allocating class, so no sibling scenario of the class
+     * is handed the same footprint in any world. It is a separate plot object with its own record of
+     * cleared volumes, because two worlds' volumes cannot reach into each other.</p>
+     */
+    public Plot inDimension(int dim) {
+        return new Plot(this, dim);
     }
 
     /**

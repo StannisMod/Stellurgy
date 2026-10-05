@@ -25,7 +25,7 @@ public class BlockAdminEnergySource extends Block implements ITileEntityProvider
         super(material);
         this.setUnlocalizedName(name);
         this.setRegistryName(AdvancedForceFieldSystem.MODID, name);
-        this.setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        this.setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         this.setHardness(3.0F);
         this.setResistance(6.0F);
         this.setSoundType(SoundType.METAL);
@@ -57,6 +57,6 @@ public class BlockAdminEnergySource extends Block implements ITileEntityProvider
 
     @Override
     public Item createItemBlock() {
-        return new ItemBlock(this).setRegistryName(getRegistryName()).setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        return new ItemBlock(this).setRegistryName(getRegistryName()).setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
     }
 }

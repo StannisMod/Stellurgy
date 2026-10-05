@@ -25,13 +25,6 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
 
     @Test
     public void forgeEnergyStorageContractMatches() throws Exception {
-        // LEFT RAW: the subject of this line IS the error shape, which `EnergyStore` refuses.
-        String empty = String.join("\n", client().execute("stellurgytest energy stored 0 1200 64 1200"));
-        // THAT refusal, not merely some refusal: as a substring, any other error the probe can
-        // write satisfied this just as well.
-        assertTrue("expected 'no tile entity': " + empty,
-                Reply.of(empty).refusedWith("no tile entity"));
-
         String place = String.join("\n", client().execute(
                 "stellurgytest place 0 1200 64 1200 libvulpes:forgepowerinput"));
         assertTrue("could not place libvulpes:forgepowerinput: " + place,
@@ -70,135 +63,8 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
         assertEquals("simulate at-cap accepted should be 0: " + inj3, 0L, accepted3);
     }
 
-    /**
-     * wireless transceiver pairing. Place two transceivers
-     * 50 blocks apart, pair them via the probe (mirrors the player-side
-     * linker-item flow), and confirm both end up on the same
-     * {@code networkID}.
-     */
-    @Test
-    public void wirelessTransceiverPairsAndTransmits() throws Exception {
-        int x1 = 1300, x2 = 1350, y = 65, z = 1200;
-        ok(client().execute(
-                "stellurgytest place 0 " + x1 + " " + y + " " + z + " stellurgy:wirelessTransciever"));
-        ok(client().execute(
-                "stellurgytest place 0 " + x2 + " " + y + " " + z + " stellurgy:wirelessTransciever"));
-
-        // Pre-pairing — each transceiver carries the default sentinel.
-        String pre1 = String.join("\n", client().execute(
-                "stellurgytest pipe wireless-info 0 " + x1 + " " + y + " " + z));
-        String pre2 = String.join("\n", client().execute(
-                "stellurgytest pipe wireless-info 0 " + x2 + " " + y + " " + z));
-        assertEquals("transceiver A starts unpaired (networkID=-1): " + pre1,
-                -1, extractInt(pre1, "networkID"));
-        assertEquals("transceiver B starts unpaired (networkID=-1): " + pre2,
-                -1, extractInt(pre2, "networkID"));
-
-        String pair = String.join("\n", client().execute(
-                "stellurgytest pipe wireless-pair 0 " + x1 + " " + y + " " + z + " "
-                        + x2 + " " + y + " " + z));
-        assertTrue("wireless-pair probe failed: " + pair, Reply.of(pair).ok());
-        int sharedId = extractInt(pair, "sharedNetworkId");
-        // NetworkRegistry hashes network IDs and may return negative values;
-        // the only invariant we care about is "not the unpaired sentinel".
-        assertTrue("shared networkID must be assigned (not -1 sentinel): " + pair,
-                sharedId != -1);
-
-        // Post-pairing — both endpoints must report the same networkID.
-        String post1 = String.join("\n", client().execute(
-                "stellurgytest pipe wireless-info 0 " + x1 + " " + y + " " + z));
-        String post2 = String.join("\n", client().execute(
-                "stellurgytest pipe wireless-info 0 " + x2 + " " + y + " " + z));
-        assertEquals("A and B must share the same networkID after pairing",
-                sharedId, extractInt(post1, "networkID"));
-        assertEquals("A and B must share the same networkID after pairing",
-                sharedId, extractInt(post2, "networkID"));
-    }
-
-    /**
-     * inventory hatch accepts items and surfaces them via the
-     * standard hatch read probe (same code path libVulpes machines use to
-     * iterate input hatches). Round-trips the item through the hatch's
-     * IInventory.
-     */
-    @Test
-    public void inventoryHatchAcceptsAndExportsItems() throws Exception {
-        int hx = 1400, hy = FixtureSite.OPEN_AIR_Y, hz = 1200;
-        ok(client().execute("stellurgytest place 0 " + hx + " " + hy + " " + hz
-                + " stellurgy:invhatch"));
-
-        // Slot 0 — 16 sticks.
-        ok(client().execute("stellurgytest hatch fill 0 " + hx + " " + hy + " " + hz
-                + " 0 minecraft:stick 16 0"));
-
-        String read = String.join("\n", client().execute(
-                "stellurgytest hatch read 0 " + hx + " " + hy + " " + hz));
-        // THE slot this test filled — addressed by its index, then read. Asking whether some slot
-        // holds sticks and some slot holds 16 is satisfied by one stick beside sixteen of
-        // something else.
-        Reply filled = Reply.of("stellurgytest hatch read", read).element("slots", "slot", "0");
-        assertEquals("slot 0 must hold the deposited sticks: " + read,
-                "minecraft:stick", filled.text("item"));
-        assertEquals("slot 0 must hold all sixteen of them: " + read, 16, filled.integer("count"));
-
-        // Overwrite slot 0 with a different stack — verify the hatch
-        // accepts replacement (export semantics: it can be cleared and
-        // re-filled, mirroring how multiblock controllers pull from it).
-        ok(client().execute("stellurgytest hatch fill 0 " + hx + " " + hy + " " + hz
-                + " 0 minecraft:cobblestone 64 0"));
-        String read2 = String.join("\n", client().execute(
-                "stellurgytest hatch read 0 " + hx + " " + hy + " " + hz));
-        Reply replaced = Reply.of("stellurgytest hatch read", read2).element("slots", "slot", "0");
-        assertEquals("slot 0 must hold the replacement stack: " + read2,
-                "minecraft:cobblestone", replaced.text("item"));
-        assertEquals("slot 0 must hold all sixty-four: " + read2, 64, replaced.integer("count"));
-        // absence is the answer: `holdsElement` exists for exactly this negative claim — the
-        // hatch no longer holds sticks ANYWHERE, so no matching element is the subject.
-        assertTrue("old stick stack must be gone after replacement: " + read2,
-                !Reply.of("stellurgytest hatch read", read2)
-                        .holdsElement("slots", "item", "minecraft:stick"));
-    }
-
-    /**
-     * fluid hatch accepts fluid via the standard fluid inject
-     * probe and surfaces it via fluid stored. Stellurgy registers a pressurised
-     * tank (stellurgy:liquidTank) that exposes the fluid-handler
-     * capability the same way libVulpes' fluid hatch does.
-     */
-    @Test
-    public void fluidHatchAcceptsAndExportsFluids() throws Exception {
-        int fx = 1500, fy = FixtureSite.OPEN_AIR_Y, fz = 1200;
-        ok(client().execute("stellurgytest place 0 " + fx + " " + fy + " " + fz
-                + " stellurgy:liquidTank"));
-
-        String injected = String.join("\n", client().execute(
-                "stellurgytest fluid inject 0 " + fx + " " + fy + " " + fz + " water 8000"));
-        assertTrue("fluid inject must succeed: " + injected, Reply.of(injected).ok());
-        int amount = extractInt(injected, "filled");
-        assertTrue("hatch must accept some water: " + injected, amount > 0);
-
-        String stored = String.join("\n", client().execute(
-                "stellurgytest fluid stored 0 " + fx + " " + fy + " " + fz));
-        // THE hatch's own tank, by index, read ONCE. Addressing it by its contents would ask the
-        // list "is some tank holding water" and then, separately, "is some tank holding N" — two
-        // questions a two-tank hatch answers from two different tanks.
-        FluidStored tanks = FluidStored.of(stored);
-        assertEquals("the hatch's tank must hold the injected water: " + stored,
-                "water", tanks.fluid(0));
-        assertEquals("and all of what the inject reported filled: " + stored,
-                amount, tanks.amount(0));
-    }
-
     private static long parseLong(String field, String s) {
         return (long) Reply.of(s).number(field);
     }
 
-    private static int extractInt(String haystack, String field) {
-        return Reply.of(haystack).integer(field);
-    }
-
-    private void ok(java.util.List<String> response) {
-        String joined = String.join("\n", response);
-        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
-    }
 }

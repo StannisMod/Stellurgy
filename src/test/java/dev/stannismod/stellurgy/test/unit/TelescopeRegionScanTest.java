@@ -18,6 +18,7 @@ import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.StellarMagnitude;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.TelescopeScan;
+import dev.stannismod.stellurgy.universe.UniverseLawsV0;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
 
 import static org.junit.Assert.assertEquals;
@@ -43,6 +44,17 @@ import static org.junit.Assert.fail;
  */
 public class TelescopeRegionScanTest {
 
+    /** The scan reads the config, which loads the mod class, whose static block touches vanilla's
+     *  fluid registry - vanilla's registries, which the fast tiers may use. Asked here, not left to
+     *  whichever class happened to run first in the fork. */
+    @org.junit.BeforeClass
+    public static void bootstrap() {
+        dev.stannismod.stellurgy.test.MinecraftBootstrap.ensure();
+    }
+
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     /**
      * The nearest few stars a tuning must reach, in lattice steps, or nothing is discoverable.
      *
@@ -67,6 +79,9 @@ public class TelescopeRegionScanTest {
     /** Cells the fixture region must hold to be worth sweeping at all — the test's own bar. */
     private static final int MIN_REGION_CELLS = 3;
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord HOME = GalacticCoord.ofSectorLocal(0, 0, 0, 0, 0, 0);
 
     /**
@@ -110,7 +125,7 @@ public class TelescopeRegionScanTest {
      */
     private static RegionScan.Tuning tuning() {
         return new RegionScan.Tuning(apertureReaching(50d), archetypes(), Math.toRadians(1d),
-                512, 100, 2, STEP);
+                512, 100, 2, STEP, UniverseLawsV0.INSTANCE);
     }
 
     private static StellarBody star(int id) {
@@ -127,12 +142,6 @@ public class TelescopeRegionScanTest {
     /** The cell {@code steps} territories out along +X — where an aim of {@code steps} lands. */
     private static GalacticCoord stepsOut(long steps) {
         return cell(steps * STEP, 0, 0);
-    }
-
-    @After
-    public void resetSeams() {
-        UniverseRegistry.detachGenerator();
-        UniverseRegistry.setStarLookup(null);
     }
 
     // ── the instrument ────────────────────────────────────────────────────────
@@ -166,8 +175,8 @@ public class TelescopeRegionScanTest {
                 stepsOut(3).cellKey(),
                 cell(aimed.distanceCells(), 0, 0).cellKey());
         assertTrue("and that distance, read as a length, must be interstellar: "
-                        + aimed.distanceLightYears() + " ly",
-                aimed.distanceLightYears() >= MIN_REACH_LY);
+                        + aimed.distanceLightYears(tuning.laws()) + " ly",
+                aimed.distanceLightYears(tuning.laws()) >= MIN_REACH_LY);
     }
 
     @Test
@@ -191,7 +200,7 @@ public class TelescopeRegionScanTest {
         // The structural guard against reading an endless procedural universe off one instrument:
         // a survey may cover a large region, but never in one step.
         RegionScan.Tuning wide = new RegionScan.Tuning(apertureReaching(200d), archetypes(),
-                Math.toRadians(20d), 1000, 100, 3, STEP);
+                Math.toRadians(20d), 1000, 100, 3, STEP, UniverseLawsV0.INSTANCE);
         RegionScan scan = RegionScan.directed(HOME, 1, 1, 0, wide.maxRangeSteps(), 0L, wide);
 
         assertTrue("the fixture must be a region worth sweeping", scan.totalCells() > MIN_REGION_CELLS);
@@ -203,7 +212,7 @@ public class TelescopeRegionScanTest {
     public void aRegionNeverExceedsItsCeiling() {
         // Ask for a 9×9×9 region with room for 27 cells and the ceiling wins.
         RegionScan.Tuning greedy = new RegionScan.Tuning(apertureReaching(200d), archetypes(),
-                Math.toRadians(20d), 27, 100, 2, STEP);
+                Math.toRadians(20d), 27, 100, 2, STEP, UniverseLawsV0.INSTANCE);
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, greedy.maxRangeSteps(), 0L, greedy);
 
         assertTrue("a survey may never cover more than its ceiling: " + scan.totalCells(),
@@ -359,10 +368,10 @@ public class TelescopeRegionScanTest {
      * find it, by a distance that is inside its own neighbourhood and nowhere near the next.</p>
      */
     private UniverseRegistry threeSystems() {
-        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
-        UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
+        testUniverse.attachGenerator(new EmptyGalaxyGenerator());
+        testUniverse.setStarLookup(TelescopeRegionScanTest::star);
 
-        UniverseRegistry registry = new UniverseRegistry();
+        UniverseRegistry registry = testUniverse.newRegistry();
         GalacticCoord inner = cell(4 * STEP - 20, 0, 0);          // found by the look at 4 steps out
         registry.place(inner, 4);
         registry.addPoi(SystemBody.fixedAt(inner, SystemBodyKind.STAR, Constants.INVALID_PLANET, 4));
@@ -451,7 +460,7 @@ public class TelescopeRegionScanTest {
         int queries;
 
         CountingGenerator(GalaxyGenConfig config) {
-            this.real = new ClusteredGalaxyGenerator(config);
+            this.real = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         }
 
         @Override
@@ -505,15 +514,15 @@ public class TelescopeRegionScanTest {
         // orders, and this test would not merely fail: it would never return.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
         CountingGenerator counting = new CountingGenerator(config);
-        UniverseRegistry.attachGenerator(counting);
-        UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
+        testUniverse.attachGenerator(counting);
+        testUniverse.setStarLookup(TelescopeRegionScanTest::star);
 
-        UniverseRegistry registry = new UniverseRegistry();
+        UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(0xC0FFEEL);
 
         // Aimed at the real reach, through the real config's own stride.
         RegionScan.Tuning live = new RegionScan.Tuning(apertureReaching(100d), archetypes(),
-                Math.toRadians(1d), 512, 100, 4, config.minSpacing);
+                Math.toRadians(1d), 512, 100, 4, config.minSpacing, registry.generator().laws());
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, live.maxRangeSteps(), 0L, live);
         int looks = scan.totalCells();
         assertTrue("the fixture must be a real sweep", looks >= REGION_CELLS);
@@ -571,9 +580,9 @@ public class TelescopeRegionScanTest {
         // re-derives everything by construction, so the discriminator below cannot quietly stop
         // discriminating.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(config));
-        UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
-        UniverseRegistry registry = new UniverseRegistry();
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config));
+        testUniverse.setStarLookup(TelescopeRegionScanTest::star);
+        UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(0xC0FFEEL);
 
         // SEARCHED rather than hardcoded. A territory is divided uniformly, so whether any given
@@ -604,7 +613,7 @@ public class TelescopeRegionScanTest {
 
         // The discriminator: the new universe must genuinely describe something else at that anchor,
         // or the assertion above would hold with no pin at all.
-        String derivedNow = new ClusteredGalaxyGenerator(config).systemAt(0xDEADBEEFL, anchor)
+        String derivedNow = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config).systemAt(0xDEADBEEFL, anchor)
                 .map(sys -> sys.systemId() + "/" + sys.primaryKind() + "/" + sys.name())
                 .orElse("none");
         assertNotEquals("arrangement: the new seed must derive something else at this anchor, or the "
@@ -630,13 +639,13 @@ public class TelescopeRegionScanTest {
         // NUMBER rather than asserted to be small: the bound below is a tripwire against an order of
         // magnitude, and the printed figures are what a decision about survey width is made from.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(config));
-        UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
-        UniverseRegistry registry = new UniverseRegistry();
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config));
+        testUniverse.setStarLookup(TelescopeRegionScanTest::star);
+        UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(0xC0FFEEL);
 
         RegionScan.Tuning live = new RegionScan.Tuning(apertureReaching(100d), archetypes(),
-                Math.toRadians(1d), 512, 100, 4, config.minSpacing);
+                Math.toRadians(1d), 512, 100, 4, config.minSpacing, registry.generator().laws());
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, live.maxRangeSteps(), 0L, live);
         int looks = scan.totalCells();
         CrystalMemory crystal = new CrystalMemory();

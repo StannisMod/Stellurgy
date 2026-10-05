@@ -17,9 +17,16 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  * identically. The registry supplies the RAW world seed (it does not pre-mix per cell), leaving the mixing
  * policy to the generator so a clustered sampler can correlate neighbouring cells.</p>
  *
- * <p>This interface is defined here (the Layer-1 universe package) but only a trivial default —
- * {@link EmptyGalaxyGenerator} — ships with it. The real clustered sampler and its {@code <galaxyGen>} XML
- * parameters are a follow-up; an addon installs its own via {@link UniverseRegistry#setGenerator}.</p>
+ * <p>Two implementations ship: {@link ClusteredGalaxyGenerator}, which {@code <galaxyGen>} configures
+ * and which a pack that states none is given with the shipped configuration, and
+ * {@link EmptyGalaxyGenerator}, the void between authored anchors that {@code procedural="false"} asks
+ * for. Which one answers a configuration is the world-model version's choice. An addon installs its own
+ * via {@link UniverseRegistry#attachGenerator}.</p>
+ *
+ * <p><b>A generator is never told where the AUTHORED systems stand</b>, and seats its field as if they
+ * did not exist. Keeping procedural systems out of an authored neighbourhood is the
+ * registry's job: it asks {@link #neighbourhoodOf} of every seat it is handed and drops the ones that
+ * reach an authored neighbourhood, so the derivation stays a function of {@code (seed, config)}.</p>
  */
 public interface IGalaxyGenerator {
 
@@ -84,11 +91,6 @@ public interface IGalaxyGenerator {
     }
 
     /**
-     * The super-cell edge (in cells) this generator partitions space by — at most one system per
-     * {@code minSpacingCells}-cube. The registry uses it to attribute member cells of AUTHORED systems and
-     * to bound body-offset clamping ({@code radius <= minSpacingCells/2 - margin}).
-     */
-    /**
      * The DERIVED retinue an AUTHORED system asks for — {@code count} major bodies from
      * {@code (seed, anchor)}, avoiding {@code takenCells}.
      *
@@ -103,17 +105,46 @@ public interface IGalaxyGenerator {
         return java.util.Collections.emptyList();
     }
 
+    /**
+     * The edge, in cells, of the star TERRITORY this generator partitions space by. It is NOT a bound
+     * on how many systems a territory holds: a generator may divide one further (see
+     * {@link #anchorsInTerritory}), and {@link ClusteredGalaxyGenerator} does, into as many as
+     * {@code k³} seats. The registry uses it for the AUTHORED neighbourhood — the box
+     * {@code minSpacingCells/2} to each side of an authored anchor that member cells attribute to and
+     * that authored bodies are clamped into.
+     */
     default int minSpacingCells() {
         return GalaxyGenConfig.DEFAULT_MIN_SPACING;
+    }
+
+    /**
+     * The NEIGHBOURHOOD of the system seated at {@code seat}: every cell {@link #anchorAt} attributes to
+     * that seat, and so every cell its bodies may be named in. Empty when no system is seated at
+     * {@code seat}'s cell.
+     *
+     * <p>Every seat this generator hands out — through {@link #anchorAt} or {@link #anchorsInTerritory}
+     * — must have one. The registry asks it to keep the procedural field out of an authored
+     * neighbourhood: a seat whose neighbourhood reaches an authored one is not a system.</p>
+     *
+     * <p>Default: the seat's own cell, which is the twin of the default {@link #anchorAt} — a
+     * generator that never overrode that one treats a system as a single cell, so a single cell is all
+     * its system owns.</p>
+     */
+    default Optional<SectorBox> neighbourhoodOf(long seed, GalacticCoord seat) {
+        GalacticCoord cell = seat.galacticCell().cellCentre();
+        Optional<GalacticCoord> anchor = anchorAt(seed, cell);
+        if (!anchor.isPresent() || !anchor.get().sameCell(cell)) {
+            return Optional.empty();
+        }
+        return Optional.of(SectorBox.around(cell, 0L));
     }
 
     /**
      * Every anchor seated inside the star TERRITORY that {@code cell} falls in — what one look of a
      * survey owes the direction it is pointed in.
      *
-     * <p>A survey strides by the territory, because that is the cube that holds at most one system
-     * and walking finer would spend a whole sweep re-reading one system's own neighbourhood. But a
-     * generator is free to divide that cube further, and then a stride that samples ONE point of it
+     * <p>A survey strides by the territory, because walking finer would spend a whole sweep re-reading
+     * one system's own neighbourhood. But a generator is free to divide that cube further, and then a stride that samples ONE point of it
      * reports a fraction of the sky and calls it the sky. So a look asks for the territory's
      * contents rather than for the point's, and the resolution of the answer is the generator's own
      * business rather than the surveyor's.</p>
@@ -139,8 +170,8 @@ public interface IGalaxyGenerator {
      * would have to say to reproduce it, and what the save fingerprints so a later load can tell that
      * the pack has been retuned underneath it.
      *
-     * <p>Empty is a real answer and not a stub: a generator with no parameters (the authored-anchors-only
-     * default, or one an addon fabricates from something other than this config) has nothing to write
+     * <p>Empty is a real answer and not a stub: a generator with no parameters (the one that answers
+     * {@code procedural="false"}, or one an addon fabricates from something other than this config) has nothing to write
      * back, and a pack file that carried a {@code <galaxyGen>} section for it would describe a generator
      * nobody installed.
      */

@@ -15,10 +15,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceSlotVsSupportTest extends AbstractSharedServerTest {
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     @Test
     public void vsShipSupportAttachesToAPoolWorld() throws Exception {
         String r = exec("stellurgytest space vs-cap deep");

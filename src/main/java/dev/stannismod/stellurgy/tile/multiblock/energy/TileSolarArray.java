@@ -30,6 +30,7 @@ import java.util.List;
 
 public class TileSolarArray extends TileMultiPowerProducer implements ITickable {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     static final Object[][][] structure = new Object[][][]{
             {
                     {'p', 'c', 'p'},

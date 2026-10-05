@@ -239,6 +239,14 @@ public final class GalaxyGenConfig {
      * {@link RogueTuning#physical()}, i.e. to what is measured.
      */
     public final RogueTuning rogue;
+    /**
+     * Whether space between the authored anchors is populated at all. A pack that says
+     * {@code <galaxyGen procedural="false"/>} asks for authored anchors only, and every other knob here
+     * is then meaningless — the fingerprint is {@link #noGeneratorFingerprint()} whatever they hold.
+     * The pack states this PROPERTY; which generator answers it is the world-model version's choice
+     * ({@code UniverseSchema#generator}), never the pack's.
+     */
+    public final boolean procedural;
 
     /**
      * Each lattice states its EDGE and then its OCCUPANCY, stars first and galaxies second, so the two
@@ -274,9 +282,10 @@ public final class GalaxyGenConfig {
         }
         this.reservedGalaxies = Collections.unmodifiableList(reserved);
         this.rogue = RogueTuning.physical();
+        this.procedural = true;
     }
 
-    private GalaxyGenConfig(GalaxyGenConfig from, RogueTuning rogue) {
+    private GalaxyGenConfig(GalaxyGenConfig from, RogueTuning rogue, boolean procedural) {
         this.density = from.density;
         this.minSpacing = from.minSpacing;
         this.galaxySpacing = from.galaxySpacing;
@@ -286,6 +295,13 @@ public final class GalaxyGenConfig {
         this.clusterTypes = from.clusterTypes;
         this.reservedGalaxies = from.reservedGalaxies;
         this.rogue = rogue == null ? RogueTuning.physical() : rogue;
+        this.procedural = procedural;
+    }
+
+    /** The pack's {@code <galaxyGen procedural="false"/>}: authored anchors only, nothing between them. */
+    public static GalaxyGenConfig nonProcedural() {
+        GalaxyGenConfig shipped = defaults();
+        return new GalaxyGenConfig(shipped, shipped.rogue, false);
     }
 
     /**
@@ -297,7 +313,7 @@ public final class GalaxyGenConfig {
      * states only the part it disagrees with.</p>
      */
     public GalaxyGenConfig withRogueTuning(RogueTuning tuning) {
-        return new GalaxyGenConfig(this, tuning);
+        return new GalaxyGenConfig(this, tuning, procedural);
     }
 
     /**
@@ -310,8 +326,9 @@ public final class GalaxyGenConfig {
         // <galaxyGen> has already been read, so going through the public constructor — which resets the
         // unbound population to the measured default — would silently discard whatever the pack
         // authored about rogues for every pack that also names a galaxy.
-        return new GalaxyGenConfig(minSpacing, density, galaxySpacing, galaxyDensity, starTypes,
-                galaxyTypes, keys).withRogueTuning(rogue);
+        GalaxyGenConfig reserved = new GalaxyGenConfig(minSpacing, density, galaxySpacing, galaxyDensity,
+                starTypes, galaxyTypes, keys);
+        return new GalaxyGenConfig(reserved, rogue, procedural);
     }
 
     /**
@@ -334,6 +351,9 @@ public final class GalaxyGenConfig {
      *         collision is not something a pack author will meet, short enough to read out of a log
      */
     public String fingerprint() {
+        if (!procedural) {
+            return noGeneratorFingerprint();
+        }
         StringBuilder sb = new StringBuilder(512);
         sb.append("v1;");
         sb.append("minSpacing=").append(minSpacing).append(';');
@@ -512,6 +532,8 @@ public final class GalaxyGenConfig {
     /**
      * The cluster every galaxy has at its own centre — the richest one, and no special case: it is a
      * cluster like the others, drawn at the galaxy's centre instead of on the cluster lattice.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     public static final ClusterType NUCLEUS = new ClusterType("Nucleus", 215, 4d, 8d, 0.4d, true, 1);
 

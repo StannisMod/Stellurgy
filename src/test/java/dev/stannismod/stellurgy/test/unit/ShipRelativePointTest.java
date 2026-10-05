@@ -21,6 +21,10 @@ import static org.junit.Assert.assertNull;
  */
 public class ShipRelativePointTest {
 
+    /**
+     * A constant: a {@code BlockPos} built with {@code new} is immutable: three final ints (not the mutable
+     * subclass).
+     */
     private static final BlockPos AFC = new BlockPos(1024, 96, -2048);
 
     @Test

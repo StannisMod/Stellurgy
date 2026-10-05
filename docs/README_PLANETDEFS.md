@@ -27,8 +27,9 @@ Consequence of (3), and it surprises everyone exactly once:
 - **Comments are lost.** The writer builds a new document; nothing in the file survives that the
   reader did not turn into model state.
 - **Unknown elements and attributes are lost**, because they were never read (see §2).
-- **`numPlanets` / `numGasGiants` are written back as `0`.** Random planets are generated once, at
-  first load, and become ordinary `<planet>` entries. They are not regenerated on later loads.
+- **`numPlanets` / `numGasGiants` are written back as one total.** The writer puts the sum into
+  `numPlanets` and writes `numGasGiants="0"`; nothing reads the split, so the total is what survives.
+  The derived worlds themselves are never written as `<planet>` entries (see §7, `<star>` attributes).
 - **A companion star loses its `name`.** The writer does not emit `name` for a nested `<star>`; it is
   regenerated as `<primary name>-<n>`.
 
@@ -66,7 +67,7 @@ So: edit the **template**, not the live copy, and keep the template under versio
 | **planet mass** | Earth masses | |
 | **planet radius** | Earth radii | |
 | **surface gravity** | percent of Earth's | `100` = 1 g. Clamped to `0..400`. |
-| **atmosphere density** | `100` = 1 atm | Clamped to `0..1600`. |
+| **atmosphere density** | `100` = 1 atm | Clamped to `0..2147483` (about 21 000 atm). |
 | **planet temperature** | KELVIN | Computed, not authored — see `avgTemperature` in §7. |
 | **rotational period** | ticks | `24000` = one Minecraft day. Must be `> 0`. |
 | **star map position** | arbitrary map units | `x` / `y` on `<star>`; affects the star-selector GUI only. |
@@ -328,14 +329,21 @@ redistributed among the remaining options. A type all of whose options are unava
 | `x`, `y` | map units | no | Position on the star-selector map. `y` is the map's Z. |
 | `galacticCoord` | `"sx,sy,sz"` | no | Explicit anchor, GALAXY-LOCAL — an offset from the declaration origin of the galaxy in `galaxy` (see §5). Malformed → warns and uses the origin. Absent → a deterministic fallback cell is assigned. |
 | `galaxy` | `home` or `"gx,gy,gz"` | no | Which galaxy `galacticCoord` is measured from. Default `home`, whose declaration origin IS the universe origin. Naming any other forces that lattice cell to hold a galaxy. |
-| `numPlanets` | count | **yes** | How many random planets to generate for this star at FIRST load. Missing → warning and none. |
-| `numGasGiants` | count | **yes** | The same for gas giants. |
+| `numPlanets` | count | **yes** | How many major worlds this star's derived retinue holds, beside its hand-written planets. Missing → warning and none. |
+| `numGasGiants` | count | **yes** | Added to `numPlanets`; the total is what counts. |
 | `blackHole` | boolean | no | This star is a black hole: a quarter of the light its size and temperature would otherwise give. |
 | `diskAngle` | degrees | no (default `70`) | Accretion-disc tilt, render only. |
 
-`numPlanets` / `numGasGiants` fire **once**, at the first load of a world. They are written back as
-`0`, so the generated planets become ordinary entries and are not regenerated. Hand-written
-`<planet>` children are additional to them, not instead of them.
+`numPlanets` + `numGasGiants` is a count read on **every** load, not spent once. It sizes the star's
+derived retinue: that many major worlds (with the moons and belts their derivation brings), derived
+from the world seed and the star's position, so the same worlds come back each load without being
+written into the file. Hand-written `<planet>` children are additional to them, not instead of them.
+A star with neither attribute holds its hand-written planets only — a bare `<star>` is a star alone.
+
+Derived worlds exist only when the file has a `<galaxyGen>`: without one there is no procedural
+generator to derive them, and the count changes nothing. The neighbourhood of a star you write is
+yours — no procedural system is seated in it, so a star you declare with seven planets holds those
+seven and its derived count, and nothing else.
 
 ### A nested `<star>` is a COMPANION
 
@@ -507,11 +515,11 @@ Physical:
 | `retrograde` | boolean | Orbits the other way. |
 | `rotationalPeriod` | ticks | Must be `> 0`; a non-positive value warns and is ignored. |
 | `tidallyLocked` | boolean | Keeps one face to its star; overrides `rotationalPeriod` in effect. |
-| `mass` | Earth masses | See the precedence rule below. |
-| `radius` | Earth radii | See the precedence rule below. |
+| `mass` | Earth masses | **Required.** A planet without both `mass` and `radius` is refused at load (see below). |
+| `radius` | Earth radii | **Required**, with `mass`. |
 | `gravitationalMultiplier` | percent of Earth | Clamped to `0..400`. See below. |
-| `atmosphereDensity` | `100` = 1 atm | Clamped to `0..1600`. |
-| `hasOxygen` | boolean | Default `true`. Only `false` is written back. |
+| `atmosphereDensity` | `100` = 1 atm | Clamped to `0..2147483` (about 21 000 atm). The TOTAL the world is given; which gases make it up is derived (see below). |
+| `hasOxygen` | boolean | Default `true`. Whether the world's own roll gave it free oxygen. Only `false` is written back. |
 | `metallicity` | relative to Sol | Feeds ore richness. `1.0` is not written back. |
 | `avgTemperature` | Kelvin | **Written, never read.** The temperature is recomputed at load from the star, the orbital distance and the atmosphere. Editing it does nothing. |
 
@@ -554,7 +562,7 @@ Content and progression:
 | element | notes |
 |---|---|
 | `GasGiant` | boolean, spelled with capitals. A gas giant has **no surface**: it cannot be landed on and is not offered as a descent target. |
-| `gas` | Fluid name; a harvestable gas. Repeatable. Read on any planet but written back only for a gas giant, so a `<gas>` on a rocky world is lost at the first save. Unknown fluid warns and is skipped. |
+| `gas` | **Not accepted here.** What can be harvested from a world is what its air holds, so state the gas inside `<atmosphere>`. A `<gas>` directly under `<planet>` is an error for that planet (it is skipped, with its moons). |
 | `isKnown` | boolean. **Writes into a GLOBAL list**, not into the planet: it marks this dimension as known to every player from the start. |
 | `artifact` | An item stack required to unlock travel here. Repeatable. |
 | `spawnable` | An entity that spawns here. See below. |
@@ -654,25 +662,56 @@ Every clamp is silent. A `clumpSize` of `1000` becomes `255` with no warning.
 
 ## 9. Combinations — what wins when two fields disagree
 
-**Gravity versus bulk.** A planet may state `gravitationalMultiplier`, or `mass` **and** `radius`, or
-all three.
+**Every planet states its `mass` and `radius`.** A planet that does not — an airless one, an oxygen
+world and the overworld (`DIMID="0"`) included — is a load error: it is logged, it is skipped, and so
+is every moon nested inside it. Nothing invents a size for it. The reason is the air: which gases a
+world keeps is decided by its mass, its size and its temperature, so a body without a size has a
+question with no answer.
+
+**Gravity versus bulk.** With the bulk always stated, gravity is either stated too or derived:
 
 | stated | result |
 |---|---|
-| `gravitationalMultiplier` only | That gravity. No mass or radius; anything needing bulk falls back to gravity. |
-| `mass` + `radius` only | Gravity is **derived**: `g = M / R²`, clamped to `0.05 .. 4.0` g. |
-| all three | **The authored gravity wins.** Mass and radius are still stored and still used for orbital periods and for anything that needs a real bulk. |
-
-The last row is the important one: adding `mass` and `radius` to a planet that already states a
-gravity cannot change how that planet plays. It only gives the model the numbers it was missing.
+| `mass` + `radius` | Gravity is **derived**: `g = M / R²`, clamped to `0.05 .. 4.0` g. |
+| `mass` + `radius` + `gravitationalMultiplier` | **The authored gravity wins.** Mass and radius are still used for orbital periods, for the air, and for anything that needs a real bulk. |
 
 **Mass and radius are order-independent** but each is applied against the other's current value, so
-stating only one of them leaves the other at zero — and a zero radius means no bulk properties at all.
-State both or neither.
+stating only one of them leaves the other at zero — which is the same as stating neither.
+
+**Oxygen and density versus the air.** `atmosphereDensity` and `hasOxygen` are what the world is GIVEN;
+what it keeps is derived, once, when the world is created. An oxygen world takes Earth's mix at the
+stated total. Any other world starts from what a rocky body outgasses (mostly carbon dioxide, some
+nitrogen) — or, with `<GasGiant>true</GasGiant>`, from what a giant captures (hydrogen, helium,
+methane) — and loses each gas its gravity cannot hold against its temperature; a rocky world colder
+than a gas's boiling point has that gas frozen onto the ground. A world that loses or freezes every gas
+is airless whatever density it stated. After creation the world's own saved air is the authority:
+editing these two elements does not change a world that already exists.
+
+**Stating the air instead.** A planet may say what its air IS rather than how dense it is:
+
+```xml
+<atmosphere>
+  <gas name="carbondioxide" ppm="965000"/>
+  <gas name="nitrogen" ppm="35000"/>
+</atmosphere>
+```
+
+Each `ppm` is parts per million of an atmosphere, so the total pressure is the sum (here exactly one
+atmosphere). Or it may copy another body of the same file: `<atmosphere copyOf="Venus"/>` — a COPY,
+taken once at load; the name may point forward, and may name another copy.
+
+- `<atmosphere>` replaces `atmosphereDensity` and `hasOxygen`; stating it beside either is an error,
+  because a composition is the whole answer and a total beside it is a second one.
+- An unknown gas name, a gas stated twice, a missing or negative `ppm`, or an element inside
+  `<atmosphere>` that is not a `<gas>` is an error for that planet (it is skipped, with its moons).
+- A `copyOf` that names no body, names a body two planets share, or leads back round to itself refuses
+  the WHOLE file — that is only visible once every body is read.
 
 **Gas giant versus surface.** `<GasGiant>true</GasGiant>` makes the world surfaceless. It is then not
-a landing target however else it is configured, `laserDrillOres` on it is ignored, and only `<gas>`
-entries can be harvested from it.
+a landing target however else it is configured, and `laserDrillOres` on it is ignored. A gas
+harvester orbiting it is offered every gas its air holds that some mod has registered as a fluid,
+and draws each one at a rate that follows that gas's partial pressure: a gas twice as dense fills
+the same tanks in half the time.
 
 **Tidal locking versus rotation.** `tidallyLocked` makes the world's rotation equal its orbit. A
 `rotationalPeriod` stated alongside it is stored but has no visible effect.
@@ -684,9 +723,11 @@ recomputed from it at every load — you cannot author a temperature that contra
 **Star temperature and size versus planet climate.** Changing a star's `temp` or `size` re-derives the
 climate of every world around it on the next load, because temperature is computed and not stored.
 
-**`DIMID` versus automatic ids.** Stating `DIMID` on some planets and not others is supported; the
-automatic allocator skips ids already taken. Two planets stating the SAME `DIMID` is not detected —
-the second silently replaces the first.
+**`DIMID` versus automatic ids.** Stating `DIMID` on some planets and not others is supported; a
+planet without one is never given an id that any planet of the file states, wherever in the file
+that planet stands. Two planets stating the SAME `DIMID`: the earlier one in the file keeps the id,
+and the later one is refused - it gets no world and does not belong to its star - with a warning in
+the server log naming the id and both planets. The rest of the file still loads.
 
 **`dimMapping` versus everything physical.** A mapped dimension is generated by whoever owns it.
 Terrain elements on it are ignored; climate, gravity and atmosphere still apply.
@@ -715,11 +756,15 @@ A single authored system, no procedural galaxy:
     <planet name="Earth" DIMID="0">
       <orbitalDistance>1495979</orbitalDistance>
       <orbitalTheta>0</orbitalTheta>
+      <mass>1.0</mass>
+      <radius>1.0</radius>
       <gravitationalMultiplier>100</gravitationalMultiplier>
       <atmosphereDensity>100</atmosphereDensity>
       <hasOxygen>true</hasOxygen>
       <planet name="Luna" DIMID="1">
         <orbitalDistance>3844</orbitalDistance>
+        <mass>0.0123</mass>
+        <radius>0.2727</radius>
         <gravitationalMultiplier>16</gravitationalMultiplier>
         <atmosphereDensity>0</atmosphereDensity>
         <hasOxygen>false</hasOxygen>

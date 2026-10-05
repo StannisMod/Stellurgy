@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import org.junit.Test;
 
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * {@link
@@ -85,8 +85,8 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
      *
      * <p>Asserts only monotonicity, not exact values — the production
      * formula {@code (int)(15 * (posY - topBlockY) / (entryHeight - topBlockY))}
-     * depends on the world-generated topBlock height and the configured
-     * {@code orbit} (entry height), neither of which is part of the
+     * depends on the world-generated topBlock height and the world's orbit
+     * line (entry height), neither of which is part of the
      * player-visible contract. What the player sees is "higher rocket,
      * stronger redstone signal"; that's what we pin.</p>
      */
@@ -115,10 +115,11 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
         String lowInfo = exec("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz);
         int lowComparator = extract(lowInfo, COMPARATOR_OVERRIDE);
 
-        // Read comparator with the rocket at a much HIGHER altitude.
-        // 5000 is well above any plausible topBlock height in the
-        // overworld and will produce a saturated reading.
-        exec("stellurgytest rocket set-state " + rocketId + " posY=5000");
+        // Read comparator with the rocket at the world's own orbit line — the top of the scale the
+        // monitor reads against, so the reading there is the saturated one. Asked of the server: the
+        // line is the body's atmosphere, not a number this class can know.
+        int highPosY = OrbitLine.of(this::exec, 0).line();
+        exec("stellurgytest rocket set-state " + rocketId + " posY=" + highPosY);
         String highInfo = exec("stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz);
         int highComparator = extract(highInfo, COMPARATOR_OVERRIDE);
 
@@ -127,7 +128,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
                         + "player-visible 'higher rocket, stronger signal' "
                         + "contract for any redstone circuit gated off the "
                         + "monitor; lowPosY=68 -> comparator=" + lowComparator
-                        + "  highPosY=5000 -> comparator=" + highComparator,
+                        + "  highPosY=" + highPosY + " -> comparator=" + highComparator,
                 highComparator > lowComparator);
     }
 

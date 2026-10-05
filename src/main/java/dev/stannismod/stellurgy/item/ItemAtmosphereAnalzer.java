@@ -26,10 +26,9 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
@@ -41,9 +40,11 @@ import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
-    private static ResourceIcon icon;
     private static ResourceLocation eyeCandySpinner = new ResourceLocation("stellurgy:textures/gui/eyeCandy/spinnyThing.png");
 
     private static String breathable = LibVulpes.proxy.getLocalizedString("msg.atmanal.canbreathe");
@@ -58,23 +59,49 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
     }
 
     /**
-     * The readout, for a pressure the CALLER supplies.
-     *
-     * <p>The pressure is a parameter because the two callers know different things and are on
-     * different sides. The client has the server's report for the player's own position and passes
-     * it; a server-side use has no such report — it has the world — and passes
-     * {@link dev.stannismod.stellurgy.client.ClientAtmosphere#NO_READING} so that the dimension's
-     * own density answers.</p>
-     *
-     * <p>It used to read the client's synced pressure directly, from both sides. On a dedicated
-     * server that field is never written, so the right-click readout reported the field's default
-     * for every planet; in single-player the client's value sat in the same JVM and made it look
-     * right.</p>
-     */
-    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable AtmosphereType atm,
-                                                      @Nonnull World world, int pressure) {
+      * The client's own readout, built entirely from what the server last said. Nothing here consults
+      * a model: the analyser is a display, and a display that reasoned would be a second answer to
+      * questions the server has already answered.
+      */
+    private List<ITextComponent> getClientReadout(World world) {
+        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary summary =
+                dev.stannismod.stellurgy.client.ClientAtmosphere.of(world).summary();
+        List<ITextComponent> str = new LinkedList<>();
+
+        // The label is the statements that are true of the air, in order — which is what a name IS
+        // once nothing branches on it. Air that asserts nothing in particular says so.
+        StringBuilder label = new StringBuilder();
+        for (String assertion : summary.assertions()) {
+            if (label.length() > 0) {
+                label.append(", ");
+            }
+            label.append(dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(
+                    "msg.atmosphere.assertion." + assertion.toLowerCase(java.util.Locale.ROOT)));
+        }
+
+        str.add(new TextComponentTranslation("%s %s %s",
+                new TextComponentTranslation("msg.atmanal.atmtype"),
+                new TextComponentString(label.toString()),
+                new TextComponentString(summary.pressureCentiAtm() / 100f + " atm")));
+        str.add(new TextComponentTranslation("%s %s",
+                new TextComponentTranslation("msg.atmanal.canbreathe"),
+                summary.breathable() ? new TextComponentTranslation("msg.yes")
+                        : new TextComponentTranslation("msg.no")));
+        return str;
+    }
+
+    /**
+      * The SERVER's readout, asked of the handler where the player is standing.
+      * <p>
+      * It used to read the client mirror of the pressure — a static that a dedicated server never
+      * fills — so the number a player got by right-clicking was the dimension's nominal density
+      * rather than the air he was standing in. Being handed the pressure makes the caller say where
+      * the reading came from.
+      */
+    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable Atmosphere atm,
+                                                      int pressureCentiAtm, @Nonnull World world) {
         if (atm == null)
-            atm = AtmosphereType.AIR;
+            atm = Atmosphere.AIR;
 
 
         List<ITextComponent> str = new LinkedList<>();
@@ -82,7 +109,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         str.add(new TextComponentTranslation("%s %s %s",
                 new TextComponentTranslation("msg.atmanal.atmtype"),
                 new TextComponentTranslation(atm.getUnlocalizedName()),
-                new TextComponentString((pressure == dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING ? (DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension()) ? DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getAtmosphereDensity() / 100f : 1) : pressure / 100f) + " atm")
+                new TextComponentString((pressureCentiAtm == dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING ? (DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension()) ? DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getAtmosphereDensity() / 100f : 1) : pressureCentiAtm / 100f) + " atm")
         ));
         str.add(new TextComponentTranslation("%s %s",
                 new TextComponentTranslation("msg.atmanal.canbreathe"),
@@ -96,11 +123,14 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
     public ActionResult<ItemStack> onItemRightClick(@Nonnull World worldIn, @Nonnull EntityPlayer playerIn, @Nonnull EnumHand hand) {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!worldIn.isRemote) {
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
-            // Server side: no client report exists here, and the dimension is the authority anyway.
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
+            // Server side: the handler is asked where the player is standing, so the pressure is a
+            // real reading of his own air rather than the dimension's nominal density.
             List<ITextComponent> str = getAtmosphereReadout(stack,
-                    atmhandler == null ? null : (AtmosphereType) atmhandler.getAtmosphereType(playerIn),
-                    worldIn, dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING);
+                    atmhandler == null ? null : (Atmosphere) atmhandler.getAtmosphereType(playerIn),
+                    atmhandler == null
+                            ? dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING
+                            : atmhandler.getAtmospherePressure(playerIn), worldIn);
             for (ITextComponent str1 : str)
                 playerIn.sendMessage(str1);
         }
@@ -142,13 +172,13 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
         FontRenderer fontRenderer = Minecraft.getMinecraft().fontRenderer;
 
-        int screenX = RocketEventHandler.atmBar.getRenderX();//8;
-        int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
+        int screenX = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarX(event.getResolution().getScaledWidth());
+        int screenY = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarY(event.getResolution().getScaledHeight());
 
-        List<ITextComponent> str = getAtmosphereReadout(componentStack,
-                (AtmosphereType) dev.stannismod.stellurgy.client.ClientAtmosphere.atmosphere(),
-                Minecraft.getMinecraft().world,
-                dev.stannismod.stellurgy.client.ClientAtmosphere.pressure());
+        // Held as a World: naming the client world's own type here would load a client-only class
+        // wherever this item class is verified, the dedicated server included.
+        World world = Minecraft.getMinecraft().world;
+        List<ITextComponent> str = getClientReadout(world);
         //Draw BG
         gui.drawString(fontRenderer, str.get(0).getFormattedText(), screenX, screenY, 0xaaffff);
         gui.drawString(fontRenderer, str.get(1).getFormattedText(), screenX, screenY + fontRenderer.FONT_HEIGHT * 4 / 3, 0xaaffff);

@@ -19,8 +19,8 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketSatellitesUpdate;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.util.FluidGasGiantGas;
 import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader.DimensionPropertyCoupling;
@@ -42,10 +42,12 @@ import java.util.zip.GZIPOutputStream;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static dev.stannismod.stellurgy.Stellurgy.logger;
-import static dev.stannismod.stellurgy.dimension.DimensionProperties.proxylists;
 import dev.stannismod.stellurgy.api.*;
 
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class DimensionManager implements IGalaxy {
 
     public static final String workingPath = "advRocketry";
@@ -59,98 +61,179 @@ public class DimensionManager implements IGalaxy {
      * Lowest dimension id a planet may take, and the cursor the planet loader advances past the
      * dimensions it has just claimed.
      *
-     * <p>OWNER: the SERVER; LIFETIME: one server. Seeded from the configured {@code minDimension}
-     * when the configuration loads and again when a server stops, and moved during a load — which is
-     * why it is state and not a constant. On the INSTANCE because that is what it describes: the
-     * dimensions of the save this manager is managing, not something true of the process.</p>
+     * <p>Seeded from the configured {@code minDimension} at construction and moved during a load —
+     * which is why it is state and not a constant.</p>
      */
-    private int dimOffset = 0;
-    /**
-     * Progression the SAVE records: whether this world's players have reached the moon, and warp.
-     *
-     * <p>OWNER: the SERVER; LIFETIME: one server. Written to the save's stat NBT, read back on load,
-     * and reset in {@link #onServerStopped()} — a freshly created world early-returns before the stat
-     * read, so without that reset it would inherit the previous world's progression in the same JVM
-     * (single-player, where client and integrated server share one process).</p>
-     *
-     * <p>On the INSTANCE for the same reason as the cursor above: these are facts about one save.
-     * They were public statics, which is what made the JVM-inheritance defect representable.</p>
-     */
+    private int dimOffset;
+    /** Progression the SAVE records: whether this world's players have reached the moon, and warp. */
     private boolean hasReachedMoon;
     private boolean hasReachedWarp;
-    //Reference to the worldProvider for any dimension created through this system, normally WorldProviderPlanet, set in Stellurgy.java in preinit
-    public static Class<? extends WorldProvider> planetWorldProvider;
-    //The default properties belonging to the overworld
-    public static DimensionProperties overworldProperties;
-    //the default property for any dimension created in space, normally, space over earth
-    public static DimensionProperties defaultSpaceDimensionProperties;
-    private static DimensionManager instance = new DimensionManager();
-    private static long nextSatelliteId;
+    /** The properties answered for dim 0 and for any id this manager does not know. */
+    private final DimensionProperties overworldProperties;
+    /** The properties of open space: answered for the station dimension outside any station. */
+    private final DimensionProperties defaultSpaceDimensionProperties;
+    private long nextSatelliteId;
     public Set<Integer> knownPlanets;
+    /**
+     * Planets every player of this save knows from the start: the overworld, plus each body the
+     * planet file marks {@code <isKnown>}. Filled by the planet load; never forgotten by a beacon.
+     */
+    private final Set<Integer> initiallyKnownPlanets = new HashSet<>();
+    /** Asteroid kinds an observatory can find and a mining mission can work, by id. */
+    private final Map<String, Asteroid> asteroidTypes = new HashMap<>();
+    /**
+     * The dimension Stellurgy made the Moon in, or {@link Constants#INVALID_PLANET} before the planet
+     * load has chosen one.
+     */
+    private int moonId = Constants.INVALID_PLANET;
+    /** The planet types this save's worlds are typed from: its planet file's, or the code-shipped set. */
+    private dev.stannismod.stellurgy.universe.PlanetTypes planetTypes = dev.stannismod.stellurgy.universe.PlanetTypes.stock();
+    /**
+     * The planet file's authored galactic anchors, read while dimensions load — before the universe
+     * registry is reachable, since worlds are not loaded yet — and drained into it once by
+     * {@code UniverseRegistry.populate}. {@link #stagedAnchorsReset}: the file was re-read on request.
+     */
+    private Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> stagedAnchors = new HashMap<>();
+    private boolean stagedAnchorsReset;
+    /**
+     * The pack's {@code <galaxyGen>} configuration for this server — the shipped one when it states
+     * none. Kept for the whole session, not drained: the upgrade command stamps with it, and the
+     * planet file is written back with it.
+     */
+    private dev.stannismod.stellurgy.universe.GalaxyGenConfig packGalaxyConfig;
+    /** The layout problems this galaxy's derivation has already reported. */
+    private final dev.stannismod.stellurgy.universe.ReportOnce reports =
+            new dev.stannismod.stellurgy.universe.ReportOnce();
     private Random random;
     private boolean hasBeenInitialized = false;
     private HashMap<Integer, DimensionProperties> dimensionList;
     private HashMap<Integer, StellarBody> starList;
 
-    public DimensionManager() {
+    /**
+     * One galaxy as one side knows it: the running server's, built when that server starts and dropped
+     * when it stops, or a client connection's, built when it connects and dropped with it. Nothing
+     * here is cleared for reuse — a new server or a new connection gets a new manager.
+     *
+     * @param dimOffset the lowest dimension id a planet may take
+     */
+    public DimensionManager(int dimOffset) {
+        this.dimOffset = dimOffset;
         dimensionList = new HashMap<>();
         starList = new HashMap<>();
 
         overworldProperties = new DimensionProperties(0);
         seedEarthDefaults(overworldProperties);
 
-        defaultSpaceDimensionProperties = new DimensionProperties(SpaceObjectManager.WARPDIMID, false);
-        defaultSpaceDimensionProperties.setAtmosphereDensityDirect(0);
-        defaultSpaceDimensionProperties.setAverageTemp(0);
-        defaultSpaceDimensionProperties.gravitationalMultiplier = 0.1f;
-        defaultSpaceDimensionProperties.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
-        defaultSpaceDimensionProperties.skyColor = new float[]{0f, 0f, 0f};
-        defaultSpaceDimensionProperties.setName("Space");
-        defaultSpaceDimensionProperties.fogColor = new float[]{0f, 0f, 0f};
-        //defaultSpaceDimensionProperties.setParentPlanet(overworldProperties,false);
+        defaultSpaceDimensionProperties = newOpenSpaceProperties();
 
+        initiallyKnownPlanets.add(0);
         random = new Random(System.currentTimeMillis());
         knownPlanets = new HashSet<>();
     }
 
     /**
-     * Give the loaded OVERWORLD the unit bulk when its planet file states none, and say so.
+     * A new, unshared set of the properties of open space — what a station starts from. New each
+     * call: a station used to start from a {@code clone()} of the manager's default, and that clone is
+     * shallow, so every station shared its satellite maps with the default and with each other.
+     */
+    public static DimensionProperties newOpenSpaceProperties() {
+        DimensionProperties space = new DimensionProperties(SpaceObjectManager.WARPDIMID, false);
+        space.realizeAtmosphere(false, 0);
+        space.setAverageTemp(0);
+        space.gravitationalMultiplier = 0.1f;
+        space.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+        space.skyColor = new float[]{0f, 0f, 0f};
+        space.setName("Space");
+        space.fogColor = new float[]{0f, 0f, 0f};
+        return space;
+    }
+
+    /** The properties answered for dim 0 and for any id this manager does not know. */
+    public DimensionProperties getOverworldProperties() {
+        return overworldProperties;
+    }
+
+    /** The properties of open space, outside any station. */
+    public DimensionProperties getDefaultSpaceProperties() {
+        return defaultSpaceDimensionProperties;
+    }
+
+    /** Planets known from the start in this save; mutable by the planet load only. */
+    public Set<Integer> getInitiallyKnownPlanets() {
+        return initiallyKnownPlanets;
+    }
+
+    /** Asteroid kinds by id: the server's from its asteroid file, a client's as the server sent them. */
+    public Map<String, Asteroid> getAsteroidTypes() {
+        return asteroidTypes;
+    }
+
+    /** The planet types this save's worlds are typed from. */
+    public dev.stannismod.stellurgy.universe.PlanetTypes getPlanetTypes() {
+        return planetTypes;
+    }
+
+    /** The layout problems this galaxy's derivation has already reported; the deriving code is handed it. */
+    public dev.stannismod.stellurgy.universe.ReportOnce reports() {
+        return reports;
+    }
+
+    /** The pack's {@code <galaxyGen>} configuration for this server — the shipped one when it states none. */
+    public dev.stannismod.stellurgy.universe.GalaxyGenConfig getPackGalaxyConfig() {
+        return packGalaxyConfig;
+    }
+
+    /** The authored anchors the planet load staged, handed over once: the next call answers empty. */
+    public Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> drainStagedAnchors() {
+        Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> drained = stagedAnchors;
+        stagedAnchors = new HashMap<>();
+        return drained;
+    }
+
+    /** Whether the staged anchors come from a planet file re-read on request; cleared by reading it. */
+    public boolean drainStagedAnchorsReset() {
+        boolean reset = stagedAnchorsReset;
+        stagedAnchorsReset = false;
+        return reset;
+    }
+
+    /** The Moon's dimension, or {@link Constants#INVALID_PLANET} when none was made. */
+    public int getMoonId() {
+        return moonId;
+    }
+
+    /**
+     * Give the loaded OVERWORLD the unit bulk when its saved state holds none, and say so.
      *
      * <p>A save written while {@link #overworldProperties} was blank (see {@link #seedEarthDefaults})
-     * carries a dim-0 planet with no mass and no radius, because the writer emits bulk only for a body
-     * that has it. Nothing later restores it: the planet file is authoritative when present, so dim 0
-     * comes from the file and never from the static above, and the world stays sizeless in processes
-     * that no longer have the defect that made it.</p>
+     * carries a dim-0 body with no mass and no radius, because the NBT writer emits bulk only for a
+     * body that has it. The planet FILE no longer reaches here: a body there that states no bulk is
+     * refused at load, the overworld included, so this answers only the saved state.</p>
      *
      * <p>It is a REPAIR of the one body whose bulk is a definition rather than a measurement — Earth
      * masses and Earth radii are the units the whole catalogue is stated in — and it is announced,
-     * because a body silently gaining a radius is indistinguishable from one that always had it. A
-     * pack that wants a different overworld states its own and this never fires.</p>
+     * because a body silently gaining a radius is indistinguishable from one that always had it.</p>
      */
     private static void repairOverworldBulk(DimensionProperties properties) {
         if (properties == null || properties.getId() != 0 || properties.hasBulkProperties()) {
             return;
         }
         properties.setBulk(1d, 1d);
-        logger.warn("The overworld's planet entry states no mass and no radius; applying the unit"
+        logger.warn("The overworld's saved state holds no mass and no radius; applying the unit"
                 + " bulk (1 Earth mass, 1 Earth radius) it is DEFINED as. A body with no radius draws"
                 + " at the marker size at every range and carries the flat 512-block proximity shell"
                 + " instead of an atmosphere. Written by a version that blanked the overworld's"
-                + " defaults on world teardown; state <mass>/<radius> in planetDefs.xml to silence"
-                + " this.");
+                + " defaults on world teardown.");
     }
 
     /**
      * Earth's catalogue entry, STATED onto {@code earth} — the home world's shipped properties.
      *
-     * <p>It is a method rather than a run of lines in the constructor because it has to be
-     * re-applicable. {@link DimensionProperties#resetProperties()} restores the GENERIC defaults of a
-     * planet (gravity 1, 100 K, no mass, no radius), and the overworld's defaults are not generic; it
-     * is called on {@link #overworldProperties} at every world teardown, while this object is a
-     * JVM-lifetime static seeded exactly once. So without a re-seed the first world opened in a
-     * process had an Earth and every world opened after a return to the title screen had a nameless
-     * 100-kelvin body of no size — and because the planet file writes bulk only when a body HAS it,
-     * that world's {@code planetDefs.xml} then recorded an Earth with no radius permanently.</p>
+     * <p>The overworld's defaults are not the GENERIC defaults of a planet (gravity 1, 100 K, no mass,
+     * no radius). When this object was a process-wide static reset at every world teardown, every
+     * world opened after a return to the title screen got a nameless 100-kelvin body of no size — and
+     * because the planet file writes bulk only when a body HAS it, that world's
+     * {@code planetDefs.xml} then recorded an Earth with no radius permanently.</p>
      *
      * <p>What a missing radius costs, measured 2026-08-23 from a live flight: the sky renderer draws
      * the body at the marker size at every range (so Earth is invisible from orbit, behind the Moon)
@@ -163,7 +246,6 @@ public class DimensionManager implements IGalaxy {
         sol.setId(0);
         sol.setName("Sol");
 
-        earth.setAtmosphereDensityDirect(100);
         //Temperature in Kelvin, 286 is 13 Degrees C
         earth.setAverageTemp(286);
         earth.gravitationalMultiplier = 1f;
@@ -176,6 +258,8 @@ public class DimensionManager implements IGalaxy {
         // derived value happens to agree, and that agreement is not what the mark is for.
         earth.setGravityAuthored(true);
         earth.setBulk(1d, 1d);
+        // After the bulk and the temperature, because the air is decided by both.
+        earth.realizeAtmosphere(true, 100);
         // ONE AU, stated as one: the field is a count of 100 km units, so a literal 100 would
         // put Earth 10 000 km from the Sun.
         earth.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
@@ -183,13 +267,17 @@ public class DimensionManager implements IGalaxy {
         earth.setName("Earth");
         earth.isNativeDimension = false;
         // The star is the throwaway Sol above rather than the registered one on purpose: this runs
-        // from the constructor (no instance to ask yet) and from teardown (the star registry has
-        // just been cleared), and in both the registry has no Sol to hand back.
+        // from the constructor, before the star registry holds a Sol to hand back.
         earth.setStar(sol);
     }
 
+    /**
+     * The galaxy as the CALLER's side knows it: the running server's on a server thread, the
+     * connection's on the client's. Throws when that side has none (no server running, not
+     * connected) rather than answering with an empty galaxy nobody could tell from a real one.
+     */
     public static DimensionManager getInstance() {
-        return Stellurgy.proxy.getDimensionManager(); //instance;
+        return Stellurgy.proxy.getDimensionManager();
     }
 
     public static DimensionProperties getEffectiveDimId(int dimId, BlockPos pos) {
@@ -197,27 +285,16 @@ public class DimensionManager implements IGalaxy {
         if (dimId == StellurgyConfiguration.getCurrentConfig().spaceDimId) {
             ISpaceObject spaceObject = SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(pos);
             if (spaceObject != null) return (DimensionProperties) spaceObject.getProperties().getParentProperties();
-            else return defaultSpaceDimensionProperties;
+            else return getInstance().defaultSpaceDimensionProperties;
         } else return getInstance().getDimensionProperties(dimId);
     }
 
     public static DimensionProperties getEffectiveDimId(World world, BlockPos pos) {
-        int dimId = world.provider.getDimension();
-
-        if (dimId == StellurgyConfiguration.getCurrentConfig().spaceDimId) {
-            ISpaceObject spaceObject = SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(pos);
-            if (spaceObject != null) return (DimensionProperties) spaceObject.getProperties().getParentProperties();
-            else return defaultSpaceDimensionProperties;
-        } else return getInstance().getDimensionProperties(dimId);
+        return getEffectiveDimId(world.provider.getDimension(), pos);
     }
 
     public static DimensionProperties getEffectiveDimId_byID(int dimId, BlockPos pos) {
-
-        if (dimId == StellurgyConfiguration.getCurrentConfig().spaceDimId) {
-            ISpaceObject spaceObject = SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(pos);
-            if (spaceObject != null) return (DimensionProperties) spaceObject.getProperties().getParentProperties();
-            else return defaultSpaceDimensionProperties;
-        } else return getInstance().getDimensionProperties(dimId);
+        return getEffectiveDimId(dimId, pos);
     }
 
     /**
@@ -256,15 +333,15 @@ public class DimensionManager implements IGalaxy {
         //Because there should never be a tile in the world where no planets have been generated load file first
         //Worst thing that can happen is there is no file and it gets genned later and the monitor does not reconnect
         if (!hasBeenInitialized && FMLCommonHandler.instance().getSide().isServer()) {
-            dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().loadDimensions(dev.stannismod.stellurgy.dimension.DimensionManager.workingPath);
+            loadDimensions(workingPath);
         }
 
         SatelliteBase satellite = overworldProperties.getSatellite(satId);
 
         if (satellite != null) return satellite;
 
-        for (int i : DimensionManager.getInstance().getLoadedDimensions()) {
-            if ((satellite = DimensionManager.getInstance().getDimensionProperties(i).getSatellite(satId)) != null)
+        for (int i : this.getLoadedDimensions()) {
+            if ((satellite = this.getDimensionProperties(i).getSatellite(satId)) != null)
                 return satellite;
         }
         return null;
@@ -283,8 +360,8 @@ public class DimensionManager implements IGalaxy {
      */
     public void tickDimensions() {
         //Tick satellites
-        for (int i : DimensionManager.getInstance().getLoadedDimensions()) {
-            DimensionProperties prop = DimensionManager.getInstance().getDimensionProperties(i);
+        for (int i : this.getLoadedDimensions()) {
+            DimensionProperties prop = this.getDimensionProperties(i);
             prop.tick();
 
             //THIS CODE NEEDS TO BE MADE MORE EFFICIENT FOR MINING ROCKETS!!!!!
@@ -297,8 +374,8 @@ public class DimensionManager implements IGalaxy {
 
     public void tickDimensionsClient() {
         //Tick satellites
-        for (int i : DimensionManager.getInstance().getLoadedDimensions()) {
-            DimensionManager.getInstance().getDimensionProperties(i).updateOrbit();
+        for (int i : this.getLoadedDimensions()) {
+            this.getDimensionProperties(i).updateOrbit();
         }
     }
 
@@ -395,6 +472,29 @@ public class DimensionManager implements IGalaxy {
      *
      * @param dimId the dimensionId to delete
      */
+    /**
+     * A client's half of a deletion: drops the body, and the moons the server deletes with it, from
+     * what this connection knows. It touches no world, no Forge registration and no file — those are
+     * the server's, and in single player the integrated server has already removed them.
+     */
+    public void forgetDimension(int dimId) {
+        DimensionProperties properties = dimensionList.remove(dimId);
+        if (properties == null) {
+            return;
+        }
+        unlinkFromSystem(properties);
+        for (Integer child : new ArrayList<>(properties.getChildPlanets())) {
+            forgetDimension(child);
+        }
+    }
+
+    private static void unlinkFromSystem(DimensionProperties properties) {
+        if (properties.getStar() != null) properties.getStar().removePlanet(properties);
+        if (properties.isMoon()) {
+            properties.getParentProperties().removeChild(properties.getId());
+        }
+    }
+
     public void deleteDimension(int dimId) {
 
         if (net.minecraftforge.common.DimensionManager.getWorld(dimId) != null) {
@@ -407,10 +507,7 @@ public class DimensionManager implements IGalaxy {
         //Can happen in some rare cases
         if (properties == null) return;
 
-        if (properties.getStar() != null) properties.getStar().removePlanet(properties);
-        if (properties.isMoon()) {
-            properties.getParentProperties().removeChild(properties.getId());
-        }
+        unlinkFromSystem(properties);
 
         if (properties.hasChildren()) {
 
@@ -493,24 +590,6 @@ public class DimensionManager implements IGalaxy {
         hasReachedWarp = reached;
     }
 
-    public void onServerStopped() {
-        unregisterAllDimensions();
-        knownPlanets.clear();
-        // CLEAR MEANS RESTORE. resetProperties() puts back the GENERIC defaults of a planet, and the
-        // overworld's are Earth's — so the reset alone leaves this JVM-lifetime static holding a
-        // nameless, sizeless body for every world opened after this one.
-        overworldProperties.resetProperties();
-        seedEarthDefaults(overworldProperties);
-        hasBeenInitialized = false;
-        // C126: progression flags are process-global statics read from a world's
-        // "stat" NBT on load. Reset them on teardown so a freshly-created world
-        // (whose loadDimensions early-returns before the stat read) cannot inherit
-        // the previous world's moon/warp progression in the same JVM (single-player,
-        // where the client and integrated server share one process).
-        hasReachedMoon = false;
-        hasReachedWarp = false;
-    }
-
     /**
      * @param dimId id of the dimention of which to get the properties
      * @return DimensionProperties representing the dimId given
@@ -547,6 +626,28 @@ public class DimensionManager implements IGalaxy {
      */
     public DimensionProperties getDimensionPropertiesOrNull(int dimId) {
         return dimensionList.get(dimId);
+    }
+
+    /**
+     * The orbit line ({@link DimensionProperties#orbitLine}) of the body registered as {@code dimId} —
+     * empty when no body is registered there, never the overworld's line standing in for it.
+     */
+    public java.util.OptionalInt orbitLineOf(int dimId) {
+        DimensionProperties props = dimensionList.get(dimId);
+        return props != null ? props.orbitLine() : java.util.OptionalInt.empty();
+    }
+
+    /**
+     * The height at which a tier-1 craft — a rocket, an elevator capsule — leaves {@code dimId} going
+     * up and arrives in it coming down: the station clearance in the station dimension, which is no
+     * body, else that world's {@link #orbitLineOf orbit line}. Empty where there is neither.
+     */
+    public java.util.OptionalInt transferLineOf(int dimId) {
+        StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
+        if (dimId == cfg.spaceDimId) {
+            return java.util.OptionalInt.of(cfg.stationClearanceHeight);
+        }
+        return orbitLineOf(dimId);
     }
 
     /**
@@ -665,7 +766,6 @@ public class DimensionManager implements IGalaxy {
 
             NBTTagCompound dimNbt = new NBTTagCompound();
             dimSet.getValue().writeToNBT(dimNbt);
-            dimSet.getValue().write_terraforming_data(dimNbt);
             dimListnbt.setTag(dimSet.getKey().toString(), dimNbt);
         }
 
@@ -682,7 +782,7 @@ public class DimensionManager implements IGalaxy {
         SpaceObjectManager.getSpaceManager().writeToNBT(nbtTag);
         nbt.setTag("spaceObjects", nbtTag);
 
-        String xmlOutput = XMLPlanetLoader.writeXML(this);
+        String xmlOutput = XMLPlanetLoader.writeXML(this, packGalaxyConfig);
 
         try {
             File planetXMLOutput = new File(net.minecraftforge.common.DimensionManager.getCurrentSaveRootDirectory(), filePath + worldXML);
@@ -833,13 +933,17 @@ public class DimensionManager implements IGalaxy {
             // A fatal/structural failure propagates so Forge produces a normal crash
             // report (diagnosable) instead of the old silent FMLCommonHandler.exitJava.
             // Recoverable per-planet config mistakes are skipped inside readAllPlanets.
-            dimCouplingList = loader.loadPlanetsOrThrow(file);
+            dimCouplingList = loader.loadPlanetsOrThrow(file, this);
             this.dimOffset += dimCouplingList.dims.size();
         }
         //End load planet files
 
         //Register hard coded dimensions
         Map<Integer, IDimensionProperties> loadedPlanets = loadDimensions(dev.stannismod.stellurgy.dimension.DimensionManager.workingPath);
+        // Bodies of the file whose id another body already holds. Identity, not equality: the question
+        // is "this object", and two refused bodies may carry the same id.
+        java.util.Set<DimensionProperties> refusedBodies =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         if (loadedPlanets.isEmpty()) {
             int numRandomGeneratedPlanets = 9;
             int numRandomGeneratedGasGiants = 1;
@@ -848,12 +952,23 @@ public class DimensionManager implements IGalaxy {
                 logger.info("Loading initial planet config!");
 
                 for (StellarBody star : dimCouplingList.stars) {
-                    DimensionManager.getInstance().addStar(star);
+                    this.addStar(star);
                 }
 
                 for (DimensionProperties properties : dimCouplingList.dims) {
-                    DimensionManager.getInstance().registerDimNoUpdate(properties, properties.isNativeDimension);
-                    properties.setStar(properties.getStarId());
+                    if (!this.registerDimNoUpdate(properties, properties.isNativeDimension)) {
+                        // Refused: the id is held. Binding the body to its star anyway would put it in
+                        // the star's id-keyed map OVER the holder, so the registry and the star would
+                        // each name a different body under one id.
+                        DimensionProperties holder = dimensionList.get(properties.getId());
+                        logger.warn("planetDefs.xml: body '" + properties.getName() + "' is not loaded:"
+                                + " dimension " + properties.getId() + " is already held by '"
+                                + (holder == null ? "?" : holder.getName()) + "'. Give it a DIMID no"
+                                + " other body states, or none at all.");
+                        refusedBodies.add(properties);
+                        continue;
+                    }
+                    properties.setStar(properties.getStarId(), this);
                 }
 
                 for (StellarBody star : dimCouplingList.stars) {
@@ -876,24 +991,24 @@ public class DimensionManager implements IGalaxy {
                 sol.setId(0);
                 sol.setName("Sol");
 
-                DimensionManager.getInstance().addStar(sol);
+                this.addStar(sol);
 
                 //Add the overworld
-                DimensionManager.getInstance().registerDimNoUpdate(DimensionManager.overworldProperties, false);
+                this.registerDimNoUpdate(overworldProperties, false);
                 // BIND, not only list: Earth was seeded with a placeholder Sol (see seedEarthDefaults),
                 // and addPlanet alone would list Earth under this Sol while Earth kept pointing at the
                 // placeholder — every identity check ("same system") and every edit to star 0 then
                 // passed Earth by. setStar lists it too.
-                DimensionManager.overworldProperties.setStar(sol);
+                overworldProperties.setStar(sol);
 
-                if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId == Constants.INVALID_PLANET)
-                    dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId = DimensionManager.getInstance().getNextFreeDim(savedDimOffset);
+                if (moonId == Constants.INVALID_PLANET)
+                    moonId = this.getNextFreeDim(savedDimOffset);
 
 
                 //Register the moon
-                if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId != Constants.INVALID_PLANET) {
-                    DimensionProperties dimensionProperties = new DimensionProperties(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId);
-                    dimensionProperties.setAtmosphereDensityDirect(0);
+                if (moonId != Constants.INVALID_PLANET) {
+                    DimensionProperties dimensionProperties = new DimensionProperties(moonId);
+                    dimensionProperties.realizeAtmosphere(false, 0);
                     dimensionProperties.setAverageTemp(20);
                     // TIDALLY LOCKED TO ITS PARENT, expressed the way this codebase expresses it:
                     // `getParentPlanetThetaFromMoon` moves the parent across a moon's sky by
@@ -925,51 +1040,51 @@ public class DimensionManager implements IGalaxy {
                     dimensionProperties.addBiome(StellurgyBiomes.moonBiome);
                     dimensionProperties.addBiome(StellurgyBiomes.moonBiomeDark);
 
-                    dimensionProperties.setParentPlanet(DimensionManager.overworldProperties);
-                    dimensionProperties.setStar(DimensionManager.getInstance().getStar(0));
+                    dimensionProperties.setParentPlanet(overworldProperties);
+                    dimensionProperties.setStar(this.getStar(0));
                     dimensionProperties.isNativeDimension = !Loader.isModLoaded("GalacticraftCore");
                     dimensionProperties.initDefaultAttributes();
 
-                    DimensionManager.getInstance().registerDimNoUpdate(dimensionProperties, !Loader.isModLoaded("GalacticraftCore"));
+                    this.registerDimNoUpdate(dimensionProperties, !Loader.isModLoaded("GalacticraftCore"));
                 }
 
-                DimensionManager.getInstance().getStar(0)
+                this.getStar(0)
                         .setMaxRetinueBodies(numRandomGeneratedPlanets + numRandomGeneratedGasGiants);
 
                 StellarBody star = new StellarBody();
                 star.setTemperature(10);
                 star.setPosX(300);
                 star.setPosZ(-200);
-                star.setId(DimensionManager.getInstance().getNextFreeStarId());
+                star.setId(this.getNextFreeStarId());
                 star.setName("Wolf 12");
-                DimensionManager.getInstance().addStar(star);
+                this.addStar(star);
                 star.setMaxRetinueBodies(5);
 
                 star = new StellarBody();
                 star.setTemperature(170);
                 star.setPosX(-200);
                 star.setPosZ(80);
-                star.setId(DimensionManager.getInstance().getNextFreeStarId());
+                star.setId(this.getNextFreeStarId());
                 star.setName("Epsilon ire");
-                DimensionManager.getInstance().addStar(star);
+                this.addStar(star);
                 star.setMaxRetinueBodies(7);
 
                 star = new StellarBody();
                 star.setTemperature(200);
                 star.setPosX(-150);
                 star.setPosZ(250);
-                star.setId(DimensionManager.getInstance().getNextFreeStarId());
+                star.setId(this.getNextFreeStarId());
                 star.setName("Proxima Centaurs");
-                DimensionManager.getInstance().addStar(star);
+                this.addStar(star);
                 star.setMaxRetinueBodies(3);
 
                 star = new StellarBody();
                 star.setTemperature(70);
                 star.setPosX(-150);
                 star.setPosZ(-250);
-                star.setId(DimensionManager.getInstance().getNextFreeStarId());
+                star.setId(this.getNextFreeStarId());
                 star.setName("Magnis Vulpes");
-                DimensionManager.getInstance().addStar(star);
+                this.addStar(star);
                 star.setMaxRetinueBodies(2);
 
 
@@ -977,18 +1092,18 @@ public class DimensionManager implements IGalaxy {
                 star.setTemperature(200);
                 star.setPosX(50);
                 star.setPosZ(-250);
-                star.setId(DimensionManager.getInstance().getNextFreeStarId());
+                star.setId(this.getNextFreeStarId());
                 star.setName("Ma-Roo");
-                DimensionManager.getInstance().addStar(star);
+                this.addStar(star);
                 star.setMaxRetinueBodies(6);
 
                 star = new StellarBody();
                 star.setTemperature(120);
                 star.setPosX(75);
                 star.setPosZ(200);
-                star.setId(DimensionManager.getInstance().getNextFreeStarId());
+                star.setId(this.getNextFreeStarId());
                 star.setName("Alykitt");
-                DimensionManager.getInstance().addStar(star);
+                this.addStar(star);
                 star.setMaxRetinueBodies(4);
 
             }
@@ -1003,26 +1118,31 @@ public class DimensionManager implements IGalaxy {
         if (dimCouplingList != null) {
             //Register new stars
             for (StellarBody star : dimCouplingList.stars) {
-                if (DimensionManager.getInstance().getStar(star.getId()) == null)
-                    DimensionManager.getInstance().addStar(star);
+                if (this.getStar(star.getId()) == null)
+                    this.addStar(star);
 
-                DimensionManager.getInstance().getStar(star.getId()).setName(star.getName());
-                DimensionManager.getInstance().getStar(star.getId()).setPosX(star.getPosX());
-                DimensionManager.getInstance().getStar(star.getId()).setPosZ(star.getPosZ());
-                DimensionManager.getInstance().getStar(star.getId()).setSize(star.getSize());
-                DimensionManager.getInstance().getStar(star.getId()).setTemperature(star.getTemperature());
-                DimensionManager.getInstance().getStar(star.getId()).subStars = star.subStars;
-                DimensionManager.getInstance().getStar(star.getId()).setBlackHole(star.isBlackHole());
+                this.getStar(star.getId()).setName(star.getName());
+                this.getStar(star.getId()).setPosX(star.getPosX());
+                this.getStar(star.getId()).setPosZ(star.getPosZ());
+                this.getStar(star.getId()).setSize(star.getSize());
+                this.getStar(star.getId()).setTemperature(star.getTemperature());
+                this.getStar(star.getId()).subStars = star.subStars;
+                this.getStar(star.getId()).setBlackHole(star.isBlackHole());
             }
 
             for (DimensionProperties properties : dimCouplingList.dims) {
+                // A body refused above is not loaded at all: nothing below may register it, nor pour
+                // its ore table into the body that holds its id.
+                if (refusedBodies.contains(properties)) {
+                    continue;
+                }
 
                 //Register dimensions loaded by other mods if not already loaded
-                if (!properties.isNativeDimension && properties.getStar() != null && !DimensionManager.getInstance().isDimensionCreated(properties.getId())) {
+                if (!properties.isNativeDimension && properties.getStar() != null && !this.isDimensionCreated(properties.getId())) {
                     for (StellarBody star : dimCouplingList.stars) {
-                        for (StellarBody loadedStar : DimensionManager.getInstance().getStars()) {
+                        for (StellarBody loadedStar : this.getStars()) {
                             if (star.getId() == properties.getStarId() && star.getName().equals(loadedStar.getName())) {
-                                DimensionManager.getInstance().registerDimNoUpdate(properties, false);
+                                this.registerDimNoUpdate(properties, false);
                                 properties.setStar(loadedStar);
                             }
                         }
@@ -1037,12 +1157,12 @@ public class DimensionManager implements IGalaxy {
                     }
                 }
                 if (properties.isNativeDimension)
-                    DimensionManager.getInstance().registerDim(properties, properties.isNativeDimension);
+                    this.registerDim(properties, properties.isNativeDimension);
                 //TODO: add properties fromXML
 
 
                 if (properties.oreProperties != null) {
-                    DimensionProperties loadedProps = DimensionManager.getInstance().getDimensionProperties(properties.getId());
+                    DimensionProperties loadedProps = this.getDimensionProperties(properties.getId());
 
                     if (loadedProps != null) loadedProps.oreProperties = properties.oreProperties;
                 }
@@ -1065,7 +1185,7 @@ public class DimensionManager implements IGalaxy {
             // `withDerivedRetinue` then returned the authored list untouched, and a system that had
             // shown its whole retinue came back holding only what was explicitly written down.
             for (StellarBody star : dimCouplingList.stars) {
-                StellarBody registered = DimensionManager.getInstance().getStar(star.getId());
+                StellarBody registered = this.getStar(star.getId());
                 int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);
                 if (registered != null) {
                     registered.setMaxRetinueBodies(retinue);
@@ -1075,7 +1195,10 @@ public class DimensionManager implements IGalaxy {
 
             // Buffer authored galactic anchor coords for the Layer-1 universe registry. Worlds are not
             // loaded yet (this runs at serverAboutToStart), so they are drained once worlds are up.
-            dev.stannismod.stellurgy.universe.UniverseRegistry.stageAnchors(dimCouplingList.anchorCoords, resetFromXml);
+            stagedAnchors = dimCouplingList.anchorCoords == null
+                    ? new java.util.HashMap<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor>()
+                    : new java.util.HashMap<>(dimCouplingList.anchorCoords);
+            stagedAnchorsReset = resetFromXml;
         }
 
         // Hand the pack's <galaxyGen> knobs to the universe layer. The generator built from them is
@@ -1092,9 +1215,10 @@ public class DimensionManager implements IGalaxy {
         // model. Where the save carries no stamp, reconcileSchema adopts the current schema at the
         // one install point, loudly and with a stamp written; that is the same outcome without the
         // window.
-        dev.stannismod.stellurgy.universe.GalaxyGenConfig galaxyGenConfig =
-                (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig : null;
-        dev.stannismod.stellurgy.universe.UniverseRegistry.stageGalaxyConfig(galaxyGenConfig);
+        // No planetDefs.xml is a pack that states nothing, and that is the shipped configuration — not
+        // an empty galaxy, which a pack asks for only with <galaxyGen procedural="false"/>.
+        packGalaxyConfig = (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig
+                : dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults();
         // C129: registration authority on load was planetDefs.xml only (the loop
         // above), while per-dim persisted state lives in temp.dat (loadedPlanets).
         // A dim present in temp.dat but absent from a hand-edited / restored /
@@ -1105,27 +1229,26 @@ public class DimensionManager implements IGalaxy {
         // no-ops; also heals the missing-XML case where the loop above is skipped.
         for (Map.Entry<Integer, IDimensionProperties> entry : loadedPlanets.entrySet()) {
             DimensionProperties props = (DimensionProperties) entry.getValue();
-            if (props == null || DimensionManager.getInstance().isDimensionCreated(entry.getKey()))
+            if (props == null || this.isDimensionCreated(entry.getKey()))
                 continue;
-            DimensionManager.getInstance().registerDimNoUpdate(props, props.isNativeDimension);
-            props.setStar(props.getStarId());
+            this.registerDimNoUpdate(props, props.isNativeDimension);
+            props.setStar(props.getStarId(), this);
         }
 
-        // Install the authored planet-type table for the same reason and on the same terms: it is a
-        // JVM-global, so an absent (or trimmed) <planetType> section must restore the stock set rather
-        // than leave the previous world's presets standing.
-        dev.stannismod.stellurgy.universe.PlanetTypes.setPresets(
+        // The save's planet-type table: its file's <planetType> section, or the code-shipped set when
+        // the file states none.
+        planetTypes = dev.stannismod.stellurgy.universe.PlanetTypes.authored(
                 dimCouplingList == null ? null : dimCouplingList.planetTypes);
 
         // make sure to set dim offset back to original to make things consistant
         this.dimOffset = savedDimOffset;
 
-        DimensionManager.getInstance().knownPlanets.addAll(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets);
+        this.knownPlanets.addAll(initiallyKnownPlanets);
 
 
-        // Whatever path dim 0 arrived by — the planet file, temp.dat, or the shipped defaults — it is
-        // the overworld and it has a size. Here rather than in one of the loops above because there
-        // are three of them and only the LAST writer decides what the world runs with.
+        // Whatever saved path dim 0 arrived by — temp.dat or the shipped defaults; the planet file
+        // refuses a sizeless body itself — it is the overworld and it has a size. Here rather than in
+        // one of the loops above because only the LAST writer decides what the world runs with.
         repairOverworldBulk(dimensionList.get(0));
 
         // Run all sanity checks now
@@ -1199,11 +1322,8 @@ public class DimensionManager implements IGalaxy {
 
         NBTTagCompound dimListNbt = nbt.getCompoundTag("dimList");
 
-        proxylists.reset(); // clear from old sessions
-
         for (String key : dimListNbt.getKeySet()) {
             DimensionProperties properties = DimensionProperties.createFromNBT(Integer.parseInt(key), dimListNbt.getCompoundTag(key));
-            properties.read_terraforming_data(dimListNbt.getCompoundTag(key));
 
             int keyInt = Integer.parseInt(key);
 				/*if(!net.minecraftforge.common.DimensionManager.isDimensionRegistered(keyInt) && properties.isNativeDimension && !properties.isGasGiant()) {
@@ -1224,7 +1344,7 @@ public class DimensionManager implements IGalaxy {
             SpaceObjectManager.getSpaceManager().readFromNBT(nbtTag);
         }
 
-        nbt.setString("prevVersion", Stellurgy.version);
+        nbt.setString("prevVersion", Stellurgy.instance.version);
 
         return loadedDimProps;
     }

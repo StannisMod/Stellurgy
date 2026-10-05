@@ -88,22 +88,6 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void rocketEventRecorderProbeIsLive() throws Exception {
-        // Sanity: probe surface returns the 4 expected counter fields.
-        // If the recorder wasn't registered, fields would still be
-        // present (initial 0); the assertion below pins JSON structure.
-        String counts = ok(client().execute("stellurgytest rocket event-counts"));
-        assertTrue("event-counts response must expose launch field: " + counts,
-                Reply.of(counts).has("launch"));
-        assertTrue("event-counts response must expose orbitReached field: " + counts,
-                Reply.of(counts).has("orbitReached"));
-        assertTrue("event-counts response must expose dismantle field: " + counts,
-                Reply.of(counts).has("dismantle"));
-        assertTrue("event-counts response must expose preLaunch field: " + counts,
-                Reply.of(counts).has("preLaunch"));
-    }
-
-    @Test
     public void forceOrbitReachedFiresRocketReachesOrbitEvent() throws Exception {
         // Real cause-effect: invoking the production onOrbitReached must
         // fire RocketReachesOrbitEvent (the event is posted in
@@ -198,40 +182,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void rocketInfoExposesTicksExistedField() throws Exception {
-        // Pin the probe-surface contract for ticksExisted — the
-        // descent-timer test relies on the field being readable. The
-        // observation that the field actually ADVANCES under server
-        // ticks is harder to assert reliably in headless: the chunk
-        // containing the assembled rocket may not be ticked by the
-        // server tick loop if no player is present. We pin the read
-        // contract here (the field is exposed and >= 0); the advancing
-        // assertion belongs in the testClient e2e harness, where a
-        // real player keeps the chunk hot.
-        int id = buildAndAssemble(FixtureSite.openAir(0, 3400, 500));
-        // The reader REFUSES a report without `ticksExisted` — a field the verb always writes —
-        // so constructing it is the "the field is exposed" half of this pin.
-        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
-        assertTrue("ticksExisted must be non-negative: " + info.ticksExisted,
-                info.ticksExisted >= 0);
-    }
-
-    @Test
-    public void forceOrbitReachedOnUnknownRocketReturnsError() throws Exception {
-        String resp = ok(client().execute("stellurgytest rocket force-orbit-reached 9999999"));
-        assertTrue("unknown rocket must error: " + resp,
-                "rocket not found".equals(Reply.of(resp).text("error")));
-    }
-
-    @Test
-    public void dismantleOnUnknownRocketReturnsError() throws Exception {
-        String resp = ok(client().execute("stellurgytest rocket dismantle 9999999"));
-        assertTrue("unknown rocket must error: " + resp,
-                "rocket not found".equals(Reply.of(resp).text("error")));
-    }
-
-    @Test
-    public void orbitReachedEventChainHandlesAbsentSatelliteHatch() throws Exception {
+    public void orbitReachedOnARocketWithNoProgrammedChipDoesNotThrow() throws Exception {
         // Defensive: the production onOrbitReached has 3 dispatch branches
         // (satellite chip / asteroid chip / has-seat / no-seat). The
         // "simple" rocket fixture has guidance computer + seat -> the

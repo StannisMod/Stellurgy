@@ -1,24 +1,31 @@
 package dev.stannismod.stellurgy.client;
 
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereSummary;
+import dev.stannismod.stellurgy.world.WorldRuntime;
+import net.minecraft.world.World;
 
 /**
- * What this client has been told about the air around its own player.
+ * What this client has been told about the air around its own player in one client world.
  *
  * <p>None of it is derivable client-side: the atmosphere a position holds is the server's answer,
  * and it arrives by packet ({@code PacketAtmSync}, {@code PacketOxygenState}). So this is a copy,
  * and like every copy it is only as current as the last packet.</p>
  *
- * <p><b>OWNER: the CLIENT; LIFETIME: one connection to one server</b>, released by {@link #reset()}
- * from the disconnect hook. Static because a client's connection is what this class describes and
- * there is exactly one of it while these values mean anything — a second would be a second client
- * in this JVM, which cannot exist.</p>
+ * <p>Owned by the client WORLD the report describes ({@link WorldRuntime}): a reading is of a position
+ * in that world, and the suffocation mark is a moment on that world's clock. Kept across a world
+ * change, a pressure would be drawn on the next world's HUD as if it had been measured there, and the
+ * mark would be compared with a clock that knows nothing about it.</p>
  *
  * <p><b>Why it is not on {@code AtmosphereHandler} any more.</b> It lived there as three public
  * statics beside that class's server-side machinery, marked only by a one-line comment saying they
  * were the client's. A server-side path read one of them anyway and reported it to the player —
- * always the field's default, because on a dedicated server nothing ever writes it. Moving them
- * here makes that mistake a compile error rather than a wrong number.</p>
+ * always the field's default, because on a dedicated server nothing ever writes it. A client class
+ * makes that mistake a compile error rather than a wrong number.</p>
+ *
+ * <p><b>What it holds is a READOUT, not a model.</b> One {@link AtmosphereSummary} — a pressure,
+ * whether the air can be breathed, the warning to show and the statements that hold — computed by the
+ * server and drawn by the client, which decides nothing about it. A stale readout therefore costs a
+ * lagging line of text and nothing else.</p>
  */
 public final class ClientAtmosphere {
 
@@ -26,49 +33,44 @@ public final class ClientAtmosphere {
      *  what the previous default of plain {@code 0} was not: every reader tests for this sentinel. */
     public static final int NO_READING = -1;
 
-    private static IAtmosphere atmosphere;
-    private static int pressure = NO_READING;
-    private static long lastSuffocationTime = Integer.MIN_VALUE;
+    private AtmosphereSummary summary = AtmosphereSummary.UNKNOWN;
+    private boolean reported;
+    private long lastSuffocationTime = Long.MIN_VALUE;
 
     private ClientAtmosphere() {
     }
 
-    /** The atmosphere the server last reported at this player's position, or {@code null} before the
-     *  first report. */
-    public static IAtmosphere atmosphere() {
-        return atmosphere;
+    /** What {@code world}'s client copy has been told about its player's air. */
+    public static ClientAtmosphere of(World world) {
+        return WorldRuntime.of(world, ClientAtmosphere.class, ClientAtmosphere::new);
+    }
+
+    /** The server's last readout for this player's position; {@link AtmosphereSummary#UNKNOWN}
+     *  before the first report. Never null. */
+    public AtmosphereSummary summary() {
+        return summary;
     }
 
     /** The pressure the server last reported, in hundredths of an atmosphere, or {@link #NO_READING}
      *  before the first report — which is a different answer from "vacuum". */
-    public static int pressure() {
-        return pressure;
+    public int pressure() {
+        return reported ? summary.pressureCentiAtm() : NO_READING;
     }
 
-    /** Take a fresh atmosphere report from the server. */
-    public static void accept(IAtmosphere atmosphere, int pressure) {
-        ClientAtmosphere.atmosphere = atmosphere;
-        ClientAtmosphere.pressure = pressure;
+    /** Take a fresh readout from the server. */
+    public void accept(AtmosphereSummary summary) {
+        this.summary = summary == null ? AtmosphereSummary.UNKNOWN : summary;
+        this.reported = summary != null;
     }
 
-    /** The world time at which this client was last told it is suffocating. */
-    public static long lastSuffocationTime() {
-        return lastSuffocationTime;
+    /** Whether a suffocation report arrived within the last {@code ticks} of this world's clock. */
+    public boolean suffocatedWithin(long worldTime, long ticks) {
+        return lastSuffocationTime != Long.MIN_VALUE
+                && worldTime >= lastSuffocationTime && worldTime - lastSuffocationTime < ticks;
     }
 
-    /** Record a suffocation report, or push the mark back to silence the warning. */
-    public static void suffocatedAt(long worldTime) {
+    /** Record a suffocation report at {@code worldTime} on this world's clock. */
+    public void suffocatedAt(long worldTime) {
         lastSuffocationTime = worldTime;
-    }
-
-    /**
-     * Forget what this client was told by the server it is leaving. The next server's air has
-     * nothing to do with this one's, and a pressure kept across the gap would be drawn on the next
-     * world's HUD as if it had been measured there.
-     */
-    public static void reset() {
-        atmosphere = null;
-        pressure = NO_READING;
-        lastSuffocationTime = Integer.MIN_VALUE;
     }
 }

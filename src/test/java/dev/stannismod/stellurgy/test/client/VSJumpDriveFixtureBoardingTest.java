@@ -1,0 +1,696 @@
+package dev.stannismod.stellurgy.test.client;
+
+import java.util.Locale;
+
+import com.google.gson.JsonObject;
+
+import org.junit.FixMethodOrder;
+import org.junit.Test;
+import org.junit.runners.MethodSorters;
+import org.lwjgl.input.Keyboard;
+
+import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.test.DriveInfo;
+import dev.stannismod.stellurgy.test.NavStatus;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShipInfo;
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.RocketFixture;
+
+import static org.junit.Assert.assertTrue;
+
+/**
+ * A jump-capable craft assembles WHOLE, and a pilot standing on its deck can reach both of the
+ * blocks he has to touch by hand: the pilot seat and the navigation console.
+ *
+ * <p><b>Why this exists.</b> The hyperjump craft is the first Stellurgy build whose player-facing surface is
+ * two separate blocks aboard an assembled physics ship — you sit down in one and open a GUI on the
+ * other. Every earlier ship test needed only the seat, so the fixture that carries the drive never
+ * had anywhere to stand: a pilot on the launch pad squints up at the hull from four blocks below,
+ * which is inside the range where the physics mod's raytrace silently discards a ship hit (it keeps
+ * one only when it is STRICTLY nearer than the vanilla world result, and at the end of reach the two
+ * tie). This test is what pins the reworked deck-based fixture: one square on the deck from which
+ * both consoles are one block away, face-on.</p>
+ *
+ * <p><b>Two things are measured, in this order.</b></p>
+ * <ol>
+ *   <li><b>Every drive component actually joined the ship.</b> Assembly returning {@code ok} says
+ *       nothing about which blocks came with it: the physics mod grows a ship by flood-filling out
+ *       of the flight computer, so a machine that is only diagonally reachable is left standing on
+ *       the pad, and the craft flies away without it. Two independent legs, because either alone
+ *       can be fooled: the block is READ at its own address in the ship's subspace (and its pad cell
+ *       is empty), and the ship's own drive/navigation layers are asked what they can SEE from the
+ *       flight computer.</li>
+ *   <li><b>Both consoles answer a real key press</b> — the same aim-and-press the human performs,
+ *       through the same code path, with the crosshair confirmed on the intended block before every
+ *       press so a red names the hop that failed rather than merely the outcome. Each press is
+ *       measured on the ordered logs either side of it rather than by polling for its result: the
+ *       seat as {@code right_click_block} &rarr; {@code mount} on the server, the console as the
+ *       server's {@code right_click_block} and the client's own {@code client_gui_opened} — which
+ *       is what separates a press the server never received from one the block declined to
+ *       answer.</li>
+ * </ol>
+ *
+ * <p>Assembly here is ARRANGEMENT, not subject: it is driven by the probe.</p>
+ *
+ * <p>On the shared VS client base. It ran its own server + client pair per method until 2026-08-23,
+ * "matching the other ship-boarding e2e tests" — a reason to resemble its neighbours, never a reason
+ * to boot: its root was a fresh empty temp dir handed to a harness that makes one of those itself,
+ * and nothing was written into it before the server started. Off the shared base an arrangement
+ * failure here could not be TYPED as one either, and that is the half that mattered.</p>
+ */
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
+
+    /**
+     * How far two readings of the SAME point may differ, in blocks, when one is mapped through the
+     * ship's transform and the other read off the seat probe.
+     *
+     * <p>The TEST'S OWN, and it is float noise rather than a tolerance: both describe one block's
+     * centre, so half a block is already generous.</p>
+     */
+    private static final double SAME_POINT_BLOCKS = 0.5;
+
+    @Override
+    protected String subsystem() {
+        return "vs-jump-drive-boarding";
+    }
+
+    /** Field-name PREFIXES: each names a triple the probe writes as {@code <prefix>X/Y/Z}. */
+    private static final String SEAT_SUB = "seat";
+    private static final String AFC_SUB = "afc";
+    private static final String SHIP_WORLD = "shipWorld";
+    private static final String TO_WORLD = "world";
+    private static final String BLOCK_ID = "block";
+    private static final String IS_AIR = "isAir";
+    /** The client event log's envelope count. It is emitted before the records, so the FIRST match
+     *  in a reply is always the envelope's and never a record's own field. */
+    private static final String CLIENT_EVENT_COUNT = "count";
+
+    private static final String VARIANT = "with-jump-drive";
+
+    /**
+     * The craft THIS scenario assembled, from the registry's own record of the add. Every lookup in
+     * the class is addressed to it: the base coordinates locate the fixture, never the ship.
+     */
+    private String scenarioShipId;
+    /** This scenario's site, from its own plot. Bound at the top of the test, never chosen here. */
+    private FixtureSite site;
+
+    /** The craft's own centre column on the pad, and the deck level the pilot walks on. */
+    private int craftX, craftY, craftZ;
+
+    /**
+     * Every block of the craft, as an offset from the FLIGHT COMPUTER. The flight computer is the
+     * origin because it is the one block whose subspace address the ship itself hands out (the pilot
+     * seat stores the offset back to it), and because a rigid relocation into subspace preserves
+     * these offsets exactly — which is what makes reading a component at a derived address a real
+     * measurement rather than a guess.
+     */
+    private final int[] offSeat = {1, 0, 0};
+    private final int[] offNav = {1, 0, 2};
+    private final int[] offGenerator = {3, 0, 0};
+    private final int[] offCapacitor = {3, 1, 0};
+    private final int[][] offSinks = {{2, 1, 0}, {3, 1, -1}, {3, 1, 1}, {3, 0, -1}};
+    private final int[] offEmitter = {0, 1, 0};
+
+    /**
+     * The one square the pilot works from: the deck cell immediately south of the seat. The seat is
+     * one block north of it and the navigation console one block south, both face-on and both well
+     * inside the couple of blocks within which a ship hit survives the raytrace's distance
+     * comparison.
+     */
+    private final int[] offStand = {1, 0, 1};
+
+    /** Vanilla eye height for a standing player — the raytrace starts here, not at the feet. */
+    private static final double EYE_HEIGHT = 1.62;
+
+    /** The server drops a block interaction beyond (reach + 3), so the bot must observably be closer. */
+    private static final double MAX_INTERACT_DIST_SQ = 64.0;
+
+    /**
+     * The use key's code. Mouse buttons enter {@code KeyBinding} as {@code -100 + button}, so RMB is
+     * {@code -99} — the code the real mouse handler writes and the default binding of
+     * {@code keyBindUseItem}.
+     */
+    private static final int KEY_USE_ITEM = -99;
+
+    /**
+     * A jump craft assembles whole, and both its consoles answer a real key press.
+     *
+     * <p>red-witnessed: with the vendored {@code ShipBlockPosFinder#isValidExpansion} at
+     * {@code return !BlockPhysicsDetails.isNotPhysicsInfused(cache.getBlockState(mutablePos).getBlock())}
+     * (Valkyrien Skies) refusing the navigation computer's block: "the
+     * navigation computer must have joined the ship: the flood fill out of the flight computer
+     * decides what comes along", 2026-09-28. The other two waits the rewrite touched are arrangement
+     * links (the ship usable, the client standing at the console).</p>
+     */
+    @Test
+    public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
+
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
+        int budget = 40;
+
+        // ---- ARRANGEMENT: build the craft and let the assembler turn it into a ship. -------------
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+        craftX = bx + 3;
+        craftY = by + 1;
+        craftZ = bz + 3;
+        long awayMark = clientEvents().mark();
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
+
+        // Marked BEFORE the assembly is queued, so the registry's own record of a ship being added
+        // is THIS craft's by construction. It also splits the wait below in two: the ship coming
+        // into EXISTENCE is an event, and only the client-present LOAD is left to poll for - where
+        // one loop reported "no altitude" for a spawn that faulted and for a chunk that never
+        // arrived alike.
+        Events events = serverEvents();
+        long spawnMark = events.markInstrumented();
+        String assemble = assembleFixture();
+        scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
+                Reply.of(assemble).ok());
+        // The id is KEPT. It was being discarded, and every lookup below then went back to the base
+        // coordinates to find the craft again — a question a neighbour's ship answers in the same
+        // shape on a world this class shares.
+        scenarioShipId = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in"
+                + " the queryable registry before any of its consoles can be aimed at (the spawn is"
+                + " asynchronous)");
+
+        long approachMark = clientEvents().mark();
+        exec("tp @a " + (bx + 0.5) + " " + (by + 10) + " " + (bz + 0.5) + " 0 0");
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what loads this craft, so the settle below is measuring a"
+                        + " ship only an arrived client can have brought into being");
+        // The LOAD is production's own record (`ship_usable`, later than every unload of the ship),
+        // from the pre-assembly mark; then ONE read confirming it is loaded now.
+        awaitShipUsable(events, spawnMark, scenarioShipId, budget * 5);
+        String atBase = shipInfoAtBase();
+        scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
+                ShipInfo.isLoaded(atBase));
+
+        String found = findSeat();
+        int[] seatSub = readTriple(found, SEAT_SUB);
+        int[] afcSub = readTriple(found, AFC_SUB);
+        scenario().requireArranged("find-seat must resolve the ship's pilot seat AND the flight computer "
+                        + "it was linked to — the whole layout below is addressed from the computer: "
+                        + found,
+                seatSub != null && afcSub != null);
+
+        // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
+        // the offset it was built at. Without this control every derived address below is a guess,
+        // and a component read as "missing" could just as easily be one read at the wrong cell.
+        scenario().requireArranged("CONTROL: the ship's subspace copy must preserve the build's own "
+                        + "geometry — seat minus flight computer should be "
+                        + describe(offSeat) + " but is "
+                        + describe(new int[]{seatSub[0] - afcSub[0], seatSub[1] - afcSub[1],
+                                seatSub[2] - afcSub[2]}) + ": " + found,
+                seatSub[0] - afcSub[0] == offSeat[0]
+                        && seatSub[1] - afcSub[1] == offSeat[1]
+                        && seatSub[2] - afcSub[2] == offSeat[2]);
+
+        // ---- 1a) Every drive component is THERE, at its own address inside the ship. -------------
+        // Read block by block rather than trusting a summary count: a flood fill that dropped one
+        // machine leaves every other number looking healthy.
+        assertComponentAboard(afcSub, offNav, "stellurgy:navigationComputer", "navigation computer");
+        assertComponentAboard(afcSub, offGenerator, "stellurgy:hyperdriveGenerator", "field generator");
+        assertComponentAboard(afcSub, offCapacitor, "stellurgy:jumpCapacitor", "jump capacitor");
+        for (int i = 0; i < offSinks.length; i++) {
+            assertComponentAboard(afcSub, offSinks[i], "stellurgy:jumpHeatSink",
+                    "heat sink #" + (i + 1));
+        }
+        assertComponentAboard(afcSub, offEmitter, "stellurgy:jumpFieldEmitter", "hull emitter");
+
+        // ---- 1b) …and the SHIP can see them, which is a different question. ----------------------
+        // A block that rode into subspace but never got welded to the flight computer is invisible to
+        // its own ship: the drive resolves its machines from the computer outward, so this leg is
+        // what says the assembler did its welding rather than merely its moving.
+        DriveInfo drive = DriveInfo.at(this::exec,
+                "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        assertTrue("the assembled ship must have a FIELD GENERATOR aboard — drivePower is measured "
+                        + "off the generator, so a zero here is a generator the ship cannot see: "
+                        + drive.raw(),
+                drive.drivePower > 0L);
+        assertTrue("…a CAPACITOR standing against that generator — a bank counts only while it "
+                        + "touches the generator's footprint, so this also pins that the two arrived "
+                        + "adjacent: " + drive.raw(),
+                drive.capacitors >= 1);
+        assertTrue("…a HULL EMITTER: " + drive.raw(), drive.emitters >= 1);
+        assertTrue("…and a measured HULL — the assembler is the only thing that ever measures the "
+                        + "craft's extent, so an unmeasured hull means the ship route did not run: "
+                        + drive.raw(),
+                drive.hullMeasured);
+        // The heat sinks have no tile entity of their own, so nothing links them and nothing counts
+        // them by name: what says they are aboard is that the bank they cool recovers FASTER than a
+        // bare controller could. Drain it and read the recovery rate back out of the cooldown, then
+        // compare against the controller's own rate — a shape ("the sinks are contributing"), with
+        // no balance number pinned on either side of the comparison.
+        String emptied = exec("stellurgytest drive charge 0 " + afcSub[0] + " " + afcSub[1] + " "
+                + afcSub[2] + " empty");
+        DriveInfo cooled = DriveInfo.at(this::exec,
+                "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        long cooldown = cooled.cooldownTicks;
+        long burst = cooled.burstCost;
+        // The cooldown is now burst / the bank's ACCEPT rate — a best case at full inflow — and heat
+        // sinks are what raise that ceiling. So the shape under test is unchanged: read the implied
+        // throughput back out and compare it against what a bare controller alone would allow.
+        long observedRate = cooldown > 0L ? burst / cooldown : Long.MAX_VALUE;
+        assertTrue("the HEAT SINKS must be raising this ship's bank throughput. A drained bank quoted "
+                        + "at " + observedRate + "/tick (burst " + burst + " over " + cooldown
+                        + " ticks) is what an uncooled controller alone allows — the sinks rode into "
+                        + "subspace but the bank is not walking to them. emptied=" + emptied
+                        + " info=" + cooled.raw(),
+                cooldown >= 0L && burst > 0L
+                        && observedRate > DriveTuning.CAPACITOR_BASE_ACCEPT_RATE * 2L);
+
+        String gate = exec("stellurgytest nav gate 0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        assertTrue("the ship must find its own NAVIGATION COMPUTER from the flight computer. That "
+                        + "search is by the console's stored link back to this computer and adopts "
+                        + "nothing, so it is the assembler's welding that is under test here: " + gate,
+                Reply.of(gate).bool("navComputer"));
+
+        int[] navSub = add(afcSub, offNav);
+        NavStatus navStatus = NavStatus.at(this::exec, 0, navSub[0], navSub[1], navSub[2]);
+        assertTrue("and the console itself must report that link: " + navStatus.raw(),
+                navStatus.linked);
+
+        // ---- ARRANGEMENT: an EMPTY hand, or a held stack consumes the press before the block. ----
+        emptyTheHand();
+
+        // ---- ARRANGEMENT CONTROL: the subspace->world mapping the aiming below leans on. ---------
+        // The navigation console has no probe of its own that reports where it is in the world, so
+        // its aim point is mapped through the ship's transform. Check that instrument against the
+        // seat, whose world position a dedicated probe reports independently, before trusting it.
+        double[] seatWorld = readTripleD(findSeat(), SHIP_WORLD);
+        double[] seatMapped = toWorld(seatWorld, seatSub, 0.5, 0.2, 0.5);
+        scenario().requireArranged("CONTROL: mapping the seat's own subspace cell through the ship's "
+                        + "transform must land where the seat probe says the seat is; otherwise the "
+                        + "console's aim point below is computed by an instrument that does not work."
+                        + " probe=" + java.util.Arrays.toString(seatWorld)
+                        + " mapped=" + java.util.Arrays.toString(seatMapped),
+                seatMapped != null && horizontalDistance(seatWorld, seatMapped) < SAME_POINT_BLOCKS);
+
+        // ---- 2a) Board the PILOT SEAT with a real use-key press. ---------------------------------
+        Aim seatAim = aimAt(afcSub, seatSub, offStand, 0.5, 0.2, 0.5, budget);
+        assertAimed(seatAim, seatSub, "pilot seat", "pilotseat");
+
+        // The mark goes BEFORE the press: a use press is over inside a tick, and a poll that arrives
+        // after it cannot tell a click the server never saw from one it saw and refused.
+        long seatPressMark = events.markInstrumented();
+        // The CLIENT's own mark beside it: his client PERFORMS the mount when the server tells it
+        // who is riding what, so the replication half below is a record on this log.
+        long seatPressOnClient = clientEvents().mark();
+        bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
+        bot().waitWorldTicks(5);
+        bot().setKey(KEY_USE_ITEM, false);
+
+        // The two links a boarding IS, in the order the game commits them: Forge fires
+        // RightClickBlock inside processRightClickBlock BEFORE the block's own activation runs, and
+        // the seat's activation is what mounts the pilot. NO right_click_block at all means the
+        // press was dropped before the seat ever saw it (reach, an unconfirmed teleport, a held
+        // stack); a right_click_block with no mount means the seat refused the boarding.
+        events.assertChain(seatPressMark, "a real use-key press aimed at the deck ship's PILOT SEAT "
+                        + "must reach the server and seat the pilot - the crosshair was proven to be "
+                        + "on that very block, so a break here is the interaction, not a missed aim."
+                        + seatAim.diagnosis,
+                5 * budget, "right_click_block", "mount");
+
+        // The replication, as the LINK it is: his client performing the mount. The poll that stood
+        // here could only sample the state this record announces, and a read landing between the
+        // tear-down and the rebuild answers `riding:false` for a pilot who is about to be seated.
+        JsonObject riding = awaitClientMount(seatPressOnClient,
+                "the CLIENT must mount the pilot after a boarding the SERVER has already recorded"
+                        + " (the chain above)", 5 * budget,
+                " serverRiding=" + exec("stellurgytest player riding-entity")
+                        + " serverMountRecord=" + events.since(seatPressMark, "mount")
+                        + seatAim.diagnosis);
+        assertTrue("the pilot must still be aboard when the seat is read — his client mounted him"
+                        + " (the link above) and must not have taken him off again. clientRiding="
+                        + riding + seatAim.diagnosis,
+                isRiding(riding));
+
+        // ---- ARRANGEMENT: leave the seat again, the way a pilot does. ----------------------------
+        leaveTheSeat(budget);
+
+        // ---- 2b) Open the NAVIGATION CONSOLE with the same real use-key press. -------------------
+        Aim navAim = aimAt(afcSub, navSub, offStand, 0.5, 0.5, 0.5, budget);
+        assertAimed(navAim, navSub, "navigation console", "navigationcomputer");
+
+        // BOTH logs are marked before the press, because opening a console is a two-sided link and a
+        // single "what screen is up" poll cannot say which half never happened: the click has to
+        // reach the SERVER (its own record), and the CLIENT has then to be told to display a screen
+        // (its record). The server's `gui_container_served` is not awaited here: `container_opened`
+        // already says the handler answered with a container, which is all this step needs.
+        long navMark = events.markInstrumented();
+        long navClientMark = clientEvents().mark();
+        bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
+        bot().waitWorldTicks(5);
+        bot().setKey(KEY_USE_ITEM, false);
+
+        events.await(navMark, "right_click_block", "the use press aimed at the NAVIGATION CONSOLE "
+                        + "must reach the server at all - an aim this test has already proven, with "
+                        + "no click recorded, is a press discarded upstream of the block (reach, an "
+                        + "unconfirmed teleport, a held stack)." + navAim.diagnosis,
+                5 * budget);
+        String opened = clientEvents().await(navClientMark, "client_gui_opened",
+                "the console press reached the server, so the CLIENT must be asked to display a "
+                        + "screen for it - nothing here is a console that swallowed the press."
+                        + navAim.diagnosis,
+                5 * budget);
+
+        // WHICH screen is up is a state, read ONCE after the link above — there is no gap here to
+        // poll. Checked in the vanilla source rather than assumed: Minecraft.displayGuiScreen
+        // posts GuiOpenEvent (which is what the record above is taken off) and assigns
+        // currentScreen sixteen lines later in the same call, so a client that recorded the open
+        // and has answered one probe round-trip since has the screen up. The one case that leaves
+        // currentScreen alone is a CANCELLED open, and the record carries `cancelled` — printed
+        // below, where the old fifty-tick poll could only report an empty string.
+        String screen = ClientGuiTestSupport.screenOf(bot().reportState());
+        assertTrue("a real use-key press aimed at the assembled ship's NAVIGATION CONSOLE must open "
+                        + "its GUI on the client. This is the second block a jump-capable craft asks "
+                        + "the pilot to touch, and unlike the seat its whole answer IS the screen — a "
+                        + "console that swallows the press leaves the pilot with no way to aim the "
+                        + "ship at all. screen=\"" + screen + "\" clientGuiOpens=" + opened
+                        + " serverSideModuleBuild=" + exec("stellurgytest nav modules 0 " + navSub[0] + " "
+                                + navSub[1] + " " + navSub[2])
+                        + navAim.diagnosis,
+                screen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
+
+        bot().closeScreen();
+    }
+
+    // ---- aiming ---------------------------------------------------------------------------------
+
+    /** One aim attempt's outcome: where the bot ended up, what it was looking at, and why. */
+    private static final class Aim {
+        JsonObject mouseOver;
+        double distSq = Double.POSITIVE_INFINITY;
+        String diagnosis = "";
+    }
+
+    /**
+     * Stand on the deck square and put the crosshair on {@code targetSub}, retrying until the client
+     * itself confirms the pick. Both the stand and the aim are re-derived from the ship's live pose
+     * every attempt: a freshly assembled ship settles for a while, and a position computed once
+     * against a stale pose leaves the bot in mid-air beside a ship that has since moved.
+     *
+     * <p>CLASSIFIED, and it stays a loop: each pass PERFORMS two stimuli — a teleport onto the
+     * recomputed stand and an aim at the recomputed target — and then reads back what the crosshair
+     * hit. Delete it and the standing and aiming stop HAPPENING, not merely stop being watched, and
+     * no link could replace it: nothing in production decides that a crosshair is on a block.</p>
+     *
+     * <p>The order INSIDE the iteration is load-bearing: teleport first, aim last. A server teleport
+     * arrives as a pos-look packet which vanilla applies with {@code setPositionAndRotation}, so an
+     * aim set before it would be silently overwritten by it.</p>
+     */
+    private Aim aimAt(int[] afcSub, int[] targetSub, int[] standOffset,
+                      double tx, double ty, double tz, int budget) throws Exception {
+        Aim aim = new Aim();
+        int[] standSub = add(afcSub, standOffset);
+        double[] shipAnchor = null;
+        double[] standWorld = null;
+        double[] targetWorld = null;
+        double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
+
+        // STIMULUS: each pass stands and aims against the ship's live pose, and ends on the
+        // crosshair resting on the target — the argument is in the javadoc above.
+        for (int attempt = 0; attempt < budget; attempt++) {
+            // READS, not waits — all three of the checks below used to sleep five ticks and retry.
+            // The ship was resolved before this method was called (its computer's subspace address
+            // is an argument), so a ship that then has no world pose, or whose points will not map
+            // to world coordinates, went away mid-arrangement; and a same-world teleport cannot cost
+            // the client its world. Each of those is news about the arrangement, not a pause.
+            shipAnchor = readTripleD(findSeat(), SHIP_WORLD);
+            scenario().requireArranged("the ship was resolved before aiming began, so it must still"
+                    + " report a world pose on attempt " + attempt, shipAnchor != null);
+            // The floor of the stand cell is the deck's top surface, so the feet go at its y with a
+            // sliver of clearance rather than at its centre.
+            standWorld = toWorld(shipAnchor, standSub, 0.5, 0.05, 0.5);
+            targetWorld = toWorld(shipAnchor, targetSub, tx, ty, tz);
+            scenario().requireArranged("the ship's stand and target points must map to world"
+                    + " coordinates off its reported pose " + java.util.Arrays.toString(shipAnchor),
+                    standWorld != null && targetWorld != null);
+            // The stand REACHING the client is a link: the reading below is of where he was put, and
+            // twenty ticks stood here as a guess at the trip.
+            long standMark = clientEvents().mark();
+            exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
+            awaitClientPlacedNear(standMark, standWorld[0], standWorld[2],
+                    "the stand on the deck square must reach the client before he aims from it");
+
+            JsonObject state = bot().reportState();
+            scenario().requireArranged("a same-world teleport must leave the client's world ready: "
+                    + state, isWorldReady(state));
+            px = state.get("playerX").getAsDouble();
+            py = state.get("playerY").getAsDouble();
+            pz = state.get("playerZ").getAsDouble();
+
+            double dx = targetWorld[0] - px;
+            double dy = targetWorld[1] - (py + EYE_HEIGHT);
+            double dz = targetWorld[2] - pz;
+            aim.distSq = dx * dx + dy * dy + dz * dz;
+            double horizontal = Math.sqrt(dx * dx + dz * dz);
+            bot().setLook((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D),
+                    (float) (-Math.toDegrees(Math.atan2(dy, horizontal))));
+            // STIMULUS: the controller's step. MEASURED that one tick is not enough (2026-09-23:
+            // deterministic red, the pick read back from a look tens of degrees off the aim); the mechanism
+            // is NOT established.
+            bot().waitWorldTicks(5);
+
+            aim.mouseOver = bot().reportMouseOver();
+            if (isUnderCrosshair(aim.mouseOver, targetSub)) {
+                break;
+            }
+        }
+        aim.diagnosis = " observedPlayer=(" + px + "," + py + "," + pz + ")"
+                + " standSubspace=" + describe(standSub)
+                + " standWorld=" + java.util.Arrays.toString(standWorld)
+                + " targetSubspace=" + describe(targetSub)
+                + " targetWorld=" + java.util.Arrays.toString(targetWorld)
+                + " distSq=" + aim.distSq + " mouseOver=" + aim.mouseOver;
+        return aim;
+    }
+
+    /** Every hop of the aim, asserted separately, so a red says which one broke. */
+    private void assertAimed(Aim aim, int[] targetSub, String what, String blockNeedle) {
+        scenario().requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
+                + "of the " + what + ", or the press is discarded before the block ever sees it."
+                + aim.diagnosis, aim.distSq < MAX_INTERACT_DIST_SQ);
+        assertTrue("HOP 1 (aim at the " + what + "): the client's crosshair must resolve to a BLOCK. "
+                + "A MISS here means the sightline off the deck square is obstructed or the aim "
+                + "maths is wrong, not that the ship is unclickable." + aim.diagnosis,
+                aim.mouseOver != null && aim.mouseOver.has("typeOfHit")
+                        && "BLOCK".equals(aim.mouseOver.get("typeOfHit").getAsString()));
+        assertTrue("HOP 2 (aim at the " + what + "): the block under the crosshair must be the "
+                + what + " as the CLIENT's own world reports it." + aim.diagnosis,
+                aim.mouseOver.has("block") && aim.mouseOver.get("block").getAsString()
+                        .toLowerCase(Locale.ROOT).contains(blockNeedle));
+        assertTrue("HOP 3 (aim at the " + what + "): the raytrace must report the block's SUBSPACE "
+                + "address " + describe(targetSub) + " — that is what the interaction is handed, "
+                + "and it is why a world-position shortcut can never reach an assembled ship."
+                + aim.diagnosis,
+                isUnderCrosshair(aim.mouseOver, targetSub));
+    }
+
+    private static boolean isUnderCrosshair(JsonObject aim, int[] sub) {
+        return aim != null
+                && aim.has("typeOfHit") && "BLOCK".equals(aim.get("typeOfHit").getAsString())
+                && aim.has("blockX")
+                && aim.get("blockX").getAsInt() == sub[0]
+                && aim.get("blockY").getAsInt() == sub[1]
+                && aim.get("blockZ").getAsInt() == sub[2];
+    }
+
+    // ---- component membership -------------------------------------------------------------------
+
+    /**
+     * One component: present at its derived address inside the ship, and gone from the pad. The pad
+     * half is the control — the assembler lifts the craft a block before the physics mod takes it,
+     * so a machine that never made it into the ship is still standing right there.
+     */
+    private void assertComponentAboard(int[] afcSub, int[] offset, String blockId, String what)
+            throws Exception {
+        int[] sub = add(afcSub, offset);
+        String aboard = exec("stellurgytest block at 0 " + sub[0] + " " + sub[1] + " " + sub[2]);
+        // Compared case-insensitively: the registry lowercases what the mod registered, so the id a
+        // probe reads back is never spelled the way the source spells it.
+        assertTrue("the " + what + " must have joined the ship: the flood fill out of the flight "
+                        + "computer decides what comes along, and a machine it could not reach is "
+                        + "left behind while the craft flies off without it. Expected " + blockId
+                        + " at subspace " + describe(sub) + " (offset " + describe(offset)
+                        + " from the flight computer at " + describe(afcSub) + "): " + aboard,
+                blockId.toLowerCase(Locale.ROOT)
+                        .equals(readGroup(aboard, BLOCK_ID).toLowerCase(Locale.ROOT)));
+
+        int[] lifted = liftedBuildPos(offset);
+        String onPad = exec("stellurgytest block at 0 " + lifted[0] + " " + lifted[1] + " " + lifted[2]);
+        assertTrue("CONTROL: …and it must be GONE from the pad. A " + what + " still standing at "
+                        + describe(lifted) + " is a block the physics mod declined to take, and the "
+                        + "reading above would then be of some other ship's machine: " + onPad,
+                Boolean.parseBoolean(readGroup(onPad, IS_AIR)));
+    }
+
+    /** Where a component sits on the pad after the assembler's one-block lift, in world coordinates. */
+    private int[] liftedBuildPos(int[] offsetFromAfc) {
+        // The flight computer is built at (craftX - 1, craftY + 4, craftZ); the assembler cuts the
+        // craft out and pastes it one block higher before handing it to the physics mod.
+        return new int[]{craftX - 1 + offsetFromAfc[0], craftY + 5 + offsetFromAfc[1],
+                craftZ + offsetFromAfc[2]};
+    }
+
+    // ---- helpers --------------------------------------------------------------------------------
+
+    /** This scenario's own craft, reported by name rather than by what stands near its base. */
+    private String shipInfoAtBase() throws Exception {
+        return exec("stellurgytest vs ship-info 0 id " + scenarioShipId);
+    }
+
+    /** The seat's subspace address, its flight computer's, and the ship's live world position. */
+    private String findSeat() throws Exception {
+        return exec("stellurgytest vs find-seat 0 id " + scenarioShipId);
+    }
+
+    /**
+     * A subspace point mapped into the world through the ship's own transform.
+     *
+     * <p>{@code shipAnchor} no longer selects the ship — the id does — but it is still required: a
+     * null anchor means the caller never resolved the craft's live pose, and mapping a subspace point
+     * for a craft whose seat lookup failed would answer with numbers about nothing.</p>
+     */
+    private double[] toWorld(double[] shipAnchor, int[] sub, double dx, double dy, double dz)
+            throws Exception {
+        if (shipAnchor == null) {
+            return null;
+        }
+        // Mapped through THIS ship's transform. The positional form asks which hulls contain the
+        // anchor and maps through the first of them, and ships do not collide — so a point inside two
+        // craft produces a plausible world position through the wrong one.
+        String mapped = exec("stellurgytest vs to-world 0 id " + scenarioShipId
+                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
+        return readTripleD(mapped, TO_WORLD);
+    }
+
+    /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */
+    private void emptyTheHand() throws Exception {
+        emptyTheHandOnClient("the bot's main hand must be EMPTY so the use press reaches the block"
+                + " rather than being consumed by a held item");
+    }
+
+    /**
+     * Get the pilot out of the seat before he reaches for the console.
+     *
+     * <p><b>This ARRANGES a dismount; it does not test the sneak key.</b> The sneak route is tried
+     * first because it is what a player does, but when it misses the probe dismount takes over and
+     * the scenario continues — so a shipped regression in "shift leaves a pilot seat" would never
+     * red here. Which route actually worked is recorded, so a green run still says it; a test for
+     * the key itself would have to assert the first route and is not written.</p>
+     */
+    private void leaveTheSeat(int budget) throws Exception {
+        // Mark the CLIENT log first: whichever route gets him off the seat, his own
+        // `dismountRidingEntity` is the record, and one mark covers both attempts.
+        long clientMark = clientEvents().mark();
+        // The sneak route gets a WINDOW, not a wait-until: it is best-effort by design (see the
+        // javadoc), so its expiry must not fail — and a poll-until-off cannot express "give the key
+        // this long and then read what happened", which is what this actually wants.
+        bot().holdKey(Keyboard.KEY_LSHIFT);
+        // STIMULUS: a best-effort sneak held for a fixed stretch; its expiry is not a failure, and
+        // the guaranteed route below is linked.
+        bot().waitWorldTicks(2 * budget);
+        bot().releaseKey(Keyboard.KEY_LSHIFT);
+        boolean bySneak = !Events.records(clientEvents().since(clientMark, "dismount")).isEmpty();
+        scenario().record("leftSeatBy", bySneak ? "sneak-key" : "probe-fallback");
+        if (!bySneak) {
+            // The guaranteed route, and here the link is REQUIRED: a probe dismount that produces
+            // no client dismount is an arrangement that did not happen, not a slow one.
+            exec("stellurgytest player dismount");
+            awaitClientDismount(clientMark, "the pilot must leave the seat before reaching for the"
+                    + " console — a seated player's use press goes to the ship, not to the block he"
+                    + " is looking at. Neither the sneak key nor the probe dismount got him off it.",
+                    2 * budget);
+        }
+        scenario().requireArranged("...and he must still be off it when the console is clicked: "
+                + bot().reportRidingEntity(), !isRiding(bot().reportRidingEntity()));
+    }
+
+    /**
+     * Wait for one CLIENT event of {@code type} recorded at or after {@code mark}, and answer the
+     * whole reply.
+     *
+     * <p>Written here rather than taken from a base class on purpose: {@link Events} reads the
+     * SERVER's ordered log through the probe, and the client's own log is reached through the bot's
+     * bridge instead — no shared base owns that shape yet. A failure prints everything the client
+     * recorded since the mark, the executed observation points included, so "nothing happened" and
+     * "nobody was listening" cannot arrive as the same sentence.</p>
+     */
+
+    private String assembleFixture() throws Exception {
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
+        // The height goes past this fixture's 12: the jump-drive variant is the tallest in the
+        // catalogue and the pilot walks its deck, so the envelope is the hull plus the room above it.
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 20,
+                "the jump-drive hull, and the deck the pilot boards it across");
+    }
+
+    // ---- tiny parsing ---------------------------------------------------------------------------
+
+    private static boolean isWorldReady(JsonObject report) {
+        return report != null && report.has("worldReady") && report.get("worldReady").getAsBoolean();
+    }
+
+    private static boolean isRiding(JsonObject riding) {
+        return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
+    }
+
+    private static int[] add(int[] base, int[] offset) {
+        return new int[]{base[0] + offset[0], base[1] + offset[1], base[2] + offset[2]};
+    }
+
+    private static String describe(int[] triple) {
+        return "(" + triple[0] + "," + triple[1] + "," + triple[2] + ")";
+    }
+
+    private static double horizontalDistance(double[] a, double[] b) {
+        double dx = a[0] - b[0], dz = a[2] - b[2];
+        return Math.sqrt(dx * dx + dz * dz);
+    }
+
+    /**
+     * The coordinate triple a probe writes as {@code <prefix>X} / {@code <prefix>Y} /
+     * {@code <prefix>Z}, or {@code null} when the reply carries none of it.
+     *
+     * <p>Read by NAME rather than by one expression spanning all three: matched as a run, the three
+     * have to stay adjacent and in that order forever, and a writer that inserts a fourth field
+     * between them turns the read into an absence.</p>
+     */
+    private static int[] readTriple(String json, String prefix) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(prefix + "X")) {
+            return null;
+        }
+        return new int[]{reply.integer(prefix + "X"), reply.integer(prefix + "Y"),
+                reply.integer(prefix + "Z")};
+    }
+
+    /** The same triple read as doubles. */
+    private static double[] readTripleD(String json, String prefix) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(prefix + "X")) {
+            return null;
+        }
+        return new double[]{reply.number(prefix + "X"), reply.number(prefix + "Y"),
+                reply.number(prefix + "Z")};
+    }
+
+    private static String readGroup(String json, String field) {
+        return Reply.of(json).text(field);
+    }
+}

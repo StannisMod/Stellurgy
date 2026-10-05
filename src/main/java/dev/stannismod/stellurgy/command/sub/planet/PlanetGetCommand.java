@@ -50,6 +50,15 @@ public class PlanetGetCommand extends StellurgyCommand {
             throw invalidValue("Dimension", dimId);
         }
         DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dimId);
+        // Two properties are READ from the planet's air rather than stored, so no field carries them
+        // for the reflective lookup below to find.
+        if (propName.equalsIgnoreCase("atmosphereDensity") || propName.equalsIgnoreCase("hasOxygen")) {
+            Object readout = propName.equalsIgnoreCase("hasOxygen")
+                    ? props.hasOxygen() : props.getAtmosphereDensity();
+            sender.sendMessage(new TextComponentTranslation("commands.stellurgy.planet.get.success",
+                    propName, readout.toString()));
+            return;
+        }
         DimensionProperties.PropLookup lookup = new DimensionProperties.PropLookup(props);
         String propValue;
         try {

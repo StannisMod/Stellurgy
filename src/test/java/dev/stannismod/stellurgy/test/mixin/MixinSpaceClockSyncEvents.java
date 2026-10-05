@@ -24,11 +24,11 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * "the login sync arrived" wants {@code first:true}; a drift-bound test wants two consecutive
  * records and their {@code serverTick} delta against {@code localTicks}.</p>
  *
- * <p><b>{@code first} is not "first ever" and must not be read as one.</b> {@code SpaceClockSync.reset()}
- * clears the baseline on every disconnect ({@code ClientProxy} calls it from its own disconnect
- * handler), so a shared client that leaves one server and joins another records {@code first:true}
- * a second time. What the field says is "no baseline was in place at this instant" — which is the
- * login-sync question for one connection and says nothing across connections.</p>
+ * <p><b>{@code first} is not "first ever" and must not be read as one.</b> Each connection's view of
+ * its server owns a fresh copy of the clock, so a shared client that leaves one server and joins
+ * another records {@code first:true} a second time. What the field says is "no baseline was in place
+ * at this instant" — which is the login-sync question for one connection and says nothing across
+ * connections.</p>
  *
  * <p>Recorded on the CLIENT: the only production caller is {@code PacketSpaceClockSync.executeClient},
  * which libVulpes's channel decoder hands to the client main thread through
@@ -52,15 +52,17 @@ public abstract class MixinSpaceClockSyncEvents {
     private static final String INSTRUMENT = "space_clock_sync_events";
 
     /** The client's own tick counter — the number the incoming baseline is about to be pinned to. */
-    @Shadow private static long localTicks;
+    @Shadow private long localTicks;
+
+    @Shadow public abstract boolean hasSync();
 
     @Inject(method = "accept", at = @At("HEAD"))
-    private static void stellurgyTest$synced(long serverTick, CallbackInfo ci) {
+    private void stellurgyTest$synced(long serverTick, CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);
         // HEAD, before `baseTick` is overwritten: `hasSync()` still describes the state this baseline
         // is replacing, which is the only moment an unsynced client can be told from a re-sync.
         TestTrace.recordHere("space_clock_synced", "\"serverTick\":" + serverTick
                 + ",\"localTicks\":" + localTicks
-                + ",\"first\":" + !SpaceClockSync.hasSync());
+                + ",\"first\":" + !hasSync());
     }
 }

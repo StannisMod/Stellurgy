@@ -1069,7 +1069,7 @@ public class TileNavigationComputer extends TileInventoryHatch
         if (world != null && world.isRemote) {
             // This is the whole wire for the toggle: the console already ships its state to the
             // clients that can see it, and the sky is drawn client-side.
-            dev.stannismod.stellurgy.client.render.planet.SkyLabels.setConsoleEnabled(skyLabels);
+            dev.stannismod.stellurgy.client.render.planet.SkyLabels.setConsoleEnabled(world, skyLabels);
         }
         forecast = nbt.getString("navForecast");
     }

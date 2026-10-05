@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.AreaBlob;
 import dev.stannismod.stellurgy.api.util.IBlobHandler;
+import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.network.PacketAirParticle;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
@@ -26,20 +27,38 @@ import java.util.concurrent.TimeUnit;
 
 public class AtmosphereBlob extends AreaBlob implements Runnable {
 
-
-    private static ThreadPoolExecutor pool = (StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1 ? new ThreadPoolExecutor(2, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(32)) : null;
+    /**
+     * The executor the threaded blob fill runs on: one per server ({@code ServerState}), shut down
+     * when it stops, so a fill queued at stop never runs against the next world. Its threads are
+     * created on first use, so a server that keeps the fill on its own thread pays nothing.
+     */
+    public static ThreadPoolExecutor newFillPool() {
+        return new ThreadPoolExecutor(2, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(32));
+    }
 
     private boolean executing;
     private HashedBlockPosition blockPos;
     private List<AreaBlob> nearbyBlobs;
+    /** The gases filling this zone. Starts sea-level breathable, which is the pressure this
+     *  method reported as a constant before zones had contents. */
+    private AirState airState = AirState.earthLike();
 
     public AtmosphereBlob(@Nonnull IBlobHandler blobHandler) {
         super(blobHandler);
         executing = false;
     }
 
+    @Nonnull
+    public AirState getAirState() {
+        return airState;
+    }
+
+    public void setAirState(@Nonnull AirState airState) {
+        this.airState = airState;
+    }
+
     public int getPressure() {
-        return 100;
+        return airState.getPressureCentiAtm();
     }
 
     /**
@@ -85,7 +104,7 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
                     executing = true;
                     if ((StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1)
                         try {
-                            pool.execute(this);
+                            Stellurgy.serverState().atmosphereFillPool.execute(this);
                         } catch (RejectedExecutionException e) {
                             Stellurgy.logger.warn("Atmosphere calculation at " + this.getRootPosition() + " aborted due to oversize queue!");
                         }
@@ -175,7 +194,7 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
      * @param blocks Collection containing affected locations
      */
     protected void runEffectOnWorldBlocks(@Nonnull World world, @Nonnull Collection<HashedBlockPosition> blocks) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world);
 
         if (atmhandler != null && !atmhandler.getDefaultAtmosphereType().allowsCombustion()) {
 

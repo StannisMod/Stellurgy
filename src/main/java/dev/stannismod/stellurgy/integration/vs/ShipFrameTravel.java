@@ -3,8 +3,6 @@ package dev.stannismod.stellurgy.integration.vs;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.collect.MapMaker;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -74,8 +72,6 @@ public final class ShipFrameTravel {
     // What an observer needs travels as PARAMETERS of the seams below, at the moment the value
     // exists, on the body it belongs to.
 
-    /** Throttle for the [FF-TRACE/WALK] line (test mode only). */
-    private static int walkTraceTicks = 0;
 
 
     /**
@@ -137,21 +133,19 @@ public final class ShipFrameTravel {
     }
 
     /**
-     * Each aboard entity's authoritative position in its ship's frame, plus the world position this
-     * class last derived from it. Weak keys: an entity that goes away takes its entry with it.
+     * The body's own capture, held on the entity object ({@link ShipFrameBody}).
      *
-     * <p><b>Keyed by IDENTITY, and it has to be.</b> Vanilla {@code Entity} declares equality by
-     * network id alone ({@code equals} compares {@code entityId}, {@code hashCode} returns it), so a
-     * store matching keys with {@code equals} hands the two logical sides ONE slot whenever they share
-     * a JVM - which is every integrated server, i.e. singleplayer. The sides then overwrite and, worse,
+     * <p><b>On the object, and it has to be.</b> Vanilla {@code Entity} declares equality by network
+     * id alone ({@code equals} compares {@code entityId}, {@code hashCode} returns it), so a store
+     * matching keys with {@code equals} hands the two logical sides ONE slot whenever they share a
+     * JVM - which is every integrated server, i.e. singleplayer. The sides then overwrite and, worse,
      * RELEASE each other's captures: a seated pilot, whose SERVER side is excluded from capture every
      * tick, had his CLIENT's capture deleted about five times a second, and the client re-captured and
-     * free-fell in the gap. {@code weakKeys()} switches key comparison to {@code ==}, which makes the
-     * collision unrepresentable rather than merely unlikely; the map is concurrent too, so the two
-     * sides' threads need no external synchronization.</p>
+     * free-fell in the gap. A field of the object makes that collision unrepresentable.</p>
      */
-    private static final Map<Entity, ShipFrameState> STATE =
-            new MapMaker().weakKeys().<Entity, ShipFrameState>makeMap();
+    private static ShipFrameState stateOf(Entity entity) {
+        return ((ShipFrameBody) entity).stellurgy$shipFrame();
+    }
 
     /**
      * What an open deck episode remembers, and it is two different kinds of thing.
@@ -170,7 +164,9 @@ public final class ShipFrameTravel {
      * live one and the difference called an external move; that guard is gone, and with it the
      * question of what a body is allowed to have done between two ticks.</p>
      */
-    private static final class ShipFrameState {
+    public static final class ShipFrameState {
+        private ShipFrameState() {}
+
         /** UUID string of the ANCHOR ship — the ship this capture episode was established on. Every
          *  transform of the episode resolves through it: an aboard body belongs to ONE ship, the
          *  one chosen at capture, for the whole episode. Re-picking the ship by world-AABB
@@ -193,18 +189,14 @@ public final class ShipFrameTravel {
          *  with only the COLLISION resolved against the ship's subspace geometry so it stands on
          *  the hull as on terrain, rides the moving ship, and never tunnels. */
         boolean hullStand;
-        /** Monotonic install stamp ({@link #CAPTURE_EPOCH}) - lets a pending dismount seed tell a
-         *  capture installed DURING its window (which it supersedes) from one that predates it. */
+        /** This body's monotonic install stamp ({@link ShipFrameBody#stellurgy$captureEpoch}) - lets
+         *  a pending dismount seed tell a capture installed DURING its window (which it supersedes)
+         *  from one that predates it. */
         long installEpoch;
         /** Whether this capture came from a seat-dismount/relog SEED (an explicit deck point)
          *  rather than first contact - a re-sent seed no-ops against it instead of re-snapping. */
         boolean seedAnchored;
     }
-
-    /** Monotonic stamp for every capture install, both sides. Comparisons are only ever made
-     *  between installs on the SAME side, so one shared counter serves both. */
-    private static final java.util.concurrent.atomic.AtomicLong CAPTURE_EPOCH =
-            new java.util.concurrent.atomic.AtomicLong();
 
     /** One tick, in seconds - turns the deck's carry velocity into a per-tick displacement. */
     private static final double TICK_SECONDS = 0.05;
@@ -237,7 +229,7 @@ public final class ShipFrameTravel {
             // A HAND-OVER, not a release: the body is not let go, the deck's own frame has it. So
             // the capture is dropped without release()'s drop record, which exists for a body handed
             // to world gravity - and which read, to every observer of the deck, as the deck letting go.
-            STATE.remove(entity);
+            ((ShipFrameBody) entity).stellurgy$setShipFrame(null);
             return false;
         }
         // Vanilla's own gate on travel(): an entity whose movement this side does not simulate (a mob
@@ -258,7 +250,7 @@ public final class ShipFrameTravel {
             release(entity, excluded);
             return false;
         }
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         if (state != null) {
             // Anchored stay/release: the episode keeps talking to ITS ship - the one capture chose -
             // and ends only when the body genuinely leaves it, steps onto world terrain, enters an
@@ -409,7 +401,7 @@ public final class ShipFrameTravel {
                 shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS,
                 shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS,
                 shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS);
-        STATE.get(entity).hullStand = hullStand;
+        stateOf(entity).hullStand = hullStand;
         logCapture(entity, candidate, local[0], local[1], local[2]);
         return true;
     }
@@ -444,7 +436,7 @@ public final class ShipFrameTravel {
             // deck may CLAIM right now - standing contact or an enclosed interior. A flyer
             // anywhere else (open airspace, flown away from his seat, over terrain) keeps
             // world-frame flight untouched.
-            ShipFrameState st = STATE.get(entity);
+            ShipFrameState st = stateOf(entity);
             boolean aboard = st != null && !st.hullStand;
             if (!aboard && !flyCaptureEligible(entity)) {
                 return "creativeFlight";
@@ -473,7 +465,9 @@ public final class ShipFrameTravel {
         // that is not the same question. Testing support first keeps the two answers honest: a
         // declaration for a ship with no deck under these feet is not a capture anyone wants, so it
         // falls through to the sweep rather than forcing a hold onto geometry that cannot carry it.
-        String declared = DeckHold.heldShipId(entity);
+        // A hold has no client half: a client body declares nothing.
+        String declared = entity.world.isRemote ? null
+                : dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.heldShipId(entity);
         if (declared != null && shipSupportObstacleCountFor(entity, declared) > 0) {
             return declared;
         }
@@ -499,8 +493,10 @@ public final class ShipFrameTravel {
         state.carryX = carryX;
         state.carryY = carryY;
         state.carryZ = carryZ;
-        state.installEpoch = CAPTURE_EPOCH.incrementAndGet();
-        STATE.put(entity, state);
+        ShipFrameBody body = (ShipFrameBody) entity;
+        state.installEpoch = body.stellurgy$captureEpoch() + 1;
+        body.stellurgy$setCaptureEpoch(state.installEpoch);
+        body.stellurgy$setShipFrame(state);
     }
 
     /**
@@ -530,30 +526,28 @@ public final class ShipFrameTravel {
     private static void noteSeedOutcome(Entity entity, String shipId, String outcome) {
     }
 
-    /** Remove the capture with an explicit, logged reason: an episode never ends implicitly, it
-     *  ends by naming the gate that ended it. Every path that stops resolving a tracked body goes
-     *  through here - a silent gate leaves stale STATE behind and the camera/HUD keep acting on
-     *  it. No-op for an untracked body. */
+    /**
+     * Stamp a deck-frame hold opening on {@code episode.shipId()}: a capture of this class on the
+     * same craft is the same stay continuing under the other holder, and passes on when it began and
+     * whether a seed placed it; anything else is a new install on the body's own capture clock.
+     */
+    static void stampEpisode(Entity entity, DeckFrameTick.Episode episode) {
+        ShipFrameState state = stateOf(entity);
+        if (state != null && state.shipId.equals(episode.shipId)) {
+            episode.installEpoch = state.installEpoch;
+            episode.seedAnchored = state.seedAnchored;
+        } else {
+            ShipFrameBody body = (ShipFrameBody) entity;
+            episode.installEpoch = body.stellurgy$captureEpoch() + 1;
+            body.stellurgy$setCaptureEpoch(episode.installEpoch);
+        }
+    }
+
     /**
      * Take over a player the deck's own frame was holding and has stopped holding because he took
      * to the air: creative flight aboard is this class's alone. A HAND-OVER, the reverse of the one in
      * {@link #handles} - the same craft, at the deck point he is at, and no drop recorded.
      */
-    /**
-     * Stamp a deck-frame hold opening on {@code episode.shipId()}: a capture of this class on the
-     * same craft is the same stay continuing under the other holder, and passes on when it began and
-     * whether a seed placed it; anything else is a new install on the shared clock.
-     */
-    static void stampEpisode(Entity entity, DeckFrameTick.Episode episode) {
-        ShipFrameState state = STATE.get(entity);
-        if (state != null && state.shipId.equals(episode.shipId)) {
-            episode.installEpoch = state.installEpoch;
-            episode.seedAnchored = state.seedAnchored;
-        } else {
-            episode.installEpoch = CAPTURE_EPOCH.incrementAndGet();
-        }
-    }
-
     static void takeOverFlyer(EntityLivingBase entity, String shipId, double[] local) {
         double[] v = VSIntegration.shipVelocityAtPointFor(
                 entity.world, shipId, entity.posX, entity.posY, entity.posZ);
@@ -564,8 +558,13 @@ public final class ShipFrameTravel {
         logCapture(entity, shipId, local[0], local[1], local[2]);
     }
 
+    /** Remove the capture with an explicit, logged reason: an episode never ends implicitly, it
+     *  ends by naming the gate that ended it. Every path that stops resolving a tracked body goes
+     *  through here - a silent gate leaves stale state behind and the camera/HUD keep acting on
+     *  it. No-op for an untracked body. */
     private static void release(Entity entity, String reason) {
-        if (STATE.remove(entity) != null) {
+        if (stateOf(entity) != null) {
+            ((ShipFrameBody) entity).stellurgy$setShipFrame(null);
             // Nothing durable is written here. The "this player is aboard ship X, at Y" record is
             // derived from state by ONE writer on its own cadence, and that writer runs OUTSIDE the
             // world's entity tick - which is where this runs. Editing the record from here would be
@@ -592,7 +591,7 @@ public final class ShipFrameTravel {
         if (DeckFrameTick.holds(entity)) {
             return DeckFrameTick.heldDeckPoint(entity);
         }
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         return state == null || state.hullStand
                 ? null : new double[]{state.localX, state.localY, state.localZ};
     }
@@ -662,7 +661,7 @@ public final class ShipFrameTravel {
         // Motion is zeroed below = "at rest RELATIVE TO THE DECK"; the carry the zeroed motion is
         // considered to contain is therefore zero too.
         captureState(entity, shipId, subX, subY, subZ, 0.0, 0.0, 0.0);
-        ShipFrameState installed = STATE.get(entity);
+        ShipFrameState installed = stateOf(entity);
         if (installed != null) {
             installed.seedAnchored = true;
         }
@@ -700,7 +699,7 @@ public final class ShipFrameTravel {
         final java.lang.ref.WeakReference<Entity> body;
         final String shipId;
         final double subX, subY, subZ;
-        /** {@link #CAPTURE_EPOCH} at slot creation: captures with a LARGER stamp were installed
+        /** The body's capture stamp at slot creation: captures with a LARGER stamp were installed
          *  during this seed's window and are superseded by it. */
         final long epoch;
         /** A RESTORE seed re-establishes a recorded state and outranks any capture this side made
@@ -715,14 +714,22 @@ public final class ShipFrameTravel {
             this.subX = subX;
             this.subY = subY;
             this.subZ = subZ;
-            this.epoch = CAPTURE_EPOCH.get();
+            this.epoch = ((ShipFrameBody) body).stellurgy$captureEpoch();
             this.restore = restore;
             this.ticksLeft = PENDING_SEED_TTL_TICKS;
         }
     }
 
-    /** The (single) pending seed. Client main thread only. */
-    private static PendingSeed pendingSeed = null;
+    /** The pending seeds of the bodies in one client world, as that world's part
+     *  ({@link dev.stannismod.stellurgy.world.WorldRuntime}): a seed places a body in that world and
+     *  goes with it. Weak keys, so a seed never keeps a body alive. Client main thread only. */
+    private static final class PendingSeeds {
+        final Map<Entity, PendingSeed> byBody = new java.util.WeakHashMap<Entity, PendingSeed>();
+    }
+
+    private static Map<Entity, PendingSeed> pendingSeedsIn(World world) {
+        return dev.stannismod.stellurgy.world.WorldRuntime.of(world, PendingSeeds.class, PendingSeeds::new).byBody;
+    }
 
     /** What a pending seed should do this tick. Pure - pinned by unit tests. */
     public enum PendingSeedDecision { WAIT, EXPIRE, ALREADY_SEEDED, KEEP_PREEXISTING, APPLY }
@@ -793,49 +800,55 @@ public final class ShipFrameTravel {
         // Whichever holds the body: a re-sent seed would otherwise find the travel resolver's slot
         // empty under a deck-frame hold, and put him back on his dismount point every tick it is sent.
         DeckFrameTick.Episode deck = DeckFrameTick.episodeOf(entity);
-        ShipFrameState st = STATE.get(entity);
+        ShipFrameState st = stateOf(entity);
         if (deck != null ? deck.seedAnchored && shipId.equals(deck.shipId)
                 : st != null && st.seedAnchored && shipId.equals(st.shipId)) {
             return; // the seed already took; a re-send must not teleport the body again
         }
-        PendingSeed slot = pendingSeed;
-        if (slot != null && slot.body.get() == entity && slot.shipId.equals(shipId)
-                && slot.restore == restore) {
+        Map<Entity, PendingSeed> seeds = pendingSeedsIn(entity.world);
+        PendingSeed slot = seeds.get(entity);
+        if (slot != null && slot.shipId.equals(shipId) && slot.restore == restore) {
             slot.ticksLeft = PENDING_SEED_TTL_TICKS;
         } else {
-            pendingSeed = new PendingSeed(entity, shipId, subX, subY, subZ, restore);
+            seeds.put(entity, new PendingSeed(entity, shipId, subX, subY, subZ, restore));
         }
-        tryApplyPendingSeed(); // zero-tick fast path when nothing blocks
+        tryApplyPendingSeed(entity); // zero-tick fast path when nothing blocks
     }
 
-    /** Per-client-tick driver for the pending seed; a no-op when no seed is pending. */
+    /** Per-client-tick driver for {@code player}'s pending seed; a no-op when none is pending. */
     public static void clientTickPendingSeed(Entity player) {
-        PendingSeed slot = pendingSeed;
+        if (player == null || player.world == null) {
+            return;
+        }
+        Map<Entity, PendingSeed> seeds = pendingSeedsIn(player.world);
+        PendingSeed slot = seeds.get(player);
         if (slot == null) {
             return;
         }
-        Entity body = slot.body.get();
-        if (body == null || body.isDead || body != player) {
-            pendingSeed = null; // the seed's target is gone (a relog recreates the player object)
+        if (player.isDead) {
+            seeds.remove(player);
             return;
         }
         slot.ticksLeft--;
-        tryApplyPendingSeed();
+        tryApplyPendingSeed(player);
     }
 
-    private static void tryApplyPendingSeed() {
-        PendingSeed slot = pendingSeed;
+    private static void tryApplyPendingSeed(Entity body) {
+        if (body.world == null) {
+            return;
+        }
+        Map<Entity, PendingSeed> seeds = pendingSeedsIn(body.world);
+        PendingSeed slot = seeds.get(body);
         if (slot == null) {
             return;
         }
-        Entity body = slot.body.get();
-        if (body == null || body.isDead || body.world == null) {
-            pendingSeed = null;
+        if (body.isDead) {
+            seeds.remove(body);
             return;
         }
         // The hold the seed is weighed against is whichever holds the body: the deck frame's first.
         DeckFrameTick.Episode deck = DeckFrameTick.episodeOf(body);
-        ShipFrameState st = STATE.get(body);
+        ShipFrameState st = stateOf(body);
         boolean excluded = body instanceof EntityLivingBase
                 && excludedStateOf((EntityLivingBase) body) != null;
         boolean captureExists = deck != null || st != null;
@@ -851,13 +864,9 @@ public final class ShipFrameTravel {
             case WAIT:
                 return;
             case EXPIRE:
-                pendingSeed = null;
-                return;
             case ALREADY_SEEDED:
-                pendingSeed = null;
-                return;
             case KEEP_PREEXISTING:
-                pendingSeed = null;
+                seeds.remove(body);
                 return;
             case APPLY:
             default:
@@ -876,11 +885,11 @@ public final class ShipFrameTravel {
                 // travel resolver takes it only for a body the deck refuses, and gives up a capture
                 // of its own here so the body is never held twice.
                 if (DeckFrameTick.holdSeeded(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world)) {
-                    STATE.remove(body);
+                    ((ShipFrameBody) body).stellurgy$setShipFrame(null);
                 } else {
                     applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
                 }
-                pendingSeed = null;
+                seeds.remove(body);
         }
     }
 
@@ -895,7 +904,7 @@ public final class ShipFrameTravel {
      * containment hijacks the view of anyone flying THROUGH that airspace without standing on the deck.</p>
      */
     public static boolean isResolving(Entity entity) {
-        return entity != null && STATE.containsKey(entity);
+        return entity != null && stateOf(entity) != null;
     }
 
     /**
@@ -921,7 +930,7 @@ public final class ShipFrameTravel {
         if (deckHeld != null) {
             return deckHeld;
         }
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         return state == null ? null : state.shipId;
     }
 
@@ -936,7 +945,7 @@ public final class ShipFrameTravel {
         if (entity == null) {
             return null;
         }
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         if (state == null || state.hullStand) {
             return null;
         }
@@ -956,7 +965,7 @@ public final class ShipFrameTravel {
         if (DeckFrameTick.holds(entity)) {
             return true;
         }
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         return state != null && !state.hullStand;
     }
 
@@ -994,7 +1003,7 @@ public final class ShipFrameTravel {
         if (deckHeld != null) {
             return deckHeld;
         }
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         return state == null || state.hullStand ? null : state.shipId;
     }
 
@@ -1060,7 +1069,7 @@ public final class ShipFrameTravel {
             m.put("verdict", true);
             return m;
         }
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         boolean tracked = state != null;
         m.put("alreadyTracked", tracked);
         m.put("anchorShipId", tracked ? state.shipId : null);
@@ -1688,7 +1697,7 @@ public final class ShipFrameTravel {
             return false;
         }
         World world = entity.world;
-        ShipFrameState anchored = STATE.get(entity);
+        ShipFrameState anchored = stateOf(entity);
         if (anchored == null) {
             return false; // no open episode, so there is no anchor to resolve this tick through
         }
@@ -1758,7 +1767,7 @@ public final class ShipFrameTravel {
         float deckYaw = deckYawDeg(entity, shipId);
         noteWalkInputs(entity, strafe, forward, deckYaw, motion[0], motion[1], motion[2]);
         if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()
-                && (walkTraceTicks++ % 10) == 0
+                && (world.getTotalWorldTime() % 10) == 0
                 && (strafe != 0f || forward != 0f
                         || Math.abs(motion[0]) > 0.05 || Math.abs(motion[2]) > 0.05)) {
             dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/WALK]"
@@ -1886,7 +1895,10 @@ public final class ShipFrameTravel {
 
     /** The installed client port, or {@code null} on a dedicated server, which has no client look
      *  and where a player's flight is client-authoritative anyway. Written only by
-     *  {@link #installClientLookSource}. */
+     *  {@link #installClientLookSource}.
+     *
+     * Effectively final, process lifetime: written only by ShipFrameTravel.installClientLookSource.
+     */
     private static volatile ClientLookSource clientLookSource = null;
 
     /**
@@ -2116,7 +2128,7 @@ public final class ShipFrameTravel {
         double carryY = shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS;
         double carryZ = shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS;
         remember(entity, shipId, sub[0], sub[1], sub[2], carryX, carryY, carryZ);
-        ShipFrameState refreshed = STATE.get(entity);
+        ShipFrameState refreshed = stateOf(entity);
         if (refreshed != null) {
             // `remember` no longer rebuilds the state, so this is a no-op on the ordinary path and
             // is kept for the one where it is not: a commit that arrives with no open episode, or
@@ -2158,7 +2170,10 @@ public final class ShipFrameTravel {
 
     /** Gravity-up for the hull walker. The stand/slide mechanic follows the LOCAL gravity by
      *  ruling; this constant is the seam a zero-/alternate-gravity space subsystem later feeds
-     *  ({@code null} would disable the lift/step/slide machinery honestly). */
+     *  ({@code null} would disable the lift/step/slide machinery honestly).
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final double[] WORLD_UP = {0.0, 1.0, 0.0};
 
     /** The ship's three axes as world-frame unit vectors, or null while the transform is away. */
@@ -2219,7 +2234,7 @@ public final class ShipFrameTravel {
         if (!handles(entity)) {
             return false;
         }
-        ShipFrameState anchored = STATE.get(entity);
+        ShipFrameState anchored = stateOf(entity);
         if (anchored == null) {
             return false;
         }
@@ -2297,7 +2312,7 @@ public final class ShipFrameTravel {
      */
     private static void remember(Entity entity, String shipId, double localX, double localY,
                                  double localZ, double carryX, double carryY, double carryZ) {
-        ShipFrameState state = STATE.get(entity);
+        ShipFrameState state = stateOf(entity);
         if (state == null || !shipId.equals(state.shipId)) {
             captureState(entity, shipId, localX, localY, localZ, carryX, carryY, carryZ);
             logCapture(entity, shipId, localX, localY, localZ);
@@ -2382,11 +2397,10 @@ public final class ShipFrameTravel {
             return 0;
         }
         int carried = 0;
-        for (java.util.Map.Entry<Entity, ShipFrameState> held : STATE.entrySet()) {
-            Entity entity = held.getKey();
-            ShipFrameState state = held.getValue();
-            if (entity == null || state == null || !shipId.equals(state.shipId)
-                    || entity.world != world || entity.isDead || entity.isRiding()) {
+        for (Entity entity : world.loadedEntityList) {
+            ShipFrameState state = stateOf(entity);
+            if (state == null || !shipId.equals(state.shipId)
+                    || entity.isDead || entity.isRiding()) {
                 continue;
             }
             double x = entity.posX + dx, y = entity.posY + dy, z = entity.posZ + dz;
@@ -2405,11 +2419,10 @@ public final class ShipFrameTravel {
             return 0;
         }
         int reseated = 0;
-        for (java.util.Map.Entry<Entity, ShipFrameState> held : STATE.entrySet()) {
-            Entity entity = held.getKey();
-            ShipFrameState state = held.getValue();
-            if (entity == null || state == null || state.shipId == null
-                    || entity.world != world || entity.isDead || entity.isRiding()
+        for (Entity entity : world.loadedEntityList) {
+            ShipFrameState state = stateOf(entity);
+            if (state == null || state.shipId == null
+                    || entity.isDead || entity.isRiding()
                     || followsRemoteOwner(entity)) {
                 continue;
             }

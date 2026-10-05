@@ -51,6 +51,7 @@ public class AdvancedForceFieldSystem {
     public static final String MODNAME = "AdvancedForceFieldSystem";
     public static final String VERSION = "0.0.1";
 
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.preInit. */
     public static Logger LOG;
     public static final int GUI_FIELD_GENERATOR = 1;
     public static final int GUI_ADMIN_ENERGY_SOURCE = 2;
@@ -59,28 +60,53 @@ public class AdvancedForceFieldSystem {
     public static final int GUI_SHIELD_NETWORK = 5;
     public static final int GUI_SHIELD_CONSOLE = 6;
     public static final int GUI_NETWORK_MAP = 8;
-    public static final SimpleNetworkWrapper NETWORK = NetworkRegistry.INSTANCE.newSimpleChannel(MODID);
-    private static int packetId = 0;
+    /** The AFFS packet channel. Effectively final, process lifetime: created, and its messages
+     *  registered, only by {@link #preInit}. */
+    public SimpleNetworkWrapper network;
+    /** The next message discriminator. Effectively final, process lifetime: advanced only by
+     *  {@link #preInit}. */
+    private int packetId = 0;
 
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.cacheRegisteredItem. */
     public static Item itemFieldGenerator;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.cacheRegisteredItem. */
     public static Item itemShieldGenerator;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.cacheRegisteredItem. */
     public static Item itemShieldAccumulator;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.cacheRegisteredItem. */
     public static Item itemShieldCable;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.cacheRegisteredItem. */
     public static Item itemAdminEnergySource;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.cacheRegisteredItem. */
     public static Item itemContourFrame;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.cacheRegisteredItem. */
     public static Item itemContourInjector;
+    /**
+     * Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent,
+     * AdvancedForceFieldSystem.cacheRegisteredItem.
+     */
     public static Item itemLaserGun;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static ItemCodeDevice ITEM_CODE_DEVICE;
 
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockFieldGenerator BLOCK_FIELD_GENERATOR;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockShieldGenerator BLOCK_SHIELD_GENERATOR;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockShieldAccumulator BLOCK_SHIELD_ACCUMULATOR;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockShieldCable BLOCK_SHIELD_CABLE;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockShieldConsole BLOCK_SHIELD_CONSOLE;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockAdminEnergySource BLOCK_ADMIN_ENERGY_SOURCE;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockContourFrame BLOCK_CONTOUR_FRAME;
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     public static BlockContourInjector BLOCK_CONTOUR_INJECTOR;
-    public static CreativeTabs tabAffs = new CreativeTabs("tabAffs") {
+    /** Effectively final, process lifetime: built with this object. */
+    public final CreativeTabs tabAffs = new CreativeTabs("tabAffs") {
         @Override
         public ItemStack getTabIconItem() {
             Item icon = itemFieldGenerator != null ? itemFieldGenerator
@@ -90,9 +116,10 @@ public class AdvancedForceFieldSystem {
         }
     };
 
-    // Self-initialised (ready at class-load, before any registry event) — the
-    // guest is no longer a @Mod, so FML does not inject @Mod.Instance for it.
-    public static final AdvancedForceFieldSystem INSTANCE = new AdvancedForceFieldSystem();
+    /** Built by the host mod object, which owns it ({@code Stellurgy.instance.affs}): AFFS is no longer
+     *  a @Mod, so FML has no @Mod.Instance to inject for it. */
+    public AdvancedForceFieldSystem() {
+    }
 
     public void preInit(FMLPreInitializationEvent event) {
         LOG = event.getModLog();
@@ -100,12 +127,16 @@ public class AdvancedForceFieldSystem {
         initContent();
         // GUI handler is registered by Stellurgy (AffsGuiRouter) — the guest is no longer its own mod
         // container, so it cannot own an IGuiHandler. GUIs are opened via openAffsGui below.
-        NETWORK.registerMessage(PacketSetFieldRadius.Handler.class, PacketSetFieldRadius.class, packetId++, Side.SERVER);
-        NETWORK.registerMessage(PacketSyncCodeValue.Handler.class, PacketSyncCodeValue.class, packetId++, Side.SERVER);
-        NETWORK.registerMessage(PacketSyncActiveGenerators.Handler.class, PacketSyncActiveGenerators.class, packetId++, Side.CLIENT);
-        NETWORK.registerMessage(PacketFieldTouchEffect.Handler.class, PacketFieldTouchEffect.class, packetId++, Side.CLIENT);
-        NETWORK.registerMessage(PacketOpenGui.Handler.class, PacketOpenGui.class, packetId++, Side.SERVER);
-        NETWORK.registerMessage(PacketSetShieldResistanceBias.Handler.class, PacketSetShieldResistanceBias.class, packetId++, Side.SERVER);
+        if (network != null) {
+            throw new IllegalStateException("AFFS pre-init runs once per process");
+        }
+        network = NetworkRegistry.INSTANCE.newSimpleChannel(MODID);
+        network.registerMessage(PacketSetFieldRadius.Handler.class, PacketSetFieldRadius.class, packetId++, Side.SERVER);
+        network.registerMessage(PacketSyncCodeValue.Handler.class, PacketSyncCodeValue.class, packetId++, Side.SERVER);
+        network.registerMessage(PacketSyncActiveGenerators.Handler.class, PacketSyncActiveGenerators.class, packetId++, Side.CLIENT);
+        network.registerMessage(PacketFieldTouchEffect.Handler.class, PacketFieldTouchEffect.class, packetId++, Side.CLIENT);
+        network.registerMessage(PacketOpenGui.Handler.class, PacketOpenGui.class, packetId++, Side.SERVER);
+        network.registerMessage(PacketSetShieldResistanceBias.Handler.class, PacketSetShieldResistanceBias.class, packetId++, Side.SERVER);
     }
 
     public void init(FMLInitializationEvent event) {
@@ -140,6 +171,7 @@ public class AdvancedForceFieldSystem {
                 world, x, y, z);
     }
 
+    /** Effectively final, process lifetime: written only by AdvancedForceFieldSystem.initContent. */
     private static List<Block> blocks;
 
     private static void initContent() {

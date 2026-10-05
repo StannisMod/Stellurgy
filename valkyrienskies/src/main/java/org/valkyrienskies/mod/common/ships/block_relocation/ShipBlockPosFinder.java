@@ -17,8 +17,7 @@ public class ShipBlockPosFinder extends SpatialDetector {
     @Override
     public boolean isValidExpansion(int x, int y, int z) {
         mutablePos.setPos(x, y, z);
-        return !BlockPhysicsDetails.blocksToNotPhysicsInfuse
-            .contains(cache.getBlockState(mutablePos).getBlock());
+        return !BlockPhysicsDetails.isNotPhysicsInfused(cache.getBlockState(mutablePos).getBlock());
     }
 
 }

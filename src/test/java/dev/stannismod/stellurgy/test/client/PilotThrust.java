@@ -29,7 +29,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
  * <p>It replaced a poll that held the key until the craft had climbed, up to 400 client ticks. That
  * ceiling was not only patience: the key was held while it ran, so it also decided how far a craft
  * that did not stop could fly — and a craft under a held throttle for 200 ticks leaves the loaded
- * region (measured in {@code VSGroundFlightGroupE2ETest}, which then read {@code managed:false}).</p>
+ * region (measured in {@code VSGroundFlightGroupTest}, which then read {@code managed:false}).</p>
  *
  * <p>The two links are what make a red legible: a key that never arrived fails naming the missing
  * {@code pilot_input_set}, never as a craft that "did not climb".</p>
@@ -91,8 +91,7 @@ final class PilotThrust {
             serverLog.awaitMatching(pressMark, "pilot_input_set",
                     seen -> Events.anyRecordHasAll(seen, "input", "set", "dim", String.valueOf(dim)),
                     "with input = set in dim " + dim, what, LINK_TICKS);
-            // STIMULUS: thrustTicks of the hull's world clock under the held key, from its arrival.
-            // The dose, not patience — see DOSE_TICKS; the caller reads what it did.
+            // STIMULUS: the dose under the held key, counted from its arrival — see DOSE_TICKS.
             GameTicks.advanceWorld(server, dim, thrustTicks);
         } catch (Exception | AssertionError failed) {
             bot.releaseKey(Keyboard.KEY_R);

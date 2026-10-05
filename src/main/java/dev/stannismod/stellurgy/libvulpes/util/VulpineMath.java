@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.util;
 
 public class VulpineMath {
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static double log2 = Math.log(2);
 	
 	public static double log2(double in) {return Math.log(in)/log2;}

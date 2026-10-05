@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -70,14 +69,6 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         ok(client().execute("stellurgytest rocket arm-prelaunch-cancel"));
     }
 
-    @AfterClass
-    public static void disarmPreLaunchCanceller() throws Exception {
-        // Don't leak the canceller subscription into sibling test
-        // classes — any test that legitimately needs LAUNCH_COUNTER to
-        // be set to 200 would observe phantom cancellations.
-        ok(client().execute("stellurgytest rocket disarm-prelaunch-cancel"));
-    }
-
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
@@ -91,7 +82,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
      *  {@code arm-prelaunch-cancel} reset the counter. Each
      *  prepareLaunch() call that reaches line 1706 of EntityRocket
      *  bumps this. */
-    private static int observedPreLaunchEvents() throws Exception {
+    private int observedPreLaunchEvents() throws Exception {
         String resp = join(client().execute(
                 "stellurgytest rocket prelaunch-cancel-counts"));
         Reply mReply = Reply.of(resp);
@@ -100,11 +91,11 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     }
 
     /** Run a single update() tick on the monitoring station tile. */
-    private static void tickMonitor(int x, int y, int z) throws Exception {
+    private void tickMonitor(int x, int y, int z) throws Exception {
         ok(client().execute("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1"));
     }
 
-    private static boolean monitorWasPowered(int x, int y, int z) throws Exception {
+    private boolean monitorWasPowered(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "stellurgytest infra monitor-info 0 " + x + " " + y + " " + z));
         Reply mReply = Reply.of(resp);
@@ -112,7 +103,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         return Boolean.parseBoolean(mReply.text(WAS_POWERED));
     }
 
-    private static boolean monitorEquivalentPower(int x, int y, int z) throws Exception {
+    private boolean monitorEquivalentPower(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "stellurgytest infra monitor-info 0 " + x + " " + y + " " + z));
         Reply mReply = Reply.of(resp);
@@ -123,19 +114,19 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     /** Place a redstone block adjacent (east) to the monitor — this
      *  raises {@code world.isBlockIndirectlyGettingPowered(monitor.pos)}
      *  to a non-zero level. */
-    private static void powerOn(int x, int y, int z) throws Exception {
+    private void powerOn(int x, int y, int z) throws Exception {
         ok(client().execute("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
                 + " minecraft:redstone_block"));
     }
 
     /** Replace the adjacent redstone block with air, dropping power. */
-    private static void powerOff(int x, int y, int z) throws Exception {
+    private void powerOff(int x, int y, int z) throws Exception {
         ok(client().execute("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
                 + " minecraft:air"));
     }
 
     /** Assembles a rocket via the standard fixture; returns its entity id. */
-    private static int assembleFixture(FixtureSite site) throws Exception {
+    private int assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so

@@ -15,27 +15,27 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
 /**
  * Wavefront Object importer
  * Based heavily off of the specifications found at http://en.wikipedia.org/wiki/Wavefront_.obj_file
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public class WavefrontObject {
-    private static Pattern vertexPattern = Pattern.compile("(v( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *\\n)|(v( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *$)");
-    private static Pattern vertexNormalPattern = Pattern.compile("(vn( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *\\n)|(vn( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *$)");
-    private static Pattern textureCoordinatePattern = Pattern.compile("(vt( (\\-){0,1}\\d+\\.\\d+){2,3} *\\n)|(vt( (\\-){0,1}\\d+(\\.\\d+)?){2,3} *$)");
-    private static Pattern face_V_VT_VN_Pattern = Pattern.compile("(f( \\d+/\\d+/\\d+){3,4} *\\n)|(f( \\d+/\\d+/\\d+){3,4} *$)");
-    private static Pattern face_V_VT_Pattern = Pattern.compile("(f( \\d+/\\d+){3,4} *\\n)|(f( \\d+/\\d+){3,4} *$)");
-    private static Pattern face_V_VN_Pattern = Pattern.compile("(f( \\d+//\\d+){3,4} *\\n)|(f( \\d+//\\d+){3,4} *$)");
-    private static Pattern face_V_Pattern = Pattern.compile("(f( \\d+){3,4} *\\n)|(f( \\d+){3,4} *$)");
-    private static Pattern groupObjectPattern = Pattern.compile("([go]( [\\w\\d\\.]+) *\\n)|([go]( [\\w\\d\\.]+) *$)");
-
-    private static Matcher vertexMatcher, vertexNormalMatcher, textureCoordinateMatcher;
-    private static Matcher face_V_VT_VN_Matcher, face_V_VT_Matcher, face_V_VN_Matcher, face_V_Matcher;
-    private static Matcher groupObjectMatcher;
+    // Compiled patterns are immutable and built from literals only, so they are the same value in
+    // every lifetime whenever this class happens to load. A Matcher is per-parse scratch and is
+    // never kept: one shared between two parses would carry one model's match state into the other.
+    private static final Pattern vertexPattern = Pattern.compile("(v( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *\\n)|(v( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *$)");
+    private static final Pattern vertexNormalPattern = Pattern.compile("(vn( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *\\n)|(vn( (\\-){0,1}\\d+(\\.\\d+)?){3,4} *$)");
+    private static final Pattern textureCoordinatePattern = Pattern.compile("(vt( (\\-){0,1}\\d+\\.\\d+){2,3} *\\n)|(vt( (\\-){0,1}\\d+(\\.\\d+)?){2,3} *$)");
+    private static final Pattern face_V_VT_VN_Pattern = Pattern.compile("(f( \\d+/\\d+/\\d+){3,4} *\\n)|(f( \\d+/\\d+/\\d+){3,4} *$)");
+    private static final Pattern face_V_VT_Pattern = Pattern.compile("(f( \\d+/\\d+){3,4} *\\n)|(f( \\d+/\\d+){3,4} *$)");
+    private static final Pattern face_V_VN_Pattern = Pattern.compile("(f( \\d+//\\d+){3,4} *\\n)|(f( \\d+//\\d+){3,4} *$)");
+    private static final Pattern face_V_Pattern = Pattern.compile("(f( \\d+){3,4} *\\n)|(f( \\d+){3,4} *$)");
+    private static final Pattern groupObjectPattern = Pattern.compile("([go]( [\\w\\d\\.]+) *\\n)|([go]( [\\w\\d\\.]+) *$)");
 
     public ArrayList<Vertex> vertices = new ArrayList<>();
     public ArrayList<Vertex> vertexNormals = new ArrayList<>();
@@ -55,6 +55,18 @@ public class WavefrontObject {
         }
     }
 
+    /**
+     * The model at {@code resource}, for a renderer that cannot draw without it: a model that does
+     * not parse is a broken jar, so it fails here, naming the model, rather than at the first draw.
+     */
+    public static WavefrontObject required(ResourceLocation resource) {
+        try {
+            return new WavefrontObject(resource);
+        } catch (ModelFormatException e) {
+            throw new IllegalStateException("model " + resource + " cannot be loaded", e);
+        }
+    }
+
     public WavefrontObject(String filename, InputStream inputStream) throws ModelFormatException {
         this.fileName = filename;
         loadObjModel(inputStream);
@@ -66,12 +78,7 @@ public class WavefrontObject {
      * @return true if the line is a valid vertex, false otherwise
      */
     private static boolean isValidVertexLine(String line) {
-        if (vertexMatcher != null) {
-            vertexMatcher.reset();
-        }
-
-        vertexMatcher = vertexPattern.matcher(line);
-        return vertexMatcher.matches();
+        return vertexPattern.matcher(line).matches();
     }
 
     /***
@@ -80,12 +87,7 @@ public class WavefrontObject {
      * @return true if the line is a valid vertex normal, false otherwise
      */
     private static boolean isValidVertexNormalLine(String line) {
-        if (vertexNormalMatcher != null) {
-            vertexNormalMatcher.reset();
-        }
-
-        vertexNormalMatcher = vertexNormalPattern.matcher(line);
-        return vertexNormalMatcher.matches();
+        return vertexNormalPattern.matcher(line).matches();
     }
 
     /***
@@ -94,12 +96,7 @@ public class WavefrontObject {
      * @return true if the line is a valid texture coordinate, false otherwise
      */
     private static boolean isValidTextureCoordinateLine(String line) {
-        if (textureCoordinateMatcher != null) {
-            textureCoordinateMatcher.reset();
-        }
-
-        textureCoordinateMatcher = textureCoordinatePattern.matcher(line);
-        return textureCoordinateMatcher.matches();
+        return textureCoordinatePattern.matcher(line).matches();
     }
 
     /***
@@ -108,12 +105,7 @@ public class WavefrontObject {
      * @return true if the line is a valid face that matches the format "f v1/vt1/vn1 ..." (with a minimum of 3 points in the face, and a maximum of 4), false otherwise
      */
     private static boolean isValidFace_V_VT_VN_Line(String line) {
-        if (face_V_VT_VN_Matcher != null) {
-            face_V_VT_VN_Matcher.reset();
-        }
-
-        face_V_VT_VN_Matcher = face_V_VT_VN_Pattern.matcher(line);
-        return face_V_VT_VN_Matcher.matches();
+        return face_V_VT_VN_Pattern.matcher(line).matches();
     }
 
     /***
@@ -122,12 +114,7 @@ public class WavefrontObject {
      * @return true if the line is a valid face that matches the format "f v1/vt1 ..." (with a minimum of 3 points in the face, and a maximum of 4), false otherwise
      */
     private static boolean isValidFace_V_VT_Line(String line) {
-        if (face_V_VT_Matcher != null) {
-            face_V_VT_Matcher.reset();
-        }
-
-        face_V_VT_Matcher = face_V_VT_Pattern.matcher(line);
-        return face_V_VT_Matcher.matches();
+        return face_V_VT_Pattern.matcher(line).matches();
     }
 
     /***
@@ -136,12 +123,7 @@ public class WavefrontObject {
      * @return true if the line is a valid face that matches the format "f v1//vn1 ..." (with a minimum of 3 points in the face, and a maximum of 4), false otherwise
      */
     private static boolean isValidFace_V_VN_Line(String line) {
-        if (face_V_VN_Matcher != null) {
-            face_V_VN_Matcher.reset();
-        }
-
-        face_V_VN_Matcher = face_V_VN_Pattern.matcher(line);
-        return face_V_VN_Matcher.matches();
+        return face_V_VN_Pattern.matcher(line).matches();
     }
 
     /***
@@ -150,12 +132,7 @@ public class WavefrontObject {
      * @return true if the line is a valid face that matches the format "f v1 ..." (with a minimum of 3 points in the face, and a maximum of 4), false otherwise
      */
     private static boolean isValidFace_V_Line(String line) {
-        if (face_V_Matcher != null) {
-            face_V_Matcher.reset();
-        }
-
-        face_V_Matcher = face_V_Pattern.matcher(line);
-        return face_V_Matcher.matches();
+        return face_V_Pattern.matcher(line).matches();
     }
 
     /***
@@ -173,12 +150,7 @@ public class WavefrontObject {
      * @return true if the line is a valid group (or object), false otherwise
      */
     private static boolean isValidGroupObjectLine(String line) {
-        if (groupObjectMatcher != null) {
-            groupObjectMatcher.reset();
-        }
-
-        groupObjectMatcher = groupObjectPattern.matcher(line);
-        return groupObjectMatcher.matches();
+        return groupObjectPattern.matcher(line).matches();
     }
 
     private void loadObjModel(InputStream inputStream) throws ModelFormatException {

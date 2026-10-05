@@ -21,54 +21,54 @@ import java.util.function.Supplier;
  * and even replaced outright, because no world outside the branch was ever generated under it and it
  * therefore owes nobody compatibility. <b>"Shipped" means merged to the release branch</b>, not landed
  * on a feature branch; the freeze begins at the merge, and that is the moment a version stops being
- * editable and starts being history.
+ * editable and starts being history. That freeze binds a STABLE version: an alpha (label {@code 0.x})
+ * stays editable in place after it ships — its leading zero is that promise — and records each such
+ * edit, with its measured blast radius, in its own javadoc.
  *
  * <p>Registering a supplier rather than an instance keeps construction lazy and makes it explicit that
  * a schema is cheap to build and holds no world state.
+ *
+ * <p>A catalogue is an immutable value, not a process registry: the versions this build carries are
+ * code, so {@link #builtIn()} builds them, and a {@link UniverseRegistry} is handed the catalogue it
+ * answers from ({@link UniverseRegistry#bindSchemas}).
  */
 public final class UniverseSchemas {
-
-    private static final Map<Integer, Supplier<UniverseSchema>> REGISTRY =
-            new LinkedHashMap<Integer, Supplier<UniverseSchema>>();
-
-    static {
-        register(UniverseSchemaV0.VERSION, new Supplier<UniverseSchema>() {
-            @Override
-            public UniverseSchema get() {
-                return new UniverseSchemaV0();
-            }
-        });
-    }
 
     /** The newest released version — what a fresh world is stamped with. */
     public static final int CURRENT = UniverseSchemaV0.VERSION;
 
-    private UniverseSchemas() {
+    private final Map<Integer, Supplier<UniverseSchema>> byVersion;
+
+    private UniverseSchemas(Map<Integer, Supplier<UniverseSchema>> byVersion) {
+        this.byVersion = Collections.unmodifiableMap(new LinkedHashMap<>(byVersion));
     }
 
-    private static void register(int version, Supplier<UniverseSchema> supplier) {
-        REGISTRY.put(version, supplier);
+    /** The versions this build carries. */
+    public static UniverseSchemas builtIn() {
+        Map<Integer, Supplier<UniverseSchema>> versions = new LinkedHashMap<>();
+        versions.put(UniverseSchemaV0.VERSION, UniverseSchemaV0::new);
+        return new UniverseSchemas(versions);
     }
 
-    /** The schema for {@code version}, or empty when this build does not carry it. */
-    public static Optional<UniverseSchema> of(int version) {
-        Supplier<UniverseSchema> supplier = REGISTRY.get(version);
+    /** The schema for {@code version}, or empty when this catalogue does not carry it. */
+    public Optional<UniverseSchema> of(int version) {
+        Supplier<UniverseSchema> supplier = byVersion.get(version);
         return (supplier == null) ? Optional.<UniverseSchema>empty() : Optional.of(supplier.get());
     }
 
     /** The newest released schema — what a world with no stamp of its own is generated under. */
-    public static UniverseSchema current() {
+    public UniverseSchema current() {
         Optional<UniverseSchema> schema = of(CURRENT);
         if (!schema.isPresent()) {
             throw new IllegalStateException("the current universe schema " + CURRENT
-                    + " is not registered");
+                    + " is not in this catalogue");
         }
         return schema.get();
     }
 
-    /** Every version this build carries, ascending — for diagnostics and for the refusal message. */
-    public static List<Integer> released() {
-        List<Integer> versions = new ArrayList<>(REGISTRY.keySet());
+    /** Every version this catalogue carries, ascending - for diagnostics and for the refusal message. */
+    public List<Integer> released() {
+        List<Integer> versions = new ArrayList<>(byVersion.keySet());
         Collections.sort(versions);
         return Collections.unmodifiableList(versions);
     }
