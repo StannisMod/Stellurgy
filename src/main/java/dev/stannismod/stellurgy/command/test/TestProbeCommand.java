@@ -5512,7 +5512,8 @@ public class TestProbeCommand extends CommandBase {
                     (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) gateTe;
             boolean gatePlanetSide = !(gateWorld.provider
                     instanceof dev.stannismod.stellurgy.space.WorldProviderSpaceSlot);
-            int gateCeiling = gateAfc.entryCeiling();
+            java.util.OptionalInt gateLine = gateAfc.entryCeiling();
+            String gateCeiling = gateLine.isPresent() ? String.valueOf(gateLine.getAsInt()) : "null";
             double[] gatePose = dev.stannismod.stellurgy.integration.vs.VSIntegration
                     .getShipWorldPosition(gateWorld, gateAfcPos);
             gate.append(",\"afcResolved\":true");
@@ -5572,11 +5573,10 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"ceiling\":").append(gateCeiling);
             // The two numbers the ceiling is derived FROM, beside it: a ceiling that will not be
             // crossed says nothing about which of the two put it there.
-            dev.stannismod.stellurgy.dimension.DimensionProperties gateProps =
-                    dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
-                            .getDimensionProperties(gateWorld.provider.getDimension());
-            gate.append(",\"orbitHeight\":").append(gateProps != null ? gateProps.getOrbitHeight()
-                    : dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().orbit);
+            java.util.OptionalInt gateOrbitLine = dev.stannismod.stellurgy.dimension.DimensionManager
+                    .getInstance().orbitLineOf(gateWorld.provider.getDimension());
+            gate.append(",\"orbitHeight\":").append(gateOrbitLine.isPresent()
+                    ? String.valueOf(gateOrbitLine.getAsInt()) : "null");
             gate.append(",\"physicsCeiling\":").append(
                     dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum(gateWorld));
             if (gatePose == null) {
@@ -5589,9 +5589,9 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"shipX\":").append(gatePose[0]).append(",\"shipY\":").append(gatePose[1])
                     .append(",\"shipZ\":").append(gatePose[2]);
             gate.append(",\"wouldTrigger\":").append(gateCtl != null && gatePlanetSide
-                    && !gateAfc.isEntryLatched()
+                    && !gateAfc.isEntryLatched() && gateLine.isPresent()
                     && dev.stannismod.stellurgy.space.ShipEntryController
-                            .shouldTriggerEntry(!gatePlanetSide, gatePose[1], gateCeiling));
+                            .shouldTriggerEntry(!gatePlanetSide, gatePose[1], gateLine.getAsInt()));
             send(sender, gate.append('}').toString());
             return;
         }
@@ -7842,6 +7842,44 @@ public class TestProbeCommand extends CommandBase {
             out.put("hasOxygen", props.hasOxygen());
             out.put("atmosphereDensity", props.getAtmosphereDensity());
             out.put("gases", gasesOf(props.getAir()));
+            send(sender, jsonMap(out));
+            return;
+        }
+        // orbit-line <dim> [<blocks>|unset]: a world's atmosphere<->orbit line as production reads it,
+        // and - with a second argument - the planet file's own <orbitHeight> for it, stated or cleared,
+        // which is how a test arranges a low line without writing a whole galaxy. Absence is a value:
+        // `line` and `entryCeiling` are null for a world that has no line.
+        if (args.length >= 2 && "orbit-line".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"unknown planet\",\"dim\":" + dim + "}");
+                return;
+            }
+            if (args.length >= 3) {
+                int stated = "unset".equalsIgnoreCase(args[2]) ? DimensionProperties.ORBIT_HEIGHT_UNSET
+                        : parseIntOr(args[2], Integer.MIN_VALUE);
+                if (stated == Integer.MIN_VALUE) {
+                    send(sender, "{\"error\":\"the line is a whole number of blocks or 'unset'\",\"dim\":"
+                            + dim + "}");
+                    return;
+                }
+                props.setOrbitHeight(stated);
+            }
+            java.util.OptionalInt line = DimensionManager.getInstance().orbitLineOf(dim);
+            net.minecraft.world.World world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("dim", dim);
+            out.put("stated", props.hasCustomOrbitHeight());
+            out.put("radius", props.getRadius());
+            out.put("line", line.isPresent() ? (Object) line.getAsInt() : null);
+            out.put("loaded", world != null);
+            out.put("entryCeiling", line.isPresent() && world != null
+                    ? (Object) dev.stannismod.stellurgy.space.ShipEntryController.effectiveEntryCeiling(
+                            line.getAsInt(),
+                            dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum(world))
+                    : null);
             send(sender, jsonMap(out));
             return;
         }

@@ -203,17 +203,14 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     private IBlockState fillerBlock;
     private int seaLevel;
     /**
-     * Per-dim atmosphere&harr;orbit line (blocks): the world-Y a tier-2 ship must climb past to
-     * enter space, and the reference the descent/gravity-well side reads. The SINGLE owner of the
-     * ceiling — nothing else may hard-code an orbit line. Sentinel {@link #ORBIT_HEIGHT_UNSET}
-     * (the default) falls back to the global {@code StellurgyConfiguration.orbit}; XML-overridable per
-     * planet. Value is {@code tunable}. The hardcoded 256..456 atmosphere-density taper
-     * ({@link #getAtmosphereDensityAtHeight}) is visual-only and never a gate.
+     * The planet file's own atmosphere&harr;orbit line (world Y), or {@link #ORBIT_HEIGHT_UNSET} when
+     * the file states none and the line is the body's ({@link #orbitLine}). The 256..456
+     * atmosphere-density taper ({@link #getAtmosphereDensityAtHeight}) is visual-only and never a gate.
      */
     private int orbitHeight;
     private int generatorType;
 
-    /** Sentinel for {@link #orbitHeight}: no per-dim override — use the global config value. */
+    /** Sentinel for {@link #orbitHeight}: the file states no line, so the body's own is used. */
     public static final int ORBIT_HEIGHT_UNSET = -1;
     // How terrain is produced (orthogonal to generatorType, which stays the NATIVE sub-flavour selector).
     private TerrainSource terrainSource = TerrainSource.NATIVE;
@@ -2662,21 +2659,31 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     /**
-     * The atmosphere&harr;orbit line of this dimension (blocks of world Y): per-dim override when
-     * set, else the global {@code StellurgyConfiguration.orbit}. Single owner of the ceiling for the
-     * tier-2 entry check and the descent/gravity-well reads.
+     * The atmosphere&harr;orbit line of this dimension (blocks of world Y): the planet file's
+     * {@code <orbitHeight>} when it states one, else the line the BODY's radius puts there
+     * ({@link dev.stannismod.stellurgy.space.DescentShell#orbitLineWorldY}) — the same surface a
+     * descent crosses from outside. Read by a ship's takeoff, a descent's arrival height and a
+     * rocket's climb alike.
+     *
+     * <p><b>Empty for a dimension that is not a body with a size</b> — a world of another mod, the
+     * station and warp dimensions — unless its file states a line. There is no atmosphere to end
+     * there, and a number standing in for one would be a takeoff line nobody chose; the reader
+     * refuses instead and says why.</p>
      */
-    public int getOrbitHeight() {
+    public OptionalInt orbitLine() {
         if (orbitHeight != ORBIT_HEIGHT_UNSET) {
-            return orbitHeight;
+            return OptionalInt.of(orbitHeight);
         }
-        StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
-        return cfg != null ? cfg.orbit : 1000;
+        if (radius > BULK_UNSET) {
+            return OptionalInt.of(dev.stannismod.stellurgy.space.DescentShell.orbitLineWorldY(radius));
+        }
+        return OptionalInt.empty();
     }
 
-    /** Set the per-dim orbit height, or {@link #ORBIT_HEIGHT_UNSET} to fall back to the config. */
+    /** Set the per-dim orbit height, or {@link #ORBIT_HEIGHT_UNSET} to derive it from the body. */
     public void setOrbitHeight(int height) {
-        this.orbitHeight = height < 0 ? ORBIT_HEIGHT_UNSET : Math.max(255, height);
+        this.orbitHeight = height < 0 ? ORBIT_HEIGHT_UNSET
+                : Math.max(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y, height);
     }
 
     /** Whether an explicit per-dim orbit height is set (drives conditional XML/NBT export). */

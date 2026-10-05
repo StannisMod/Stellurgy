@@ -13,14 +13,14 @@ import net.minecraft.util.math.BlockPos;
 
 /**
  * The tier-2 <b>entry on-ramp</b>: how a ship first enters space. Entry is ASCENT — a pilot climbs
- * past the launch dimension's {@code getOrbitHeight()} ceiling — a phase distinct from the
+ * past the launch dimension's {@code orbitLine()} — a phase distinct from the
  * hyperjump; ascent is the SAFE exit, not the only one. The flight computer's tick detects the
  * crossing and calls {@link #requestEntry}; this controller then:
  *
  * <ol>
  *   <li>resolves the launch planet's galactic address through the universe registry (its OWN zone
  *       cell), falling back to the configured home-system anchor;</li>
- *   <li>places the ship on a spawn RING outside the descent radius — the hysteresis contract with
+ *   <li>places the ship on a spawn RING outside the descent shell — the hysteresis contract with
  *       the descent trigger, so an entry can never immediately re-descend;</li>
  *   <li>materializes the cell (an exhausted pool REFUSES entry — the ship simply stays below the
  *       ceiling), then hands the momentary crossing + async settle to the shared
@@ -41,8 +41,9 @@ public final class ShipEntryController {
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /**
-     * Descent proximity radius R (blocks, cell-local) around a body's POI position — the SINGLE
-     * owner of R: the descent trigger reads THIS constant. {@code tunable}.
+     * The proximity radius (chart blocks) of a body that has NO size — a belt, a station slot — and
+     * the floor under every body's {@link DescentShell}. A body with a radius is approached at its
+     * shell, not here. {@code tunable}.
      */
     public static final long DESCENT_RADIUS_BLOCKS = 512L;
 

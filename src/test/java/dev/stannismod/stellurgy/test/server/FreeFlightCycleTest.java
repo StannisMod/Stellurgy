@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.RocketInfo;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ConfigFlag;
 import org.junit.Test;
 
 
@@ -194,25 +195,29 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     @Test
     public void verticalInputDrainsPrimaryFuel() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 2600, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        // With fuel REQUIRED for the whole scenario, assembly included: the engines' burn rate is
+        // fixed when the rocket is assembled, a rocket that needs no fuel burns none, and the shared
+        // harness world starts with the requirement off.
+        try (ConfigFlag fuelRequired = ConfigFlag.set(c -> String.join("\n", client().execute(c)),
+                "rocketRequireFuel", true)) {
+            int id = buildAndAssemble(FixtureSite.openAir(0, 2600, 500));
+            ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+            ok(client().execute("stellurgytest rocket start-free-flight " + id));
 
-        // Inspect fuel BEFORE — start-free-flight auto-fills the primary tank.
-        String fuelBefore = ok(client().execute("stellurgytest rocket fuel " + id));
-        int amountBefore = parsePrimaryFuel(fuelBefore);
-        assertTrue("start-free-flight must auto-fill primary fuel for tests, got amount="
-                + amountBefore + " from " + fuelBefore, amountBefore > 0);
+            // Inspect fuel BEFORE — start-free-flight auto-fills the primary tank.
+            String fuelBefore = ok(client().execute("stellurgytest rocket fuel " + id));
+            int amountBefore = parsePrimaryFuel(fuelBefore);
+            assertTrue("start-free-flight must auto-fill primary fuel for tests, got amount="
+                    + amountBefore + " from " + fuelBefore, amountBefore > 0);
 
-        // Push full vertical thrust + tick several ticks.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 1.0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 10"));
-
-        String fuelAfter = ok(client().execute("stellurgytest rocket fuel " + id));
-        int amountAfter = parsePrimaryFuel(fuelAfter);
-        assertTrue("fuel must decrease monotonically under thrust; before=" + amountBefore
-                        + " after=" + amountAfter,
-                amountAfter < amountBefore);
+            // Push full vertical thrust + tick several ticks.
+            ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 1.0 0 0 0"));
+            ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 10"));
+            int amountAfter = parsePrimaryFuel(ok(client().execute("stellurgytest rocket fuel " + id)));
+            assertTrue("fuel must decrease monotonically under thrust; before=" + amountBefore
+                            + " after=" + amountAfter,
+                    amountAfter < amountBefore);
+        }
     }
 
     @Test

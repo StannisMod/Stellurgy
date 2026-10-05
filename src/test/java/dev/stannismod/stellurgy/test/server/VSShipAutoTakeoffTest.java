@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.EntrySlots;
@@ -41,8 +42,12 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
 
 
     private static final int SRC_X = 6500, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6500;
-    /** A short hop below the default orbit ceiling (1000), so the diagonal climb crosses it quickly. */
-    private static final int NEAR_CEILING_Y = 985;
+    /**
+     * How far below the overworld's reported takeoff ceiling the ship is put: a short hop, so the
+     * diagonal climb crosses it within {@link #CLIMB_TICKS}. The ceiling itself is read from the server —
+     * it is the body's own line, not a number this class can know.
+     */
+    private static final int BELOW_CEILING_HOP = 15;
 
     /**
      * Budgets in SERVER TICKS, none fork-scaled: 100 for the autopilot's raycast to run on the AFC's
@@ -109,7 +114,8 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
                 + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:air")
                 ).ok());
         String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + (int) sx + " " + NEAR_CEILING_Y + " " + (int) sz);
+                + (int) sx + " " + (OrbitLine.of(this::exec, 0).entryCeiling() - BELOW_CEILING_HOP)
+                + " " + (int) sz);
         assertTrue("hop teleport failed: " + tp, Reply.of(tp).ok());
         exec("stellurgytest vs unpark-by-id 0 " + shipId);
         // Marked before the re-engage is allowed to carry the craft up: the arrival is announced

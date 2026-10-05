@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
@@ -68,8 +69,6 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
     /** How much WORLD an async crossing is allowed to settle in, in server ticks — thirty seconds. */
     private static final int SETTLE_TICKS = 600;
 
-    /** A world Y comfortably above the default orbit ceiling (StellurgyConfiguration.orbit = 1000). */
-    private static final int ABOVE_CEILING_Y = 1200;
 
     /** Float noise on a commanded rate read back through a double, not a tolerance. */
     private static final double EXACTLY_ZERO = 1e-9;
@@ -523,7 +522,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 Reply.of(held).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 "
-                + padVsId + " " + (int) onPad.x + " " + ABOVE_CEILING_Y + " " + (int) onPad.z)).ok());
+                + padVsId + " " + (int) onPad.x + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) onPad.z)).ok());
         // Marked BEFORE the unpark, which is what lets the entry start: it is announced once.
         long entryMark = events.mark();
         exec("stellurgytest vs unpark-by-id 0 " + padVsId);

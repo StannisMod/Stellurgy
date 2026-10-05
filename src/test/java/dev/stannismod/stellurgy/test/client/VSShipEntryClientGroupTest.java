@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import dev.stannismod.stellurgy.test.MaterializedCell;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.PlayerShipData;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.SeatMount;
@@ -17,6 +18,7 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -110,8 +112,13 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     // patterns match that; the class was found by measurement instead. Asking for a site is what
     // makes a spelling irrelevant.
 
-    /** The seeded atmosphere ceiling: the config key's minimum, so the climb stays short. */
-    private static final int ORBIT_LINE = 255;
+    /**
+     * The atmosphere ceiling this family STATES for the overworld, as a planet file's
+     * {@code <orbitHeight>} would: the lowest line production accepts (the top of the block band), so a
+     * powered climb is seconds rather than the minutes Earth's own 100 000-block line costs. The trigger
+     * predicate is the same whatever the number.
+     */
+    private static final int ORBIT_LINE = dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y;
 
     /** Control leg: the ship must demonstrably fly at all before either entry leg means anything. */
     private static final double MIN_CONTROL_CLIMB = 1.0;
@@ -149,9 +156,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
 
     @Override
     protected void seedGameDirectory(GameDirSeed seed) {
-        // Pull the orbit line down to the config key's minimum so a powered climb is seconds rather
-        // than minutes; the trigger predicate is the same whatever the number.
-        seed.config("rockets", "I:orbitHeight", ORBIT_LINE, getClass());
         // TWO slots, and the number is derived rather than chosen. One is the smallest pool a
         // refusal can be provoked in, and it is what each of these scenarios used alone — but a ship
         // that SETTLES holds its slot for the rest of the class and nothing may take it back: a
@@ -178,6 +182,12 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
         super.resetFamilyStateBeforeTeleport();
+
+        // The low line every scenario here climbs through, stated before each one and read back: a
+        // scenario that ran against Earth's own line would sit out its climb budget below it.
+        OrbitLine stated = OrbitLine.state(this::exec, 0, ORBIT_LINE);
+        assertEquals("the overworld's orbit line must be the one this family states: " + stated,
+                ORBIT_LINE, stated.line());
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         if (!status.registered) {

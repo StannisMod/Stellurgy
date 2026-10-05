@@ -318,7 +318,10 @@ public class RocketEventHandler extends Gui {
                 this.drawTexturedModalRect(0, 0, 0, 0, 17, 252);
 
                 //Draw altitude indicator
-                float percentOrbit = MathHelper.clamp((float) ((rocket.posY - rocket.world.provider.getAverageGroundLevel()) / (float) (StellurgyConfiguration.getCurrentConfig().orbit - rocket.world.provider.getAverageGroundLevel())), 0f, 1f);
+                int orbitLine = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                        .transferLineOf(rocket.world.provider.getDimension())
+                        .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+                float percentOrbit = MathHelper.clamp((float) ((rocket.posY - rocket.world.provider.getAverageGroundLevel()) / (float) (orbitLine - rocket.world.provider.getAverageGroundLevel())), 0f, 1f);
                 this.drawTexturedModalRect(3, 8 + (int) (79 * (1 - percentOrbit)), 17, 0, 6, 6); //6 to 83
 
                 //Draw Velocity indicator

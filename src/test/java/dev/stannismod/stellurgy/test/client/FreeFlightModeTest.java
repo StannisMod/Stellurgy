@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ConfigFlag;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
@@ -951,24 +952,27 @@ public class FreeFlightModeTest extends AbstractSharedClientE2ETest {
     @Test
     public void verticalThrustDrainsFuelThroughLiveLoop() throws Exception {
         // Fuel must burn classic-style (getFuelConsumptionRate, gated by
-        // rocketRequireFuel) while thrust is applied across real server ticks.
-        int rocketId = mountFreshFreeFlightRocket();
+        // rocketRequireFuel) while thrust is applied across real server ticks — so fuel is REQUIRED
+        // for the whole scenario, assembly included: the burn rate is fixed when the rocket is
+        // assembled, and the shared harness world starts with the requirement off.
+        try (ConfigFlag fuelRequired = ConfigFlag.set(this::exec, "rocketRequireFuel", true)) {
+            int rocketId = mountFreshFreeFlightRocket();
 
-        int fuelBefore = primaryFuelAmount(exec("stellurgytest rocket fuel " + rocketId));
-        assertTrue("rocket must report a primary fuel amount", fuelBefore >= 0);
+            int fuelBefore = primaryFuelAmount(exec("stellurgytest rocket fuel " + rocketId));
+            assertTrue("rocket must report a primary fuel amount", fuelBefore >= 0);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
-        // WINDOW: a drain is a value, not an event; no record answers.
-        advanceServerAndClient(20);
+            exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
+            // WINDOW: a drain is a value, not an event; no record answers.
+            advanceServerAndClient(20);
+            int fuelAfter = primaryFuelAmount(exec("stellurgytest rocket fuel " + rocketId));
+            assertTrue("rocket must still report a primary fuel amount", fuelAfter >= 0);
+            assertTrue("FF thrust must drain primary fuel through the live loop; "
+                            + "before=" + fuelBefore + " after=" + fuelAfter,
+                    fuelAfter < fuelBefore);
 
-        int fuelAfter = primaryFuelAmount(exec("stellurgytest rocket fuel " + rocketId));
-        assertTrue("rocket must still report a primary fuel amount", fuelAfter >= 0);
-        assertTrue("FF thrust must drain primary fuel through the live loop; "
-                        + "before=" + fuelBefore + " after=" + fuelAfter,
-                fuelAfter < fuelBefore);
-
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+            exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+            exec("stellurgytest player dismount");
+        }
     }
 
     // ===== Key-conflict resolution (StellurgyKeyConflictContext) =================

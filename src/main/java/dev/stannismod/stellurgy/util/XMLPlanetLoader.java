@@ -963,7 +963,7 @@ public class XMLPlanetLoader {
 
         // Emit only when overridden so a default planet's XML is unchanged (terrain-source pattern).
         if (properties.hasCustomOrbitHeight())
-            nodePlanet.appendChild(createTextNode(doc, ELEMENT_ORBIT_HEIGHT, properties.getOrbitHeight()));
+            nodePlanet.appendChild(createTextNode(doc, ELEMENT_ORBIT_HEIGHT, properties.orbitLine().getAsInt()));
 
 //        nodePlanet.appendChild(createTextNode(doc, ELEMENT_TARGETSEALEVEL, properties.getTargetSeaLevel()));
 
@@ -1456,7 +1456,7 @@ public class XMLPlanetLoader {
                     properties.setOrbitHeight(Integer.parseInt(planetPropertyNode.getTextContent()));
                 } catch (NumberFormatException e) {
                     Stellurgy.logger.warn("Invalid orbitHeight specified for dimension "
-                            + properties.getId() + "; keeping the global default");
+                            + properties.getId() + "; its line stays the one its body's radius gives");
                 }
             }
             /*

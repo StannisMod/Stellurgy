@@ -629,6 +629,28 @@ public class DimensionManager implements IGalaxy {
     }
 
     /**
+     * The orbit line ({@link DimensionProperties#orbitLine}) of the body registered as {@code dimId} —
+     * empty when no body is registered there, never the overworld's line standing in for it.
+     */
+    public java.util.OptionalInt orbitLineOf(int dimId) {
+        DimensionProperties props = dimensionList.get(dimId);
+        return props != null ? props.orbitLine() : java.util.OptionalInt.empty();
+    }
+
+    /**
+     * The height at which a tier-1 craft — a rocket, an elevator capsule — leaves {@code dimId} going
+     * up and arrives in it coming down: the station clearance in the station dimension, which is no
+     * body, else that world's {@link #orbitLineOf orbit line}. Empty where there is neither.
+     */
+    public java.util.OptionalInt transferLineOf(int dimId) {
+        StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
+        if (dimId == cfg.spaceDimId) {
+            return java.util.OptionalInt.of(cfg.stationClearanceHeight);
+        }
+        return orbitLineOf(dimId);
+    }
+
+    /**
      * @param id star id for which to get the object
      * @return the {@link StellarBody} object
      */

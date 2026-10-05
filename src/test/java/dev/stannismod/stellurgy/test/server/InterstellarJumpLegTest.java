@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 
 import org.junit.After;
@@ -54,8 +55,6 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
 
     /** Where the craft is built — a loaded overworld region well clear of the other space suites. */
     private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
-    /** A world Y comfortably above the default orbit ceiling (StellurgyConfiguration.orbit = 1000). */
-    private static final int ABOVE_CEILING_Y = 1200;
 
     /**
      * Sectors to the neighbouring system. Measured, not invented: over 20 seeds of the default
@@ -131,7 +130,7 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 Reply.of(held).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + sx + " " + ABOVE_CEILING_Y + " " + sz)).ok());
+                + sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + sz)).ok());
         // Marked BEFORE the unpark, because the unpark is what starts the entry and the settle is
         // announced once.
         long entryMark = events.mark();

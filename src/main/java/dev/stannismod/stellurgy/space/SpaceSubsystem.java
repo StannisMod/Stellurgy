@@ -412,8 +412,7 @@ public final class SpaceSubsystem {
         // own sky does not draw.
         // The ring and the clearance come from the BODIES, as the entry path's do: each body's descent
         // shell is where its atmosphere begins, so a flat ring sits inside any shell wider than itself —
-        // a moon's, a planet's. (The flight computer's trigger itself still compares a flat radius, so
-        // this clears more than the trigger asks today; the shell is the boundary it is meant to use.)
+        // a moon's, a planet's.
         java.util.List<GalacticCoord> occupied = new java.util.ArrayList<>();
         long ring = ShipEntryController.ENTRY_RING_BLOCKS;
         long clearance = ShipEntryController.DESCENT_RADIUS_BLOCKS;

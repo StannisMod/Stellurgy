@@ -79,8 +79,6 @@ public class StellurgyConfiguration {
     //Only to be set in preinit
     public net.minecraftforge.common.config.Configuration config;
     @ConfigProperty(needsSync = true)
-    public int orbit = 1000;
-    @ConfigProperty(needsSync = true)
     public int stationClearanceHeight = 1000;
     @ConfigProperty(needsSync = true)
     public int transBodyInjection = 0;
@@ -815,8 +813,7 @@ public class StellurgyConfiguration {
         stellurgyConfig.fuelCapacityMultiplier = config.get(ROCKET, "fuelCapacityMultiplier", 1f, "Multiplier for fuel tank capacity.").getDouble();
         stellurgyConfig.nuclearCoreThrustRatio = config.get(ROCKET, "nuclearCoreThrustRatio", 1.0, "Multiplier for nuclear core thrust.").getDouble();
         stellurgyConfig.automaticRetroRockets = config.get(ROCKET, "autoRetroRockets", true, "Setting to false will disable the retrorockets that fire automatically on reentry on both player and automated rockets").getBoolean();
-        stellurgyConfig.orbit = config.getInt("orbitHeight", ROCKET, 1000, 255, Integer.MAX_VALUE, "Height required to reach orbit.. This is used by itself when launching from a planet to LEO, which can be either a satellite, a space station, or another point on this planet's surface. It's used in conjunction with the TBI burn when launching to the moon or asteroids. Warp flights will need orbit height + 10x TBI to launch from planets");
-        stellurgyConfig.stationClearanceHeight = config.getInt("stationClearance", ROCKET, 1000, 255, Integer.MAX_VALUE, "Height required to clear a space station. WARNING: This property is not synced with orbitHeight and so will be displayed incorrectly on monitors if not equal to it. Burn length here is used by itself when launching from a station to either another station or the same station, or to the planet it is orbiting. It is used in conjunction with the TBI burn when launching to a moon or asteroid");
+        stellurgyConfig.stationClearanceHeight = config.getInt("stationClearance", ROCKET, 1000, 255, Integer.MAX_VALUE, "Height required to clear a space station. A planet's orbit line is not set here: it is derived from the planet's radius, or stated per planet as <orbitHeight> in the planet file. Burn length here is used by itself when launching from a station to either another station or the same station, or to the planet it is orbiting. It is used in conjunction with the TBI burn when launching to a moon or asteroid");
         stellurgyConfig.transBodyInjection = config.getInt("transBodyInjection", ROCKET, 0, 0, Integer.MAX_VALUE, "How long the burn for trans-body injection is - this is performed soley after entering orbit and is in blocks - WARNING: This property is not taken into account by any machines when determining whether the rocket is fit to fly or not - Rockets that can reach LEO and so are flightworthy may not make TBI and will fall back to the parent planet. When enabled, the burn sequence is [Burn to LEO], [TBI Burn] when launching from a planet to moons or asteroids; and the sequence is [Station clearance burn], [TBI Burn] when launching from a station to a moon or asteroid. This distance varies by object distance");
         stellurgyConfig.asteroidTBIBurnMult = (float) config.get(ROCKET, "asteroidTBIBurnMult", 1.0, "Multiplier for asteroid TBI distance.").getDouble();
         stellurgyConfig.warpTBIBurnMult = (float) config.get(ROCKET, "warpTBIBurnMult", 10.0, "Multiplier for warp TBI distance.").getDouble();

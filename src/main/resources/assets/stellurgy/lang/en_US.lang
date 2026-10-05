@@ -259,6 +259,7 @@ mission.gascollection.name=Gas Collection
 
 error.rocket.notEnoughMissionFuel=Not enough fuel!
 error.rocket.tooHeavy=Rocket is too heavy to launch (insufficient thrust).
+error.rocket.noOrbitLine=This world has no orbit to reach: it is not a planet with a known size.
 error.rocket.tooWorn=Rocket is too worn to launch safely (%s%% chance of failure). Service it first.
 error.rocket.seatWorn=A seat is too worn for a crewed launch. Repair or replace it, or launch uncrewed.
 warning.rocket.worn=§eWarning: worn rocket parts — %s%% chance of failure on launch.

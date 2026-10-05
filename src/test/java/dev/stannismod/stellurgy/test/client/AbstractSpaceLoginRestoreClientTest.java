@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.LedgerEntry;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.PlayerPosition;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.SeatMount;
@@ -157,9 +158,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     protected static final int SRC_X = 6800;
     protected static final int SRC_Y = FixtureSite.OPEN_AIR_Y;
     protected static final int SRC_Z = 6800;
-
-    /** A world height comfortably above the default orbit ceiling, so the ceiling check fires. */
-    protected static final int ABOVE_CEILING_Y = 1200;
 
     /**
      * The six flight channels - forward, vertical, strafe, yaw, pitch, roll - as the flight-input
@@ -1309,7 +1307,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // computer in its PILOTED branch for the rest of the scenario.
         long entryMark = events.mark();
         String climb = exec("stellurgytest vs teleport-ship-by-id " + LAUNCH_DIM + " " + srcVsId
-                + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
+                + " " + sx + " " + OrbitLine.of(this::exec, LAUNCH_DIM).aboveEntryCeiling() +" " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, Reply.of(climb).ok());
         exec("stellurgytest vs unpark-by-id " + LAUNCH_DIM + " " + srcVsId);
 
@@ -1469,7 +1467,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long entryMark = events.mark();
         long clientEntryMark = clientEvents().mark();
         String climb = exec("stellurgytest vs teleport-ship-by-id " + LAUNCH_DIM + " " + groundShipId
-                + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
+                + " " + sx + " " + OrbitLine.of(this::exec, LAUNCH_DIM).aboveEntryCeiling() +" " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, Reply.of(climb).ok());
         exec("stellurgytest vs unpark-by-id " + LAUNCH_DIM + " " + groundShipId);
         // WAS `waitTicks(20)` and a read of the client's riding flag. The budget decided the

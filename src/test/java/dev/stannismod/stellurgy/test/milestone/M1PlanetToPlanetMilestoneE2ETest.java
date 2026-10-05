@@ -29,6 +29,7 @@ import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.PilotSeat;
 import dev.stannismod.stellurgy.test.LedgerEntry;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.CellInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
@@ -74,8 +75,8 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  *       ledger, and he is still in his seat.</li>
  * </ol>
  *
- * <p><b>The one arrangement knob</b> is the orbit line, seeded to the config minimum so the powered
- * climb takes seconds instead of minutes. It changes how LONG the climb is, not what the crossing
+ * <p><b>The one arrangement knob</b> is the home world's orbit line, stated at its lowest so the
+ * powered climb takes seconds instead of minutes. It changes how LONG the climb is, not what the crossing
  * decides: the trigger predicate is "the ship is above the dimension's orbit line", whatever that
  * line happens to be. Fuel is turned off for the same class of reason — a fuel-adequacy check on
  * the pad is a different mechanic with its own tests, and leaving it on would make this loop fail
@@ -218,11 +219,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private final int bx = site.x, by = site.y, bz = site.z;
 
     /**
-     * The seeded atmosphere ceiling: the config key's own minimum. The ONE arrangement knob in this
-     * test — it shortens the climb from minutes to seconds and does not touch the entry predicate,
-     * which asks whether the ship is above the line, not where the line is.
+     * The HOME world's atmosphere ceiling, stated in leg 0 as its planet file would state it: the lowest
+     * line production accepts. The ONE arrangement knob in this test — it shortens the first climb from
+     * minutes to seconds and does not touch the entry predicate, which asks whether the ship is above
+     * the line, not where the line is. The destination is minted during the loop and keeps its BODY's
+     * line; leg 9 reads that one from the server.
      */
-    private static final int ORBIT_LINE = 255;
+    private static final int ORBIT_LINE = dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y;
 
     /** Seat and standing square, as offsets from the ship's FLIGHT COMPUTER (the deck layout). */
     private final int[] offSeat = {1, 0, 0};
@@ -291,14 +294,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         root = Files.createTempDirectory("forge-m1-milestone-");
         Path stellurgyConfigDir = root.resolve("config").resolve("advRocketry");
         Files.createDirectories(stellurgyConfigDir);
-        // Both knobs are seeded BEFORE the server boots, because the config is read once at load.
-        // The file key is `rocketsRequireFuel`; the field (and the probe that reads it back) is
-        // `rocketRequireFuel` — the assertion below is what proves this file was actually parsed
-        // rather than silently ignored for a syntax the config reader did not recognise.
+        // Seeded BEFORE the server boots, because the config is read once at load. The file key is
+        // `rocketsRequireFuel`; the field (and the probe that reads it back) is `rocketRequireFuel`
+        // — the assertion in leg 0 is what proves this file was actually parsed rather than silently
+        // ignored for a syntax the config reader did not recognise.
         String cfg = "# seeded by the milestone e2e\n"
                 + "rockets {\n"
                 + "    B:rocketsRequireFuel=false\n"
-                + "    I:orbitHeight=" + ORBIT_LINE + "\n"
                 + "}\n";
         Files.write(stellurgyConfigDir.resolve("stellurgy.cfg"), cfg.getBytes(StandardCharsets.UTF_8));
 
@@ -421,6 +423,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "`true` here means the file was written in a syntax the config reader "
                         + "skipped and every later leg would be running against defaults: " + fuelCfg,
                 (!Reply.of(fuelCfg).bool("value")));
+        // The home world's line, STATED as its planet file would state it — Earth's own is 100 000
+        // world blocks, a climb of minutes — and read back as production reads it.
+        OrbitLine homeLine = OrbitLine.state(this::exec, 0, ORBIT_LINE);
+        requireArranged("the home world's orbit line must be the one this loop states: " + homeLine,
+                homeLine.line() == ORBIT_LINE);
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         requireArranged("the production space subsystem must be REGISTERED — it owns the "
@@ -1340,37 +1347,38 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 + " arrivalY=" + arrivalY + " riding=" + landedRiding);
 
         // ---- LEG 9: he stays put, and can still leave later. ------------------------------------
-        // The descent puts the ship down IN THE AIR, above this body's own orbit line (this run
-        // seeds the line to the config minimum, so it certainly is). The entry on-ramp fires on
-        // "the ship is above the line", whoever is at the controls — the arrival matches it exactly,
-        // and without a hold the ship is taken straight back to space on the tick it arrives. The
-        // hold is a latch the descent sets and only being at or below the line releases.
+        // The descent puts the ship down IN THE AIR, at the destination's arrival altitude: under its
+        // BODY's own orbit line (the destination was minted in leg 8, so nothing stated a line for
+        // it), except for a body so small that its line sits inside the block band, where the arrival
+        // is lifted above the band and therefore above the line. The entry on-ramp fires on "the ship
+        // is above the line", whoever is at the controls, so the descent sets a hold that only being
+        // at or below the line releases — for a body with a real atmosphere it releases on the first
+        // tick, and the leg pins what holds either way: no bounce, and the on-ramp works again.
         //
-        // NO WINDOW in this leg: both halves are bounded by production's own records. The pilot
-        // flies DOWN, and the whole way down the ship is above the line under power — the on-ramp's
-        // exact condition, held off only by the latch. The release is a record; the bounce is an
-        // absence between the descent and that record, which is the entire span the ship stood
-        // above the line held.
+        // NO WINDOW in this leg: both halves are bounded by production's own records. The release is
+        // a record, read from the DESCENT's mark because it can have happened during leg 8; the
+        // bounce is an absence between the descent and that record.
         tLeg = System.currentTimeMillis();
-        long latchMark = events.markInstrumented();
+        events.markInstrumented();
         long latchClientMark = clientEvents().mark();
+        int destinationLine = OrbitLine.of(this::exec, descentDim).line();
         // A link's ceiling, from the ship's own numbers: straight down from the arrival at
         // SHIP_MAX_SPEED (m/s, a twentieth of it per tick) after its 60-tick ramp from rest. Four
         // times that, so the ceiling is never a claim about how fast the box is.
         double blocksPerTick = TileAdvancedFlightComputer.SHIP_MAX_SPEED / 20.0;
-        int descentTicks = 60 + (int) Math.ceil((arrivalY - ORBIT_LINE) / blocksPerTick);
+        int descentTicks = 60 + (int) Math.ceil(Math.max(0d, arrivalY - destinationLine) / blocksPerTick);
         String released;
         String entriesWhileHeld;
         String bounceChanges;
         bot().holdKey(Keyboard.KEY_F);          // vertical-down
         try {
-            released = events.awaitRecordWithField(latchMark, "entry_latch_released", "ship", shipId,
+            released = events.awaitRecordWithField(descentMark, "entry_latch_released", "ship", shipId,
                     "…and the hold must RELEASE once he has flown down through the orbit line. A "
                             + "latch that never clears turns \"bounces off instantly\" into \"can never "
                             + "leave this planet again\", which is strictly worse. No release means he "
                             + "never got below the line (read the pilot inputs and cruise setpoints "
                             + "below) or the latch ignored it. arrivalY=" + arrivalY
-                            + " orbitLine=" + ORBIT_LINE,
+                            + " orbitLine=" + destinationLine,
                     4 * descentTicks);
             // Read at the release, before the key is let go: from here on the ship is below the
             // line, so nothing later can land in this span.
@@ -1380,12 +1388,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             bot().releaseKey(Keyboard.KEY_F);
         }
         assertEquals("a ship that has just been PUT somewhere by a descent must stay there while its "
-                        + "pilot flies, even though the arrival is above this body's orbit line. The "
-                        + "on-ramp reads altitude alone, so between the descent and the latch's release "
-                        + "— the whole time this ship stood above the line under power — it must not "
-                        + "have been asked to enter even once. An entry here is the bounce: the pilot "
-                        + "crossed a system to reach this body and was thrown back off it. arrivalY="
-                        + arrivalY + " orbitLine=" + ORBIT_LINE + " release=" + released
+                        + "pilot flies. The on-ramp reads altitude alone, so between the descent and "
+                        + "the latch's release it must not have been asked to enter even once. An entry "
+                        + "here is the bounce: the pilot crossed a system to reach this body and was "
+                        + "thrown back off it. arrivalY="
+                        + arrivalY + " orbitLine=" + destinationLine + " release=" + released
                         + " entry decisions since the descent: " + entriesWhileHeld,
                 0, Events.countRecords(entriesWhileHeld, "ship", shipId));
         assertEquals("…and the CLIENT was never carried off the planet in that span either — a "
@@ -1407,7 +1414,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                             + "landed on a planet has to be able to leave it. If this stays on the "
                             + "planet the hold never released and the descent has stranded him "
                             + "instead of bouncing him. arrivedDim=" + descentDim + " slotDims=["
-                            + jumpSlotDims + "] release=" + released + " orbitLine=" + ORBIT_LINE,
+                            + jumpSlotDims + "] release=" + released + " orbitLine=" + destinationLine,
                     budget * 10);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);

@@ -55,19 +55,13 @@ public final class SharedClientScope extends TestClassScope {
         plots.clear();
         nextPlotIndex = plotOffset;
 
-        GameDirSeed seed = new GameDirSeed();
+        GameDirSeed seed = GameDirSeed.forTheSharedHarness();
         test.seedGameDirectory(seed);
 
         long startedNanos = System.nanoTime();
-        String seeded = "";
-        if (seed.isEmpty()) {
-            server = RealDedicatedServerHarness.start();
-        } else {
-            java.nio.file.Path root =
-                    java.nio.file.Files.createTempDirectory("forge-shared-client-");
-            seeded = seed.writeInto(root);
-            server = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
-        }
+        java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-client-");
+        String seeded = seed.writeInto(root);
+        server = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
         // The client's start-time options come from system properties the harness reads as it
         // launches the child, so a class that needs one sets it HERE, around the boot, and the value
         // it displaced goes back in close(). Set, not assumed: a scenario that measures pixels

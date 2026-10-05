@@ -213,7 +213,12 @@ public class TileSpaceElevator extends TileWasteHeatPowerConsumer implements IMo
 
         double capsulePosX = getLandingLocationX();
         double capsulePosZ = getLandingLocationZ();
-        for (EntityElevatorCapsule e : world.getEntitiesWithinAABB(EntityElevatorCapsule.class, new AxisAlignedBB(capsulePosX - 3, 0, capsulePosZ - 3, capsulePosX + 3, EntityElevatorCapsule.MAX_HEIGHT, capsulePosZ + 3))) {
+        // A capsule rides from the ground up to where it transfers, and a world with no line is one it
+        // transfers out of at the top of the block band - so that is where this search ends too.
+        double lineTop = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                .transferLineOf(world.provider.getDimension())
+                .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+        for (EntityElevatorCapsule e : world.getEntitiesWithinAABB(EntityElevatorCapsule.class, new AxisAlignedBB(capsulePosX - 3, 0, capsulePosZ - 3, capsulePosX + 3, lineTop, capsulePosZ + 3))) {
             if (!e.isDead) {
                 capsule = e;
                 break;
