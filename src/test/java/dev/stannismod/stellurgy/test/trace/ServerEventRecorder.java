@@ -437,7 +437,8 @@ public final class ServerEventRecorder {
      * <p>{@code ship} is the craft's durable name, {@code afcX/Y/Z} the computer's own address (a
      * subspace one on an assembled ship), {@code revision} this computer's rebuild count, and
      * {@code totalKg} the mass the new model was solved for — the one figure a cargo scenario links
-     * on.</p>
+     * on — and {@code liveSurgeN} the sustained forward authority of the actuators working now, the
+     * figure a scenario that changes the hull's motors links on.</p>
      */
     @SubscribeEvent
     public static void onFlightModelChanged(
@@ -453,7 +454,11 @@ public final class ServerEventRecorder {
                         + ",\"dim\":" + world.provider.getDimension()
                         + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
                         + ",\"revision\":" + event.readout.revision()
-                        + ",\"totalKg\":" + num(event.readout.totalMass()));
+                        + ",\"totalKg\":" + num(event.readout.totalMass())
+                        + ",\"liveSurgeN\":" + num(event.readout.authority(
+                                dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE,
+                                dev.stannismod.stellurgy.ship.control.ControlDirection.SURGE_POSITIVE,
+                                dev.stannismod.stellurgy.ship.control.Endurance.SUSTAINED)));
     }
 
     /**

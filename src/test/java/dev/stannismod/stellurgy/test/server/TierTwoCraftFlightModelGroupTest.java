@@ -701,20 +701,24 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * re-assembly: the flight computer re-surveys the hull it is standing on and its readout drops.
      *
      * <p>The motor is chosen from the ship's own actuator survey — a working one that pushes
-     * forward — and removed from the ship's yard in place. The test links on the flight computer's
-     * next model announcement for this craft (a revision past the one it read before), then reads the
-     * readout once. The same physics id still answers throughout: the ship was never re-built.</p>
+     * forward — and removed from the ship's yard in place. The verdict is a LINK on what the craft
+     * publishes: a {@code flight_model_changed} for this craft whose live forward authority
+     * ({@code liveSurgeN}, the console's figure) is below the one read before. No rebuild is asked for
+     * by name — a model rebuilt on the round before the removal reaches the hull is not an answer, and
+     * a production that lowers the figure some other way still passes. The same physics id answers
+     * throughout: the ship was never re-built.</p>
      *
      * <p>Contract: this fails if production breaks the contract that the live readout follows the
      * hull as it changes.</p>
      *
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#tickFlightModel} at {@code boolean due = flightModel == null} (a model rebuilt only when the
-     * computer has none — neither a hull change nor the load round triggers one) fails "the flight
-     * computer must re-survey its hull once a motor is taken off it" with no model past revision 1
-     * inside 200 ticks, 2026-09-30</p>
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#rebuildFlightModel} at {@code survey.mass(), survey.design(), survey.live(), HELM_FRAME);} (a rebuild solved over the previous
-     * model's live actuators instead of the new survey's) fails "with one forward motor gone, the
-     * craft's live forward authority must drop" with 4 905 000 N at revision 2, 2026-09-30</p>
+     * <p>red-witnessed: 2026-10-05, on the form whose wait IS the verdict. With
+     * {@code TileAdvancedFlightComputer#tickFlightModel} at {@code boolean due = flightModel == null}
+     * (a model rebuilt only when the computer has none), it fails "with one forward motor gone, the
+     * craft's live forward authority must drop below the 4905000.0 N it had, without re-assembly". With
+     * {@code TileAdvancedFlightComputer#rebuildFlightModel} at
+     * {@code survey.mass(), survey.design(), survey.live(), HELM_FRAME);} solving every rebuild over the
+     * FIRST survey's live actuators instead of the new survey's, the same verdict fails. Earlier records
+     * (2026-09-30) were taken on a form that waited for the next rebuild and then asserted.</p>
      */
     @Test
     public void removingAWorkingMotorLowersLiveAuthorityWithoutReassembly() throws Exception {
@@ -725,6 +729,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
         Reply before = readout(craft, "before the motor is removed");
         long revision = before.longInteger("revision");
+        double massBefore = Reply.of(before.object("mass")).number("totalKg");
         double forceBefore = live(before, "SURGE_POSITIVE").number("sustained");
         Reply survey = Reply.of(exec("stellurgytest vs actuators " + DIM + " " + craft.physicsId));
         requireArranged("the craft must be surveyable: " + survey, survey.bool("survey"));
@@ -746,19 +751,18 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 + motor.integer("y") + " " + motor.integer("z") + " minecraft:air"));
         requireArranged("the motor must come out of the ship's yard: " + removed,
                 removed.ok() && removed.integer("placed") == 1);
-        events.awaitMatching(mark, "flight_model_changed",
-                reply -> anyLaterRevision(reply, craft.durable, revision),
-                "for this craft, at a revision past " + revision,
-                "the flight computer must re-survey its hull once a motor is taken off it",
+        // THE WAIT IS THE VERDICT: the readout this craft publishes — what its console shows — must
+        // come to read less forward authority than before. Not "the model was rebuilt": the computer
+        // also rebuilds on a fixed round whatever the hull did, so a link on the next rebuild took one
+        // of the untouched hull at six forks on 2026-10-04 (revision 2, still 4 905 000 N).
+        String dropped = events.awaitMatching(mark, "flight_model_changed",
+                reply -> anyLiveSurgeBelow(reply, craft.durable, forceBefore),
+                "for this craft, publishing a live forward authority below " + forceBefore + " N",
+                "with one forward motor gone, the craft's live forward authority must drop below the "
+                        + forceBefore + " N it had, without re-assembly. Removed: " + motor,
                 LINK_BUDGET_TICKS);
-        Reply after = readout(craft, "after the motor is removed");
-        double forceAfter = live(after, "SURGE_POSITIVE").number("sustained");
-        measured("motor removed", "forceBefore=" + forceBefore, "forceAfter=" + forceAfter,
-                "revisionBefore=" + revision, "revisionAfter=" + after.longInteger("revision"), motor);
-        assertTrue("with one forward motor gone, the craft's live forward authority must drop below"
-                        + " the " + forceBefore + " N it had; it reads " + forceAfter + " N at revision "
-                        + after.longInteger("revision") + ". Removed: " + motor,
-                forceAfter < forceBefore);
+        measured("motor removed", "forceBefore=" + forceBefore, "revisionBefore=" + revision,
+                "massBefore=" + massBefore, motor, dropped);
     }
 
     /**
@@ -773,9 +777,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         System.out.println(line);
     }
 
-    private static boolean anyLaterRevision(String reply, String durable, long revision) {
+    /**
+     * Whether a {@code flight_model_changed} for this craft published a live sustained forward
+     * authority below {@code newtons} — by more than the record's own rendering, six significant
+     * figures, so by more than a hundred-thousandth of the figure (a removed motor here is half of it).
+     */
+    private static boolean anyLiveSurgeBelow(String reply, String durable, double newtons) {
         for (String record : Events.recordsWhere(reply, "ship", durable)) {
-            if (Events.number(record, "revision") > revision) {
+            if (newtons - Events.number(record, "liveSurgeN") > newtons * 1e-5) {
                 return true;
             }
         }
