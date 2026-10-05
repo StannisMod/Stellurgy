@@ -805,6 +805,14 @@ public final class DeckFrameTick {
             if (local == null || motion == null) {
                 continue;
             }
+            // A craft DECLARED for him is boarded by the declaration, not by where his feet happen
+            // to be: it is judged by what keeps a held body (a deck below in the craft's frame, or
+            // its enclosure), not by the standing probe. Measured 2026-10-04: a crossing pinned a
+            // crew member 0.5 above his deck, this probe refused him every tick, and the hold that
+            // pinned him re-teleported him every tick waiting for a deck that would never take him.
+            if (shipId.equals(declared) && ShipFrameTravel.deckMayKeep(entity, shipId, local)) {
+                return shipId;
+            }
             double reach = SUPPORT_PROBE + Math.max(0.0, -motion[1]);
             double half = entity.width / 2.0;
             AxisAlignedBB underFeet = new AxisAlignedBB(local[0] - half, local[1] - reach, local[2] - half,

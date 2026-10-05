@@ -442,10 +442,12 @@ public abstract class AbstractSharedClientE2ETest {
         String released = exec("stellurgytest player release");
         assertTrue("the between-scenario release must run: " + released, Reply.of(released).ok());
         scenario.record("releasedAtStart", Reply.of(released).integer("releasedCount"));
-        String stillBound = exec("stellurgytest player bindings");
-        assertEquals("after the between-scenario release the player must be bound to nothing, or the"
-                + " next scenario inherits its predecessor's ship, cell or hold: " + stillBound,
-                0, Reply.of(stillBound).arrayLength("bound"));
+        // "Bound to nothing" is asserted AFTER the teleport below, not here. A deck takes a body
+        // that stands on it — that is the capture's rule, not a leak — and between this release and
+        // the next command the server ticks, so a player still standing where the predecessor left
+        // him can be aboard again before anyone looks. Measured 2026-10-04 under six-fork load: the
+        // check read `"bound":["aboard record"]` here in two of three runs, both opening a scenario
+        // of the hyperspace-crew class, whose predecessors leave a crew member aboard a hull.
         // DIMENSION, and it must come before the teleport: vanilla /tp moves the player WITHIN the
         // world he is in, so a scenario left behind in the space dim or on a planet would be placed
         // at the right X/Z in the WRONG world — and the plot assertion below, which reads X and Z,
@@ -516,6 +518,18 @@ public abstract class AbstractSharedClientE2ETest {
                         + " asserts afterwards is about a body at the plot, and a body still in"
                         + " flight fails those assertions in the previous scenario's name",
                 PLACEMENT_LINK_BUDGET_TICKS);
+        // Now that he stands on the plot, away from every craft, release once more and assert the
+        // result. What this second release finds is what was legitimately re-derived while he still
+        // stood on the predecessor's deck; it is recorded, so a scenario can see it happened, and
+        // the assertion then holds the reset to its whole promise.
+        String releasedAfterPlacing = exec("stellurgytest player release");
+        assertTrue("the between-scenario release must run: " + releasedAfterPlacing,
+                Reply.of(releasedAfterPlacing).ok());
+        scenario.record("releasedAfterPlacing", Reply.of(releasedAfterPlacing).integer("releasedCount"));
+        String stillBound = exec("stellurgytest player bindings");
+        assertEquals("after the between-scenario release the player must be bound to nothing, or the"
+                + " next scenario inherits its predecessor's ship, cell or hold: " + stillBound,
+                0, Reply.of(stillBound).arrayLength("bound"));
 
         // Health is restored HERE: after the teleport, and with the settle wait below still between
         // it and the client reset. Both halves of that placement were paid for in a gate.
