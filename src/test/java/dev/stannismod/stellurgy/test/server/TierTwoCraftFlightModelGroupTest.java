@@ -856,6 +856,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         Reply motor = null;
         for (String one : survey.objectArray("actuators")) {
             Reply a = Reply.of(one);
+            // the producer always writes `sustained` and `working` on every actuator it lists.
             if (a.bool("sustained") && a.bool("working")) {
                 motor = a;
                 break;
@@ -1154,6 +1155,188 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                         + " empties and a crew member boards without a single block changing, so no"
                         + " block event exists to catch either",
                 ROUND_BUDGET_TICKS, "ship", shipId, "path", "round");
+    }
+
+    /**
+     * How much water is poured into the deck tank, in millibuckets: one bucket, which any tank holds.
+     * What it weighs is the table's business, not this test's — the verdict is only that the craft
+     * grew heavier by more than the record's own rounding.
+     */
+    private static final int POURED_MB = 1000;
+
+    /**
+     * A filled tank outweighs an empty one: water poured into a tank aboard is weighed into the craft,
+     * with no block changing.
+     *
+     * <p>A machine's contents are priced in two halves, the items it holds and the fluid it holds, and
+     * {@link #theSameShipCarryingCargoAcceleratesLessByItsMassRatio} weighs the first. This is the
+     * second. Pouring changes no block, so nothing about the hull tells the flight computer; the model
+     * can learn it only from its own load round, which re-weighs what the craft carries.</p>
+     *
+     * <p>The verdict is a LINK on what the craft publishes: a flight model of this craft solved for
+     * more than the craft weighed with its tank empty.</p>
+     *
+     * <p>Contract: this fails if production breaks the contract that the fluid a craft carries is part
+     * of its mass.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, after a healthy run (306 250 => 311 250 kg for 1000 mB) — with
+     * {@code WeightEngine#heldWeight} at {@code weight += getWeight(info.getContents());} adding nothing
+     * for a tank's contents, it fails "the flight computer must weigh the water poured into the craft's
+     * tank — the readout's mass must GROW by it — no `flight_model_changed` for this craft, solved for
+     * more than the 306250.0 kg it weighed with its tank empty was recorded within 200 ticks".</p>
+     */
+    @Test
+    public void aFilledTankOutweighsAnEmptyOne() throws Exception {
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-pilot-deck-and-tank", "a decked craft with a tank");
+        // WHERE the tank stands aboard is the fixture's to say, as an offset from the flight computer.
+        int[] tank = fixture.intArray("tankFromFlightComputer");
+        requireArranged("the fixture must say where its tank stands: " + fixture,
+                tank != null && tank.length == 3);
+        AssembledCraft craft = assembleLaid(site, fixture, "a decked craft with a tank");
+
+        Reply empty = readout(craft, "the craft with its tank empty");
+        double emptyKg = Reply.of(empty.object("mass")).number("totalKg");
+
+        long pourMark = events.mark();
+        Reply pour = Reply.of(exec("stellurgytest fluid inject " + DIM + " " + (craft.afcX + tank[0])
+                + " " + (craft.afcY + tank[1]) + " " + (craft.afcZ + tank[2]) + " water " + POURED_MB));
+        requireArranged("the water must go into the tank: " + pour,
+                pour.ok() && pour.integer("filled") == POURED_MB);
+        String full = events.awaitMatching(pourMark, "flight_model_changed",
+                reply -> anyHeavier(reply, craft.durable, emptyKg),
+                "for this craft, solved for more than the " + emptyKg + " kg it weighed with its tank"
+                        + " empty",
+                "the flight computer must weigh the water poured into the craft's tank — the readout's"
+                        + " mass must GROW by it", LINK_BUDGET_TICKS);
+        measured("tank", "emptyKg=" + emptyKg, "pour=" + pour, full);
+    }
+
+    /**
+     * How far from the middle of the seat's own block a point may lie and still be in the seat's
+     * column, in blocks: half a block, the cell's own half-width.
+     */
+    private static final double SEAT_COLUMN_HALF_WIDTH = 0.5;
+
+    /**
+     * How far above the floor of the seat's own block the occupant's mass may sit, in blocks: the
+     * height of that one cell. Measured 2026-10-05: 0.30 above it, and 1.5e-6 / 5e-9 off the middle
+     * of the cell horizontally.
+     */
+    private static final double SEATED_HEIGHT = 1.0;
+
+    /**
+     * How closely the physics record's growth must match the crew mass the craft's own readout
+     * reports, in kilograms: floating-point room only. Measured 2026-10-05: 80.0 against 80.0 exactly,
+     * on a 281 250 kg craft.
+     */
+    private static final double CREW_MASS_BAND = 1.0e-6;
+
+    /**
+     * A body seated aboard is weighed WHERE it sits: the craft's physics record grows by the occupant's
+     * mass, and its centre of mass moves toward the seat by exactly what that mass at the seat makes
+     * it.
+     *
+     * <p>Two things are decided here, and both are the mass model's. Who is crew: someone seated on
+     * the ship, or held by its deck — a body that is merely inside the hull is not weighed. And where:
+     * an entity's position is a WORLD position, while the hull's mass is measured in the ship's own
+     * subspace frame, so the occupant must be carried from one to the other before its mass is placed.
+     * A body placed at its world position would pull the centre of mass toward a point the hull is
+     * nowhere near.</p>
+     *
+     * <p>How it sees: the occupant is an armor stand seated on the pilot seat — no AI, so nothing it
+     * does on its own can move it out of the seat. Seating changes no block, so the craft learns it on
+     * its load round, and the verdict links on the model of this craft solved heavier. The physics
+     * record — the mass and centre the engine integrates — is then read from the round that wrote it,
+     * linked on the round's own record for this craft. From the record before and after, the point the
+     * added mass sits at is solved for directly, {@code p = c1 + M0 (c1 - c0) / m}; and the seat's
+     * subspace block is known independently of the conversion under test, as the fixture's offset from
+     * the flight computer.</p>
+     *
+     * <p>Contract: this fails if production breaks the contract that a seated occupant's mass is part
+     * of the craft and sits where the occupant sits aboard.</p>
+     *
+     * <p>Witnessed 2026-10-05, after a healthy run (80.0 kg added, solved at the seat block's middle,
+     * 0.30 above its floor), one break per verdict:</p>
+     * <p>red-witnessed: with {@code ShipHullMass#isCarried} at {@code if (body.isRiding())} never
+     * taken, it fails "the flight computer must weigh the occupant seated aboard — the readout's mass
+     * must GROW by him — no `flight_model_changed` for this craft, solved for more than the 281250.0 kg
+     * it weighed empty was recorded within 200 ticks".</p>
+     * <p>red-witnessed: with {@code ShipInertiaWriter#applyTo} at
+     * {@code record.setGameTickMass(frame.getTotalMass());} writing the total less the crew, it fails
+     * "the craft's physics record must grow by the occupant's mass its readout reports (80.0 kg); it
+     * grew by 0.0 kg".</p>
+     * <p>red-witnessed: with {@code ShipHullMass#addCrew} at
+     * {@code builder.add(MassContributor.ofBlock(local[0] - ox, local[1] - oy, local[2] - oz,} placing
+     * the occupant at its WORLD position instead, it fails "the occupant's mass must sit where the
+     * occupant sits aboard — in the column of the pilot seat at 19200001,128,51200 (subspace), inside
+     * that block — and the centre of mass moved as if it sat at 4023.500004246831,156.30000000148743,
+     * 4023.4999999994398".</p>
+     */
+    @Test
+    public void aSeatedOccupantIsWeighedWhereItSits() throws Exception {
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-pilot-deck", "a decked craft that takes an occupant");
+        int[] seatOffset = fixture.intArray("pilotSeatFromFlightComputer");
+        requireArranged("the fixture must say where its pilot seat stands: " + fixture,
+                seatOffset != null && seatOffset.length == 3);
+        AssembledCraft craft = assembleLaid(site, fixture, "a decked craft that takes an occupant");
+        int seatX = craft.afcX + seatOffset[0];
+        int seatY = craft.afcY + seatOffset[1];
+        int seatZ = craft.afcZ + seatOffset[2];
+
+        Reply unoccupied = readout(craft, "the craft before anybody sits");
+        double unoccupiedKg = Reply.of(unoccupied.object("mass")).number("totalKg");
+        requireArranged("the craft must carry nobody before the occupant sits: " + unoccupied,
+                Reply.of(unoccupied.object("mass")).number("crewKg") == 0.0);
+        Reply before = Reply.of(exec("stellurgytest vs ship-info " + DIM + " id " + craft.physicsId));
+        requireArranged("the craft's physics record must answer its mass and centre: " + before,
+                before.has("massKg") && before.has("comX"));
+
+        Reply occupied = Reply.of(exec("stellurgytest vs seat-occupy " + DIM + " " + seatX + " " + seatY
+                + " " + seatZ));
+        // absence is the answer "refused": when the verb cannot seat anybody it answers an error
+        // object carrying neither field — which is what this rejects.
+        requireArranged("an occupant must be seated on the craft's pilot seat: " + occupied,
+                occupied.boolOr("spawned", false) && occupied.boolOr("mounted", false));
+        // Marked AFTER the occupant sits: a round run between the mark and the seating would be a
+        // round of the craft without him.
+        long mark = events.markInstrumented();
+        String weighed = events.awaitMatching(mark, "flight_model_changed",
+                reply -> anyHeavier(reply, craft.durable, unoccupiedKg),
+                "for this craft, solved for more than the " + unoccupiedKg + " kg it weighed empty",
+                "the flight computer must weigh the occupant seated aboard — the readout's mass must"
+                        + " GROW by him", LINK_BUDGET_TICKS);
+        ArrangementFailure.arranged(() -> events.awaitRecordWithFields(mark, "ship_mass_measured",
+                "a round must write the physics record with the occupant aboard before the record is"
+                        + " read", ROUND_BUDGET_TICKS, "ship", craft.physicsId, "path", "round"));
+        double crewKg = Reply.of(readout(craft, "the craft with its occupant").object("mass"))
+                .number("crewKg");
+        Reply after = Reply.of(exec("stellurgytest vs ship-info " + DIM + " id " + craft.physicsId));
+        requireArranged("the craft's physics record must answer its mass and centre: " + after,
+                after.has("massKg") && after.has("comX"));
+
+        double m0 = before.number("massKg");
+        double added = after.number("massKg") - m0;
+        double[] c0 = {before.number("comX"), before.number("comY"), before.number("comZ")};
+        double[] c1 = {after.number("comX"), after.number("comY"), after.number("comZ")};
+        double[] at = new double[3];
+        for (int i = 0; i < 3; i++) {
+            at[i] = c1[i] + m0 * (c1[i] - c0[i]) / added;
+        }
+        measured("occupant", "crewKg=" + crewKg, "added=" + added, "seat=" + seatX + "," + seatY + ","
+                + seatZ, "solvedAt=" + at[0] + "," + at[1] + "," + at[2], before, after, weighed);
+        assertEquals("the craft's physics record must grow by the occupant's mass its readout reports ("
+                        + crewKg + " kg); it grew by " + added + " kg. Before: " + before + " After: "
+                        + after, crewKg, added, CREW_MASS_BAND);
+        assertTrue("the occupant's mass must sit where the occupant sits aboard — in the column of the"
+                        + " pilot seat at " + seatX + "," + seatY + "," + seatZ + " (subspace), inside"
+                        + " that block — and the centre of mass moved as if it sat"
+                        + " at " + at[0] + "," + at[1] + "," + at[2] + ". Before: " + before
+                        + " After: " + after,
+                Math.abs(at[0] - (seatX + 0.5)) <= SEAT_COLUMN_HALF_WIDTH
+                        && Math.abs(at[2] - (seatZ + 0.5)) <= SEAT_COLUMN_HALF_WIDTH
+                        && at[1] >= seatY && at[1] <= seatY + SEATED_HEIGHT);
     }
 
     // ================================================================================================

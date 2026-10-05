@@ -16656,6 +16656,10 @@ public class TestProbeCommand extends CommandBase {
             //                               seat's other side, as a hold cargo can be stowed in after
             //                               assembly; the reply names where it sits relative to the
             //                               flight computer.
+            //   with-pilot-deck-and-tank  — the same craft with an EMPTY liquid tank standing where the
+            //                               chest would, as a tank fluid can be poured into after
+            //                               assembly; the reply names where it sits relative to the
+            //                               flight computer.
             // And one jump craft too TALL for its generator's own window:
             //   with-jump-drive-and-mast  — with-jump-drive plus an iron mast standing on the deck's
             //                               north-west corner, rising past the top of the cube the
@@ -16667,6 +16671,7 @@ public class TestProbeCommand extends CommandBase {
             boolean bareHull = "hull-without-actuators".equals(variant);
             boolean wheelOnlyHull = "wheel-only-hull".equals(variant);
             boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
+            boolean includeDeckTank = "with-pilot-deck-and-tank".equals(variant);
             boolean seatHullVariant = bareHull || wheelOnlyHull;
             boolean includeEngines = !"invalid-no-engine".equals(variant) && !bareHull && !wheelOnlyHull;
             boolean includeFuelTanks = !"invalid-no-fuel-tank".equals(variant);
@@ -16743,7 +16748,7 @@ public class TestProbeCommand extends CommandBase {
             boolean includeRoofedDeck = "with-roofed-deck".equals(variant);
             boolean includeJumpDrive = "with-jump-drive".equals(variant) || jumpMast;
             boolean includePilotDeck = "with-pilot-deck".equals(variant) || includeRoofedDeck
-                    || includeJumpDrive || includeHold;
+                    || includeJumpDrive || includeHold || includeDeckTank;
             // with-shield-emitter — a with-pilot-seat ship (AFC + pilot seat, so it becomes a VS ship)
             // plus one affs:field_generator emitter block welded into the hull. The emitter rides the
             // ship into subspace, so its field frame resolves to the ship (§4.3); the ship-frame e2e
@@ -16822,7 +16827,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"missing Stellurgy block(s) in registry\"}");
                 return;
             }
-            if (includeFluidCargo && liquidTank == null) {
+            if ((includeFluidCargo || includeDeckTank) && liquidTank == null) {
                 send(sender, "{\"error\":\"missing liquidTank block (stellurgy:liquidTank)\"}");
                 return;
             }
@@ -17111,6 +17116,24 @@ public class TestProbeCommand extends CommandBase {
                 holdFromComputer = "[" + (hold.getX() - computer.getX()) + ","
                         + (hold.getY() - computer.getY()) + "," + (hold.getZ() - computer.getZ()) + "]";
             }
+            String tankFromComputer = "null";
+            if (includeDeckTank) {
+                // The hold's cell, for the hold's reasons: on the deck, welded to it, clear of the motors
+                // and of the seat's column.
+                BlockPos tank = new BlockPos(rocketX + 1, rocketY + 4, rocketZ);
+                BlockPos computer = new BlockPos(rocketX - 1, rocketY + 4, rocketZ);
+                world.setBlockState(tank, liquidTank.getDefaultState());
+                tankFromComputer = offsetJson(tank, computer);
+            }
+            // Where the pilot seat stands relative to the flight computer, for every craft that has
+            // both: assembly moves them as one rigid body, so the offset names the seat aboard.
+            String seatFromComputer = "null";
+            if (includePilotSeat && includeAdvancedFlightComputer) {
+                BlockPos seatAt = new BlockPos(rocketX, rocketY + 4, rocketZ);
+                BlockPos computer = new BlockPos(rocketX - 1, includePilotDeck ? rocketY + 4 : rocketY + 3,
+                        rocketZ);
+                seatFromComputer = offsetJson(seatAt, computer);
+            }
             if (includeCargo) {
                 // Vanilla chest above the seat — gives the rocket an IInventory
                 // tile in its storage chunk for rocket-loader / unloader
@@ -17125,6 +17148,8 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"variant\":\"" + variant + "\",\"builderPos\":[" + builderPos.getX() + ","
                     + builderPos.getY() + "," + builderPos.getZ() + "]"
                     + ",\"holdFromFlightComputer\":" + holdFromComputer
+                    + ",\"tankFromFlightComputer\":" + tankFromComputer
+                    + ",\"pilotSeatFromFlightComputer\":" + seatFromComputer
                     + ",\"jumpBayFromFlightComputer\":" + jumpBayFromComputer
                     + ",\"wheelPos\":" + (wheel == null ? "null"
                             : "[" + wheel.getX() + "," + wheel.getY() + "," + wheel.getZ() + "]") + "}");
