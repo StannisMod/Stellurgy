@@ -60,9 +60,27 @@ public class PacketSerializationTest {
         field.set(target, value);
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict on the readout, 2026-09-30. PRESSURE -
+     * {@code PacketAtmSync#write} at {@code nbt.setShort("pressure", (short) summary.pressureCentiAtm());} writing half the pressure: "expected:&lt;850&gt; but was:&lt;425&gt;".
+     * BREATHABLE - {@code PacketAtmSync#readClient} at {@code summary = new AtmosphereSummary(nbt.getShort("pressure"), nbt.getBoolean("breathable"),} reading the flag negated: "expected:&lt;false&gt; but
+     * was:&lt;true&gt;". WARNING - {@code PacketAtmSync#readClient} at {@code nbt.getString("warning"), holding);} reading the warning under another key:
+     * "expected:&lt;[msg.noOxygen]&gt; but was:&lt;[]&gt;". STATEMENTS IN ORDER -
+     * {@code PacketAtmSync#readClient} at {@code holding.add(list.getStringTagAt(i));} prepending each statement instead of appending it: "the statements must
+     * survive in order ... expected:&lt;[NOT_BREATHABLE, TOXIC]&gt; but was:&lt;[TOXIC,
+     * NOT_BREATHABLE]&gt;". The readable-bytes check was not part of this change and is not
+     * witnessed here.</p>
+     */
     @Test
     public void packetAtmSyncRoundTrip() {
-        PacketAtmSync sent = new PacketAtmSync("ar:test_atm", 850);
+        // A readout, not a model: a pressure, whether it can be breathed, a warning to show, and the
+        // statements that are true of the air — which is what a player reads as its name now that
+        // nothing branches on one.
+        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary summary =
+                new dev.stannismod.stellurgy.atmosphere.AtmosphereSummary(
+                        850, false, "msg.noOxygen",
+                        java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"));
+        PacketAtmSync sent = new PacketAtmSync(summary);
 
         ByteBuf buffer = newBuffer();
         sent.write(buffer);
@@ -71,8 +89,13 @@ public class PacketSerializationTest {
         received.readClient(buffer);
 
         assertEquals(0, buffer.readableBytes());
-        assertEquals("ar:test_atm", PacketSerializationTest.<String>field(received, "type"));
-        assertEquals(850, (int) PacketSerializationTest.<Integer>field(received, "pressure"));
+        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary back =
+                PacketSerializationTest.field(received, "summary");
+        assertEquals(850, back.pressureCentiAtm());
+        assertEquals(false, back.breathable());
+        assertEquals("msg.noOxygen", back.warningKey());
+        assertEquals("the statements must survive in order — they are the label a player reads",
+                java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"), back.assertions());
     }
 
     @Test

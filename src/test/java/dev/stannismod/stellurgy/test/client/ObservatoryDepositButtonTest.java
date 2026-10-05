@@ -113,9 +113,9 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
         clientEvents().awaitField(tabMark, "client_gui_opened", "gui", "GuiModular",
                 "the survey tab must be re-opened by the server before its Deposit control exists",
                 GUI_LINK_BUDGET_TICKS);
-        long depositMark = events().markInstrumented();
+        long depositMark = serverEvents().markInstrumented();
         bot().clickButtonById(BUTTON_DEPOSIT);
-        String deposited = events().awaitField(depositMark, "crystal_deposited",
+        String deposited = serverEvents().awaitField(depositMark, "crystal_deposited",
                 "pos", X + "," + Y + "," + Z,
                 "pressing Deposit must make THIS observatory read its crystal into the world's"
                         + " knowledge", GUI_LINK_BUDGET_TICKS);

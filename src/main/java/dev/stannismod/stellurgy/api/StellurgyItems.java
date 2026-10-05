@@ -61,6 +61,8 @@ public class StellurgyItems {
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemCarbonScrubberCartridge;
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
+    public static Item itemCarbonDust;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemSealDetector;
     /** Effectively final, process lifetime: written only by Stellurgy.registerItems. */
     public static Item itemJackhammer;

@@ -359,7 +359,12 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
         float fueltime = (float) stats.getFuelCapacity(fuelType) / stats.getBaseFuelRate(fuelType);
         float s_can = aAvg / 2f * fueltime * fueltime;
-        float target_s = 1 * StellurgyConfiguration.getCurrentConfig().orbit - this.getPos().getY(); // for way back *2
+        // The climb a launch from HERE needs; a world with no line has no orbit to reach.
+        java.util.OptionalInt line = DimensionManager.getInstance().transferLineOf(world.provider.getDimension());
+        if (!line.isPresent()) {
+            return false;
+        }
+        float target_s = line.getAsInt() - this.getPos().getY();
         return s_can > target_s;
     }
 
@@ -721,9 +726,14 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 // Biprop engines require BOTH bipropellant AND oxidizer capacity
                 status = ErrorCodes.NOFUEL;
 
-            } else if (((thrustBipropellant > 0)      && !hasEnoughFuel(FuelType.LIQUID_BIPROPELLANT))
+            } else if (scannedFlightComputerPos == null
+                    && (((thrustBipropellant > 0)      && !hasEnoughFuel(FuelType.LIQUID_BIPROPELLANT))
                     || ((thrustMonopropellant > 0)    && !hasEnoughFuel(FuelType.LIQUID_MONOPROPELLANT))
-                    || ((thrustNuclearTotalLimit > 0) && !hasEnoughFuel(FuelType.NUCLEAR_WORKING_FLUID))) {
+                    || ((thrustNuclearTotalLimit > 0) && !hasEnoughFuel(FuelType.NUCLEAR_WORKING_FLUID)))) {
+                // "Can its tanks carry it to orbit" is asked of a ROCKET only. A rocket's one flight
+                // is a climb to its world's orbit line, so a build that cannot make it is no rocket;
+                // a ship with a flight computer is flown, and is a legitimate craft for flights that
+                // never leave the planet.
                 status = ErrorCodes.NOFUEL;
 
             } else {

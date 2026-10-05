@@ -3,7 +3,8 @@ package dev.stannismod.stellurgy.affs.block;
 import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.affs.item.ItemBlockTiered;
 import dev.stannismod.stellurgy.affs.te.TileEntityShieldCable;
-import dev.stannismod.stellurgy.affs.world.shield.IShieldNetworkNode;
+import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
 import net.minecraft.block.Block;
 import net.minecraft.block.ITileEntityProvider;
 import net.minecraft.block.SoundType;
@@ -216,7 +217,10 @@ public class BlockShieldCable extends Block implements ITileEntityProvider, IHas
 
     private boolean canConnect(IBlockAccess world, BlockPos pos, EnumFacing facing) {
         TileEntity tileEntity = world.getTileEntity(pos.offset(facing));
-        return tileEntity instanceof IShieldNetworkNode;
+        // A cable connects to shield nodes only: a ventilation duct laid through the same wall is a
+        // network node too, and joining it would draw an arm to a block this line never feeds.
+        return tileEntity instanceof ISubsystemNetworkNode
+                && ((ISubsystemNetworkNode) tileEntity).getNetworkDomain() == ShieldNetworkManager.DOMAIN;
     }
 
     @Override

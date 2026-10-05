@@ -1188,7 +1188,8 @@ public class TileRocketMonitoringStation extends TileEntity
 
     @Override
     public int getTotalProgress(int id) {
-        if (id == 0) return StellurgyConfiguration.getCurrentConfig().orbit;
+        if (id == 0) return DimensionManager.getInstance().transferLineOf(world.provider.getDimension())
+                .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
         if (id == 1) return 1000;
         if (id == 2) return (world.isRemote ? maxFuelLevel : (snapFuelCap > 0 ? snapFuelCap : lastKnownFuelCap));
         if (id == 6) return (world.isRemote ? maxFuelLevel : (snapOxCap   > 0 ? snapOxCap   : lastKnownOxCap));

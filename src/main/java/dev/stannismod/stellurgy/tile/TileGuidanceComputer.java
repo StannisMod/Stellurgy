@@ -211,7 +211,10 @@ public class TileGuidanceComputer extends TileInventoryHatch implements IModular
             } else if (stack.getItem() == LibVulpesItems.itemLinker && ItemLinker.getDimId(stack) != Constants.INVALID_PLANET) {
                 //Use the destination the Linker in the Guidance computer directs.
                 BlockPos landingBlock = ItemLinker.getMasterCoords(stack);
-                return new Vector3F<>(landingBlock.getX() + 0.5f, (float) StellurgyConfiguration.getCurrentConfig().orbit, landingBlock.getZ() + 0.5f);
+                // The rocket's own arrival rule, which announces a world with no line.
+                float arrivalY = DimensionManager.getInstance().transferLineOf(ItemLinker.getDimId(stack))
+                        .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+                return new Vector3F<>(landingBlock.getX() + 0.5f, arrivalY, landingBlock.getZ() + 0.5f);
             }
 
         } else if (destinationId != Constants.INVALID_PLANET) {
@@ -268,7 +271,10 @@ public class TileGuidanceComputer extends TileInventoryHatch implements IModular
     }
 
     public int getLaunchSequence(int currentDimensionID, BlockPos currentPosition) {
-        int totalBurn = (currentDimensionID == StellurgyConfiguration.getCurrentConfig().spaceDimId) ? StellurgyConfiguration.getCurrentConfig().stationClearanceHeight : StellurgyConfiguration.getCurrentConfig().orbit;
+        // A launch from a world with no line is refused before this is asked (EntityRocket#launch).
+        int totalBurn = DimensionManager.getInstance().transferLineOf(currentDimensionID).orElseThrow(
+                () -> new IllegalStateException("no orbit line in dim " + currentDimensionID
+                        + ": a launch from it should have been refused"));
         int destinationDimensionID = getDestinationDimId(currentDimensionID, currentPosition);
 
         totalBurn += (currentDimensionID == StellurgyConfiguration.getCurrentConfig().spaceDimId) ? getTransBodyInjection(currentDimensionID, destinationDimensionID, currentPosition) : getTransBodyInjection(currentDimensionID, destinationDimensionID);

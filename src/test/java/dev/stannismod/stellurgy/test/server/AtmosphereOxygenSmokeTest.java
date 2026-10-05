@@ -1,11 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.atmosphere.AtmosphereNeedsSuit;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 
+import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 
 import static org.junit.Assert.assertEquals;
@@ -36,9 +37,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
         assertTrue("baseline Earth not breathable — env contamination? " + baseline,
                 Reply.of(baseline).bool("breathable"));
 
-        String planet = String.join("\n", client().execute("stellurgytest planet info 0"));
-        int originalDensity = extractInt(planet, "atmosphereDensity");
-        assertTrue("could not read Earth atmosphereDensity: " + planet, originalDensity >= 0);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> String.join("\n", client().execute(c)), 0);
 
         try {
             String setResp = String.join("\n", client().execute("stellurgytest atmosphere set-density 0 0"));
@@ -50,27 +49,34 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
             assertTrue("density=0 should yield non-breathable, got: " + vacResp,
                     (!Reply.of(vacResp).bool("breathable")));
         } finally {
-            client().execute("stellurgytest atmosphere set-density 0 " + originalDensity);
+            // The gases, not the pressure: an emptied world cannot be thickened back by a number.
+            originalAir.restore(c -> String.join("\n", client().execute(c)));
         }
     }
 
     /**
-     * Place an atmosphere detector on overworld. Its default {@code
-     * atmosphereToDetect} is AIR, and overworld has no per-dim atmosphere
-     * handler, so {@link dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector#update()}
-     * falls into the no-handler branch where {@code detectedAtm = atmosphereToDetect == AIR}
-     * &rarr; {@code true} &rarr; the block flips to POWERED on the first valid tick.
-     * Then re-target the detector to a non-AIR atmosphere (vacuum) and confirm
-     * it unpowers — exercises both branches of the update loop.
+     * Place an atmosphere detector in open overworld air. It starts out watching the statement
+     * "breathable". The overworld HAS an atmosphere handler, and with no sealed zone around the
+     * detector {@link dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector#statementHolds()}
+     * is answered from the dimension's published atmosphere: breathable, and not vacuum. So a forced
+     * sample powers the block; re-targeted to "vacuum", the next forced sample unpowers it. Both
+     * samples go through the handler branch — the detector's no-handler branch is not reached here.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, for the three verdicts this branch
+     * rewrote. DEFAULT — {@code TileAtmosphereDetector#TileAtmosphereDetector} at {@code assertionToDetect = AtmosphereAssertion.BREATHABLE;} starting on {@code VACUUM}: "detector
+     * should default to watching for breathable air: … expected:&lt;[BREATHABLE]&gt; but
+     * was:&lt;[VACUUM]&gt;". BREATHABLE — {@code AtmosphereAssertions#holdsAt} at {@code return breathable(air, published);} never holding: "overworld
+     * air must satisfy \"breathable\": … \"detected\":false". NOT VACUUM — {@code AtmosphereAssertions#holdsAt} at {@code return air != null ? air.getTotalPressure() <= 0L : published == Atmosphere.VACUUM;} calling any air without a zone vacuum: "overworld air must not satisfy
+     * \"vacuum\": … \"detected\":true". Both of the last two reds came through the handler branch:
+     * the overworld has an atmosphere handler.</p>
      */
     @Test
     public void atmosphereDetectorReportsCurrentAtmosphereOnRedstone() throws Exception {
         FixtureSite s = site();
         int bx = s.x, by = s.y, bz = s.z;
 
-        // Clear neighbours so the detector's sample loop sees AIR (any opaque
-        // block on any face would suppress the AIR branch). 3×3×3 air around
-        // the target pos is enough.
+        // Clear neighbours so the detector's sample loop has open air to ask about: it skips any
+        // face with an opaque block on it. 3×3×3 air around the target pos is enough.
         ok(client().execute("stellurgytest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
 
@@ -82,8 +88,10 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
         String pre = String.join("\n", client().execute(
                 "stellurgytest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
         assertTrue("pre-tick probe failed: " + pre, Reply.of(pre).bool("isDetector"));
-        assertEquals("detector should default to AIR mode: " + pre,
-                "air", matchOrFail("detectorMode", pre));
+        // A fresh detector watches the harmless statement: "is this breathable". It used to default
+        // to the atmosphere NAMED "air", which is the same question asked through the vocabulary.
+        assertEquals("detector should default to watching for breathable air: " + pre,
+                "BREATHABLE", matchOrFail("detectorMode", pre));
 
         // Drive the sample loop directly via probe — TileAtmosphereDetector.update()
         // is gated by world.getWorldTime() % 10 == 0, which force-tick doesn't
@@ -92,7 +100,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
         String sample1 = String.join("\n", client().execute(
                 "stellurgytest atmosphere detector-force-sample 0 " + bx + " " + by + " " + bz));
         assertTrue("force-sample failed: " + sample1, Reply.of(sample1).ok());
-        assertTrue("AIR target on overworld must report detected=true: " + sample1,
+        assertTrue("overworld air must satisfy \"breathable\": " + sample1,
                 Reply.of(sample1).bool("detected"));
 
         String postAir = String.join("\n", client().execute(
@@ -105,15 +113,15 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
         // Re-target detector to vacuum — there's no vacuum near here, so the
         // sample loop should report non-detect and the block should unpower.
         String setMode = String.join("\n", client().execute(
-                "stellurgytest atmosphere detector-set-mode 0 " + bx + " " + by + " " + bz + " vacuum"));
+                "stellurgytest atmosphere detector-set-mode 0 " + bx + " " + by + " " + bz + " VACUUM"));
         assertTrue("detector-set-mode failed: " + setMode, Reply.of(setMode).ok());
 
         String sample2 = String.join("\n", client().execute(
                 "stellurgytest atmosphere detector-force-sample 0 " + bx + " " + by + " " + bz));
         assertTrue("force-sample (vacuum target) failed: " + sample2,
                 Reply.of(sample2).ok());
-        assertTrue("vacuum target on overworld must report detected=false: " + sample2,
-                (!Reply.of(sample2).bool("detected")));
+        assertTrue("overworld air must not satisfy \"vacuum\": " + sample2,
+                !Reply.of(sample2).bool("detected"));
 
         String postVacuum = String.join("\n", client().execute(
                 "stellurgytest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
@@ -231,7 +239,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
      * as a valid air container — see {@link dev.stannismod.stellurgy.util.ItemAirUtils#isStackValidAirContainer}.
      * A vanilla diamond chestplate is rejected; the same chestplate with
      * the enchant applied is accepted. That is the bypass branch that lets
-     * {@link AtmosphereNeedsSuit#isImmune}
+     * {@link dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards#isImmune}
      * skip vacuum damage for the wearer.
      */
     @Test

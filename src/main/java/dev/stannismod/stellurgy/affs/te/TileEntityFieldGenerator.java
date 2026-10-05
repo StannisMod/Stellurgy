@@ -13,9 +13,7 @@ import dev.stannismod.stellurgy.affs.world.FieldSource;
 import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
 import dev.stannismod.stellurgy.affs.world.WorldFieldFrame;
 import dev.stannismod.stellurgy.affs.world.projectile.IEnergyProjectile;
-import dev.stannismod.stellurgy.affs.world.shield.IShieldSink;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
-import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkRegistry;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkState;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind;
 import net.minecraft.entity.Entity;
@@ -40,8 +38,12 @@ import net.minecraftforge.energy.EnergyStorage;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
-public class TileEntityFieldGenerator extends TileEntity implements ITickable, FieldSource, IShieldSink {
+public class TileEntityFieldGenerator extends TileEntity implements ITickable, FieldSource, ISubsystemSink {
 
     public static final int MIN_RADIUS = 1;
     public static final int MAX_RADIUS = 16;
@@ -72,7 +74,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     // Both intake and extraction are UNTHROTTLED at the storage (maxReceive == maxExtract == capacity):
     //   - the per-tick recharge-throughput cap (D134-3) is tier-dependent (getRechargeThroughput()) and
     //     read from the world block state at runtime, so it cannot live on this construction-time field;
-    //     it is enforced instead as the coil's advertised network demand (getRequestedShieldEnergy),
+    //     it is enforced instead as the coil's advertised network demand (getRequested),
     //     which is the single source of truth for the throttle;
     //   - extraction is unthrottled because absorbing one hit may need to spend far more than a tick's
     //     intake, so a per-tick extract cap would make the coil unable to block any impact above it.
@@ -157,7 +159,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     }
 
     @Override
-    public int getShieldPriority() {
+    public int getPriority() {
         return priority;
     }
 
@@ -168,7 +170,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         priority = value;
         if (world != null && !world.isRemote) {
             markDirty();
-            ShieldNetworkManager.markDirty(world);
+            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
             queueClientSync(false);
         }
     }
@@ -179,8 +181,8 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         resolveFieldFrame();
         if (world != null && !world.isRemote) {
             emittersOf(world).active.add(this);
-            ShieldNetworkRegistry.of(world).register(this);
-            ShieldNetworkManager.markDirty(world);
+            SubsystemNetworkRegistry.register(this);
+            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
             refreshFieldPowerState(true);
         }
     }
@@ -237,6 +239,11 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     }
 
     @Override
+    public SubsystemNetworkDomain getNetworkDomain() {
+        return ShieldNetworkManager.DOMAIN;
+    }
+
+    @Override
     public BlockPos getNodePos() {
         return pos;
     }
@@ -267,13 +274,13 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     }
 
     @Override
-    public int getRequestedShieldEnergy() {
+    public int getRequested() {
         // Advertise only what the coil can physically intake this tick (min of free space and this
         // emitter's tier-scaled recharge throughput). The network solver uses this as the coil's
         // demand-edge capacity, so (a) a large source (e.g. an accumulator) can never have more energy
         // extracted from it than the coil actually receives — keeping the network energy-conserving —
         // and (b) regeneration is capped at the emitter's throughput (D134-3), the per-zone bottleneck.
-        return Math.min(getFreeShieldCapacity(), getRechargeThroughput());
+        return Math.min(getFreeCapacity(), getRechargeThroughput());
     }
 
     /**
@@ -289,12 +296,12 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     }
 
     @Override
-    public int getFreeShieldCapacity() {
+    public int getFreeCapacity() {
         return Math.max(0, energy.getMaxEnergyStored() - energy.getEnergyStored());
     }
 
     @Override
-    public int receiveShieldEnergy(int amount) {
+    public int receive(int amount) {
         if (world == null || world.isRemote || amount <= 0) {
             return 0;
         }
@@ -453,6 +460,15 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
 
     public int getShieldDrainThisTick() {
         return getShieldDrainForPhase(shieldDrainPhase);
+    }
+
+    /**
+     * What the network should report as CONSUMPTION: the upkeep this emitter actually burns, not the
+     * larger amount it requests while topping its buffer back up.
+     */
+    @Override
+    public int getConsumptionPerTick() {
+        return getShieldDrainThisTick();
     }
 
     private void pushEntityBack(Entity entity) {
@@ -630,8 +646,8 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public void invalidate() {
         if (world != null && !world.isRemote) {
             emittersOf(world).active.remove(this);
-            ShieldNetworkRegistry.of(world).unregister(this);
-            ShieldNetworkManager.markDirty(world);
+            SubsystemNetworkRegistry.unregister(this);
+            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.invalidate();
     }
@@ -640,8 +656,8 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
             emittersOf(world).active.remove(this);
-            ShieldNetworkRegistry.of(world).unregister(this);
-            ShieldNetworkManager.markDirty(world);
+            SubsystemNetworkRegistry.unregister(this);
+            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }

@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.LedgerEntry;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.space.CellSeam;
@@ -73,8 +74,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
     /** Where this class's plots live — its own region, clear of the entry/descent legs. */
     private static final int SRC_X = 6800, SRC_Z = 6800;
 
-    /** A world Y comfortably above the default orbit ceiling (StellurgyConfiguration.orbit = 1000). */
-    private static final int ABOVE_CEILING_Y = 1200;
 
     /**
      * How much WORLD an async settle is allowed, in server ticks — thirty seconds of game time.
@@ -636,7 +635,7 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
                 Reply.of(heldInput).bool("afcResolved"));
         assertTrue("climb teleport failed",
                 Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 " + srcVsId + " "
-                        + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)
+                        + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz)
                         ).ok());
         // Marked BEFORE the unpark: the unpark is what lets the craft climb, and both the entry
         // decision and the settle below are announced once each.

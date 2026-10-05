@@ -74,7 +74,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
 
     /**
-     * Client ticks the brake is given to act before anything is judged.
+     * Ticks the brake is given to act before anything is judged.
      *
      * <p>300 is the budget this scenario has always given it — the replaced poll's ceiling was 150
      * iterations two ticks apart. It is kept unchanged on purpose: the instrument is
@@ -87,7 +87,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     private static final int BRAKE_SETTLE_TICKS = 300;
 
     /**
-     * The hold that decides: how many readings, and how far apart in client ticks.
+     * The hold that decides: how many readings, and how many ticks apart.
      *
      * <p>Sized from the oscillation it has to outlast rather than picked. Measured 2026-09-14, the
      * rate swung from 0.123 to 0.393 within 25 poll iterations of two ticks each — one visible swing
@@ -337,7 +337,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 "carrying a non-empty HUD line",
                 "a seated tier-2 pilot must get a Free Flight HUD at all", HUD_LINK_BUDGET_TICKS);
 
-        Events events = events();
+        Events events = serverEvents();
         long climbHudMark = clientEvents().mark();
         // EXPERIMENT: a dose of thrust from the key's arrival, then one reading with it cut. The key
         // REACHING the computer is a link inside it, awaited before a tick of the dose is counted: a
@@ -367,11 +367,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
         // --- The spin brake. Deflect the flight cursor sideways through the client's OWN raw-mouse
         // entry point, so the ship rolls, then centre the cursor and watch the spin die.
-        // STIMULUS: twelve raw mouse deltas two ticks apart are the deflection; the cursor read after
-        // them is what is asserted.
+        // STIMULUS: the deflection — an input, not a wait.
         for (int i = 0; i < 12; i++) {
             mouseDelta(60, 0);
-            bot().waitTicks(2);
+            bot().waitWorldTicks(2);
         }
         double cursorDeflected = flightCursorX("after twelve raw mouse deltas");
         assertTrue("a raw mouse delta must deflect the client's flight cursor (got "
@@ -380,10 +379,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // WINDOW: the hull's angular rate over SPIN_WINDOW_SAMPLES readings SPIN_WINDOW_GAP ticks of
         // its world apart, with the cursor still deflected; the claim is on the LARGEST of them. No
         // record says "it turned" — the attitude law integrates a torque every tick and nothing
-        // decides an arrival — so the rate is measured, and on the world the hull is ticked in: a
-        // window of client ticks buys a busy box more world, the lenient direction for "it spun up".
+        // decides an arrival — so the rate is measured. Each gap is the later of the hull's world
+        // and the client's ticks: the world integrates the torque, the client sends the deflected
+        // cursor that drives it, and a gap counted on either alone is short when the other lags.
         java.util.List<Double> spinRates = new java.util.ArrayList<Double>();
-        GameTicks.observe(serverClient(), GameTicks.world(0), SPIN_WINDOW_SAMPLES, SPIN_WINDOW_GAP,
+        GameTicks.observe(worldAndClient(0), SPIN_WINDOW_SAMPLES, SPIN_WINDOW_GAP,
                 () -> spinRates.add(shipInfo().omega));
         double spinning = java.util.Collections.max(spinRates);
         assertTrue("a deflected flight cursor must actually spin the ship (largest omega over the"
@@ -426,7 +426,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     public void aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim() throws Exception {
         scenarioDim = TransitSetup.empty(this::exec).originDim;
         final FixtureSite site = FixtureSite.openAir(scenarioDim, 40, 40);
-        Events events = events();
+        Events events = serverEvents();
         String assembled = RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
                 "the craft the pilot turns and then stops");
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
@@ -462,16 +462,16 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 SEAT_LINK_BUDGET_TICKS);
 
         // THE SPIN, which is this scenario's premise — its own verdict lives in the overworld method.
-        // STIMULUS: twelve raw mouse deltas two ticks apart are the deflection.
+        // STIMULUS: the deflection — an input, not a wait.
         for (int i = 0; i < 12; i++) {
             mouseDelta(60, 0);
-            bot().waitTicks(2);
+            bot().waitWorldTicks(2);
         }
         double cursorDeflected = flightCursorX("after twelve raw mouse deltas");
         scenario().requireArranged("the cursor must be deflected before a stop means anything (got "
                 + cursorDeflected + ")", Math.abs(cursorDeflected) > RAW_CURSOR_DEFLECTED);
         java.util.List<Double> spinRates = new java.util.ArrayList<Double>();
-        GameTicks.observe(serverClient(), GameTicks.world(scenarioDim), SPIN_WINDOW_SAMPLES,
+        GameTicks.observe(worldAndClient(scenarioDim), SPIN_WINDOW_SAMPLES,
                 SPIN_WINDOW_GAP, () -> spinRates.add(shipInfo().omega));
         double spinning = java.util.Collections.max(spinRates);
         scenario().requireArranged("the ship must be SPINNING before its stop is judged (largest"
@@ -639,10 +639,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         String point = exec("stellurgytest vs point-by-id 0 " + scenarioShipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
         assertTrue("attitude hold must accept the roll: " + point, Reply.of(point).bool("commanded"));
-        // EXPERIMENT: 200 ticks of the slew and the held roll, and the claim is what they did to the
-        // body standing on the deck. Overshoot only keeps him on the tilted deck longer, which is the
-        // strict direction for "he stayed put".
-        bot().waitTicks(200);
+        // EXPERIMENT: the claim is what the slew and the held roll did to the body standing on the
+        // deck. Overshoot only keeps him on the tilted deck longer, which is the strict direction
+        // for "he stayed put".
+        advanceServerAndClient(200);
 
         // The dose is ASSERTED, not just recorded: "he barely moved across the deck" is vacuous on a
         // deck that never rolled, and a slow slew delivers less roll in the same ticks, which would
@@ -722,7 +722,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // filter would now return zero for a deck that thrashed its crew off through any other gate.
         // The contract has not changed — a rotating deck must not drop the body it carries — and
         // narrowing it to one mechanism was always describing the suspect rather than the crime.
-        Events events = events();
+        Events events = serverEvents();
         long spinMark = events.markInstrumented();
 
         // Spin the ship about a horizontal axis via free VS physics - the deck ROTATES under the standing
@@ -732,9 +732,9 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // STATICALLY inverted deck rides fine - the 75deg test). Reproduces the maintainer's ~174deg case,
         // which was a ship oscillating/hunting near the unstable inverted attitude (nonzero omega).
         exec("stellurgytest vs spin-ship-by-id 0 " + scenarioShipId + " 2.0 0.0 0.0");
-        // EXPERIMENT: 30 ticks of a 2 rad/s spin, and the claim counts the drops inside them.
-        // Overshoot only lengthens the spin, which gives a thrashing capture more drops to show.
-        bot().waitTicks(30);
+        // EXPERIMENT: the claim counts the drops inside the spin. Overshoot only lengthens it, which
+        // gives a thrashing capture more drops to show.
+        advanceServerAndClient(30);
         exec("stellurgytest vs spin-ship-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
 
         String released = events.since(spinMark, "deck_released");
@@ -810,7 +810,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // ground under its feet, and vanilla cannot see a subspace deck. So mark before the floor
         // goes in and read the silence afterwards: production names its own reason at the release,
         // and `steppedOntoTerrain` is that gate's word for exactly this.
-        Events events = events();
+        Events events = serverEvents();
         long floorMark = events.markInstrumented();
         // ONE block, in the column the body stands in, and not a slab: the ground belongs UNDER his
         // feet, not THROUGH the hull. The body stands on the pilot seat, and the cell under the seat is
@@ -825,7 +825,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // EXPERIMENT: the body stands 60 ticks over ground that was not there before, and the claim
         // is that no tick of them released it. Overshoot only lengthens the exposure — the strict
         // direction for an absence.
-        bot().waitTicks(60);
+        advanceServerAndClient(60);
 
         String releases = events.since(floorMark, "deck_released");
         // "Nothing was released" and "nobody was recording releases" are the same empty reply until
@@ -880,7 +880,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
         // Fly it a couple of blocks up so it is genuinely airborne (and mark it "flown", which arms the
         // unmanned station-keeping hold), then release the throttle.
-        Events events = events();
+        Events events = serverEvents();
         // As in test 1: a dose of thrust from the key's arrival, the arrival itself a link, so a climb
         // that never happens is not reported as a control failure when the control never got there.
         // ARRANGEMENT here, not the subject: this scenario is about the hold that follows.
@@ -924,10 +924,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         scenario().requireArranged("the unmanned ship must decide to HOLD STATION before 'it did not"
                 + " sink' is a statement about the hold: " + hold,
                 matchingRecords(hold, "\"held\":true") > 0);
-        // EXPERIMENT: 60 ticks for the hold to brake out the climb's residual motion, then the
-        // window below judges it. The defect is a STEADY sink, which extra ticks cannot hide; what
-        // overshoot forgives is only a hold that settles a little late.
-        bot().waitTicks(60);
+        // EXPERIMENT: the hold brakes out the climb's residual motion before the window below judges
+        // it. The defect is a STEADY sink, which extra ticks cannot hide; what overshoot forgives is
+        // only a hold that settles a little late.
+        advanceServerAndClient(60);
 
         double yStart = shipInfo().y;
         double worstVelY = 0.0;
@@ -936,7 +936,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // quantity and a last read would miss it. The hold never decides it is holding, so no record
         // answers. What it cannot see: an excursion inside one 3-tick sample.
         for (int i = 0; i < 40; i++) {
-            bot().waitTicks(3);
+            advanceServerAndClient(3);
             double velY = shipInfo().velY;
             if (Math.abs(velY) > Math.abs(worstVelY)) {
                 worstVelY = velY;
@@ -980,7 +980,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // scenario's own ship by construction — where the count increment it replaces asked a
         // question every neighbour that ever assembled a ship also answers, and then had to recover
         // the identity from a nearest-ship lookup at the build site.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
@@ -1070,12 +1070,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 && !(Math.abs(readDouble(before, CRUISE_FWD)) < EXACTLY_ZERO
                         && Math.abs(readDouble(before, CRUISE_RIGHT)) < EXACTLY_ZERO
                         && Math.abs(readDouble(before, CRUISE_UP)) < EXACTLY_ZERO);
-        Events events = events();
+        Events events = serverEvents();
         long cutMark = events.markInstrumented();
         bot().holdKey(Keyboard.KEY_X);
         try {
             // STIMULUS: how long the cut is held — the key is sampled per client tick and sent.
-            bot().waitTicks(holdTicks);
+            bot().waitWorldTicks(holdTicks);
         } finally {
             bot().releaseKey(Keyboard.KEY_X);
         }
@@ -1124,7 +1124,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 mouseDelta(60, 0);
             }
             cursorMark = clientEvents().mark();
-            bot().waitTicks(2);
+            bot().waitWorldTicks(2);
         }
         // No settle after centring: the caller reads the attitude and the camera from one peek, so
         // the two agree about one instant whether or not the brake has finished.
@@ -1140,11 +1140,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         double cursor = flightCursorX("before centring");
         // STIMULUS: a feedback controller on the client's own recorded cursor — each nudge IS the
         // pilot's input, sized by where the last one left the cursor; delete the loop and the cursor
-        // is not centred at all. It stops on its own budget, and the caller reads what it returns.
+        // is not centred at all.
         for (int i = 0; i < 200 && Math.abs(cursor) >= CURSOR_DEADZONE * 0.5; i++) {
             int step = Math.abs(cursor) > CURSOR_DEFLECTED ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);
-            bot().waitTicks(1);
+            bot().waitWorldTicks(1);
             cursor = flightCursorX("while centring, nudge " + i);
         }
         return cursor;
@@ -1162,12 +1162,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      */
     private double flightCursorX(String what) throws Exception {
         long mark = clientEvents().mark();
-        // WINDOW: one client tick between the mark and the read, and the claim is over what the log
-        // gained in it. The ship path runs once per CLIENT tick and this counts client ticks, so
-        // the window holds exactly one run however slow the box is. Not a link on purpose: a link
-        // steps five ticks, and the centring loop's nudges are the stimulus — slowing them five-fold
-        // lets the ship roll on under a cursor still being brought home.
-        bot().waitTicks(1);
+        // WINDOW: the ship path runs once per CLIENT tick, so one tick holds exactly one run however
+        // slow the box is. Not a link on purpose: a link steps five ticks, and the centring loop's
+        // nudges are the stimulus — slowing them five-fold lets the ship roll on under a cursor
+        // still being brought home.
+        bot().waitWorldTicks(1);
         return cursorXSince(mark, what);
     }
 
@@ -1331,7 +1330,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * @return the stand's entity id
      */
     private int dropStandAndAwaitItsCapture(double[] ship) throws Exception {
-        Events events = events();
+        Events events = serverEvents();
         long dropMark = events.markInstrumented();
         int crewId = readInt(exec("stellurgytest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
                 + " " + ship[2]), ENTITY_ID);
@@ -1439,7 +1438,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     @Test
     public void aShipsReadoutReachesItsPilotAndNotAPassenger() throws Exception {
         FixtureSite site = site();
-        long serverMark = events().mark();
+        long serverMark = serverEvents().mark();
         site.makeRoom(this::exec, 2, 12, "a decked craft with a pilot seat, and a body on its deck");
         Reply fixture = Reply.of(exec("stellurgytest fixture rocket " + site.dim + " " + site.x + " "
                 + site.y + " " + site.z + " with-pilot-deck"));
@@ -1453,11 +1452,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         String durable = press.text("shipId");
         // ARRANGEMENT links, typed as such: the naming and the first model are the premise that
         // gives this scenario its addresses, not the audience it is about.
-        String named = ArrangementFailure.arranged(() -> events().awaitRecordWithFields(serverMark,
+        String named = ArrangementFailure.arranged(() -> serverEvents().awaitRecordWithFields(serverMark,
                 "ship_lifecycle", "the craft must be named once it is assembled", READOUT_LINK_TICKS,
                 "durable", durable, "edge", "named"));
         String physicsId = Events.text(named, "ship");
-        String model = ArrangementFailure.arranged(() -> events().awaitRecordWithFields(serverMark,
+        String model = ArrangementFailure.arranged(() -> serverEvents().awaitRecordWithFields(serverMark,
                 "flight_model_changed", "the craft's flight computer must build its first flight model",
                 READOUT_LINK_TICKS, "ship", durable));
         String afcX = Events.text(model, "afcX");

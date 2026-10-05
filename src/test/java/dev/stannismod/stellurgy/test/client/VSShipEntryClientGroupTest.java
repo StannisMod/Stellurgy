@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import dev.stannismod.stellurgy.test.MaterializedCell;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.PlayerShipData;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.SeatMount;
@@ -17,6 +18,7 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -110,8 +112,13 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     // patterns match that; the class was found by measurement instead. Asking for a site is what
     // makes a spelling irrelevant.
 
-    /** The seeded atmosphere ceiling: the config key's minimum, so the climb stays short. */
-    private static final int ORBIT_LINE = 255;
+    /**
+     * The atmosphere ceiling this family STATES for the overworld, as a planet file's
+     * {@code <orbitHeight>} would: the lowest line production accepts (the top of the block band), so a
+     * powered climb is seconds rather than the minutes Earth's own 100 000-block line costs. The trigger
+     * predicate is the same whatever the number.
+     */
+    private static final int ORBIT_LINE = dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y;
 
     /** Control leg: the ship must demonstrably fly at all before either entry leg means anything. */
     private static final double MIN_CONTROL_CLIMB = 1.0;
@@ -134,7 +141,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     private String durableShipName;
 
     /**
-     * Client ticks between two reads of the arrival's own records — the step {@link Events}'s waits
+     * Ticks between two reads of the arrival's own records — the step {@link Events}'s waits
      * advance by, so a budget expressed in ITERATIONS (as the loops here were) converts by
      * multiplying. Named because the conversion is otherwise a bare {@code * 5} whose meaning has to
      * be re-derived at every site.
@@ -149,9 +156,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
 
     @Override
     protected void seedGameDirectory(GameDirSeed seed) {
-        // Pull the orbit line down to the config key's minimum so a powered climb is seconds rather
-        // than minutes; the trigger predicate is the same whatever the number.
-        seed.config("rockets", "I:orbitHeight", ORBIT_LINE, getClass());
         // TWO slots, and the number is derived rather than chosen. One is the smallest pool a
         // refusal can be provoked in, and it is what each of these scenarios used alone — but a ship
         // that SETTLES holds its slot for the rest of the class and nothing may take it back: a
@@ -178,6 +182,12 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
         super.resetFamilyStateBeforeTeleport();
+
+        // The low line every scenario here climbs through, stated before each one and read back: a
+        // scenario that ran against Earth's own line would sit out its climb budget below it.
+        OrbitLine stated = OrbitLine.state(this::exec, 0, ORBIT_LINE);
+        assertEquals("the overworld's orbit line must be the one this family states: " + stated,
+                ORBIT_LINE, stated.line());
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         if (!status.registered) {
@@ -249,7 +259,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // (40/60 blocks per second per tick) and was already cut into its cell when marks taken after
         // the control reading were placed — `ledger_settled` was the fifth record of the window and
         // `cell_crossing_begun` preceded it. The control leg itself writes none of the chain's links.
-        Events events = events();
+        Events events = serverEvents();
         long entryMark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         try {
@@ -347,7 +357,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // feed — the client half used to be a static-field read of a ring that production carried.
         System.out.println("[ARRIVAL-TRACE server] " + exec("stellurgytest vs arrival-trace"));
         for (String writer : new String[]{"pos_jump", "vel_jump", "mount", "dismount"}) {
-            System.out.println("[ARRIVAL-TRACE server " + writer + "] " + events().since(0, writer));
+            System.out.println("[ARRIVAL-TRACE server " + writer + "] " + serverEvents().since(0, writer));
         }
         System.out.println("[ARRIVAL-TRACE client] " + clientEvents().since(0));
         // ...and the end state, read ONCE now that the link has established it happened.
@@ -360,8 +370,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // (3) Not falling: over a two-second window the client-rendered altitude must not sink
         // like a body in free fall.
         double y0 = clientPlayerY();
-        // WINDOW: y0 and y1, both in the message; the claim is over their difference.
-        bot().waitTicks(40);
+        // WINDOW: a fall is a value, not an event; no record answers.
+        advanceServerAndClient(40);
         double y1 = clientPlayerY();
         assertTrue("the arrived pilot must NOT be in free fall (clientY " + y0 + " -> " + y1
                         + " over 40 ticks; free fall sinks ~20). riding=" + bot().reportRidingEntity(),
@@ -377,7 +387,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // So the cruise is zeroed by probe — not by his keys, which are what is under test — and the
         // hull is given time to brake before the key is asked anything.
         String arrivedShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
-                this::exec, events(), clientDim, durableShipName, arrivalBudget * 5);
+                this::exec, serverEvents(), clientDim, durableShipName, arrivalBudget * 5);
         String zeroed = exec("stellurgytest vs ff-cruise-by-id " + clientDim + " " + arrivedShipId
                 + " 0 0 0");
         scenario().requireArranged("the arrived ship's cruise must be zeroed before his key is"
@@ -385,7 +395,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                 Reply.of(zeroed).bool("afcResolved"));
         // EXPERIMENT: CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the
         // constant for the measurement).
-        bot().waitTicks(CRUISE_BRAKE_TICKS);
+        advanceServerAndClient(CRUISE_BRAKE_TICKS);
         final double before = clientPlayerY();
         // EXPERIMENT: a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival
         // at its computer — that arrival is the first half of the contract and a link, so a seat
@@ -413,7 +423,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // the record was written only by the mount transition. It is maintained from state on the
         // server tick, so it lands some ticks after the arrival — awaited as the record's own WRITE
         // (`aboard_record_stamped`), which a poll of the tag could only see once it persisted.
-        events().await(entryMark, "aboard_record_stamped", "a pilot who flew his own ship into a cell"
+        serverEvents().await(entryMark, "aboard_record_stamped", "a pilot who flew his own ship into a cell"
                 + " must be STAMPED with a durable aboard record - it is the only evidence the login"
                 + " restore has that he was ever aboard", arrivalBudget * 5);
         String tag = exec("stellurgytest space aboard-tag " + BOT);
@@ -522,7 +532,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // but it is the second link — a refusal that was decided and never said is a different defect
         // from one that was never decided, and the old form (poll the chat, then guess from the
         // altitude) could not tell them apart.
-        Events events = events();
+        Events events = serverEvents();
         long refusalMark = events.markInstrumented();
         // The CLIENT's own mark beside it, and taken here for the same reason: the message he reads
         // and the seat he keeps are both facts of HIS log, and the two logs number independently —
@@ -679,7 +689,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,

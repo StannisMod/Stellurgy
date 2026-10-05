@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.item.ItemAtmosphereAnalzer;
 import dev.stannismod.stellurgy.test.trace.AtmosphereReadoutMemory;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
@@ -68,8 +68,8 @@ public abstract class MixinItemAtmosphereAnalzerEvents {
     // AtmosphereReadoutMemory. Never consulted for a server composition.
 
     @Inject(method = "getAtmosphereReadout", at = @At("RETURN"))
-    private void stellurgyTest$readoutComposed(ItemStack stack, AtmosphereType atm, World world,
-                                        int pressure,
+    private void stellurgyTest$readoutComposed(ItemStack stack, Atmosphere atm, int pressure,
+                                        World world,
                                         CallbackInfoReturnable<List<ITextComponent>> cir) {
         TestTrace.instrumentHere(INSTRUMENT);
         List<ITextComponent> lines = cir.getReturnValue();

@@ -42,7 +42,6 @@ import java.util.List;
  */
 public class EntityElevatorCapsule extends Entity implements INetworkEntity {
 
-    public static final double MAX_HEIGHT = StellurgyConfiguration.getCurrentConfig().orbit;
     public static final double MAX_STANDTIME = 200;
     protected static final DataParameter<Byte> motionDir = EntityDataManager.createKey(EntityElevatorCapsule.class, DataSerializers.BYTE);
     protected static final DataParameter<Integer> standTimeCounter = EntityDataManager.createKey(EntityElevatorCapsule.class, DataSerializers.VARINT);
@@ -53,6 +52,8 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
     private static final byte PACKET_WRITE_SRC_INFO = 4;
     byte motion;
     int standTime, idleTime;
+    /** Whether this capsule has already said a world it transfers through has no orbit line. */
+    private boolean noOrbitLineReported = false;
     DimensionBlockPosition dstTilePos, srcTilePos;
 
     public EntityElevatorCapsule(World worldIn) {
@@ -60,6 +61,26 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
         setSize(3, 3);
         motion = 0;
         ignoreFrustumCheck = true;
+    }
+
+    /**
+     * {@link dev.stannismod.stellurgy.dimension.DimensionManager#transferLineOf} for a capsule that
+     * must come out somewhere: the top of the block band where a world has no line, said once.
+     */
+    private int transferHeightIn(int dimId) {
+        java.util.OptionalInt line = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                .transferLineOf(dimId);
+        if (line.isPresent()) {
+            return line.getAsInt();
+        }
+        if (!noOrbitLineReported) {
+            noOrbitLineReported = true;
+            Stellurgy.logger.warn("[ElevatorCapsule] dim {} has no orbit line (no radius, no stated "
+                    + "<orbitHeight>); the capsule transfers at the top of the block band, Y {}, which "
+                    + "is not that world's atmosphere", dimId,
+                    dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+        }
+        return dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y;
     }
 
     public boolean isAscending() {
@@ -161,7 +182,7 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
 
     @Override
     public Entity changeDimension(int newDimId) {
-        return changeDimension(newDimId, this.posX, StellurgyConfiguration.getCurrentConfig().orbit, this.posZ);
+        return changeDimension(newDimId, this.posX, transferHeightIn(newDimId), this.posZ);
     }
 
     public void copyDataFromOld(Entity entityIn) {
@@ -236,7 +257,7 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
                         ent.startRiding(this);
                 }
 
-                if (this.posY > MAX_HEIGHT) {
+                if (this.posY > transferHeightIn(world.provider.getDimension())) {
                     setCapsuleMotion(1);
                     double landingLocX, landingLocZ;
                     World world;
@@ -374,7 +395,7 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
                         }
                     }
 
-                    changeDimension(dstTilePos.dimid, landingLocX, StellurgyConfiguration.getCurrentConfig().orbit, landingLocZ);
+                    changeDimension(dstTilePos.dimid, landingLocX, transferHeightIn(dstTilePos.dimid), landingLocZ);
 
                     MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketDeOrbitingEvent(this));
                 } else

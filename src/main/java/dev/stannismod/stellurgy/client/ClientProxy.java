@@ -60,7 +60,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPan;
 import dev.stannismod.stellurgy.libvulpes.tile.TileSchematic;
 
 import net.minecraft.util.text.TextComponentTranslation;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.client.gui.ModuleSelectableAtmosphereButton;
 import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
 
@@ -166,6 +166,7 @@ public class ClientProxy extends CommonProxy {
 
         registerFluidModel((IFluidBlock) StellurgyBlocks.blockOxygenFluid);
         registerFluidModel((IFluidBlock) StellurgyBlocks.blockNitrogenFluid);
+        registerFluidModel((IFluidBlock) StellurgyBlocks.blockCarbonDioxideFluid);
         registerFluidModel((IFluidBlock) StellurgyBlocks.blockHydrogenFluid);
         registerFluidModel((IFluidBlock) StellurgyBlocks.blockFuelFluid);
         registerFluidModel((IFluidBlock) StellurgyBlocks.blockEnrichedLavaFluid);
@@ -662,8 +663,8 @@ public class ClientProxy extends CommonProxy {
     // atmosphere detector
 
     @Override
-    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, IAtmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
-        return new ModuleSelectableAtmosphereButton(offsetX, offsetY, buttonId, atmosphere, text, detector, buttonImages);
+    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion assertion, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
+        return new ModuleSelectableAtmosphereButton(offsetX, offsetY, buttonId, assertion, text, detector, buttonImages);
     }
 
     @Override

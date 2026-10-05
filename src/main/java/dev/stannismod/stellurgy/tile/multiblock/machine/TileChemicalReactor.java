@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.player.EntityPlayer;
@@ -28,13 +30,12 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
 import dev.stannismod.stellurgy.libvulpes.recipe.NumberedOreDictStack;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileChemicalReactor extends TileMultiblockMachine {
+public class TileChemicalReactor extends TileWasteHeatMachine {
     /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{null, 'c', null},

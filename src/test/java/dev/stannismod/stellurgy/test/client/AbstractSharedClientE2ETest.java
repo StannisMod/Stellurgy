@@ -21,6 +21,7 @@ import org.junit.runners.MethodSorters;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.EvictionReports;
 
 import java.util.Locale;
@@ -345,7 +346,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
             org.junit.Assert.fail("a previous scenario KILLED the shared player, and no reset can bring"
                     + " that body back — this scenario and every one after it is downstream of that"
                     + " death. The last death the server recorded: "
-                    + Events.lastRecord(events().since(0L, "player_died")) + "; server body: " + bodyOnServer);
+                    + Events.lastRecord(serverEvents().since(0L, "player_died")) + "; server body: " + bodyOnServer);
         }
         serverClient().execute("clear @a");
         // The harness server runs gamemode=1 (RealDedicatedServerHarness writes it into
@@ -369,7 +370,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
                 "discardClientWindows");
         // This scenario's pilot-input delivery chain, both halves, from here on. Twenty-one failure
         // messages print it; before it was a window, its counts were the JVM's since boot.
-        seatDelivery = SeatDelivery.open(this::exec, bot(), events(), clientEvents());
+        seatDelivery = SeatDelivery.open(this::exec, bot(), serverEvents(), clientEvents());
         // A family of scenarios can carry a channel this base knows nothing about — a seat the
         // player is still riding, a subsystem flag it switched on. It runs HERE, before the
         // teleport, because a player still bound to a vehicle is not moved by /tp: the plot
@@ -487,7 +488,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
         // before the reset, these two left one marker behind and every scenario in the tier failed
         // its own backlog-is-empty guard. The server answers over its own control socket now and the
         // harness refuses to start without one, so no such line exists.
-        long hurtMark = events().mark();
+        long hurtMark = serverEvents().mark();
         // The CLIENT's mark for the same write, taken here because the packet it produces is what
         // the gate below waits for. It survives `resetClientState` — that resets the screen and the
         // chat, both client-owned display state, and does not touch the event log.
@@ -606,7 +607,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
                     + "; server reports "
                     + String.join("\n", serverClient().execute("stellurgytest player health"))
                     + "\n  damage taken during this reset: "
-                    + events().since(hurtMark, "living_hurt"));
+                    + serverEvents().since(hurtMark, "living_hurt"));
         }
 
         // The world the CLIENT actually renders, asserted rather than inferred from the teleport
@@ -679,7 +680,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
             last = bot().reportState();
             trail.append(' ').append(describePlayerPoint(last));
             arrived |= isInsidePlot(last, plot);
-            bot().waitTicks(5);
+            advanceServerAndClient(5);
         }
         // WHO OWNS THIS BODY, asked of the server on a scenario that has already lost its verdict —
         // so the chat markers these commands echo can no longer disturb anything.
@@ -762,7 +763,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
         // scenario's failure, which is the whole reason this method existed in longhand.
         Events.MarkOrWhyNot mark;
         try {
-            mark = events().markIfInstrumented();
+            mark = serverEvents().markIfInstrumented();
         } catch (Exception unreachable) {
             plotMarkFailure = "the event log could not be marked: " + unreachable;
             return;
@@ -782,7 +783,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
                     + ")";
         }
         try {
-            return events().since(plotMark, "pos_jump");
+            return serverEvents().since(plotMark, "pos_jump");
         } catch (Exception unavailable) {
             return "(unavailable: " + unavailable + ")";
         }
@@ -1021,7 +1022,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
     private static final int HAND_LINK_BUDGET_TICKS = 200;
 
     /**
-     * How long the chat fence is given to reach the client, in client ticks: a deadline for one
+     * How long the chat fence is given to reach the client, in ticks: a deadline for one
      * packet's delivery, the same order as the other single-packet links here — not a settle.
      */
     private static final int CHAT_FENCE_TICKS = 200;
@@ -1217,15 +1218,31 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
      * which is the one answer an instrument must not be able to fake. {@link Events#mark} asserts
      * the recorder is subscribed and {@link Events#markInstrumented} additionally asserts the
      * test-only mixins were woven — the two independent silences behind an empty position trace.
+     *
+     * <p>A wait whose client is deliberately out of the world uses {@link #connectionEvents()}.</p>
      */
-    protected final Events events() {
-        return new Events(this::exec, bot()::waitTicks, evictionReports());
+    protected final Events serverEvents() {
+        return new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks),
+                evictionReports());
+    }
+
+    /**
+     * The same log for a CONNECTION window — between a disconnect and the reconnect — where the
+     * client has no world by design.
+     *
+     * <p>Still two clocks: a disconnect is performed on the client's next tick, not when it is asked
+     * for, so a server-only deadline can run out before the channel has even closed; and
+     * {@link #serverEvents()}'s world ticks would stall for the whole window.</p>
+     */
+    protected final Events connectionEvents() {
+        return new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks),
+                evictionReports());
     }
 
     /**
      * The CLIENT's ordered event log, behind the same verbs.
      *
-     * <p>Offered beside {@link #events()} because the two logs answer different questions and a
+     * <p>Offered beside {@link #serverEvents()} because the two logs answer different questions and a
      * scenario picks by SUBJECT, not by convenience: a body released and reclaimed inside a hull is
      * the client's fact — the server rebases an {@code EntityPlayerMP}'s position instead of
      * releasing at all, so its probe reports "still tracked" straight through a release the client
@@ -1233,9 +1250,46 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
      *
      * <p>{@link Events#markInstrumented} must never be called on this one: the client reply carries
      * no {@code mixins} flag. {@link ClientEvents} says why, and what to assert instead.</p>
+     *
+     * <p>Two clocks, because most of what the client records is driven by a server packet. A wait
+     * whose client is deliberately out of the world uses {@link #clientConnectionEvents()}.</p>
      */
     protected final Events clientEvents() {
-        return ClientEvents.of(bot(), evictionReports());
+        return ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks),
+                evictionReports());
+    }
+
+    /** The client's log for a CONNECTION window: a kick or a disconnect is recorded after the world is gone. */
+    protected final Events clientConnectionEvents() {
+        return ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks),
+                evictionReports());
+    }
+
+    /**
+     * A WINDOW in which one side drives what the other observes — client input the server must
+     * judge, server motion the client must render. A window whose subject is the client's own
+     * simulation alone (a vanilla client timer, the player's own flight) is
+     * {@code bot().waitWorldTicks}; one whose subject and reader are the server alone, with no client
+     * input in flight, is {@link GameTicks#advance}.
+     */
+    protected final void advanceServerAndClient(int ticks) throws Exception {
+        GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks).ticks(ticks);
+    }
+
+    /**
+     * For a window whose failure is the client losing its world (a disconnect that must not happen),
+     * where world ticks would stall and report a stalled clock instead of the window's own verdict.
+     */
+    protected final void advanceServerAndAllClientTicks(int ticks) throws Exception {
+        GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks).ticks(ticks);
+    }
+
+    protected final void advanceWorldAndClient(int dim, int ticks) throws Exception {
+        worldAndClient(dim).ticks(ticks);
+    }
+
+    protected final Events.Step worldAndClient(int dim) {
+        return GameTicks.serverAndClient(serverClient(), GameTicks.world(dim), bot()::waitWorldTicks);
     }
 
     /**

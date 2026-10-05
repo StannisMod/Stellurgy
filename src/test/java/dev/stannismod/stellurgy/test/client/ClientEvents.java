@@ -270,17 +270,11 @@ public final class ClientEvents {
         String read() throws Exception;
     }
 
-    /** The bot's own event log, read through {@link Events}, paced by that same bot's ticks. */
-    public static Events of(ClientBot bot, EvictionReports evictions) {
-        return new Events(probe(bot), bot::waitTicks, evictions);
-    }
-
     /**
-     * The same log, paced by something OTHER than this bot's ticks.
-     *
-     * <p>For a scenario whose subject is offline, or whose clock is a second client's: the log being
-     * read and the thing being waited ON are then different, and a wait paced by a disconnected
-     * bot's ticks never advances.</p>
+     * There is no form without a step. The records here are the client's, but most of them are
+     * DRIVEN by the server — a health update, a slot tag, a dimension change all arrive as its
+     * packets — so a deadline counted in the bot's ticks alone runs out while a lagging server has
+     * not sent anything yet.
      */
     public static Events of(ClientBot bot, Events.Step step, EvictionReports evictions) {
         return new Events(probe(bot), step, evictions);

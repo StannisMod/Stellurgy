@@ -164,7 +164,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         // splits the wait below in two: the ship COMING INTO EXISTENCE is an event the registry
         // itself records, and only what is left — the client-present LOAD — is a state worth polling
         // for. A red now says which of the two never happened.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
@@ -256,11 +256,10 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
             float pitch = (float) (-Math.toDegrees(Math.atan2(dy, horizontal)));
             bot().setLook(yaw, pitch);
-            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
-            // pick. MEASURED that one is not enough (2026-09-23: deterministic red, with the stand's
-            // own pos-look the only move applied, and still red with twenty ticks after the stand);
-            // the mechanism is NOT established.
-            bot().waitTicks(5);
+            // STIMULUS: the controller's step. MEASURED that one tick is not enough (2026-09-23:
+            // deterministic red, with the stand's own pos-look the only move applied, and still red with
+            // twenty ticks after the stand); the mechanism is NOT established.
+            bot().waitWorldTicks(5);
 
             aim = bot().reportMouseOver();
             if (isSeatUnderCrosshair(aim, seatSubX, seatSubY, seatSubZ)) {
@@ -317,7 +316,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         long pressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
         // STIMULUS: the use key held down across client ticks, as a mouse button is.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
         // The two links a boarding IS, in the order the game commits them: Forge fires
@@ -479,7 +478,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
                 + " the break, or the leg measures nothing: " + before + deck.diag,
                 !Reply.of(before).bool("isAir"));
 
-        Events events = events();
+        Events events = serverEvents();
         long pressMark = events.markInstrumented();
         scenario().asserting("a real attack-key press on the aimed ship block, and the server's verdict on it");
         bot().setKey(KEY_ATTACK, true);
@@ -544,7 +543,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         scenario().requireArranged("the space the placement would fill must be EMPTY beforehand, or a"
                 + " green would mean nothing. target=" + target + deck.diag, Reply.of(target).bool("isAir"));
 
-        Events events = events();
+        Events events = serverEvents();
         long pressMark = events.markInstrumented();
         scenario().asserting("a real use-key press with stone in hand, and the server's verdict on it");
         bot().setKey(KEY_USE_ITEM, true);
@@ -598,7 +597,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it");
 
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
                 "the hull, and the air the player stands and clicks in on its deck");

@@ -139,6 +139,8 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientE2ETest {
     /** One planet entry, identical but for its name and dimension — the two differ in nothing else. */
     private static String planet(String name, int dim) {
         return "        <planet name=\"" + name + "\" DIMID=\"" + dim + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
@@ -208,8 +210,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientE2ETest {
         // it was right to refuse, because nothing it could read told the two apart. The chain does:
         // if he never slept, `sleep_in_bed`/`player_wake_up` are simply absent, and the failure says
         // so instead of leaving the reader with two candidates.
-        dev.stannismod.stellurgy.test.Events events = new dev.stannismod.stellurgy.test.Events(
-                this::exec, bot()::waitTicks, evictionReports());
+        dev.stannismod.stellurgy.test.Events events = serverEvents();
         long mark = events.mark();
 
         JsonObject click = bot().interactBlock(BED_X, BED_Y, BED_FOOT_Z);
@@ -289,8 +290,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientE2ETest {
         // THE MARK, taken BEFORE the click. Everything the server records from here on is readable
         // afterwards, so nothing can be missed between two samples and there is no race at the start
         // — which is what a poll on the world clock could never give this test.
-        dev.stannismod.stellurgy.test.Events events = new dev.stannismod.stellurgy.test.Events(
-                this::exec, bot()::waitTicks, evictionReports());
+        dev.stannismod.stellurgy.test.Events events = serverEvents();
         long mark = events.mark();
 
         JsonObject click = bot().interactBlock(BED_X, BED_Y, BED_FOOT_Z);
@@ -427,10 +427,9 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientE2ETest {
         exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
         awaitClientPlacedNear(placedMark, 8.5, 7.5,
                 "the player's own client must stand him on the platform - his movement is his");
-        // WINDOW: from the placement at y=BED_Y to the read below. A player's position is his
-        // client's to move, so a platform that is not there shows as the fall his client simulates
-        // over these ticks; both ends are in the arrangement's message.
-        bot().waitTicks(20);
+        // WINDOW: a player's position is his client's to move, so a platform that is not there shows as
+        // the fall his client simulates over these ticks.
+        bot().waitWorldTicks(20);
 
         // AND HE MUST STILL BE THERE. A /tp onto a platform that is not there drops him to the
         // terrain, and every downstream observation then describes a player standing in a field

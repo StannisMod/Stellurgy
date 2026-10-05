@@ -77,8 +77,8 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
      * answering the mount dummy's id for the chair
      * — the collision this pins: red at the server's {@code mount} link with "Connection reset", the
      * client having died on the chair it built as the other class, 2026-09-28. Earlier than the
-     * named failure in {@code ridingOrDie}: the server-log wait paces on the client's ticks, so a
-     * dead client ends it first, and the socket error does not name the cause.</p>
+     * named failure in {@code ridingOrDie}: the server-log wait's step also waits on the client's
+     * ticks, so a dead client ends it first, and the socket error does not name the cause.</p>
      */
     @Test
     public void aChairMountArrivesAtTheClientAsItself() throws Exception {
@@ -123,12 +123,12 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
                         Reply.of("stellurgytest block at", placed).text("block")));
 
         // ---- ACT: the player sits down, through a real right-click on his own client. -----------
-        long sitMark = events().markInstrumented();
+        long sitMark = serverEvents().markInstrumented();
         long sitOnClient = clientEvents().mark();
         JsonObject click = bot().interactBlock(CX, CY, CZ);
         scenario().requireArranged("the right-click must be accepted by the client: " + click,
                 click != null);
-        events().await(sitMark, "mount", "the right-click on the chair must seat the player on the"
+        serverEvents().await(sitMark, "mount", "the right-click on the chair must seat the player on the"
                 + " SERVER - without that there is no mount entity to compare", SIT_LINK_BUDGET_TICKS);
 
         // ---- The server's view: the truth the client is supposed to reproduce. Read FIRST, so

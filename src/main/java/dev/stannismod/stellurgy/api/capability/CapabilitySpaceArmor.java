@@ -30,7 +30,7 @@ public class CapabilitySpaceArmor {
                     IProtectiveArmor instance, EnumFacing side) {
                 return null;
             }
-        }, ((IProtectiveArmor) (atmosphere, stack, commitProtection) -> false).getClass());
+        }, ((IProtectiveArmor) (hazards, needsSuppliedOxygen, stack, commitProtection) -> false).getClass());
     }
 
 }

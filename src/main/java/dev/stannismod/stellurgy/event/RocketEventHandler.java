@@ -318,7 +318,10 @@ public class RocketEventHandler extends Gui {
                 this.drawTexturedModalRect(0, 0, 0, 0, 17, 252);
 
                 //Draw altitude indicator
-                float percentOrbit = MathHelper.clamp((float) ((rocket.posY - rocket.world.provider.getAverageGroundLevel()) / (float) (StellurgyConfiguration.getCurrentConfig().orbit - rocket.world.provider.getAverageGroundLevel())), 0f, 1f);
+                int orbitLine = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                        .transferLineOf(rocket.world.provider.getDimension())
+                        .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+                float percentOrbit = MathHelper.clamp((float) ((rocket.posY - rocket.world.provider.getAverageGroundLevel()) / (float) (orbitLine - rocket.world.provider.getAverageGroundLevel())), 0f, 1f);
                 this.drawTexturedModalRect(3, 8 + (int) (79 * (1 - percentOrbit)), 17, 0, 6, 6); //6 to 83
 
                 //Draw Velocity indicator
@@ -440,10 +443,10 @@ public class RocketEventHandler extends Gui {
             // Tell the player he's suffocating if needed
             if (worldTime >= hud.suppressWarningUntil && air.suffocatedWithin(worldTime, numTicksToDisplay)) {
                 FontRenderer fontRenderer = mc.fontRenderer;
-                String str = "";
-                if (air.atmosphere() != null) {
-                    str = air.atmosphere().getDisplayMessage();
-                }
+                // The server said what to warn about; the client only localizes it.
+                String warningKey = air.summary().warningKey();
+                String str = warningKey.isEmpty()
+                        ? "" : dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(warningKey);
 
                 int screenX = event.getResolution().getScaledWidth() / 6 - fontRenderer.getStringWidth(str) / 2;
                 int screenY = event.getResolution().getScaledHeight() / 18;

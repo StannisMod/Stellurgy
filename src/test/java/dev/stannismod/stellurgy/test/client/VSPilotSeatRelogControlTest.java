@@ -72,7 +72,7 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
     private static final int LINK_BUDGET_TICKS = 400;
 
     /**
-     * Client ticks between two reads of the login's own records — the step {@link Events}'s waits
+     * Ticks between two reads of the login's own records — the step {@link Events}'s waits
      * advance by, so a budget expressed in ITERATIONS (as the poll here was) converts by
      * multiplying. Named because the conversion is otherwise a bare {@code * 5}.
      */
@@ -116,7 +116,7 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
         // construction, where the count it replaces is answered by every neighbour that ever
         // assembled one.
         int budget = 40;
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,

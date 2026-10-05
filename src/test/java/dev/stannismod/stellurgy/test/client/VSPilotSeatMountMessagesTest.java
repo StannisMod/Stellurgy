@@ -107,7 +107,7 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
         standBesideTheSeat();
         emptyTheHand();
 
-        Events events = events();
+        Events events = serverEvents();
 
         // ---- 1) Unassembled notice: the click seats him AND explains the dead controls. --------
         // Both marks BEFORE the click, so nothing between the stimulus and the reader can be missed.
@@ -156,9 +156,8 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
         events.await(selfMark, "right_click_block", "the self-click must REACH the server — an"
                 + " absence of messages below means nothing if the click was dropped on the reach"
                 + " check before the block ever saw it", NOTICE_BUDGET_TICKS);
-        // WINDOW: an absence of notices, watched from the click's own record to the log reads below,
-        // for SILENCE_WINDOW_TICKS — which the assertion names.
-        bot().waitTicks(SILENCE_WINDOW_TICKS);
+        // WINDOW: an absence of notices; nothing records one that was not sent.
+        advanceServerAndClient(SILENCE_WINDOW_TICKS);
         String selfQueued = events.since(selfMark, "action_bar_queued");
         String selfSent = events.since(selfMark, "status_message_sent");
         Events.assertInstrumentRan(selfQueued, "action_bar_events",

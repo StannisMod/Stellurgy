@@ -114,7 +114,7 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
         // writes the new shape. The record is refreshed on a one-second cadence, which is why a
         // single sample says nothing - but the answer to that is to wait for the WRITE, not to
         // sample the tag until it agrees.
-        String tag = standUpAndAwaitTheStandingRecord(events());
+        String tag = standUpAndAwaitTheStandingRecord(serverEvents());
         assertTrue("standing up on his own deck must keep him aboard, as a STANDING record - a "
                 + "record dropped here is exactly what used to send him to an ordinary spawn: " + tag,
                 Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
@@ -135,7 +135,7 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
         // Without it the two claims are about possibly different craft and the sentence "the record
         // describes this crew member on this deck" is not established by either of them.
         capBefore.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
                         200),
                 "the deck he is captured on must be the ship the STANDING record names");
 
@@ -161,7 +161,7 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
 
         // The mark before the client exists, because the restore fires ON his connection: taken
         // afterwards it could not tell "the hook never ran" from "the hook ran before I looked".
-        Events restore = events();
+        Events restore = serverEvents();
         long restoreMark = restore.mark();
         startClient();
         bot().waitForWorld();

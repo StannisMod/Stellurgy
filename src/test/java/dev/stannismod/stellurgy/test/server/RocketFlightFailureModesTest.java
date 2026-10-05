@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ConfigFlag;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -108,13 +109,17 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 7200, 500));
         ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
-        ok(client().execute("stellurgytest rocket drain-fuel " + id));
-        // launch with fillFuel=false to keep tanks empty.
-        ok(client().execute("stellurgytest rocket launch " + id + " false instant"));
+        // The subject is the FUEL gate, so fuel is required for this launch: the shared harness world
+        // starts with the requirement off, and the assembly above was judged without it.
+        try (ConfigFlag fuelRequired = ConfigFlag.set(c -> String.join("\n", client().execute(c)),"rocketRequireFuel", true)) {
+            ok(client().execute("stellurgytest rocket drain-fuel " + id));
+            // launch with fillFuel=false to keep tanks empty.
+            ok(client().execute("stellurgytest rocket launch " + id + " false instant"));
 
-        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
-        assertFalse("zero-fuel launch must be refused by the fuel gate "
-                        + "(isInFlight stays false): " + info.raw(),
-                info.inFlight);
+            RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+            assertFalse("zero-fuel launch must be refused by the fuel gate "
+                            + "(isInFlight stays false): " + info.raw(),
+                    info.inFlight);
+        }
     }
 }

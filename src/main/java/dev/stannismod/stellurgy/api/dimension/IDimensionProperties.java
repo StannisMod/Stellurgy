@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.api.dimension;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
@@ -69,7 +69,7 @@ public interface IDimensionProperties {
     /**
      * @return the default atmosphere of this dimension
      */
-    IAtmosphere getAtmosphere();
+    Atmosphere getAtmosphere();
 
     /**
      * @return true if the planet has an atmosphere

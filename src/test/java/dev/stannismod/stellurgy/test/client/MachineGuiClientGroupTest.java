@@ -224,7 +224,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
     }
 
     private String openMachineGui(int[] at) throws Exception {
-        Events events = events();
+        Events events = serverEvents();
         long serverMark = events.mark();
         long clientMark = clientEvents().mark();
 
@@ -396,7 +396,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 screen.startsWith(GUI_MODULAR));
 
         scenario().asserting("Scan then Build, clicked on the real GUI, assemble a rocket");
-        Events events = events();
+        Events events = serverEvents();
         long buildMark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         exec("stellurgytest energy inject " + builder + " 100000000");
@@ -791,7 +791,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // then the survey step actually MOVED (a completion pass that finds no crystal, no cell due
         // or too little distance data returns changing nothing, and says nothing). A red used to be
         // 400 ticks of telescope JSON that could not tell those apart.
-        Events events = events();
+        Events events = serverEvents();
         long scanMark = events.markInstrumented();
         bot().clickButtonById(6);
         events.assertChain(scanMark, "pressing Observe must reach the instrument, be ACCEPTED as a"
@@ -856,9 +856,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().record("planetButtonId", planetId);
 
         scenario().asserting("clicking it registers the selection server-side");
-        long selectMark = events().markInstrumented();
+        long selectMark = serverEvents().markInstrumented();
         bot().clickButtonById(planetId);
-        events().awaitField(selectMark, "selector_selection_set", "pos",
+        serverEvents().awaitField(selectMark, "selector_selection_set", "pos",
                 at[0] + "," + at[1] + "," + at[2],
                 "clicking planet button " + planetId + " must reach THIS selector's server copy",
                 GUI_LINK_BUDGET_TICKS);
@@ -1112,7 +1112,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         emptyTheHand();
         String screen = openMachineGui(at);
         scenario().record("screen", screen);
-        Events events = events();
+        Events events = serverEvents();
 
         // ---- 1) Try to arm with nowhere to go. ------------------------------------------------
         // The chat overlay is no longer drained first. A mark taken before the click is what makes a
@@ -1344,7 +1344,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // than by right-click: the right-click packet was dropped before the chunk/player settled
         // in the original class, a settle-timing race orthogonal to the mixin contract under test.
         // The S2C open-window packet makes the real client render GuiChest.
-        Events events = events();
+        Events events = serverEvents();
         long openMark = events.mark();
         long openOnClient = clientEvents().mark();
         String open = exec("stellurgytest player open-chest " + dim + " " + x + " " + Y + " " + z);

@@ -149,10 +149,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
-     * The overworld's air as this scenario found it, read before anything here changed it, so
-     * {@link #restoreTheAir} can put back exactly that.
+     * The overworld's air as this scenario found it — its gas mix, each gas by name and amount, as
+     * {@code planet info} reports it — read before anything here changed it, so {@link #restoreTheAir}
+     * can put back exactly that. The mix and not its density: an airless world has no mix left to
+     * thicken, so a density alone cannot bring the air back.
      */
-    private double airAtStart;
+    private String gasesAtStart;
 
     /**
      * Each scenario starts with an empty sky, at standard gravity, and remembers the air it found.
@@ -169,7 +171,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         Reply planet = Reply.of(exec("stellurgytest planet info " + DIM));
         requireArranged("the overworld must be at standard gravity, which every scenario here"
                 + " leaves it at: " + planet, planet.number("gravity") == 1.0);
-        airAtStart = planet.number("atmosphereDensity");
+        gasesAtStart = planet.object("gases");
+        requireArranged("the overworld must report its gas mix: " + planet, gasesAtStart != null);
     }
 
     /**
@@ -187,13 +190,38 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /**
      * Put the overworld's air back as {@link #emptySkyAtStandardGravity} found it, and read it back: a
      * scenario that left the world airless would hand every later fall a different medium.
+     *
+     * <p>Each gas the world is now short of is added back by name, through the exchange production
+     * itself uses; a scenario that never thinned the air finds nothing missing and adds nothing.</p>
      */
     @After
     public void restoreTheAir() throws Exception {
-        exec("ar planet set " + DIM + " atmosphereDensity " + Math.round(airAtStart));
+        Reply wanted = Reply.of(gasesAtStart);
+        Reply now = gasesNow();
+        String[] names = Reply.of("{\"gases\":" + gasesAtStart + "}").objectKeys("gases");
+        for (String gas : names) {
+            // absence is the answer "none of it left": an airless world reports no entry for a gas.
+            long missing = wanted.longInteger(gas) - (now.has(gas) ? now.longInteger(gas) : 0L);
+            if (missing > 0L) {
+                Reply added = Reply.of(exec("stellurgytest planet add-gas " + DIM + " " + gas + " "
+                        + missing));
+                requireArranged("the overworld's " + gas + " must be put back: " + added, added.ok());
+            }
+        }
+        Reply restored = gasesNow();
+        boolean same = Reply.of("{\"gases\":" + restored + "}").objectKeys("gases").length == names.length;
+        for (String gas : names) {
+            same &= restored.has(gas) && restored.longInteger(gas) == wanted.longInteger(gas);
+        }
+        requireArranged("the overworld's air must be put back to " + gasesAtStart + "; it is " + restored,
+                same);
+    }
+
+    /** The overworld's gas mix now, as {@code planet info} reports it. */
+    private Reply gasesNow() throws Exception {
         Reply planet = Reply.of(exec("stellurgytest planet info " + DIM));
-        requireArranged("the overworld's air must be put back to " + airAtStart + ": " + planet,
-                planet.number("atmosphereDensity") == airAtStart);
+        requireArranged("the overworld must report its gas mix: " + planet, planet.object("gases") != null);
+        return Reply.of(planet.object("gases"));
     }
 
     /** Lay {@code variant} at {@code site} and assemble it ({@link AssembledCraft}). */

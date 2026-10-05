@@ -91,6 +91,18 @@ public class StellurgyBlocks {
     public static Block blockPressureTank;
     public static Block blockIntake;
     public static Block blockNitrogenFluid;
+    public static Block blockCarbonDioxideFluid;
+    public static Block blockAirRecirculator;
+    public static Block blockGasSeparator;
+    public static Block blockLifeSupportPlant;
+    public static Block blockVentilationDuct;
+    public static Block blockJettisonPort;
+    public static Block blockHeatPipe;
+    public static Block blockHeatAccumulator;
+    public static Block blockHeatRadiator;
+    public static Block blockHeatChiller;
+    public static Block blockHeatDump;
+    public static Block blockHeatIntakeDuct;
     public static Block blockCircleLight;
     public static Block blockSolarGenerator;
     public static Block blockDockingPort;

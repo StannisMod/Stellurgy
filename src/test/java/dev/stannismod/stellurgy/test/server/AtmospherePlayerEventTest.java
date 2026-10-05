@@ -12,13 +12,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * {@code AtmosphereHandler} per-player cache bookkeeping — server tier.
- * Relabeled down the pyramid from the old client-harness
- * {@code AtmospherePlayerEventE2ETest} the
- * contract (onTick populates {@code prevAtmosphere} for players in Stellurgy dims;
- * {@code onPlayerChangeDim} clears the entry so the next dim repopulates)
- * is server-side handler state the old test read through server probes
- * anyway.
+ * What the per-entity atmosphere gate answers for a player, and that the answer is the one belonging
+ * to the dimension he is STANDING IN — server tier.
+ *
+ * <p>These three used to assert the shape of a per-player cache: that a dim populated it, that a
+ * dimension change cleared it. That cache is gone — it existed only so an edge-triggered sync packet
+ * could compare against the previous answer, and the sync is periodic now — and asserting its
+ * bookkeeping was pinning an implementation detail in the first place. What a player can actually
+ * feel is the resolution itself, so that is what is asserted here: the gate answers his current
+ * dimension's air, and nothing of the dimension he left survives the move.</p>
  *
  * <p>Player supply: {@code ensure-fake} (cross-dim moves fire the same
  * {@code PlayerChangedDimensionEvent} Forge's transfer fires);
@@ -27,8 +29,8 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>One server for the class, over the two planets {@link Galaxy} declares. The fake player is
  * shared, so every scenario that waits for a resolution first takes him through the overworld
- * ({@link #startFromTheOverworld}): the dim change clears his entry, which is what guarantees the
- * resolution it waits for is a change and therefore recorded.</p>
+ * ({@link #startFromTheOverworld}): resolved as breathable there, he owes a change of answer on the
+ * airless planet, which is what guarantees the resolution it waits for is recorded.</p>
  */
 @SeededWorld(AtmospherePlayerEventTest.Galaxy.class)
 public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
@@ -50,8 +52,8 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     private static final int DIM_VAC = 9411;
     private static final int DIM_AIR = 9412;
 
-    private static final String HAS_CACHED = "hasCachedAtmosphere";
-    private static final String CACHED_ATMOS = "cachedAtmosphere";
+    private static final String PLAYER_ATMOS = "atmosphere";
+    private static final String PLAYER_BREATHABLE = "breathable";
 
     /** A vacuum planet and a breathable one, otherwise identical. */
     public static final class Galaxy implements WorldSeed {
@@ -71,6 +73,8 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     private static String planetXml(String name, int dim, int atmosDensity) {
         return "        <planet name=\"" + name + "\" DIMID=\"" + dim + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
@@ -89,7 +93,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     }
 
     /** This class's reader of the server's ordered event log. */
-    private Events events() {
+    private Events serverEvents() {
         return new Events(this::exec,
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
@@ -102,24 +106,29 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     }
 
     /**
-     * The shared fake player starts this scenario in the overworld, with his entry cleared by the dim
-     * change — whatever world and cache a sibling scenario left him with.
+     * The shared fake player starts this scenario resolved as breathable in the overworld, whatever
+     * world a sibling scenario left him in — so the move to an airless planet that follows is a
+     * change of answer, which is what the instrument records.
      */
     private void startFromTheOverworld() throws Exception {
-        enterDim(0, 0);
+        enterDim(0, OVERWORLD_UPDATES);
+        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld; the ticker posts
+        // one per server tick and then stops, so overshoot delivers none extra.
+        GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
     }
 
     /**
      * Stations the fake player in {@code dim} and waits for that dimension's handler to RESOLVE him,
-     * on the cache write it records ({@code player_atmosphere_changed}, carrying the resolver's dim).
+     * on the record it emits ({@code player_atmosphere_changed}, carrying the resolver's dim).
      *
-     * <p>The write happens only on a change, and every caller arrives with a change owed: the scenario
-     * began in the overworld with his entry cleared, and the one move this class makes — vacuum to
-     * breathable — both clears his entry and changes the answer. Marked before the station, because
-     * the first living update may resolve him before a later mark could be taken.</p>
+     * <p>The record is an EDGE, and every caller arrives with one owed: he starts resolved as
+     * breathable in the overworld ({@link #startFromTheOverworld}), so going airless changes the
+     * answer, and going on from airless to breathable changes it again. So the wait cannot expire on
+     * a healthy path. Marked before the station,
+     * because the first living update may resolve him before a later mark could be taken.</p>
      */
     private String enterDimAndAwaitResolution(int dim) throws Exception {
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         enterDim(dim, 40);
         // Answers the LAST matching record itself, not a `since` reply.
@@ -134,74 +143,88 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     }
 
     /**
-     * Overworld baseline: no Stellurgy atmosphere may be cached for the player.
+     * The overworld is breathable, and the gate says so for a player standing in it.
+     *
+     * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType} at
+     * {@code if (StellurgyConfiguration.getCurrentConfig().enableOxygen)} preceded by a return of
+     * VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own
+     * dimension check instead stays GREEN — no other world's handler exists in this scenario to
+     * answer for the overworld.</p>
      *
      * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType(Entity)} at
      * {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}
      * answering VACUUM for dimension 0: "overworld baseline: cache must be empty or non-Stellurgy;
-     * hasCached=true atmos=vacuum", 2026-09-28; re-taken 2026-10-04 on the shared server, same text
-     * plus {@code "cachedInDims":[0]}. NOT YET for the other break: with
-     * {@code AtmosphereHandler#onTick} at {@code entity.world.provider.getDimension() == this.dimId}
-     * removed, this stays GREEN — re-taken 2026-10-04 on the shared server, where both resolving
-     * scenarios ran before this one (class run 3/3 green with the break in place). The earlier reason,
-     * "no other world's handler exists", no longer describes the arrangement; why the other worlds'
-     * handlers still cache nothing for an overworld player is not measured.</p>
+     * hasCached=true atmos=vacuum", 2026-09-28 (taken on the other line of this test before the two
+     * were merged).</p>
      */
     @Test
-    public void stellurgyDimWithoutVisitDoesNotCacheAtmosphereForPlayer() throws Exception {
+    public void aPlayerInTheOverworldResolvesBreathableAir() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);
-        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld, and the claim
-        // below is about what they left in the cache. The ticker posts one per server tick and then
-        // stops, so this many server ticks (plus the slack) deliver all of them; overshoot delivers
-        // none extra, so the verdict does not depend on the box's speed.
+        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld. The ticker
+        // posts one per server tick and then stops, so this many server ticks (plus the slack)
+        // deliver all of them; overshoot delivers none extra, so the verdict does not depend on the
+        // box's speed.
         GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
-        String cache = exec("stellurgytest atmosphere cached-for-player");
-        String has = field(HAS_CACHED, cache);
-        String atmos = field(CACHED_ATMOS, cache);
-        assertTrue("overworld baseline: cache must be empty or non-Stellurgy; hasCached=" + has
-                + " atmos=" + atmos + " " + cache,
-                "false".equals(has) || atmos.isEmpty() || !atmos.contains("vacuum"));
+        String resp = exec("stellurgytest atmosphere for-player");
+        assertFalse("the gate must answer SOMETHING for a player in the overworld: " + resp,
+                field(PLAYER_ATMOS, resp).isEmpty());
+        assertEquals("the overworld must resolve as breathable for a player standing in it: " + resp,
+                "true", field(PLAYER_BREATHABLE, resp));
     }
 
-    /** Ticking in a Stellurgy dim populates the per-player cache. */
+    /**
+     * An airless planet resolves as unbreathable for a player standing on it.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: "the gate must answer
+     * SOMETHING for a player on a Stellurgy planet: … \"hasAtmosphere\":false". UNBREATHABLE — the
+     * same line answering {@code AIR} for every dimension: "a planet declared with zero atmosphere
+     * must resolve as unbreathable … \"breathable\":true".</p>
+     */
     @Test
-    public void stellurgyDimTickPopulatesPerPlayerCache() throws Exception {
+    public void aPlayerOnAnAirlessPlanetResolvesUnbreathableAir() throws Exception {
         startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
-        String cache = exec("stellurgytest atmosphere cached-for-player");
-        assertEquals("after >=1 living-update in a Stellurgy dim the per-player cache "
-                + "MUST be populated; cache=" + cache, "true", field(HAS_CACHED, cache));
-        assertFalse("cached atmosphere name must be non-empty: " + cache,
-                field(CACHED_ATMOS, cache).isEmpty());
+        String resp = exec("stellurgytest atmosphere for-player");
+        assertFalse("the gate must answer SOMETHING for a player on a Stellurgy planet: " + resp,
+                field(PLAYER_ATMOS, resp).isEmpty());
+        assertEquals("a planet declared with zero atmosphere must resolve as unbreathable for a "
+                + "player standing on it: " + resp, "false", field(PLAYER_BREATHABLE, resp));
     }
 
-    /** Dim change clears the entry; the new dim repopulates with its own. */
+    /**
+     * Dim change clears the entry; the new dim repopulates with its own.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}.
+     * SOMETHING BEFORE — answering nothing for an unbreathable dimension: "the airless planet must
+     * resolve to SOMETHING before the move". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:
+     * "the airless planet must resolve as unbreathable before the move: … \"breathable\":true".
+     * BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: "the breathable planet must
+     * resolve as breathable after the move: … \"NoO2\"".</p>
+     *
+     * <p>Not asserted: which dimension's handler resolved him after the move, because the wait
+     * selects its record by that very field, so reading it back could not disagree; and that the
+     * airless planet's atmosphere does not survive the move, because it is implied by the two
+     * breathability verdicts either side of it.</p>
+     */
     @Test
-    public void dimChangeClearsAtmosphereCacheForPlayer() throws Exception {
+    public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
         startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
-        String cacheVac = exec("stellurgytest atmosphere cached-for-player");
-        String atmoVac = field(CACHED_ATMOS, cacheVac);
-        assertFalse("vacuum-dim cache must populate before the dim change: " + cacheVac,
+        String onVacuum = exec("stellurgytest atmosphere for-player");
+        String atmoVac = field(PLAYER_ATMOS, onVacuum);
+        assertFalse("the airless planet must resolve to SOMETHING before the move: " + onVacuum,
                 atmoVac.isEmpty());
+        assertEquals("the airless planet must resolve as unbreathable before the move: " + onVacuum,
+                "false", field(PLAYER_BREATHABLE, onVacuum));
 
-        // Straight from vacuum to air, never through the overworld: the clear asserted below has to
-        // be the one THIS dim change makes.
-        String airResolution = enterDimAndAwaitResolution(DIM_AIR);
-        // THE CLEAR ITSELF, read off the write that followed it. A cache entry that survived the
-        // dim change is still overwritten here — air differs from the cached vacuum — so the two
-        // cached names below differ with or without the clear. What only the clear produces is the
-        // write finding NOTHING in the slot: the record's `from` is "none" exactly then.
-        assertEquals("the dim change must CLEAR the player's cached atmosphere before the breathable"
-                        + " dim resolves him - the write found " + Events.text(airResolution, "from")
-                        + " in his slot: " + airResolution,
-                "none", Events.text(airResolution, "from"));
-        String cacheAir = exec("stellurgytest atmosphere cached-for-player");
-        String atmoAir = field(CACHED_ATMOS, cacheAir);
-        assertFalse("breathable-dim cache must repopulate after dim change: " + cacheAir,
-                atmoAir.isEmpty());
-        assertFalse("the vacuum-dim atmosphere must NOT carry over into the breathable "
-                + "dim's cache slot (onPlayerChangeDim must clear); vacuumAtmos=" + atmoVac
-                + " breathableAtmos=" + atmoAir, atmoVac.equals(atmoAir));
+        // THE MOVE ITSELF is the link this waits on: the arriving dimension's own handler resolving
+        // him. That record is what separates "he arrived and was re-resolved" from "he arrived and
+        // nobody asked" — the state read below cannot tell those apart, because a gate that never ran
+        // leaves the same answer standing.
+        enterDimAndAwaitResolution(DIM_AIR);
+
+        String onAir = exec("stellurgytest atmosphere for-player");
+        assertEquals("the breathable planet must resolve as breathable after the move: " + onAir,
+                "true", field(PLAYER_BREATHABLE, onAir));
     }
 }

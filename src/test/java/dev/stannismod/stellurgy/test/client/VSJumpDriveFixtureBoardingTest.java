@@ -172,7 +172,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // into EXISTENCE is an event, and only the client-present LOAD is left to poll for - where
         // one loop reported "no altitude" for a spawn that faulted and for a chunk that never
         // arrived alike.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture();
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
@@ -309,7 +309,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         long seatPressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
         // STIMULUS: the use key held down across client ticks, as a mouse button is.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
         // The two links a boarding IS, in the order the game commits them: Forge fires
@@ -353,7 +353,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         long navClientMark = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
         // STIMULUS: the use key held down across client ticks, as a mouse button is.
-        bot().waitTicks(5);
+        bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
         events.await(navMark, "right_click_block", "the use press aimed at the NAVIGATION CONSOLE "
@@ -460,10 +460,10 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
             double horizontal = Math.sqrt(dx * dx + dz * dz);
             bot().setLook((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D),
                     (float) (-Math.toDegrees(Math.atan2(dy, horizontal))));
-            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
-            // pick. MEASURED that one is not enough (2026-09-23: deterministic red, the pick read
-            // back from a look tens of degrees off the aim); the mechanism is NOT established.
-            bot().waitTicks(5);
+            // STIMULUS: the controller's step. MEASURED that one tick is not enough (2026-09-23:
+            // deterministic red, the pick read back from a look tens of degrees off the aim); the mechanism
+            // is NOT established.
+            bot().waitWorldTicks(5);
 
             aim.mouseOver = bot().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, targetSub)) {
@@ -603,7 +603,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         bot().holdKey(Keyboard.KEY_LSHIFT);
         // STIMULUS: a best-effort sneak held for a fixed stretch; its expiry is not a failure, and
         // the guaranteed route below is linked.
-        bot().waitTicks(2 * budget);
+        bot().waitWorldTicks(2 * budget);
         bot().releaseKey(Keyboard.KEY_LSHIFT);
         boolean bySneak = !Events.records(clientEvents().since(clientMark, "dismount")).isEmpty();
         scenario().record("leftSeatBy", bySneak ? "sneak-key" : "probe-fallback");

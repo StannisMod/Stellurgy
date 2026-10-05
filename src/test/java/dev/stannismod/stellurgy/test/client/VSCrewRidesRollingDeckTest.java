@@ -114,7 +114,7 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         // `ship_usable` for THAT name, so it is also the proof that the assembly created a ship. The
         // count of every ship in the world that stood here was satisfied by any neighbour's hull on
         // a world this class shares.
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), 0,
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), 0,
                 ShipIdentity.nameFromAssembly(assemble), 200);
 
         // A poll of the world's LOADED-ship count stood after this teleport, "the ship must load with
@@ -173,12 +173,10 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         String point = exec("stellurgytest vs point-by-id 0 " + shipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
         assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded"));
-        // WINDOW: `level` before, `rolled` after, and the claim at the foot of this method is the
-        // difference between them — how far he moved on the deck against how far in the world —
-        // with both readings in its message. Counted on the hull's world clock, and the roll it
-        // bought is GATED below: a hull that has turned a few degrees satisfies every claim here
-        // without testing any of them.
-        GameTicks.advanceWorld(serverClient(), 0, ROLL_WINDOW_TICKS);
+        // WINDOW: on the hull's world clock and the client's ticks — the world rolls the deck, the
+        // client moves him on it — and the roll it bought is GATED below: a hull that has turned a few
+        // degrees satisfies every claim here without testing any of them.
+        advanceWorldAndClient(0, ROLL_WINDOW_TICKS);
         double upAfterRoll = ShipInfo.byId(this::exec, 0, shipId).upY();
         scenario().requireArranged("the deck must actually be rolled before the ride is judged - the"
                         + " test's own premise is at least half of the commanded " + ROLL_DEG
@@ -202,8 +200,8 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
                 // The server's half as ITS records, not a probe reply of statics: the verb that
                 // served them is gone, and each record here names the body it is about.
                 + " || server ticks=" + Events.fieldLines(
-                        events().since(0, "ship_frame_tick"), "line")
-                + " || server releases=" + events().since(0, "deck_released"));
+                        serverEvents().since(0, "ship_frame_tick"), "line")
+                + " || server releases=" + serverEvents().since(0, "deck_released"));
         assertTrue("the crew member must still be aboard after the roll: " + rolled.raw(),
                 rolled.shipLoaded);
         // The roll is the moment a capture can be handed to the wrong hull, so "still aboard" is only

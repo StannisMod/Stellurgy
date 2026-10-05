@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock.machine;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
@@ -23,13 +25,12 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.ChanceFluidStack;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileCentrifuge extends TileMultiblockMachine {
+public class TileCentrifuge extends TileWasteHeatMachine {
     /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
 

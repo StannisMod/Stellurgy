@@ -124,7 +124,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         // construction — where a count incremented on a shared world is answered by any neighbour
         // that ever assembled one. markInstrumented, because the frame decision further down is
         // recorded by a test-only mixin: an empty log would otherwise have a second silent cause.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
 
         String assemble = assembleFixture(site);

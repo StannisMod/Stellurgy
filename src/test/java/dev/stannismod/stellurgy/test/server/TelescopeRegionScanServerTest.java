@@ -537,6 +537,23 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
         configure("telescopeSurveyDataPerStep", 0);
     }
 
+    /**
+     * Every scenario starts in an authored-only sky: its subject is the systems IT seats, and a sky the
+     * save's procedural field fills is one that other scenarios of this class have surveyed and pinned
+     * systems in. The scenarios about the procedural field install it themselves.
+     */
+    @org.junit.Before
+    public void authoredOnlySky() throws Exception {
+        Reply.of("stellurgytest space gen-empty", exec("stellurgytest space gen-empty"))
+                .requireOk("start from an authored-only sky");
+    }
+
+    @org.junit.After
+    public void restoreTheSavesSky() throws Exception {
+        Reply.of("stellurgytest space gen-reset", exec("stellurgytest space gen-reset"))
+                .requireOk("put the server's own sky back");
+    }
+
     /** The shipped procedural sky — stars with derived worlds, and the clouds between them. */
     private void proceduralSky() throws Exception {
         GalaxyGenConfig shipped = GalaxyGenConfig.defaults();

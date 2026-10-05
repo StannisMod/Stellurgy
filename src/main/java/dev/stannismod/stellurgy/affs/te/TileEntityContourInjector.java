@@ -7,9 +7,7 @@ import dev.stannismod.stellurgy.affs.util.CodeUtils;
 import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
 import dev.stannismod.stellurgy.affs.world.contour.ContourFrameGeometry;
 import dev.stannismod.stellurgy.affs.world.projectile.IEnergyProjectile;
-import dev.stannismod.stellurgy.affs.world.shield.IShieldSink;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
-import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkRegistry;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -25,8 +23,12 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Explosion;
 
 import javax.annotation.Nullable;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
-public class TileEntityContourInjector extends TileEntity implements ITickable, IShieldSink {
+public class TileEntityContourInjector extends TileEntity implements ITickable, ISubsystemSink {
 
     public static final int MAX_SCAN_RADIUS = 16;
     public static final int MAX_SHIELD_BUFFER = 200_000;
@@ -83,7 +85,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
 
         frameCount = geometry.getFrameCount();
         interiorCount = geometry.getInteriorCount();
-        requestedShieldEnergy = getFreeShieldCapacity();
+        requestedShieldEnergy = getFreeCapacity();
 
         refreshFieldActiveState(true);
 
@@ -120,16 +122,16 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.of(world).register(this);
-            ShieldNetworkManager.markDirty(world);
+            SubsystemNetworkRegistry.register(this);
+            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
         }
     }
 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.of(world).unregister(this);
-            ShieldNetworkManager.markDirty(world);
+            SubsystemNetworkRegistry.unregister(this);
+            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.invalidate();
     }
@@ -137,10 +139,15 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.of(world).unregister(this);
-            ShieldNetworkManager.markDirty(world);
+            SubsystemNetworkRegistry.unregister(this);
+            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
+    }
+
+    @Override
+    public SubsystemNetworkDomain getNetworkDomain() {
+        return ShieldNetworkManager.DOMAIN;
     }
 
     @Override
@@ -154,21 +161,21 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     }
 
     @Override
-    public int getRequestedShieldEnergy() {
-        return currentGeometry == null ? 0 : getFreeShieldCapacity();
+    public int getRequested() {
+        return currentGeometry == null ? 0 : getFreeCapacity();
     }
 
     @Override
-    public int getFreeShieldCapacity() {
+    public int getFreeCapacity() {
         return Math.max(0, MAX_SHIELD_BUFFER - shieldBuffer);
     }
 
     @Override
-    public int receiveShieldEnergy(int amount) {
+    public int receive(int amount) {
         if (world == null || world.isRemote || amount <= 0) {
             return 0;
         }
-        int accepted = Math.min(amount, getFreeShieldCapacity());
+        int accepted = Math.min(amount, getFreeCapacity());
         if (accepted > 0) {
             shieldBuffer += accepted;
             shieldReceivedThisTick += accepted;

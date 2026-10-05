@@ -4,6 +4,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 
 public interface IPlanetaryProvider {
 
@@ -80,6 +81,6 @@ public interface IPlanetaryProvider {
      * @param pos location in block coords
      * @return Atmosphere type
      */
-    IAtmosphere getAtmosphere(BlockPos pos);
+    Atmosphere getAtmosphere(BlockPos pos);
 
 }

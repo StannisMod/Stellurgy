@@ -126,7 +126,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         // The registry's own record of the ship being added, since a mark taken before the assembly
         // was queued: THIS scenario's ship by construction, where a whole-dimension count is
         // answered by every neighbour that ever assembled one.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleShip();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
@@ -251,7 +251,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         standBesideTheSeat();
         emptyTheHand();
 
-        Events events = events();
+        Events events = serverEvents();
         long sitMark = events.markInstrumented();
         // The CLIENT's mark beside it: he PERFORMS the mount when the server tells him who is
         // riding what, so the replication half is a link on the other log rather than a poll.
@@ -304,7 +304,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         // an absence has no record to link on, only a deadline. The control leg's jump arrived on
         // the same seam, so the window is long enough to have seen one; overshoot only lengthens
         // it, which is the strict direction for an absence.
-        bot().waitTicks(SILENCE_WINDOW_TICKS);
+        advanceServerAndClient(SILENCE_WINDOW_TICKS);
         String commands = events.since(deafMark, "pilot_command_received");
         Events.assertInstrumentRan(commands, "pilot_seat_events",
                 "a craft that never became a ship is never COMMANDED");
@@ -322,7 +322,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         try {
             // STIMULUS: 40 ticks of held flight keys — many samples of the client's per-tick gate,
             // and two of its once-a-second re-assertions of a held intent.
-            bot().waitTicks(40);
+            bot().waitWorldTicks(40);
         } finally {
             bot().releaseKey(Keyboard.KEY_W);
             bot().releaseKey(Keyboard.KEY_R);
@@ -331,7 +331,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         // at the release, but an input sent on the hold's last tick is still in flight to the seat,
         // and "nothing reached a seat" is only a claim once it has had time to land. Overshoot only
         // lengthens the absence window — the strict direction.
-        bot().waitTicks(10);
+        advanceServerAndClient(10);
 
         // THE POSITIVE PRECONDITION, and the reason this leg is worth anything: the client's gate
         // must have been CONSULTED and answered CLOSED while he sat on this seat. Without it, the
@@ -387,7 +387,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
     private void tapKey(int keyCode) throws Exception {
         bot().holdKey(keyCode);
         // STIMULUS: held across client ticks, so the edge-triggered handler samples it pressed.
-        bot().waitTicks(2);
+        bot().waitWorldTicks(2);
         bot().releaseKey(keyCode);
     }
 

@@ -408,6 +408,11 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
 
 
     private boolean hasEnoughFuelUnmanned(@Nonnull FuelType family) {
+        // Fuel not required means no fuel adequacy to judge: the base rate is 0 by design then, and
+        // the burn-time arithmetic below would read that as "cannot reach" and refuse every build.
+        if (!dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().rocketRequireFuel) {
+            return true;
+        }
         // SD flight: acceleration in entity code is ≈ 0.005 blocks/tick^2
         final float a_station = 0.005f;
         final float targetS   = 128f;  // SD rocket switches to orbit after ~128 blocks

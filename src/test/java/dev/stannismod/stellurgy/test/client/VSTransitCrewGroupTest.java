@@ -540,7 +540,7 @@ private String execEnvelope(String cmd) throws Exception {
     @Test
     public void aCrewMemberIsReseatedOnArrivalWithNothingForcingTheShipLoaded() throws Exception {
 
-        Events arrangeLog = events();
+        Events arrangeLog = serverEvents();
         long setupMark = arrangeLog.markInstrumented();
         TransitSetup setup = TransitSetup.of(execEnvelope("stellurgytest space transit-setup-piloted"));
         int originDim = setup.originDim;
@@ -639,7 +639,7 @@ private String execEnvelope(String cmd) throws Exception {
 private static final int SKY_RENDER_DISTANCE = 8;
 
     /**
-     * How long a render counter is watched for growth, in CLIENT ticks. A window, not a deadline:
+     * How long a render counter is watched for growth, in ticks. A window, not a deadline:
      * what is read across it is a frame counter, and a frame counter growing is not an event — so a
      * longer window samples more frames and cannot change whether the assertion holds. The control
      * window in an ordinary cell and the corridor window in flight use the same number, which is
@@ -810,8 +810,8 @@ private String hud() throws Exception {
         // ── CONTROL, in an ordinary cell ────────────────────────────────────────────────────────
         long skyBefore = skyFrames();
         long tunnelBefore = tunnelFrames();
-        // WINDOW: skyBefore/tunnelBefore and the two reads after, each asserted as a difference.
-        bot().waitTicks(RENDER_WINDOW_TICKS);
+        // WINDOW: frame counters grow; nothing records it.
+        advanceServerAndClient(RENDER_WINDOW_TICKS);
         long skyAfter = skyFrames();
         long tunnelAfter = tunnelFrames();
         // The sky renderer must run here at all. Without it "the corridor is drawn in hyperspace"
@@ -851,12 +851,11 @@ private String hud() throws Exception {
         long tunnelAtStart = tunnelFrames();
         scenario().record("tunnelAtStart", tunnelAtStart);
 
-        // WINDOW: tunnelAtStart and tunnelInFlight, asserted as a difference below. What grows across
-        // it is a frame COUNTER, which is not an event, so a longer window samples more frames and
-        // changes nothing about whether the assertion can hold. Same length as the control window
-        // above, so the two readings are comparable. The HUD is NOT read off this window — see its
-        // link below.
-        bot().waitTicks(RENDER_WINDOW_TICKS);
+        // WINDOW: what grows across it is a frame COUNTER, which is not an event, so a longer window
+        // samples more frames and changes nothing about whether the assertion can hold; same length
+        // as the control window above, so the two readings are comparable. The HUD is NOT read off
+        // this window — see its link below.
+        advanceServerAndClient(RENDER_WINDOW_TICKS);
         long tunnelInFlight = tunnelFrames();
 
         // The premise, read AFTER the window and before anything measured in it is believed: the jump
@@ -1121,8 +1120,8 @@ private String hud() throws Exception {
         // advanced in hyperspace" is a first reading rather than a change.
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
-        // WINDOW: skyInCell/tunnelInCell and the two reads after, each asserted as a difference.
-        bot().waitTicks(20);
+        // WINDOW: frame counters grow; nothing records it.
+        advanceServerAndClient(20);
         long skyAfterInCell = skyFrames();
         long tunnelAfterInCell = tunnelFrames();
         assertTrue("CONTROL: this sky renderer must run in an ordinary cell, or every corridor"
@@ -1141,8 +1140,8 @@ private String hud() throws Exception {
         String cellAfcKey = originDim + " " + cellSeat.afcX
                 + " " + cellSeat.afcY + " " + cellSeat.afcZ;
         long cellTileTicks = gameSeen(motionTrace(cellAfcKey));
-        // WINDOW: cellTileTicks and cellTileTicksAfter, both in the message, asserted as a rise.
-        bot().waitTicks(20);
+        // WINDOW: a tick counter rising is not an event; nothing records it.
+        advanceServerAndClient(20);
         long cellTileTicksAfter = gameSeen(motionTrace(cellAfcKey));
         assertTrue("CONTROL: the ship's flight computer must be recording server ticks in an"
                         + " ordinary cell, or the hyperspace reading below is a zero for the wrong"
@@ -1191,8 +1190,8 @@ private String hud() throws Exception {
 
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
-        // WINDOW: the standing and after-standing reads of both counters, all four in the messages.
-        bot().waitTicks(20);
+        // WINDOW: frame counters grow; nothing records it.
+        advanceServerAndClient(20);
         long skyAfterStanding = skyFrames();
         long tunnelAfterStanding = tunnelFrames();
         // The renderer itself, first: a corridor counter standing still means nothing until the
@@ -1220,7 +1219,7 @@ private String hud() throws Exception {
         // SHARED world — every scenario in this class parks its craft in the same hyperspace — so a
         // lookup from them resolves the yard nearest that point, which is a different lane's ship
         // whenever the lanes are closer than the caller assumed.
-        String hyperShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), hyperDim, parkedHullName,
+        String hyperShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), hyperDim, parkedHullName,
                 100);
         PilotSeat hyperSeat = findSeat(hyperDim, hyperShipId);
         int afcX = hyperSeat.afcX;
@@ -1228,8 +1227,8 @@ private String hud() throws Exception {
         int afcZ = hyperSeat.afcZ;
         String afcKey = hyperDim + " " + afcX + " " + afcY + " " + afcZ;
         long tileTicksBefore = gameSeen(motionTrace(afcKey));
-        // WINDOW: tileTicksBefore and tileTicksAfter, both in the message, asserted as a rise.
-        bot().waitTicks(20);
+        // WINDOW: a tick counter rising is not an event; nothing records it.
+        advanceServerAndClient(20);
         long tileTicksAfter = gameSeen(motionTrace(afcKey));
         assertTrue("the ship's flight computer must keep TICKING while the ship is parked in"
                         + " hyperspace — a jump during which the ship's machinery stops is a"
@@ -1301,7 +1300,7 @@ private String hud() throws Exception {
         // fallback teleport's thirty blocks stand in for — five seconds of W take a body far clear
         // of a 3x3 deck, so the one the void is then asked about is nowhere near a deck that could
         // take him back. Stopping at the release record would leave him at the deck's edge.
-        bot().waitTicks(100);
+        bot().waitWorldTicks(100);
         bot().releaseKey(FORWARD_KEY);
         if (Events.records(clientEvents().since(offMark, "deck_released")).isEmpty()) {
             // The fallback that gets him off the hull when walking did not: a teleport, and its far
@@ -1529,7 +1528,7 @@ private String hud() throws Exception {
         // HIS deck. The physics id is re-derived from the ship's durable name because a crossing
         // mints a new one; the name is the handle that survives both crossings.
         captureOnArrival.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), targetDim, setup.requireDurableId(),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), targetDim, setup.requireDurableId(),
                         200),
                 "the deck he is put back on at the far end must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"
@@ -1598,8 +1597,8 @@ private String hud() throws Exception {
         // ── READING 1, in an ordinary cell: no corridor ──────────────────────────────────────────
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
-        // WINDOW: skyInCell/tunnelInCell and the two reads after, each asserted as a difference.
-        bot().waitTicks(20);
+        // WINDOW: frame counters grow; nothing records it.
+        advanceServerAndClient(20);
         long skyAfterInCell = skyFrames();
         long tunnelAfterInCell = tunnelFrames();
         assertTrue("this sky renderer must run in an ordinary cell (sky frames " + skyInCell + " -> "
@@ -1624,8 +1623,8 @@ private String hud() throws Exception {
         // is asserted INSIDE, where the chain that would explain a failure is still readable.
         JsonObject mount = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         long tunnelSeated = tunnelFrames();
-        // WINDOW: tunnelSeated and tunnelAfterSeated, both in the message, asserted as a rise.
-        bot().waitTicks(20);
+        // WINDOW: frame counters grow; nothing records it.
+        advanceServerAndClient(20);
         long tunnelAfterSeated = tunnelFrames();
         long drawnSeated = tunnelAfterSeated - tunnelSeated;
         assertTrue("the corridor must be drawn for a SEATED pilot in hyperspace — this is the leg that"
@@ -1648,8 +1647,8 @@ private String hud() throws Exception {
         // ── READING 3, THE CONTRACT: on his feet, the corridor is still coming ───────────────────
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
-        // WINDOW: the standing and after-standing reads of both counters, all four in the messages.
-        bot().waitTicks(20);
+        // WINDOW: frame counters grow; nothing records it.
+        advanceServerAndClient(20);
         long skyAfterStanding = skyFrames();
         long tunnelAfterStanding = tunnelFrames();
         long skyDrawnStanding = skyAfterStanding - skyStanding;
@@ -1795,7 +1794,7 @@ private String hud() throws Exception {
         // hold other craft, so "on a deck" and "on the deck he stood up from" are different claims
         // and only the second is what a crossing is supposed to guarantee.
         captureOnArrival.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), targetDim, setup.requireDurableId(),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), targetDim, setup.requireDurableId(),
                         200),
                 "the deck he stands on after the arrival must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"

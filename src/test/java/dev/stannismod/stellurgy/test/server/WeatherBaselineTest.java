@@ -57,6 +57,8 @@ public class WeatherBaselineTest extends AbstractSharedServerTest {
 
     private static String planetXml(String name, int dim) {
         return "        <planet name=\"" + name + "\" DIMID=\"" + dim + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"

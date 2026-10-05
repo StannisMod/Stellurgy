@@ -63,7 +63,12 @@ public class PlanetSetCommand extends StellurgyCommand {
         DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dimId);
         if (propName.equalsIgnoreCase("atmosphereDensity")) {
             int atmosphereDensity = parseInt(args[argsOffset]);
-            props.setAtmosphereDensityDirect(atmosphereDensity);
+            try {
+                props.setAtmosphereDensity(atmosphereDensity);
+            } catch (IllegalStateException e) {
+                // An airless world has no mix to scale; say so rather than invent one.
+                throw new CommandException(e.getMessage());
+            }
             sender.sendMessage(new TextComponentTranslation("commands.stellurgy.planet.set.success",
                     dimId, propName, atmosphereDensity));
             return;

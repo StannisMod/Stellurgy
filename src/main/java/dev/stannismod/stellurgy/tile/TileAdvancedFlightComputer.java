@@ -127,6 +127,9 @@ public class TileAdvancedFlightComputer extends TileEntity
      *  tile: the scan runs every tick, and the condition persists until the row is rewritten. */
     private boolean descentScanUnusableReported = false;
 
+    /** Whether this computer has already said that its dimension has no orbit line. Once per tile. */
+    private boolean noOrbitLineReported = false;
+
     /**
      * Said once per tile, not once per tick: a ship sitting against its cell's boundary would
      * otherwise report it twenty times a second. Not persisted — a fresh tile after a relocation
@@ -596,9 +599,8 @@ public class TileAdvancedFlightComputer extends TileEntity
                 !(world.provider instanceof dev.stannismod.stellurgy.space.WorldProviderSpaceSlot);
 
         // Descent trigger (the inverse of the entry ceiling check): a SETTLED slot-world ship that
-        // has closed within the descent radius of a descend-target body drops into that body's
-        // planet dim. Proximity reads the ledger coord (self-reported above) + the body POIs of
-        // the ship's own cell — no VS enumeration. Only planets/moons with a real dim are targets.
+        // has crossed a landable body's descent shell drops into that body's planet dim, minting it
+        // first if nobody has landed there. Proximity reads the ledger coord, not VS.
         if (!onPlanetSide && shipId != null) {
             dev.stannismod.stellurgy.space.SpaceSubsystem descentStack =
                     dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
@@ -632,7 +634,6 @@ public class TileAdvancedFlightComputer extends TileEntity
                         shipCoord = null;
                     }
                     if (reg != null && shipCoord != null) {
-                        long radius = dev.stannismod.stellurgy.space.ShipEntryController.DESCENT_RADIUS_BLOCKS;
                         long clock = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
                         // WHERE THE CRAFT IS, absolutely, at this tick — its cell's frame origin plus
                         // its offset inside that cell. The proximity test below compares two absolute
@@ -651,7 +652,7 @@ public class TileAdvancedFlightComputer extends TileEntity
                         dev.stannismod.stellurgy.universe.SystemBody body =
                                 dev.stannismod.stellurgy.space.DescentController
                                         .nearestDescentTarget(descendTargetsIn(reg, shipCoord),
-                                                craftAt, clock, radius);
+                                                craftAt, clock);
                         if (body != null) {
                             // A procedural body has no dimension until somebody flies down to it, so
                             // the world is minted HERE — once the ship is genuinely close enough to
@@ -682,19 +683,31 @@ public class TileAdvancedFlightComputer extends TileEntity
         // one that was flown down, and the pilot must not have to be at the controls at the exact
         // tick it happens. Costs a position read only while the latch is actually set, which is the
         // rare case (it is set by a descent arrival and cleared on the way down).
-        if (onPlanetSide && entryLatched) {
+        java.util.OptionalInt line = onPlanetSide ? entryCeiling() : java.util.OptionalInt.empty();
+        if (onPlanetSide && !line.isPresent()) {
+            if (!noOrbitLineReported) {
+                noOrbitLineReported = true;
+                dev.stannismod.stellurgy.Stellurgy.logger.warn(
+                        "[SPACE] dimension {} has no orbit line - it is not a body with a radius and its "
+                                + "planet file states none - so the ship at {} can never enter space "
+                                + "from here, however high it climbs.",
+                        world.provider.getDimension(), getPos());
+            }
+            autoTakeoffEngaged = false;
+        }
+        if (onPlanetSide && entryLatched && line.isPresent()) {
             double[] latchPos = VSIntegration.getShipWorldPosition(world, getPos());
-            if (latchPos != null && latchPos[1] <= entryCeiling()) {
+            if (latchPos != null && latchPos[1] <= line.getAsInt()) {
                 entryLatched = false;
                 markDirty();
             }
         }
 
-        if (onPlanetSide) {
+        if (onPlanetSide && line.isPresent()) {
             dev.stannismod.stellurgy.space.SpaceSubsystem entryStack =
                     dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
             double[] shipPos = VSIntegration.getShipWorldPosition(world, getPos());
-            int ceiling = entryCeiling();
+            int ceiling = line.getAsInt();
             if (entryStack != null && shipPos != null && !entryLatched
                     && dev.stannismod.stellurgy.space.ShipEntryController
                             .shouldTriggerEntry(false, shipPos[1], ceiling)
@@ -1123,19 +1136,24 @@ public class TileAdvancedFlightComputer extends TileEntity
     }
 
     /**
-     * The altitude this dimension's entry on-ramp fires above: the dimension's own orbit line (or the
-     * global config value when it declares none), capped below the physics mod's pose clamp. ONE
-     * owner, so the trigger, the latch's re-arm and anything reporting the gate read the same line —
-     * a readout that recomputes it is a second owner and will eventually disagree with the trigger.
+     * The altitude this dimension's entry on-ramp fires above: the dimension's own orbit line, capped
+     * below the physics mod's pose clamp. ONE owner, so the trigger, the latch's re-arm and anything
+     * reporting the gate read the same line — a readout that recomputes it is a second owner and will
+     * eventually disagree with the trigger.
+     *
+     * <p>Empty where the dimension has no line ({@link
+     * dev.stannismod.stellurgy.dimension.DimensionProperties#orbitLine}): no atmosphere ends there, so
+     * no climb reaches space from it, and the trigger says so once rather than firing at a made-up
+     * height.</p>
      */
-    public int entryCeiling() {
-        dev.stannismod.stellurgy.dimension.DimensionProperties props =
-                dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
-                        .getDimensionProperties(world.provider.getDimension());
-        return dev.stannismod.stellurgy.space.ShipEntryController.effectiveEntryCeiling(
-                props != null ? props.getOrbitHeight()
-                        : dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().orbit,
-                VSIntegration.shipYPositionMaximum(world));
+    public java.util.OptionalInt entryCeiling() {
+        java.util.OptionalInt line = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                .orbitLineOf(world.provider.getDimension());
+        if (!line.isPresent()) {
+            return line;
+        }
+        return java.util.OptionalInt.of(dev.stannismod.stellurgy.space.ShipEntryController.effectiveEntryCeiling(
+                line.getAsInt(), VSIntegration.shipYPositionMaximum(world)));
     }
 
     /**

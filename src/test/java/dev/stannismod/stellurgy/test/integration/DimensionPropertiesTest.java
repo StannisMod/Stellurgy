@@ -75,12 +75,13 @@ public class DimensionPropertiesTest {
     }
 
     @Test
-    public void setAtmosphereDensityDirectDoesNotCorruptIdOrHierarchy() {
+    public void realizingTheAtmosphereDoesNotCorruptIdOrHierarchy() {
         DimensionProperties props = new DimensionProperties(123, "Mars");
         setIntField(props, "starId", 5);
         setIntField(props, "parentPlanet", -1);
+        props.setBulk(1d, 1d);
 
-        props.setAtmosphereDensityDirect(42);
+        props.realizeAtmosphere(true, 42);
 
         // Identity invariants survive density mutation.
         assertEquals(123, props.getId());
@@ -134,11 +135,12 @@ public class DimensionPropertiesTest {
 
         // DimensionProperties.hasAtmosphere() flips at NORMAL/LOW boundary.
         DimensionProperties earth = new DimensionProperties(7771, "Earth");
-        earth.setAtmosphereDensityDirect(100);
+        earth.setBulk(1d, 1d);
+        earth.realizeAtmosphere(true, 100);
         assertTrue("density=100 should have atmosphere", earth.hasAtmosphere());
 
         DimensionProperties vacuum = new DimensionProperties(7772, "Vac");
-        vacuum.setAtmosphereDensityDirect(0);
+        vacuum.realizeAtmosphere(false, 0);
         assertFalse("density=0 should be no atmosphere", vacuum.hasAtmosphere());
     }
 

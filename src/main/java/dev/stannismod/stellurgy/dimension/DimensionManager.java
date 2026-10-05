@@ -21,7 +21,6 @@ import dev.stannismod.stellurgy.network.PacketSatellitesUpdate;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.util.FluidGasGiantGas;
 import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader.DimensionPropertyCoupling;
@@ -97,7 +96,7 @@ public class DimensionManager implements IGalaxy {
     private Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> stagedAnchors = new HashMap<>();
     private boolean stagedAnchorsReset;
     /**
-     * The pack's {@code <galaxyGen>} configuration for this server, or {@code null} when it declares
+     * The pack's {@code <galaxyGen>} configuration for this server — the shipped one when it states
      * none. Kept for the whole session, not drained: the upgrade command stamps with it, and the
      * planet file is written back with it.
      */
@@ -139,7 +138,7 @@ public class DimensionManager implements IGalaxy {
      */
     public static DimensionProperties newOpenSpaceProperties() {
         DimensionProperties space = new DimensionProperties(SpaceObjectManager.WARPDIMID, false);
-        space.setAtmosphereDensityDirect(0);
+        space.realizeAtmosphere(false, 0);
         space.setAverageTemp(0);
         space.gravitationalMultiplier = 0.1f;
         space.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
@@ -179,7 +178,7 @@ public class DimensionManager implements IGalaxy {
         return reports;
     }
 
-    /** The pack's {@code <galaxyGen>} configuration for this server, or {@code null} if it declares none. */
+    /** The pack's {@code <galaxyGen>} configuration for this server — the shipped one when it states none. */
     public dev.stannismod.stellurgy.universe.GalaxyGenConfig getPackGalaxyConfig() {
         return packGalaxyConfig;
     }
@@ -204,30 +203,27 @@ public class DimensionManager implements IGalaxy {
     }
 
     /**
-     * Give the loaded OVERWORLD the unit bulk when its planet file states none, and say so.
+     * Give the loaded OVERWORLD the unit bulk when its saved state holds none, and say so.
      *
      * <p>A save written while {@link #overworldProperties} was blank (see {@link #seedEarthDefaults})
-     * carries a dim-0 planet with no mass and no radius, because the writer emits bulk only for a body
-     * that has it. Nothing later restores it: the planet file is authoritative when present, so dim 0
-     * comes from the file and never from the static above, and the world stays sizeless in processes
-     * that no longer have the defect that made it.</p>
+     * carries a dim-0 body with no mass and no radius, because the NBT writer emits bulk only for a
+     * body that has it. The planet FILE no longer reaches here: a body there that states no bulk is
+     * refused at load, the overworld included, so this answers only the saved state.</p>
      *
      * <p>It is a REPAIR of the one body whose bulk is a definition rather than a measurement — Earth
      * masses and Earth radii are the units the whole catalogue is stated in — and it is announced,
-     * because a body silently gaining a radius is indistinguishable from one that always had it. A
-     * pack that wants a different overworld states its own and this never fires.</p>
+     * because a body silently gaining a radius is indistinguishable from one that always had it.</p>
      */
     private static void repairOverworldBulk(DimensionProperties properties) {
         if (properties == null || properties.getId() != 0 || properties.hasBulkProperties()) {
             return;
         }
         properties.setBulk(1d, 1d);
-        logger.warn("The overworld's planet entry states no mass and no radius; applying the unit"
+        logger.warn("The overworld's saved state holds no mass and no radius; applying the unit"
                 + " bulk (1 Earth mass, 1 Earth radius) it is DEFINED as. A body with no radius draws"
                 + " at the marker size at every range and carries the flat 512-block proximity shell"
                 + " instead of an atmosphere. Written by a version that blanked the overworld's"
-                + " defaults on world teardown; state <mass>/<radius> in planetDefs.xml to silence"
-                + " this.");
+                + " defaults on world teardown.");
     }
 
     /**
@@ -250,7 +246,6 @@ public class DimensionManager implements IGalaxy {
         sol.setId(0);
         sol.setName("Sol");
 
-        earth.setAtmosphereDensityDirect(100);
         //Temperature in Kelvin, 286 is 13 Degrees C
         earth.setAverageTemp(286);
         earth.gravitationalMultiplier = 1f;
@@ -263,6 +258,8 @@ public class DimensionManager implements IGalaxy {
         // derived value happens to agree, and that agreement is not what the mark is for.
         earth.setGravityAuthored(true);
         earth.setBulk(1d, 1d);
+        // After the bulk and the temperature, because the air is decided by both.
+        earth.realizeAtmosphere(true, 100);
         // ONE AU, stated as one: the field is a count of 100 km units, so a literal 100 would
         // put Earth 10 000 km from the Sun.
         earth.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
@@ -632,6 +629,28 @@ public class DimensionManager implements IGalaxy {
     }
 
     /**
+     * The orbit line ({@link DimensionProperties#orbitLine}) of the body registered as {@code dimId} —
+     * empty when no body is registered there, never the overworld's line standing in for it.
+     */
+    public java.util.OptionalInt orbitLineOf(int dimId) {
+        DimensionProperties props = dimensionList.get(dimId);
+        return props != null ? props.orbitLine() : java.util.OptionalInt.empty();
+    }
+
+    /**
+     * The height at which a tier-1 craft — a rocket, an elevator capsule — leaves {@code dimId} going
+     * up and arrives in it coming down: the station clearance in the station dimension, which is no
+     * body, else that world's {@link #orbitLineOf orbit line}. Empty where there is neither.
+     */
+    public java.util.OptionalInt transferLineOf(int dimId) {
+        StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
+        if (dimId == cfg.spaceDimId) {
+            return java.util.OptionalInt.of(cfg.stationClearanceHeight);
+        }
+        return orbitLineOf(dimId);
+    }
+
+    /**
      * @param id star id for which to get the object
      * @return the {@link StellarBody} object
      */
@@ -914,7 +933,7 @@ public class DimensionManager implements IGalaxy {
             // A fatal/structural failure propagates so Forge produces a normal crash
             // report (diagnosable) instead of the old silent FMLCommonHandler.exitJava.
             // Recoverable per-planet config mistakes are skipped inside readAllPlanets.
-            dimCouplingList = loader.loadPlanetsOrThrow(file);
+            dimCouplingList = loader.loadPlanetsOrThrow(file, this);
             this.dimOffset += dimCouplingList.dims.size();
         }
         //End load planet files
@@ -949,7 +968,7 @@ public class DimensionManager implements IGalaxy {
                         refusedBodies.add(properties);
                         continue;
                     }
-                    properties.setStar(properties.getStarId());
+                    properties.setStar(properties.getStarId(), this);
                 }
 
                 for (StellarBody star : dimCouplingList.stars) {
@@ -989,7 +1008,7 @@ public class DimensionManager implements IGalaxy {
                 //Register the moon
                 if (moonId != Constants.INVALID_PLANET) {
                     DimensionProperties dimensionProperties = new DimensionProperties(moonId);
-                    dimensionProperties.setAtmosphereDensityDirect(0);
+                    dimensionProperties.realizeAtmosphere(false, 0);
                     dimensionProperties.setAverageTemp(20);
                     // TIDALLY LOCKED TO ITS PARENT, expressed the way this codebase expresses it:
                     // `getParentPlanetThetaFromMoon` moves the parent across a moon's sky by
@@ -1196,7 +1215,10 @@ public class DimensionManager implements IGalaxy {
         // model. Where the save carries no stamp, reconcileSchema adopts the current schema at the
         // one install point, loudly and with a stamp written; that is the same outcome without the
         // window.
-        packGalaxyConfig = (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig : null;
+        // No planetDefs.xml is a pack that states nothing, and that is the shipped configuration — not
+        // an empty galaxy, which a pack asks for only with <galaxyGen procedural="false"/>.
+        packGalaxyConfig = (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig
+                : dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults();
         // C129: registration authority on load was planetDefs.xml only (the loop
         // above), while per-dim persisted state lives in temp.dat (loadedPlanets).
         // A dim present in temp.dat but absent from a hand-edited / restored /
@@ -1210,7 +1232,7 @@ public class DimensionManager implements IGalaxy {
             if (props == null || this.isDimensionCreated(entry.getKey()))
                 continue;
             this.registerDimNoUpdate(props, props.isNativeDimension);
-            props.setStar(props.getStarId());
+            props.setStar(props.getStarId(), this);
         }
 
         // The save's planet-type table: its file's <planetType> section, or the code-shipped set when
@@ -1224,9 +1246,9 @@ public class DimensionManager implements IGalaxy {
         this.knownPlanets.addAll(initiallyKnownPlanets);
 
 
-        // Whatever path dim 0 arrived by — the planet file, temp.dat, or the shipped defaults — it is
-        // the overworld and it has a size. Here rather than in one of the loops above because there
-        // are three of them and only the LAST writer decides what the world runs with.
+        // Whatever saved path dim 0 arrived by — temp.dat or the shipped defaults; the planet file
+        // refuses a sizeless body itself — it is the overworld and it has a size. Here rather than in
+        // one of the loops above because only the LAST writer decides what the world runs with.
         repairOverworldBulk(dimensionList.get(0));
 
         // Run all sanity checks now

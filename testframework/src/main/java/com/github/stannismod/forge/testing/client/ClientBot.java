@@ -109,6 +109,16 @@ public final class ClientBot implements Closeable {
         assertOk(execute(command));
     }
 
+    /**
+     * Only the ticks on which the player can act: {@link #waitTicks} also counts the menu and the
+     * terrain screen. Its failure says whether the client stopped ticking or ticked without a world.
+     */
+    public void waitWorldTicks(int ticks) throws IOException {
+        JsonObject command = command("wait_world_ticks");
+        command.addProperty("ticks", ticks);
+        assertOk(execute(command));
+    }
+
     public void selectHotbar(int slot) throws IOException {
         JsonObject command = command("select_hotbar");
         command.addProperty("slot", slot);

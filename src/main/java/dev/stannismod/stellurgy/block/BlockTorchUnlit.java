@@ -65,7 +65,7 @@ public class BlockTorchUnlit extends BlockTorch {
             if (atmhandler != null
                     && !world.isRemote
                     && !item.equals(Items.AIR)
-                    && atmhandler.getAtmosphereType(pos).allowsCombustion()
+                    && atmhandler.allowsCombustionAt(pos)
                     && (item == Item.getItemFromBlock(Blocks.TORCH)
                     || item == Items.FLINT_AND_STEEL
                     || item == Items.FIRE_CHARGE)) {

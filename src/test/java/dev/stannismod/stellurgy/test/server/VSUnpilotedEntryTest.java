@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.EntrySlots;
@@ -67,8 +68,6 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
 
     /** Where the ship is built — its own region, clear of every other server-tier fixture. */
     private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
-    /** A world Y comfortably above the default orbit ceiling (StellurgyConfiguration.orbit = 1000). */
-    private static final int ABOVE_CEILING_Y = 1200;
 
     @After
     public void cleanup() throws Exception {
@@ -112,7 +111,7 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
                 Reply.of(hands).bool("afcResolved") && "null".equals(Reply.of(hands).text("input")));
 
         String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + vsId + " "
-                + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         // Marked before the unpark, which is what lets the entry start: the arrival is announced
         // once, and a mark taken after it would wait for a second entry.

@@ -73,7 +73,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
     //
     // Every one of these three scenarios waits for something that happens ON THE CLIENT — a world
     // rebuilt for a slot dim, a sky feed applied, a clock baseline accepted — so they read the base's
-    // {@link #clientEvents()} rather than {@link #events()}, which is the server's log.
+    // {@link #clientEvents()} rather than {@link #serverEvents()}, which is the server's log.
 
     /**
      * Wait for a {@code chunk_data_applied} record naming the chunk this scenario stands in.
@@ -264,8 +264,8 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
         // settle. The height is printed, so the next reader can size it from a measurement rather
         // than inherit it.
         double placedY = bot().reportState().get("playerY").getAsDouble();
-        // WINDOW: from the Y the reposition left him at to the read after it, both in the message.
-        bot().waitTicks(SETTLE_WINDOW_TICKS);
+        // WINDOW: where he settles is a value, not an event; no record answers.
+        advanceServerAndClient(SETTLE_WINDOW_TICKS);
         double clientY = bot().reportState().get("playerY").getAsDouble();
         boolean settled = clientY > 63.5 && clientY < 68.0;
         System.out.println("[spacesync] client Y " + placedY + " -> " + clientY + " over "
@@ -282,8 +282,9 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
         // cannot distinguish from a client that left the world and returned.
         long holdMark = clientLog.mark();
         // WINDOW: forty ticks of the SERVER's clock — whatever would throw him out is the server's
-        // doing — from holdMark to the log read below.
-        GameTicks.advance(serverClient(), GameTicks.server(), 40);
+        // doing — and of the client's, which must apply what it is sent before the log read below
+        // can see it.
+        advanceServerAndClient(40);
         String changes = clientLog.since(holdMark, "client_dimension_changed");
         Events.assertInstrumentRan(changes, "client_dimension_changed",
                 "the client was never respawned out of the slot dim during the hold");
@@ -361,8 +362,9 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
             Events clientLog = clientEvents();
             long controlMark = clientLog.mark();
             // WINDOW: an absence of feeds over forty ticks of the SERVER's clock, which is the
-            // clock the feed is sent on; client ticks would give a busy box fewer sends to miss.
-            GameTicks.advance(serverClient(), GameTicks.server(), 40);
+            // clock the feed is sent on, and of the client's, which records one only once it is
+            // applied there.
+            advanceServerAndClient(40);
             String outside = clientLog.since(controlMark, "system_bodies_received");
             scenario().record("skyFeedsWhileOutside", outside);
             assertTrue("a player who is not in the cell's world must not be sent its sky; the client"
@@ -518,7 +520,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
         final int dimLinkBudgetTicks = 200;
 
         scenario().arranging("assemble a VS ship in a fresh pool slot");
-        Events serverLog = events();
+        Events serverLog = serverEvents();
         long spawnMark = serverLog.markInstrumented();
         String asm = exec("stellurgytest space vs-assemble deep");
         Reply assembled = Reply.of(asm);

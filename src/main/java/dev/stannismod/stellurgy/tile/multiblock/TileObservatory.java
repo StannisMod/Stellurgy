@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import java.util.HashSet;
 import java.util.Set;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
@@ -49,7 +51,6 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
@@ -68,7 +69,7 @@ import dev.stannismod.stellurgy.Stellurgy;
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
-public class TileObservatory extends TileMultiPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
+public class TileObservatory extends TileWasteHeatPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
 
     /** Where this observatory's asteroid list was scrolled to, on the client. */
     private final dev.stannismod.stellurgy.inventory.modules.ScrollMemory listScroll =

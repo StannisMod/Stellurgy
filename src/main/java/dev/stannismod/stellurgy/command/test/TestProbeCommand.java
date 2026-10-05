@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.command.test;
 
 import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
 import dev.stannismod.stellurgy.satellite.SatelliteSpyTelescope;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
 import net.minecraft.block.state.IBlockState;
@@ -22,7 +21,7 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
@@ -184,6 +183,9 @@ public class TestProbeCommand extends CommandBase {
                 case "vent":
                     handleVent(server, sender, tail(args));
                     break;
+                case "jettison":
+                    handleJettison(server, sender, tail(args));
+                    break;
                 case "item":
                     handleItem(server, sender, tail(args));
                     break;
@@ -210,6 +212,15 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "scrubber":
                     handleScrubber(server, sender, tail(args));
+                    break;
+                case "separator":
+                    handleSeparator(server, sender, tail(args));
+                    break;
+                case "subnet":
+                    handleSubsystemNetwork(server, sender, tail(args));
+                    break;
+                case "heat":
+                    handleHeat(server, sender, tail(args));
                     break;
                 case "gascharge":
                     handleGasCharge(server, sender, tail(args));
@@ -322,7 +333,7 @@ public class TestProbeCommand extends CommandBase {
                 info.put("shieldStored", emitter.getEnergyStored());
                 info.put("shieldMax", emitter.getMaxEnergyStored());
                 info.put("radius", emitter.getRadius());
-                info.put("requested", emitter.getRequestedShieldEnergy());
+                info.put("requested", emitter.getRequested());
                 // P2 (D134-3/4): the emitter's tier, its tier-scaled recharge throughput (the per-zone
                 // regen cap), the passive-maintenance draw this tick, and how much it actually received
                 // this tick — so a test can assert the throughput cap and the tier scaling.
@@ -339,7 +350,7 @@ public class TestProbeCommand extends CommandBase {
                 info.put("worldZ", wc.z);
                 info.put("shipFramed", emitter.isShipFramed());
                 info.put("frameReady", emitter.isFrameReady());
-                info.put("priority", emitter.getShieldPriority());
+                info.put("priority", emitter.getPriority());
                 // P4 (D134-5/6): the emitter's domain, the priority group that lists it (if any), and its
                 // carried access credential — so a test can assert group push-down and code rotation.
                 String domainId = dev.stannismod.stellurgy.affs.world.shield.ShieldDomains.forBlock(
@@ -358,7 +369,7 @@ public class TestProbeCommand extends CommandBase {
                 info.put("kind", "generator");
                 info.put("shieldStored", gen.getShieldStored());
                 info.put("feStored", gen.getFeStored());
-                info.put("available", gen.getAvailableShieldEnergy());
+                info.put("available", gen.getAvailable());
             } else if (tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldCable) {
                 // P6: a cable's transport cap, so a test can compare the two limiters (transport vs the
                 // emitter's recharge throughput) without pinning either magnitude.
@@ -372,8 +383,8 @@ public class TestProbeCommand extends CommandBase {
                 info.put("kind", "accumulator");
                 info.put("shieldStored", acc.getShieldStored());
                 info.put("shieldMax", acc.getMaxShieldStored());
-                info.put("available", acc.getAvailableShieldEnergy());
-                info.put("free", acc.getFreeShieldCapacity());
+                info.put("available", acc.getAvailable());
+                info.put("free", acc.getFreeCapacity());
             } else {
                 info.put("error", "not a shield tile");
                 info.put("tileClass", tile == null ? "null" : tile.getClass().getName());
@@ -530,7 +541,72 @@ public class TestProbeCommand extends CommandBase {
             if (args.length >= 6) {
                 emitter.setPriority(parseIntOr(args[5], 0));
             }
-            send(sender, "{\"ok\":true,\"priority\":" + emitter.getShieldPriority() + "}");
+            send(sender, "{\"ok\":true,\"priority\":" + emitter.getPriority() + "}");
+            return;
+        }
+        if (args.length >= 5 && "console-info".equalsIgnoreCase(args[0])) {
+            // console-info <dim> <x> <y> <z> — what a shield CONSOLE is currently displaying, as
+            // opposed to what the network state says. The two can disagree, and that disagreement is
+            // the bug class this verb exists to make visible. Read out of the console's
+            // own writeToNBT, so it reports the same fields production persists rather than a
+            // parallel accessor that could drift from them.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole)) {
+                send(sender, "{\"error\":\"not a TileEntityShieldConsole\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            net.minecraft.nbt.NBTTagCompound shown =
+                    tile.writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+            send(sender, "{\"ok\":true"
+                    + ",\"networkConnected\":" + shown.getBoolean("networkConnected")
+                    + ",\"networkStatus\":" + shown.getInteger("networkStatus")
+                    + ",\"cableCount\":" + shown.getInteger("cableCount")
+                    + ",\"sourceAvailable\":" + shown.getInteger("sourceAvailable")
+                    + ",\"sinkRequested\":" + shown.getInteger("sinkRequested")
+                    + ",\"deliveredFlow\":" + shown.getInteger("deliveredFlow")
+                    + ",\"resistanceBias\":" + shown.getDouble("shieldEnergyResistanceBias") + "}");
+            return;
+        }
+        if (args.length >= 6 && "console-bias".equalsIgnoreCase(args[0])) {
+            // console-bias <dim> <x> <y> <z> <0..1> — drive the console's own
+            // applyShieldEnergyResistanceBias, the method its GUI slider calls. The setting is
+            // console-OWNED and console-persisted, which is the property a restart test pins.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            double bias;
+            try {
+                bias = Double.parseDouble(args[5]);
+            } catch (NumberFormatException badNumber) {
+                send(sender, "{\"error\":\"bias must be a number\",\"got\":\"" + escapeJson(args[5]) + "\"}");
+                return;
+            }
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole)) {
+                send(sender, "{\"error\":\"not a TileEntityShieldConsole\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole consoleTile =
+                    (dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole) tile;
+            consoleTile.applyShieldEnergyResistanceBias(bias);
+            send(sender, "{\"ok\":true,\"resistanceBias\":"
+                    + consoleTile.getShieldEnergyResistanceBias() + "}");
             return;
         }
         if (args.length >= 6 && "group".equalsIgnoreCase(args[0])) {
@@ -3894,6 +3970,10 @@ public class TestProbeCommand extends CommandBase {
             info.put("hullMeasured", coverage != null);
             info.put("hullOutsideWindow", coverage == null ? 0L : coverage.uncoveredBlocks());
             info.put("storedEnergy", drive.storedEnergy());
+            // What the thermal refusal actually READ, in thousandths of a kelvin. Reported beside the
+            // verdict on purpose: "allowed:false" alone cannot tell a drive that is too hot from a
+            // drive whose coolant the ship never found, and those are opposite bugs.
+            info.put("driveCoolantMilliK", Math.round(nav.driveCoolantKelvin() * 1000.0D));
             info.put("speedBlocksPerTick", nav.plannedSpeed());
             info.put("transitTicks", nav.plannedTransitTicks());
             info.put("flightEnergyCost", nav.flightEnergyCost());
@@ -5992,7 +6072,8 @@ public class TestProbeCommand extends CommandBase {
                     (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) gateTe;
             boolean gatePlanetSide = !(gateWorld.provider
                     instanceof dev.stannismod.stellurgy.space.WorldProviderSpaceSlot);
-            int gateCeiling = gateAfc.entryCeiling();
+            java.util.OptionalInt gateLine = gateAfc.entryCeiling();
+            String gateCeiling = gateLine.isPresent() ? String.valueOf(gateLine.getAsInt()) : "null";
             double[] gatePose = dev.stannismod.stellurgy.integration.vs.VSIntegration
                     .getShipWorldPosition(gateWorld, gateAfcPos);
             gate.append(",\"afcResolved\":true");
@@ -6052,11 +6133,10 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"ceiling\":").append(gateCeiling);
             // The two numbers the ceiling is derived FROM, beside it: a ceiling that will not be
             // crossed says nothing about which of the two put it there.
-            dev.stannismod.stellurgy.dimension.DimensionProperties gateProps =
-                    dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
-                            .getDimensionProperties(gateWorld.provider.getDimension());
-            gate.append(",\"orbitHeight\":").append(gateProps != null ? gateProps.getOrbitHeight()
-                    : dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().orbit);
+            java.util.OptionalInt gateOrbitLine = dev.stannismod.stellurgy.dimension.DimensionManager
+                    .getInstance().orbitLineOf(gateWorld.provider.getDimension());
+            gate.append(",\"orbitHeight\":").append(gateOrbitLine.isPresent()
+                    ? String.valueOf(gateOrbitLine.getAsInt()) : "null");
             gate.append(",\"physicsCeiling\":").append(
                     dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum(gateWorld));
             if (gatePose == null) {
@@ -6069,9 +6149,9 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"shipX\":").append(gatePose[0]).append(",\"shipY\":").append(gatePose[1])
                     .append(",\"shipZ\":").append(gatePose[2]);
             gate.append(",\"wouldTrigger\":").append(gateCtl != null && gatePlanetSide
-                    && !gateAfc.isEntryLatched()
+                    && !gateAfc.isEntryLatched() && gateLine.isPresent()
                     && dev.stannismod.stellurgy.space.ShipEntryController
-                            .shouldTriggerEntry(!gatePlanetSide, gatePose[1], gateCeiling));
+                            .shouldTriggerEntry(!gatePlanetSide, gatePose[1], gateLine.getAsInt()));
             send(sender, gate.append('}').toString());
             return;
         }
@@ -6991,10 +7071,9 @@ public class TestProbeCommand extends CommandBase {
                     + declared.local().sectorZ() + "]}");
             return;
         }
-        // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator and bind a
-        // seed. A world with no <galaxyGen> in its planetDefs runs the authored-anchors-only default, so
-        // without this there are no procedural systems to realize at all and every test about them would
-        // be a test about an empty universe. `gen-reset` puts back the generator and the seed the save
+        // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator at a test's
+        // own density and bind a seed — the shipped configuration is sparse, so a test that needs
+        // procedural systems close to it asks for them here. `gen-reset` puts back the generator and the seed the save
         // had before the first install; a shared-server class MUST call it, because the generator and
         // the seed are the server's.
         //
@@ -7036,6 +7115,24 @@ public class TestProbeCommand extends CommandBase {
                 parkedGenerator = null;
             }
             send(sender, "{\"ok\":true,\"restored\":" + restored + "}");
+            return;
+        }
+        // gen-empty: the void between authored anchors, as a pack's procedural="false" would have it —
+        // for a scenario whose subject must not share its sky with the save's procedural field.
+        // `gen-reset` puts back what was in force before, exactly as after gen-install.
+        if (args.length >= 1 && "gen-empty".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            if (parkedGenerator == null) {
+                parkedGenerator = reg.generator();
+                parkedWorldSeed = reg.worldSeed();
+            }
+            reg.detachGenerator();
+            send(sender, "{\"ok\":true,\"generator\":\"" + reg.generator().getClass().getSimpleName() + "\"}");
             return;
         }
         // find-procedural <radiusInSuperCells>: the first body a ship could land on that has NO dimension
@@ -7166,6 +7263,43 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":false,\"reason\":\"no moon in range\"}");
             return;
         }
+        // find-giant <radius>: the first GAS GIANT in a box of `radius` minimum spacings each way,
+        // reported by its cellKey and its `variant` among the cell's realizable bodies — the pair
+        // `realize` takes. A giant has no surface, so realizing it registers properties and no world.
+        if (args.length >= 2 && "find-giant".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            long r = parseIntOr(args[1], 8);
+            long s = Math.max(1L, reg.generator().minSpacingCells());
+            for (long x = -r; x <= r; x++) {
+                for (long y = -r; y <= r; y++) {
+                    for (long z = -r; z <= r; z++) {
+                        dev.stannismod.stellurgy.space.GalacticCoord probe =
+                                dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+                                        x * s, y * s, z * s, 0L, 0L, 0L);
+                        for (dev.stannismod.stellurgy.universe.SystemBody b : reg.systemBodiesAt(probe)) {
+                            if (b.kind() != dev.stannismod.stellurgy.universe.SystemBodyKind.GAS_GIANT) {
+                                continue;
+                            }
+                            java.util.OptionalInt variant = reg.variantOf(b);
+                            if (!variant.isPresent()) {
+                                continue; // an identity that does not separate: never guessed
+                            }
+                            send(sender, "{\"ok\":true,\"cellKey\":\"" + b.name().cellKey()
+                                    + "\",\"variant\":" + variant.getAsInt()
+                                    + ",\"family\":" + reg.realizableBodiesAt(b.name()).size() + "}");
+                            return;
+                        }
+                    }
+                }
+            }
+            send(sender, "{\"ok\":false,\"reason\":\"no gas giant in range\"}");
+            return;
+        }
         // derived <sx> <sy> <sz>: what the DERIVATION says about the body in that cell, without
         // realizing anything. This is the answer a telescope gives from across the system, and the whole
         // point of it is that a landing has to agree with it — so a test compares this against the
@@ -7285,7 +7419,7 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"radius\":" + props.getRadius() + ",\"gravity\":"
                     + Math.round(props.getGravitationalMultiplier() * 100f) + ",\"pressure\":"
                     + props.getAtmosphereDensity() + ",\"temperature\":" + props.getAverageTemp()
-                    + ",\"oxygen\":" + props.hasOxygen + ",\"locked\":" + props.isTidallyLocked()
+                    + ",\"oxygen\":" + props.hasOxygen() + ",\"locked\":" + props.isTidallyLocked()
                     + ",\"metallicity\":" + props.getMetallicity() + ",\"gasGiant\":"
                     + props.isGasGiant() + ",\"terrainSource\":\"" + props.getTerrainSource()
                     // Moon-ness, and the dimension it hangs off. Reported because a moon whose parent
@@ -8131,7 +8265,16 @@ public class TestProbeCommand extends CommandBase {
             info.put("orbitTheta", props.orbitTheta);
             info.put("rotationalPeriod", props.rotationalPeriod);
             info.put("hasRings", props.hasRings);
-            info.put("hasOxygen", props.hasOxygen);
+            info.put("hasOxygen", props.hasOxygen());
+            // What the outdoor air is made of, by substance, in the composition's own unit.
+            info.put("gases", gasesOf(props.getAir()));
+            // What a gas harvester here is offered, by gas name in the order it is offered — the
+            // planet's own answer, not one rebuilt from "gases" above.
+            List<String> harvestable = new java.util.ArrayList<>();
+            for (dev.stannismod.stellurgy.atmosphere.gas.Gas gas : props.getHarvestableGases()) {
+                harvestable.add(gas.name());
+            }
+            info.put("harvestable", harvestable);
             info.put("seaLevel", props.getSeaLevel());
             info.put("rainStartLength", props.getRainStartLength());
             info.put("thunderStartLength", props.getThunderStartLength());
@@ -8230,13 +8373,104 @@ public class TestProbeCommand extends CommandBase {
             out.put("ok", true);
             out.put("dim", dim);
             out.put("averageTemperature", props.getAverageTemp());
-            out.put("hasOxygen", props.hasOxygen);
+            out.put("hasOxygen", props.hasOxygen());
             out.put("atmosphereDensity", props.getAtmosphereDensity());
             out.put("atmosphere", props.getAtmosphere().getUnlocalizedName());
             send(sender, jsonMap(out));
             return;
         }
+        // stellurgytest planet add-gas <dim> <gasName> <amount>
+        // Puts real gas into a planet's air through the exchange production uses (the terraformer's),
+        // so a test can give a world a trace of something its derivation never would — or put back,
+        // exactly, the air a snapshot recorded. <amount> is in the composition's own unit, the one
+        // `planet info`'s "gases" reports.
+        if (args.length >= 4 && "add-gas".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            dev.stannismod.stellurgy.atmosphere.gas.Gas gas =
+                    dev.stannismod.stellurgy.atmosphere.gas.GasRegistry.byName(args[2]);
+            long amount = parseLongOr(args[3], -1L);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null || gas == null || amount <= 0L) {
+                send(sender, "{\"error\":\"unknown planet, unknown gas or non-positive amount\",\"dim\":"
+                        + dim + ",\"gas\":\"" + escapeJson(args[2]) + "\",\"amount\":" + amount + "}");
+                return;
+            }
+            dev.stannismod.stellurgy.atmosphere.AirState portion =
+                    dev.stannismod.stellurgy.atmosphere.AirState.vacuum();
+            portion.add(gas, amount, props.getAverageTemp());
+            props.addToAtmosphere(portion);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("dim", dim);
+            out.put("hasOxygen", props.hasOxygen());
+            out.put("atmosphereDensity", props.getAtmosphereDensity());
+            out.put("gases", gasesOf(props.getAir()));
+            send(sender, jsonMap(out));
+            return;
+        }
+        // orbit-line <dim> [<blocks>|unset]: a world's atmosphere<->orbit line as production reads it,
+        // and - with a second argument - the planet file's own <orbitHeight> for it, stated or cleared,
+        // which is how a test arranges a low line without writing a whole galaxy. Absence is a value:
+        // `line` and `entryCeiling` are null for a world that has no line.
+        if (args.length >= 2 && "orbit-line".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"unknown planet\",\"dim\":" + dim + "}");
+                return;
+            }
+            if (args.length >= 3) {
+                int stated = "unset".equalsIgnoreCase(args[2]) ? DimensionProperties.ORBIT_HEIGHT_UNSET
+                        : parseIntOr(args[2], Integer.MIN_VALUE);
+                if (stated == Integer.MIN_VALUE) {
+                    send(sender, "{\"error\":\"the line is a whole number of blocks or 'unset'\",\"dim\":"
+                            + dim + "}");
+                    return;
+                }
+                props.setOrbitHeight(stated);
+            }
+            java.util.OptionalInt line = DimensionManager.getInstance().orbitLineOf(dim);
+            net.minecraft.world.World world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("dim", dim);
+            out.put("stated", props.hasCustomOrbitHeight());
+            out.put("radius", props.getRadius());
+            out.put("line", line.isPresent() ? (Object) line.getAsInt() : null);
+            out.put("loaded", world != null);
+            out.put("entryCeiling", line.isPresent() && world != null
+                    ? (Object) dev.stannismod.stellurgy.space.ShipEntryController.effectiveEntryCeiling(
+                            line.getAsInt(),
+                            dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum(world))
+                    : null);
+            send(sender, jsonMap(out));
+            return;
+        }
         send(sender, "{\"error\":\"unknown planet subcommand\"}");
+    }
+
+    /**
+     * For a living entity: its health, and the type of the damage it last took — vanilla keeps that
+     * for 40 ticks after the hit and answers none after, so "none" means no hit in the last two
+     * seconds, not no hit ever. Empty for anything not alive in that sense.
+     */
+    private static String livingFields(net.minecraft.entity.Entity entity) {
+        if (!(entity instanceof net.minecraft.entity.EntityLivingBase)) {
+            return "";
+        }
+        net.minecraft.entity.EntityLivingBase living = (net.minecraft.entity.EntityLivingBase) entity;
+        net.minecraft.util.DamageSource last = living.getLastDamageSource();
+        return ",\"health\":" + living.getHealth()
+                + ",\"lastDamageType\":\"" + (last == null ? "none" : escapeJson(last.getDamageType())) + "\"";
+    }
+
+    /** A composition as {@code {gasName: amount}}, the amount in the composition's own unit. */
+    private static Map<String, Object> gasesOf(dev.stannismod.stellurgy.atmosphere.AirState air) {
+        Map<String, Object> gases = new LinkedHashMap<>();
+        for (Map.Entry<dev.stannismod.stellurgy.atmosphere.gas.Gas, Long> entry : air.composition().entrySet()) {
+            gases.put(entry.getKey().name(), entry.getValue());
+        }
+        return gases;
     }
 
     private static List<Double> floatArrayToList(float[] arr) {
@@ -12623,15 +12857,44 @@ public class TestProbeCommand extends CommandBase {
                     send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
                     return;
                 }
-                IAtmosphere atm = props.getAtmosphere();
+                Atmosphere atm = props.getAtmosphere();
                 info.put("source", "dimension-default");
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
             } else {
-                IAtmosphere atm = handler.getAtmosphereType(new BlockPos(x, y, z));
+                BlockPos pos = new BlockPos(x, y, z);
+                Atmosphere atm = handler.getAtmosphereType(pos);
                 info.put("source", "block-handler");
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
+                // What the AIR itself says, beside what its label says. The two are reported
+                // separately on purpose: the label carries a hand-assigned combustion flag and the
+                // air carries a measurement, and a test about which of them a mechanic obeys can
+                // only be written if it can see both.
+                info.put("labelCombustible", atm.allowsCombustion());
+                info.put("combustible", handler.allowsCombustionAt(pos));
+                // The statements production holds true here — what a detector and the readout see,
+                // indoors or out — asked of production rather than rebuilt from the fields below.
+                List<String> statements = new java.util.ArrayList<>();
+                for (dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion assertion
+                        : dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion.values()) {
+                    if (dev.stannismod.stellurgy.atmosphere.AtmosphereAssertions.holdsAt(handler, pos, assertion)) {
+                        statements.add(assertion.name());
+                    }
+                }
+                info.put("statements", statements);
+                dev.stannismod.stellurgy.atmosphere.AirState air = handler.getAirStateAt(pos);
+                if (air != null) {
+                    info.put("breathableAir", air.isBreathableAir());
+                    info.put("toxic", air.isToxic());
+                    info.put("corrosionMilli", Math.round(air.corrosionIndex() * 1000.0D));
+                    Map<String, Object> gases = new LinkedHashMap<>();
+                    for (Map.Entry<dev.stannismod.stellurgy.atmosphere.gas.Gas, Long> entry
+                            : air.composition().entrySet()) {
+                        gases.put(entry.getKey().name(), entry.getValue());
+                    }
+                    info.put("gases", gases);
+                }
             }
             send(sender, jsonMap(info));
             return;
@@ -12675,11 +12938,10 @@ public class TestProbeCommand extends CommandBase {
                 if (tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector) {
                     try {
                         java.lang.reflect.Field f = dev.stannismod.stellurgy.tile.atmosphere
-                                .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                                .TileAtmosphereDetector.class.getDeclaredField("assertionToDetect");
                         f.setAccessible(true);
-                        dev.stannismod.stellurgy.api.IAtmosphere mode =
-                                (dev.stannismod.stellurgy.api.IAtmosphere) f.get(tile);
-                        info.put("detectorMode", mode == null ? "null" : mode.getUnlocalizedName());
+                        Object mode = f.get(tile);
+                        info.put("detectorMode", mode == null ? "null" : ((Enum<?>) mode).name());
                     } catch (ReflectiveOperationException ignored) {
                         info.put("detectorMode", "reflect-failed");
                     }
@@ -12688,11 +12950,15 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        if ("cached-for-player".equalsIgnoreCase(args[0])) {
-            // The atmosphere a world's handler last committed for the first connected player. Each
-            // world's AtmosphereHandler keeps its own private map, so every loaded world is asked:
-            // a dimension change must leave the player cached in NO world, and reading only the one
-            // he stands in now would answer "not cached" whatever the old world still holds.
+        if ("for-player".equalsIgnoreCase(args[0])) {
+            // What the per-entity gate answers for the first connected player, RIGHT NOW: the same
+            // call every effect path makes, asked live.
+            //
+            // It used to reflect into AtmosphereHandler.prevAtmosphere instead. That map existed
+            // only to let an edge-triggered sync compare against the previous answer; once the sync
+            // became periodic nothing read it, and a probe reading it was measuring an artefact of
+            // its own instrument — a value written once a second, on a phase of the player's own
+            // ticksExisted, which a poll could catch one send stale.
             java.util.List<net.minecraft.entity.player.EntityPlayerMP> ps =
                     server.getPlayerList().getPlayers();
             if (ps.isEmpty() && fakePlayer != null) {
@@ -12703,45 +12969,21 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             net.minecraft.entity.player.EntityPlayerMP player = ps.get(0);
-            try {
-                java.lang.reflect.Field f =
-                        AtmosphereHandler
-                                .class.getDeclaredField("prevAtmosphere");
-                f.setAccessible(true);
-                dev.stannismod.stellurgy.api.IAtmosphere cached = null;
-                StringBuilder cachedIn = new StringBuilder();
-                for (net.minecraft.world.WorldServer w : server.worlds) {
-                    AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(w);
-                    if (handler == null) {
-                        continue;
-                    }
-                    @SuppressWarnings("unchecked")
-                    java.util.Map<net.minecraft.entity.player.EntityPlayer,
-                            dev.stannismod.stellurgy.api.IAtmosphere> map =
-                            (java.util.Map<net.minecraft.entity.player.EntityPlayer,
-                                    dev.stannismod.stellurgy.api.IAtmosphere>) f.get(handler);
-                    dev.stannismod.stellurgy.api.IAtmosphere here = map.get(player);
-                    if (here != null) {
-                        if (cachedIn.length() > 0) {
-                            cachedIn.append(',');
-                        }
-                        cachedIn.append(w.provider.getDimension());
-                        if (cached == null || w == player.world) {
-                            cached = here;
-                        }
-                    }
-                }
-                send(sender, "{\"ok\":true,\"player\":\""
-                        + escapeJson(player.getName()) + "\""
-                        + ",\"hasCachedAtmosphere\":" + (cached != null)
-                        + ",\"cachedAtmosphere\":\""
-                        + escapeJson(cached == null ? "" : cached.getUnlocalizedName())
-                        + "\",\"cachedInDims\":[" + cachedIn + "]}");
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"could not read prevAtmosphere: "
-                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
-                        + "\"}");
-            }
+            dev.stannismod.stellurgy.atmosphere.AtmosphereHandler handler =
+                    dev.stannismod.stellurgy.atmosphere.AtmosphereHandler
+                            .getOxygenHandler(player.world);
+            dev.stannismod.stellurgy.api.atmosphere.Atmosphere atm =
+                    handler == null ? null : handler.getAtmosphereType(player);
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"hasHandler\":" + (handler != null)
+                    + ",\"hasAtmosphere\":" + (atm != null)
+                    + ",\"atmosphere\":\""
+                    + escapeJson(atm == null ? "" : atm.getUnlocalizedName()) + "\""
+                    // The name AND what it means, so a test about whether the player can breathe
+                    // where he stands does not have to be written against a label.
+                    + ",\"breathable\":" + (atm != null && atm.isBreathable())
+                    + "}");
             return;
         }
         if (args.length >= 5 && "detector-force-sample".equalsIgnoreCase(args[0])) {
@@ -12772,31 +13014,10 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"tile not TileAtmosphereDetector\"}");
                 return;
             }
-            dev.stannismod.stellurgy.api.IAtmosphere mode;
-            try {
-                java.lang.reflect.Field f = dev.stannismod.stellurgy.tile.atmosphere
-                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
-                f.setAccessible(true);
-                mode = (dev.stannismod.stellurgy.api.IAtmosphere) f.get(tile);
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
-                        + escapeJson(e.getMessage()) + "\"}");
-                return;
-            }
-            AtmosphereHandler atmh = atmosphereOfLoaded(dim);
-            boolean detected;
-            if (atmh == null) {
-                detected = mode == AtmosphereType.AIR;
-            } else {
-                detected = false;
-                for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
-                    if (!world.getBlockState(pos.offset(dir)).isOpaqueCube()
-                            && mode == atmh.getAtmosphereType(pos.offset(dir))) {
-                        detected = true;
-                        break;
-                    }
-                }
-            }
+            // Asks the DETECTOR, rather than carrying a second copy of its sampling loop. The copy
+            // that used to live here is exactly the kind that survives a refactor by compiling.
+            boolean detected = ((dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector) tile)
+                    .statementHolds();
             dev.stannismod.stellurgy.block.BlockRedstoneEmitter emitter =
                     (dev.stannismod.stellurgy.block.BlockRedstoneEmitter) state.getBlock();
             boolean was = emitter.getState(world, state, pos);
@@ -12813,7 +13034,7 @@ public class TestProbeCommand extends CommandBase {
             int x = parseIntOr(args[2], 0);
             int y = parseIntOr(args[3], 0);
             int z = parseIntOr(args[4], 0);
-            String atmName = args[5];
+            String assertionName = args[5];
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -12825,20 +13046,35 @@ public class TestProbeCommand extends CommandBase {
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            dev.stannismod.stellurgy.api.IAtmosphere target =
-                    dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister.getInstance().getAtmosphere(atmName);
+            // The detector watches a STATEMENT about the air now, not a named atmosphere. Rejecting
+            // an unknown one loudly matters more here than anywhere: this reflects straight into the
+            // field, so a silent default would leave a test asserting against a detector watching
+            // something else entirely.
+            dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion target = null;
+            for (dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion candidate
+                    : dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion.values()) {
+                if (candidate.name().equalsIgnoreCase(assertionName)) {
+                    target = candidate;
+                    break;
+                }
+            }
             if (target == null) {
-                send(sender, "{\"error\":\"unknown atmosphere name\",\"name\":\""
-                        + escapeJson(atmName) + "\"}");
+                send(sender, "{\"error\":\"unknown assertion\",\"name\":\""
+                        + escapeJson(assertionName) + "\",\"known\":"
+                        + jsonStringArray(java.util.Arrays.asList(
+                                java.util.Arrays.stream(
+                                        dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion.values())
+                                        .map(Enum::name).toArray(String[]::new)))
+                        + "}");
                 return;
             }
             try {
                 java.lang.reflect.Field f = dev.stannismod.stellurgy.tile.atmosphere
-                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                        .TileAtmosphereDetector.class.getDeclaredField("assertionToDetect");
                 f.setAccessible(true);
                 f.set(tile, target);
                 tile.markDirty();
-                send(sender, "{\"ok\":true,\"detectorMode\":\"" + escapeJson(atmName) + "\"}");
+                send(sender, "{\"ok\":true,\"detectorMode\":\"" + escapeJson(target.name()) + "\"}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
@@ -12907,7 +13143,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"cleared\":" + n + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value> | detector-output <dim> <x> <y> <z> | detector-set-mode <dim> <x> <y> <z> <atmName> | extinguish-at <dim> <x> <y> <z> | torch-block-add <blockId> | torch-block-clear\"}");
+        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value> | detector-output <dim> <x> <y> <z> | detector-set-mode <dim> <x> <y> <z> <assertion> | extinguish-at <dim> <x> <y> <z> | torch-block-add <blockId> | torch-block-clear\"}");
     }
 
     // Oxygen probe -------------------------------------------------------
@@ -12928,7 +13164,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("posY", player.posY);
             info.put("posZ", player.posZ);
             if (handler != null) {
-                IAtmosphere atm = handler.getAtmosphereType(player);
+                Atmosphere atm = handler.getAtmosphereType(player);
                 info.put("atmosphere", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
                 info.put("pressure", handler.getAtmospherePressure(player));
@@ -13674,7 +13910,73 @@ public class TestProbeCommand extends CommandBase {
                     "telescopeResolveMarginMagnitudes",
                     // The research master switch. A survey is instant without it and paced by the
                     // time curve with it, so both halves of boundary B need it flippable at runtime.
-                    "planetsMustBeDiscovered"));
+                    "planetsMustBeDiscovered",
+                    // The oxygen band. A test of the combiner's governor has to know where the
+                    // ceiling IS to assert that gas stopped there; hard-coding the default would
+                    // make the assertion re-state a tuned number instead of the rule it enforces.
+                    "lifeSupportMaxPartialO2",
+                    "lifeSupportMinPartialO2",
+                    // The ventilation plant's supply and a duct's capacity: a priority test needs a
+                    // real DEFICIT, and the honest way to create one is to turn the supply down
+                    // rather than to build a contrived amount of demand.
+                    "lifeSupportPlantRate",
+                    "lifeSupportDuctThroughput",
+                    // The thermal system's master switch, so its disableability can be pinned from
+                    // both sides in one server, plus the two capacities: a test that a bigger loop
+                    // heats slower has to be able to CHANGE the capacity, or it is asserting a
+                    // tuned number rather than the relation between capacity and temperature.
+                    "shipHeat",
+                    // What air and coolant sit at with nothing in them. Read far more often than
+                    // written: a test that arranges a zone hotter than the room has to know what the
+                    // room IS, and hard-coding it would restate a tuned number.
+                    "shipHeatAmbientKelvin",
+                    "shipHeatPipeCapacity",
+                    "shipHeatAccumulatorCapacity",
+                    "shipHeatWasteFraction",
+                    // The radiator's reference point and its clearance: an area-linearity test has to
+                    // build cells rather than tune them, but a clearance test needs the RULE's
+                    // distance to place an obstruction at, and hard-coding the default would make
+                    // the assertion restate a tuned number instead of the rule it enforces.
+                    "shipHeatRadiatorCellPower",
+                    "shipHeatRadiatorClearance",
+                    // The chiller's lift and its COP: a heat-pump test asserts a RELATION between
+                    // what was radiated, what left the loop and what was paid, and it needs the COP
+                    // to state that relation without restating a tuned number.
+                    "shipHeatChillerThroughput",
+                    "shipHeatChillerCopFraction",
+                    // How strong a star is, and how much of it a shield keeps off. A test of what a
+                    // ship DOES with the flux needs the flux to be a variable — the alternative is to
+                    // fly the rig to a brighter star, which is a test of the universe layer and not of
+                    // this one. The attenuation is here for the opposite reason: the clause is that no
+                    // configuration can reach total immunity, so the test has to be able to ASK for it.
+                    "shipHeatStarFluxReferenceKelvin",
+                    "shipHeatShieldAttenuation",
+                    // What a block of air holds per kelvin. A mixing test asserts a RELATION between
+                    // two zones' capacities, and it has to be able to switch the reservoir off
+                    // entirely to show that the relation is what carries the result.
+                    "lifeSupportAirHeatCapacity",
+                    // Where the failure ladder's rungs sit. A test of a rung has to arrange a room or
+                    // a loop on the far side of its threshold, and it must do that by READING the
+                    // threshold: hard-coding one would make the assertion restate a tuned number
+                    // instead of the rule that a room past it turns hostile.
+                    "shipHeatCrewVeryHotKelvin",
+                    "shipHeatCrewSuperheatedKelvin",
+                    "shipHeatDriveRefusalKelvin",
+                    // How often the melting rung looks. A test drives the domain through a probe,
+                    // and world time does not advance inside one probe call - so the interval is
+                    // set to 1 to make the sweep run on the tick the test asks for rather than on
+                    // whichever tick the phase happens to land on.
+                    "shipHeatMeltCheckTicks",
+                    // The dump's trigger and rate. A test of "it runs only when the ship is
+                    // already losing" has to arrange BOTH sides of that threshold, and naming the
+                    // temperature in the test instead would restate the tuned number.
+                    "shipHeatDumpTriggerKelvin",
+                    "shipHeatDumpThroughput",
+                    // How much of a ship's warmth reaches its outer skin. Here for the same reason
+                    // the shield's attenuation is: the clause is that no configuration can make a
+                    // ship invisible, so a test has to be able to ASK for a perfectly cold skin and
+                    // watch the game refuse it.
+                    "shipHeatHullSkinFraction"));
 
     private void handleConfig(ICommandSender sender, String[] args) {
         if (args.length == 0) {
@@ -13773,6 +14075,9 @@ public class TestProbeCommand extends CommandBase {
         if (type == boolean.class || type == Boolean.class) return Boolean.parseBoolean(raw);
         if (type == int.class || type == Integer.class) {
             try { return Integer.parseInt(raw); } catch (NumberFormatException e) { return null; }
+        }
+        if (type == long.class || type == Long.class) {
+            try { return Long.parseLong(raw); } catch (NumberFormatException e) { return null; }
         }
         if (type == double.class || type == Double.class) {
             try { return Double.parseDouble(raw); } catch (NumberFormatException e) { return null; }
@@ -19520,6 +19825,10 @@ public class TestProbeCommand extends CommandBase {
                     else builder.append('"').append(escapeJson(item.toString())).append('"');
                 }
                 builder.append(']');
+            } else if (v instanceof Map) {
+                // A nested object, so a caller reading a composition gets JSON rather than a Java
+                // map's toString wrapped in quotes.
+                builder.append(jsonMap((Map<String, ?>) v));
             } else {
                 builder.append('"').append(escapeJson(v.toString())).append('"');
             }
@@ -20231,6 +20540,773 @@ public class TestProbeCommand extends CommandBase {
         return null;
     }
 
+    // Jettison-port probe ----------------------------------------------
+
+    /**
+     * {@code /stellurgytest jettison load <dim> <x> <y> <z> <itemId> <count>} — put a stack in the port's
+     * slot, the way a hopper would.
+     * <p>
+     * {@code /stellurgytest jettison info <dim> <x> <y> <z>} — what the port holds, whether its exit is
+     * clear, and how many loose item entities are floating within a few blocks of it:
+     *
+     * <pre>
+     * {"ok":true,"held":"stellurgy:carbonDust","heldCount":1,"obstruction":0,"ejected":0}
+     * </pre>
+     *
+     * <p>{@code ejected} is the assertion the contract actually needs — "the dust LEFT" is a claim
+     * about the world, not about the slot, and a port that merely voided its contents would empty
+     * its slot exactly as convincingly. {@code obstruction} is reported as a DISTANCE rather than a
+     * flag so a red test says which block to go and look at.</p>
+     */
+    private void handleJettison(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5
+                || !("load".equalsIgnoreCase(args[0]) || "info".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown jettison subcommand — try load <dim> <x> <y> <z>"
+                    + " <itemId> <count> | info <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(x, y, z);
+        TileEntity tile = world.getTileEntity(pos);
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort)) {
+            send(sender, "{\"error\":\"not a TileJettisonPort\",\"tileClass\":\""
+                    + escapeJson(tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort port =
+                (dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort) tile;
+
+        if ("load".equalsIgnoreCase(args[0])) {
+            if (args.length < 7) {
+                send(sender, "{\"error\":\"usage: load <dim> <x> <y> <z> <itemId> <count>\"}");
+                return;
+            }
+            net.minecraft.item.Item item =
+                    ForgeRegistries.ITEMS.getValue(new ResourceLocation(args[5]));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(args[5]) + "\"}");
+                return;
+            }
+            port.setInventorySlotContents(0,
+                    new net.minecraft.item.ItemStack(item, Math.max(1, parseIntOr(args[6], 1))));
+            send(sender, "{\"ok\":true,\"loaded\":\"" + escapeJson(args[5]) + "\"}");
+            return;
+        }
+
+        net.minecraft.item.ItemStack held = port.getStackInSlot(0);
+        // Loose items only, and only close by: the port's own muzzle offset puts an ejected stack
+        // well under a block away, so a wider box would start counting the world's litter.
+        java.util.List<net.minecraft.entity.item.EntityItem> loose = world.getEntitiesWithinAABB(
+                net.minecraft.entity.item.EntityItem.class,
+                new net.minecraft.util.math.AxisAlignedBB(pos).grow(4.0D));
+        send(sender, "{\"ok\":true,\"held\":\""
+                + escapeJson(held.isEmpty() ? "" : held.getItem().getRegistryName().toString())
+                + "\",\"heldCount\":" + held.getCount()
+                + ",\"obstruction\":" + port.getObstruction()
+                + ",\"ejected\":" + loose.size() + "}");
+    }
+
+    // Subsystem-network probe ------------------------------------------
+
+    /**
+     * {@code /stellurgytest subnet info <domain> <dim> <x> <y> <z>} — the network the block at this
+     * position belongs to, in whichever domain was named ({@code lifesupport}, {@code shield},
+     * {@code heat}).
+     *
+     * <p>Naming the domain is the point: it is how a test can ask whether two subsystems laid
+     * through the same wall stayed apart, which is otherwise only inferable from gas that did or
+     * did not move. {@code inNetwork:false} means this position is in no network of that domain —
+     * emitted as a value, with the counters at zero beside it, so the reply parses the same either
+     * way.
+     *
+     * <pre>
+     * {"ok":true,"domain":"lifesupport","inNetwork":true,"connected":true,"status":5,
+     *  "cables":3,"sources":1,"sinks":1,"sourceAvailable":12000,"sinkRequested":2700000,
+     *  "cableCapacity":18000,"deliveredFlow":6000,"saturatedCables":1,"members":5,
+     *  "heatStored":0,"heatCapacity":0,"heatGeneration":0,"temperatureMilliK":0}
+     * </pre>
+     *
+     * <p>The four heat fields describe a coolant loop's reservoir and are zero in every other
+     * domain. A loop does not distribute anything the way the other two do — it is one body at one
+     * temperature — so what a heat test reads out of this verb is {@code temperatureMilliK} and the
+     * {@code heatStored}/{@code heatCapacity} it came from, rather than {@code deliveredFlow}.
+     */
+    private void handleSubsystemNetwork(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 3
+                || !("info".equalsIgnoreCase(args[0]) || "solve".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown subnet subcommand — try info <domain> <dim> <x> <y> <z>"
+                    + " | solve <domain> <dim> <ticks>\"}");
+            return;
+        }
+        String domainName = args[1].toLowerCase(java.util.Locale.ROOT);
+        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain domain;
+        // "all" solves EVERY domain once per tick, which is what the game does. Solving one domain
+        // N times and then another N times is a different experiment wherever two subsystems feed
+        // each other within a tick — a machine hands its waste heat to a coolant loop, and a buffer
+        // that only holds a moment's worth loses the rest to the air if nothing collects it in time.
+        boolean everyDomain = "all".equals(domainName);
+        if (everyDomain) {
+            domain = null;
+        } else if ("lifesupport".equals(domainName)) {
+            domain = dev.stannismod.stellurgy.atmosphere.LifeSupportNetwork.DOMAIN;
+        } else if ("shield".equals(domainName)) {
+            domain = dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager.DOMAIN;
+        } else if ("heat".equals(domainName)) {
+            domain = dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN;
+        } else {
+            send(sender, "{\"error\":\"unknown domain\",\"domain\":\"" + escapeJson(domainName)
+                    + "\",\"known\":[\"lifesupport\",\"shield\",\"heat\",\"all\"]}");
+            return;
+        }
+        if (everyDomain && !"solve".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"'all' names no single network to report on — use it with solve\"}");
+            return;
+        }
+        int dim = parseIntOr(args[2], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer solveWorld = server.getWorld(dim);
+        if (solveWorld == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        // /stellurgytest subnet solve <domain> <dim> <ticks> — run the network's own per-tick work N times.
+        //
+        // A probe executes ON the server thread, so it holds the tick loop while it runs: waiting on
+        // wall-clock does not buy world ticks, and a network solved in a WorldTickEvent is therefore
+        // unreachable from a test the way a force-ticked tile is not. Measured before this verb
+        // existed: 300 requested ticks of waiting produced FOUR solves. This drives the same public
+        // entry point the event handler calls, so it exercises production and not a copy of it.
+        if ("solve".equalsIgnoreCase(args[0])) {
+            int ticks = args.length >= 4 ? parseIntOr(args[3], 1) : 1;
+            ticks = Math.max(0, Math.min(20000, ticks));
+            int domainsSolved = everyDomain
+                    ? dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry.domains().size()
+                    : 1;
+            for (int i = 0; i < ticks; i++) {
+                if (everyDomain) {
+                    for (dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain each
+                            : dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry.domains()) {
+                        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager
+                                .tick(each, solveWorld);
+                    }
+                } else {
+                    dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager
+                            .tick(domain, solveWorld);
+                }
+            }
+            send(sender, "{\"ok\":true,\"domain\":\"" + escapeJson(domainName)
+                    + "\",\"ticksSolved\":" + ticks + ",\"domainsSolved\":" + domainsSolved + "}");
+            return;
+        }
+
+        if (args.length < 6) {
+            send(sender, "{\"error\":\"usage: info <domain> <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int x = parseIntOr(args[3], 0);
+        int y = parseIntOr(args[4], 0);
+        int z = parseIntOr(args[5], 0);
+        net.minecraft.world.WorldServer world = solveWorld;
+        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState state =
+                dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager
+                        .getState(domain, world, new BlockPos(x, y, z));
+
+        StringBuilder out = new StringBuilder("{\"ok\":true");
+        out.append(",\"domain\":\"").append(escapeJson(domainName)).append('"');
+        out.append(",\"inNetwork\":").append(state != null);
+        out.append(",\"connected\":").append(state != null && state.isConnected());
+        out.append(",\"status\":").append(state == null ? 0 : state.getStatus());
+        out.append(",\"cables\":").append(state == null ? 0 : state.getCableCount());
+        out.append(",\"sources\":").append(state == null ? 0 : state.getSourceCount());
+        out.append(",\"sinks\":").append(state == null ? 0 : state.getSinkCount());
+        out.append(",\"sourceAvailable\":").append(state == null ? 0 : state.getSourceAvailable());
+        out.append(",\"sinkRequested\":").append(state == null ? 0 : state.getSinkRequested());
+        out.append(",\"cableCapacity\":").append(state == null ? 0 : state.getCableCapacity());
+        out.append(",\"deliveredFlow\":").append(state == null ? 0 : state.getDeliveredFlow());
+        out.append(",\"saturatedCables\":").append(state == null ? 0 : state.getSaturatedCables());
+        out.append(",\"members\":").append(state == null ? 0 : state.getMemberPositions().size());
+        // The thermal reservoir, in every state and never as a dropped key: a loop that is holding
+        // nothing and a position that is in no loop are both legitimate answers, and a test that
+        // parses one of them must not throw on the other. Temperature is emitted in milli-kelvin
+        // because the envelope's numbers are read as integers, and beside the two quantities it was
+        // computed from, so a temperature that will not move can be attributed to Q or to C.
+        dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState heatState =
+                state instanceof dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState
+                        ? (dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState) state
+                        : null;
+        out.append(",\"heatStored\":").append(heatState == null ? 0L : heatState.getStoredHeat());
+        out.append(",\"heatCapacity\":").append(heatState == null ? 0L : heatState.getHeatCapacity());
+        out.append(",\"heatGeneration\":").append(heatState == null ? 0 : heatState.getGenerationThisTick());
+        out.append(",\"temperatureMilliK\":").append(heatState == null
+                ? 0L
+                : Math.round(heatState.getTemperatureKelvin() * 1000.0D));
+        // Rejection, and the two numbers that make the blocked state readable: how many machines on
+        // the loop CAN shed heat, and how much working surface they actually have between them. Three
+        // exchangers reporting two cells is one obstructed cell, which is a degradation and not a
+        // failure — and `heat read` on the cell itself says how far away the obstruction is.
+        // `pumpedOut` and `pumpedIn` are the two ends of a chiller, deliberately reported per LOOP: a
+        // pump's defect is that the second is not larger than the first by the work it paid.
+        out.append(",\"heatRejected\":").append(heatState == null ? 0L : heatState.getRejectedThisTick());
+        out.append(",\"exchangers\":").append(heatState == null ? 0 : heatState.getExchangerCount());
+        out.append(",\"radiatingCells\":").append(heatState == null ? 0 : heatState.getRadiatingCells());
+
+        out.append(",\"pumpedOut\":").append(heatState == null ? 0L : heatState.getPumpedOutThisTick());
+        out.append(",\"delivered\":").append(heatState == null ? 0L : heatState.getDeliveredThisTick());
+        out.append(",\"pumpedIn\":").append(heatState == null ? 0L : heatState.getPumpedInThisTick());
+        out.append(",\"heatWork\":").append(heatState == null ? 0L : heatState.getWorkThisTick());
+        out.append(",\"pumps\":").append(heatState == null ? 0 : heatState.getPumpPositions().size());
+        // What the outside is putting into ONE radiating cell, in thousandths of a heat unit per tick,
+        // BEFORE any shield. Reported per cell rather than per loop so it can be compared straight
+        // against what a cell radiates, and unshielded so that a shielded ship and a ship parked
+        // somewhere cold are distinguishable — the shield's effect is `heatRejected` minus this.
+        out.append(",\"incidentFluxMilli\":").append(heatState == null
+                ? 0L
+                : Math.round(heatState.getIncidentFluxPerCell() * 1000.0D));
+        // Heat taken out of compartment AIR this tick — the third figure a conservation check across
+        // the air/coolant boundary needs, beside `delivered` and `work`, all from one tick.
+        out.append(",\"airTaken\":").append(heatState == null ? 0L : heatState.getAirTakenThisTick());
+        out.append('}');
+        send(sender, out.toString());
+    }
+
+    // Coolant-loop block probe -----------------------------------------
+
+    /**
+     * {@code /stellurgytest heat set|read <dim> <x> <y> <z> [amount]} — the energy written down on ONE
+     * block of a coolant loop.
+     *
+     * <p>Deliberately per BLOCK, where {@code subnet info heat} answers per LOOP. That is the split
+     * the design makes: a loop is the thing with a temperature, and a block is the thing with a
+     * name and therefore the thing that gets saved. A test about persistence has to address the
+     * side that persists, and reading the loop would not distinguish "the energy came back from the
+     * blocks" from "the loop happened to be re-derived".</p>
+     *
+     * <p>{@code set} goes through the tile's own {@code setStoredHeat}, which is the same call the
+     * per-tick physics makes — the probe supplies a starting state, it does not implement one.</p>
+     *
+     * <pre>
+     * {"ok":true,"isLoopBlock":true,"heatStored":4530,"heatCapacity":20,"isRadiator":true,
+     *  "obstruction":0,"radiatingCells":1,"facing":"up","rejected":264}
+     * </pre>
+     */
+    private void handleHeat(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 5 && "emitter".equalsIgnoreCase(args[0])) {
+            handleHeatEmitter(server, sender, args);
+            return;
+        }
+        if (args.length >= 6 && "cycle".equalsIgnoreCase(args[0])) {
+            handleHeatCycle(server, sender, args);
+            return;
+        }
+        if (args.length >= 5 && "signature".equalsIgnoreCase(args[0])) {
+            handleHeatSignature(server, sender, args);
+            return;
+        }
+        if (args.length >= 5 && "silent".equalsIgnoreCase(args[0])) {
+            handleHeatSilent(server, sender, args);
+            return;
+        }
+        if (args.length >= 5 && "dump".equalsIgnoreCase(args[0])) {
+            // The emergency dump's own state: what the slug it holds has taken, what it can still
+            // take, and whether the port is clear. Reported separately because "charge went to zero"
+            // is BOTH "nothing happened" and "it fired", and a test must be able to tell those apart.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 0));
+            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.heat.TileHeatDump)) {
+                send(sender, "{\"ok\":true,\"isDump\":false,\"charge\":0,\"headroom\":0,"
+                        + "\"hasStack\":false,\"obstruction\":0}");
+                return;
+            }
+            dev.stannismod.stellurgy.tile.heat.TileHeatDump dump =
+                    (dev.stannismod.stellurgy.tile.heat.TileHeatDump) tile;
+            net.minecraft.item.ItemStack held = dump.getStackInSlot(0);
+            if (args.length >= 7 && "load".equalsIgnoreCase(args[5])) {
+                net.minecraft.item.Item item = net.minecraft.item.Item.getByNameOrId(args[6]);
+                if (item == null) {
+                    send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(args[6]) + "\"}");
+                    return;
+                }
+                dump.setInventorySlotContents(0, new net.minecraft.item.ItemStack(item, 1));
+                held = dump.getStackInSlot(0);
+            }
+            send(sender, "{\"ok\":true,\"isDump\":true,\"charge\":"
+                    + dev.stannismod.stellurgy.tile.heat.TileHeatDump.chargeOf(held)
+                    + ",\"headroom\":" + dump.headroom()
+                    + ",\"hasStack\":" + (!held.isEmpty())
+                    + ",\"obstruction\":" + dump.getObstruction()
+                    + ",\"chargedThisTick\":" + dump.getChargedThisTick()
+                    + ",\"powered\":" + dump.isPowered()
+                    + ",\"request\":" + dump.getSinkRequestPerTick(9999.0D) + "}");
+            return;
+        }
+        if (args.length >= 2 && "item".equalsIgnoreCase(args[0])) {
+            // The same question asked of an ITEM rather than a position: an item has no collision
+            // boxes, so this is the path that falls back to the shape of the block it would place.
+            net.minecraft.item.Item item = net.minecraft.item.Item.getByNameOrId(args[1]);
+            int meta = args.length >= 3 ? parseIntOr(args[2], 0) : 0;
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(item, 1, meta);
+            dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial material =
+                    dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.of(stack);
+            long volume = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                    .volumeMillilitres(stack);
+            send(sender, "{\"ok\":true,\"item\":\"" + escapeJson(args[1])
+                    + "\",\"material\":\"" + escapeJson(material == null ? "" : material.name())
+                    + "\",\"volumeMilliLitres\":" + volume
+                    + ",\"capacity\":" + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                            .slugCapacity(material, volume) + "}");
+            return;
+        }
+        if (args.length >= 5 && "material".equalsIgnoreCase(args[0])) {
+            // What the block at this position IS, thermally: which substance, how much of it, and
+            // therefore how much heat it can take. Volume is reported separately from capacity on
+            // purpose - a block whose substance is unknown still has a size, and reading one number
+            // could not tell "nothing there" from "nobody described this metal".
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 0));
+            net.minecraft.block.Block block = world.getBlockState(pos).getBlock();
+            dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial material =
+                    dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.of(
+                            new net.minecraft.item.ItemStack(block));
+            send(sender, "{\"ok\":true,\"block\":\"" + escapeJson(String.valueOf(block.getRegistryName()))
+                    + "\",\"material\":\"" + escapeJson(material == null ? "" : material.name())
+                    + "\",\"volumeMilliLitres\":"
+                    + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                            .volumeMillilitres(world, pos)
+                    + ",\"capacity\":"
+                    + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE
+                            .blockCapacity(world, pos)
+                    + ",\"ceilingKelvin\":" + (material == null ? 0 : material.ceilingKelvin()) + "}");
+            return;
+        }
+        if (args.length >= 5 && "material".equalsIgnoreCase(args[0])) {
+            handleHeatMaterial(server, sender, args);
+            return;
+        }
+        if (args.length < 5
+                || !("set".equalsIgnoreCase(args[0]) || "read".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown heat subcommand — try set <dim> <x> <y> <z> <amount>"
+                    + " | read <dim> <x> <y> <z> | cycle <dim> <x> <y> <z> <charge> [ticks] | material <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+        // Absence is a VALUE here, with the quantities zero beside it: "there is no loop block at
+        // this position" and "the loop block here is holding nothing" are both real answers and a
+        // test must be able to parse either without the reply changing shape.
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock)) {
+            send(sender, "{\"ok\":true,\"isLoopBlock\":false,\"heatStored\":0,\"heatCapacity\":0}");
+            return;
+        }
+        dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock loopBlock =
+                (dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock) tile;
+        if ("set".equalsIgnoreCase(args[0])) {
+            if (args.length < 6) {
+                send(sender, "{\"error\":\"usage: set <dim> <x> <y> <z> <amount>\"}");
+                return;
+            }
+            loopBlock.setStoredHeat(parseLongOr(args[5], 0L));
+        }
+        // A radiating cell answers two more things, and every loop block answers them so the reply
+        // keeps one shape: a plain pipe is simply never obstructed and never sheds anything.
+        boolean isRadiator = loopBlock instanceof dev.stannismod.stellurgy.tile.heat.TileHeatRadiator;
+        dev.stannismod.stellurgy.tile.heat.TileHeatRadiator radiator = isRadiator
+                ? (dev.stannismod.stellurgy.tile.heat.TileHeatRadiator) loopBlock
+                : null;
+        send(sender, "{\"ok\":true,\"isLoopBlock\":true,\"heatStored\":" + loopBlock.getStoredHeat()
+                + ",\"heatCapacity\":" + loopBlock.getHeatCapacity()
+                + ",\"isRadiator\":" + isRadiator
+                + ",\"obstruction\":" + (radiator == null ? 0 : radiator.getObstruction())
+                + ",\"radiatingCells\":" + (radiator == null ? 0 : radiator.getExchangeCells())
+                + ",\"facing\":\"" + (radiator == null ? "none" : radiator.getRadiatingFacing().getName())
+                + "\",\"rejected\":" + (radiator == null ? 0L : radiator.getRejectedThisTick()) + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat material <dim> <x> <y> <z>} - what the block standing there is worth
+     * thermally: which material the table resolved it to, how much SUBSTANCE is actually there, and
+     * the capacity those two produce.
+     *
+     * <p>The volume is the interesting field and it is why this verb exists. It comes off the block's
+     * own collision boxes, so a slab answers half a cubic metre and a staircase three quarters, while
+     * the block's bounding box would say "one" for both. A test that could only see the capacity could
+     * not tell a wrong material from a wrong volume - they multiply.</p>
+     *
+     * <pre>
+     * {"ok":true,"block":"minecraft:iron_block","material":"iron","volumeMilliLitres":1000000,
+     *  "capacity":5384,"ceilingKelvin":1811}
+     * </pre>
+     *
+     * <p>{@code material} is the empty string where the table knows nothing about the block, and the
+     * capacity is then 0 - absence is a value here, not an error.</p>
+     */
+    private void handleHeatMaterial(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial material =
+                dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.of(
+                        new net.minecraft.item.ItemStack(world.getBlockState(pos).getBlock()));
+        long volume = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                .volumeMillilitres(world, pos);
+        long capacity = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE
+                .blockCapacity(world, pos);
+        send(sender, "{\"ok\":true,\"material\":\"" + (material == null ? "" : material.name())
+                + "\",\"volumeMillilitres\":" + volume
+                + ",\"capacity\":" + capacity
+                + ",\"ceilingKelvin\":" + (material == null ? 0 : material.ceilingKelvin()) + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat cycle <dim> <x> <y> <z> <charge> [ticks]} — charge a whole coolant loop to
+     * exactly {@code charge} and advance it, in ONE call.
+     *
+     * <p>It has to be one call. A probe holds the server thread while it runs, but <b>between</b>
+     * calls the world ticks normally, and the heat domain is ticked by the ordinary
+     * {@code WorldTickEvent} like everything else — so a test that charged a loop with one command
+     * and measured it with the next was measuring whatever was left after some natural ticks had
+     * already shed heat. That is not a small error: two loops with different radiating area cool at
+     * different rates in the gap, so the very ratio such a test exists to measure is the thing the
+     * gap corrupts. Measured 2026-08-17, and it read exactly like a broken area law.</p>
+     *
+     * <p>Charging is per LOOP, not per block: the queried block takes all of it and every other
+     * member is zeroed, so the loop holds the stated number and nothing else. Then the domain's own
+     * public tick runs {@code ticks} times — production, not a copy of it.</p>
+     *
+     * <pre>
+     * {"ok":true,"inLoop":true,"charged":8000,"ticks":1,"rejected":79,"heatStored":7921,
+     *  "heatCapacity":80,"temperatureMilliK":392012,"exchangers":1,"radiatingCells":1,
+     *  "pumpedOut":0,"pumpedIn":0,"work":0,"pumps":0,"incidentFluxMilli":60712}
+     * </pre>
+     *
+     * <p>{@code rejected} is SIGNED. Negative means the cells took heat in rather than shedding it,
+     * which is what a radiator under a star does, and a test reading it must not assume otherwise.</p>
+     */
+    private void handleHeatCycle(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        long charge = parseLongOr(args[5], 0L);
+        int ticks = args.length >= 7 ? Math.max(0, Math.min(20000, parseIntOr(args[6], 1))) : 1;
+
+        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState raw =
+                dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager.getState(
+                        dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN, world, pos);
+        if (!(raw instanceof dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState)) {
+            send(sender, "{\"ok\":true,\"inLoop\":false,\"charged\":0,\"ticks\":0,\"rejected\":0,"
+                    + "\"heatStored\":0,\"heatCapacity\":0,\"temperatureMilliK\":0,\"exchangers\":0,"
+                    + "\"radiatingCells\":0}");
+            return;
+        }
+
+        for (BlockPos member : raw.getMemberPositions()) {
+            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(member);
+            if (tile instanceof dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock) {
+                ((dev.stannismod.stellurgy.tile.heat.TileHeatLoopBlock) tile)
+                        .setStoredHeat(member.equals(pos) ? charge : 0L);
+            }
+        }
+        // A BOLTED machine is part of the loop's thermal mass without being a member of its graph
+        // (a chiller is a lump of metal in contact with the coolant), so a sweep over members alone
+        // leaves it holding whatever it accumulated during the ticks that ran between two probe
+        // calls — and the loop then starts at `charge` PLUS that, which is not what this verb says
+        // it does. Measured 2026-08-17: a loop charged to 0 reported 10700, of which 4460 was the
+        // chiller's own share carried over.
+        for (BlockPos pumpPos : ((dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState) raw)
+                .getPumpPositions()) {
+            net.minecraft.tileentity.TileEntity bolted = world.getTileEntity(pumpPos);
+            if (bolted instanceof dev.stannismod.stellurgy.subsystem.heat.IHeatNode) {
+                ((dev.stannismod.stellurgy.subsystem.heat.IHeatNode) bolted).setStoredHeat(0L);
+            }
+        }
+        for (int i = 0; i < ticks; i++) {
+            dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager.tick(
+                    dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN, world);
+        }
+
+        dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState after =
+                (dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState)
+                        dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager.getState(
+                                dev.stannismod.stellurgy.subsystem.heat.HeatNetwork.DOMAIN, world, pos);
+        if (after == null) {
+            send(sender, "{\"ok\":true,\"inLoop\":false,\"charged\":" + charge + ",\"ticks\":" + ticks
+                    + ",\"rejected\":0,\"heatStored\":0,\"heatCapacity\":0,\"temperatureMilliK\":0,"
+                    + "\"exchangers\":0,\"radiatingCells\":0}");
+            return;
+        }
+        send(sender, "{\"ok\":true,\"inLoop\":true,\"charged\":" + charge + ",\"ticks\":" + ticks
+                + ",\"rejected\":" + after.getRejectedThisTick()
+                + ",\"heatStored\":" + after.getStoredHeat()
+                + ",\"heatCapacity\":" + after.getHeatCapacity()
+                + ",\"sunk\":" + after.getSunkThisTick()
+                + ",\"temperatureMilliK\":" + Math.round(after.getTemperatureKelvin() * 1000.0D)
+                + ",\"exchangers\":" + after.getExchangerCount()
+                + ",\"radiatingCells\":" + after.getRadiatingCells()
+                + ",\"pumpedOut\":" + after.getPumpedOutThisTick()
+                + ",\"delivered\":" + after.getDeliveredThisTick()
+                + ",\"pumpedIn\":" + after.getPumpedInThisTick()
+                + ",\"work\":" + after.getWorkThisTick()
+                + ",\"pumps\":" + after.getPumpPositions().size()
+                + ",\"incidentFluxMilli\":" + Math.round(after.getIncidentFluxPerCell() * 1000.0D)
+                + ",\"airTaken\":" + after.getAirTakenThisTick() + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat signature <dim> <x> <y> <z> [sensorRange]} — what a passive sensor sees of
+     * the whole ship this block belongs to.
+     *
+     * <p>Both terms are reported separately and neither is derived from the other, because that is
+     * the clause: total radiated power drives the range a ship is DETECTED from, radiance drives how
+     * well a seeker can LOCK it, and the two are different questions about the same object. A test
+     * that could only read one of them could not tell a compact hot array from a large cool one.</p>
+     *
+     * <p>{@code sensorRange} is the range at which the asking sensor would find the reference ship;
+     * the reported range is what THIS signature gives that same sensor. It is an argument rather than
+     * a constant because sensor quality belongs to the sensor, not to the thermal model.</p>
+     *
+     * <pre>
+     * {"ok":true,"isBody":true,"loops":2,"radiatingCells":9,"sizeBlocks":214,"hullCellsMilli":214000,
+     *  "cabinMilliK":293000,"skinMilliK":102550,"peakMilliK":500000,"radiatedPowerMilli":300000,
+     *  "radianceMilli":300000,"detectionRangeMilli":1000000,"referencePowerMilli":19200000,
+     *  "silent":false,"radiators":9}
+     * </pre>
+     */
+    /**
+     * {@code heat emitter <dim> <x> <y> <z>} — does the machine at this position OFFER a coolant loop
+     * the heat its work leaves behind, and how much is it holding right now.
+     *
+     * <p>The question is about WIRING rather than thermodynamics, and it has to be asked in a world
+     * because the capability object is populated by the mod's own load: a unit context has a null
+     * `HEAT_EMITTER`, where `hasCapability` answers TRUE by accident and the cast then throws.</p>
+     *
+     * <pre>{"ok":true,"present":true,"pending":0}</pre>
+     */
+    private void handleHeatEmitter(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"ok\":false,\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(Integer.parseInt(args[2]), Integer.parseInt(args[3]),
+                Integer.parseInt(args[4]));
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+        if (tile == null) {
+            send(sender, "{\"ok\":true,\"present\":false,\"pending\":0,\"tile\":\"none\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.api.capability.IHeatEmitter emitter =
+                dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter.get(tile);
+        send(sender, "{\"ok\":true,\"present\":" + (emitter != null)
+                + ",\"pending\":" + (emitter == null ? 0 : emitter.getPendingHeat())
+                + ",\"tile\":\"" + tile.getClass().getSimpleName() + "\"}");
+    }
+
+    private void handleHeatSignature(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        double sensorRange = args.length >= 6 ? parseIntOr(args[5], 2000) : 2000;
+        dev.stannismod.stellurgy.subsystem.heat.ThermalBody body =
+                dev.stannismod.stellurgy.subsystem.heat.ThermalBody.at(world, pos);
+        if (body == null) {
+            send(sender, "{\"ok\":true,\"isBody\":false,\"loops\":0,\"radiatingCells\":0,"
+                    + "\"sizeBlocks\":0,\"hullCellsMilli\":0,\"cabinMilliK\":0,\"skinMilliK\":0,"
+                    + "\"peakMilliK\":0,\"radiatedPowerMilli\":0,\"radianceMilli\":0,"
+                    + "\"detectionRangeMilli\":0,\"silent\":false,\"radiators\":0}");
+            return;
+        }
+        dev.stannismod.stellurgy.subsystem.heat.ThermalSignature signature = body.signature();
+        int cells = 0;
+        for (dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState loop : body.loops()) {
+            cells += loop.getRadiatingCells();
+        }
+        send(sender, "{\"ok\":true,\"isBody\":true,\"loops\":" + body.loops().size()
+                + ",\"radiatingCells\":" + cells
+                + ",\"sizeBlocks\":" + body.sizeBlocks()
+                + ",\"hullCellsMilli\":" + Math.round(body.hullCells() * 1000.0D)
+                + ",\"cabinMilliK\":" + Math.round(body.cabinKelvin() * 1000.0D)
+                + ",\"skinMilliK\":" + Math.round(body.skinKelvin() * 1000.0D)
+                + ",\"peakMilliK\":" + Math.round(signature.peakKelvin() * 1000.0D)
+                + ",\"radiatedPowerMilli\":" + Math.round(signature.radiatedPower() * 1000.0D)
+                + ",\"radianceMilli\":" + Math.round(signature.radiance() * 1000.0D)
+                + ",\"detectionRangeMilli\":"
+                + Math.round(signature.detectionRangeBlocks(sensorRange) * 1000.0D)
+                + ",\"referencePowerMilli\":"
+                + Math.round(dev.stannismod.stellurgy.subsystem.heat.ThermalSignature
+                        .referencePower() * 1000.0D)
+                + ",\"silent\":" + body.isRunningSilent()
+                + ",\"radiators\":" + body.radiators().size() + "}");
+    }
+
+    /**
+     * {@code /stellurgytest heat silent <dim> <x> <y> <z> <on|off>} — shut every sink on this ship, or open
+     * them again.
+     *
+     * <p>Ship-wide and in one call, because that is what the control is: a pilot decides to go dark,
+     * not to shut cell 34. The verb exists because the station that will carry that control is not
+     * built yet and the MECHANIC is — a test may not wait on a GUI to pin what closing the sinks
+     * does.</p>
+     *
+     * <pre>
+     * {"ok":true,"isBody":true,"changed":9,"silent":true,"radiators":9}
+     * </pre>
+     */
+    private void handleHeatSilent(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        boolean closed = args.length < 6 || "on".equalsIgnoreCase(args[5])
+                || "true".equalsIgnoreCase(args[5]);
+        dev.stannismod.stellurgy.subsystem.heat.ThermalBody body =
+                dev.stannismod.stellurgy.subsystem.heat.ThermalBody.at(world, pos);
+        if (body == null) {
+            send(sender, "{\"ok\":true,\"isBody\":false,\"changed\":0,\"silent\":false,\"radiators\":0}");
+            return;
+        }
+        int changed = body.setSinksClosed(closed);
+        send(sender, "{\"ok\":true,\"isBody\":true,\"changed\":" + changed
+                + ",\"silent\":" + body.isRunningSilent()
+                + ",\"radiators\":" + body.radiators().size() + "}");
+    }
+
+    // Gas separator state probe ---------------------------------------
+
+    /**
+     * {@code /stellurgytest separator info <dim> <x> <y> <z>} — the gas separator's direction, its tank
+     * and the air cell it has resolved.
+     *
+     * <p>The direction matters to a test as a PREMISE: a combine-path assertion that fails
+     * without it cannot say whether the machine refused to act or was never flipped in the first
+     * place. {@code hasServedCell} is the same distinction one step further down — a machine
+     * walled in by solid blocks and a machine whose governor is holding the line both move no gas.
+     *
+     * <pre>
+     * {
+     *   "ok": true,
+     *   "isSeparator": true,
+     *   "combining": true|false,       // false = split (room to tank), true = combine (tank to room)
+     *   "hasServedCell": true|false,
+     *   "servedCell": [x,y,z],         // all zeroes when hasServedCell is false
+     *   "tankFluid": "oxygen"|"none",
+     *   "tankAmount": &lt;int&gt;,
+     *   "tankCapacity": &lt;int&gt;,
+     *   "energyStored": &lt;int&gt;
+     * }
+     * </pre>
+     */
+    private void handleSeparator(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5 || !"info".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown separator subcommand — try info <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator)) {
+            send(sender, "{\"error\":\"not a TileGasSeparator\",\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator separator =
+                (dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator) tile;
+
+        BlockPos served = separator.findServedCell();
+        boolean hasServed = served != null;
+        BlockPos reported = hasServed ? served : BlockPos.ORIGIN;
+
+        // Tank. Reported as "none" with a zero amount rather than a dropped field, so an empty
+        // tank parses the same way a full one does.
+        String tankFluid = "none";
+        int tankAmount = 0, tankCapacity = 0;
+        net.minecraftforge.fluids.capability.IFluidHandler fluidH = findFluidHandler(tile);
+        if (fluidH != null) {
+            for (net.minecraftforge.fluids.capability.IFluidTankProperties p : fluidH.getTankProperties()) {
+                tankCapacity += p.getCapacity();
+                if (p.getContents() != null) {
+                    tankAmount += p.getContents().amount;
+                    tankFluid = p.getContents().getFluid().getName();
+                }
+            }
+        }
+
+        int energyStored = 0;
+        net.minecraftforge.energy.IEnergyStorage es = null;
+        for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
+            if (tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir)) {
+                es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir);
+                break;
+            }
+        }
+        if (es == null && tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)) {
+            es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+        }
+        if (es != null) energyStored = es.getEnergyStored();
+
+        send(sender, "{\"ok\":true,\"isSeparator\":true"
+                + ",\"combining\":" + separator.isCombining()
+                + ",\"hasServedCell\":" + hasServed
+                + ",\"servedCell\":[" + reported.getX() + "," + reported.getY() + ","
+                + reported.getZ() + "]"
+                + ",\"tankFluid\":\"" + escapeJson(tankFluid) + "\""
+                + ",\"tankAmount\":" + tankAmount
+                + ",\"tankCapacity\":" + tankCapacity
+                + ",\"energyStored\":" + energyStored + "}");
+    }
+
     // Oxygen vent state probe -----------------------------------------
 
     /**
@@ -20245,6 +21321,12 @@ public class TestProbeCommand extends CommandBase {
      *   "isSealed": true|false,        // private TileOxygenVent.isSealed
      *   "blobSize": &lt;int&gt;,             // AtmosphereHandler.getBlobSize(vent)
      *   "blobAtmosphere": "...",       // current AreaBlob atmosphere unlocalized name
+     *   "airN2": &lt;long&gt;,              // zone gas partial pressures, BILLIONTHS of an atm;
+     *   "airO2": &lt;long&gt;,              //   -1 means the position is in no zone at all
+     *   "airCO2": &lt;long&gt;,
+     *   "airPressure": &lt;int&gt;,          // their sum in hundredths of an atm (100 = 1.00 atm)
+     *   "airTempMilliK": &lt;int&gt;,        // the zone air's temperature, thousandths of a kelvin
+     *   "airHeatCapacity": &lt;long&gt;,     // heat units per kelvin: pressure x volume, the mixing weight
      *   "hasFluid": true|false,        // private TileOxygenVent.hasFluid
      *   "fluidAmount": &lt;int&gt;,          // tank contents
      *   "energyStored": &lt;int&gt;
@@ -20252,6 +21334,107 @@ public class TestProbeCommand extends CommandBase {
      * </pre>
      */
     private void handleVent(MinecraftServer server, ICommandSender sender, String[] args) {
+        // /stellurgytest vent setair <dim> <x> <y> <z> <n2> <o2> <co2> [milliK] — overwrite the gas
+        // contents of the zone containing this position, and optionally its TEMPERATURE. Nothing in
+        // production can put a chosen amount of CO2 into a room short of parking crew in it for
+        // minutes, so a test that wants to drive the regeneration path needs this the same way it
+        // needs `energy inject`. The temperature is optional and defaults to ambient: a mixing test
+        // has to be able to arrange two zones that genuinely differ, and no production path sets a
+        // compartment's temperature directly.
+        if (args.length >= 8 && "setair".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            // The composition's own unit — nano-atmospheres — not the millionths a config file is
+            // written in. A probe reports what the state holds and must be able to write the same
+            // thing back, and a gas giant's partial pressures do not fit an int.
+            long n2 = parseLongOr(args[5], 0L);
+            long o2 = parseLongOr(args[6], 0L);
+            long co2 = parseLongOr(args[7], 0L);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
+                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.atmosphere.AtmosphereHandler handler = atmosphereOfLoaded(dim);
+            if (handler == null) {
+                send(sender, "{\"error\":\"no atmosphere handler for dim\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.atmosphere.AirState written =
+                    args.length >= 9 && args[8].indexOf('=') < 0
+                            ? new dev.stannismod.stellurgy.atmosphere.AirState(n2, o2, co2,
+                                    parseIntOr(args[8], 0))
+                            : new dev.stannismod.stellurgy.atmosphere.AirState(n2, o2, co2);
+            // Any further argument of the form <gas>=<amount> puts that SUBSTANCE in the room. The
+            // three named gases cover what life support moves around; a poison or an acid is a gas
+            // like any other to the model, and nothing in production can put one in a room on demand.
+            for (int i = 8; i < args.length; i++) {
+                int split = args[i].indexOf('=');
+                if (split <= 0) {
+                    continue;
+                }
+                dev.stannismod.stellurgy.atmosphere.gas.Gas gas =
+                        dev.stannismod.stellurgy.atmosphere.gas.GasRegistry
+                                .byName(args[i].substring(0, split));
+                if (gas == null) {
+                    send(sender, "{\"error\":\"unknown gas\",\"name\":\""
+                            + escapeJson(args[i].substring(0, split)) + "\"}");
+                    return;
+                }
+                written.add(gas, parseLongOr(args[i].substring(split + 1), 0L),
+                        written.getTemperatureKelvin());
+            }
+            boolean ok = handler.setAirState(
+                    (dev.stannismod.stellurgy.api.util.IBlobHandler) tile, written);
+            if (ok)
+                handler.refreshDerivedAtmosphereAt(new BlockPos(x, y + 1, z));
+            send(sender, "{\"ok\":" + ok + "}");
+            return;
+        }
+
+        // /stellurgytest vent priority <dim> <x> <y> <z> <value> — set a zone's ventilation priority
+        // through the SERVER half of the production path: the same useNetworkData branch the GUI
+        // button's packet lands in, clamp included. The button itself is a client concern; this
+        // drives what the server does when it arrives.
+        if (args.length >= 5 && "priority".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            // With no value this READS instead of writing — a restart test needs to ask what
+            // survived without first overwriting it.
+            boolean write = args.length >= 6;
+            int value = write ? parseIntOr(args[5], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
+                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent vent =
+                    (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile;
+            if (write) {
+                net.minecraft.nbt.NBTTagCompound payload = new net.minecraft.nbt.NBTTagCompound();
+                payload.setInteger("zonePriority", value);
+                vent.useNetworkData(null, net.minecraftforge.fml.relauncher.Side.SERVER, (byte) 4, payload);
+            }
+            send(sender, "{\"ok\":true,\"wrote\":" + write
+                    + ",\"priority\":" + vent.getZonePriority() + "}");
+            return;
+        }
+
+        // /stellurgytest vent reseal <dim> <x> <y> <z> — force a one-shot
         // /stellurgytest vent reseal <dim> <x> <y> <z> — force a one-shot
         // addBlock(handler, pos) on a vent's blob. Production runs the same
         // call inside performFunction every 100 world-time ticks, but
@@ -20405,9 +21588,39 @@ public class TestProbeCommand extends CommandBase {
         }
         String blobAtm = "no-handler";
         if (handler != null) {
-            dev.stannismod.stellurgy.api.IAtmosphere atm =
+            dev.stannismod.stellurgy.api.atmosphere.Atmosphere atm =
                     handler.getAtmosphereType(new BlockPos(x, y + 1, z));
             blobAtm = atm == null ? "null" : atm.getUnlocalizedName();
+        }
+
+        // Gas contents of the zone this vent anchors. Reported as -1 where the position is in no
+        // zone at all, so a caller can tell "no zone" from "a zone holding nothing".
+        long airN2 = -1L, airO2 = -1L, airCo2 = -1L;
+        int airPressure = -1, airTempMilliK = -1;
+        long airHeatCapacity = -1L;
+        // "zone" when the position is in a live zone, "none" otherwise. This field describes the
+        // POSITION fields below and nothing else: -1 has meant "in no zone" since INV-ATM-19 was
+        // pinned, and a probe may not quietly widen what an existing field answers. The vent's own
+        // held gases are reported SEPARATELY (ventAir*), because a vent holding air is not the same
+        // claim as a position being in a zone — a blob starts out earth-like whether or not it has
+        // ever sealed.
+        String airSource = "none";
+        if (handler != null) {
+            dev.stannismod.stellurgy.atmosphere.AirState air =
+                    handler.getAirStateAt(new BlockPos(x, y + 1, z));
+            if (air != null) {
+                airSource = "zone";
+            }
+            if (air != null) {
+                airN2 = air.getNitrogen();
+                airO2 = air.getOxygen();
+                airCo2 = air.getCarbonDioxide();
+                airPressure = air.getPressureCentiAtm();
+                airTempMilliK = air.getTemperatureMilliK();
+                // The zone's own volume decides its capacity, so the readout has to ask the handler
+                // for it rather than report a figure per block that no test could compare.
+                airHeatCapacity = air.getHeatCapacity(handler.getBlobSizeAt(new BlockPos(x, y + 1, z)));
+            }
         }
 
         // Tank contents.
@@ -20438,6 +21651,39 @@ public class TestProbeCommand extends CommandBase {
         out.append(",\"isSealed\":").append(isSealed);
         out.append(",\"blobSize\":").append(blobSize);
         out.append(",\"blobAtmosphere\":\"").append(escapeJson(blobAtm)).append('"');
+        out.append(",\"airN2\":").append(airN2);
+        out.append(",\"airO2\":").append(airO2);
+        out.append(",\"airCO2\":").append(airCo2);
+        out.append(",\"airPressure\":").append(airPressure);
+        out.append(",\"airSource\":\"").append(airSource).append('"');
+        // Air as a RESERVOIR: what it is at, and how much it takes to move it. The capacity is the
+        // half a mixing test needs, because two zones at the same pressure and different volumes mix
+        // by their capacities and would otherwise look like they should meet in the middle.
+        out.append(",\"airTempMilliK\":").append(airTempMilliK);
+        out.append(",\"airHeatCapacity\":").append(airHeatCapacity);
+        // The gases this VENT holds, independent of whether its position resolves to a zone. While
+        // a breached room is losing its air the graph is already empty, so the position fields
+        // above say -1 and only these can see the loss happening. Zeros once it is vacuum, which is
+        // a state and not an absence; ventHasAir separates "no air left" from "no state at all".
+        long ventN2 = 0L, ventO2 = 0L, ventCo2 = 0L;
+        int ventPressure = 0;
+        boolean ventHasAir = false;
+        if (handler != null && tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) {
+            dev.stannismod.stellurgy.atmosphere.AirState held = handler.getAirState(
+                    (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile);
+            if (held != null) {
+                ventHasAir = true;
+                ventN2 = held.getNitrogen();
+                ventO2 = held.getOxygen();
+                ventCo2 = held.getCarbonDioxide();
+                ventPressure = held.getPressureCentiAtm();
+            }
+        }
+        out.append(",\"ventHasAir\":").append(ventHasAir);
+        out.append(",\"ventAirN2\":").append(ventN2);
+        out.append(",\"ventAirO2\":").append(ventO2);
+        out.append(",\"ventAirCO2\":").append(ventCo2);
+        out.append(",\"ventAirPressure\":").append(ventPressure);
         out.append(",\"hasFluid\":").append(hasFluid);
         out.append(",\"fluidAmount\":").append(fluidAmount);
         out.append(",\"energyStored\":").append(energyStored);
@@ -20740,6 +21986,7 @@ public class TestProbeCommand extends CommandBase {
                     // How many updates the entity has had: the only way to tell an entity that
                     // SURVIVED its updates from one whose world never updated it.
                     + ",\"ticksExisted\":" + entity.ticksExisted
+                    + livingFields(entity)
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }
@@ -21635,7 +22882,8 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"riding\":\""
                     + escapeJson(player.getRidingEntity() == null ? ""
                             : player.getRidingEntity().getClass().getSimpleName()) + "\""
-                    + ",\"grace\":" + player.getEntityData().getLong("stellurgyRocketTransferGrace")
+                    + ",\"grace\":" + player.getEntityData().getLong(
+                            dev.stannismod.stellurgy.atmosphere.RocketTransferGrace.KEY)
                     + ",\"worldTime\":" + player.world.getTotalWorldTime()
                     + ",\"atmos\":\"" + escapeJson(atmos) + "\""
                     + ",\"health\":" + player.getHealth()
@@ -23078,9 +24326,59 @@ public class TestProbeCommand extends CommandBase {
      * mutation) without going through a tile entity.
      */
     private void handleBlock(MinecraftServer server, ICommandSender sender, String[] args) {
+        // /stellurgytest block activate <dim> <x> <y> <z> [sneak] — drive the block's own
+        // onBlockActivated with a player, exactly as a right-click does. `sneak` (default false)
+        // sets isSneaking first, which is how a block tells "open me" from "toggle me".
+        //
+        // The server tier has no client to click with, and the client bot's interactBlock is
+        // client-side only, so without this a sneak-click behaviour can only be tested by calling
+        // the tile method directly — which pins the tile and leaves the block's dispatch, the very
+        // half that decides WHICH action a click means, unexercised.
+        if (args.length >= 5 && "activate".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            boolean sneak = args.length >= 6 && Boolean.parseBoolean(args[5]);
+            net.minecraft.world.WorldServer activateWorld = server.getWorld(dim);
+            if (activateWorld == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos target = new BlockPos(x, y, z);
+            net.minecraft.block.state.IBlockState targetState = activateWorld.getBlockState(target);
+            // Forge's own FakePlayer, not the bare `player ensure-fake` one: it is what production
+            // already sees when something clicks a block with no client behind it, and it no-ops
+            // exactly the calls that need a connection (sendStatusMessage, openGui). The bare test
+            // player would take the tick loop down with an NPE on the first status message.
+            java.util.List<net.minecraft.entity.player.EntityPlayerMP> connected =
+                    server.getPlayerList().getPlayers();
+            boolean headless = connected.isEmpty();
+            net.minecraft.entity.player.EntityPlayer clicker = headless
+                    ? net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(activateWorld)
+                    : connected.get(0);
+            boolean wasSneaking = clicker.isSneaking();
+            clicker.setSneaking(sneak);
+            boolean handled;
+            try {
+                handled = targetState.getBlock().onBlockActivated(activateWorld, target, targetState,
+                        clicker, net.minecraft.util.EnumHand.MAIN_HAND,
+                        net.minecraft.util.EnumFacing.UP, 0.5f, 0.5f, 0.5f);
+            } finally {
+                clicker.setSneaking(wasSneaking);
+            }
+            net.minecraft.util.ResourceLocation clicked = targetState.getBlock().getRegistryName();
+            send(sender, "{\"ok\":true,\"pos\":[" + x + "," + y + "," + z + "]"
+                    + ",\"block\":\"" + escapeJson(clicked == null ? "null" : clicked.toString()) + "\""
+                    + ",\"sneaking\":" + sneak
+                    + ",\"handled\":" + handled
+                    + ",\"player\":\"" + escapeJson(clicker.getName()) + "\""
+                    + ",\"fakePlayer\":" + headless + "}");
+            return;
+        }
         if (args.length < 5
                 || !("at".equalsIgnoreCase(args[0]) || "biome-at".equalsIgnoreCase(args[0]))) {
-            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z> | biome-at <dim> <x> <y> <z>\"}");
+            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z> | biome-at <dim> <x> <y> <z> | activate <dim> <x> <y> <z> [sneak]\"}");
             return;
         }
         boolean biomeMode = "biome-at".equalsIgnoreCase(args[0]);
@@ -24540,6 +25838,7 @@ public class TestProbeCommand extends CommandBase {
     private net.minecraft.entity.player.EntityPlayerMP fakePlayer;
     private volatile int fakeLivingTicksRemaining = 0;
     private FakePlayerTicker fakeTicker;
+
 
     /** Posts one LivingUpdateEvent per server tick for the fake player while
      *  `tick-living` has remaining budget — the un-spawned test player never
