@@ -67,7 +67,7 @@ So: edit the **template**, not the live copy, and keep the template under versio
 | **planet mass** | Earth masses | |
 | **planet radius** | Earth radii | |
 | **surface gravity** | percent of Earth's | `100` = 1 g. Clamped to `0..400`. |
-| **atmosphere density** | `100` = 1 atm | Clamped to `0..1600`. |
+| **atmosphere density** | `100` = 1 atm | Clamped to `0..2147483` (about 21 000 atm). |
 | **planet temperature** | KELVIN | Computed, not authored — see `avgTemperature` in §7. |
 | **rotational period** | ticks | `24000` = one Minecraft day. Must be `> 0`. |
 | **star map position** | arbitrary map units | `x` / `y` on `<star>`; affects the star-selector GUI only. |
@@ -518,7 +518,7 @@ Physical:
 | `mass` | Earth masses | **Required.** A planet without both `mass` and `radius` is refused at load (see below). |
 | `radius` | Earth radii | **Required**, with `mass`. |
 | `gravitationalMultiplier` | percent of Earth | Clamped to `0..400`. See below. |
-| `atmosphereDensity` | `100` = 1 atm | Clamped to `0..1600`. The TOTAL the world is given; which gases make it up is derived (see below). |
+| `atmosphereDensity` | `100` = 1 atm | Clamped to `0..2147483` (about 21 000 atm). The TOTAL the world is given; which gases make it up is derived (see below). |
 | `hasOxygen` | boolean | Default `true`. Whether the world's own roll gave it free oxygen. Only `false` is written back. |
 | `metallicity` | relative to Sol | Feeds ore richness. `1.0` is not written back. |
 | `avgTemperature` | Kelvin | **Written, never read.** The temperature is recomputed at load from the star, the orbital distance and the atmosphere. Editing it does nothing. |

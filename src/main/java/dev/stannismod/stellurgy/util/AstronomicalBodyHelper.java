@@ -481,7 +481,7 @@ public class AstronomicalBodyHelper {
         // than obviously. While a planet's pressure could not exceed 16 atm the multiplier could not
         // exceed 2.25 and the question never arose. Once the ceiling moved, the same expression was
         // being asked about 21 000 atmospheres, where it answers 13.6 — a number with no observation
-        // behind it, applied to every world dense enough to reach it (ledger #330).
+        // behind it, applied to every world dense enough to reach it.
         //
         // So the correlation is used across the range it was fitted for and HELD past it. That is not
         // a claim that greenhouse warming stops; it is a refusal to invent the part of the curve

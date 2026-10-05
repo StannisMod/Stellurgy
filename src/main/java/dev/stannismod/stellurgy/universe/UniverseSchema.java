@@ -106,7 +106,7 @@ public interface UniverseSchema {
      * could be fingerprinted and compared at load; its derivation reached a world only through
      * {@code generator(config)}, so a released version whose planets were re-derived left every
      * stamp byte-identical and the guard against editing a released version in place could not see
-     * the edit (ledger #335).</p>
+     * the edit.</p>
      */
     IBodyDerivation bodyDerivation();
 }

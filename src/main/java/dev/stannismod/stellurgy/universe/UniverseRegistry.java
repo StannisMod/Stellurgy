@@ -1564,7 +1564,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * {@link IBodyDerivation}. So a version whose planets were re-derived — a different pressure, a
      * different type, a different temperature — left the laws fingerprint byte-identical, and the
      * guard built to refuse "a released schema edited in place" had nothing to say about the edit
-     * that actually happened (ledger #335, demonstrated by #329).
+     * that actually happened.
      *
      * <p>Rogue derivation is the probe because it needs no star: it exercises radius, mass, gravity,
      * pressure, temperature, type and terrain from a seed and a cell alone, which is the whole of

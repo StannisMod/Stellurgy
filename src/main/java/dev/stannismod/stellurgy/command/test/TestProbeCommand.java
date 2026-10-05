@@ -547,7 +547,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 5 && "console-info".equalsIgnoreCase(args[0])) {
             // console-info <dim> <x> <y> <z> — what a shield CONSOLE is currently displaying, as
             // opposed to what the network state says. The two can disagree, and that disagreement is
-            // the bug class this verb exists to make visible (ledger #260). Read out of the console's
+            // the bug class this verb exists to make visible. Read out of the console's
             // own writeToNBT, so it reports the same fields production persists rather than a
             // parallel accessor that could drift from them.
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
