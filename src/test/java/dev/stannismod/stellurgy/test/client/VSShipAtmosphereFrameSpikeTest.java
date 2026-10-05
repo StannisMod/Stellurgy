@@ -243,7 +243,13 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
 
         // RESULT 3 — the gate that actually matters: a body standing inside the sealed cabin.
         // Re-map first: the ship keeps drifting, so the cabin's world image is only valid now.
-        double[] wNow = toWorld(vx, vy, vz);
+        // At the MIDDLE of the 3x3 cavity, not at (vx, vy, vz): that is the cavity's corner, where a
+        // body 0.6 wide stands half inside the stone wall. Measured 2026-10-05 once his own client
+        // ran his update in the deck's frame: vanilla's push-out-of-blocks moved him 0.1 a tick off
+        // the wall, the cell under his feet crossed into the wall's, and the gate that had resolved
+        // him to PressurizedAir resolved him back to air two ticks later. The control leg stands him
+        // at a cell's centre for the same reason.
+        double[] wNow = toWorld(vx + 1, vy, vz + 1);
         String aboardCached = cachedAtmosphereWithPlayerAt(wNow[0], wNow[1], wNow[2]);
         System.out.println("[S1/ship] cachedForPlayerAboard=" + aboardCached);
         assertTrue("RESULT-3: a player standing INSIDE the ship's pressurised cabin must breathe it,"

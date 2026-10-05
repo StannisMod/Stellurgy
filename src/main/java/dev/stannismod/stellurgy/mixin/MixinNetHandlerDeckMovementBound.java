@@ -49,12 +49,18 @@ public abstract class MixinNetHandlerDeckMovementBound {
     @Inject(method = "processPlayer", at = @At("HEAD"))
     private void stellurgyDeckMovementBoundBefore(CPacketPlayer packet, CallbackInfo ci) {
         final EntityPlayerMP subject = player;
-        stellurgyBoundHaveFrom = subject != null;
-        if (stellurgyBoundHaveFrom) {
-            stellurgyBoundFromX = subject.posX;
-            stellurgyBoundFromY = subject.posY;
-            stellurgyBoundFromZ = subject.posZ;
+        // processPlayer is entered TWICE per packet: first on the network thread, where vanilla only
+        // queues the packet for the server thread and leaves. Read there, "where the server had him"
+        // is whatever the server thread is doing to him at that instant - measured 2026-10-04, his
+        // shipyard coordinates in the middle of a deck-frame move, which the TAIL of the packet being
+        // handled then measured a step of millions of blocks against and refused.
+        if (subject == null || !subject.getServerWorld().isCallingFromMinecraftThread()) {
+            return;
         }
+        stellurgyBoundHaveFrom = true;
+        stellurgyBoundFromX = subject.posX;
+        stellurgyBoundFromY = subject.posY;
+        stellurgyBoundFromZ = subject.posZ;
     }
 
     @Inject(method = "processPlayer", at = @At("TAIL"))
