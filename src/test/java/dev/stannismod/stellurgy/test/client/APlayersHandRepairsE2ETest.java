@@ -181,9 +181,10 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aDamagedBlockAPlayerBreaksLeavesNoDamageBehind() throws Exception {
-        // The break and its record happen in the server's world, so its log is stepped by that
-        // world's own clock.
-        Events server = new Events(this::exec, ticks -> GameTicks.advanceWorld(serverClient(), DIM, ticks), evictions);
+        // The break and its record happen in the server's world, so the server half of the step is
+        // that world's own clock; the client half counts the ticks in which it sends the press.
+        Events server = new Events(this::exec,
+                GameTicks.serverAndClient(serverClient(), GameTicks.world(DIM), bot()::waitWorldTicks), evictions);
         prepareSite();
         int subjectX = X + 2, controlX = X + 6;
         post(subjectX);
@@ -223,7 +224,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
                 ROUND_TRIP_DEADLINE_TICKS);
         // STIMULUS: one client tick, the one whose start recomputes the crosshair from the rotation
         // the placement applied (Minecraft.runTick recomputes it before it reads any key).
-        bot().waitTicks(1);
+        bot().waitWorldTicks(1);
         JsonObject pick = bot().reportMouseOver();
         requireArranged("the client's crosshair is not on the damaged post, so a press would break"
                 + " something else: " + pick,
@@ -236,7 +237,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
         // STIMULUS: the attack key held across one client tick, as a mouse button is — long enough
         // for the press to be read (Minecraft.processKeyBinds), shorter than the five ticks a
         // creative break waits before it will take the next block (PlayerControllerMP.blockHitDelay).
-        bot().waitTicks(1);
+        bot().waitWorldTicks(1);
         bot().setKey(KEY_ATTACK, false);
         server.awaitRecordWithFields(broken, "damage_invalidation_heard",
                 "the player's break of the damaged post never reached the damage map",

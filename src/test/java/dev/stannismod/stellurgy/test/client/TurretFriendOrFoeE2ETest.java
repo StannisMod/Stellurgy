@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
@@ -48,7 +49,8 @@ public class TurretFriendOrFoeE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot() throws Exception {
-        Events server = new Events(this::server, bot()::waitTicks, evictions);
+        Events server = new Events(this::server,
+                GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         // Build the gun AROUND the player rather than teleporting the player to the gun. A tp into
         // a freshly cleared site drops him, and a gun tracking a falling target pins its elevation
         // arc and stops firing — which is indistinguishable from the refusal this test is about.

@@ -7,6 +7,7 @@ import org.junit.Test;
 import java.util.List;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
@@ -76,7 +77,8 @@ public class SensorFriendIsNeverAcquiredE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes() throws Exception {
-        Events server = new Events(this::server, bot()::waitTicks, evictions);
+        Events server = new Events(this::server,
+                GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         // Built around the player rather than the player moved to it: a tp into a cleared site drops
         // him, and a battery tracking a falling target is a different experiment.
         Reply player = ask("stellurgytest player position-of " + PLAYER);

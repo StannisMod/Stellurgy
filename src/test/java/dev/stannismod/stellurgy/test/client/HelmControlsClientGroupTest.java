@@ -284,8 +284,9 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
 
         // The outline half asks whether a block UNDER his cursor is outlined; with none under it, its
         // silence would be about the aim. His client's own crosshair is read a few ticks after the block
-        // was placed; a block his client has not been sent yet fails this as an ARRANGEMENT, loudly.
-        bot().waitTicks(VIEW_WINDOW_TICKS);
+        // was placed; a block his client has not been sent yet fails this as an ARRANGEMENT, loudly. The
+        // server sends the block and the client draws it, so both clocks run the window.
+        advanceServerAndClient(VIEW_WINDOW_TICKS);
         JsonObject cursor = bot().reportMouseOver();
         ArrangementFailure.requireArranged("from the helm his cursor is on no block, so nothing could be"
                 + " outlined either way: " + cursor, "BLOCK".equals(cursor.get("typeOfHit").getAsString()));
@@ -295,7 +296,7 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         for (int button : new int[]{MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE}) {
             bot().setKey(button, true);
         }
-        bot().waitTicks(window);
+        bot().waitWorldTicks(window);
         for (int button : new int[]{MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE}) {
             bot().setKey(button, false);
         }
@@ -349,7 +350,7 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      */
     private double[] steadyView(double[] eye) throws Exception {
         JsonObject first = bot().reportState();
-        bot().waitTicks(VIEW_WINDOW_TICKS);
+        bot().waitWorldTicks(VIEW_WINDOW_TICKS);
         JsonObject second = bot().reportState();
         double yaw = second.get("playerYaw").getAsDouble(), pitch = second.get("playerPitch").getAsDouble();
         ArrangementFailure.requireArranged("his view is not still on a parked hull — read " + first + " then "

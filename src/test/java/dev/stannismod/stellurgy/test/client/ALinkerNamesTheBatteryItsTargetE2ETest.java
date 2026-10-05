@@ -207,6 +207,8 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
                 + " {NoAI:1b,Invulnerable:1b,UUIDMost:" + ZOMBIE_UUID_MOST + "L,UUIDLeast:" + ZOMBIE_UUID_LEAST + "L}");
         Reply zombies = Reply.of(exec("stellurgytest entity near " + OVERWORLD + " " + (px + 0.5D) + " "
                 + (py + 1) + " " + (pz + 0.5D) + " 2 EntityZombie")).requireOk("entity near");
+        // the producer always writes `count` on an ok `entity near` reply, so a reply without it is a
+        // broken probe and refusing here is the right failure.
         if (zombies.integer("count") != 1) {
             ArrangementFailure.arrangementFailed("exactly one zombie must stand by its footing: " + zombies
                     + " | the summon said: " + summoned
