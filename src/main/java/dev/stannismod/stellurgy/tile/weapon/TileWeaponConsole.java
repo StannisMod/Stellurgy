@@ -25,6 +25,7 @@ import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkStatus;
+import dev.stannismod.stellurgy.weapon.HullAllegianceRule;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkDomain;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkState;
@@ -65,14 +66,16 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
 
     private static final int BUTTON_HOLD_FIRE = 0;
     private static final int BUTTON_CLEAR_TARGET = 1;
+    private static final int BUTTON_HULL_ALLEGIANCE = 2;
 
     private static final byte NET_TOGGLE_HOLD_FIRE = 0;
     private static final byte NET_CLEAR_TARGET = 1;
     /** Server&rarr;client: what the open screen should say. See {@link ReadoutSync}. */
     private static final byte NET_READOUT = 2;
+    private static final byte NET_NEXT_HULL_ALLEGIANCE = 3;
 
     /** The screen's lines, in the order {@link #readoutLines} produces them. */
-    private static final int READOUT_LINES = 4;
+    private static final int READOUT_LINES = 5;
 
     private boolean registered;
 
@@ -180,6 +183,37 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     public java.util.UUID getTargetEntity() {
         WeaponNetworkState state = network();
         return state == null ? null : state.getTargetEntity();
+    }
+
+    /** Point every gun on this network at a ship, by the physics substrate's id, and keep following it. */
+    public boolean assignTargetShip(String shipId) {
+        WeaponNetworkState state = network();
+        if (state == null) {
+            return false;
+        }
+        state.clearTarget();
+        state.setTargetShip(shipId);
+        return true;
+    }
+
+    public String getTargetShip() {
+        WeaponNetworkState state = network();
+        return state == null ? null : state.getTargetShip();
+    }
+
+    /** The rule this network tells a friendly hull by; see {@link HullAllegianceRule}. */
+    public boolean setHullAllegiance(HullAllegianceRule rule) {
+        WeaponNetworkState state = network();
+        if (state == null) {
+            return false;
+        }
+        state.setHullAllegiance(rule);
+        return true;
+    }
+
+    public HullAllegianceRule getHullAllegiance() {
+        WeaponNetworkState state = network();
+        return state == null ? null : state.getHullAllegiance();
     }
 
     public boolean clearTarget() {
@@ -372,6 +406,9 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
         modules.add(new ModuleButton(10, 42, BUTTON_CLEAR_TARGET,
                 LibVulpes.proxy.getLocalizedString("msg.weaponConsole.clearTarget"), this,
                 TextureResources.buttonBuild, 80, 18));
+        modules.add(new ModuleButton(94, 20, BUTTON_HULL_ALLEGIANCE,
+                LibVulpes.proxy.getLocalizedString("msg.weaponConsole.hullAllegiance"), this,
+                TextureResources.buttonBuild, 80, 18));
 
         for (int line = 0; line < READOUT_LINES; line++) {
             ModuleText text = new ModuleText(10, 68 + 12 * line, "", 0x2b2b2b);
@@ -402,6 +439,13 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
             tag.setDouble("targetY", target.y);
             tag.setDouble("targetZ", target.z);
         }
+        if (getTargetShip() != null) {
+            tag.setBoolean("targetShip", true);
+        }
+        HullAllegianceRule allegiance = getHullAllegiance();
+        if (allegiance != null) {
+            tag.setString("allegiance", allegiance.getLangKey());
+        }
         TargetTrack acquired = getAcquiredTrack();
         if (acquired != null) {
             tag.setBoolean("locked", acquired.isLocked(StellurgyConfiguration.getCurrentConfig()
@@ -424,16 +468,21 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
         String gunLine = saturated > 0
                 ? readoutText("msg.weaponConsole.line.gunsOutOfArc", guns, onTarget, saturated)
                 : readoutText("msg.weaponConsole.line.guns", guns, onTarget);
-        String targetLine = readout.hasKey("targetX")
+        String targetLine = readout.getBoolean("targetShip")
+                ? readoutText("msg.weaponConsole.line.targetShip")
+                : readout.hasKey("targetX")
                 ? readoutText("msg.weaponConsole.line.target", readout.getDouble("targetX"),
                         readout.getDouble("targetY"), readout.getDouble("targetZ"))
                 : readoutText("msg.weaponConsole.line.targetNone");
+        String allegianceLine = readout.hasKey("allegiance")
+                ? readoutText("msg.weaponConsole.line.allegiance", readoutText(readout.getString("allegiance")))
+                : "";
         String sensorLine = !readout.hasKey("distance")
                 ? readoutText("msg.weaponConsole.line.sensorNone")
                 : readoutText(readout.getBoolean("locked") ? "msg.weaponConsole.line.sensor"
                                 : "msg.weaponConsole.line.sensorTooPoor",
                         readout.getDouble("distance"), readout.getDouble("quality"));
-        return new String[] {network, gunLine, targetLine, sensorLine};
+        return new String[] {network, gunLine, targetLine, sensorLine, allegianceLine};
     }
 
     /** Client: a readout from the server arrived for the open screen. */
@@ -505,6 +554,8 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
             PacketHandler.sendToServer(new PacketMachine(this, NET_TOGGLE_HOLD_FIRE));
         } else if (buttonId == BUTTON_CLEAR_TARGET) {
             PacketHandler.sendToServer(new PacketMachine(this, NET_CLEAR_TARGET));
+        } else if (buttonId == BUTTON_HULL_ALLEGIANCE) {
+            PacketHandler.sendToServer(new PacketMachine(this, NET_NEXT_HULL_ALLEGIANCE));
         }
     }
 
@@ -539,6 +590,13 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
             setHoldFire(!isHoldFire());
         } else if (id == NET_CLEAR_TARGET) {
             clearTarget();
+        } else if (id == NET_NEXT_HULL_ALLEGIANCE) {
+            // The next rule after the server's own, as for hold-fire: a stale screen still steps the
+            // real one.
+            HullAllegianceRule current = getHullAllegiance();
+            if (current != null) {
+                setHullAllegiance(current.next());
+            }
         }
     }
 

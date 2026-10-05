@@ -646,6 +646,26 @@ public class TestProbeCommand extends CommandBase {
                     + escapeJson(console.getAccessCode()) + "\"}");
             return;
         }
+        // ship <dim> <x> <y> <z> <vsShipId> — the network's order to follow a ship, as the pilot's
+        // designation leaves it; the designation's own choice of ship is not what this arranges.
+        if ("ship".equals(sub) && args.length >= 6) {
+            send(sender, "{\"ok\":true,\"applied\":" + console.assignTargetShip(args[5]) + "}");
+            return;
+        }
+        // allegiance <dim> <x> <y> <z> <CODE_ON_WEAPONS|CODE_ON_CREW|NONE> — the rule the console's
+        // button cycles through, set by name.
+        if ("allegiance".equals(sub) && args.length >= 6) {
+            dev.stannismod.stellurgy.weapon.HullAllegianceRule rule;
+            try {
+                rule = dev.stannismod.stellurgy.weapon.HullAllegianceRule.valueOf(
+                        args[5].toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException unknown) {
+                send(sender, jsonError("unknown allegiance rule"));
+                return;
+            }
+            send(sender, "{\"ok\":true,\"applied\":" + console.setHullAllegiance(rule) + "}");
+            return;
+        }
         if ("read".equals(sub)) {
             net.minecraft.util.math.Vec3d target = console.getTarget();
             send(sender, "{\"ok\":true"
@@ -660,6 +680,9 @@ public class TestProbeCommand extends CommandBase {
                     + (console.getAcquiredTrack() == null ? ""
                             : ",\"sensorQuality\":" + console.getAcquiredTrack().getQuality())
                     + ",\"trackingEntity\":" + (console.getTargetEntity() != null)
+                    + ",\"targetShip\":\"" + escapeJson(String.valueOf(console.getTargetShip())) + "\""
+                    + ",\"allegiance\":\"" + (console.getHullAllegiance() == null ? ""
+                            : console.getHullAllegiance().name()) + "\""
                     + ",\"hasTarget\":" + (target != null)
                     + (target == null ? "" : ",\"targetX\":" + target.x + ",\"targetY\":" + target.y
                             + ",\"targetZ\":" + target.z)

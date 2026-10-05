@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.test.WarShip;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -233,6 +234,174 @@ public class TurretOnAShipE2ETest extends AbstractSharedServerTest {
                         + " blocks a tick along X while the hull was measured doing " + hullPerTick
                         + " (ratio " + ratio + ") — " + muzzle,
                 ratio > 0.5D && ratio < 2.0D);
+    }
+
+    /** The engagement scenarios' build sites and the altitude both hulls are parked at. */
+    /**
+     * Assembly leaves the build site's launch pad behind, so each engagement scenario builds on its
+     * own pair of sites, a lane apart along Z: {@code lane} 0 and 1.
+     */
+    private static final int SHOOTER_SRC_X = 8400, QUARRY_SRC_X = 8800, SRC_LANE_Z = 7600, LANE_STEP = 400;
+    private static final int ENGAGE_X = 8400, ENGAGE_Y = 170, ENGAGE_Z = 9800;
+    /** How far along X the quarry is parked from the shooter: clear of both hulls' own extents. */
+    private static final int QUARRY_OFFSET = 80;
+    /** How far along Z the quarry is moved, to see the battery follow it. */
+    private static final int QUARRY_MOVE = 120;
+    /**
+     * A point this close to a parked hull's own position is ON that hull: the with-pilot-seat fixture
+     * spans about twenty blocks, so its world bounds' middle lies within half of that of the position.
+     */
+    private static final double ON_THAT_HULL = 16.0D;
+
+    /** A battery aboard one hull, a second hull for it to engage, and a console on the battery. */
+    private static final class Engagement {
+        final WarShip shooter;
+        final WarShip quarry;
+        final int gunX, gunY, gunZ;
+        final int consoleX;
+
+        Engagement(WarShip shooter, WarShip quarry, int gunX, int gunY, int gunZ, int consoleX) {
+            this.shooter = shooter;
+            this.quarry = quarry;
+            this.gunX = gunX;
+            this.gunY = gunY;
+            this.gunZ = gunZ;
+            this.consoleX = consoleX;
+        }
+
+        String console() {
+            return "0 " + consoleX + " " + gunY + " " + gunZ;
+        }
+
+        String gun() {
+            return "0 " + gunX + " " + gunY + " " + gunZ;
+        }
+    }
+
+    /**
+     * Two hulls parked side by side, a charged gun aboard the first with a console touching it — one
+     * weapons network — and the network on the rule given.
+     */
+    private Engagement arrangeEngagement(int lane, String allegiance) throws Exception {
+        ask("stellurgytest shot clear 0").requireOk("clear the air");
+        int srcZ = SRC_LANE_Z + lane * LANE_STEP;
+        WarShip shooter = WarShip.build(events, this::exec, FixtureSite.openAir(0, SHOOTER_SRC_X, srcZ),
+                null, "the hull the battery stands on");
+        shooter.parkAt(ENGAGE_X, ENGAGE_Y, ENGAGE_Z, ON_THE_HULL);
+        WarShip quarry = WarShip.build(events, this::exec, FixtureSite.openAir(0, QUARRY_SRC_X, srcZ),
+                null, "the hull the battery is told to engage");
+        quarry.parkAt(ENGAGE_X + QUARRY_OFFSET, ENGAGE_Y, ENGAGE_Z, ON_THE_HULL);
+
+        int[] seat = shooter.seat();
+        int gunX = seat[0] + 3, gunY = seat[1], gunZ = seat[2];
+        long built = events.markInstrumented();
+        buildGun(gunX, gunY, gunZ);
+        Weapons.awaitAssembled(events, built, gunX, gunY, gunZ, PARTS, "the battery's gun never assembled");
+        ask("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
+
+        int consoleX = gunX + 1;
+        long placed = events.mark();
+        place("stellurgy:weaponConsole", consoleX, gunY, gunZ);
+        events.awaitRecordWithFields(placed, "subsystem_network_rebuilt",
+                "the weapons network never rebuilt after the console was placed", Weapons.ARRANGEMENT_TICKS,
+                "domain", "Weapon", "dim", "0");
+        Engagement engagement = new Engagement(shooter, quarry, gunX, gunY, gunZ, consoleX);
+        Reply network = ask("stellurgytest weaponconsole read " + engagement.console()).requireOk("read the console");
+        requireArranged("the console touching the gun is not commanding it: " + network,
+                network.bool("network") && network.integer("guns") == 1);
+        requireArranged("the console would not take the rule " + allegiance,
+                ask("stellurgytest weaponconsole allegiance " + engagement.console() + " " + allegiance)
+                        .requireOk("set the rule").bool("applied"));
+        return engagement;
+    }
+
+    /** Where the gun is pointing this tick and how far that is from the quarry's own position. */
+    private double targetFromQuarry(Engagement engagement) throws Exception {
+        Reply gun = ask("stellurgytest turret read " + engagement.gun()).requireOk("read the gun");
+        requireArranged("the gun holds no target at all: " + gun, gun.bool("hasTarget"));
+        Reply quarry = engagement.quarry.info();
+        return Math.sqrt(sq(gun.number("targetX") - quarry.number("posX"))
+                + sq(gun.number("targetY") - quarry.number("posY"))
+                + sq(gun.number("targetZ") - quarry.number("posZ")));
+    }
+
+    /**
+     * A battery told to engage a SHIP aims at that hull — wherever the hull is now, not where it was
+     * when the order was given — and fires on it.
+     *
+     * <p>red-witnessed: with {@code TileTurret#shipIntercept} at
+     * {@code net.minecraft.util.math.AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, uuid);}
+     * reading the hull's SHIPYARD bounds instead, this fails at "the battery is aimed
+     * 1.9191751436964057E7 blocks from the ship it was told to engage — not at its hull" (2026-10-05).</p>
+     */
+    @Test
+    public void aBatteryToldToEngageAShipAimsAtItsHullWhereverItIs() throws Exception {
+        Engagement engagement = arrangeEngagement(0, "NONE");
+
+        long ordered = events.markInstrumented();
+        requireArranged("the console would not take a ship order",
+                ask("stellurgytest weaponconsole ship " + engagement.console() + " " + engagement.quarry.vsShip)
+                        .requireOk("order the battery onto the quarry").bool("applied"));
+        Weapons.awaitFired(events, ordered, engagement.gunX, engagement.gunY, engagement.gunZ,
+                "a battery ordered onto a ship never fired on it");
+        double before = targetFromQuarry(engagement);
+        assertTrue("the battery is aimed " + before + " blocks from the ship it was told to engage — not"
+                + " at its hull", before < ON_THAT_HULL);
+
+        engagement.quarry.parkAt(ENGAGE_X + QUARRY_OFFSET, ENGAGE_Y, ENGAGE_Z + QUARRY_MOVE, ON_THE_HULL);
+        double after = targetFromQuarry(engagement);
+        assertTrue("the ship moved " + QUARRY_MOVE + " blocks and the battery is aimed " + after
+                + " blocks from where it is now — it kept the point the order was given at", after < ON_THAT_HULL);
+    }
+
+    /**
+     * Under "a ship whose weapons carry our code is a friend", a hull with a console set to our code
+     * is not fired on; the same hull under "no ship is a friend" is. One battery, one quarry, the rule
+     * switched between the two verdicts.
+     *
+     * <p>red-witnessed: with {@code HullAllegianceRule#isFriend} at {@code if (ours.isEmpty() || shipId == null) {}
+     * in {@code CODE_ON_WEAPONS} inverted to refuse every named ship, this fails at "the battery never
+     * decided about the hull its code vouches for — no `turret_fire_decided` carrying … friendly = true"
+     * (2026-10-05).</p>
+     *
+     * <p>red-witnessed: with {@code HullAllegianceRule#isFriend} at {@code return false;} in {@code NONE}
+     * answering {@code return true;}, this fails at
+     * "under \"no ship is a friend\" the battery never decided about the same hull again — no
+     * `turret_fire_decided` carrying … friendly = false" (2026-10-05).</p>
+     */
+    @Test
+    public void aHullWhoseWeaponsCarryOurCodeIsSparedOnlyUnderThatRule() throws Exception {
+        Engagement engagement = arrangeEngagement(1, "CODE_ON_WEAPONS");
+        ask("stellurgytest weaponconsole code " + engagement.console() + " ALPHA").requireOk("our code");
+        // The quarry's own console, set to the same code: its weapons vouch for it.
+        int[] quarrySeat = engagement.quarry.seat();
+        long placed = events.mark();
+        place("stellurgy:weaponConsole", quarrySeat[0] + 2, quarrySeat[1], quarrySeat[2]);
+        events.awaitRecordWithFields(placed, "subsystem_network_rebuilt",
+                "the quarry's console never joined a network", Weapons.ARRANGEMENT_TICKS,
+                "domain", "Weapon", "dim", "0");
+        String quarryConsole = "0 " + (quarrySeat[0] + 2) + " " + quarrySeat[1] + " " + quarrySeat[2];
+        requireArranged("the quarry's console took no code",
+                ask("stellurgytest weaponconsole code " + quarryConsole + " ALPHA").requireOk("their code")
+                        .bool("applied"));
+
+        long ordered = events.markInstrumented();
+        ask("stellurgytest weaponconsole ship " + engagement.console() + " " + engagement.quarry.vsShip)
+                .requireOk("order the battery onto the quarry");
+        String spared = events.awaitRecordWithFields(ordered, "turret_fire_decided",
+                "the battery never decided about the hull its code vouches for", Weapons.SUBJECT_TICKS,
+                "pos", Weapons.at(engagement.gunX, engagement.gunY, engagement.gunZ), "friendly", "true");
+        assertEquals("the battery was PERMITTED to fire on a hull whose weapons carry its own code: " + spared,
+                "false", Events.text(spared, "permitted"));
+
+        long switched = events.markInstrumented();
+        ask("stellurgytest weaponconsole allegiance " + engagement.console() + " NONE").requireOk("no friends");
+        String engaged = events.awaitRecordWithFields(switched, "turret_fire_decided",
+                "under \"no ship is a friend\" the battery never decided about the same hull again",
+                Weapons.SUBJECT_TICKS, "pos", Weapons.at(engagement.gunX, engagement.gunY, engagement.gunZ),
+                "friendly", "false");
+        assertEquals("under \"no ship is a friend\" the battery still would not fire on the hull: " + engaged,
+                "true", Events.text(engaged, "permitted"));
     }
 
     /** The same reference gun the ground tests use, placed at SUBSPACE coordinates. */

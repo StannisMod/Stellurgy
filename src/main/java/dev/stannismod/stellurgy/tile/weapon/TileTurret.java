@@ -437,6 +437,13 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
      * battery" means — and its silence is not an instruction to stop.
      */
     public Vec3d getEffectiveTarget() {
+        String ship = engagedShip();
+        if (ship != null) {
+            // A network order, so it outranks every order this gun holds itself. A ship that cannot
+            // be found or measured this tick is aimed at nowhere — the mount holds its bearing — and
+            // never falls through to an older order the player had already replaced.
+            return shipIntercept(ship);
+        }
         Entity tracked = trackedEntity();
         if (tracked != null) {
             // Aim at the middle of the body rather than its feet: a round at foot height passes
@@ -473,12 +480,44 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
         if (live != null) {
             position = bodyCentre(live);
         }
+        return interceptOf(position, track.getVelocity());
+    }
+
+    /**
+     * Where to point so the round meets the hull this network was told to engage: the middle of its
+     * world bounds — the hull as a whole — led by the ship's own motion there. Null when the ship is
+     * not loaded on this side, since neither its place nor its motion is then known.
+     */
+    private Vec3d shipIntercept(String ship) {
+        java.util.UUID uuid;
+        try {
+            uuid = java.util.UUID.fromString(ship);
+        } catch (IllegalArgumentException notAShipId) {
+            return null;
+        }
+        net.minecraft.util.math.AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, uuid);
+        if (hull == null) {
+            return null;
+        }
+        Vec3d centre = dev.stannismod.stellurgy.weapon.ShipDesignation.centreOf(hull);
+        double[] motion = VSIntegration.shipVelocityAtPointFor(world, ship, centre.x, centre.y, centre.z);
+        if (motion == null) {
+            return null;
+        }
+        return interceptOf(centre, new Vec3d(motion[0], motion[1], motion[2]));
+    }
+
+    /**
+     * Lead a target at {@code position} moving at {@code velocity} (blocks per tick, world frame).
+     * Aboard a moving hull the shooter's own motion is taken out first: the round inherits it.
+     */
+    private Vec3d interceptOf(Vec3d position, Vec3d velocity) {
         String shipId = TurretFireControl.shipIdAt(world, pos);
         Vec3d muzzle = TurretFireControl.worldPositionOf(world, pos, shipId);
         if (muzzle == null) {
             return position;
         }
-        Vec3d relative = track.getVelocity();
+        Vec3d relative = velocity;
         if (shipId != null) {
             double[] carried = VSIntegration.shipVelocityAtPointFor(world, shipId, muzzle.x, muzzle.y,
                     muzzle.z);
@@ -502,7 +541,7 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
      * the acquisition is what is left when nothing else has been said.
      */
     private boolean engagementIsAcquired() {
-        if (manualControl || trackedEntity() != null || localTarget != null) {
+        if (manualControl || trackedEntity() != null || localTarget != null || engagedShip() != null) {
             return false;
         }
         WeaponNetworkState state = networkState();
@@ -574,10 +613,21 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
      * and a boarder who produced it and was shot anyway.</p>
      */
     private boolean targetIsFriendly() {
+        String ship = engagedShip();
+        if (ship != null) {
+            // A hull carries no credential, so the installation's own rule says whose it is.
+            return networkState().getHullAllegiance().isFriend(world, ship, getEffectiveAccessCode());
+        }
         Entity engaged = engagedEntity();
         return engaged != null
                 && dev.stannismod.stellurgy.affs.util.CodeUtils.entityHasMatchingCode(engaged,
                         getEffectiveAccessCode());
+    }
+
+    /** The ship this gun's network told it to engage, or null. Only a network gives a ship order. */
+    private String engagedShip() {
+        WeaponNetworkState state = networkState();
+        return state == null ? null : state.getTargetShip();
     }
 
     /** The entity this gun is shooting at, whether it was named or found. Null for a point target. */

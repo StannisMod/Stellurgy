@@ -65,6 +65,7 @@
     "MixinSubsystemNetworkRebuildEvents",
     "MixinSubsystemNodeReleaseEvents",
     "MixinTurretMuzzleEvents",
+    "MixinShipDesignationEvents",
     "MixinContactResolverEvents",
     "MixinContactResolverImpactEvents",
     "MixinShotSubstrateCrossingEvents",
@@ -98,6 +99,8 @@
     "MixinEntityTraceMemory"
   ],
   "client": [
+    "MixinClientCursorActs",
+    "MixinClientBlockOutline",
     "MixinEntityVelocityWriters",
     "MixinShipTransformEntityWrites",
     "MixinShipFrameTravelWrites",

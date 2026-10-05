@@ -27,6 +27,8 @@ public class WeaponNetworkState extends SubsystemNetworkState {
 
     private Vec3d target;
     private java.util.UUID targetEntity;
+    private String targetShip;
+    private HullAllegianceRule hullAllegiance = HullAllegianceRule.CODE_ON_WEAPONS;
     private String accessCode = "";
     private boolean holdFire;
     private TargetTrack acquiredTrack;
@@ -44,6 +46,33 @@ public class WeaponNetworkState extends SubsystemNetworkState {
     public void clearTarget() {
         this.target = null;
         this.targetEntity = null;
+        this.targetShip = null;
+    }
+
+    /**
+     * The ship every gun on this network is following, by the physics substrate's id, or null. The
+     * guns aim at the hull as a whole, wherever it is this tick, and lead it by its own motion.
+     */
+    public String getTargetShip() {
+        return targetShip;
+    }
+
+    public void setTargetShip(String shipId) {
+        this.targetShip = shipId;
+    }
+
+    /**
+     * The rule this installation tells a friendly HULL by. A creature proves itself with the code it
+     * carries; a hull carries nothing, so which ship counts as ours is the installation's choice. A new
+     * network starts on {@link HullAllegianceRule#CODE_ON_WEAPONS}: the one rule whose answer the
+     * battery's own owner controls, by setting the same code on both installations.
+     */
+    public HullAllegianceRule getHullAllegiance() {
+        return hullAllegiance;
+    }
+
+    public void setHullAllegiance(HullAllegianceRule rule) {
+        this.hullAllegiance = rule == null ? HullAllegianceRule.CODE_ON_WEAPONS : rule;
     }
 
     /**
@@ -111,6 +140,8 @@ public class WeaponNetworkState extends SubsystemNetworkState {
         copyInto(copy);
         copy.target = target;
         copy.targetEntity = targetEntity;
+        copy.targetShip = targetShip;
+        copy.hullAllegiance = hullAllegiance;
         copy.accessCode = accessCode;
         copy.holdFire = holdFire;
         copy.acquiredTrack = acquiredTrack;
