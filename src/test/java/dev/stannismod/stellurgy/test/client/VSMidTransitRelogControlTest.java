@@ -131,7 +131,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         // in another cell, and a transit cell is a POOL slot that routinely holds an earlier
         // scenario's leavings.
         String durableId = ShipIdentity.nameFromAssembly(assembled);
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), originDim,
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), originDim,
                 durableId, 200);
         // The transit stack must know WHICH craft the jump is about, by its durable name: a jump
         // begun for a ship the stack cannot name captures nobody and never reaches the ledger, so a
@@ -276,12 +276,12 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
                 Reply.of(exec("stellurgytest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
                         ).bool("commanded"));
         // WINDOW: a converging attitude, where nothing decides it has arrived — the hold never
-        // publishes "level". Its two ends are poseBeforeLevel and poseBeforeClimb, and both reach the
-        // gate's message, so a red says whether the hull was slewing (short window) or never moved
-        // (a command accepted and not obeyed, which no window repairs). Sized from the computer's own
-        // limits: a 2.0 rad/s ceiling reached at 4.0 rad/s^2, so even a half-turn is about 45 ticks.
-        // Overshoot is lenient, and the gate it feeds is a ARRANGEMENT, never the verdict.
-        bot().waitTicks(LEVEL_WINDOW_TICKS);
+        // publishes "level". Reading both ends lets a red say whether the hull was slewing (short
+        // window) or never moved (a command accepted and not obeyed, which no window repairs). Sized
+        // from the computer's own limits: a 2.0 rad/s ceiling reached at 4.0 rad/s^2, so even a
+        // half-turn is about 45 ticks. Overshoot is lenient, and the gate it feeds is an ARRANGEMENT,
+        // never the verdict.
+        advanceServerAndClient(LEVEL_WINDOW_TICKS);
         String poseBeforeClimb = shipInfoById(originDim, shipId);
         System.out.println("[relog] level window :: before=" + poseBeforeLevel
                 + " || after " + LEVEL_WINDOW_TICKS + " ticks=" + poseBeforeClimb);

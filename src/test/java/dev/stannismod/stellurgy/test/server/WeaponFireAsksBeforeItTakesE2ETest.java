@@ -130,9 +130,4 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
     private static boolean gone(Reply stage) {
         return stage.bool("wasDestroyed") || "minecraft:air".equals(stage.text("block"));
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

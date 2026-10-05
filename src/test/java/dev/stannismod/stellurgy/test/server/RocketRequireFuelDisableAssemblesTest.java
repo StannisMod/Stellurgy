@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ConfigFlag;
 import org.junit.Test;
 
 
@@ -28,9 +29,11 @@ import static org.junit.Assert.assertTrue;
  * tank capacity). Before the merge the same path divided by that zero rate and
  * accidentally passed via a {@code +Infinity} burn time.</p>
  *
- * <p>The {@code simple} fixture assembles to SUCCESS on the default
- * {@code rocketRequireFuel=true} (pinned by {@code RocketAssemblySmokeTest}); the
- * contract here is that flipping the flag off does not break that.</p>
+ * <p>The {@code simple} fixture assembles to SUCCESS with {@code rocketRequireFuel=true}; the
+ * contract here is that flipping the flag off does not break that. The class also holds the other
+ * fuel-at-assembly contract: the climb-to-orbit check is a ROCKET's, never a ship's. Each scenario
+ * states the flag it needs and puts back what it found — the shared harness world starts with it
+ * off.</p>
  */
 public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerTest {
 
@@ -62,14 +65,48 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
         return mReply.has(STATUS) ? mReply.text(STATUS) : "<none>";
     }
 
+    /**
+     * With fuel required, a ROCKET whose tanks cannot carry it to its world's orbit line is refused,
+     * and a SHIP built round a flight computer is not held to that climb.
+     *
+     * <p>This fails if production breaks the contract that <b>{@code TileRocketAssemblingMachine}
+     * asks "can its tanks reach orbit" of a rocket only</b>: a rocket's one flight is that climb, while
+     * a ship is flown and is a legitimate craft for flights that never leave the planet. The rocket leg
+     * is the control — it shows the reach check is live in this world (the overworld's line is its
+     * body's, 100 000 blocks), so the ship's success is the exemption and not an empty check.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, with {@code TileRocketAssemblingMachine#scanRocket} at {@code scannedFlightComputerPos == null}
+     * dropped from the NOFUEL branch (the reach check asked of every build), this fails with "a ship must assemble with
+     * fuel required even though its tanks cannot reach orbit".</p>
+     */
+    @Test
+    public void aShipIsNotHeldToTheClimbToOrbitThatARocketIs() throws Exception {
+        try (ConfigFlag fuelRequired = ConfigFlag.set(this::cmd, "rocketRequireFuel", true)) {
+            // The fixtures' own extent: two blocks round the pad, ten above it.
+            String rocket = RocketFixture.assembleAt(FixtureSite.openAir(0, 3520, 3400),
+                    c -> String.join("\n", client().execute(c)), "with-fluid-cargo", 2, 10,
+                    "the rocket is built in this volume");
+            assertEquals("control: a rocket with cargo in place of tanks must be refused for want of "
+                    + "the climb to orbit, or the ship below proves nothing: " + rocket,
+                    "NOFUEL", status(rocket));
+
+            String ship = RocketFixture.assembleAt(FixtureSite.openAir(0, 3580, 3400),
+                    c -> String.join("\n", client().execute(c)), "with-pilot-deck", 2, 10,
+                    "the ship is built in this volume");
+            assertTrue("a ship must assemble with fuel required even though its tanks cannot reach "
+                    + "orbit: " + ship, Reply.of(ship).ok());
+            assertEquals("…and it must be a SHIP, not a rocket entity: " + ship,
+                    0, Reply.of(ship).integer("rocketCount"));
+        }
+    }
+
     @Test
     public void validRocketAssemblesWhenFuelNotRequired() throws Exception {
-        try {
-            // Positive control: the simple fixture assembles on the default.
+        try (ConfigFlag restored = ConfigFlag.set(this::cmd, "rocketRequireFuel", true)) {
+            // Positive control: the simple fixture assembles with fuel required.
             // The assemble probe reports "ok":true only when the SCAN status was
             // SUCCESS; the "status" field it echoes is the POST-assemble status
             // (ALREADY_ASSEMBLED), so we gate on "ok":true, not status==SUCCESS.
-            assertTrue(Reply.of(cmd("stellurgytest config set rocketRequireFuel true")).ok());
             String on = buildAndAssemble(FixtureSite.openAir(0, 3400, 3400));
             assertTrue("simple fixture must assemble on rocketRequireFuel=true (scan SUCCESS): " + on,
                     Reply.of(on).ok());
@@ -81,9 +118,6 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
             assertTrue("with rocketRequireFuel=false a valid rocket must still assemble "
                     + "(no fuel-adequacy gate); scan status was " + status(off) + ": " + off,
                     Reply.of(off).ok());
-        } finally {
-            // Restore the shared-harness default for any later test in this JVM.
-            client().execute("stellurgytest config set rocketRequireFuel true");
         }
     }
 }

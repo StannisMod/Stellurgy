@@ -131,6 +131,55 @@ public class DescentShellTest {
         }
     }
 
+    /**
+     * A pilot leaving a world and one coming back cross the SAME surface: the takeoff line is the
+     * descent shell's depth above the body, read in the world's own metric.
+     *
+     * <p>This fails if production breaks the contract that <b>takeoff fires where descent does</b> —
+     * {@link DescentShell#orbitLineWorldY} and {@link DescentShell#radiusAround} describing two
+     * different atmospheres. The two lengths are in two metrics (a chart block is 250 m, a world block
+     * one), so the comparison converts the shell's depth and allows the half chart block the shell is
+     * rounded to; Earth's line is checked against the Kármán line it is defined from.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code double depthWorldBlocks = depthChartBlocks * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;}
+     * left in chart blocks (the multiplication removed), this fails with "the takeoff line must be the
+     * descent shell's depth in world blocks (r=0.2727)".</p>
+     */
+    @Test
+    public void theTakeoffLineIsTheDescentShellSeenFromInsideTheWorld() {
+        int metresPerChartBlock = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;
+        for (double r : new double[]{0.2727d, 1d, 11d}) {
+            long shell = DescentShell.radiusAround(sized(r));
+            double surface = r * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
+            double depthInWorldBlocks = (shell - surface) * metresPerChartBlock;
+            assertEquals("the takeoff line must be the descent shell's depth in world blocks (r=" + r + ")",
+                    depthInWorldBlocks, DescentShell.orbitLineWorldY(r), metresPerChartBlock);
+        }
+        assertEquals("and Earth's is the Kármán line, 100 km above its surface, within the 0.11 % its "
+                        + "6 378 km radius and the line's 6 371 km definition differ by",
+                100_000d, DescentShell.orbitLineWorldY(1d), 150d);
+    }
+
+    /**
+     * A line a ship could cross while parked is the floor, not an atmosphere: a body small enough that
+     * its derived line would sit inside the block band takes the top of the band, and a body with no
+     * radius has no line to derive.
+     *
+     * <p>red-witnessed: 2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code return (int) Math.max(TerrainHeightFinder.MAX_BUILD_Y, Math.round(depthWorldBlocks));}
+     * returning the bare rounded depth, this fails with "expected:&lt;255&gt; but was:&lt;100&gt;".</p>
+     */
+    @Test
+    public void aTakeoffLineNeverSitsInsideTheBlockBand() {
+        assertEquals(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y,
+                DescentShell.orbitLineWorldY(0.001d));
+        try {
+            DescentShell.orbitLineWorldY(0d);
+            org.junit.Assert.fail("a body with no radius has no line, and must not be handed one");
+        } catch (IllegalArgumentException expected) {
+            // the refusal is the answer
+        }
+    }
+
     @Test
     public void aBodyWithNoSizeKeepsTheFlatProximityRadius() {
         // A belt or a station slot is not a sphere and has no surface to stand above, so the constant

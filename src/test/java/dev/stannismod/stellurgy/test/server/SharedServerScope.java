@@ -33,12 +33,11 @@ public final class SharedServerScope extends TestClassScope {
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         // Cold-start once for the whole class — over a seeded game directory when the class declares one.
         SeededWorld seeded = testClass.getAnnotation(SeededWorld.class);
-        if (seeded == null) {
-            harness = RealDedicatedServerHarness.start();
-            return;
+        dev.stannismod.stellurgy.test.client.GameDirSeed seed =
+                dev.stannismod.stellurgy.test.client.GameDirSeed.forTheSharedHarness();
+        if (seeded != null) {
+            seeded.value().getDeclaredConstructor().newInstance().seed(seed);
         }
-        dev.stannismod.stellurgy.test.client.GameDirSeed seed = new dev.stannismod.stellurgy.test.client.GameDirSeed();
-        seeded.value().getDeclaredConstructor().newInstance().seed(seed);
         java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-server-");
         String written = seed.writeInto(root);
         harness = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);

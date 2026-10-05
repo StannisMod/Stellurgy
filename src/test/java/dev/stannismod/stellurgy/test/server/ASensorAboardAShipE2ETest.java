@@ -327,9 +327,6 @@ public class ASensorAboardAShipE2ETest extends AbstractSharedServerTest {
     }
 
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 
     /** A body this scenario put down, and where the sensor takes its middle to be (TacticalScan.bodyCentre). */
     private static final class Creeper {

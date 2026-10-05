@@ -110,7 +110,7 @@ public class SpaceRestartPersistenceTest {
      * that is its subject — and a reader captured on one boot would be addressing a process that has
      * exited.</p>
      */
-    private Events events() {
+    private Events serverEvents() {
         return new Events(this::exec,
                 ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
@@ -364,7 +364,7 @@ public class SpaceRestartPersistenceTest {
                 Reply.of(settled).ok());
 
         // Marked before the arming: the fire is announced once and the fault does not exist yet.
-        long faultMark = events().mark();
+        long faultMark = serverEvents().mark();
         String armed = exec("stellurgytest space save-fault-once");
         assertTrue("the fault must actually be armed, or nothing below is exercising a failed save: "
                 + armed, Reply.of(armed).bool("armed"));
@@ -381,7 +381,7 @@ public class SpaceRestartPersistenceTest {
         // false before the arming and false after the firing, so a reading only means anything
         // relative to the arming that preceded it, and nothing in the reading says which side of it
         // the reader is on. The record says the fault FIRED.
-        events().await(faultMark, "save_fault_fired",
+        serverEvents().await(faultMark, "save_fault_fired",
                 "no autosave reached the armed fault within " + AUTOSAVE_WAIT_TICKS + " ticks, so"
                         + " this run never exercised a failing save at all and its green would be"
                         + " worth nothing", AUTOSAVE_WAIT_TICKS);

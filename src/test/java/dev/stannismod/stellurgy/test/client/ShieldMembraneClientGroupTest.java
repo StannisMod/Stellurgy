@@ -93,7 +93,7 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientE2ETest {
                 + (z0 - 2) + " " + (ax + 12) + " " + floorY + " " + (z0 + 4) + " minecraft:stone"));
         requireArranged("the floor could not be laid: " + floor, floor.ok());
 
-        Events server = events();
+        Events server = serverEvents();
         long built = server.markInstrumented();
         // B FIRST: see the javadoc. Each shield is an emitter in the floor, fed by a generator beside
         // it, fed in turn by an unlimited FE source.

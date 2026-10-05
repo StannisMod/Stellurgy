@@ -63,7 +63,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aBlockAPlayerPutsIntoAHoleIsNotRecordedAsDestroyed() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int subjectX = X + 2, controlX = X + 4;
         post(subjectX);
@@ -124,7 +124,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aWelderInAPlayersHandTakesOneStageOff() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int blockX = X + 6;
         ask("stellurgytest fill " + DIM + " " + blockX + " " + Y + " " + Z + " " + blockX + " " + Y + " " + Z
@@ -217,7 +217,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
         double standX = subjectX + 0.5D, standY = Y, standZ = Z - 2.5D;
         double dy = (Y + 0.5D) - (standY + EYE_HEIGHT), dz = (Z + 0.5D) - standZ;
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, dz));
-        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot(), evictions), this::exec,
+        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions), this::exec,
                 "tp " + PLAYER + " " + standX + " " + standY + " " + standZ + " 0 " + pitch,
                 standX, standY, standZ, "the player must stand in front of the damaged post",
                 ROUND_TRIP_DEADLINE_TICKS);

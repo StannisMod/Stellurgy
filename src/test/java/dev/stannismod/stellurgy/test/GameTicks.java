@@ -237,6 +237,43 @@ public final class GameTicks {
     }
 
     /**
+     * A step that returns only once BOTH {@code serverClock} and the client have run {@code ticks}.
+     *
+     * <p>Why both, and not the server alone. The log is written by the server, so a deadline counted
+     * in the bot's ticks alone is counted on a clock the publisher does not run on: a server lagging
+     * the client makes a healthy run red, and the red says "no record". But many of the chains a
+     * client test waits on are DRIVEN by the client — pilot input sent each client tick, a click
+     * whose packet the client has yet to send — and a deadline in server ticks alone fails the same
+     * way when it is the client that lags. A link's budget is a lower bound on the world each side
+     * needs to do its part; it is wrong only when it is SHORT, and the slower clock is the one that
+     * can make it short. So one number serves both sides, and the step waits for the later of the
+     * two.</p>
+     *
+     * <p>It is never shorter than the bot-only step it replaces, so no wait that held on that one
+     * can expire on this one. What it does not do is measure a latency: a budget is a deadline, not
+     * a claim that something arrives within N ticks — that claim is a comparison of the tick stamps
+     * the two records carry.</p>
+     *
+     * @param serverClock the server half — {@link #server()} for work the server tick loop drives,
+     *                    {@link #world(int)} for a subject that lives in one world
+     * @param clientTicks the client half — {@code ClientBot::waitWorldTicks} while the player is in
+     *                    a world, {@code ClientBot::waitTicks} across a connection window; bound when
+     *                    the caller's bot is bound, so a family that marks before its client has
+     *                    connected passes a lambda that looks the bot up on each step
+     */
+    public static Events.Step serverAndClient(final TestClient server, final Clock serverClock,
+                                              final Events.Step clientTicks) {
+        return ticks -> {
+            long serverTarget = serverClock.read(server) + ticks;
+            clientTicks.ticks(ticks);
+            long serverBehind = serverTarget - serverClock.read(server);
+            if (serverBehind > 0) {
+                advance(server, serverClock, (int) serverBehind);
+            }
+        };
+    }
+
+    /**
      * As {@link #advance}, returning how far the clock actually went (never less than {@code ticks}).
      *
      * @throws AssertionError if the clock does not get there — which is the interesting case, and the
@@ -304,6 +341,20 @@ public final class GameTicks {
         sample.run();
         for (int i = 1; i < samples; i++) {
             advance(client, clock, ticksBetween);
+            sample.run();
+        }
+    }
+
+    /** For a window whose subject one side drives while the other is read. */
+    public static void observe(Events.Step gap, int samples, int ticksBetween, Action sample)
+            throws Exception {
+        if (samples <= 0 || ticksBetween <= 0) {
+            throw new IllegalArgumentException("samples and gap must be positive, got "
+                    + samples + " / " + ticksBetween);
+        }
+        sample.run();
+        for (int i = 1; i < samples; i++) {
+            gap.ticks(ticksBetween);
             sample.run();
         }
     }

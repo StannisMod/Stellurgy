@@ -72,9 +72,8 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
         bot().waitForWorld();
         // WINDOW: an ABSENCE watched for exactly as long as every positive leg waits for the presence
         // (RESTORE_LINK_BUDGET_TICKS, which outlives the re-seat's silent give-up). Shorter, and a
-        // restore the positive legs would have accepted could land after the reads; its two ends are
-        // the pre-restart record read above and the reads below.
-        bot().waitTicks(RESTORE_LINK_BUDGET_TICKS);
+        // restore the positive legs would have accepted could land after the reads.
+        advanceServerAndClient(RESTORE_LINK_BUDGET_TICKS);
 
         int dim = clientDim();
         JsonObject riding = bot().reportRidingEntity();

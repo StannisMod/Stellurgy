@@ -156,9 +156,4 @@ public class WideRoundCutsAWideHoleE2ETest extends AbstractSharedServerTest {
         assertTrue("the wall block has no price, so no budget here means anything: " + state, budget > 0);
         return budget;
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

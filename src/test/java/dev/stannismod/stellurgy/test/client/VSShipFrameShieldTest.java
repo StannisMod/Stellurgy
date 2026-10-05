@@ -112,7 +112,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         // construction — where a count incremented on a shared world is answered by any neighbour
         // that ever assembled one. markInstrumented, because the frame decision further down is
         // recorded by a test-only mixin: an empty log would otherwise have a second silent cause.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
 
         String assemble = assembleFixture(site);
@@ -247,7 +247,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
             String push = exec("stellurgytest vs push-ship-by-id 0 " + shipId + " 0 14 0");
             scenario().requireArranged("the push must reach THIS ship: " + push,
                     Reply.of(push).bool("pushed"));
-            bot().waitTicks(2);
+            advanceServerAndClient(2);
         }
         double[] ship2 = shipPos(shipId);
         String moved = exec("stellurgytest shield emitters 0");

@@ -423,9 +423,4 @@ public class TurretOnAShipE2ETest extends AbstractSharedServerTest {
     private static double sq(double v) {
         return v * v;
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

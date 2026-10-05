@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -9,10 +11,9 @@ import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
-public class TileBeacon extends TileMultiPowerConsumer {
+public class TileBeacon extends TileWasteHeatPowerConsumer {
 
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]

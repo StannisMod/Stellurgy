@@ -76,7 +76,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientE2ETest {
     //
     // The guard's contract is a CROSS-SIDE chain: the server hands the body to a teleporter bound
     // for the overworld, and the player's own client is respawned into it. The base's
-    // {@link #events()} reads the SERVER log and {@link #clientEvents()} the client's, both behind
+    // {@link #serverEvents()} reads the SERVER log and {@link #clientEvents()} the client's, both behind
     // the same reader — the same mark, the same "is anybody recording" assertion, the same failure
     // narrative on both sides.
 
@@ -112,7 +112,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientE2ETest {
         // BOTH marks before the stimulus, so nothing that happens in between can be missed: the
         // transfer into the space dim and the guard's answer to it are one server tick apart, and a
         // reader that marked afterwards could not tell "already done" from "never happened".
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         Events clientLog = clientEvents();
         long clientMark = clientLog.mark();
@@ -173,7 +173,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientE2ETest {
         // slot index our station does not occupy, so getSpaceStationFromBlockCoords returns null
         // and the guard fires.
         scenario().asserting("the guard puts an out-of-bounds player on the station's spawn");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         exec("stellurgytest tp " + SPACE_DIM);
         // ARRANGEMENT, and it is a LINK rather than a budget: vanilla /tp moves a body WITHIN the

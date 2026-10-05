@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
@@ -62,8 +63,8 @@ public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest
      */
     @Test
     public void theConsolesHoldFireButtonHoldsTheBatteryOnTheServer() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
-        Events client = ClientEvents.of(bot(), evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int gunX = X + 3, consoleX = X + 4;
         long built = server.markInstrumented();
@@ -128,8 +129,8 @@ public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest
      */
     @Test
     public void theConsolesScreenShowsTheServersNetwork() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
-        Events client = ClientEvents.of(bot(), evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int gunX = X + 3, consoleX = X + 4;
         long built = server.markInstrumented();
@@ -181,8 +182,8 @@ public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest
      */
     @Test
     public void theSensorsModeButtonSwitchesTheSensorOnTheServer() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
-        Events client = ClientEvents.of(bot(), evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int sensorX = X + 7;
         long placed = server.markInstrumented();

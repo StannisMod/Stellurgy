@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
@@ -24,6 +25,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * E2E: does the tier-2 ENTRY ON-RAMP take a piloted ship from a planet dimension into space through the
@@ -72,8 +74,6 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
 
     /** Where the piloted ship is built (a loaded overworld region, well clear of other tests). */
     private static final int SRC_X = 6000, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6000;
-    /** A world Y comfortably above the default orbit ceiling (StellurgyConfiguration.orbit = 1000). */
-    private static final int ABOVE_CEILING_Y = 1200;
     /** The jump leg builds its own ship, well clear of the entry leg's region (shared server, both run). */
     private static final int JUMP_SRC_X = 6400, JUMP_SRC_Z = 6400;
     /**
@@ -83,6 +83,42 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
      * leaves the ship legitimately IN_TRANSIT for thousands of ticks and the test reds on its own poll
      * window while production is working correctly.
      */
+
+    /**
+     * A world's takeoff line is its BODY's atmosphere unless its planet file states one.
+     *
+     * <p>This fails if production breaks the contract that <b>{@code DimensionProperties#orbitLine}
+     * answers the planet file's {@code <orbitHeight>} when there is one and otherwise the line the
+     * body's radius puts there</b> — the joint between the registered world and
+     * {@code DescentShell#orbitLineWorldY}, whose own law is pinned by {@code DescentShellTest}. The
+     * overworld is read as the server holds it (its radius from the reply, never assumed), then given a
+     * stated line, then cleared again so the body's own applies.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, with {@code DimensionProperties#orbitLine} at {@code return OptionalInt.of(orbitHeight);}
+     * replaced by the body's line (the stated line ignored), this fails with "a stated line must be
+     * the line the world answers".</p>
+     */
+    @Test
+    public void aWorldsTakeoffLineIsItsBodysAtmosphereUnlessItsFileStatesOne() throws Exception {
+        OrbitLine asHeld = OrbitLine.of(this::exec, 0);
+        requireArranged("the overworld must not carry a stated line before this scenario: " + asHeld,
+                !asHeld.stated);
+        double radius = asHeld.radius();
+        requireArranged("the overworld must be a body with a radius: " + asHeld, radius > 0d);
+        assertEquals("with no stated line, the world's line must be its body's atmosphere: " + asHeld,
+                dev.stannismod.stellurgy.space.DescentShell.orbitLineWorldY(radius), asHeld.line());
+
+        // A line well clear of the body's own, so the two answers cannot coincide.
+        int stated = asHeld.line() / 2;
+        try {
+            assertEquals("a stated line must be the line the world answers",
+                    stated, OrbitLine.state(this::exec, 0, stated).line());
+        } finally {
+            OrbitLine cleared = OrbitLine.unstate(this::exec, 0);
+            assertEquals("and clearing it must give the body's own line back: " + cleared,
+                    asHeld.line(), cleared.line());
+        }
+    }
 
     @Test
     public void aPilotedShipClimbingPastTheCeilingEntersSpaceViaTheFlightComputerTick() throws Exception {
@@ -111,7 +147,8 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         assertTrue("launch dim resolved to no cell: " + launch, expectedCell != null);
 
         // NAME the ship, then arrange the entry preconditions: a pilot (the static FF input channel makes
-        // the AFC tick see "someone is flying") and a climb PAST the ceiling (rigid-teleport to Y=1200).
+        // the AFC tick see "someone is flying") and a climb PAST the ceiling (a rigid teleport above the
+        // line the server reports for the overworld).
         // The name comes from the assembler, which minted it — not from asking the shared overworld what
         // stands near the pad, which answers with a neighbouring scenario's craft just as readily.
         String durableId = ShipIdentity.nameFromAssembly(asm);
@@ -127,7 +164,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
                 Reply.of(heldInput).bool("afcResolved"));
         String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         // Marked BEFORE the unpark, which is the act that lets the entry start: the arrival is
         // announced once and a mark taken after it would be waiting for a second one.
@@ -196,7 +233,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
                 Reply.of(heldInput).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)).ok());
+                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz)).ok());
         long entryMark = events.mark();
         exec("stellurgytest vs unpark-by-id 0 " + shipId);
 

@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
@@ -53,7 +54,7 @@ public class ShotReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aRoundFiredNearbyIsDrawnByTheClientAndOneFiredFarAwayIsNot() throws Exception {
-        Events client = ClientEvents.of(bot(), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         serverClient().execute("tp @a " + PX + " " + PY + " " + PZ);
 
         long mark = client.mark();
@@ -93,7 +94,7 @@ public class ShotReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aRoundThatStopsNearbyIsToldToTheClientAsEnded() throws Exception {
-        Events client = ClientEvents.of(bot(), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         serverClient().execute("tp @a " + PX + " " + PY + " " + PZ);
         int wallX = (int) Math.floor(PX + NEAR);
         int wallY = (int) Math.floor(PY), wallZ = (int) Math.floor(PZ) + 6;

@@ -117,7 +117,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
     //
     // Every scenario here types a command and then waits for its outcome to reach the CLIENT — a
     // reply on the chat overlay, a slot in the inventory it draws, a world it is respawned into — so
-    // they read the base's {@link #clientEvents()}, not {@link #events()}, which is the server's log.
+    // they read the base's {@link #clientEvents()}, not {@link #serverEvents()}, which is the server's log.
 
     /**
      * How long the far side of a typed command may take to reach the client — a deadline for a
@@ -379,7 +379,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
         // player is already in, so the whole transfer runs — a teleporter placement on the server
         // and a respawn on the client. Both marks go before the command; the twenty ticks that used
         // to stand here were budgeting exactly that round trip.
-        Events serverLog = events();
+        Events serverLog = serverEvents();
         long serverMark = serverLog.markInstrumented();
         Events clientLog = clientEvents();
         long clientMark = clientLog.mark();

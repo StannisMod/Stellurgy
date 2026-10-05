@@ -488,9 +488,4 @@ public class TurretStandaloneE2ETest extends AbstractSharedServerTest {
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + ": " + placed,
                 placed.bool("placed"));
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

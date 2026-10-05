@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -40,8 +41,6 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
 
     /** A loaded overworld region distinct from the entry e2e's, well clear of other tests. */
     private static final int SRC_X = 6400, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6400;
-    /** A world Y comfortably above the default orbit ceiling (StellurgyConfiguration.orbit = 1000). */
-    private static final int ABOVE_CEILING_Y = 1200;
     /** The descent target: the overworld — always registered, terrain-generated. */
     private static final int TARGET_DIM = 0;
 
@@ -79,7 +78,7 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 Reply.of(held).bool("afcResolved"));
         String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + vsId + " "
-                + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         // Marked before the unpark, which is what lets the entry start: the arrival is announced
         // once, and a mark taken after it would wait for a second entry.

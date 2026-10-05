@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -30,7 +33,6 @@ import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
@@ -40,7 +42,14 @@ import java.util.List;
 
 //This code is a complete mess. it should be rewritten just like the space laser, but it kinda works, so I'll leave it with this for now
 
-public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements INetworkMachine {
+public class TileAtmosphereTerraformer extends TileWasteHeatPowerConsumer implements INetworkMachine {
+
+    /**
+     * Each gas's share of one thickening step: the step is one hundredth of an atmosphere, the
+     * density readout's own unit, split evenly because the machine drains nitrogen and oxygen at the
+     * one rate ({@code terraformliquidRate} for both).
+     */
+    private static final long STEP_PER_GAS = AirState.ONE_ATM / 200L;
 
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
@@ -498,7 +507,9 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
         if (!world.isRemote && properties != null && properties.getId() == world.provider.getDimension() && ((world.provider.getClass().equals(WorldProviderPlanet.class) &&
                 properties.isNativeDimension) || StellurgyConfiguration.getCurrentConfig().allowTerraformNonStellurgy)) {
             if (buttonIncrease.getState() && properties.getAtmosphereDensity() < 1600) {
-                properties.setAtmosphereDensity(properties.getAtmosphereDensity() + 1);
+                // A step ADDS what the machine drained, so an oxygen-free world thickened this way
+                // gains oxygen it can eventually breathe.
+                properties.addToAtmosphere(new AirState(STEP_PER_GAS, STEP_PER_GAS, 0L));
                 if (buttonIncrease.getState() && properties.getAtmosphereDensity() >= 1600) {
                     this.setMachineEnabled(false);
                     this.setMachineRunning(false);

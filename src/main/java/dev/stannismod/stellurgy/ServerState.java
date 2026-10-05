@@ -43,7 +43,7 @@ public final class ServerState {
     /** Where each player stepped from a rocket's GUI into one of its tiles' GUIs. */
     public final RocketGuiNavigation rocketGuiReturns = new RocketGuiNavigation();
     /**
-     * Every subsystem network node this server holds — shields, weapons and the other domains — and
+     * Every subsystem network node this server holds — shields, weapons, ventilation, heat — and
      * each world's solved topology. Built here, before the first world loads and its tiles register.
      */
     public final dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager subsystemNetworks =

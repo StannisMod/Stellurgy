@@ -46,7 +46,8 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  * back to its system via {@link #anchorForCell} (super-cell partition; derive-don't-store). The persistent
  * override store holds authored (XML anchor) placements, player POIs and {@code pin-on-touch} snapshots of
  * touched procedural systems; untouched procedural space is re-derived on demand from {@code (seed, coord)}
- * through the {@link IGalaxyGenerator} seam (which ships as {@link EmptyGalaxyGenerator} here).</p>
+ * through the {@link IGalaxyGenerator} seam, which holds {@link EmptyGalaxyGenerator} until {@link #populate}
+ * installs the one the save's world model builds from the pack's configuration.</p>
  *
  * <p>A {@link WorldSavedData} on the overworld's global {@code MapStorage} (reachable from any dimension since
  * the overworld is always loaded). Server-side only; the world seed is re-derived on load rather than
@@ -125,6 +126,15 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * stamp would let a refusal blame the wrong one, and the remedies are not the same.
      */
     private String lawsFingerprint = "";
+    /**
+     * What this world's schema DERIVED ITS BODIES with when it was made.
+     * <p>
+     * Empty means "never measured": a world written before this key existed cannot be compared
+     * against, and is adopted rather than refused. That is the same shape `lawsFingerprint`
+     * already uses, and it is what keeps adding the guard from rejecting every save that predates
+     * it — a guard whose arrival breaks every existing world is not a guard, it is an outage.
+     */
+    private String derivationFingerprint = "";
     /**
      * Set by an operator's upgrade, consumed by the NEXT load: permission, given once, to accept a
      * {@code <galaxyGen>} that has changed.
@@ -1500,6 +1510,10 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     /** The laws fingerprint (metric + expansion) this save was generated under; empty when unstamped. */
+    public String derivationFingerprint() {
+        return derivationFingerprint;
+    }
+
     public String lawsFingerprint() {
         return lawsFingerprint;
     }
@@ -1541,6 +1555,82 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     /**
+     * What a version's BODY DERIVATION answers, measured the same way its laws are: fixed inputs
+     * through the real implementation, hashed.
+     *
+     * <p><b>Why this exists.</b> {@link #lawsFingerprintOf} measures {@code IUniverseLaws} — cells,
+     * light years, orbit units, the drift horizon. A {@link UniverseSchema} has TWO halves, and a
+     * world's BODIES come through the other one: {@code generator(config)}, which reaches
+     * {@link IBodyDerivation}. So a version whose planets were re-derived — a different pressure, a
+     * different type, a different temperature — left the laws fingerprint byte-identical, and the
+     * guard built to refuse "a released schema edited in place" had nothing to say about the edit
+     * that actually happened.
+     *
+     * <p>Rogue derivation is the probe because it needs no star: it exercises radius, mass, gravity,
+     * pressure, temperature, type and terrain from a seed and a cell alone, which is the whole of
+     * what moved. The residual-temperature and metallicity laws are added because they are pure and
+     * cheap and a change to either moves every world.
+     */
+    public static String derivationFingerprintOf(IBodyDerivation derivation) {
+        // The probe's own report sink: what it derives is not this galaxy's, so neither are its reports.
+        ReportOnce probeReports = new ReportOnce();
+        StringBuilder sb = new StringBuilder(256);
+        sb.append("derive1;");
+        long[] seeds = {1L, 987654321L};
+        long[] cells = {0L, 5_002_361L};
+        for (long seed : seeds) {
+            for (long cell : cells) {
+                GalacticCoord at = GalacticCoord.ofSectorLocal(cell, -cell, cell / 2L, 0, 0, 0);
+                sb.append(Fingerprint.bits(derivation.metallicityOf(seed, at))).append(',');
+                for (int variant = 0; variant < 3; variant++) {
+                    for (double giantFraction : new double[]{0.0d, 1.0d}) {
+                        BodyProfile p = derivation.deriveRogue(seed, at, variant, giantFraction, probeReports);
+                        sb.append(p.typeName()).append(',')
+                                .append(Fingerprint.bits(p.massEarths())).append(',')
+                                .append(Fingerprint.bits(p.radiusEarths())).append(',')
+                                .append(p.gravityPercent()).append(',')
+                                .append(p.pressure()).append(',')
+                                .append(p.temperatureKelvin()).append(',')
+                                .append(p.hasOxygen()).append(',')
+                                .append(p.tidallyLocked()).append(',')
+                                .append(p.hasRings()).append(';');
+                    }
+                }
+            }
+        }
+        for (double[] body : new double[][]{{1.0d, 1.0d}, {318.0d, 11.0d}, {0.1d, 0.3d}}) {
+            sb.append(derivation.residualTemperature(body[0], body[1])).append(';');
+        }
+        // A BOUND body as well as a rogue one. The rogue path takes its temperature from
+        // `residualTemperature` and never touches the greenhouse correlation, so a probe made only of
+        // rogues would leave the whole star-warmed half of the derivation unmeasured — which is the
+        // same mistake one level down as measuring `laws()` and calling it the schema.
+        StellarBody sun = new StellarBody();
+        sun.setTemperature(5778);
+        sun.setSize(1.0f);
+        sun.setMass(1.0f);
+        for (int orbit : new int[]{25, 100, 400, 1600}) {
+            sb.append(derivation.bareTemperature(sun, orbit)).append(',')
+                    .append(derivation.tidallyLockedAt(sun, orbit)).append(';');
+            BodyProfile p = derivation.derive(4242L, GalacticCoord.ORIGIN,
+                    GalacticCoord.ofSectorLocal(7L, 7L, 7L, 0, 0, 0), 0, sun, false, orbit, probeReports);
+            sb.append(p.typeName()).append(',')
+                    .append(p.pressure()).append(',')
+                    .append(p.temperatureKelvin()).append(',')
+                    .append(p.hasOxygen()).append(';');
+        }
+        sb.append(derivation.referenceDistance(sun)).append(';')
+                .append(Fingerprint.bits(derivation.innerOrbit(sun))).append(',')
+                .append(Fingerprint.bits(derivation.outerOrbit(sun))).append(';');
+        return Fingerprint.hex16(sb.toString());
+    }
+
+    /** What THIS build's newest schema derives bodies with. */
+    public static String currentDerivationFingerprint() {
+        return derivationFingerprintOf(UniverseSchemas.builtIn().current().bodyDerivation());
+    }
+
+    /**
      * Decide which world model this save must be read under, and stamp it if it has none yet.
      *
      * <p><b>The version comes from the SAVE, never from the pack.</b> That inversion is the whole
@@ -1559,8 +1649,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * strict: a reserved galaxy is a galaxy forced into a cell that had its own contents, and one more
      * weight moves every draw that walks the table.
      *
-     * @param config the pack's {@code <galaxyGen>} configuration, or {@code null} for an
-     *               authored-anchors-only universe
+     * @param config the pack's {@code <galaxyGen>} configuration — {@link GalaxyGenConfig#defaults()}
+     *               when it states none, non-procedural when it asks for authored anchors only
      * @return the schema to install for this world
      * @throws UniverseSchemaMismatchException when the save cannot be honoured by this build
      */
@@ -1603,6 +1693,20 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                             + "changed metric ships as a NEW schema version, which old worlds simply do "
                             + "not use. This build is broken; install one whose schema " + schemaVersion
                             + " is intact.");
+        }
+        // The other half of the same question, and the half that was unwatched: a released version
+        // whose BODIES were re-derived. Compared only when the world carries a measurement to compare
+        // against, so a save written before this key existed is adopted rather than refused.
+        String derived = derivationFingerprintOf(saved.get().bodyDerivation());
+        if (!derivationFingerprint.isEmpty() && !derivationFingerprint.equals(derived)) {
+            throw new UniverseSchemaMismatchException(
+                    "Universe schema " + schemaVersion + " in this build does not DERIVE BODIES the way "
+                            + "it did when this world was generated: the world was made under "
+                            + derivationFingerprint + " and this build's schema " + schemaVersion
+                            + " states " + derived + ". A released schema's planets may never change "
+                            + "shape — a changed derivation ships as a NEW schema version, which old "
+                            + "worlds simply do not use. This build is broken; install one whose schema "
+                            + schemaVersion + " is intact.");
         }
         if (!configFingerprint.equals(fingerprint)) {
             if (upgradeArmed) {
@@ -1660,20 +1764,25 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return schema;
     }
 
-    /** The fingerprint a {@code null} (authored-anchors-only) configuration has its own name for. */
     public static String fingerprintOf(GalaxyGenConfig config) {
-        return (config == null) ? GalaxyGenConfig.noGeneratorFingerprint() : config.fingerprint();
+        if (config == null) {
+            throw new IllegalArgumentException("a galaxy configuration is required: a pack with no "
+                    + "<galaxyGen> is given GalaxyGenConfig.defaults()");
+        }
+        return config.fingerprint();
     }
 
     private void stampSchema(int version, String fingerprint) {
         String laws = currentLawsFingerprint();
+        String derived = currentDerivationFingerprint();
         if (schemaVersion == version && configFingerprint.equals(fingerprint)
-                && lawsFingerprint.equals(laws)) {
+                && lawsFingerprint.equals(laws) && derivationFingerprint.equals(derived)) {
             return;
         }
         schemaVersion = version;
         configFingerprint = fingerprint;
         lawsFingerprint = laws;
+        derivationFingerprint = derived;
         markDirty();
     }
 
@@ -1768,12 +1877,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     /**
-     * Release the running server's generator, leaving the shipped default: void space between
-     * authored anchors.
+     * Release the running server's generator: void space between authored anchors until a world
+     * model installs one at {@link #populate}.
      *
-     * <p>That default is a DESIGNED answer, not a fallback — it is what a pack with no
-     * {@code <galaxyGen>} is owed — which is why returning to it is spelled out here rather than
-     * reached by passing null to the setter.</p>
+     * <p>This is NOT what a pack with no {@code <galaxyGen>} is given — that pack gets the shipped
+     * procedural configuration, and only {@code procedural="false"} asks for the void. Spelled out here
+     * rather than reached by passing null to the setter, which is refused.</p>
      */
     public void detachGenerator() {
         generator = new EmptyGalaxyGenerator();
@@ -1839,6 +1948,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         schemaVersion = nbt.hasKey("schemaVersion") ? nbt.getInteger("schemaVersion") : UNSTAMPED;
         configFingerprint = nbt.getString("galaxyConfigFingerprint");
         lawsFingerprint = nbt.getString("universeLawsFingerprint");
+        derivationFingerprint = nbt.getString("universeDerivationFingerprint");
         upgradeArmed = nbt.getBoolean("universeUpgradeArmed");
         NBTTagList names = nbt.getTagList("cellNames", 10 /* NBTTagCompound */);
         for (int i = 0; i < names.tagCount(); i++) {
@@ -1894,6 +2004,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         nbt.setInteger("schemaVersion", schemaVersion);
         nbt.setString("galaxyConfigFingerprint", configFingerprint);
         nbt.setString("universeLawsFingerprint", lawsFingerprint);
+        nbt.setString("universeDerivationFingerprint", derivationFingerprint);
         nbt.setBoolean("universeUpgradeArmed", upgradeArmed);
         NBTTagList list = new NBTTagList();
         for (Map.Entry<Integer, GalacticCoord> e : byStar.entrySet()) {

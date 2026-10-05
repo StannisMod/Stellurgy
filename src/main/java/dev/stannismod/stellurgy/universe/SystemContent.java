@@ -55,8 +55,13 @@ public final class SystemContent {
      * depending on which level had written it, so a reader that did not know the level was wrong by
      * that factor. {@code ReferenceFrames.soiRadiusBlocks} takes a live block displacement rather
      * than reading the field, and says so, for exactly this reason.</p>
+     *
+     * <p>Public because it is also the only bridge between the two distance vocabularies in this mod —
+     * the blocks a cell measures in, and the orbital units every stellar formula is written in.
+     * Anything that has a block distance to a star and wants a physical quantity out of it converts
+     * here rather than inventing a second scale that would drift from where the system was placed.</p>
      */
-    static final long ORBIT_UNIT_BLOCKS = AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
+    public static final long ORBIT_UNIT_BLOCKS = AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
 
     /**
      * The floor an authored moon is lifted to, in parent radii — see {@link #moonLawOf}.

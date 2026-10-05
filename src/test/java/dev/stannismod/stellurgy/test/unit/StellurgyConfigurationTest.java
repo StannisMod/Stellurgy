@@ -18,11 +18,11 @@ public class StellurgyConfigurationTest {
     @Test
     public void cloneConstructorCopiesFields() {
         StellurgyConfiguration src = new StellurgyConfiguration();
-        src.orbit = 4242;
+        src.stationClearanceHeight = 4242;
         src.stationSize = 256;
 
         StellurgyConfiguration copy = new StellurgyConfiguration(src);
-        assertEquals(4242, copy.orbit);
+        assertEquals(4242, copy.stationClearanceHeight);
         assertEquals(256, copy.stationSize);
     }
 
@@ -92,10 +92,10 @@ public class StellurgyConfigurationTest {
     public void unknownConfigDoesNotCrash() {
         StellurgyConfiguration cfg = new StellurgyConfiguration();
 
-        cfg.orbit = -777;                      // sentinel-out-of-range value
+        cfg.stationClearanceHeight = -777;     // sentinel-out-of-range value
         cfg.spaceLaserPowerMult = Float.NaN;   // pathological float
         StellurgyConfiguration clone = new StellurgyConfiguration(cfg);
-        assertEquals(-777, clone.orbit);
+        assertEquals(-777, clone.stationClearanceHeight);
         assertTrue("NaN must survive clone (no silent normalisation)",
                 Float.isNaN(clone.spaceLaserPowerMult));
     }

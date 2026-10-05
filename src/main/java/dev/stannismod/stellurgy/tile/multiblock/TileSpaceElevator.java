@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -36,13 +38,12 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.List;
 
-public class TileSpaceElevator extends TileMultiPowerConsumer implements IModularInventory, ILinkableTile, ITickable {
+public class TileSpaceElevator extends TileWasteHeatPowerConsumer implements IModularInventory, ILinkableTile, ITickable {
 
     private static final byte SUMMON_PACKET = 2;
     private static final int BUTTON_ID_OFFSET = 5;
@@ -212,7 +213,12 @@ public class TileSpaceElevator extends TileMultiPowerConsumer implements IModula
 
         double capsulePosX = getLandingLocationX();
         double capsulePosZ = getLandingLocationZ();
-        for (EntityElevatorCapsule e : world.getEntitiesWithinAABB(EntityElevatorCapsule.class, new AxisAlignedBB(capsulePosX - 3, 0, capsulePosZ - 3, capsulePosX + 3, EntityElevatorCapsule.MAX_HEIGHT, capsulePosZ + 3))) {
+        // A capsule rides from the ground up to where it transfers, and a world with no line is one it
+        // transfers out of at the top of the block band - so that is where this search ends too.
+        double lineTop = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                .transferLineOf(world.provider.getDimension())
+                .orElse(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y);
+        for (EntityElevatorCapsule e : world.getEntitiesWithinAABB(EntityElevatorCapsule.class, new AxisAlignedBB(capsulePosX - 3, 0, capsulePosZ - 3, capsulePosX + 3, lineTop, capsulePosZ + 3))) {
             if (!e.isDead) {
                 capsule = e;
                 break;

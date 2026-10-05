@@ -318,9 +318,4 @@ public class ShotSubstrateE2ETest extends AbstractSharedServerTest {
         assertTrue("the shot ended in mid-flight across empty space: " + read, read.bool("present"));
         return Reply.of("the round", read.object("shot"));
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

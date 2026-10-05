@@ -249,9 +249,4 @@ public class ShipDamageSurvivesRelocationE2ETest extends AbstractSharedServerTes
     private Reply stage(int x, int y, int z) throws Exception {
         return ask("stellurgytest damage stage 0 " + x + " " + y + " " + z).requireOk("read a stage");
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

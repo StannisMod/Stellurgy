@@ -21,8 +21,14 @@ public class StatsRocket {
     private static final String TAGNAME = "rocketStats";
     public static final int INVALID_SEAT = Integer.MIN_VALUE;
     private final List<HashedBlockPosition> passengerSeats = new ArrayList<>();
-    //Used for orbital height calculations
+    /**
+     * The height this flight reaches orbit at, written by the launch; {@link #ORBIT_HEIGHT_UNSET} until
+     * a launch has written it (it is not saved, so a rocket loaded mid-flight is unset too), and the
+     * rocket then takes its world's own line.
+     */
     public int orbitHeight;
+    /** Sentinel for {@link #orbitHeight}: no launch has stated this flight's orbit height. */
+    public static final int ORBIT_HEIGHT_UNSET = -1;
     public float injectionBurnLenghtMult;
     HashedBlockPosition pilotSeatPos;
     private int thrust;
@@ -75,7 +81,7 @@ public class StatsRocket {
         fuelRateBipropellant = 0;
         fuelRateOxidizer = 0;
         drillingPower = 0f;
-        orbitHeight = StellurgyConfiguration.getCurrentConfig().orbit;
+        orbitHeight = ORBIT_HEIGHT_UNSET;
         injectionBurnLenghtMult = 1;
         pilotSeatPos = new HashedBlockPosition(0, 0, 0);
         pilotSeatPos.x = INVALID_SEAT;

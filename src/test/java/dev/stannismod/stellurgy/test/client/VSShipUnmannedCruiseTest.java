@@ -94,7 +94,7 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
     @Test
     public void aDismountedPilotsShipKeepsCruisingAndSurvivesRemount() throws Exception {
 
-        Events events = events();
+        Events events = serverEvents();
         // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN. The plot is this scenario's own and
         // cannot overlap a sibling's; the height is the open-air band, because the site has no Y to
         // pass. Neither is a number this test has to get right, and both used to be.
@@ -257,10 +257,9 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
      */
     private double[] altitudeEveryTenTicks() throws Exception {
         double[] y = new double[4];
-        // WINDOW: four reads ten ticks apart, and the verdict is over the last difference and names
-        // all four. The link would be a record of the hull's pose per tick, and none exists.
+        // WINDOW: the link would be a record of the hull's pose per tick, and none exists.
         for (int i = 0; i < y.length; i++) {
-            bot().waitTicks(10);
+            advanceServerAndClient(10);
             y[i] = shipY();
         }
         return y;

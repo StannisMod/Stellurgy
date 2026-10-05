@@ -83,6 +83,7 @@
     "MixinEntityRocketLaunchGate",
     "MixinItemAtmosphereAnalzerEvents",
     "MixinAtmosphereNeedsSuitEvents",
+    "MixinPoisoningEvents",
     "MixinAtmosphereChangeEvents",
     "MixinItemSpaceChestEvents",
     "MixinItemAirUtilsEvents",

@@ -98,7 +98,7 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      */
     @Test
     public void aPilotsTNamesTheShipAheadAndTheCrewRuleSparesItOnceHeBoardsIt() throws Exception {
-        Events server = events();
+        Events server = serverEvents();
         Events client = clientEvents();
 
         // ---- three hulls: his, and two that will be placed from his view
@@ -242,7 +242,7 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      */
     @Test
     public void fromTheHelmTheCursorActsOnNothing() throws Exception {
-        Events server = events();
+        Events server = serverEvents();
         Events client = clientEvents();
         exec("gamemode creative " + PLAYER);
 

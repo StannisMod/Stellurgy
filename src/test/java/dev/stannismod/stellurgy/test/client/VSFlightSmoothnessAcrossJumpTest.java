@@ -91,7 +91,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
     private static final int WINDOW_MS = 3000;
 
     /**
-     * How long the settled leg waits after the immediate one, in client ticks. Several times the
+     * How long the settled leg waits after the immediate one, in ticks. Several times the
      * length of a measured window, so an arrival transient that merely SLID into leg B's window
      * cannot still be inside leg C's.
      */
@@ -350,7 +350,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
             if (arrivedSeat.found && arrivedSeat.hasAfc) {
                 afcArrived = new int[]{arrivedSeat.afcX, arrivedSeat.afcY, arrivedSeat.afcZ};
             } else {
-                bot().waitTicks(10);
+                advanceServerAndClient(10);
             }
         }
         scenario().requireArranged("the arrived ship must expose its flight computer, or the post-jump "
@@ -369,7 +369,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // suspected.
         // EXPERIMENT: leg C is DEFINED as the same flight SETTLE_TICKS after leg B — the gap is the
         // variable that tells a transient from a lasting change.
-        bot().waitTicks(SETTLE_TICKS);
+        advanceServerAndClient(SETTLE_TICKS);
         Leg settled = measure("after-jump-settled", targetDim, afcArrived);
 
         // The raw client channels beside the summary. A ratio says the pose stream is uneven; only
@@ -730,7 +730,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
     }
 
     /**
-     * Hold the vertical key for a fixed number of client ticks, then read every clock's account of
+     * Hold the vertical key for a fixed number of ticks, then read every clock's account of
      * the trailing window. The server rings are cleared first; the client rings are not (nothing
      * resets them), which is why the client half is summarised over trailing windows and read
      * immediately after the key is released.
@@ -747,7 +747,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
      * uncertain: the ship is named, so the only question is whether it exists yet.
      */
     private String awaitPhysicsId(int dim, String durableShipId) throws Exception {
-        return ShipIdentity.awaitPhysicsIdOf(this::exec, events(), dim, durableShipId, 200);
+        return ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), dim, durableShipId, 200);
     }
 
     private void liftClear(int dim, int[] afc) throws Exception {
@@ -756,7 +756,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         try {
             for (int attempt = 0; attempt < LIFT_ATTEMPTS && moved < LIFT_CLEAR_BLOCKS; attempt++) {
                 resetServerMotionTrace();
-                bot().waitTicks(LIFT_POLL_TICKS);
+                advanceServerAndClient(LIFT_POLL_TICKS);
                 moved = netMoveLength(section(serverMotionTrace(dim, afc, WINDOW_MS), "phys"));
             }
         } finally {
@@ -775,8 +775,8 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         resetServerMotionTrace();
         bot().holdKey(Keyboard.KEY_R);
         try {
-            // STIMULUS: FLY_TICKS of held climb — the flight each leg's traces describe.
-            bot().waitTicks(FLY_TICKS);
+            // STIMULUS: held climb — the flight each leg's traces describe.
+            advanceServerAndClient(FLY_TICKS);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
@@ -988,7 +988,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
             // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
             mounted = Reply.of(mount).boolOr("mounted", false);
             if (!mounted) {
-                bot().waitTicks(10);
+                advanceServerAndClient(10);
             }
         }
         scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);

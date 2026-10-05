@@ -1,0 +1,286 @@
+package dev.stannismod.stellurgy.tile.atmosphere;
+
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.atmosphere.LifeSupportNetwork;
+import dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter;
+import dev.stannismod.stellurgy.api.capability.IHeatEmitter;
+import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
+import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Tier 4: the ship's central regeneration plant. Same Bosch chemistry as the tier-3 recirculator,
+ * but it serves every zone reachable through the ventilation network instead of the room it stands
+ * in — which is the whole point of the tier, and the reason it can be fed by a single power run.
+ * <p>
+ * It is a network SOURCE: it offers regeneration work, and the network decides how much of it
+ * actually reaches which zone, bounded by the ducts in between. The carbon it removes lands in its
+ * own output slot; a full slot backs the plant up rather than deleting the carbon, exactly as it
+ * does one tier down.
+ */
+public class TileLifeSupportPlant extends TileInventoriedRFConsumer
+        implements IModularInventory, ISubsystemSource, IHeatEmitter {
+
+    /** Regeneration work done but not yet worth a whole dust, in µatm·blocks. */
+    private int carbonBuffer;
+
+    /**
+     * Waste heat made and not yet picked up by a coolant loop, in heat units. Not persisted: it is
+     * at most a second's worth, and a plant left alone sheds it to the room rather than banking it.
+     */
+    /** The heat this plant's work leaves behind — the same component every other machine holds. */
+    private final dev.stannismod.stellurgy.subsystem.heat.WasteHeat wasteHeat =
+            new dev.stannismod.stellurgy.subsystem.heat.WasteHeat();
+
+    public TileLifeSupportPlant() {
+        super(100000, 1);
+    }
+
+    // ─── network node ──────────────────────────────────────────────────
+
+    @Override
+    public SubsystemNetworkDomain getNetworkDomain() {
+        return LifeSupportNetwork.DOMAIN;
+    }
+
+    @Override
+    public World getNodeWorld() {
+        return world;
+    }
+
+    @Override
+    public BlockPos getNodePos() {
+        return pos;
+    }
+
+    /**
+     * What the plant can convert this tick: its rate, cut by the power it actually holds and by
+     * whether there is anywhere to put the carbon. Offering work it cannot pay for would make the
+     * network promise a zone air the plant is unable to deliver.
+     */
+    @Override
+    public int getAvailable() {
+        if (world == null || world.isRemote || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+            return 0;
+        if (!hasRoomForDust())
+            return 0;
+        int rate = LifeSupportNetwork.perTick(StellurgyConfiguration.getCurrentConfig().lifeSupportPlantRate);
+        if (rate <= 0)
+            return 0;
+        int powerPerTick = LifeSupportNetwork.perTick(StellurgyConfiguration.getCurrentConfig().lifeSupportPlantPower);
+        if (powerPerTick <= 0)
+            return rate;
+        // Power is charged in proportion to the work done, so what the buffer holds bounds the
+        // offer rather than gating it all-or-nothing.
+        long affordable = (long) rate * energy.getUniversalEnergyStored() / powerPerTick;
+        return (int) Math.max(0, Math.min(rate, affordable));
+    }
+
+    @Override
+    public int extract(int amount) {
+        if (amount <= 0)
+            return 0;
+        int rate = LifeSupportNetwork.perTick(StellurgyConfiguration.getCurrentConfig().lifeSupportPlantRate);
+        int taken = Math.min(amount, Math.max(0, rate));
+        if (taken <= 0)
+            return 0;
+
+        int powerPerTick = LifeSupportNetwork.perTick(StellurgyConfiguration.getCurrentConfig().lifeSupportPlantPower);
+        if (powerPerTick > 0 && rate > 0) {
+            int cost = (int) ((long) powerPerTick * taken / rate);
+            energy.extractEnergy(cost, false);
+            wasteHeat.spend(cost);
+        }
+
+        carbonBuffer += taken;
+        emitDust();
+        markDirty();
+        return taken;
+    }
+
+    /** Purely for the readout: production is what it can convert, never what its power buffer holds. */
+    @Override
+    public int getGenerationPerTick() {
+        return getAvailable();
+    }
+
+    // ─── the heat that work leaves behind ──────────────────────────────
+
+    // The accrual itself lives in `WasteHeat`, which was extracted FROM this class when every other
+    // powered machine needed it. Keeping a second copy here meant two implementations of one rule
+    // that had already begun to drift: this one capped the buffer at a second of the plant's RATED
+    // power, the component at twenty ticks of its OBSERVED spend. The plant cannot extend the
+    // `TileWasteHeat*` bases — it is a `TileInventoriedRFConsumer` — which is exactly why the
+    // mechanism is a component and not a base class.
+
+    @Override
+    public int getPendingHeat() {
+        return wasteHeat.getPendingHeat();
+    }
+
+    @Override
+    public int takeHeat(int amount) {
+        return wasteHeat.takeHeat(amount);
+    }
+
+    /**
+     * The plant hosts the heat capability itself rather than being attached one. A coolant loop
+     * therefore reads our machines and foreign ones through exactly the same call, which is what
+     * keeps `instanceof` out of the thermal system entirely.
+     */
+    @Override
+    public boolean hasCapability(@Nonnull net.minecraftforge.common.capabilities.Capability<?> capability,
+                                 @Nullable EnumFacing facing) {
+        if (capability == CapabilityHeatEmitter.HEAT_EMITTER) {
+            return true;
+        }
+        return super.hasCapability(capability, facing);
+    }
+
+    @Override
+    @Nullable
+    public <T> T getCapability(@Nonnull net.minecraftforge.common.capabilities.Capability<T> capability,
+                               @Nullable EnumFacing facing) {
+        if (capability == CapabilityHeatEmitter.HEAT_EMITTER) {
+            return CapabilityHeatEmitter.HEAT_EMITTER.cast(wasteHeat);
+        }
+        return super.getCapability(capability, facing);
+    }
+
+    // ─── the carbon it takes out of the air ────────────────────────────
+
+    private void emitDust() {
+        int perDust = Math.max(1, StellurgyConfiguration.getCurrentConfig().lifeSupportPlantCarbonPerDust);
+        while (carbonBuffer >= perDust) {
+            ItemStack slot = getStackInSlot(0);
+            if (slot.isEmpty()) {
+                setInventorySlotContents(0, new ItemStack(StellurgyItems.itemCarbonDust, 1));
+            } else if (slot.getCount() < slot.getMaxStackSize()) {
+                slot.grow(1);
+            } else {
+                return;
+            }
+            carbonBuffer -= perDust;
+        }
+    }
+
+    private boolean hasRoomForDust() {
+        ItemStack slot = getStackInSlot(0);
+        return slot.isEmpty()
+                || (slot.getItem() == StellurgyItems.itemCarbonDust && slot.getCount() < slot.getMaxStackSize());
+    }
+
+    // ─── tile plumbing ─────────────────────────────────────────────────
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (world != null && !world.isRemote) {
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
+        }
+    }
+
+    @Override
+    public void invalidate() {
+        leaveNetwork();
+        super.invalidate();
+    }
+
+    @Override
+    public void onChunkUnload() {
+        leaveNetwork();
+        super.onChunkUnload();
+    }
+
+    private void leaveNetwork() {
+        if (world != null && !world.isRemote) {
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
+        }
+    }
+
+    /**
+     * The plant does its work through the network solve, not through a machine cycle of its own —
+     * the network is what knows which zones exist and what the ducts allow.
+     */
+    @Override
+    public boolean canPerformFunction() {
+        return false;
+    }
+
+    @Override
+    public void performFunction() {
+    }
+
+    @Override
+    public int getPowerPerOperation() {
+        return 0;
+    }
+
+    @Override
+    @Nonnull
+    public int[] getSlotsForFace(@Nullable EnumFacing side) {
+        return new int[]{0};
+    }
+
+    @Override
+    public boolean canInsertItem(int slot, @Nonnull ItemStack stack, @Nullable EnumFacing side) {
+        return false;
+    }
+
+    @Override
+    public boolean isItemValidForSlot(int slot, @Nonnull ItemStack stack) {
+        return false;
+    }
+
+    @Override
+    public String getModularInventoryName() {
+        return StellurgyBlocks.blockLifeSupportPlant.getLocalizedName();
+    }
+
+    @Override
+    public boolean canInteractWithContainer(EntityPlayer entity) {
+        return true;
+    }
+
+    @Override
+    public List<ModuleBase> getModules(int ID, EntityPlayer player) {
+        List<ModuleBase> modules = new ArrayList<>(2);
+        modules.add(new ModulePower(18, 20, this.energy));
+        modules.add(new ModuleSlotArray(80, 35, this, 0, 1));
+        return modules;
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound nbt) {
+        super.readFromNBT(nbt);
+        carbonBuffer = nbt.getInteger("carbonBuffer");
+    }
+
+    @Override
+    public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
+        super.writeToNBT(nbt);
+        nbt.setInteger("carbonBuffer", carbonBuffer);
+        return nbt;
+    }
+}

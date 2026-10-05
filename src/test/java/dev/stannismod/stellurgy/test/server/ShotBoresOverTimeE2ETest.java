@@ -394,9 +394,4 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
         Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
         assertTrue("failed to place " + block + " at " + x + ": " + placed, placed.bool("placed"));
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

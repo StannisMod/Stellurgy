@@ -238,9 +238,6 @@ public class AUnitHearsWhatBrokeItE2ETest extends AbstractSharedServerTest {
     }
 
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 
     /** One blow along +X into the lane, as {@code damage impact}, read as data. */
     private Reply strike(int lane, int budget) throws Exception {

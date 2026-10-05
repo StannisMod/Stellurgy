@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
@@ -58,8 +59,8 @@ public class BeamReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
-        Events client = ClientEvents.of(bot(), evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
 
         // The player stands beside the near gun for the whole scenario, so which gun is in range
         // never changes while anything burns.

@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
@@ -97,8 +98,8 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
      */
     @Test
     public void aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
-        Events client = ClientEvents.of(bot(), evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
 
         // ---- where it stands: open air, a plot of its own, proved empty first
         Plot plot = Plot.forScenario(0, getClass().getSimpleName(), OVERWORLD, Plot.Lane.DEFAULT);

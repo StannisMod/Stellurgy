@@ -556,8 +556,8 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
     private String watchModelGate(int ticks) throws Exception {
         long mark = clientEvents().mark();
         ClientWindow window = ClientWindow.open(bot(), REMOTE_MODEL_WINDOW);
-        // WINDOW: opened and closed around these ticks; its one record is the whole reading.
-        bot().waitTicks(ticks);
+        // WINDOW: its one record is the whole reading.
+        bot().waitWorldTicks(ticks);
         window.close();
         String summary = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
         assertTrue("the model-gate window recorded nothing at all, so the harness — not the gate — "
@@ -590,16 +590,15 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the steep roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
                         ).bool("commanded"));
-        // A WINDOW, not a poll — and the comment above was right that a tick count cannot be the
+        // WINDOW: not a poll — and the comment above was right that a tick count cannot be the
         // GATE, which is a different claim from "so it must re-read until it likes the answer". An
         // attitude converging under a hold is a physical value nobody publishes, and the hold never
         // decides it has arrived, so there is no link to await; but a loop whose exit is the
         // assertion three lines below it can be timed out and never disproved. Give the slew its
         // ticks, then read: the hold applies torque toward its target every tick and HOLDS the
-        // attitude once it is there, so a window longer than the slew reads the same state.
-        // WINDOW: upBefore -> upY, both in the gate's message — equal means the command was ignored,
-        // different-but-short means the window was.
-        bot().waitTicks(ROLL_WINDOW_TICKS);
+        // attitude once it is there, so a window longer than the slew reads the same state. Equal
+        // ends mean the command was ignored; different-but-short means the window was.
+        advanceServerAndClient(ROLL_WINDOW_TICKS);
         // The ship's own up, world-frame, from the attitude quaternion the probe reports.
         String info = shipInfo();
         double qx = readDouble(info, Q_X), qz = readDouble(info, Q_Z);
@@ -789,7 +788,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         // assembled one — and it NAMES the ship, so the identity comes out of the record instead of a
         // nearest-ship lookup inside a radius bound. Both legs then roll that ship past vertical, so
         // an identity is the only address that keeps working.
-        Events events = events();
+        Events events = serverEvents();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a " + VARIANT + " build must route to a ship: " + assemble,
@@ -852,7 +851,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
      * The CLIENT event log's sequence, taken BEFORE the stimulus — and refused unless a recorder is
      * actually subscribed, because an empty log afterwards would otherwise read as "it never
      * happened" when the truth is "nobody was listening". The shared base wraps the SERVER probe's
-     * log ({@code events()}); this class's arrival link is a client one, so it is read here.
+     * log ({@code serverEvents()}); this class's arrival link is a client one, so it is read here.
      */
     private long clientMark() throws Exception {
         // The adapter's own mark, which makes exactly this check — a private copy of it here was a

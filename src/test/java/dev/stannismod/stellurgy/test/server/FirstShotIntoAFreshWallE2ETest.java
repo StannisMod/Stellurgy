@@ -114,9 +114,4 @@ public class FirstShotIntoAFreshWallE2ETest extends AbstractSharedServerTest {
                     + " | the impacts answered on its row: " + answered, unmarked);
         }
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

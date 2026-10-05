@@ -389,9 +389,4 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
     private Reply stageAt(int x, int lane) throws Exception {
         return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

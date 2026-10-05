@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.tile.multiblock;
 
+import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -27,13 +29,12 @@ import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileAreaGravityController extends TileMultiPowerConsumer implements ISliderBar, IGuiCallback {
+public class TileAreaGravityController extends TileWasteHeatPowerConsumer implements ISliderBar, IGuiCallback {
 
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = {

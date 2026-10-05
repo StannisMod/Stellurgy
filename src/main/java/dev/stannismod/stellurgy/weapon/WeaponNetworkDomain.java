@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.weapon;
 import org.apache.logging.log4j.Logger;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkController;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 
@@ -39,7 +40,8 @@ public final class WeaponNetworkDomain extends SubsystemNetworkDomain {
     }
 
     @Override
-    public void onComponentRebuilt(SubsystemNetworkState state, List<ISubsystemNetworkController> controllers) {
+    public void onComponentRebuilt(SubsystemNetworkState state, List<ISubsystemNetworkController> controllers,
+                                   List<ISubsystemNetworkNode> members) {
         if (!(state instanceof WeaponNetworkState)) {
             return;
         }

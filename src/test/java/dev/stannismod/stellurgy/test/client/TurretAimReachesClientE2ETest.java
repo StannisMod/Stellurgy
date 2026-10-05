@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
@@ -51,8 +52,8 @@ public class TurretAimReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void theBearingTheServerCommandsArrivesAtTheClient() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
-        Events client = ClientEvents.of(bot(), evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         ask("stellurgytest chunk warmup 0 " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((X + 16) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
         ask("stellurgytest fill 0 " + (X - 3) + " " + (Y - 1) + " " + (Z - 3) + " " + (X + 3) + " "

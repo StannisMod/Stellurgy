@@ -186,9 +186,4 @@ public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
         ask("stellurgytest fill 0 " + X + " " + (Y - 2) + " " + (Z - HALF) + " " + (X + DEPTH) + " "
                 + (Y + 2) + " " + (Z + HALF) + " minecraft:stone").requireOk("build the target");
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

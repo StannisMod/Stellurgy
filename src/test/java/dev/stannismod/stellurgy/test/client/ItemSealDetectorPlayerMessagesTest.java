@@ -212,7 +212,7 @@ public class ItemSealDetectorPlayerMessagesTest extends AbstractSharedClientE2ET
         // arrangement alone, measured. The server answers over its own control socket now, so that
         // source is gone; the mark is kept because a SHARED client's backlog is dirty anyway.)
         scenario().measuring("mark both event logs immediately before the right-click");
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
 

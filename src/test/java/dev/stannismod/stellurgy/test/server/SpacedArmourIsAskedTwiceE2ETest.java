@@ -123,9 +123,4 @@ public class SpacedArmourIsAskedTwiceE2ETest extends AbstractSharedServerTest {
         return "minecraft:air".equals(ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane)
                 .requireOk("read a stage").text("block"));
     }
-
-
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
-    }
 }

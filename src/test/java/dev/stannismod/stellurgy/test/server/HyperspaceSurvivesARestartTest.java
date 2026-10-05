@@ -166,7 +166,7 @@ public class HyperspaceSurvivesARestartTest {
      * side of the restart this class exists to measure, and a reader captured on boot 1 would be
      * addressing a server that has stopped.</p>
      */
-    private Events events() {
+    private Events serverEvents() {
         return new Events(this::exec,
                 ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
@@ -186,7 +186,7 @@ public class HyperspaceSurvivesARestartTest {
      */
     private void requireRegistered(long mark, TransitSetup setup, int dim) throws Exception {
         try {
-            events().awaitField(mark, "ship_spawned", "stellurgyShip", setup.durableId,
+            serverEvents().awaitField(mark, "ship_spawned", "stellurgyShip", setup.durableId,
                     "the fixture ship never entered the registry in the origin cell (dim "
                             + dim + ")", REGISTER_TICKS);
         } catch (AssertionError neverBuilt) {
@@ -204,7 +204,7 @@ public class HyperspaceSurvivesARestartTest {
 
         // Marked before the fixture is built: the registry add awaited below happens INSIDE
         // `piloted`, so a mark taken after it would be waiting for a second ship.
-        long buildMark = events().mark();
+        long buildMark = serverEvents().mark();
         TransitSetup setup = TransitSetup.piloted(this::exec);
         int originDim = setup.originDim;
         requireRegistered(buildMark, setup, originDim);

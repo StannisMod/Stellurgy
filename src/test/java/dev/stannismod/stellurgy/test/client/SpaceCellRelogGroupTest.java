@@ -213,7 +213,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         int slotDim = seatThePilotAboardHisShip();
 
         // The posture the report is about: on his feet, on his own deck.
-        String tag = standUpAndAwaitTheStandingRecord(events());
+        String tag = standUpAndAwaitTheStandingRecord(serverEvents());
         requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
                 Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
         DeckCapture capBefore = DeckCapture.read(this::exec);
@@ -224,19 +224,18 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         // On HIS deck. The capture's anchor is the PHYSICS id, and this scenario holds the durable
         // one, so the two are bridged by name rather than by asking what is standing at his feet.
         capBefore.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
                         200),
                 "the capture the relog must restore is the one on THIS scenario's own deck");
 
         // A REAL logout that leaves the world running. Both marks BEFORE the disconnect: the client
         // JVM is REUSED across a plain relog, so its log still holds this session's records and zero
         // would be the whole session rather than the relog.
-        Events offlineLog = serverClockEvents();
+        Events offlineLog = connectionEvents();
         long logoutMark = offlineLog.mark();
         long clientMark = clientEvents().mark();
         bot().disconnect();
-        // Waited for as the LINK it is - the space subsystem's own logout handler running - on the
-        // server's clock, because the client is the thing that went away. The record it leaves
+        // Waited for as the LINK it is - the space subsystem's own logout handler running. The record it leaves
         // carries the aboard tag AS RECONCILED at that moment, which is the very state the login
         // below reads back; the poll it replaces could only see him vanish from the player list.
         String loggedOut = offlineLog.await(logoutMark, "player_logged_out",
@@ -260,7 +259,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
 
         // Nobody is left near the ship to hold its chunks while he is away.
 
-        Events restore = events();
+        Events restore = serverEvents();
         long restoreMark = restore.mark();
         bot().connect();
         bot().waitForWorld();
@@ -321,7 +320,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
     public void aCrewMemberWhoRelogsOnAnInvertedDeckIsNotDraggedAlongIt() throws Exception {
         int slotDim = seatThePilotAboardHisShip();
 
-        String tag = standUpAndAwaitTheStandingRecord(events());
+        String tag = standUpAndAwaitTheStandingRecord(serverEvents());
         requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
                 Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
         // Read ONCE: the two-exec idiom this replaces diagnosed from a different sample than the one
@@ -331,7 +330,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
                         + capUpright.raw(),
                 capUpright.alreadyTracked);
         capUpright.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
                         200),
                 "the deck he stands on before the roll must be his own ship's");
 
@@ -365,11 +364,11 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         // one-ship count asserted first as its premise — but a count of one is not evidence that the
         // one is THIS craft, and the case where it is not is exactly the case where this scenario's
         // ship failed to load and something else did.
-        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
                 200);
         double upY = 1.0;
         for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
-            bot().waitTicks(10);
+            advanceServerAndClient(10);
             upY = shipUpY(jsonOf(exec("stellurgytest vs ship-info " + slotDim + " id " + rolledShipId)));
         }
         String info = jsonOf(exec("stellurgytest vs ship-info " + slotDim + " id " + rolledShipId));
@@ -386,7 +385,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
 
         // Both marks before the disconnect - see the upright leg for why the client's own log needs
         // one and cannot start from zero.
-        Events offlineLog = serverClockEvents();
+        Events offlineLog = connectionEvents();
         long logoutMark = offlineLog.mark();
         long clientMark = clientEvents().mark();
         bot().disconnect();
@@ -405,7 +404,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
                 "no such player".equals(Reply.of(offline).textOr("error", null))
                         || "no players connected".equals(Reply.of(offline).textOr("error", null)));
 
-        Events restore = events();
+        Events restore = serverEvents();
         long restoreMark = restore.mark();
         bot().connect();
         bot().waitForWorld();
@@ -455,7 +454,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
 
         // The mark BEFORE the ship is taken away: a restore decided at any earlier point is outside the
         // window and cannot satisfy the wait.
-        Events events = events();
+        Events events = serverEvents();
         long mark = events.markInstrumented();
 
         String forgot = exec("stellurgytest space ledger-forget " + arrangedShipId);

@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.client;
 
-import dev.stannismod.stellurgy.api.IAtmosphere;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereSummary;
 import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraft.world.World;
 
@@ -21,6 +21,11 @@ import net.minecraft.world.World;
  * were the client's. A server-side path read one of them anyway and reported it to the player —
  * always the field's default, because on a dedicated server nothing ever writes it. A client class
  * makes that mistake a compile error rather than a wrong number.</p>
+ *
+ * <p><b>What it holds is a READOUT, not a model.</b> One {@link AtmosphereSummary} — a pressure,
+ * whether the air can be breathed, the warning to show and the statements that hold — computed by the
+ * server and drawn by the client, which decides nothing about it. A stale readout therefore costs a
+ * lagging line of text and nothing else.</p>
  */
 public final class ClientAtmosphere {
 
@@ -28,8 +33,8 @@ public final class ClientAtmosphere {
      *  what the previous default of plain {@code 0} was not: every reader tests for this sentinel. */
     public static final int NO_READING = -1;
 
-    private IAtmosphere atmosphere;
-    private int pressure = NO_READING;
+    private AtmosphereSummary summary = AtmosphereSummary.UNKNOWN;
+    private boolean reported;
     private long lastSuffocationTime = Long.MIN_VALUE;
 
     private ClientAtmosphere() {
@@ -40,22 +45,22 @@ public final class ClientAtmosphere {
         return WorldRuntime.of(world, ClientAtmosphere.class, ClientAtmosphere::new);
     }
 
-    /** The atmosphere the server last reported at this player's position, or {@code null} before the
-     *  first report. */
-    public IAtmosphere atmosphere() {
-        return atmosphere;
+    /** The server's last readout for this player's position; {@link AtmosphereSummary#UNKNOWN}
+     *  before the first report. Never null. */
+    public AtmosphereSummary summary() {
+        return summary;
     }
 
     /** The pressure the server last reported, in hundredths of an atmosphere, or {@link #NO_READING}
      *  before the first report — which is a different answer from "vacuum". */
     public int pressure() {
-        return pressure;
+        return reported ? summary.pressureCentiAtm() : NO_READING;
     }
 
-    /** Take a fresh atmosphere report from the server. */
-    public void accept(IAtmosphere atmosphere, int pressure) {
-        this.atmosphere = atmosphere;
-        this.pressure = pressure;
+    /** Take a fresh readout from the server. */
+    public void accept(AtmosphereSummary summary) {
+        this.summary = summary == null ? AtmosphereSummary.UNKNOWN : summary;
+        this.reported = summary != null;
     }
 
     /** Whether a suffocation report arrived within the last {@code ticks} of this world's clock. */

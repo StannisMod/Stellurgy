@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.AreaBlob;
 import dev.stannismod.stellurgy.api.util.IBlobHandler;
+import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.network.PacketAirParticle;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
@@ -38,14 +39,26 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
     private boolean executing;
     private HashedBlockPosition blockPos;
     private List<AreaBlob> nearbyBlobs;
+    /** The gases filling this zone. Starts sea-level breathable, which is the pressure this
+     *  method reported as a constant before zones had contents. */
+    private AirState airState = AirState.earthLike();
 
     public AtmosphereBlob(@Nonnull IBlobHandler blobHandler) {
         super(blobHandler);
         executing = false;
     }
 
+    @Nonnull
+    public AirState getAirState() {
+        return airState;
+    }
+
+    public void setAirState(@Nonnull AirState airState) {
+        this.airState = airState;
+    }
+
     public int getPressure() {
-        return 100;
+        return airState.getPressureCentiAtm();
     }
 
     /**

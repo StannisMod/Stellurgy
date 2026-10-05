@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
@@ -45,8 +46,8 @@ public class ABentBeamIsDrawnBentE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks, evictions);
-        Events client = ClientEvents.of(bot(), evictions);
+        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         serverClient().execute("tp @a " + (GUN_X + 4) + ".5 " + (Y + 1) + " " + (Z + 0.5D));
 
         long built = server.markInstrumented();
