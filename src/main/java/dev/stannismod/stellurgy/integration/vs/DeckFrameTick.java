@@ -252,8 +252,17 @@ public final class DeckFrameTick {
             episode = open(player, shipId);
         }
         String shipId = episode.shipId;
-        double[] local = VSIntegration.toShipFrameFor(world, shipId, player.posX, player.posY, player.posZ);
-        if (local != null) {
+        // Where on the deck his client last said he is (claimArrived), unless somebody else has written
+        // his position since. Never re-derived from his world position as a matter of course: that was
+        // laid down against the pose his packet was handled under, and the world tick has moved the
+        // craft since. Measured 2026-10-05 at the onset of a roll: claims declared exactly on the floor
+        // arrived here 0.08 to 0.15 above it, and his replayed update ended in the air.
+        boolean mappedIn = !episode.held || episode.worldWritten;
+        double[] local = mappedIn
+                ? VSIntegration.toShipFrameFor(world, shipId, player.posX, player.posY, player.posZ)
+                : new double[]{episode.localX, episode.localY, episode.localZ};
+        episode.worldWritten = false;
+        if (mappedIn && local != null) {
             clearOfMappingNoise(player, local);
         }
         AxisAlignedBB stay = VSIntegration.subspaceStayRegion(world, shipId, STAY_REGION_MARGIN);
@@ -305,6 +314,53 @@ public final class DeckFrameTick {
     }
 
     /**
+     * The network handler's write of a server player back onto where his packet left him, right after
+     * his update - for a held player exactly the position {@link #updatePlayer} has just restored, so
+     * it is the deck's own bookkeeping and not a placement. Counted as one, it threw away his declared
+     * deck point every tick and his next update re-derived it from the world after the craft had moved.
+     * (A write cannot be told by its VALUE: vanilla's teleports assign the position fields first and
+     * then write those same values.)
+     */
+    public static void restoreAfterUpdate(EntityPlayerMP player, double x, double y, double z,
+                                          float yaw, float pitch) {
+        Episode episode = episodeOf(player);
+        boolean own = episode != null && !episode.writing;
+        if (own) {
+            episode.writing = true;
+        }
+        try {
+            player.setPositionAndRotation(x, y, z, yaw, pitch);
+        } finally {
+            if (own) {
+                episode.writing = false;
+            }
+        }
+    }
+
+    /**
+     * A movement packet from a player a deck holds has just been handled: where it left him in the
+     * world is his client's claim, and it is taken onto the deck NOW, through the pose the packet was
+     * handled under - his next update comes after the world tick has moved the craft.
+     */
+    public static void claimArrived(EntityPlayerMP player) {
+        Episode episode = episodeOf(player);
+        if (episode == null) {
+            return;
+        }
+        double[] local = VSIntegration.toShipFrameFor(player.world, episode.shipId,
+                player.posX, player.posY, player.posZ);
+        if (local == null) {
+            return;
+        }
+        clearOfMappingNoise(player, local);
+        episode.localX = local[0];
+        episode.localY = local[1];
+        episode.localZ = local[2];
+        episode.held = true;
+        episode.worldWritten = false;
+    }
+
+    /**
      * Replay a displacement of a body the deck holds, made from OUTSIDE its own update, against the
      * deck's blocks in the deck's frame instead of the world's.
      *
@@ -325,24 +381,44 @@ public final class DeckFrameTick {
         double[] from = VSIntegration.toShipFrameFor(world, shipId, entity.posX, entity.posY, entity.posZ);
         double[] to = VSIntegration.toShipFrameFor(world, shipId,
                 entity.posX + dx, entity.posY + dy, entity.posZ + dz);
-        if (from == null || to == null) {
+        // The velocity crosses too, by rotation alone: a move zeroes the velocity along every axis it
+        // clipped on, and here those are the deck's axes - the deck's floor must zero the velocity into
+        // the deck, not the world's vertical.
+        double[] motion = VSIntegration.rotateToShipFrameFor(world, shipId,
+                entity.motionX, entity.motionY, entity.motionZ);
+        if (from == null || to == null || motion == null) {
             return false;
         }
+        // Both ends arrive from the world through the same transform, so both carry its noise: a
+        // standing player's zero step otherwise clips the floor by a few ulps and is taken for a landing.
         clearOfMappingNoise(entity, from);
+        clearOfMappingNoise(entity, to);
         double worldX = entity.posX, worldY = entity.posY, worldZ = entity.posZ;
+        double motionX = entity.motionX, motionY = entity.motionY, motionZ = entity.motionZ;
         episode.writing = true;
         try {
             entity.setPosition(from[0], from[1], from[2]);
+            entity.motionX = motion[0];
+            entity.motionY = motion[1];
+            entity.motionZ = motion[2];
             entity.move(type, to[0] - from[0], to[1] - from[1], to[2] - from[2]);
             double[] out = VSIntegration.toWorldFrameFor(world, shipId, entity.posX, entity.posY, entity.posZ);
-            if (out == null) {
+            double[] outMotion = VSIntegration.rotateToWorldFrameFor(world, shipId,
+                    entity.motionX, entity.motionY, entity.motionZ);
+            if (out == null || outMotion == null) {
                 // The craft went away during the move: put the body back where the world had it and
                 // let the world make the step, rather than leave it standing in the shipyard.
                 entity.setPosition(worldX, worldY, worldZ);
+                entity.motionX = motionX;
+                entity.motionY = motionY;
+                entity.motionZ = motionZ;
                 trace(entity, "moveHeld shipGoneDuringMove");
                 return false;
             }
             entity.setPosition(out[0], out[1], out[2]);
+            entity.motionX = outMotion[0];
+            entity.motionY = outMotion[1];
+            entity.motionZ = outMotion[2];
         } finally {
             episode.writing = false;
         }
@@ -578,6 +654,13 @@ public final class DeckFrameTick {
         entity.motionY = episode.writtenY;
         entity.motionZ = episode.writtenZ;
         restorePrevious(entity, lastX, lastY, lastZ);
+        if (isLocalPlayer(entity)) {
+            // The position his client sends next is this deck point; sent as one, the server maps it
+            // through its own pose. Sent as the world position just computed through THIS side's pose,
+            // it arrived mapped elsewhere on the deck - measured 2026-10-05 on a rolling deck, 0.1 to
+            // 0.2 above the floor, and a standing player's claims alternating 0.004 apart.
+            VSIntegration.declareMovementClaim(entity, shipId, episode.localX, episode.localY, episode.localZ);
+        }
         // The substrate would otherwise go on dragging a body it still thinks is standing on its
         // hull, on top of the carry the deck has just given it.
         VSIntegration.suppressShipDrag(entity);
@@ -752,10 +835,31 @@ public final class DeckFrameTick {
 
     /** Stop holding {@code entity}; from its next update the world moves it again. */
     private static void release(Entity entity, String reason) {
+        Episode episode = ((DeckHeld) entity).stellurgy$deckEpisode();
         noteReleased(entity, reason);
         ((DeckHeld) entity).stellurgy$setDeckEpisode(null);
         forgetPath(entity);
+        if (episode != null && entity instanceof EntityPlayerMP) {
+            keepCarry(entity, episode.shipId);
+        }
         trace(entity, "release " + reason);
+    }
+
+    /**
+     * A server player leaves the deck with the craft's motion at his point, as his client does: there
+     * his held velocity always carried it, while his update on the server hands his velocity back by
+     * rotation alone. Without it the two sides part at the edge of the deck - his client moves on with
+     * the craft's momentum and the server's speed check, which judges him again once nothing holds
+     * him, measures that against a velocity that never had it.
+     */
+    private static void keepCarry(Entity entity, String shipId) {
+        double[] v = VSIntegration.shipVelocityAtPointFor(entity.world, shipId,
+                entity.posX, entity.posY, entity.posZ);
+        if (v != null) {
+            entity.motionX += v[0] * TICK_SECONDS;
+            entity.motionY += v[1] * TICK_SECONDS;
+            entity.motionZ += v[2] * TICK_SECONDS;
+        }
     }
 
     /**

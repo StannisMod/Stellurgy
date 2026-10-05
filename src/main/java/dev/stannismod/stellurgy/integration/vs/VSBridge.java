@@ -1198,6 +1198,12 @@ final class VSBridge {
      * mod see the body as ship-free; after Stellurgy releases the body, the mod's own collision re-arms it
      * naturally on first contact.</p>
      */
+    static void declareMovementClaim(Entity entity, String shipId, double x, double y, double z) {
+        if (entity instanceof IDraggable && shipId != null) {
+            ((IDraggable) entity).setMovementClaimInShip(java.util.UUID.fromString(shipId), x, y, z);
+        }
+    }
+
     static boolean clearEntityShipAssociation(Entity entity) {
         try {
             if (!(entity instanceof IDraggable)) {

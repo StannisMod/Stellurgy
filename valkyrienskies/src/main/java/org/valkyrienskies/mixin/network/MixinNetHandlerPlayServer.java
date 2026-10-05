@@ -206,10 +206,6 @@ public abstract class MixinNetHandlerPlayServer {
             packetPlayer.yaw = (float) playerYawInGlobal;
             packetPlayer.pitch = (float) playerPitchInGlobal;
 
-            // Set the player motion values to tell the NetHandlerPlayServer that the player is allowed to move this fast.
-            this.player.motionX = packetPlayer.x - this.firstGoodX;
-            this.player.motionY = packetPlayer.y - this.firstGoodY;
-            this.player.motionZ = packetPlayer.z - this.firstGoodZ;
 
             // Update the player draggable
             final IDraggable playerAsDraggable = IDraggable.class.cast(this.player);

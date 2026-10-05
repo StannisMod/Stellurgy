@@ -22,8 +22,9 @@ import net.minecraft.entity.player.EntityPlayerMP;
  *
  * <p>It never makes legitimate play impossible. It applies ONLY while Stellurgy itself holds a deck capture
  * for that player — a state that already excludes riding, elytra flight, creative flight and
- * levitation, i.e. every locomotion whose speed is not the walking one. Outside a deck capture this
- * class has no opinion and vanilla's own checks stand alone. And the bound it applies is generous by
+ * levitation, i.e. every locomotion whose speed is not the walking one. Inside one it REPLACES
+ * vanilla's speed check, which stands down ({@link #judges}); outside one this class has no opinion
+ * and vanilla's own checks stand alone. And the bound it applies is generous by
  * construction: the sum of two speeds, each taken at its maximum rather than its typical value.</p>
  *
  * <h2>The numbers</h2>
@@ -81,10 +82,7 @@ public final class DeckMovementBound {
     public static boolean accepts(EntityPlayerMP player,
                                   double fromX, double fromY, double fromZ,
                                   double toX, double toY, double toZ) {
-        if (player == null || player.world == null || player.world.isRemote) {
-            return true;
-        }
-        final String shipId = ShipFrameTravel.aboardShipId(player);
+        final String shipId = judgedShipId(player);
         if (shipId == null) {
             return true;
         }
@@ -116,5 +114,25 @@ public final class DeckMovementBound {
         // want it read this method's arguments and verdict off a test-only mixin rather than a
         // field kept here, so a shipped game keeps no telemetry for them.
         return moved <= allowed;
+    }
+
+    /**
+     * Whether this bound judges {@code player}'s movement — and so whether vanilla's own speed check
+     * must stand down for him. The bound REPLACES that check for a body on a deck rather than adding
+     * to it: vanilla measures his step against his own velocity alone, so the craft's motion under
+     * him would trip it at any speed beyond its threshold, and this is the check that knows the carry.
+     */
+    public static boolean judges(EntityPlayerMP player) {
+        return judgedShipId(player) != null;
+    }
+
+    /** The craft this bound judges {@code player} on, or {@code null} for no opinion: any craft that
+     *  holds him, its outer hull included - a body standing on a moving hull is carried exactly as one
+     *  on its deck, and vanilla's check, which knows nothing of the carry, must not judge him either. */
+    private static String judgedShipId(EntityPlayerMP player) {
+        if (player == null || player.world == null || player.world.isRemote) {
+            return null;
+        }
+        return ShipFrameTravel.capturedShipId(player);
     }
 }

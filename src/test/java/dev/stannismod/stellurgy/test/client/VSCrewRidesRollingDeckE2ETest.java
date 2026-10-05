@@ -66,6 +66,49 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         return value;
     }
 
+    /** How many of the server's latest held-player records a ground claim's message carries. */
+    private static final int GROUND_TRAIL = 8;
+
+    /**
+     * The server's two writers of a held player's {@code onGround} since {@code mark}: the replay of
+     * his update in the deck's frame ({@code deck_player_update}, its verdict {@code groundOut}) and
+     * his client's movement claims ({@code deck_player_claim}). A single read of {@code onGround}
+     * cannot say which one it saw; these, on the server's clock beside the read, can.
+     */
+    private String serverGroundTrail(long mark) throws Exception {
+        String updates = events().since(mark, "deck_player_update");
+        String claims = events().since(mark, "deck_player_claim");
+        String steps = events().since(mark, "deck_player_step");
+        // Diagnostic text for a failure message, not a claim: zero updates here cannot tell "no deck
+        // held him on the server" from "nobody was looking".
+        return "\n  server updates since mark: " + Events.records(updates).size()
+                + ", groundOut=false in " + Events.countRecords(updates, "groundOut", "false")
+                + "; claims: " + Events.records(claims).size()
+                + ", claimGround=false in " + Events.countRecords(claims, "claimGround", "false")
+                + "\n  every airborne update:\n    "
+                + String.join("\n    ", Events.recordsWhere(updates, "groundOut", "false"))
+                + "\n  last updates:\n    " + tail(Events.records(updates))
+                + "\n  last claims:\n    " + tail(Events.records(claims))
+                + "\n  last claim steps replayed on the deck:\n    " + tail(Events.records(steps));
+    }
+
+    /**
+     * The client's own half of an airborne server tick: every tick his deck-frame update ended off
+     * the floor of his deck ({@code ship_frame_tick}, {@code path:"d"}, {@code onDeck:false}) since
+     * {@code clientMark}. A server replay that starts above the floor is either the client standing
+     * there too, or a claim that did not arrive as a deck point; this says which.
+     */
+    private String clientOffDeckTrail(long clientMark) throws Exception {
+        String ticks = clientEvents().since(clientMark, "ship_frame_tick");
+        java.util.List<String> off = Events.recordsWhereAll(ticks, "path", "d", "onDeck", "false");
+        return "\n  client deck-frame ticks: " + Events.countRecords(ticks, "path", "d")
+                + ", off the floor in " + off.size() + ":\n    " + String.join("\n    ", off);
+    }
+
+    private static String tail(java.util.List<String> records) {
+        return String.join("\n    ", records.subList(Math.max(0, records.size() - GROUND_TRAIL), records.size()));
+    }
+
     private static double distance(double[] a, double[] b) {
         double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -90,6 +133,12 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
      * body at its deck point after the craft moves) doing nothing: "the crew member must ride the
      * deck, not the world: he moved 1.95 relative to the ship but only 0.37 in the world",
      * 2026-09-28. The lines the wait rewrite touched are the arrangement links before the roll.</p>
+     *
+     * <p>red-witnessed: with {@code MixinNetHandlerPlayerDeckFrame#stellurgy$claimOntoTheDeck} at
+     * {@code DeckFrameTick.claimArrived(player)} removed, the every-replay ground claim fails with
+     * "airborne in 1 of 133 replays of his update", 2026-10-05. Before the server took his claim as a
+     * deck point the same count read 112, then 49, then 2 to 5 of 127 replays as each writer of the
+     * airborne verdict was removed; 0 of 127 in three runs after.</p>
      */
     @Test
     public void aStandingCrewMemberStaysOnTheDeckWhenTheShipRolls() throws Exception {
@@ -126,6 +175,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         // The ship does not stay at the pad base — which is exactly why it is asked for by NAME.
         // Find it, then drop the bot ONTO it: standing next to a ship would prove nothing.
         ShipInfo where = ShipInfo.byId(this::exec, 0, shipId);
+        long serverDropMark = events().mark();
         long dropMark = clientEvents().mark();
         exec("tp @a " + where.x + " " + (where.y + 4) + " " + where.z + " 0 0");
         awaitClientPlacedNear(dropMark, where.x, where.z,
@@ -161,7 +211,8 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                 "the crew member must be aboard the ship this scenario built");
         assertTrue("walking crew must NOT be reported as mounted (that is the seated pilot): " + level.raw(),
                 !level.mounted);
-        assertTrue("a player standing on the deck must be on the ground: " + level.raw(),
+        assertTrue("a player standing on the deck must be on the ground: " + level.raw()
+                        + serverGroundTrail(serverDropMark),
                 level.onGround);
 
         double[] localBefore = {level.localX(), level.localY(), level.localZ()};
@@ -173,6 +224,8 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         String point = exec("stellurgytest vs point-by-id 0 " + shipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
         assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded"));
+        long serverRollMark = events().mark();
+        long clientRollMark = clientEvents().mark();
         // WINDOW: `level` before, `rolled` after, and the claim at the foot of this method is the
         // difference between them — how far he moved on the deck against how far in the world —
         // with both readings in its message. Counted on the hull's world clock, and the roll it
@@ -203,15 +256,33 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                 // served them is gone, and each record here names the body it is about.
                 + " || server ticks=" + Events.fieldLines(
                         events().since(0, "ship_frame_tick"), "line")
-                + " || server releases=" + events().since(0, "deck_released"));
+                + " || server releases=" + events().since(0, "deck_released")
+                + " || server ground over the roll:" + serverGroundTrail(serverRollMark)
+                + " || client over the roll:" + clientOffDeckTrail(clientRollMark));
         assertTrue("the crew member must still be aboard after the roll: " + rolled.raw(),
                 rolled.shipLoaded);
         // The roll is the moment a capture can be handed to the wrong hull, so "still aboard" is only
         // the claim this test means if it is still aboard the SAME ship it started on.
         rolled.requireAboard( shipId,
                 "the crew member must still be aboard the ship he started the roll on");
-        assertTrue("the crew member must not fall off a rolled deck: " + rolled.raw(),
+        assertTrue("the crew member must not fall off a rolled deck: " + rolled.raw()
+                        + serverGroundTrail(serverRollMark),
                 rolled.onGround);
+        // ...and the SERVER holds him standing on EVERY tick of the roll, not at whichever moment the
+        // read above lands on. Its `onGround` has two writers - his client's claim and its own replay
+        // of his update on the deck - and a single read sees whichever ran last, so a server that
+        // thought him airborne most of the time still passed that read now and then. Off the ground the
+        // server breaks his blocks five times slower than his client predicts. The replay's own verdict,
+        // per tick, from the record the deck frame's server half writes for each held update.
+        String replays = events().since(serverRollMark, "deck_player_update");
+        Events.assertInstrumentRan(replays, "deck_player_update_events",
+                "the server must have replayed the held crew member's update over the roll");
+        int replayCount = Events.records(replays).size();
+        int airborne = Events.countRecords(replays, "groundOut", "false");
+        assertTrue("the server must hold a crew member standing on a rolling deck on the ground every"
+                        + " tick: airborne in " + airborne + " of " + replayCount + " replays of his update"
+                        + serverGroundTrail(serverRollMark),
+                replayCount > 0 && airborne == 0);
 
         double[] localAfter = {rolled.localX(), rolled.localY(), rolled.localZ()};
         double[] worldAfter = {rolled.playerX, rolled.playerY, rolled.playerZ};

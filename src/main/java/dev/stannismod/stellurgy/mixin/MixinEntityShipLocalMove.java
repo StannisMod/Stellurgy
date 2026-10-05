@@ -19,13 +19,18 @@ import dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl;
  * <p>The physics mod injects at the same point, cancellably. Mixin emits an
  * {@code if (ci.isCancelled()) return;} guard after <em>each</em> callback at an injection point, so
  * whichever callback runs first and cancels prevents the rest — including the vanilla method body.
- * Callback order follows mixin application order, which is why this mixin declares an explicit
- * priority rather than relying on the default both configs happen to use.</p>
+ * Callback order follows mixin application order, and a LOWER priority is applied first, so this
+ * mixin must sit below the physics mod's own ({@code MixinEntityIntrinsic}, priority 1). It sat at
+ * 1500 until 2026-10-05, which ran it SECOND: measured on a held player's movement packet, the
+ * physics mod's callback was the outer frame, pushed his step out of the hull's polygons along the
+ * deck normal (0.209 blocks on a 45-degree deck, for a player standing still), re-entered
+ * {@code move} with that step, and on the way out wrote the step into his velocity and named the
+ * hull as the ship he last touched.</p>
  *
  * <p>Inert unless armed through {@link ShipLocalMoveControl}, and then only for one entity, only on
  * the server. It references no physics-mod type, so it is safe to weave with or without that mod.</p>
  */
-@Mixin(value = Entity.class, priority = 1500)
+@Mixin(value = Entity.class, priority = 0)
 public abstract class MixinEntityShipLocalMove {
 
     @Inject(method = "move", at = @At("HEAD"), cancellable = true)

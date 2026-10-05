@@ -8,6 +8,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import dev.stannismod.stellurgy.integration.vs.DeckMovementBound;
@@ -61,6 +62,19 @@ public abstract class MixinNetHandlerDeckMovementBound {
         stellurgyBoundFromX = subject.posX;
         stellurgyBoundFromY = subject.posY;
         stellurgyBoundFromZ = subject.posZ;
+    }
+
+    /**
+     * Vanilla's speed check ("moved too quickly") stands down for a player the bound judges: the first
+     * {@code isInvulnerableDimensionChange} call in {@code processPlayer} is that check's condition,
+     * and answering {@code true} skips it exactly as vanilla skips it across a dimension change. The
+     * bound at the TAIL is then the only judge of his step, so no speed of the craft under him can
+     * trip a check that does not know the craft is there.
+     */
+    @Redirect(method = "processPlayer", at = @At(value = "INVOKE", ordinal = 0,
+            target = "Lnet/minecraft/entity/player/EntityPlayerMP;isInvulnerableDimensionChange()Z"))
+    private boolean stellurgyDeckBoundReplacesSpeedCheck(EntityPlayerMP subject) {
+        return subject.isInvulnerableDimensionChange() || DeckMovementBound.judges(subject);
     }
 
     @Inject(method = "processPlayer", at = @At("TAIL"))

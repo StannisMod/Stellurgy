@@ -43,6 +43,27 @@ public interface EntityTrace {
         public double startX, startY, startZ;
     }
 
+    /** What a server player's update in the deck's frame was handed: the deck point and deck-frame
+     *  velocity it started from, and whether he stood on something going in. */
+    final class DeckPlayerUpdate {
+        public double inX, inY, inZ, inMotionX, inMotionY, inMotionZ;
+        /** His WORLD velocity as the update found it, before it was rotated into the deck's frame. */
+        public double worldMotionX, worldMotionY, worldMotionZ;
+        public boolean groundIn;
+        /** His world velocity as a movement packet found it, before the packet's own move. */
+        public double claimHeadMotionX, claimHeadMotionY, claimHeadMotionZ;
+        /** What the packet declared: the ship it named, its touch count, and its point's height in it. */
+        public String claimShip;
+        public int claimTicksSinceTouched;
+        public double claimInShipY;
+        /** One replayed movement step: world velocity at its head, then the deck-frame velocity and
+         *  position just before and just after its {@code move}. */
+        public double stepHeadMotionX, stepHeadMotionY, stepHeadMotionZ;
+        public double stepPreMotionX, stepPreMotionY, stepPreMotionZ, stepPreX, stepPreY, stepPreZ;
+        public double stepPostMotionX, stepPostMotionY, stepPostMotionZ, stepPostX, stepPostY, stepPostZ;
+        public boolean stepMoved;
+    }
+
     /** The suit-immunity recorder's memory: the last decision recorded, per atmosphere. */
     final class SuitDecisions {
         public final HashMap<String, Boolean> byAtmosphere = new HashMap<>();

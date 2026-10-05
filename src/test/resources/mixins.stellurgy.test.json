@@ -22,6 +22,8 @@
     "MixinDeckMovementBoundInputs",
     "MixinFlightComputerMotionSample",
     "MixinPlayerPacketRubberBand",
+    "MixinDeckFramePlayerUpdate",
+    "MixinDeckPlayerClaim",
     "MixinShipTransformUpdateDiag",
     "MixinTilePilotSeatDiag",
     "MixinWorldServerShipManagerDiag",

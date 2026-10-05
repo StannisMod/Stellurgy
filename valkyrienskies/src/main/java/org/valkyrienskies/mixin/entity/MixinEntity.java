@@ -278,6 +278,39 @@ public abstract class MixinEntity implements IDraggable {
         this.ticksInAirPocket--;
     }
 
+    @Shadow
+    public int ticksExisted;
+
+    /** The declared movement claim, the tick of this entity it was declared in, and the world position
+     *  it was declared at - a claim describes THAT position, and any later write leaves it behind. */
+    private UUID movementClaimShip;
+    private final Vector3d movementClaimInShip = new Vector3d();
+    private int movementClaimTick;
+    private double movementClaimAtX, movementClaimAtY, movementClaimAtZ;
+
+    @Override
+    public void setMovementClaimInShip(@Nonnull UUID shipId, double x, double y, double z) {
+        this.movementClaimShip = shipId;
+        this.movementClaimInShip.set(x, y, z);
+        this.movementClaimTick = this.ticksExisted;
+        this.movementClaimAtX = this.posX;
+        this.movementClaimAtY = this.posY;
+        this.movementClaimAtZ = this.posZ;
+    }
+
+    @Override
+    public UUID getMovementClaimShip() {
+        boolean current = this.movementClaimTick == this.ticksExisted && this.movementClaimAtX == this.posX
+                && this.movementClaimAtY == this.posY && this.movementClaimAtZ == this.posZ;
+        return current ? this.movementClaimShip : null;
+    }
+
+    @Nonnull
+    @Override
+    public Vector3dc getMovementClaimInShip() {
+        return this.movementClaimInShip;
+    }
+
     /**
      * This mixin removes the water slowdown effect when the player is in an air bubble.
      */

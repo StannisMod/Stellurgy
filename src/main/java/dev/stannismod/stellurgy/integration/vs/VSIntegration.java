@@ -1119,6 +1119,14 @@ public final class VSIntegration {
                 ? null : VSBridge.declaredVelocityAtPointFor(world, shipId, x, y, z);
     }
 
+    /** Declare where the player this client plays stands on {@code shipId}'s deck, in its frame, for the
+     *  movement packet he sends this tick: the server then maps the point through its own pose rather
+     *  than re-deriving it from a world position computed through this client's. */
+    public static void declareMovementClaim(net.minecraft.entity.Entity entity, String shipId,
+                                            double x, double y, double z) {
+        VSBridge.declareMovementClaim(entity, shipId, x, y, z);
+    }
+
     /** Clear the physics mod's own entity-to-ship association (its {@code EntityDraggable} drag
      *  anchor) for a body Stellurgy resolves ship-locally — the drag is a second mover that fights the
      *  ship-frame resolution from a stale anchor the suppressed collision injector can never
