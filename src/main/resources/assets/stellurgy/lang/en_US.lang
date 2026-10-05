@@ -1749,6 +1749,7 @@ msg.jump.committed=Jump window open
 msg.jump.burstfailed=The capacitor failed to open the window
 msg.jump.nopositionrecord=The ship's position is not on record
 msg.jump.departfailed=The drive fired but the ship did not leave - check the hull is one assembled craft, then try again
+msg.jump.nomass=The hull could not be weighed, so the drive has no speed to fly at - the jump was not fired
 msg.jump.cellnotlive=The ship's position has not settled yet - wait a moment and try again
 msg.jump.notonship=Not aboard an assembled ship
 msg.jump.confirm=Press again to confirm

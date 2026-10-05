@@ -8,7 +8,9 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
+import dev.stannismod.stellurgy.test.AssembledCraft;
 import dev.stannismod.stellurgy.test.DimList;
+import dev.stannismod.stellurgy.test.DriveInfo;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -194,83 +196,29 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 planet.number("atmosphereDensity") == airAtStart);
     }
 
-    /** One assembled craft, by every name a scenario addresses it with. */
-    private static final class Craft {
-        final String durable;
-        final String physicsId;
-        final int afcX;
-        final int afcY;
-        final int afcZ;
-
-        Craft(String durable, String physicsId, int afcX, int afcY, int afcZ) {
-            this.durable = durable;
-            this.physicsId = physicsId;
-            this.afcX = afcX;
-            this.afcY = afcY;
-            this.afcZ = afcZ;
-        }
-    }
-
-    /**
-     * Lay a fixture at {@code site}, assemble it, and wait for the two records that make it
-     * addressable: its naming (which hands over the physics id) and its first flight model (which
-     * hands over the flight computer's address aboard).
-     *
-     * <p>A build the assembler warns about first — a hull that cannot hold its weight — is pressed a
-     * second time; that is how a player builds one, and whether it WAS warned about is not this
-     * arrangement's question.</p>
-     */
-    private Craft assemble(FixtureSite site, String variant, String what) throws Exception {
+    /** Lay {@code variant} at {@code site} and assemble it ({@link AssembledCraft}). */
+    private AssembledCraft assemble(FixtureSite site, String variant, String what) throws Exception {
         return assembleLaid(site, lay(site, variant, what), what);
     }
 
-    /**
-     * The first half alone: make room and lay the fixture, answering the fixture's own reply — which
-     * carries what a scenario may need beyond where to press, such as where the hold stands.
-     */
+    /** {@link AssembledCraft#lay} with this group's working volume, {@link #HALO} by {@link #HEIGHT}. */
     private Reply lay(FixtureSite site, String variant, String what) throws Exception {
-        site.makeRoom(this::exec, HALO, HEIGHT, what);
-        Reply fixture = Reply.of(exec("stellurgytest fixture rocket " + site.dim + " " + site.x + " "
-                + site.y + " " + site.z + " " + variant));
-        requireArranged(what + " — the fixture (" + variant + ") must be laid: " + fixture,
-                fixture.ok() && fixture.blockPos("builderPos") != null);
-        return fixture;
+        return layWithHeadroom(site, variant, HEIGHT, what);
     }
 
-    /**
-     * The second half: press the assembler the fixture laid, and wait for the craft to be named.
-     *
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleTier2Ship(world, shipStructure,} (the cut build never handed to the
-     * physics mod) fails "the craft must be named once it is assembled" in every scenario that builds,
-     * 2026-09-30</p>
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#rebuildFlightModel} at {@code net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(} (a rebuilt flight model never announced)
-     * fails "the craft's flight computer must build its first flight model" in every scenario that
-     * builds, 2026-09-30</p>
-     */
-    private Craft assembleLaid(FixtureSite site, Reply fixture, String what) throws Exception {
-        long mark = events.mark();
-        int[] builder = fixture.blockPos("builderPos");
-        Reply press = Reply.of(RocketFixture.assembleBuilt(site, this::exec, builder));
-        requireArranged(what + " — the assemble press must answer whether it built the ship: "
-                + press, press.ok() && press.has("shipCut"));
-        if (press.has("shipCut") && !press.bool("shipCut")) {
-            press = Reply.of(RocketFixture.assembleBuilt(site, this::exec, builder));
-            requireArranged(what + " — a second press on the same build must build it: " + press,
-                    press.ok() && press.bool("shipCut"));
-        }
-        String durable = press.text("shipId");
-        String named = events.awaitRecordWithFields(mark, "ship_lifecycle",
-                what + " — the craft must be named once it is assembled", LINK_BUDGET_TICKS,
-                "durable", durable, "edge", "named");
-        String model = events.awaitRecordWithFields(mark, "flight_model_changed",
-                what + " — the craft's flight computer must build its first flight model",
-                LINK_BUDGET_TICKS, "ship", durable);
-        return new Craft(durable, Events.text(named, "ship"), (int) Events.number(model, "afcX"),
-                (int) Events.number(model, "afcY"), (int) Events.number(model, "afcZ"));
+    /** {@link #lay}, clearing {@code height} blocks above the site instead of {@link #HEIGHT}. */
+    private Reply layWithHeadroom(FixtureSite site, String variant, int height, String what)
+            throws Exception {
+        return AssembledCraft.lay(site, this::exec, variant, HALO, height, what);
+    }
+
+    /** {@link AssembledCraft#assemble}: press the assembler the fixture laid and resolve the craft. */
+    private AssembledCraft assembleLaid(FixtureSite site, Reply fixture, String what) throws Exception {
+        return AssembledCraft.assemble(site, this::exec, events, fixture, what);
     }
 
     /** Command a world-frame velocity on the craft's own flight computer, and require it took. */
-    private void command(Craft craft, String verb, double x, double y, double z, String what)
+    private void command(AssembledCraft craft, String verb, double x, double y, double z, String what)
             throws Exception {
         Reply r = Reply.of(exec("stellurgytest vs " + verb + " " + DIM + " " + craft.physicsId
                 + " " + x + " " + y + " " + z));
@@ -293,7 +241,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     }
 
     /** The readout the craft's flight computer holds now, as the {@code model} object. */
-    private Reply readout(Craft craft, String what) throws Exception {
+    private Reply readout(AssembledCraft craft, String what) throws Exception {
         Reply r = Reply.of(exec("stellurgytest vs flight-model-by-id " + DIM + " " + craft.physicsId));
         requireArranged(what + " — the craft's flight computer must hold a model: " + r,
                 r.bool("found") && r.object("model") != null);
@@ -313,7 +261,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * the experiment — and its record is read once. That it describes THIS craft is structural: it was
      * opened on this craft's flight computer's address.</p>
      */
-    private String drive(Craft craft, String verb, double x, double y, double z, int doseTicks,
+    private String drive(AssembledCraft craft, String verb, double x, double y, double z, int doseTicks,
                          String what) throws Exception {
         ServerWindow window = ServerWindow.open(this::exec,
                 "dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", DIM,
@@ -357,7 +305,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     public void aBuiltShipAcceleratesAsItsReadoutPredicts() throws Exception {
         standInVacuum();
         FixtureSite site = site();
-        Craft craft = assemble(site, "with-pilot-deck", "a decked craft driven forward");
+        AssembledCraft craft = assemble(site, "with-pilot-deck", "a decked craft driven forward");
         command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
         removePad(site, "a craft measured in free air");
 
@@ -419,7 +367,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         int[] hold = fixture.intArray("holdFromFlightComputer");
         requireArranged("the fixture must say where its hold stands: " + fixture,
                 hold != null && hold.length == 3);
-        Craft craft = assembleLaid(site, fixture, "a decked craft with a hold");
+        AssembledCraft craft = assembleLaid(site, fixture, "a decked craft with a hold");
         command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
         removePad(site, "a craft measured in free air");
 
@@ -499,8 +447,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         standInVacuum();
         FixtureSite controlSite = plot().siteAt(4, 4);
         FixtureSite bareSite = plot().siteAt(36, 4);
-        Craft control = assemble(controlSite, "with-pilot-deck", "the control: a craft with motors");
-        Craft bare = assemble(bareSite, "hull-without-actuators", "a hull with nothing that pushes");
+        AssembledCraft control = assemble(controlSite, "with-pilot-deck", "the control: a craft with motors");
+        AssembledCraft bare =assemble(bareSite, "hull-without-actuators", "a hull with nothing that pushes");
         Reply bareModel = readout(bare, "the motorless hull");
         for (String direction : new String[]{"SURGE_POSITIVE", "HEAVE_POSITIVE"}) {
             Reply d = live(bareModel, direction);
@@ -575,7 +523,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     public void aWheelOnlyHullTurnsAndDoesNotTranslate() throws Exception {
         standInVacuum();
         FixtureSite site = site();
-        Craft craft = assemble(site, "wheel-only-hull", "a hull whose only actuator is a wheel");
+        AssembledCraft craft = assemble(site, "wheel-only-hull", "a hull whose only actuator is a wheel");
         Reply model = readout(craft, "the wheel-only hull");
         requireArranged("the wheel-only hull must have no force in any direction and torque about"
                 + " the vertical, or it is not the subject: " + model,
@@ -646,8 +594,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         standInVacuum();
         FixtureSite weakSite = plot().siteAt(4, 4);
         FixtureSite strongSite = plot().siteAt(36, 4);
-        Craft weak = assemble(weakSite, "with-pilot-seat", "a craft that will be too weak to hover");
-        Craft strong = assemble(strongSite, "with-pilot-deck", "the control: a craft that will hover");
+        AssembledCraft weak = assemble(weakSite, "with-pilot-seat", "a craft that will be too weak to hover");
+        AssembledCraft strong =assemble(strongSite, "with-pilot-deck", "the control: a craft that will hover");
         command(weak, "force-vel-by-id", 0, 0, 0, "hover the weak craft");
         command(strong, "force-vel-by-id", 0, 0, 0, "hover the strong craft");
         removePad(weakSite, "the weak craft measured in free air");
@@ -724,7 +672,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     public void removingAWorkingMotorLowersLiveAuthorityWithoutReassembly() throws Exception {
         standInVacuum();
         FixtureSite site = site();
-        Craft craft = assemble(site, "with-pilot-deck", "a decked craft losing a motor");
+        AssembledCraft craft = assemble(site, "with-pilot-deck", "a decked craft losing a motor");
         command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
 
         Reply before = readout(craft, "before the motor is removed");
@@ -836,7 +784,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 wheel != null && wheel.length == 3);
         String wound = exec("blockdata " + wheel[0] + " " + wheel[1] + " " + wheel[2]
                 + " {storedMomentumY:" + WOUND_YAW_MOMENTUM + "d}");
-        Craft craft = assembleLaid(site, fixture, "a decked craft with a wound wheel");
+        AssembledCraft craft = assembleLaid(site, fixture, "a decked craft with a wound wheel");
         command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
         removePad(site, "a craft left in free air");
 
@@ -858,8 +806,111 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 second < first);
     }
 
+    // ---- 6c. the drive weighs the hull ----------------------------------------------------------
+
+    /**
+     * How tall the jump-drive craft stands, in blocks of headroom to clear: its generator rises
+     * above the hull the other fixtures stop at, and the milestone that builds the same craft clears
+     * twenty.
+     */
+    private static final int JUMP_CRAFT_HEADROOM = 20;
+
+    /**
+     * The jump drive is forecast to carry a lighter hull faster, by exactly the ratio of the two
+     * masses: a motor is taken off the milestone's own jump craft, the drive is untouched, and the
+     * speed the pilot is shown rises as the hull's mass falls.
+     *
+     * <p>The masses are read from the flight model's readout, which weighs the hull by its own survey
+     * and not through the drive — so a drive that ignored the hull, or weighed every craft the same,
+     * would show the same speed at two different masses and fail here. The link is on the model
+     * rebuilt LIGHTER, which is when the readout's mass is the hull without the motor.</p>
+     *
+     * <p>The tolerance is the two rounding steps between the quantities: a speed is a whole number of
+     * blocks per tick, and a recorded mass carries six significant figures.</p>
+     *
+     * <p>Contract: this fails if production breaks the contract that a jump's speed is set by the mass
+     * of the hull it carries.</p>
+     *
+     * <p>red-witnessed: 2026-10-05, after a healthy run (321 250 → 311 250 kg, 1556 → 1606
+     * blocks/tick) — with {@code ShipMassProvider#massOf} at
+     * {@code return OptionalLong.of(Math.max(1L, Math.round(frame.getTotalMass())));} answering
+     * {@code DriveTuning.BASELINE_SHIP_MASS} for every hull, as the placeholder did, it fails "a lighter
+     * hull must be forecast faster by its mass ratio: 321250.0 kg at 125000 blocks/tick, 311250.0 kg
+     * at 125000 expected:&lt;1.0321285140562249&gt; but was:&lt;1.0&gt;".</p>
+     */
+    @Test
+    public void theDriveForecastsALighterHullFasterByItsMassRatio() throws Exception {
+        FixtureSite site = site();
+        Reply fixture = layWithHeadroom(site, "with-jump-drive", JUMP_CRAFT_HEADROOM,
+                "the milestone's jump craft");
+        AssembledCraft craft = assembleLaid(site, fixture, "the milestone's jump craft");
+        command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
+        String where = DIM + " " + craft.afcX + " " + craft.afcY + " " + craft.afcZ;
+
+        DriveInfo before = DriveInfo.at(this::exec, where);
+        requireArranged("the craft must carry a drive that forecasts a speed: " + before,
+                before.drivePower > 0L && before.speedBlocksPerTick > 0L);
+        Reply model = readout(craft, "the jump craft with every motor");
+        double massBefore = Reply.of(model.object("mass")).number("totalKg");
+        Reply survey = Reply.of(exec("stellurgytest vs actuators " + DIM + " " + craft.physicsId));
+        Reply motor = null;
+        for (String one : survey.objectArray("actuators")) {
+            Reply a = Reply.of(one);
+            if (a.bool("sustained") && a.bool("working")) {
+                motor = a;
+                break;
+            }
+        }
+        requireArranged("the craft must carry a working motor to take off: " + survey, motor != null);
+
+        long mark = events.mark();
+        Reply removed = Reply.of(exec("stellurgytest fill " + DIM + " " + motor.integer("x") + " "
+                + motor.integer("y") + " " + motor.integer("z") + " " + motor.integer("x") + " "
+                + motor.integer("y") + " " + motor.integer("z") + " minecraft:air"));
+        requireArranged("the motor must come out of the ship's yard: " + removed,
+                removed.ok() && removed.integer("placed") == 1);
+        String lighter = events.awaitMatching(mark, "flight_model_changed",
+                reply -> anyLighter(reply, craft.durable, massBefore),
+                "for this craft, solved for less than the " + massBefore + " kg it weighed",
+                "the craft's model must be rebuilt for the hull without the motor",
+                LINK_BUDGET_TICKS);
+        double massAfter = Double.NaN;
+        for (String record : Events.recordsWhere(lighter, "ship", craft.durable)) {
+            double kg = Events.number(record, "totalKg");
+            if (massBefore - kg > massBefore * 1e-5) {
+                massAfter = kg; // the last lighter model is the one the drive is read against
+            }
+        }
+        DriveInfo after = DriveInfo.at(this::exec, where);
+        requireArranged("taking off a motor must leave the drive as it was: " + before + " / " + after,
+                after.drivePower == before.drivePower);
+
+        measured("drive and hull", "massBefore=" + massBefore, "massAfter=" + massAfter,
+                "speedBefore=" + before.speedBlocksPerTick, "speedAfter=" + after.speedBlocksPerTick,
+                "drivePower=" + before.drivePower);
+        double speedRatio = after.speedBlocksPerTick / (double) before.speedBlocksPerTick;
+        double massRatio = massBefore / massAfter;
+        double tolerance = 2.0e-5 + 2.0 / before.speedBlocksPerTick;
+        assertEquals("a lighter hull must be forecast faster by its mass ratio: " + massBefore + " kg at "
+                        + before.speedBlocksPerTick + " blocks/tick, " + massAfter + " kg at "
+                        + after.speedBlocksPerTick, massRatio, speedRatio, tolerance * massRatio);
+    }
+
+    /**
+     * Whether a {@code flight_model_changed} for this craft was solved for less than {@code kg} — by
+     * more than the record's six significant figures can blur.
+     */
+    private static boolean anyLighter(String reply, String durable, double kg) {
+        for (String record : Events.recordsWhere(reply, "ship", durable)) {
+            if (kg - Events.number(record, "totalKg") > kg * 1e-5) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** How full the fullest wheel aboard is, 0 to 1, as the craft's flight computer reports it. */
-    private double wheelFill(Craft craft) throws Exception {
+    private double wheelFill(AssembledCraft craft) throws Exception {
         Reply r = Reply.of(exec("stellurgytest vs flight-model-by-id " + DIM + " " + craft.physicsId));
         requireArranged("the craft's flight computer must answer for its wheels: " + r,
                 r.bool("found") && r.has("wheelFill"));

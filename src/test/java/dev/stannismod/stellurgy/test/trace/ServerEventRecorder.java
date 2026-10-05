@@ -374,6 +374,31 @@ public final class ServerEventRecorder {
     }
 
     /**
+     * A chunk LEFT the server's memory — {@code chunk_unloaded}.
+     *
+     * <p>Posted from {@code Chunk#onUnload}, which the chunk provider calls for a chunk it is dropping,
+     * immediately before it writes that chunk to disk and forgets it, all inside one tick. So once
+     * this record exists the chunk's tile entities are gone from the world, and whatever is read at
+     * that position afterwards was read back from what was saved. That is what a persistence scenario
+     * needs to know and could not otherwise tell: a reload that found the chunk still in memory reads
+     * the very objects it wrote, and a save that was never exercised looks exactly like one that
+     * worked.</p>
+     *
+     * <p>Server side only, for the same reason as {@link #onWorldUnloaded}. {@code cx}/{@code cz} are
+     * chunk coordinates.</p>
+     */
+    @SubscribeEvent
+    public static void onChunkUnloaded(net.minecraftforge.event.world.ChunkEvent.Unload event) {
+        World world = event.getWorld();
+        instrument(world, "server_bus_chunk_unloaded");
+        if (world == null || world.isRemote || event.getChunk() == null) {
+            return;
+        }
+        record(world, "chunk_unloaded", "\"dim\":" + world.provider.getDimension()
+                + ",\"cx\":" + event.getChunk().x + ",\"cz\":" + event.getChunk().z);
+    }
+
+    /**
      * A ship became USABLE — its physics will be stepped from now on.
      *
      * <p>Production's own event, subscribed to like any other consumer would rather than

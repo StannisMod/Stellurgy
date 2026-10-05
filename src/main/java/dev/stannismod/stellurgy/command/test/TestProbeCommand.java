@@ -3745,7 +3745,14 @@ public class TestProbeCommand extends CommandBase {
 
     private void handleDrive(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 5) {
-            send(sender, "{\"error\":\"usage: drive build|info|charge|push|arm|press|hull <dim> <afcX> <afcY> <afcZ> ...\"}");
+            send(sender, "{\"error\":\"usage: drive build|extend|info|charge|push|arm|press <dim> <afcX> <afcY> <afcZ> ...\"}");
+            return;
+        }
+        if ("extend".equalsIgnoreCase(args[0])) {
+            // Dispatched before anything below reads the ship: every read there goes through
+            // ShipDrive, and ShipDrive ADOPTS any unlinked machine standing in the claim — the very
+            // rule a caller of this verb has come to observe.
+            handleDriveExtend(server, sender, args);
             return;
         }
         String verb = args[0];
@@ -3781,14 +3788,6 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"dampeners\":" + drive.dampeners().size() + "}");
             return;
         }
-        if ("hull".equalsIgnoreCase(verb) && args.length >= 11
-                && afcTe instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) {
-            ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe).setHullExtent(
-                    parseIntOr(args[5], 0), parseIntOr(args[6], 0), parseIntOr(args[7], 0),
-                    parseIntOr(args[8], 0), parseIntOr(args[9], 0), parseIntOr(args[10], 0));
-            send(sender, "{\"ok\":true}");
-            return;
-        }
         if ("charge".equalsIgnoreCase(verb)) {
             boolean full = args.length < 6 || !"empty".equalsIgnoreCase(args[5]);
             for (dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor capacitor
@@ -3807,11 +3806,27 @@ public class TestProbeCommand extends CommandBase {
             // solar array or cable does. Deliberately not `fill()`: that seam sets the level directly
             // and would leave a test unable to tell a wired bank from one that manufactures its own
             // charge — which is the exact defect this verb exists to be able to observe.
+            //
+            // push <dim> <afc> <amount> [capacitors|dampeners]: which of the ship's machines are
+            // fed. A dampener's buffer takes energy through the same capability, and feeding it that
+            // way rather than through its fixture seam is what lets "powered" mean a dampener the
+            // ship's grid has charged.
             long amount = args.length > 5 ? parseLongOr(args[5], 0L) : 0L;
+            boolean toDampeners = args.length > 6 && "dampeners".equalsIgnoreCase(args[6]);
+            if (args.length > 6 && !toDampeners && !"capacitors".equalsIgnoreCase(args[6])) {
+                send(sender, "{\"error\":\"push feeds capacitors or dampeners, not "
+                        + escapeJson(args[6]) + "\"}");
+                return;
+            }
+            java.util.List<net.minecraft.tileentity.TileEntity> fed = new java.util.ArrayList<>();
+            if (toDampeners) {
+                fed.addAll(drive.dampeners());
+            } else {
+                fed.addAll(drive.capacitors());
+            }
             long accepted = 0L;
             int ports = 0;
-            for (dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor capacitor
-                    : drive.capacitors()) {
+            for (net.minecraft.tileentity.TileEntity capacitor : fed) {
                 net.minecraftforge.energy.IEnergyStorage port = capacitor.getCapability(
                         net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
                 if (port == null) {
@@ -3965,6 +3980,191 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
         }
+    }
+
+    /**
+     * {@code drive extend <dim> <afcX> <afcY> <afcZ> <coils> <cells> <sinks> <emitters> <dampeners>}
+     * — build drive machines ONTO an assembled ship, the way a player adds blocks to a finished craft.
+     * The address is the flight computer's SUBSPACE block.
+     *
+     * <p>It places and does nothing else. It links nothing, because whether a machine built onto a
+     * finished ship becomes part of it is production's rule ({@code ShipDrive}'s adoption), and a
+     * probe that linked would be answering the question for it. It clears nothing, because a ship is
+     * not a site: every block is placed only into air, and a request that cannot be placed into air
+     * inside this ship's own claim is refused whole, before anything is placed.</p>
+     *
+     * <p>Where: coils as one face-connected straight run off the generator the assembler bound to this
+     * computer (or off a coil already welded to it); cells, then sinks, as straight runs off that
+     * computer's capacitor or a cell or sink already on its walk; emitters, then dampeners, as straight
+     * runs off the flight computer itself. A run takes the first face, in the order east, south, west,
+     * north, up, whose cells are all air and inside the claim. The machines are found by their LINK
+     * and not through {@code ShipDrive}, whose every read adopts.</p>
+     *
+     * <p>Answers every block it placed, by kind, as subspace positions.</p>
+     */
+    private void handleDriveExtend(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 10) {
+            send(sender, "{\"error\":\"usage: drive extend <dim> <afcX> <afcY> <afcZ> <coils> <cells>"
+                    + " <sinks> <emitters> <dampeners>\"}");
+            return;
+        }
+        net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], 0));
+        if (world == null) {
+            send(sender, "{\"error\":\"no such dim\"}");
+            return;
+        }
+        BlockPos afc = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0),
+                parseIntOr(args[4], 0));
+        int[] counts = new int[5];
+        for (int i = 0; i < counts.length; i++) {
+            counts[i] = parseIntOr(args[5 + i], -1);
+            if (counts[i] < 0) {
+                send(sender, "{\"error\":\"counts must be whole numbers, not " + escapeJson(args[5 + i])
+                        + "\"}");
+                return;
+            }
+        }
+        world.getChunkProvider().provideChunk(afc.getX() >> 4, afc.getZ() >> 4);
+        String ship = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                .registeredShipIdManagingBlock(world, afc);
+        if (!(world.getTileEntity(afc) instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)
+                || ship == null) {
+            send(sender, "{\"error\":\"no assembled ship's flight computer at that position\"}");
+            return;
+        }
+        net.minecraft.util.math.AxisAlignedBB claim = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                .shipyardBoundsOf(world, java.util.UUID.fromString(ship));
+        if (claim == null) {
+            send(sender, "{\"error\":\"the ship managing that block has no claim\",\"ship\":\"" + ship + "\"}");
+            return;
+        }
+        BlockPos generator = null;
+        BlockPos capacitor = null;
+        for (net.minecraft.tileentity.TileEntity te
+                : world.loadedTileEntityList.toArray(new net.minecraft.tileentity.TileEntity[0])) {
+            if (te.isInvalid() || !(te instanceof dev.stannismod.stellurgy.tile.TileShipComponent)
+                    || !((dev.stannismod.stellurgy.tile.TileShipComponent) te).belongsTo(afc)) {
+                continue;
+            }
+            if (te instanceof dev.stannismod.stellurgy.tile.hyperdrive.TileHyperdriveGenerator) {
+                generator = te.getPos();
+            } else if (te instanceof dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor) {
+                capacitor = te.getPos();
+            }
+        }
+        if (counts[0] > 0 && generator == null) {
+            send(sender, "{\"error\":\"coils asked for, and no generator is bound to this computer\"}");
+            return;
+        }
+        if ((counts[1] > 0 || counts[2] > 0) && capacitor == null) {
+            send(sender, "{\"error\":\"cells or sinks asked for, and no capacitor is bound to this computer\"}");
+            return;
+        }
+        net.minecraft.block.Block coil = dev.stannismod.stellurgy.api.StellurgyBlocks.blockHyperdriveCoil;
+        net.minecraft.block.Block cell = dev.stannismod.stellurgy.api.StellurgyBlocks.blockJumpCapacitorCell;
+        net.minecraft.block.Block sink = dev.stannismod.stellurgy.api.StellurgyBlocks.blockJumpHeatSink;
+        String[] kinds = {"coils", "cells", "sinks", "emitters", "dampeners"};
+        net.minecraft.block.Block[] blocks = {coil, cell, sink,
+                dev.stannismod.stellurgy.api.StellurgyBlocks.blockJumpFieldEmitter,
+                dev.stannismod.stellurgy.api.StellurgyBlocks.blockGravityDampener};
+        // Planned in full before anything is placed, so a refusal leaves the ship as it was. A plan
+        // reserves its cells, so a later run of the same request never lands on an earlier one's.
+        java.util.Map<BlockPos, net.minecraft.block.Block> reserved = new java.util.HashMap<>();
+        java.util.List<java.util.List<BlockPos>> runs = new java.util.ArrayList<>();
+        for (int k = 0; k < kinds.length; k++) {
+            java.util.List<BlockPos> roots;
+            if (k == 0) {
+                roots = walkOf(world, generator, java.util.Collections.singleton(coil), reserved);
+            } else if (k <= 2) {
+                java.util.Set<net.minecraft.block.Block> bank = new java.util.HashSet<>();
+                bank.add(cell);
+                bank.add(sink);
+                roots = walkOf(world, capacitor, bank, reserved);
+            } else {
+                roots = java.util.Collections.singletonList(afc);
+            }
+            java.util.List<BlockPos> run = counts[k] == 0 ? new java.util.ArrayList<BlockPos>()
+                    : freeRun(world, claim, roots, counts[k], reserved);
+            if (run == null) {
+                send(sender, "{\"error\":\"no straight run of " + counts[k] + " free cells inside the"
+                        + " claim for the " + kinds[k] + "\"}");
+                return;
+            }
+            for (BlockPos at : run) {
+                reserved.put(at, blocks[k]);
+            }
+            runs.add(run);
+        }
+        StringBuilder reply = new StringBuilder("{\"ok\":true,\"ship\":\"").append(ship).append('"');
+        for (int k = 0; k < kinds.length; k++) {
+            reply.append(",\"").append(kinds[k]).append("\":[");
+            java.util.List<BlockPos> run = runs.get(k);
+            for (int i = 0; i < run.size(); i++) {
+                BlockPos at = run.get(i);
+                world.setBlockState(at, blocks[k].getDefaultState(), 3);
+                if (world.getBlockState(at).getBlock() != blocks[k]) {
+                    send(sender, "{\"error\":\"a " + kinds[k] + " block did not take at " + at
+                            + "\",\"partial\":true}");
+                    return;
+                }
+                reply.append(i == 0 ? "" : ",").append('[').append(at.getX()).append(',')
+                        .append(at.getY()).append(',').append(at.getZ()).append(']');
+            }
+            reply.append(']');
+        }
+        send(sender, reply.append('}').toString());
+    }
+
+    /**
+     * {@code origin} and every block face-connected to it through {@code members}, nearest first,
+     * counting a block this request has planned but not yet placed as already standing.
+     */
+    private static java.util.List<BlockPos> walkOf(net.minecraft.world.WorldServer world, BlockPos origin,
+                                                   java.util.Set<net.minecraft.block.Block> members,
+                                                   java.util.Map<BlockPos, net.minecraft.block.Block> planned) {
+        java.util.List<BlockPos> walk = new java.util.ArrayList<>();
+        java.util.Set<BlockPos> seen = new java.util.HashSet<>();
+        walk.add(origin);
+        seen.add(origin);
+        for (int i = 0; i < walk.size(); i++) {
+            for (net.minecraft.util.EnumFacing face : net.minecraft.util.EnumFacing.VALUES) {
+                BlockPos next = walk.get(i).offset(face);
+                net.minecraft.block.Block there = planned.containsKey(next)
+                        ? planned.get(next) : world.getBlockState(next).getBlock();
+                if (seen.add(next) && members.contains(there)) {
+                    walk.add(next);
+                }
+            }
+        }
+        return walk;
+    }
+
+    /** The first straight run of {@code n} free cells inside {@code claim} off any of {@code roots}. */
+    private static java.util.List<BlockPos> freeRun(net.minecraft.world.WorldServer world,
+                                                    net.minecraft.util.math.AxisAlignedBB claim,
+                                                    java.util.List<BlockPos> roots, int n,
+                                                    java.util.Map<BlockPos, net.minecraft.block.Block> reserved) {
+        net.minecraft.util.EnumFacing[] order = {net.minecraft.util.EnumFacing.EAST,
+                net.minecraft.util.EnumFacing.SOUTH, net.minecraft.util.EnumFacing.WEST,
+                net.minecraft.util.EnumFacing.NORTH, net.minecraft.util.EnumFacing.UP};
+        for (BlockPos root : roots) {
+            for (net.minecraft.util.EnumFacing face : order) {
+                java.util.List<BlockPos> run = new java.util.ArrayList<>();
+                for (int i = 1; i <= n; i++) {
+                    BlockPos at = root.offset(face, i);
+                    if (reserved.containsKey(at) || !world.isAirBlock(at)
+                            || at.getX() < claim.minX || at.getX() > claim.maxX
+                            || at.getZ() < claim.minZ || at.getZ() > claim.maxZ) {
+                        break;
+                    }
+                    run.add(at);
+                }
+                if (run.size() == n) {
+                    return run;
+                }
+            }
+        }
+        return null;
     }
 
     private void handleNav(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -16376,6 +16576,12 @@ public class TestProbeCommand extends CommandBase {
         return wheel;
     }
 
+    /** {@code [dx,dy,dz]} from {@code origin} to {@code at}, as a fixture reply writes an offset. */
+    private static String offsetJson(BlockPos at, BlockPos origin) {
+        return "[" + (at.getX() - origin.getX()) + "," + (at.getY() - origin.getY()) + ","
+                + (at.getZ() - origin.getZ()) + "]";
+    }
+
     private static void placeMotor(net.minecraft.world.WorldServer world, net.minecraft.block.Block motor,
                                    BlockPos at, net.minecraft.util.EnumFacing nozzle) {
         world.setBlockState(at, motor.getDefaultState()
@@ -16450,6 +16656,14 @@ public class TestProbeCommand extends CommandBase {
             //                               seat's other side, as a hold cargo can be stowed in after
             //                               assembly; the reply names where it sits relative to the
             //                               flight computer.
+            // And one jump craft too TALL for its generator's own window:
+            //   with-jump-drive-and-mast  — with-jump-drive plus an iron mast standing on the deck's
+            //                               north-west corner, rising past the top of the cube the
+            //                               generator holds up alone, so the hull fits only with the
+            //                               craft's emitter. Upward because the assembler takes
+            //                               nothing beyond the pad's footprint, and that footprint
+            //                               lies wholly inside the generator's window horizontally.
+            boolean jumpMast = "with-jump-drive-and-mast".equals(variant);
             boolean bareHull = "hull-without-actuators".equals(variant);
             boolean wheelOnlyHull = "wheel-only-hull".equals(variant);
             boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
@@ -16460,12 +16674,14 @@ public class TestProbeCommand extends CommandBase {
                     && !"with-pilot-seat".equals(variant) // pilot seat replaces the generic seat
                     && !"with-shield-emitter".equals(variant)
                     && !"with-jump-drive".equals(variant)
+                    && !jumpMast
                     && !seatHullVariant;
             boolean includeGuidance = !"invalid-no-guidance".equals(variant)
                     && !"advanced-flight-computer-only".equals(variant)
                     && !"with-pilot-seat".equals(variant) // AFC is the ship's brain — no guidance
                     && !"with-shield-emitter".equals(variant)
                     && !"with-jump-drive".equals(variant)
+                    && !jumpMast
                     && !seatHullVariant;
             boolean includeCargo = "with-cargo".equals(variant);
             // with-fluid-cargo: same as simple but replaces 2 of the 6 BlockFuelTank
@@ -16525,7 +16741,7 @@ public class TestProbeCommand extends CommandBase {
             // machine welds a ship's machines to its flight computer, and a fixture that did that
             // itself would hide the failure a jump-capable-ship test is looking for.
             boolean includeRoofedDeck = "with-roofed-deck".equals(variant);
-            boolean includeJumpDrive = "with-jump-drive".equals(variant);
+            boolean includeJumpDrive = "with-jump-drive".equals(variant) || jumpMast;
             boolean includePilotDeck = "with-pilot-deck".equals(variant) || includeRoofedDeck
                     || includeJumpDrive || includeHold;
             // with-shield-emitter — a with-pilot-seat ship (AFC + pilot seat, so it becomes a VS ship)
@@ -16649,7 +16865,9 @@ public class TestProbeCommand extends CommandBase {
             // variant raises it far enough to take the roof (rocketY+8 = baseY+9) into the ship, and
             // the jump-drive variant gets one spare course above its highest machine (rocketY+5) so
             // the top of the drive bay is not sitting exactly on the scan ceiling.
-            int towerTop = includeRoofedDeck ? 9 : (includeJumpDrive ? 7 : 6);
+            // The mast variant's tower clears the mast's top (rocketY+11 = baseY+12) by the same
+            // spare course.
+            int towerTop = includeRoofedDeck ? 9 : (jumpMast ? 13 : (includeJumpDrive ? 7 : 6));
             if (structureTower != null) {
                 for (int dy = 0; dy <= towerTop; dy++) {
                     world.setBlockState(new BlockPos(baseX - 1, baseY + dy, baseZ + padSize / 2),
@@ -16750,6 +16968,7 @@ public class TestProbeCommand extends CommandBase {
                 world.setBlockState(new BlockPos(rocketX + 1, rocketY + 3, rocketZ),
                         shieldEmitter.getDefaultState());
             }
+            String jumpBayFromComputer = "null";
             if (includeJumpDrive) {
                 // The hyperjump bay, standing on the pilot DECK (rocketY+3, placed further down).
                 // Everything here sits either directly on that deck or on a block that does, because
@@ -16772,14 +16991,15 @@ public class TestProbeCommand extends CommandBase {
                 // Four heat sinks put the charge rate at base + 4 sinks at the current tuning, which
                 // refills that burst from empty in a cooldown a test can wait out in a couple of
                 // seconds.
-                world.setBlockState(new BlockPos(rocketX, rocketY + 4, rocketZ + 2),
-                        navComputer.getDefaultState());
-                world.setBlockState(new BlockPos(rocketX + 2, rocketY + 4, rocketZ),
-                        hyperdriveGenerator.getDefaultState());
+                BlockPos bayNav = new BlockPos(rocketX, rocketY + 4, rocketZ + 2);
+                BlockPos bayGenerator = new BlockPos(rocketX + 2, rocketY + 4, rocketZ);
+                BlockPos bayCapacitor = new BlockPos(rocketX + 2, rocketY + 5, rocketZ);
+                BlockPos bayEmitter = new BlockPos(rocketX - 1, rocketY + 5, rocketZ);
+                world.setBlockState(bayNav, navComputer.getDefaultState());
+                world.setBlockState(bayGenerator, hyperdriveGenerator.getDefaultState());
                 // Directly ON the generator: a bank is only this drive's bank while it touches the
                 // generator's footprint, which is where the drive goes looking for one.
-                world.setBlockState(new BlockPos(rocketX + 2, rocketY + 5, rocketZ),
-                        jumpCapacitor.getDefaultState());
+                world.setBlockState(bayCapacitor, jumpCapacitor.getDefaultState());
                 // Sinks are counted by the capacitor's own walk outward through sink/cell blocks, so
                 // three hang straight off the bank and the fourth off a sink.
                 world.setBlockState(new BlockPos(rocketX + 1, rocketY + 5, rocketZ),
@@ -16795,8 +17015,30 @@ public class TestProbeCommand extends CommandBase {
                 // the foot of the hull, while one emitter's envelope wraps the whole hull box — so
                 // the jump gate returns a clean verdict instead of the undersized-window advisory.
                 // It stands on the flight computer, out of the walkway.
-                world.setBlockState(new BlockPos(rocketX - 1, rocketY + 5, rocketZ),
-                        jumpFieldEmitter.getDefaultState());
+                world.setBlockState(bayEmitter, jumpFieldEmitter.getDefaultState());
+                // Where each machine stands, as an offset from the flight computer: assembly moves
+                // the craft as one rigid body, so the offset names the same machine aboard the ship,
+                // and a scenario that has to reach one of them reads it here instead of re-deriving
+                // this layout.
+                BlockPos computer = new BlockPos(rocketX - 1, rocketY + 4, rocketZ);
+                String mast = "";
+                if (jumpMast) {
+                    // Resting on the deck's corner, so the assembly's flood fill takes it. Its top is
+                    // 7 above the generator: past the generator's own window, and within the 6 an
+                    // emitter on the flight computer reaches (DriveTuning's two window radii, 5 and 6
+                    // on 2026-10-05) — scenarios measure both, so a retune shows up as a failed
+                    // precondition, not as a silent pass.
+                    BlockPos top = null;
+                    for (int dy = 4; dy <= 11; dy++) {
+                        top = new BlockPos(rocketX - 2, rocketY + dy, rocketZ - 2);
+                        world.setBlockState(top, net.minecraft.init.Blocks.IRON_BLOCK.getDefaultState());
+                    }
+                    mast = ",\"mastTop\":" + offsetJson(top, computer);
+                }
+                jumpBayFromComputer = "{\"navigationComputer\":" + offsetJson(bayNav, computer)
+                        + ",\"generator\":" + offsetJson(bayGenerator, computer)
+                        + ",\"capacitor\":" + offsetJson(bayCapacitor, computer)
+                        + ",\"emitter\":" + offsetJson(bayEmitter, computer) + mast + "}";
             }
             if (includeFluidCargo) {
                 // Swap 2 of the 6 fuel-tank slots for liquidTank (TileFluidTank).
@@ -16883,6 +17125,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"variant\":\"" + variant + "\",\"builderPos\":[" + builderPos.getX() + ","
                     + builderPos.getY() + "," + builderPos.getZ() + "]"
                     + ",\"holdFromFlightComputer\":" + holdFromComputer
+                    + ",\"jumpBayFromFlightComputer\":" + jumpBayFromComputer
                     + ",\"wheelPos\":" + (wheel == null ? "null"
                             : "[" + wheel.getX() + "," + wheel.getY() + "," + wheel.getZ() + "]") + "}");
             return;
