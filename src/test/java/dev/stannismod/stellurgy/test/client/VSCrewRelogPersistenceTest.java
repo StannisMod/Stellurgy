@@ -846,7 +846,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // geometry stops the body somewhere) is exactly the captured-but-world-camera desync of the
         // original report, and it must NOT satisfy this contract — so the capture above is the link
         // that he was taken, and this is the link that says in WHICH mode.
-        String modes = awaitCommittedAboardOnHisShip(events, relogMark,
+        String modes = awaitCommittedAboardOnHisShip(events, relogMark, clientRelogMark,
                 "after a relog on an inverted deck the player must be captured ABOARD again, not"
                         + " held with world semantics wherever the inverted hull stopped him");
         DeckCapture capNow = DeckCapture.read(this::exec);
@@ -900,10 +900,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
      * carried him somewhere. The walk itself is witnessed (he must actually cover ground before the
      * logout), because a leg where the body never moved would pass without exercising anything.</p>
      */
-    @Ignore("Red in about two runs of three: after the relog the server's deck frame holds him on his"
-            + " deck point, and within six ticks lets go of him half a block BELOW it (no deck below);"
-            + " he then falls through the craft. Lift once a relogged crew member stays held on his"
-            + " deck spot in repeated runs.")
     @Test
     public void aCrewMemberWhoLogsOutWalkingComesBackStandingStillOnHisDeckSpot() throws Exception {
         final FixtureSite site = site();
@@ -989,9 +985,21 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // contract. On HIS ship, because a capture on a neighbour's hull commits `aboard` in
         // exactly the same shape, and then "he did not drift" would only mean he is standing on
         // something else.
-        awaitCommittedAboardOnHisShip(events, relogMark,
+        awaitCommittedAboardOnHisShip(events, relogMark, clientRelogMark,
                 "after the relog he must be captured ABOARD the deck again, or 'he did not drift'"
                         + " would just mean he is standing on something else");
+
+        // HOW he was put back, not only that he was: the server's restore seed names his deck spot,
+        // and the client must apply it. Without it the capture above is the client's own deck
+        // catching a body falling from that spot - a race it sometimes wins - so a seed that never
+        // reaches a player passes the link above on a good run. A restore seed outranks any capture
+        // the client made for itself, so its verdict is APPLY.
+        clientEvents().awaitMatching(clientRelogMark, "deck_seed_decided",
+                seen -> "APPLY".equals(Events.lastField(seen, "decision")),
+                "the client APPLYING the deck hold's restore seed",
+                "after the relog the client must apply the restore seed the server sent for his deck"
+                        + " spot (`deck_seed_arrived` says whether it reached a player at all)",
+                CAPTURE_BUDGET_TICKS);
 
         // Everything the tight pins below measure is taken from the CLIENT's own per-tick record,
         // which starts here: the client owns this body's movement, and the server-side probe reads
@@ -1027,7 +1035,8 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         String seeds = clientSeedDecisions(clientRelogMark);
         String seedOutcome = Events.lastField(seeds, "decision");
         System.out.println("[walk-relog] logoutDeckPoint=" + fmt(logoutOffset) + " seedOutcome="
-                + seedOutcome + " decisions=" + seeds + " trace:" + path);
+                + seedOutcome + " arrived=" + clientEvents().since(clientRelogMark, "deck_seed_arrived")
+                + " decisions=" + seeds + " trace:" + path);
         System.out.println("[walk-relog] CLIENT per-tick history (B = the client body's own "
                 + "ship-frame point):\n" + clientTickHistory());
 
@@ -1359,7 +1368,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
      * with NO ship filter — deliberately, because there it is the body's own last mode that is the
      * subject and the ship is fixed by construction. Fold the two only if a third caller appears.</p>
      */
-    private String awaitCommittedAboardOnHisShip(Events log, long mark, String what)
+    private String awaitCommittedAboardOnHisShip(Events log, long mark, long clientMark, String what)
             throws Exception {
         try {
             return log.awaitMatching(mark, "deck_mode_committed", reply -> {
@@ -1373,8 +1382,17 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             // one. They ask for opposite investigations, and an empty window reads as the second.
             Events.assertInstrumentRan(log.since(mark, "deck_mode_committed"), "deck_mode_events",
                     "a capture MODE was committed at all after the relog");
+            // The server adopts each position his client claims, so a server that lets him go below
+            // his deck is usually a client that was not holding him: what the CLIENT decided about
+            // the restore seed, and whom it took and let go, is the other half of the story.
             throw new AssertionError(never.getMessage() + " | server verdict "
-                    + exec("stellurgytest vs deck-capture"));
+                    + exec("stellurgytest vs deck-capture")
+                    + " | CLIENT seeds arrived: " + clientEvents().since(clientMark, "deck_seed_arrived")
+                    + " | CLIENT seed verdicts: " + clientSeedDecisions(clientMark)
+                    + " | CLIENT captures: " + clientEvents().since(clientMark, "deck_entered")
+                    + " | CLIENT releases: " + clientEvents().since(clientMark, "deck_released")
+                    + " | CLIENT teleports applied: "
+                    + clientEvents().since(clientMark, "client_pos_look_applied"));
         }
     }
 

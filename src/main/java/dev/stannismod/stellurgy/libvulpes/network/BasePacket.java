@@ -125,7 +125,11 @@ public abstract class BasePacket implements IMessage {
 		public IMessage onMessage(BasePacket message, MessageContext ctx) {
 			switch(ctx.side) {
 			case CLIENT:
-				Minecraft.getMinecraft().addScheduledTask(new executor(message, Minecraft.getMinecraft().player, ctx.side));
+				// The player is read when the task RUNS, on the game thread, not here on the network
+				// thread: a packet sent at login arrives before the client has built its player, and
+				// one read here reached its handler as null and was dropped.
+				final Minecraft mc = Minecraft.getMinecraft();
+				mc.addScheduledTask(() -> message.executeClient(mc.player));
 				break;
 			case SERVER:
 				((WorldServer) ctx.getServerHandler().player.world).addScheduledTask(new executor(message, ctx.getServerHandler().player, ctx.side));

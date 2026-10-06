@@ -119,6 +119,7 @@
     "MixinClientProxyEvents",
     "MixinTestClientMuteEvents",
     "MixinClientShipLoadDecisions",
-    "MixinMinecraftSideTrace"
+    "MixinMinecraftSideTrace",
+    "MixinPacketDeckCaptureEvents"
   ]
 }
