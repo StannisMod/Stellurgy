@@ -399,6 +399,20 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: dismounting mid-hover drops the ship and the pilot --------------------------------
 
+    /**
+     * <p>red-witnessed: with the client made to take no body — {@code DeckFrameTick#admissible} at
+     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct,
+     * {@code ShipFrameTravel#handles} answering false on a client at
+     * {@code if (entity == null || entity.world == null)}, and
+     * {@code ShipFrameTravel#seedShipFrameCapture} refusing on a client at
+     * {@code if (entity == null || shipId == null)} — this fails at "the dismounted pilot must be
+     * resolved on the deck, not handed to vanilla", 2026-10-06.</p>
+     *
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#update} at
+     * {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,} replaced
+     * by a null command in the unmanned branch, this fails at "a hovering ship must not start falling
+     * when the pilot dismounts" with velY -7.04, 2026-10-06.</p>
+     */
     @Test
     public void standingUpWhileHoveringKeepsTheShipUpAndThePilotOnTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -808,6 +822,15 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
 
+    /**
+     * <p>red-witnessed: with the client made to take no body — {@code DeckFrameTick#admissible} at
+     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct,
+     * {@code ShipFrameTravel#handles} answering false on a client at
+     * {@code if (entity == null || entity.world == null)}, and
+     * {@code ShipFrameTravel#seedShipFrameCapture} refusing on a client at
+     * {@code if (entity == null || shipId == null)} — this fails at the positive leg, "a player
+     * actually standing on the deck must get the deck camera", 2026-10-06.</p>
+     */
     @Test
     public void flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera() throws Exception {
         final FixtureSite site = site();
@@ -955,6 +978,17 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: a hovering ship falls (and tumbles inverted) after a world reload -----------------
 
+    /**
+     * <p>red-witnessed: NOT YET, and the attempts say the method cannot see its subject. GREEN with
+     * {@code TileAdvancedFlightComputer#readFromNBT} at
+     * {@code stationKeeping = nbt.getBoolean(NBT_STATION_KEEPING);} forced to false, and GREEN again
+     * with {@code TileAdvancedFlightComputer#update} at
+     * {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,} replaced
+     * by a null command in the unmanned branch — which turns the sibling live-dismount scenario red at
+     * once. The pre-reload hover is read before a hull could have fallen, and after the reload a hull
+     * nothing holds stays where it was rather than falling, so "it did not fall" is true of the
+     * subject's absence, 2026-10-06.</p>
+     */
     @Test
     public void aHoveringShipKeepsHoveringAcrossAReloadInsteadOfFalling() throws Exception {
         final FixtureSite site = site();
@@ -1056,6 +1090,18 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         return new double[]{info.x, info.y, info.z};
     }
 
+    /**
+     * <p>red-witnessed: with the client made to take no body — {@code DeckFrameTick#admissible} at
+     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct,
+     * {@code ShipFrameTravel#handles} answering false on a client at
+     * {@code if (entity == null || entity.world == null)},
+     * {@code ShipFrameTravel#seedShipFrameCapture} refusing on a client at
+     * {@code if (entity == null || shipId == null)}, and {@code ShipFrameTravel#tryApplyPendingSeed}
+     * returning before {@code DeckFrameTick.holdSeeded(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world)}
+     * — this fails at "standing up on THIS tilted deck must leave the ex-pilot captured ON THE
+     * CLIENT", 2026-10-06. (Without the last of the four it stays green: the pending seed's fallback
+     * capture takes him.)</p>
+     */
     @Test
     public void standingUpFromASeatOnASteeplyTiltedShipKeepsThePilotOnTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -1164,6 +1210,15 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 Math.cos(h), Math.sin(h), -0.35, 0.35, "90deg");
     }
 
+    /**
+     * <p>red-witnessed: with the client made to take no body — {@code DeckFrameTick#admissible} at
+     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct,
+     * {@code ShipFrameTravel#handles} answering false on a client at
+     * {@code if (entity == null || entity.world == null)}, and
+     * {@code ShipFrameTravel#seedShipFrameCapture} refusing on a client at
+     * {@code if (entity == null || shipId == null)} — this fails at "the client and server must agree
+     * on the ex-pilot's height" (serverY 157.50, clientY 154.16), 2026-10-06.</p>
+     */
     @Test
     public void aFreshlyDismountedPilotStaysCapturedWhenTheShipThenRollsPastVertical() throws Exception {
         // Command 160deg; the attitude hold settles well PAST vertical on this fixture (measured deck-up
@@ -1283,6 +1338,17 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 + " clientY=" + clientY + ")", Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_TILTED_BLOCKS);
     }
 
+    /**
+     * <p>red-witnessed: with the client made to take no body — {@code DeckFrameTick#admissible} at
+     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct,
+     * {@code ShipFrameTravel#handles} answering false on a client at
+     * {@code if (entity == null || entity.world == null)},
+     * {@code ShipFrameTravel#seedShipFrameCapture} refusing on a client at
+     * {@code if (entity == null || shipId == null)}, and {@code ShipFrameTravel#tryApplyPendingSeed}
+     * returning before {@code DeckFrameTick.holdSeeded(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world)}
+     * — this fails at "leaving the seat on THIS INVERTED ship must leave the ex-pilot captured BY IT on
+     * his own client", 2026-10-06. (Without the last of the four it stays green.)</p>
+     */
     @Test
     public void enteringAndLeavingTheSeatOnAnInvertedShipWorks() throws Exception {
         final FixtureSite site = site();
@@ -1402,6 +1468,12 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 + "through: " + capture.raw(), capture.verdict);
     }
 
+    /**
+     * <p>red-witnessed: with {@code KeyBindings#acceptShipPilotMouseDelta} at
+     * {@code pilot.pendingCursorYawDeg += dx * degPerUnit;} removed, this fails at "a hard
+     * flight-cursor deflection must register on the client even when inverted" (cursor=0.0),
+     * 2026-10-06.</p>
+     */
     @Test
     public void aSeatedPilotCanStillTurnTheShipWhenItIsInverted() throws Exception {
         final FixtureSite site = site();
@@ -1523,6 +1595,15 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: camera/capture instability on a steeply tilted, HELD deck ------------------------
 
+    /**
+     * <p>red-witnessed: with the client made to take no body — {@code DeckFrameTick#admissible} at
+     * {@code (!entity.world.isRemote || isLocalPlayer(entity))} without its local-player disjunct,
+     * {@code ShipFrameTravel#handles} answering false on a client at
+     * {@code if (entity == null || entity.world == null)}, and
+     * {@code ShipFrameTravel#seedShipFrameCapture} refusing on a client at
+     * {@code if (entity == null || shipId == null)} — this fails at "the client must be captured on
+     * THIS upright deck before the ship is tilted under him", 2026-10-06.</p>
+     */
     @Test
     public void aClientPlayerRidingASteeplyTiltedDeckHasStableCaptureAndCamera() throws Exception {
         final FixtureSite site = site();
@@ -1627,6 +1708,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     // ---- Bug: coordinate transforms break at extreme (inverted) attitudes ----------------------
 
+    /**
+     * <p>red-witnessed: with {@code Quat#rotate} at
+     * {@code vy * 2 * (xy - wz)} changed to {@code (xy + wz)}, this fails at "movement rotate and
+     * camera quaternion must agree on ship-up" (disagreement 0.711), 2026-10-06.</p>
+     */
     @Test
     public void anInvertedShipsMovementAndCameraFramesStayConsistent() throws Exception {
         final FixtureSite site = site();
