@@ -40,7 +40,7 @@ public class Atmosphere {
     //We're probably not getting a polluted atmosphere type
     public static final Atmosphere AIR = new Atmosphere(false, true, "air");
     public static final Atmosphere PRESSURIZEDAIR = new Atmosphere(false, true, true, "PressurizedAir");
-    // Twelve of these used to be twelve CLASSES, each carrying its own copy of the same tick method.
+    // Eleven of these (not HIGHOXYGEN) were eleven CLASSES, each with its own copy of one tick method.
     // What they do now lives in one table, and what is left of them here is a name and two flags.
     public static final Atmosphere LOWOXYGEN = new Atmosphere(true, false, true, "lowO2");
     public static final Atmosphere HIGHOXYGEN = new Atmosphere(true, false, true, "highO2");

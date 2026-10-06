@@ -26,10 +26,10 @@ import dev.stannismod.stellurgy.util.ItemAirUtils;
 /**
  * What each atmosphere does to the people in it, in one table, plus the one question a suit is asked.
  * <p>
- * <b>This replaces fourteen classes that each carried a copy of the same method.</b> Every one of them
+ * <b>This replaces eleven classes that each carried a copy of the same method.</b> Every one of them
  * was the same shape — a period, a damage source, an amount, a handful of potions — and because each
- * was a method rather than a row they drifted apart in ways nobody chose. The rows below are the
- * fourteen cells decomposed into the five things that were actually varying, and where the old cells
+ * was a method rather than a row they drifted apart in ways nobody chose. The rows below are those
+ * eleven cells decomposed into the five things that were actually varying, and where the old cells
  * disagreed with what that decomposition produces, the disagreement is a NAMED row rather than a
  * silent one. Each such row says which behaviour it is preserving and is a candidate for deletion on
  * its own merits.
