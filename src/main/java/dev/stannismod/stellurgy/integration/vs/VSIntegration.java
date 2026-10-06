@@ -170,7 +170,12 @@ public final class VSIntegration {
                     world == null ? "null" : world.provider.getDimension());
             return null;
         }
-        return assembleTier2ShipAt(world, afcPos, cause);
+        // The same footprint BOUNDS the ship: the substrate's block search may not leave it. The ship
+        // is what was pasted here, and nothing that merely touches it — a launch pad reached through
+        // the snow on its rim, a tree — the search used to take until it hit the size cap.
+        return assembleTier2ShipAt(world, afcPos, cause,
+                new net.minecraft.world.gen.structure.StructureBoundingBox(x0, y0, z0,
+                        x0 + width - 1, y0 + height - 1, z0 + depth - 1));
     }
 
     /**
@@ -229,7 +234,8 @@ public final class VSIntegration {
      */
     private static java.util.UUID assembleTier2ShipAt(
             World world, BlockPos anchorPos,
-            dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause) {
+            dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause,
+            net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
         java.util.UUID durable = durableNameAtAnchor(world, anchorPos);
         // ONE SHIP, ONE IDENTITY. The substrate's uuid IS the craft's durable name, so nothing has to
         // translate between two values and no lookup can be answered about the wrong craft. Before
@@ -286,7 +292,7 @@ public final class VSIntegration {
             return null;
         }
         // The identity IS the durable name. There is no second value and no caller-supplied one.
-        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, durable, cause);
+        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, durable, cause, footprint);
     }
 
     /**

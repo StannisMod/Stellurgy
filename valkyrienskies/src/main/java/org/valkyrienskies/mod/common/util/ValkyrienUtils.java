@@ -193,19 +193,6 @@ public final class ValkyrienUtils {
         return ((IHasShipManager) world).getManager().getAllLoadedPhysObj();
     }
 
-    public static void assembleShipAsOrderedByPlayer(World world, @Nullable EntityPlayerMP creator, BlockPos physicsInfuserPos, BlockFinder.BlockFinderType blockFinderType) {
-        if (world.isRemote) {
-            throw new IllegalStateException("This method cannot be invoked on client side!");
-        }
-        if (!(world instanceof WorldServer)) {
-            throw new IllegalStateException("The world " + world + " wasn\'t an instance of WorldServer");
-        }
-        // Create the ship data that we will use to make the ship with later.
-        ShipData shipData = createNewShip(world, physicsInfuserPos);
-        // Queue the ship spawn operation
-        ((WorldServerShipManager) ValkyrienUtils.getPhysObjWorld(world)).queueShipSpawn(shipData, physicsInfuserPos, blockFinderType);
-    }
-
     public static IPhysObjectWorld getPhysObjWorld(World world) {
         return ((IHasShipManager) world).getManager();
     }

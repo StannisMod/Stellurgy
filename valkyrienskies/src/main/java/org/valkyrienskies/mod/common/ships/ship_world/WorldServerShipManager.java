@@ -16,6 +16,7 @@ import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.ChunkProviderServer;
+import net.minecraft.world.gen.structure.StructureBoundingBox;
 import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.physics.BlockPhysicsDetails;
 import org.valkyrienskies.mod.common.ships.QueryableShipData;
@@ -101,7 +102,11 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * both arrive as the same call with the same blocks. Only the caller knows which it asked for,
      * and the difference decides whether a consumer mints a durable record or reattaches to one.</p>
      *
-     * <p>Value equality across all four fields, so the enclosing {@code LinkedHashSet} keeps refusing
+     * <p>The footprint is the region the block search may not leave — the blocks the caller actually
+     * placed — and it travels with the spawn for the same reason the cause does: only the caller knows
+     * it, and at the drain the world around the craft is indistinguishable from the craft.</p>
+     *
+     * <p>Value equality across every field, so the enclosing {@code LinkedHashSet} keeps refusing
      * duplicates exactly as it did when this was a triple.</p>
      */
     private static final class QueuedSpawn {
@@ -109,14 +114,16 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         private final ShipData toSpawn;
         private final BlockFinder.BlockFinderType blockFinderType;
         private final ShipLifecycleEvent.Cause cause;
+        private final StructureBoundingBox footprint;
 
         private QueuedSpawn(BlockPos spawnPos, ShipData toSpawn,
                             BlockFinder.BlockFinderType blockFinderType,
-                            ShipLifecycleEvent.Cause cause) {
+                            ShipLifecycleEvent.Cause cause, StructureBoundingBox footprint) {
             this.spawnPos = spawnPos;
             this.toSpawn = toSpawn;
             this.blockFinderType = blockFinderType;
             this.cause = cause;
+            this.footprint = footprint;
         }
 
         @Override
@@ -129,12 +136,19 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             }
             QueuedSpawn that = (QueuedSpawn) other;
             return Objects.equals(spawnPos, that.spawnPos) && toSpawn == that.toSpawn
-                    && blockFinderType == that.blockFinderType && cause == that.cause;
+                    && blockFinderType == that.blockFinderType && cause == that.cause
+                    // StructureBoundingBox keeps Object's identity equality, so it is compared by value
+                    && Arrays.equals(corners(footprint), corners(that.footprint));
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(spawnPos, System.identityHashCode(toSpawn), blockFinderType, cause);
+            return Objects.hash(spawnPos, System.identityHashCode(toSpawn), blockFinderType, cause,
+                    Arrays.hashCode(corners(footprint)));
+        }
+
+        private static int[] corners(StructureBoundingBox box) {
+            return new int[]{box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ};
         }
     }
 
@@ -288,7 +302,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             if (loadedShips.containsKey(toSpawn.getUuid())) {
                 throw new IllegalStateException("Tried spawning a ShipData that was already loaded?\n" + toSpawn);
             }
-            final SpatialDetector detector = BlockFinder.getBlockFinderFor(blockBlockFinderType, physicsInfuserPos, world, VSConfig.maxDetectedShipSize + 1, true);
+            final SpatialDetector detector = BlockFinder.getBlockFinderFor(blockBlockFinderType, physicsInfuserPos, world, VSConfig.maxDetectedShipSize + 1, true, spawnData.footprint);
             if (VSConfig.showAnnoyingDebugOutput) {
                 System.out.println("Attempting to spawn " + toSpawn + " on the thread " + Thread.currentThread().getName());
             }
@@ -762,24 +776,19 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     /**
      * Thread safe way to queue a ship spawn. (Not the same as {@link #queueShipLoad(UUID)}.
      *
-     * <p>Announced as a brand-new craft. A caller that is re-registering a craft which already
-     * existed — a crossing, a transit, a reposition — must say so through
-     * {@link #queueShipSpawn(ShipData, BlockPos, BlockFinder.BlockFinderType, ShipLifecycleEvent.Cause)}
-     * instead, because nothing at the drain can tell the two apart.</p>
-     */
-    public void queueShipSpawn(@Nonnull ShipData data, @Nonnull BlockPos spawnPos, @Nonnull BlockFinder.BlockFinderType blockFinderType) {
-        queueShipSpawn(data, spawnPos, blockFinderType, ShipLifecycleEvent.Cause.ASSEMBLED);
-    }
-
-    /**
-     * The same, stating WHY this ship is appearing — see {@link ShipLifecycleEvent.Cause}. The cause
-     * travels with the queued spawn and is what the naming event carries when the queue is drained.
+     * <p>{@code cause} says WHY this ship is appearing — see {@link ShipLifecycleEvent.Cause}; it travels
+     * with the queued spawn and is what the naming event carries when the queue is drained.</p>
+     *
+     * <p>{@code footprint} is the region the block search may not leave, inclusive: the blocks the
+     * caller placed. It is required, with no unbounded form: the search used to stop only at the size
+     * cap, so a craft took whatever touched it — a launch pad, through the snow on its rim, or a tree.</p>
      */
     public void queueShipSpawn(@Nonnull ShipData data, @Nonnull BlockPos spawnPos,
                                @Nonnull BlockFinder.BlockFinderType blockFinderType,
-                               @Nonnull ShipLifecycleEvent.Cause cause) {
+                               @Nonnull ShipLifecycleEvent.Cause cause,
+                               @Nonnull StructureBoundingBox footprint) {
         enforceGameThread();
-        this.spawnQueue.add(new QueuedSpawn(spawnPos, data, blockFinderType, cause));
+        this.spawnQueue.add(new QueuedSpawn(spawnPos, data, blockFinderType, cause, footprint));
     }
 
     /**

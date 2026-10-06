@@ -1139,6 +1139,86 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     }
 
     /**
+     * A ship assembled on a snowed-on launch pad is the craft that was built, and the launch site stays
+     * where it stood.
+     *
+     * <p>This test fails if production breaks the contract that <b>the blocks that become a ship are the
+     * blocks the assembler pasted, and nothing that merely touches them</b>. The physics substrate finds
+     * a ship's blocks by a search from its flight computer that follows diagonal neighbours; bounded only
+     * by a size cap, it walked from the lifted craft through the snow on the pad's rim into the pad, the
+     * structure tower, the builder and its power plug, and the craft flew off carrying its own launch
+     * site — a third heavier and unable to hold itself up.</p>
+     *
+     * <p>The snow is laid by the test on the pad's open cells between building and assembling, because
+     * that is the one arrangement that puts a block diagonally beside the craft once the assembler has
+     * lifted it, the way weather does on a real pad. Read as a premise: at least one cell took snow.</p>
+     *
+     * <p>red-witnessed: with {@code SpatialDetector#tryExpanding} at {@code if (x < footprint.minX || x >
+     * footprint.maxX} disabled, the pad verdict fails — "the ship took 36 of its 36 cells with it … (32
+     * snowed-on cells beside it) expected:&lt;36&gt; but was:&lt;0&gt;" — 2026-10-06. The builder verdict
+     * is not witnessed separately.</p>
+     */
+    @Test
+    public void aShipAssembledOnASnowedOnPadLeavesTheLaunchSiteBehind() throws Exception {
+        FixtureSite site = site();
+        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", HALO, HEIGHT,
+                "the craft built on a snowed-on pad stands in this volume");
+
+        // The launch site as it stands before anything is assembled, READ rather than assumed from
+        // the fixture's geometry: the pad's own cells, and what the craft leaves open on top of them.
+        int padBefore = 0;
+        int snowed = 0;
+        for (int px = site.x; px <= site.x + FixtureSite.PAD; px++) {
+            for (int pz = site.z; pz <= site.z + FixtureSite.PAD; pz++) {
+                if (LAUNCHPAD.equals(blockAt(px, site.y, pz).text("block"))) {
+                    padBefore++;
+                    if (blockAt(px, site.y + 1, pz).bool("isAir")) {
+                        requireArranged("snow must take on the open pad cell at " + px + "," + (site.y + 1)
+                                + "," + pz, Reply.of(exec("stellurgytest place " + DIM + " " + px + " "
+                                + (site.y + 1) + " " + pz + " minecraft:snow_layer")).bool("placed"));
+                        snowed++;
+                    }
+                }
+            }
+        }
+        requireArranged("the fixture must lay a launch pad at the site's own height", padBefore > 0);
+        requireArranged("the craft must leave some of the pad open for snow to lie on beside it, or"
+                + " nothing touches it and the scenario cannot tell a bounded search from an unbounded"
+                + " one", snowed > 0);
+
+        String asm = RocketFixture.assembleBuilt(site, this::exec, builder);
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
+                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        // USABLE, not merely named: the block search runs when the spawn is drained, which is before
+        // the ship can be usable, so everything it took is gone from the world by the reads below.
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events, DIM,
+                ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
+
+        int padAfter = 0;
+        for (int px = site.x; px <= site.x + FixtureSite.PAD; px++) {
+            for (int pz = site.z; pz <= site.z + FixtureSite.PAD; pz++) {
+                if (LAUNCHPAD.equals(blockAt(px, site.y, pz).text("block"))) {
+                    padAfter++;
+                }
+            }
+        }
+        String builderNow = blockAt(builder[0], builder[1], builder[2]).text("block");
+        assertEquals("the launch pad must still stand where it was built: the ship took " + (padBefore
+                - padAfter) + " of its " + padBefore + " cells with it, so the search for the ship's blocks"
+                + " walked out of the craft (" + snowed + " snowed-on cells beside it)", padBefore, padAfter);
+        assertEquals("the assembler must still stand where it was built",
+                ROCKET_BUILDER, builderNow);
+    }
+
+    private static final String LAUNCHPAD = "stellurgy:launchpad";
+    private static final String ROCKET_BUILDER = "stellurgy:rocketbuilder";
+
+    private Reply blockAt(int x, int y, int z) throws Exception {
+        return Reply.of("stellurgytest block at", exec("stellurgytest block at " + DIM + " " + x + " " + y
+                + " " + z));
+    }
+
+    /**
      * A ship is re-weighed on a CADENCE, with no event to trigger it.
      *
      * <p>Why a cadence has to exist at all: the authoritative recompute used to run only where the

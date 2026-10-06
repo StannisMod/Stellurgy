@@ -82,12 +82,15 @@ public abstract class MixinWorldServerShipManagerDiag {
             at = @At(value = "INVOKE",
                     target = "Lorg/valkyrienskies/mod/common/ships/block_relocation/BlockFinder;"
                             + "getBlockFinderFor(Lorg/valkyrienskies/mod/common/ships/block_relocation/BlockFinder$BlockFinderType;"
-                            + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/world/World;IZ)"
+                            + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/world/World;IZ"
+                            + "Lnet/minecraft/world/gen/structure/StructureBoundingBox;)"
                             + "Lorg/valkyrienskies/mod/common/ships/block_relocation/SpatialDetector;"),
             require = 0)
     private SpatialDetector stellurgyTest$recordFloodResult(BlockFinder.BlockFinderType type, BlockPos pos,
-                                                     World floodWorld, int maxSize, boolean corners) {
-        SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners);
+                                                     World floodWorld, int maxSize, boolean corners,
+                                                     net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
+        SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners,
+                footprint);
         if (detector != null) {
             // The flood's outcome AS A RECORD, beside the statics below: VS drops a spawn whose flood
             // is too big or touched bedrock with one line on System.err and a `continue`, so a queued
@@ -99,6 +102,9 @@ public abstract class MixinWorldServerShipManagerDiag {
             dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_flood",
                     "\"x\":" + pos.getX() + ",\"y\":" + pos.getY() + ",\"z\":" + pos.getZ()
                             + ",\"dim\":" + floodWorld.provider.getDimension()
+                            + ",\"footprint\":\"" + footprint.minX + "," + footprint.minY + ","
+                            + footprint.minZ + ".." + footprint.maxX + "," + footprint.maxY + ","
+                            + footprint.maxZ + "\""
                             + ",\"found\":" + detector.foundSet.size()
                             + ",\"bedrock\":" + detector.cleanHouse
                             + ",\"refused\":" + refused);

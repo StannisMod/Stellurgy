@@ -74,7 +74,8 @@ final class VSBridge {
      * headless test.</p>
      */
     static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name,
-                                  ShipLifecycleEvent.Cause cause) {
+                                  ShipLifecycleEvent.Cause cause,
+                                  net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
         // ONE SHIP, ONE IDENTITY, and this signature is the last place it could have been broken.
         // There used to be three overloads here: one with no identity at all, one with an identity
         // and no durable name, and one with both as separate values. The first two ASSEMBLED A
@@ -116,7 +117,7 @@ final class VSBridge {
         // flight computer was duplicated, which the facade re-mints for before it gets here.
         ship.setStellurgyDurableIdBeforeRegistration(name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
-        manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS, cause);
+        manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS, cause, footprint);
         logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
                 ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
         return ship.getUuid();
