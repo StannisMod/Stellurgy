@@ -66,6 +66,7 @@
     "MixinShotEvents",
     "MixinShotRegistryEvents",
     "MixinDamageStateEvents",
+    "MixinTileRepairBayEvents",
     "MixinTileFireControlSensorEvents",
     "MixinSubsystemNetworkRebuildEvents",
     "MixinSubsystemNodeReleaseEvents",

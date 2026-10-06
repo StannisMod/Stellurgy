@@ -284,6 +284,9 @@ public class TestProbeCommand extends CommandBase {
                 case "damage":
                     handleDamage(server, sender, tail(args));
                     break;
+                case "repairbay":
+                    handleRepairBay(server, sender, tail(args));
+                    break;
                 case "shot":
                     handleShot(server, sender, tail(args));
                     break;
@@ -1498,7 +1501,7 @@ public class TestProbeCommand extends CommandBase {
 
             int stageBefore = dev.stannismod.stellurgy.damage.DamageState.getStage(world, pos);
             int materialBefore = countOf(welder, material);
-            dev.stannismod.stellurgy.item.ItemRepairWelder.Outcome outcome =
+            dev.stannismod.stellurgy.damage.RepairOutcome outcome =
                     dev.stannismod.stellurgy.item.ItemRepairWelder.weld(welder, world, pos, tool);
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("ok", true);
@@ -1511,6 +1514,40 @@ public class TestProbeCommand extends CommandBase {
             m.put("materialAfter", countOf(welder, material));
             m.put("block", String.valueOf(world.getBlockState(pos).getBlock().getRegistryName()));
             send(sender, jsonMap(m));
+            return;
+        }
+        if (args.length >= 6 && "forge-provenance".equalsIgnoreCase(args[0])) {
+            // forge-provenance <dim> <x> <y> <z> <registryName> — rewrite the recorded block of the
+            // hole at (x,y,z) to a name, as a save does that outlived the mod whose block it named.
+            // That state is unreachable inside one install, so it is reached the way a load reaches
+            // it: the map's own writer, the name changed in the written tag, the map's own reader.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+            dev.stannismod.stellurgy.damage.BlockDamageSavedData data =
+                    dev.stannismod.stellurgy.damage.BlockDamageSavedData.get(world);
+            net.minecraft.nbt.NBTTagCompound saved = data.writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+            net.minecraft.nbt.NBTTagList entries = saved.getTagList("entries", 10);
+            boolean rewritten = false;
+            for (int i = 0; i < entries.tagCount(); i++) {
+                net.minecraft.nbt.NBTTagCompound entry = entries.getCompoundTagAt(i);
+                if (entry.getLong("pos") == pos.toLong() && entry.hasKey("block")) {
+                    entry.setString("block", args[5]);
+                    rewritten = true;
+                }
+            }
+            if (!rewritten) {
+                send(sender, "{\"ok\":false,\"reason\":\"no destroyed-block record at that position\"}");
+                return;
+            }
+            data.readFromNBT(saved);
+            data.markDirty();
+            send(sender, "{\"ok\":true,\"destroyedBlock\":\"" + escapeJson(
+                    String.valueOf(data.getDestroyedBlockName(pos))) + "\"}");
             return;
         }
         if (args.length >= 8 && "records".equalsIgnoreCase(args[0])) {
@@ -1628,6 +1665,86 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown damage subcommand — try impact <dim> <x> <y> <z> <dx> <dy> <dz> <budget> [kind] [impactId] | stage <dim> <x> <y> <z> | clear-impacts\"}");
+    }
+
+    /**
+     * {@code /stellurgytest repairbay ...} — read a repair bay, and fill its reserve.
+     * <ul>
+     *   <li>{@code read <dim> <x> <y> <z>} — what the bay says it is doing ({@code outcome},
+     *       {@code "none"} before its first look), its energy, how many items its reserve holds,
+     *       and the size law as production computes it for the bay built there: {@code size} from
+     *       production's own walk, {@code rate} from production's own law at that size,
+     *       {@code ceiling} and {@code maxSize} beside them, plus {@code energyPerStage} and
+     *       {@code lookIntervalTicks} so a caller sizes its waits from production's numbers;</li>
+     *   <li>{@code stock <dim> <x> <y> <z> <item[#meta]> <count>} — insert through the bay's own
+     *       item handler, the way a hopper or a pipe would, and report how many it took.</li>
+     * </ul>
+     */
+    private void handleRepairBay(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5) {
+            send(sender, "{\"error\":\"usage: repairbay read|stock <dim> <x> <y> <z> ...\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        TileEntity tile = world.getTileEntity(pos);
+        if (!(tile instanceof dev.stannismod.stellurgy.damage.repair.TileRepairBay)) {
+            send(sender, "{\"error\":\"no repair bay there\",\"block\":\""
+                    + world.getBlockState(pos).getBlock().getRegistryName() + "\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.damage.repair.TileRepairBay bay =
+                (dev.stannismod.stellurgy.damage.repair.TileRepairBay) tile;
+        if ("read".equalsIgnoreCase(args[0])) {
+            int size = dev.stannismod.stellurgy.damage.repair.RepairBaySize.of(world, pos);
+            int reserved = 0;
+            for (int i = 0; i < bay.getSizeInventory(); i++) {
+                reserved += bay.getStackInSlot(i).getCount();
+            }
+            net.minecraftforge.energy.IEnergyStorage energy =
+                    bay.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ok", true);
+            m.put("outcome", bay.getOutcome() == null ? "none" : bay.getOutcome().name());
+            m.put("energy", energy == null ? 0 : energy.getEnergyStored());
+            m.put("reserve", reserved);
+            m.put("size", size);
+            m.put("rate", dev.stannismod.stellurgy.damage.repair.RepairBaySize.powerPerTick(size));
+            m.put("ceiling", dev.stannismod.stellurgy.damage.repair.RepairBaySize.ceiling());
+            m.put("maxSize", 1 + dev.stannismod.stellurgy.damage.repair.RepairBaySize.MAX_PARTS);
+            m.put("energyPerStage", dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig()
+                    .repairBayEnergyPerStage);
+            m.put("lookIntervalTicks", dev.stannismod.stellurgy.damage.repair.TileRepairBay.LOOK_INTERVAL_TICKS);
+            send(sender, jsonMap(m));
+            return;
+        }
+        if ("stock".equalsIgnoreCase(args[0]) && args.length >= 7) {
+            String itemId = args[5];
+            int meta = 0;
+            int mark = itemId.indexOf('#');
+            if (mark >= 0) {
+                meta = parseIntOr(itemId.substring(mark + 1), 0);
+                itemId = itemId.substring(0, mark);
+            }
+            net.minecraft.item.Item item = net.minecraft.item.Item.getByNameOrId(itemId);
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item\",\"item\":\"" + escapeJson(itemId) + "\"}");
+                return;
+            }
+            int count = parseIntOr(args[6], 0);
+            net.minecraftforge.items.IItemHandler handler = bay.getCapability(
+                    net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+            net.minecraft.item.ItemStack left = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                    handler, new net.minecraft.item.ItemStack(item, count, meta), false);
+            send(sender, "{\"ok\":true,\"inserted\":" + (count - left.getCount()) + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown repairbay subcommand — try read | stock\"}");
     }
 
     // Valkyrien Skies integration probes ----------------------------------

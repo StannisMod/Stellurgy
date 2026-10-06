@@ -46,6 +46,14 @@ public class BlockDamageSavedData extends WorldSavedData {
 
     private final Map<Long, Entry> entries = new HashMap<>();
 
+    /**
+     * Which repairer is working which position right now, by position. TRANSIENT on purpose: it is
+     * never written to NBT and dies with this object, which dies with its world. A claim is a fact
+     * about machines that are running, and nothing that is running survives a restart, so a saved
+     * claim could only ever be a stale one.
+     */
+    private final Map<Long, Claim> claims = new HashMap<>();
+
     public BlockDamageSavedData() {
         super(DATA_NAME);
     }
@@ -184,6 +192,35 @@ public class BlockDamageSavedData extends WorldSavedData {
         }
     }
 
+    /**
+     * Take {@code pos} for {@code holder}, or renew a claim it already holds, as of world tick
+     * {@code now}. False when a DIFFERENT holder has it and is still working it.
+     *
+     * <p>A claim whose holder has not renewed it since the tick before last is taken over: the only
+     * way a working holder fails to renew is by not ticking — its chunk unloaded, the server
+     * stopped it, it crashed out of its update — and a claim that outlived its holder would park
+     * that position's repair forever. Two ticks and not one, because within one world tick the
+     * holders run in no fixed order: one that runs after the asker this tick renewed last tick.</p>
+     */
+    public boolean claim(BlockPos pos, Object holder, long now) {
+        long key = pos.toLong();
+        Claim held = claims.get(key);
+        if (held != null && held.holder != holder && now - held.renewedAt <= 1) {
+            return false;
+        }
+        claims.put(key, new Claim(holder, now));
+        return true;
+    }
+
+    /** Give {@code pos} back, if {@code holder} is the one holding it. */
+    public void release(BlockPos pos, Object holder) {
+        long key = pos.toLong();
+        Claim held = claims.get(key);
+        if (held != null && held.holder == holder) {
+            claims.remove(key);
+        }
+    }
+
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         entries.clear();
@@ -227,5 +264,16 @@ public class BlockDamageSavedData extends WorldSavedData {
         private int stage;
         private String originalBlock;
         private int originalMeta;
+    }
+
+    private static final class Claim {
+        /** Compared by identity: a claim belongs to one running machine, not to an equal one. */
+        private final Object holder;
+        private final long renewedAt;
+
+        private Claim(Object holder, long renewedAt) {
+            this.holder = holder;
+            this.renewedAt = renewedAt;
+        }
     }
 }

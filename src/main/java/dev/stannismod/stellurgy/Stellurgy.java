@@ -768,6 +768,8 @@ public class Stellurgy {
                 new ResourceLocation(Constants.modId, "ARweaponConsole"));
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor.class,
                 new ResourceLocation(Constants.modId, "ARfireControlSensor"));
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.damage.repair.TileRepairBay.class,
+                new ResourceLocation(Constants.modId, "StellurgyRepairBay"));
 
         if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().enableGravityController)
             GameRegistry.registerTileEntity(TileAreaGravityController.class, "StellurgyGravityMachine");
@@ -1317,6 +1319,14 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunAmmoFeed.setRegistryName("gunAmmoFeed"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunBeamEmitter.setRegistryName("gunBeamEmitter"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGunCooling.setRegistryName("gunCooling"));
+        // The repair bay: a controller that works the ship it stands on, made bigger — and faster —
+        // by frames placed against it. Neither block is held in a field: nothing in the mod refers
+        // to them by handle, so registering them is all there is to do.
+        LibVulpesBlocks.registerBlock(new BlockTile(dev.stannismod.stellurgy.damage.repair.TileRepairBay.class,
+                GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("repairBay")
+                .setCreativeTab(tabAdvRocketry).setHardness(3f).setRegistryName("repairBay"));
+        LibVulpesBlocks.registerBlock(new dev.stannismod.stellurgy.damage.repair.BlockRepairBayPart()
+                .setUnlocalizedName("repairBayPart").setCreativeTab(tabAdvRocketry).setRegistryName("repairBayPart"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGuidanceComputer.setRegistryName("guidanceComputer"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockAdvancedFlightComputer.setRegistryName("advancedFlightComputer"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockNavigationComputer.setRegistryName("navigationComputer"));

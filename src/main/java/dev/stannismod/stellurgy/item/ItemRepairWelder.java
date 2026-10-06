@@ -21,6 +21,7 @@ import javax.annotation.Nullable;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.damage.DamageState;
 import dev.stannismod.stellurgy.damage.RepairCost;
+import dev.stannismod.stellurgy.damage.RepairOutcome;
 
 import java.util.List;
 
@@ -54,37 +55,19 @@ public class ItemRepairWelder extends Item {
     }
 
     /**
-     * Every way one use of the welder can end. A type rather than four message strings, because the
-     * four are genuinely different answers and callers — the player, a test, a future automated
-     * rung — all need to tell them apart, not just read different words.
-     */
-    public enum Outcome {
-        REPAIRED("msg.welder.repaired"),
-        UNDAMAGED("msg.welder.undamaged"),
-        NO_RECIPE("msg.welder.nocost"),
-        NO_MATERIALS("msg.welder.nomaterials"),
-        NO_CHARGE("msg.welder.nocharge");
-
-        /** Effectively final, process lifetime: written only by the constructor. */
-        public final String messageKey;
-
-        Outcome(String messageKey) {
-            this.messageKey = messageKey;
-        }
-    }
-
-    /**
      * One stage of repair at {@code pos}, paid for out of {@code player}'s inventory and {@code
      * tool}'s charge. Server-side, silent, and the whole decision — the item below only turns the
-     * answer into words.
+     * answer into words. It answers in the ladder's shared vocabulary; of it, the welder gives only
+     * {@code REPAIRED}, {@code UNDAMAGED}, {@code NO_RECIPE}, {@code NO_MATERIALS} and
+     * {@code NO_CHARGE}.
      *
      * <p>Nothing is taken unless everything can be: the two charges are checked before either is
      * made, so a use that ends in a refusal costs the player nothing at all.</p>
      */
-    public static Outcome weld(EntityPlayer player, World world, BlockPos pos, ItemStack tool) {
+    public static RepairOutcome weld(EntityPlayer player, World world, BlockPos pos, ItemStack tool) {
         int stage = DamageState.getStage(world, pos);
         if (stage <= 0) {
-            return Outcome.UNDAMAGED;
+            return RepairOutcome.UNDAMAGED;
         }
         boolean free = player.capabilities.isCreativeMode;
         if (free) {
@@ -96,26 +79,44 @@ public class ItemRepairWelder extends Item {
             // refusal.
             DamageState.setStage(world, pos, stage - 1);
             world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 3);
-            return Outcome.REPAIRED;
+            return RepairOutcome.REPAIRED;
         }
 
         RepairCost cost = RepairCost.perStage(world, pos);
         if (cost == null) {
-            return Outcome.NO_RECIPE;
+            return RepairOutcome.NO_RECIPE;
         }
         int energyCost = StellurgyConfiguration.getCurrentConfig().repairWelderEnergyPerStage;
         if (storedEnergy(tool) < energyCost) {
-            return Outcome.NO_CHARGE;
+            return RepairOutcome.NO_CHARGE;
         }
         if (!cost.consume(player, true)) {
-            return Outcome.NO_MATERIALS;
+            return RepairOutcome.NO_MATERIALS;
         }
 
         cost.consume(player, false);
         setStoredEnergy(tool, storedEnergy(tool) - energyCost);
         DamageState.setStage(world, pos, stage - 1);
         world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 3);
-        return Outcome.REPAIRED;
+        return RepairOutcome.REPAIRED;
+    }
+
+    /** The welder's own sentence for an answer it gives. */
+    private static String messageKey(RepairOutcome outcome) {
+        switch (outcome) {
+            case REPAIRED:
+                return "msg.welder.repaired";
+            case UNDAMAGED:
+                return "msg.welder.undamaged";
+            case NO_RECIPE:
+                return "msg.welder.nocost";
+            case NO_MATERIALS:
+                return "msg.welder.nomaterials";
+            case NO_CHARGE:
+                return "msg.welder.nocharge";
+            default:
+                throw new IllegalStateException("the welder never answers " + outcome);
+        }
     }
 
     @Override
@@ -126,9 +127,9 @@ public class ItemRepairWelder extends Item {
             // predict a repair the server may refuse.
             return EnumActionResult.PASS;
         }
-        Outcome outcome = weld(player, world, pos, player.getHeldItem(hand));
-        player.sendStatusMessage(new TextComponentTranslation(outcome.messageKey), true);
-        if (outcome != Outcome.REPAIRED) {
+        RepairOutcome outcome = weld(player, world, pos, player.getHeldItem(hand));
+        player.sendStatusMessage(new TextComponentTranslation(messageKey(outcome)), true);
+        if (outcome != RepairOutcome.REPAIRED) {
             return EnumActionResult.FAIL;
         }
         world.playSound(null, pos, net.minecraft.init.SoundEvents.BLOCK_ANVIL_USE,
