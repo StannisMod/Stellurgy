@@ -28,6 +28,7 @@ import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileAtmosphereDetector extends TileEntity implements ITickable, IModularInventory, IButtonInventory, INetworkMachine {
 
@@ -126,8 +127,13 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
     }
 
     @Override
-    public boolean canInteractWithContainer(@Nullable EntityPlayer entity) {
-        return true;
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
+    public boolean canInteractWithContainer(EntityPlayer entity) {
+        return canBeUsedBy(entity);
     }
 
     @Override

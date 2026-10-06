@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * Advanced Flight Computer — the block that marks an assembled craft as a
@@ -1421,6 +1422,6 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 }

@@ -36,6 +36,7 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileSatelliteTerminal extends TileInventoriedRFConsumer
         implements INetworkMachine, IModularInventory, IButtonInventory, IDataInventory, IDataHandler {
@@ -464,5 +465,12 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
 
 
     @Override
-    public boolean canInteractWithContainer(EntityPlayer entity) { return true; }
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
+    public boolean canInteractWithContainer(EntityPlayer entity) {
+        return canBeUsedBy(entity);
+    }
 }

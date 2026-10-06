@@ -835,12 +835,18 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         return null;
     }
 
+    /**
+     * A player who starts seeing the rocket is sent its blocks and stats. The tracker calls this after
+     * it has sent him the spawn, on the same connection, so the rocket exists on his side when this
+     * arrives.
+     */
     @Override
-    public void setEntityId(int id) {
-        super.setEntityId(id);
-        //Ask server for nbt data
-        if (world.isRemote) {
-            PacketHandler.sendToServer(new PacketEntity(this, (byte) PacketType.REQUESTNBT.ordinal()));
+    public void addTrackingPlayer(EntityPlayerMP player) {
+        super.addTrackingPlayer(player);
+        if (storage != null) {
+            NBTTagCompound nbtdata = new NBTTagCompound();
+            this.writeNetworkableNBT(nbtdata);
+            PacketHandler.sendToPlayer(new PacketEntity(this, (byte) PacketType.RECIEVENBT.ordinal(), nbtdata), player);
         }
     }
 
@@ -3367,14 +3373,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         } else if (id == PacketType.OPENGUI.ordinal()) { //Used in key handler
             if (player.getRidingEntity() == this) //Prevent cheating
                 openGui(player);
-        } else if (id == PacketType.REQUESTNBT.ordinal()) {
-            if (storage != null) {
-                NBTTagCompound nbtdata = new NBTTagCompound();
-
-                this.writeNetworkableNBT(nbtdata);
-                PacketHandler.sendToPlayer(new PacketEntity(this, (byte) PacketType.RECIEVENBT.ordinal(), nbtdata), player);
-
-            }
         } else if (id == PacketType.FORCEMOUNT.ordinal()) { //Used for pesky dimension transfers
             //When dimensions are transferred make sure to remount the player on the client
             if (!acceptedPacket) {
@@ -3872,8 +3870,13 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        boolean ret = !this.isDead && this.getDistance(entity) < 64;
+        boolean ret = canBeUsedBy(entity);
         if (!ret && entity instanceof EntityPlayerMP)
             Stellurgy.serverState().rocketInventory.removePlayerFromInventoryBypass((EntityPlayerMP) entity);
 

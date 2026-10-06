@@ -24,6 +24,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * The chiller: the machine that drives one coolant loop hot so its radiators can actually shed, at
@@ -219,7 +220,7 @@ public class TileHeatChiller extends TileEntityRFConsumer
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 
     @Override

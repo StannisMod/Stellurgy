@@ -18,6 +18,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * The gas separator: one block, two directions, and the safety governor of the whole air loop.
@@ -71,7 +72,7 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
 
     @Override
     public boolean canInteractWithContainer(net.minecraft.entity.player.EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 
     @Override

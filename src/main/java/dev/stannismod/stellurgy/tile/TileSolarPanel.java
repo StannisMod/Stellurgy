@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedForgePowerMachine;
 
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileSolarPanel extends TileInventoriedForgePowerMachine {
 
@@ -85,6 +86,6 @@ public class TileSolarPanel extends TileInventoriedForgePowerMachine {
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 }

@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill;
 import dev.stannismod.stellurgy.tile.heat.TileWasteHeatPowerConsumer;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
@@ -38,9 +39,12 @@ import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements IGuiCallback, IButtonInventory {
 
+    /** Update-tag key of the state a player who starts seeing the drill is sent. */
+    private static final String NBT_DRILL_SYNC = "drillSync";
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final int POWER_PER_OPERATION = (int) (10000 * StellurgyConfiguration.getCurrentConfig().spaceLaserPowerMult);
     private AbstractDrill drill;
@@ -92,7 +96,6 @@ public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements
     private MODE mode;
 
     private boolean terraformingstatus;
-    boolean client_first_loop = true; // for render bug on client
     //private Ticket ticket; // this is useless anyway because it would not load the energy supply system and the laser would run out of energy
     
     // Performance tweaks
@@ -112,7 +115,6 @@ public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements
         this.voidMiningMode = !StellurgyConfiguration.getCurrentConfig().laserDrillPlanet;
 
         terraformingstatus = false;
-        client_first_loop = true;
 
         radius = 0;
         xCenter = 0;
@@ -337,10 +339,6 @@ public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements
             PacketHandler.sendToNearby(new PacketMachine(this, (byte) 11),
                     this.world.provider.getDimension(), pos, 2048);
 
-        } else if (id == 13) {
-            PacketHandler.sendToNearby(new PacketMachine(this, (byte) 11),
-                    this.world.provider.getDimension(), pos, 2048);
-
         } else if (id == 17) {
             // **IMPORTANT**: only act on server
             if (!world.isRemote) {
@@ -467,13 +465,6 @@ public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements
 
     @Override
     public void update() {
-
-
-        //Freaky janky crap to make sure the multiblock loads on chunkload etc
-        if (world.isRemote && client_first_loop) {
-            PacketHandler.sendToServer(new PacketMachine(this, (byte) 13));
-            client_first_loop = false;
-        }
         if (timeAlive == 0 && !world.isRemote) {
             if (isComplete())
                 canRender = completeStructure = completeStructure(world.getBlockState(pos));
@@ -587,6 +578,29 @@ public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements
         t = null;
         last_orbit_dim = 0;
         lastTfDim = Integer.MIN_VALUE;
+    }
+
+    /**
+     * What a player who starts seeing the drill is told: the state machine packet 11 carries, sent
+     * with the chunk. Built through packet 11's own encoder and decoder, so the two cannot drift.
+     */
+    @Override
+    public NBTTagCompound getUpdateTag() {
+        NBTTagCompound tag = super.getUpdateTag();
+        ByteBuf state = Unpooled.buffer();
+        writeDataToNetwork(state, (byte) 11);
+        NBTTagCompound sync = new NBTTagCompound();
+        readDataFromNetwork(state, (byte) 11, sync);
+        tag.setTag(NBT_DRILL_SYNC, sync);
+        return tag;
+    }
+
+    @Override
+    public void handleUpdateTag(NBTTagCompound tag) {
+        super.handleUpdateTag(tag);
+        if (tag.hasKey(NBT_DRILL_SYNC)) {
+            useNetworkData(null, Side.CLIENT, (byte) 11, tag.getCompoundTag(NBT_DRILL_SYNC));
+        }
     }
 
     @Override
@@ -945,8 +959,13 @@ public class TileOrbitalLaserDrill extends TileWasteHeatPowerConsumer implements
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
 
     void check_is_terraforming_update_gui() {

@@ -391,6 +391,11 @@ public class TileRocketFluidLoader extends TileFluidHatch implements IInfrastruc
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return canInteractWithContainer(player);
+    }
+
+    @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
         state = RedstoneState.values()[nbt.getByte("state")];

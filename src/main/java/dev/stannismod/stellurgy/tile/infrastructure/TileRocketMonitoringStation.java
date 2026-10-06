@@ -50,6 +50,7 @@ import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
 import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileRocketMonitoringStation extends TileEntity
     implements IModularInventory, ITickable, IAdjBlockUpdate, IInfrastructure,
@@ -1204,8 +1205,13 @@ public class TileRocketMonitoringStation extends TileEntity
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
     
     @Override

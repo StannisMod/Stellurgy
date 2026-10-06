@@ -16,6 +16,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.entity.EntityDummy;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * Pilot seat for a tier-2 (Valkyrien Skies) ship: the in-world control station that hands a
@@ -219,6 +220,16 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
      * SUBSPACE one — a frame-crossing comparison that can accept a bystander thousands of blocks
      * from the craft). A packet with no exact binding is dropped.
      */
+    /**
+     * Only the pilot seated here uses the seat, and he is within reach of it as of any machine.
+     * Reach does not replace the binding (see {@link #isPilotOf}); it is measured by
+     * {@link MachineReach}, whose distance Valkyrien Skies takes to where the seat really is.
+     */
+    @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return isPilotOf(player) && MachineReach.reaches(player, this);
+    }
+
     private boolean isPilotOf(EntityPlayer player) {
         if (player == null) {
             return false;

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.network;
 
 import io.netty.buffer.ByteBuf;
-import net.minecraft.client.Minecraft;
+import io.netty.buffer.Unpooled;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -11,17 +11,32 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
 
 import java.io.IOException;
 
+/**
+ * A packet addressed to an {@link INetworkEntity}: a dimension, an entity id, a packet id, an optional
+ * compound, and whatever bytes that entity writes for that id.
+ *
+ * <p>Decoding reads BYTES; the game thread resolves the ENTITY — the same split as
+ * {@link PacketMachine}, for the same reason: Netty decodes on its own IO thread, a world looked up
+ * there is looked up off the game thread, and an exception thrown by a decoder (a dimension that is
+ * not loaded) is fatal to the sender's connection.</p>
+ */
 public class PacketEntity extends BasePacket {
 
 	INetworkEntity entity;
 
 	NBTTagCompound nbt;
-	int entityId;
 	byte packetId;
+
+	/** Where the entity is. Read off the wire; resolved only on the game thread. */
+	private int dimId;
+	private int entityId;
+	/** The entity's own bytes, copied out of the decoder's buffer and read back on the game thread. */
+	private byte[] payload;
 
 	public PacketEntity() {
 		nbt = new NBTTagCompound();
@@ -62,95 +77,79 @@ public class PacketEntity extends BasePacket {
 
 	@Override
 	public void read(ByteBuf in) {
-		PacketBuffer buffer = new PacketBuffer(in);
-		read(buffer, true);
-	}
-
-	public void read(PacketBuffer in, boolean server) {
-		//DEBUG:
-		World world;
-		world = DimensionManager.getWorld(in.readInt());
-
-		int entityId = in.readInt();
-		packetId = in.readByte();
-
-		Entity ent = world.getEntityByID(entityId);
-
-		if(in.readBoolean()) {
-			NBTTagCompound nbt = null;
-
-			try {
-				nbt = in.readCompoundTag();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-			this.nbt = nbt;
-		}
-
-		if(ent instanceof INetworkEntity) {
-			entity = (INetworkEntity)ent;
-			entity.readDataFromNetwork(in, packetId, nbt);
-		}
-		else {
-			//Error
-		}
-	}
-
-	public void execute(EntityPlayer player, Side side) {
-		if(entity != null)
-			entity.useNetworkData(player, side, packetId, nbt);
-	}
-
-	@Override
-	public void executeServer(EntityPlayerMP player) {
-		execute(player, Side.SERVER);
-	}
-
-	@Override
-	public void executeClient(EntityPlayer player) {
-		execute(player, Side.CLIENT);
-		if(entity == null) {
-			
-		}
+		readAddressAndPayload(new PacketBuffer(in));
 	}
 
 	@Override
 	@SideOnly(Side.CLIENT)
 	public void readClient(ByteBuf in) {
-		PacketBuffer buffer = new PacketBuffer(in);
+		readAddressAndPayload(new PacketBuffer(in));
+	}
 
-		//DEBUG:
-		World world;
+	/** The whole of decoding: an address, the optional compound, and the bytes behind them. */
+	private void readAddressAndPayload(PacketBuffer in) {
+		dimId = in.readInt();
+		entityId = in.readInt();
+		packetId = in.readByte();
 
-		buffer.readInt();
-		world = Minecraft.getMinecraft().world;
-
-
-		int entityId = buffer.readInt();
-		packetId = buffer.readByte();
-
-		Entity ent = world.getEntityByID(entityId);
-
-		if(buffer.readBoolean()) {
-			NBTTagCompound nbt = null;
+		if(in.readBoolean()) {
+			NBTTagCompound read = null;
 
 			try {
-				nbt = buffer.readCompoundTag();
+				read = in.readCompoundTag();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 
-			this.nbt = nbt;
+			this.nbt = read;
 		}
 
-		if(ent instanceof INetworkEntity) {
-			entity = (INetworkEntity)ent;
-			entity.readDataFromNetwork(buffer, packetId, nbt);
+		payload = new byte[in.readableBytes()];
+		in.readBytes(payload);
+	}
+
+	/**
+	 * Find the addressed entity in {@code world}. Game thread only.
+	 *
+	 * @return the entity, or {@code null} when the world is not loaded or the id names no
+	 *         {@link INetworkEntity} in it
+	 */
+	private INetworkEntity resolve(World world) {
+		if (world == null || payload == null) {
+			return null;
 		}
-		else {
-			this.entityId = entityId;
-			System.out.println("oh no...");
+		Entity ent = world.getEntityByID(entityId);
+		return ent instanceof INetworkEntity ? (INetworkEntity) ent : null;
+	}
+
+	/**
+	 * A client's use of the entity. The dimension and the id are the client's to write, so the entity
+	 * is asked whether this player may use it before a byte of the payload is read, and a refusal is
+	 * logged.
+	 */
+	@Override
+	public void executeServer(EntityPlayerMP player) {
+		entity = resolve(DimensionManager.getWorld(dimId));
+		if (entity == null) {
+			return;
+		}
+		if (!entity.canBeUsedBy(player)) {
+			LibVulpes.logger.warn("Refused entity packet {} for {} #{} (dim {}) from {}: the player may not"
+							+ " use it", packetId, entity.getClass().getSimpleName(), entityId, dimId,
+					player == null ? "nobody" : player.getName());
+			return;
+		}
+		entity.readDataFromNetwork(new PacketBuffer(Unpooled.wrappedBuffer(payload)), packetId, nbt);
+		entity.useNetworkData(player, Side.SERVER, packetId, nbt);
+	}
+
+	@Override
+	public void executeClient(EntityPlayer player) {
+		// The receiving player's own world, as in PacketMachine: this method is not @SideOnly.
+		entity = resolve(player == null ? null : player.world);
+		if (entity != null) {
+			entity.readDataFromNetwork(new PacketBuffer(Unpooled.wrappedBuffer(payload)), packetId, nbt);
+			entity.useNetworkData(player, Side.CLIENT, packetId, nbt);
 		}
 	}
 

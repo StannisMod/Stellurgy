@@ -26,6 +26,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileFluidHatch extends TilePointer implements IFluidHandlerInternal, IModularInventory, ISidedInventory, IInventoryUpdateCallback {
 
@@ -173,7 +174,7 @@ public class TileFluidHatch extends TilePointer implements IFluidHandlerInternal
 
 	@Override
 	public boolean canInteractWithContainer(EntityPlayer entity) {
-		return true;
+		return MachineReach.reaches(entity, this);
 	}
 
 	@Override

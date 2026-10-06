@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * Tier 3 of the life-support progression: a powered block that regenerates the oxygen of the
@@ -66,7 +67,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
 
     @Override
     public boolean canInteractWithContainer(net.minecraft.entity.player.EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 
     @Override

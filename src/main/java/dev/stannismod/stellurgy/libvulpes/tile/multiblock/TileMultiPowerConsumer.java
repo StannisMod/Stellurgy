@@ -29,6 +29,8 @@ import dev.stannismod.stellurgy.libvulpes.util.MultiBattery;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nullable;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
+
 import java.util.LinkedList;
 import java.util.List;
 
@@ -394,8 +396,14 @@ public class TileMultiPowerConsumer extends TileMultiBlock implements INetworkMa
 			setMachineEnabled(toggleSwitch.getState());
 	}
 
+	/** A structure is used through its controller, so the reach is to the controller. */
+	@Override
+	public boolean canBeUsedBy(EntityPlayer player) {
+		return isComplete() && MachineReach.reaches(player, this);
+	}
+
 	@Override
 	public boolean canInteractWithContainer(EntityPlayer entity) {
-		return isComplete();
+		return canBeUsedBy(entity);
 	}
 }

@@ -40,6 +40,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileGuidanceComputerAccessHatch extends TilePointer implements IInfrastructure, IInventory, IModularInventory, IToggleButton, INetworkMachine, ITickable {
 
@@ -336,8 +337,13 @@ public class TileGuidanceComputerAccessHatch extends TilePointer implements IInf
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
 
     @Override

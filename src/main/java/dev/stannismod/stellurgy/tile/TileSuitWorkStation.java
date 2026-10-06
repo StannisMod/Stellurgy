@@ -16,6 +16,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileSuitWorkStation extends TileEntity implements IModularInventory, IInventory {
 
@@ -50,7 +51,7 @@ public class TileSuitWorkStation extends TileEntity implements IModularInventory
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 
     @Override

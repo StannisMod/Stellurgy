@@ -11,6 +11,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 /**
@@ -97,44 +98,50 @@ public class PacketMachine extends BasePacket {
 	}
 
 	/**
-	 * Find the addressed machine in {@code world} and hand it its bytes. Game thread only, where a
-	 * world lookup means something.
+	 * Find the addressed machine in {@code world}. Game thread only, where a world lookup means
+	 * something.
 	 *
 	 * @return the machine, or {@code null} when the world is not loaded, the block is not loaded, or
 	 *         whatever is at that position is not an {@link INetworkMachine}
 	 */
-	private INetworkMachine resolveAndFeed(World world) {
+	private INetworkMachine resolve(World world) {
 		if (world == null || payload == null || !world.isBlockLoaded(pos)) {
 			return null;
 		}
 		TileEntity ent = world.getTileEntity(pos);
-		if (!(ent instanceof INetworkMachine)) {
-			return null;
-		}
-		INetworkMachine found = (INetworkMachine) ent;
-		found.readDataFromNetwork(Unpooled.wrappedBuffer(payload), packetId, nbt);
-		return found;
+		return ent instanceof INetworkMachine ? (INetworkMachine) ent : null;
 	}
 
 	public void executeClient(EntityPlayer player) {
 		// The receiving player's own world, not Minecraft.getMinecraft() — this method is not
 		// @SideOnly and must stay loadable on a dedicated server, where that class does not exist.
-		machine = resolveAndFeed(player == null ? null : player.world);
+		machine = resolve(player == null ? null : player.world);
 		//Machine can be null if not all chunks are loaded
-		if(machine != null)
+		if (machine != null) {
+			machine.readDataFromNetwork(Unpooled.wrappedBuffer(payload), packetId, nbt);
 			machine.useNetworkData(player, Side.CLIENT, packetId, nbt);
+		}
 	}
 
+	/**
+	 * A client's press of one of the machine's buttons. The address is the client's to write, so it
+	 * may name a machine the sender is nowhere near: the machine is asked whether this player may use
+	 * it before a byte of the payload is read, and a refusal is logged — a press that silently did
+	 * nothing would read, from the server log, exactly like a button nobody pressed.
+	 */
 	public void executeServer(EntityPlayerMP player) {
-		machine = resolveAndFeed(DimensionManager.getWorld(dimId));
-		if(machine != null)
-			machine.useNetworkData(player, Side.SERVER, packetId, nbt);
-	}
-
-	public void execute(EntityPlayer player, Side side) {
-		machine = resolveAndFeed(side.isClient() ? player.world : DimensionManager.getWorld(dimId));
-		if(machine != null)
-			machine.useNetworkData(player, side, packetId, nbt);
+		machine = resolve(DimensionManager.getWorld(dimId));
+		if (machine == null) {
+			return;
+		}
+		if (!machine.canBeUsedBy(player)) {
+			LibVulpes.logger.warn("Refused machine packet {} for {} at {} (dim {}) from {}: the player"
+							+ " may not use it", packetId, machine.getClass().getSimpleName(), pos, dimId,
+					player == null ? "nobody" : player.getName());
+			return;
+		}
+		machine.readDataFromNetwork(Unpooled.wrappedBuffer(payload), packetId, nbt);
+		machine.useNetworkData(player, Side.SERVER, packetId, nbt);
 	}
 
 }

@@ -28,6 +28,7 @@ import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileStationGravityController extends TileEntity implements IModularInventory, ITickable, INetworkMachine, ISliderBar, IButtonInventory, IComparatorOverride {
 
@@ -235,8 +236,13 @@ public class TileStationGravityController extends TileEntity implements IModular
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
 
     @Override

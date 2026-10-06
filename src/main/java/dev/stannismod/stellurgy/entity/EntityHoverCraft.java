@@ -19,6 +19,7 @@ import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -365,6 +366,11 @@ public class EntityHoverCraft extends Entity implements IInventory, INetworkEnti
             this.turningUp = nbt.getBoolean("up");
             this.turningDownforWhat = nbt.getBoolean("down");
         }
+    }
+
+    @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
     }
 
 

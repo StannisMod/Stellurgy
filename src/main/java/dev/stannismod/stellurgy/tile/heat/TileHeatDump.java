@@ -24,6 +24,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * The emergency heat dump: when rejection cannot win, energy leaves the ship inside a lump of matter
@@ -209,6 +210,6 @@ public class TileHeatDump extends TileInventoriedRFConsumer
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer player) {
-        return true;
+        return MachineReach.reaches(player, this);
     }
 }

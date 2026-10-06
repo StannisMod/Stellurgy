@@ -33,6 +33,8 @@ import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
+import net.minecraft.entity.player.EntityPlayerMP;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -46,7 +48,6 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
     protected static final DataParameter<Byte> motionDir = EntityDataManager.createKey(EntityElevatorCapsule.class, DataSerializers.BYTE);
     protected static final DataParameter<Integer> standTimeCounter = EntityDataManager.createKey(EntityElevatorCapsule.class, DataSerializers.VARINT);
     private static final byte PACKET_WRITE_DST_INFO = 0;
-    private static final byte PACKET_RECIEVE_NBT = 1;
     private static final byte PACKET_LAUNCH_EVENT = 2;
     private static final byte PACKET_DEORBIT = 3;
     private static final byte PACKET_WRITE_SRC_INFO = 4;
@@ -141,13 +142,20 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
             srcTilePos = null;
     }
 
+    /**
+     * A player who starts seeing the capsule is told where it is bound. The tracker calls this after
+     * it has sent him the spawn, on the same connection, so the capsule exists on his side when this
+     * arrives.
+     */
     @Override
-    public void setEntityId(int id) {
-        super.setEntityId(id);
-        //Ask server for nbt data
-        if (world.isRemote) {
-            PacketHandler.sendToServer(new PacketEntity(this, PACKET_RECIEVE_NBT));
-        }
+    public void addTrackingPlayer(EntityPlayerMP player) {
+        super.addTrackingPlayer(player);
+        PacketHandler.sendToPlayer(new PacketEntity(this, PACKET_WRITE_DST_INFO), player);
+    }
+
+    @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
     }
 
     @Override
@@ -531,8 +539,6 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
             if (nbt.hasKey("dimid")) {
                 srcTilePos = new DimensionBlockPosition(nbt.getInteger("dimid"), new HashedBlockPosition(nbt.getInteger("x"), nbt.getInteger("y"), nbt.getInteger("z")));
             } else srcTilePos = null;
-        } else if (id == PACKET_RECIEVE_NBT) {
-            PacketHandler.sendToPlayersTrackingEntity(new PacketEntity(this, PACKET_WRITE_DST_INFO), this);
         } else if (id == PACKET_LAUNCH_EVENT && world.isRemote) {
             List<EntityPlayer> list = world.getEntitiesWithinAABB(EntityPlayer.class, getEntityBoundingBox());
             for (Entity ent : list) {

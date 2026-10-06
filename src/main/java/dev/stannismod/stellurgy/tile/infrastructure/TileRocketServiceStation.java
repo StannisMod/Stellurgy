@@ -51,6 +51,7 @@ import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.stream.Collectors;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileRocketServiceStation extends TileEntityRFConsumer implements IModularInventory, ITickable, IAdjBlockUpdate, IInfrastructure, ILinkableTile, INetworkMachine, IButtonInventory, IProgressBar, IComparatorOverride {
 
@@ -701,8 +702,13 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
 
     @Override

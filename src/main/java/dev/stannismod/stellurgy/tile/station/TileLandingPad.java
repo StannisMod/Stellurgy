@@ -383,6 +383,11 @@ public class TileLandingPad extends TileInventoryHatch implements ILinkableTile,
 
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return canInteractWithContainer(player);
+    }
+
+    @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
         if (id == 0) {

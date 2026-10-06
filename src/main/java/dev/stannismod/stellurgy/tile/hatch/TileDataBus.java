@@ -217,6 +217,11 @@ public class TileDataBus extends TileInventoryHatch implements IDataInventory, I
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return canInteractWithContainer(player);
+    }
+
+    @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
     }
 

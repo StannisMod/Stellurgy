@@ -23,6 +23,7 @@ import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileDockingPort extends TileEntity implements IModularInventory, IGuiCallback, INetworkMachine {
 
@@ -123,8 +124,13 @@ public class TileDockingPort extends TileEntity implements IModularInventory, IG
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
 
     @Override

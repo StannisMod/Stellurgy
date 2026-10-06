@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedForgePowerMachine;
 
 import javax.annotation.Nonnull;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileCoalGenerator extends TileInventoriedForgePowerMachine implements IComparatorOverride {
 
@@ -76,7 +77,7 @@ public class TileCoalGenerator extends TileInventoriedForgePowerMachine implemen
 
 	@Override
 	public boolean canInteractWithContainer(EntityPlayer entity) {
-		return true;
+		return MachineReach.reaches(entity, this);
 	}
 
 	@Override

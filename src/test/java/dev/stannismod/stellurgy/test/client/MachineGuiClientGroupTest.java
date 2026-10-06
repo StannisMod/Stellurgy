@@ -10,6 +10,8 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.NavStatus;
 import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Events;
@@ -125,6 +127,34 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
     private static final int FAR_FROM_CONSOLE = 24;
     /** Vanilla's container reach, squared: {@code TileEntityLockableLoot#isUsableByPlayer}'s 64.0. */
     private static final double VANILLA_CONTAINER_REACH_SQ = 64.0D;
+    /** A machine that answered every player at any distance before its screen became a use of it. */
+    private static final String AIR_RECIRCULATOR = "stellurgy:airRecirculator";
+    /** The container a libVulpes machine's screen runs, by the simple name the recorders write. */
+    private static final String MACHINE_CONTAINER = "ContainerModular";
+    /**
+     * Where the rocket's watcher stands, down the plot from the pad: well beyond reach of its box, and
+     * well inside the 64 blocks a rocket is tracked at (its entity registration in {@code Stellurgy}),
+     * so the client is shown the rocket at all.
+     */
+    private static final int ROCKET_VIEWER_DISTANCE = 32;
+    /**
+     * The rocket's sight, in blocks along an axis: its tracking range (its entity registration in
+     * {@code Stellurgy}) and the radius the assembler broadcasts a new rocket's blocks at
+     * ({@code TileRocketAssemblingMachine}'s {@code sendToNearby}), both 64.
+     */
+    private static final int ROCKET_SIGHT_BLOCKS = 64;
+    /** Where the player stands while the rocket is assembled: out of its sight, still inside the 128-block plot. */
+    private static final int ROCKET_OUT_OF_SIGHT = 110;
+    /**
+     * How far the fixture rocket's box can reach from its position, as a bound: the fixture builds the
+     * craft on a 5x5 pad from ten blocks (two motors, six tanks, a computer, a seat), so no point of it
+     * lies 16 blocks from its base.
+     */
+    private static final double ROCKET_BOX_BOUND = 16.0D;
+    /** Blocks to the side of the rocket's position the near packet is sent from — inside reach of it. */
+    private static final int BESIDE_ROCKET = 3;
+    /** The rocket does not move, so its working volume is the pad's footprint and a block around it. */
+    private static final int ROCKET_SITE_HALO = 1;
 
     private static final String SHIP_COUNT = "ship";
     private static final String SOURCE_COUNT = "source";
@@ -1296,9 +1326,9 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      */
     /**
      * A machine packet's address is the CLIENT's to write, so a press can name a weapon console its
-     * sender is nowhere near. The server answers it by the console's own usability rule — the same
-     * world, within a chest's reach — and a press from beyond it changes nothing; the same press from
-     * beside the console still holds the battery's fire.
+     * sender is nowhere near. The server asks the console whether this player may use it before it
+     * reads the press — the same world, within a chest's reach — and a press from beyond it changes
+     * nothing; the same press from beside the console still holds the battery's fire.
      *
      * <p>Both presses are forged by the real client ({@link ForgedMachinePress}) rather than clicked:
      * a far player has no screen to click, and a modified client does not need one. That is the
@@ -1306,35 +1336,32 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * the screen's own button, which {@code WeaponGuiButtonsReachTheServerE2ETest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      *
-     * <p>red-witnessed: with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}
-     * answering {@code true} unconditionally (the shape it shipped with), this fails at "the console
-     * judged a press from 24 blocks away as within reach: {...weapon_console_press_judged,
-     * pos:4016,150,4016,player:ForgeTestClient,reachable:true}" (2026-10-06).</p>
+     * <p>The witnesses below the first one were taken on the pre-2026-10-06 form, in which the console
+     * judged its own presses inside {@code TileWeaponConsole#useNetworkData}; that check is gone and
+     * the judgement is {@code PacketMachine#executeServer}'s, recorded as {@code machine_packet_judged}.
+     * They are kept as history of what this method caught; the ones that count today are the two
+     * {@code PacketMachine} / {@code MachineReach} records.</p>
      *
-     * <p>red-witnessed: with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}
-     * keeping its log line but not its {@code return}, this fails at "a press from beyond reach held the
+     * <p>red-witnessed: with {@code MachineReach#reaches} at {@code <= REACH_SQ} answering for any
+     * distance ({@code >= 0}, both overloads), this fails at "the console judged a press from 24 blocks
+     * away as within reach: {...machine_packet_judged,machine:TileWeaponConsole,...usable:true}"
+     * (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code PacketMachine#executeServer} at {@code return;} removed from the
+     * refusal (it logs and reads the press anyway), this fails at "a press from beyond reach held the
      * battery's fire anyway: {...network:true,...holdFire:true...}" (2026-10-06).</p>
      *
-     * <p>red-witnessed: with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}
-     * answering {@code false} unconditionally, this fails at "the console refused a press from the
-     * player standing on it: {...reachable:false}" (2026-10-06).</p>
+     * <p>red-witnessed: with {@code TileWeaponConsole#canBeUsedBy} at
+     * {@code return MachineReach.reaches(player, this);} answering {@code false}, this fails at "the
+     * console refused a press from the player standing on it: {...usable:false}" (2026-10-06).</p>
      *
-     * <p>red-witnessed: with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}
-     * removed, this fails at "a press from the player standing on the console did not hold fire:
-     * {...holdFire:false...}" (2026-10-06).</p>
+     * <p>red-witnessed (pre-2026-10-06 form, history): with {@code TileWeaponConsole#useNetworkData}
+     * at {@code setHoldFire(!isHoldFire());} removed, this fails at "a press from the player standing
+     * on the console did not hold fire: {...holdFire:false...}" (2026-10-06).</p>
      *
      * <p>red-witnessed: with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}
      * removed, this fails at the arrangement wait "the console never joined a weapon network ... no
-     * `weapon_orders_seeded` carrying consoles = 4144,150,4016"; with {@code TileWeaponConsole#useNetworkData}
-     * returning before {@code if (!canInteractWithContainer(player))}, at the far wait "the console never
-     * judged the far press: it never reached the server" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: NOT YET, with {@code TileWeaponConsole#useNetworkData} at
-     * {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR
-     * {@code weapon_console_press_judged} wait and the two
-     * {@code awaitClientPlacedNear} waits, for the reasons given on
-     * {@link #aFireControlSensorPressFromBeyondReachChangesNothing}: a break silencing the near press
-     * silences the far one first, and the placement waits link on vanilla's teleport.</p>
+     * `weapon_orders_seeded` carrying consoles = 4144,150,4016" (2026-10-06).</p>
      */
     @Test
     public void aWeaponConsolePressFromBeyondReachChangesNothing() throws Exception {
@@ -1371,11 +1398,11 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().asserting("a press from beyond reach is judged out of reach and changes nothing");
         long farPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, CONSOLE_TOGGLE_HOLD_FIRE);
-        String farJudged = events.awaitRecordWithFields(farPress, "weapon_console_press_judged",
-                "the console never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String farJudged = events.awaitRecordWithFields(farPress, "machine_packet_judged",
+                "the server never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the console judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
-                + farJudged, "false", Events.text(farJudged, "reachable"));
+                + farJudged, "false", Events.text(farJudged, "usable"));
         Reply afterFar = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
         scenario().requireArranged("the console lost its network during the far press: " + afterFar,
                 afterFar.bool("network"));
@@ -1391,42 +1418,37 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, nearSq <= VANILLA_CONTAINER_REACH_SQ);
         long nearPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, CONSOLE_TOGGLE_HOLD_FIRE);
-        String nearJudged = events.awaitRecordWithFields(nearPress, "weapon_console_press_judged",
-                "the console never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String nearJudged = events.awaitRecordWithFields(nearPress, "machine_packet_judged",
+                "the server never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the console refused a press from the player standing on it: " + nearJudged,
-                "true", Events.text(nearJudged, "reachable"));
+                "true", Events.text(nearJudged, "usable"));
         Reply afterNear = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
         assertTrue("a press from the player standing on the console did not hold fire: " + afterNear,
                 afterNear.bool("holdFire"));
     }
 
     /**
-     * The fire-control sensor answers a press the way the weapon console does: by vanilla's usability
-     * rule, so a press from beyond a chest's reach leaves its mode alone, and the same press from the
-     * player standing on it switches it to illuminating. Both presses are forged by the real client
-     * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerE2ETest}'s.
+     * The fire-control sensor is asked the way the weapon console is: by vanilla's usability rule,
+     * before the server reads the press, so a press from beyond a chest's reach leaves its mode alone,
+     * and the same press from the player standing on it switches it to illuminating. Both presses are
+     * forged by the real client ({@link ForgedMachinePress}); the screen's own button is
+     * {@code WeaponGuiButtonsReachTheServerE2ETest}'s.
      *
-     * <p>red-witnessed (2026-10-06, one inversion per run):
-     * {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering
-     * true fails "the sensor judged a press from 24 blocks away as within reach"; answering false fails
-     * "the sensor refused a press from the player standing on it";
-     * {@code TileFireControlSensor#useNetworkData} at {@code if (!canInteractWithContainer(player))}
-     * logging without its {@code return} fails "a press from beyond reach switched the sensor anyway
-     * {...mode:ACTIVE...}"; the same method at {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);}
-     * removed fails "a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}";
-     * the same method returning before {@code if (!canInteractWithContainer(player))} fails at the far
-     * wait, "the sensor never judged the far press: it never reached the server".</p>
+     * <p>red-witnessed (2026-10-06, one inversion per run): {@code MachineReach#reaches} at
+     * {@code <= REACH_SQ} answering for any distance fails "the sensor judged a press from 24 blocks
+     * away as within reach: {...usable:true}"; {@code PacketMachine#executeServer} at {@code return;}
+     * removed from the refusal fails "a press from beyond reach switched the sensor anyway
+     * {...mode:ACTIVE...}"; {@code TileFireControlSensor#canBeUsedBy} at
+     * {@code return MachineReach.reaches(player, this);} answering {@code false} fails "the sensor
+     * refused a press from the player standing on it: {...usable:false}".</p>
      *
-     * <p>red-witnessed: NOT YET, with {@code TileFireControlSensor#useNetworkData} at
-     * {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR
-     * {@code sensor_press_judged} wait and the two
-     * {@code awaitClientPlacedNear} waits. Any production break that silences the near press silences
-     * the far one first (one path, one seam), so it reds the far wait instead; the only break that
-     * reaches the near wait alone is one conditional on distance — the reach decision itself, which the
-     * near verdict after it pins. The placement waits link on vanilla's own position packet
-     * ({@code client_pos_look_applied} after {@code /tp}); no Stellurgy code decides it, so there is
-     * nothing of ours to break.</p>
+     * <p>red-witnessed (pre-2026-10-06 form, history): {@code TileFireControlSensor#useNetworkData} at
+     * {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);} removed
+     * fails "a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}".</p>
+     *
+     * <p>The placement waits link on vanilla's own position packet ({@code client_pos_look_applied}
+     * after {@code /tp}); no Stellurgy code decides it, so there is nothing of ours to break.</p>
      */
     @Test
     public void aFireControlSensorPressFromBeyondReachChangesNothing() throws Exception {
@@ -1456,11 +1478,11 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().asserting("a press from beyond reach is judged out of reach and leaves the mode alone");
         long farPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, SENSOR_TOGGLE_MODE);
-        String farJudged = events.awaitRecordWithFields(farPress, "sensor_press_judged",
-                "the sensor never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String farJudged = events.awaitRecordWithFields(farPress, "machine_packet_judged",
+                "the server never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the sensor judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
-                + farJudged, "false", Events.text(farJudged, "reachable"));
+                + farJudged, "false", Events.text(farJudged, "usable"));
         Reply afterFar = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
         assertEquals("a press from beyond reach switched the sensor anyway: " + afterFar,
                 "PASSIVE", afterFar.text("mode"));
@@ -1474,11 +1496,11 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
                 + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, nearSq <= VANILLA_CONTAINER_REACH_SQ);
         long nearPress = events.mark();
         ForgedMachinePress.send(bot(), x, Y, z, SENSOR_TOGGLE_MODE);
-        String nearJudged = events.awaitRecordWithFields(nearPress, "sensor_press_judged",
-                "the sensor never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+        String nearJudged = events.awaitRecordWithFields(nearPress, "machine_packet_judged",
+                "the server never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
                 "pos", Weapons.at(x, Y, z));
         assertEquals("the sensor refused a press from the player standing on it: " + nearJudged,
-                "true", Events.text(nearJudged, "reachable"));
+                "true", Events.text(nearJudged, "usable"));
         Reply afterNear = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
         assertEquals("a press from the player standing on the sensor did not switch it: " + afterNear,
                 "ACTIVE", afterNear.text("mode"));
@@ -1490,14 +1512,253 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * the side that compares it.
      */
     private double serverDistanceSqTo(int x, int y, int z) throws Exception {
+        return serverDistanceSqToPoint(x + 0.5D, y + 0.5D, z + 0.5D);
+    }
+
+    /** {@link #serverDistanceSqTo}, to a point rather than a block's centre — an entity's position. */
+    private double serverDistanceSqToPoint(double x, double y, double z) throws Exception {
         Reply at = Reply.of(exec("stellurgytest player position-of " + PlayerState.botName(this::exec)))
                 .requireOk("read the player's position on the server");
-        double dx = at.number("playerPosX") - (x + 0.5D);
-        double dy = at.number("playerPosY") - (y + 0.5D);
-        double dz = at.number("playerPosZ") - (z + 0.5D);
+        double dx = at.number("playerPosX") - x;
+        double dy = at.number("playerPosY") - y;
+        double dz = at.number("playerPosZ") - z;
         double sq = dx * dx + dy * dy + dz * dz;
         System.out.println("[reach] server position " + at + " -> squared distance " + sq + " to " + x + "," + y + "," + z);
         return sq;
+    }
+
+    /**
+     * An open machine screen IS its player using the machine, so the server closes it when he walks
+     * out of a chest's reach of the machine — here for an air recirculator, one of the machines that
+     * used to answer "yes" to every player at any distance, which kept its screen open across the
+     * world.
+     *
+     * <p>Seen through the server's own per-tick container check ({@code container_interact_checked},
+     * an edge recorder: a record when the answer or the container changes) and the close it causes
+     * ({@code container_closed}), and through the client's screen going away
+     * ({@code client_gui_opened} with {@code gui:none}). The refusal is pinned on the machine's own
+     * container ({@code ContainerModular}): once it is closed the player's container is his inventory
+     * again, so a {@code ContainerModular} answered {@code false} can only precede the close. What this
+     * does not see: a machine packet sent after the close — the forged-press methods are that.</p>
+     *
+     * <p>red-witnessed: with {@code MachineReach#reaches} at {@code <= REACH_SQ} answering for any
+     * distance, this fails at "the server never closed the machine's screen after he walked 24 blocks
+     * away — no `container_closed` carrying container = ContainerModular was recorded within 200 ticks"
+     * (2026-10-06).</p>
+     *
+     * <p>red-witnessed: NOT YET for the {@code allowed:false} assertion and the client's
+     * {@code gui:none} wait. The break tried, {@code MachineReach#reaches} at {@code <= REACH_SQ}
+     * answering for any distance, stops the close itself, so it reds the close wait above them; the only way past that wait with no refusal is a close for some other
+     * reason, which no Stellurgy code makes here. The client taking the screen down is vanilla's
+     * answer to the server's close packet; nothing of ours decides it.</p>
+     */
+    @Test
+    public void aMachineScreenClosesWhenItsUserWalksOutOfReach() throws Exception {
+        int dim = plot().dim;
+        int[] at = placeMachineAndStandOnIt(AIR_RECIRCULATOR);
+        Events events = serverEvents();
+
+        scenario().arranging("the machine's screen open, held open by the server while he stands on it");
+        long openMark = events.markInstrumented();
+        String screen = openMachineGui(at);
+        scenario().requireArranged("the machine's screen must be open, or there is nothing to close: " + screen,
+                screen.startsWith(GUI_MODULAR));
+        String openChecks = events.since(openMark, "container_interact_checked");
+        scenario().requireArranged("the server must have judged the open screen usable from where he stands"
+                + " — otherwise a close below says nothing about distance: " + openChecks,
+                Events.anyRecordHasAll(openChecks, "container", MACHINE_CONTAINER, "allowed", "true"));
+
+        int farZ = at[2] + FAR_FROM_CONSOLE;
+        exec("stellurgytest place " + dim + " " + at[0] + " " + Y + " " + farZ + " minecraft:stone");
+
+        scenario().asserting("walking out of reach closes the machine's screen, on the server's own check");
+        long walkMark = events.markInstrumented();
+        long walkOnClient = clientEvents().mark();
+        exec("tp @a " + (at[0] + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
+        awaitClientPlacedNear(walkOnClient, at[0] + 0.5, farZ + 0.5, "he must have walked away");
+        double farSq = serverDistanceSqTo(at[0], at[1], at[2]);
+        scenario().requireArranged("he must stand beyond reach of the machine: squared distance " + farSq
+                + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, farSq > VANILLA_CONTAINER_REACH_SQ);
+        String closed = events.awaitRecordWithFields(walkMark, "container_closed",
+                "the server never closed the machine's screen after he walked " + FAR_FROM_CONSOLE + " blocks away",
+                GUI_LINK_BUDGET_TICKS, "container", MACHINE_CONTAINER);
+        String walkChecks = events.since(walkMark, "container_interact_checked");
+        assertTrue("the machine's screen closed, but not because the server judged it out of reach: no"
+                        + " " + MACHINE_CONTAINER + " answered false. closed=" + closed + " checks=" + walkChecks,
+                Events.anyRecordHasAll(walkChecks, "container", MACHINE_CONTAINER, "allowed", "false"));
+        clientEvents().awaitField(walkOnClient, "client_gui_opened", "gui", "none",
+                "the client must take the machine's screen down when the server closes it", GUI_LINK_BUDGET_TICKS);
+    }
+
+    /**
+     * A player who comes to see a rocket that already exists is given its blocks by the server, from
+     * wherever he stands: being shown a craft is not using it, so it is not a packet of his — the
+     * server pushes the rocket when he starts seeing it. He arrives beyond reach of it, which is
+     * exactly where a request of his own would be refused.
+     *
+     * <p>The rocket is assembled while he stands out of its sight ({@link #ROCKET_OUT_OF_SIGHT} down
+     * the plot): the assembler broadcasts the new rocket's blocks to everyone within 64 blocks of it,
+     * and a watcher already there would be shown it by that broadcast, not by the push this pins.
+     * Seen on the client ({@code rocket_blocks_received}, at the point its copy of the rocket has
+     * rebuilt itself from what it was sent). What this does not see: the drawing itself.</p>
+     *
+     * <p>red-witnessed: with {@code EntityRocket#addTrackingPlayer} at {@code if (storage != null)}
+     * made {@code false}, this fails at "a player who came within sight of the rocket was never given
+     * its blocks — no `rocket_blocks_received` carrying e = 1713" (2026-10-06). (On its first form —
+     * the watcher present at assembly — the same inversion left it GREEN: the assembler's own
+     * broadcast showed him the rocket. That is why he now stands out of sight while it is built.)</p>
+     *
+     * <p>red-witnessed: NOT YET for the {@code blocks} assertion: {@code EntityRocket#addTrackingPlayer}
+     * at {@code if (storage != null)} sends the push only when the rocket has a block store, so the
+     * break tried above silences the record instead of emptying it.</p>
+     */
+    @Test
+    public void aRocketIsShownToAPlayerWhoSeesItFromBeyondReach() throws Exception {
+        scenario().arranging("a rocket assembled while the player stands out of its sight");
+        int[] builder = buildRocketFixture();
+        standDownThePad(ROCKET_OUT_OF_SIGHT, "he must stand out of the rocket's sight while it is assembled");
+        int rocket = assembleRocket(builder);
+        Reply where = rocketInfo(rocket);
+        double[] away = serverOffsetTo(where.number("posX"), where.number("posZ"));
+        scenario().requireArranged("he must stand beyond the 64 blocks the rocket is tracked at, and the"
+                + " assembler broadcasts at, along either axis: offset " + away[0] + "," + away[1],
+                Math.max(Math.abs(away[0]), Math.abs(away[1])) > ROCKET_SIGHT_BLOCKS);
+
+        scenario().asserting("walking to within sight of it shows it to him, without his client asking");
+        long seen = clientEvents().mark();
+        standDownThePad(ROCKET_VIEWER_DISTANCE, "he must watch from where he now stands");
+        requireBeyondReachOf(rocket);
+        String received = clientEvents().awaitRecordWithFields(seen, "rocket_blocks_received",
+                "a player who came within sight of the rocket was never given its blocks", GUI_LINK_BUDGET_TICKS,
+                "e", String.valueOf(rocket));
+        assertEquals("the client was told about the rocket, but holds no blocks for it: " + received,
+                "true", Events.text(received, "blocks"));
+    }
+
+    /**
+     * A packet to a rocket is its player using it, so the server asks the rocket before reading it: a
+     * packet from a player beyond reach of the rocket is refused, and the same packet from beside it is
+     * accepted. The packet is the client's own, built from its copy of the rocket ({@link ForgedEntityPress})
+     * — what any client can send for a rocket it merely sees.
+     *
+     * <p>The packet is {@code TOGGLE_RCS}, which no longer changes anything once accepted, so the
+     * verdict is the server's judgement itself ({@code entity_packet_judged}); what an accepted packet
+     * does is each packet's own contract. What this does not see: a packet to a rocket in another
+     * dimension, which the client cannot address.</p>
+     *
+     * <p>red-witnessed: with {@code MachineReach#reaches} at {@code <= REACH_SQ} answering for any
+     * distance, this fails at "the rocket accepted a packet from a player beyond reach of it:
+     * {...entity_packet_judged,...entity:EntityRocket,packet:19,...usable:true}" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code EntityRocket#canBeUsedBy} at
+     * {@code return MachineReach.reaches(player, this);} answering {@code false}, this fails at "the
+     * rocket refused a packet from the player standing beside it: {...usable:false}" (2026-10-06).</p>
+     */
+    @Test
+    public void aRocketRefusesAPacketFromBeyondReach() throws Exception {
+        int dim = plot().dim;
+        Events events = serverEvents();
+
+        scenario().arranging("a rocket the client holds, watched from beyond reach");
+        int[] builder = buildRocketFixture();
+        standFarFromThePad();
+        long seen = clientEvents().mark();
+        int rocket = assembleRocket(builder);
+        clientEvents().awaitRecordWithFields(seen, "rocket_blocks_received",
+                "the client must hold the rocket before it can send it anything", GUI_LINK_BUDGET_TICKS,
+                "e", String.valueOf(rocket));
+        requireBeyondReachOf(rocket);
+
+        scenario().asserting("a packet from beyond reach of the rocket is refused");
+        long farPress = events.mark();
+        scenario().requireArranged("the client must have sent the far packet",
+                ForgedEntityPress.send(bot(), rocket, EntityRocket.PacketType.TOGGLE_RCS.ordinal()));
+        String farJudged = events.awaitRecordWithFields(farPress, "entity_packet_judged",
+                "the server never judged the far packet: it never reached the server", GUI_LINK_BUDGET_TICKS,
+                "e", String.valueOf(rocket));
+        assertEquals("the rocket accepted a packet from a player beyond reach of it: " + farJudged,
+                "false", Events.text(farJudged, "usable"));
+
+        scenario().asserting("the same packet from beside the rocket is accepted");
+        Reply where = rocketInfo(rocket);
+        int besideX = (int) Math.floor(where.number("posX")) + BESIDE_ROCKET;
+        int besideZ = (int) Math.floor(where.number("posZ"));
+        int floorY = (int) Math.floor(where.number("posY")) - 1;
+        exec("stellurgytest place " + dim + " " + besideX + " " + floorY + " " + besideZ + " minecraft:stone");
+        long nearStand = clientEvents().mark();
+        exec("tp @a " + (besideX + 0.5) + " " + (floorY + 1) + " " + (besideZ + 0.5) + " 90 0");
+        awaitClientPlacedNear(nearStand, besideX + 0.5, besideZ + 0.5, "the packet must leave from beside the rocket");
+        double nearSq = serverDistanceSqToPoint(where.number("posX"), where.number("posY"), where.number("posZ"));
+        scenario().requireArranged("he must stand within reach of the rocket's own position (inside its box):"
+                + " squared distance " + nearSq + " against " + VANILLA_CONTAINER_REACH_SQ,
+                nearSq <= VANILLA_CONTAINER_REACH_SQ);
+        long nearPress = events.mark();
+        scenario().requireArranged("the client must have sent the near packet",
+                ForgedEntityPress.send(bot(), rocket, EntityRocket.PacketType.TOGGLE_RCS.ordinal()));
+        String nearJudged = events.awaitRecordWithFields(nearPress, "entity_packet_judged",
+                "the server never judged the near packet: it never reached the server", GUI_LINK_BUDGET_TICKS,
+                "e", String.valueOf(rocket));
+        assertEquals("the rocket refused a packet from the player standing beside it: " + nearJudged,
+                "true", Events.text(nearJudged, "usable"));
+    }
+
+    /** Where this plot's rocket stands: the machine offset, so a machine scenario and it never meet. */
+    private FixtureSite rocketSite() {
+        return plot().siteAt(MACHINE_DX, MACHINE_DZ);
+    }
+
+    /** Lays the rocket fixture's blocks, loose, at {@link #rocketSite}; returns the assembler's position. */
+    private int[] buildRocketFixture() throws Exception {
+        warmupPlotChunks();
+        return RocketFixture.placeAt(rocketSite(), this::exec, "simple", ROCKET_SITE_HALO,
+                (int) ROCKET_BOX_BOUND, "the rocket stands still on its pad; only the watcher moves");
+    }
+
+    /** Stands the player on a block of his own {@link #ROCKET_VIEWER_DISTANCE} down the plot from the pad. */
+    private void standFarFromThePad() throws Exception {
+        standDownThePad(ROCKET_VIEWER_DISTANCE, "he must watch from where he now stands");
+    }
+
+    /** Stands the player on a block of his own {@code blocks} down the plot from the pad. */
+    private void standDownThePad(int blocks, String what) throws Exception {
+        FixtureSite site = rocketSite();
+        int standZ = site.z + blocks;
+        exec("stellurgytest place " + site.dim + " " + site.x + " " + site.y + " " + standZ + " minecraft:stone");
+        long stand = clientEvents().mark();
+        exec("tp @a " + (site.x + 0.5) + " " + (site.y + 1) + " " + (standZ + 0.5) + " 180 0");
+        awaitClientPlacedNear(stand, site.x + 0.5, standZ + 0.5, what);
+    }
+
+    /** The player's horizontal offset from (x, z) on the server, as {@code {dx, dz}}. */
+    private double[] serverOffsetTo(double x, double z) throws Exception {
+        Reply at = Reply.of(exec("stellurgytest player position-of " + PlayerState.botName(this::exec)))
+                .requireOk("read the player's position on the server");
+        return new double[]{at.number("playerPosX") - x, at.number("playerPosZ") - z};
+    }
+
+    /** Assembles the fixture's rocket; returns its entity id. */
+    private int assembleRocket(int[] builder) throws Exception {
+        return RocketFixture.rocketEntityId(RocketFixture.assembleBuilt(rocketSite(), this::exec, builder));
+    }
+
+    /** The rocket's own readout. It answers its fields with no {@code ok}, so the position IS the receipt. */
+    private Reply rocketInfo(int rocket) throws Exception {
+        Reply info = Reply.of(exec("stellurgytest rocket info " + rocket));
+        scenario().requireArranged("the server must know the rocket's position: " + info, info.has("posX"));
+        return info;
+    }
+
+    /**
+     * Requires the player to stand beyond reach of the rocket's whole box, measured on the server from
+     * the rocket's position: reach is to the nearest point of the box, and this fixture's box lies
+     * within {@link #ROCKET_BOX_BOUND} of its position.
+     */
+    private void requireBeyondReachOf(int rocket) throws Exception {
+        Reply where = rocketInfo(rocket);
+        double sq = serverDistanceSqToPoint(where.number("posX"), where.number("posY"), where.number("posZ"));
+        double bound = Math.sqrt(VANILLA_CONTAINER_REACH_SQ) + ROCKET_BOX_BOUND;
+        scenario().requireArranged("he must stand beyond reach of the rocket's box: squared distance " + sq
+                + " to its position, against " + (bound * bound), sq > bound * bound);
     }
 
     @Test

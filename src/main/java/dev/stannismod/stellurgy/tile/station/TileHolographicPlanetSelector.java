@@ -29,6 +29,7 @@ import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileHolographicPlanetSelector extends TileEntity implements ITickable, IButtonInventory, IModularInventory, ISliderBar, INetworkMachine {
 
@@ -394,8 +395,13 @@ public class TileHolographicPlanetSelector extends TileEntity implements ITickab
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
 
     @Override

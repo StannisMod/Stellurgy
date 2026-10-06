@@ -19,6 +19,7 @@ import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileInventoryHatch extends TilePointer implements ISidedInventory, IModularInventory, IInventoryUpdateCallback {
 
@@ -166,7 +167,7 @@ public class TileInventoryHatch extends TilePointer implements ISidedInventory, 
 
 	@Override
 	public boolean canInteractWithContainer(EntityPlayer entity) {
-		return true;
+		return MachineReach.reaches(entity, this);
 	}
 
 	@Override

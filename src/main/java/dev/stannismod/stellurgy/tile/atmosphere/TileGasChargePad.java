@@ -27,6 +27,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileGasChargePad extends TileInventoriedRFConsumerTank implements IModularInventory {
     private static final int TICK_INTERVAL = 2; 
@@ -201,7 +202,7 @@ public class TileGasChargePad extends TileInventoriedRFConsumerTank implements I
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 
     @Override

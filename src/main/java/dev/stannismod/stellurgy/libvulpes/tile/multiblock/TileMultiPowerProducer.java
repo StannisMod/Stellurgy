@@ -14,6 +14,8 @@ import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine.
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.libvulpes.util.MultiBattery;
 
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
+
 import java.util.LinkedList;
 import java.util.List;
 
@@ -107,9 +109,15 @@ public class TileMultiPowerProducer extends TileMultiBlock implements IToggleBut
 		return getMachineName();
 	}
 	
+	/** A structure is used through its controller, so the reach is to the controller. */
+	@Override
+	public boolean canBeUsedBy(EntityPlayer player) {
+		return isComplete() && MachineReach.reaches(player, this);
+	}
+
 	@Override
 	public boolean canInteractWithContainer(EntityPlayer entity) {
-		return isComplete();
+		return canBeUsedBy(entity);
 	}
 	
 	public void resetCache() {

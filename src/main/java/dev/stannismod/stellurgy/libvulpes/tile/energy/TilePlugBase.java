@@ -22,6 +22,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public abstract class TilePlugBase extends TilePointer implements IModularInventory, IUniversalEnergy, IMultiblock, IInventory, IComparatorOverride {
 
@@ -192,7 +193,7 @@ public abstract class TilePlugBase extends TilePointer implements IModularInvent
 
 	@Override
 	public boolean canInteractWithContainer(EntityPlayer entity) {
-		return true;
+		return MachineReach.reaches(entity, this);
 	}
 
 	@Override

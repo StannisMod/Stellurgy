@@ -53,6 +53,7 @@ import java.util.LinkedList;
 import java.util.List;
 import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.block.*;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * Purpose: validate the rocket structure as well as give feedback to the player as to what needs to be
@@ -1417,8 +1418,13 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return canBeUsedBy(entity);
     }
 
     @Override

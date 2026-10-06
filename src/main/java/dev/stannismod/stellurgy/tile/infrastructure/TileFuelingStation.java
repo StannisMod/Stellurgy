@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 public class TileFuelingStation extends TileInventoriedRFConsumerTank implements IModularInventory, IMultiblock, IInfrastructure, ILinkableTile, INetworkMachine, IButtonInventory {
 
@@ -566,7 +567,14 @@ public class TileFuelingStation extends TileInventoriedRFConsumerTank implements
     }
 
     @Override
-    public boolean canInteractWithContainer(EntityPlayer entity) { return true; }
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
+    public boolean canInteractWithContainer(EntityPlayer entity) {
+        return canBeUsedBy(entity);
+    }
 
     @Override
     public boolean linkMission(IMission mission) { return false; }

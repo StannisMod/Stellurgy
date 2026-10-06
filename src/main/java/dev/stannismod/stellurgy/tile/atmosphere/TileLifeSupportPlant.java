@@ -26,6 +26,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * Tier 4: the ship's central regeneration plant. Same Bosch chemistry as the tier-3 recirculator,
@@ -260,7 +261,7 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
 
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return MachineReach.reaches(entity, this);
     }
 
     @Override

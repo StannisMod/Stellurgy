@@ -42,6 +42,7 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 /**
  * The ship's navigation computer: it holds the addresses the ship can jump to, and the one it is
@@ -767,8 +768,13 @@ public class TileNavigationComputer extends TileInventoryHatch
     }
 
     @Override
+    public boolean canBeUsedBy(EntityPlayer player) {
+        return MachineReach.reaches(player, this);
+    }
+
+    @Override
     public boolean canInteractWithContainer(EntityPlayer player) {
-        return true;
+        return canBeUsedBy(player);
     }
 
     @Override
