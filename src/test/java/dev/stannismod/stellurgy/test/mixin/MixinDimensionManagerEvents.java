@@ -59,7 +59,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>A dimension the client already knows is REFRESHED by {@code PacketDimInfo} through
  * {@code setDimProperties} (a direct map put) and never passes {@code registerDimNoUpdate}, so a
  * re-sync of a known id produces no {@code client_dim_registered}; the event is a first sighting, not
- * a sync. Whether Forge's own registry gained or lost a dimension is not observed — only Stellurgy's map is.
+ * a sync. Whether Forge's own registry GAINED a dimension is not observed — only Stellurgy's map is;
+ * whether it still holds one a deletion removed is, on {@code client_dim_forgotten} (below).
  * And a client that reconnects to a second server in one session is a path this harness cannot
  * drive, so the ghost that motivated the clear is pinned by its remedy, not reproduced.</p>
  */
@@ -82,6 +83,23 @@ public abstract class MixinDimensionManagerEvents {
                 + ",\"name\":\"" + TestTrace.json(properties.getName())
                 + "\",\"withForge\":" + registerWithForge
                 + ",\"registered\":" + cir.getReturnValueZ());
+    }
+
+    /**
+     * {@code client_dim_forgotten} — the RETURN of {@code forget(int, boolean)}, the one body behind
+     * both {@code forgetDimension} and {@code withdrawDimension}: a deleted body leaving this side's
+     * galaxy. Carries {@code dim}, {@code withdraw} (the caller's choice) and
+     * {@code forgeRegistered} — whether Forge's registry in this JVM still holds the id once the call
+     * is done, which is what a later body on that id would inherit. Recorded for every id the
+     * recursion visits, the moons included, and for an id this side never knew. Read by
+     * {@code WorldCommandClientGroupTest#aDeletedPlanetLeavesNoForgeDimensionOnARemoteClient}.
+     */
+    @Inject(method = "forget", at = @At("RETURN"), require = 1)
+    private void stellurgyTest$dimForgotten(int dimId, boolean withdrawRegistration, CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        TestTrace.recordHere("client_dim_forgotten", "\"dim\":" + dimId
+                + ",\"withdraw\":" + withdrawRegistration
+                + ",\"forgeRegistered\":" + net.minecraftforge.common.DimensionManager.isDimensionRegistered(dimId));
     }
 
     @Inject(method = "unregisterAllDimensions", at = @At("HEAD"))

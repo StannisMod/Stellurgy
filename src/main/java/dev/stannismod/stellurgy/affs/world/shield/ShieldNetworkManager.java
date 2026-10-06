@@ -16,16 +16,10 @@ import java.util.List;
  * The shield domain. Everything structural — the connected-component graph, the max-flow solve, the
  * priority tiers, the per-tick statistics — lives in the shared subsystem-network primitive; what is
  * genuinely shield-specific is the resistance bias a console sets, and that is all this adds.
- * <p>
- * This class subscribes to nothing. It used to carry the world/tick handlers itself, and with them a
- * {@code @Mod.EventBusSubscriber} that had to name the owning container rather than the vendored
- * guest modid; both moved to the shared primitive when the bridge layer collapsed, and the modid
- * question moved with them.
- * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class ShieldNetworkManager {
 
-    /** The domain handle. Shield nodes register under it; nothing else joins these graphs. */
+    /** The domain handle. Shield nodes register under it; nothing else joins these graphs. Effectively final, process lifetime: built once at class initialisation. A domain holds nothing but its name. */
     public static final SubsystemNetworkDomain DOMAIN = new SubsystemNetworkDomain("Shield") {
         @Override
         public SubsystemNetworkState newState() {

@@ -108,6 +108,25 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
      * {@code AudioRegistry} field resolves; the registration verdict right after it is the one that
      * decides.</p>
      */
+    /**
+     * The repair welder has an inventory model on a booted client — it is not drawn as the missing
+     * model's purple-and-black cube. The item ships a model file; what decides whether the client
+     * finds it is the item's mapping in {@code ClientProxy#preInitItems}.
+     *
+     * <p>red-witnessed: with {@code ClientProxy#preInitItems} at {@code new ModelResourceLocation("stellurgy:repairWelder", "inventory")}
+     * — its whole line — removed (the shape it shipped with), this fails at "the repair welder is drawn
+     * with the missing model: its item has no model mapping" (2026-10-06).</p>
+     */
+    @Test
+    public void theRepairWelderHasAnInventoryModel() throws Exception {
+        scenario().asserting("the repair welder's baked inventory model is not the missing model");
+        bot().waitForWorld();
+        scenario().requireArranged("the reader must be able to see a missing model at all — air has none",
+                ItemModelReader.airDrawsMissing(bot()));
+        assertFalse("the repair welder is drawn with the missing model: its item has no model mapping",
+                ItemModelReader.repairWelderDrawsMissing(bot()));
+    }
+
     @Test
     public void serverPlayedStellurgySoundReachesClientSoundManager() throws Exception {
         scenario().asserting("a sound the server plays reaches the client's sound manager");

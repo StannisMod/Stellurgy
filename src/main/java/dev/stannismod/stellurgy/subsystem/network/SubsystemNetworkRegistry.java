@@ -2,9 +2,13 @@ package dev.stannismod.stellurgy.subsystem.network;
 
 import net.minecraft.world.World;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -13,14 +17,19 @@ import java.util.Set;
  * <p>
  * Keyed by domain so the graphs stay apart; a node names its own domain, so registering one into
  * the wrong graph is not expressible. Synchronized because tiles are created and invalidated off
- * the tick that reads them. The table itself is the running server's ({@link SubsystemNetworks}).
+ * the tick that reads them.
+ * <p>
+ * One per {@link SubsystemNetworkManager}, which is one per running server: the nodes of one server
+ * session are never in the set another session reads.
  */
-public final class SubsystemNetworkRegistry {
+final class SubsystemNetworkRegistry {
 
-    private SubsystemNetworkRegistry() {
+    private final Map<SubsystemNetworkDomain, Set<ISubsystemNetworkNode>> nodes = new HashMap<>();
+
+    SubsystemNetworkRegistry() {
     }
 
-    public static synchronized void register(ISubsystemNetworkNode node) {
+    synchronized void register(ISubsystemNetworkNode node) {
         SubsystemNetworkDomain domain = node == null ? null : node.getNetworkDomain();
         if (domain == null) {
             return;
@@ -29,7 +38,7 @@ public final class SubsystemNetworkRegistry {
         log(domain, "register", node);
     }
 
-    public static synchronized void unregister(ISubsystemNetworkNode node) {
+    synchronized void unregister(ISubsystemNetworkNode node) {
         SubsystemNetworkDomain domain = node == null ? null : node.getNetworkDomain();
         if (domain == null) {
             return;
@@ -38,37 +47,51 @@ public final class SubsystemNetworkRegistry {
         log(domain, "unregister", node);
     }
 
-    public static synchronized Set<ISubsystemNetworkNode> snapshot(SubsystemNetworkDomain domain) {
+    synchronized Set<ISubsystemNetworkNode> snapshot(SubsystemNetworkDomain domain) {
         if (domain == null) {
             return Collections.emptySet();
         }
         return Collections.unmodifiableSet(new HashSet<>(nodesOf(domain)));
     }
 
-    /** Every domain that has ever registered a node — what the manager ticks. */
-    public static synchronized Set<SubsystemNetworkDomain> domains() {
-        return new LinkedHashSet<>(SubsystemNetworks.current().nodes.keySet());
+    /** The nodes of this domain in this world that are a {@code type}, as a list the caller owns. */
+    synchronized <T> List<T> nodesIn(SubsystemNetworkDomain domain, World world, Class<T> type) {
+        List<T> found = new ArrayList<>();
+        if (domain == null || world == null) {
+            return found;
+        }
+        for (ISubsystemNetworkNode node : nodesOf(domain)) {
+            if (type.isInstance(node) && node.getNodeWorld() == world) {
+                found.add(type.cast(node));
+            }
+        }
+        return found;
     }
 
-    public static synchronized void clearWorld(SubsystemNetworkDomain domain, World world) {
+    /** Every domain that has registered a node on this server — what the manager ticks. */
+    synchronized Set<SubsystemNetworkDomain> domains() {
+        return new LinkedHashSet<>(nodes.keySet());
+    }
+
+    synchronized void clearWorld(SubsystemNetworkDomain domain, World world) {
         if (domain == null || world == null) {
             return;
         }
         int dim = world.provider.getDimension();
-        Set<ISubsystemNetworkNode> nodes = nodesOf(domain);
-        int before = nodes.size();
-        nodes.removeIf(node -> node != null && matchesDimension(node.getNodeWorld(), dim));
-        if (before != nodes.size() && domain.getLogger() != null) {
+        Set<ISubsystemNetworkNode> ofDomain = nodesOf(domain);
+        int before = ofDomain.size();
+        ofDomain.removeIf(node -> node != null && matchesDimension(node.getNodeWorld(), dim));
+        if (before != ofDomain.size() && domain.getLogger() != null) {
             domain.getLogger().info("[{}Network] clearWorld dim={} removed={} remaining={}",
-                    domain.getName(), dim, before - nodes.size(), nodes.size());
+                    domain.getName(), dim, before - ofDomain.size(), ofDomain.size());
         }
     }
 
-    private static Set<ISubsystemNetworkNode> nodesOf(SubsystemNetworkDomain domain) {
-        return SubsystemNetworks.current().nodes.computeIfAbsent(domain, key -> new HashSet<>());
+    private Set<ISubsystemNetworkNode> nodesOf(SubsystemNetworkDomain domain) {
+        return nodes.computeIfAbsent(domain, key -> new HashSet<>());
     }
 
-    private static void log(SubsystemNetworkDomain domain, String action, ISubsystemNetworkNode node) {
+    private void log(SubsystemNetworkDomain domain, String action, ISubsystemNetworkNode node) {
         if (domain.getLogger() == null) {
             return;
         }

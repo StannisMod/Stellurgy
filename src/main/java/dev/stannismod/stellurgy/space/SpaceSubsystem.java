@@ -491,7 +491,9 @@ public final class SpaceSubsystem {
             if (!java.util.Objects.equals(child.name().zone(), zoneBody.name().cellKey())) {
                 continue; // not a child of THIS zone
             }
-            double childRadius = ZoneScale.realizedRadiusBlocks(child, zoneBody, tick);
+            // The child's EXTENT, as on the way out: a zone is entered where it would be left, so no
+            // band between its realized span and its sphere belongs to neither.
+            double childRadius = ZoneScale.extentRadiusBlocks(child, zoneBody, tick);
             AbsolutePos childAt = child.absoluteAt(tick);
             if (!CellSeam.hasEnteredZone(craftAt.distanceTo(childAt), childRadius)) {
                 continue;
@@ -655,11 +657,15 @@ public final class SpaceSubsystem {
                 : java.util.OptionalLong.of(sphereRadiusOf(reg, zoneBody, zoneCell, tick));
     }
 
-    /** The one reading of a zone's sphere, shared by the crossing and by {@link #zoneSphereRadiusOf}. */
+    /**
+     * The one reading of a zone's sphere, shared by the crossing and by {@link #zoneSphereRadiusOf}:
+     * the zone's EXTENT, never its realized span — a craft between a big planet's one realized cell
+     * and its sphere of influence is still keeping station with the planet.
+     */
     private static long sphereRadiusOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
                                        dev.stannismod.stellurgy.universe.SystemBody zoneBody,
                                        GalacticCoord zoneCell, long tick) {
-        return ZoneScale.realizedRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);
+        return ZoneScale.extentRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);
     }
 
     /** The body whose frame {@code cell} rides, or {@code null} when the cell is void. */

@@ -1080,6 +1080,38 @@ public final class VSIntegration {
                 ? null : VSBridge.shipIdManagingBlock(world, pos);
     }
 
+    /**
+     * Whether this block sits in the shipyard and NO ship claims it — the window in which a machine
+     * aboard a ship must do nothing at all.
+     *
+     * <h3>Why the window exists</h3>
+     * <p>A ship's chunks and its ship object do not arrive together. The manager queues a background
+     * load and the chunks come into memory before the {@code PhysicsObject} exists, and a shipyard
+     * chunk can also be pulled in by anything that force-loads a region. In that window the blocks
+     * are there, their tiles tick, and every coordinate they hold is a SHIPYARD address — millions
+     * of blocks from where the ship actually is. A machine that acts on those numbers is acting on a
+     * position no player can reach.</p>
+     *
+     * <h3>The rule</h3>
+     * <p>Nothing aboard a ship runs until the ship is named. Not "runs carefully", not "runs with a
+     * fallback": a subsystem that cannot say where it is has nothing correct to do, and the cheapest
+     * correct behaviour is to wait. This is the one question it has to ask to know that.</p>
+     */
+    public static boolean isOnUnnamedShip(World world, BlockPos pos) {
+        return isBlockInShipyard(pos) && registeredShipIdManagingBlock(world, pos) == null;
+    }
+
+    /**
+     * Whether {@code pos} is inside the shipyard region — the far-off block range VS keeps ship
+     * blocks in. Answered from the allocator's constants, so unlike every other method here it is
+     * NOT gated on {@link #isAvailable()}: a world whose ships exist while VS is switched off still
+     * has those blocks, and a caller that needs to know "are these coordinates really world
+     * coordinates" needs a true answer in exactly that case.
+     */
+    public static boolean isBlockInShipyard(BlockPos pos) {
+        return VSBridge.isBlockInShipyard(pos);
+    }
+
     /** UUID string of the ship whose subspace claim manages {@code pos} as the REGISTRY knows it —
      *  answered whether or not that ship is currently simulated. Use this for questions about a
      *  ship's IDENTITY; {@link #shipIdManagingBlock} answers about its live physics and is null for
@@ -1094,6 +1126,14 @@ public final class VSIntegration {
     public static java.util.List<String> shipIdsAt(World world, double x, double y, double z) {
         return (world == null)
                 ? java.util.Collections.<String>emptyList() : VSBridge.shipIdsAt(world, x, y, z);
+    }
+
+    /** Every loaded ship's grown world AABB, by uuid string — the candidate list for a swept SEGMENT
+     *  rather than a point (possibly empty; never null). */
+    public static java.util.Map<String, AxisAlignedBB> loadedShipWorldBounds(World world) {
+        return (world == null)
+                ? java.util.Collections.<String, AxisAlignedBB>emptyMap()
+                : VSBridge.loadedShipWorldBounds(world);
     }
 
     /** World point to ship-frame point, for the anchored ship. See the anchored-access note. */
@@ -1124,19 +1164,13 @@ public final class VSIntegration {
         return (world == null) ? null : VSBridge.rotateToWorldFrameFor(world, shipId, x, y, z);
     }
 
-    /** {@link #shipVelocityAtPoint} for the anchored ship — the deck-carry widening of an anchored
-     *  capture's external-move guard must come from ITS ship. */
+    /** The world-frame velocity of the ship {@code shipId} at a world point, in BLOCKS PER TICK — its
+     *  linear velocity plus its rotation's tangential velocity there — or null when that ship is not
+     *  loaded on this side. A deck's carry, a hull-borne round's carry and a ship-mounted gun's own
+     *  motion all read this one number. */
     public static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
         return (world == null)
                 ? null : VSBridge.shipVelocityAtPointFor(world, shipId, x, y, z);
-    }
-
-    /** What the craft DECLARES it is doing at that point, as opposed to what the pose on this side
-     *  just did — for a TOLERANCE, never for a body's carry. See the bridge method for why a guard
-     *  must not be built from the tighter of two known readings. */
-    public static double[] declaredVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
-        return (world == null)
-                ? null : VSBridge.declaredVelocityAtPointFor(world, shipId, x, y, z);
     }
 
     /** Clear the physics mod's own entity-to-ship association (its {@code EntityDraggable} drag
@@ -1210,16 +1244,6 @@ public final class VSIntegration {
         return VSBridge.shipLinearVelocity(world, pos);
     }
 
-    /**
-     * The world-frame velocity {@code [x,y,z]} (blocks/second) of the ship AT {@code (x,y,z)} - its
-     * linear velocity plus the tangential velocity of its rotation there - or {@code null} when VS is
-     * absent or the point is aboard no loaded ship. How fast the DECK carries an aboard body at that
-     * point; the ship-frame movement guard widens by one tick of it so a rotating deck is not read as a
-     * teleport. Only Stellurgy-core/MC types cross the gate.
-     */
-    public static double[] shipVelocityAtPoint(World world, double x, double y, double z) {
-        return VSBridge.shipVelocityAtPoint(world, x, y, z);
-    }
 
     /**
      * The unit world-frame direction toward the floor of the loaded ship the point {@code (x,y,z)}

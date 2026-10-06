@@ -130,7 +130,7 @@ public final class HeatNetwork {
         if (world == null || world.isRemote) {
             return;
         }
-        SubsystemNetworkManager.markDirty(DOMAIN, world);
+        SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);
     }
 
     /**

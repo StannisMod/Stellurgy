@@ -42,6 +42,15 @@ public final class ServerState {
     public final RocketInventoryHelper rocketInventory = new RocketInventoryHelper();
     /** Where each player stepped from a rocket's GUI into one of its tiles' GUIs. */
     public final RocketGuiNavigation rocketGuiReturns = new RocketGuiNavigation();
+    /**
+     * Every subsystem network node this server holds — shields, weapons, ventilation, heat — and
+     * each world's solved topology. Built here, before the first world loads and its tiles register.
+     */
+    public final dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager subsystemNetworks =
+            new dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager();
+    /** The impact identities this server's damage service has applied recently. */
+    public final dev.stannismod.stellurgy.damage.ShipDamageService.ImpactMemory impactMemory =
+            new dev.stannismod.stellurgy.damage.ShipDamageService.ImpactMemory();
     /** The deck holds pinning returning and carried crew to their ships. */
     public final DeckHold.Holds deckHolds = new DeckHold.Holds();
     /** The {@code Entity.move} takeover experiment, armed by the test probe for one entity. */
@@ -58,9 +67,6 @@ public final class ServerState {
             new dev.stannismod.stellurgy.space.HyperspaceVoid.ServerPart();
     /** The pending steps of the developer command {@code runtests}. */
     public final IngameTestOrchestrator ingameTests = new IngameTestOrchestrator();
-    /** The subsystem networks — shields, ventilation, heat — of this server's worlds. */
-    public final dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks =
-            dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks.forServer();
     /** The executor the threaded atmosphere fill runs on; shut down by {@link #release()}. */
     public final ThreadPoolExecutor atmosphereFillPool = AtmosphereBlob.newFillPool();
 

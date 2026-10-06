@@ -65,6 +65,11 @@ public class KeyBindings {
      *  then owns it for the launch; the object here is the same one that registry holds, and the
      *  binding's own pressed-state is read through it. A dedicated server never touches this class. */
     private static final KeyBinding jumpTrigger  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.jumpTrigger"),         Keyboard.KEY_J, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    /** The helm's target key: names the ship ahead as this ship's batteries' target. T — shares with
+     *  vanilla chat, which it takes over only while piloting (resolved by StellurgyKeyConflictContext).
+     *  OWNER: the CLIENT, as for {@link #jumpTrigger}: the client's key registry holds this same object
+     *  for the launch. Approved by the maintainer 2026-10-05 under the rule for registration holders. */
+    private static final KeyBinding designateShip = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.designateShip"), Keyboard.KEY_T, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
     /** Deflection added per degree of mouse movement (≈ full deflection at 25°). */
     private static final float FF_CURSOR_SENS = 0.04f;
     /** Centre deadzone: |deflection| below this reads as zero (no drift at rest). */
@@ -243,6 +248,7 @@ public class KeyBindings {
         ClientRegistry.registerKeyBinding(flightAssistToggle);
         ClientRegistry.registerKeyBinding(autoTakeoffToggle);
         ClientRegistry.registerKeyBinding(jumpTrigger);
+        ClientRegistry.registerKeyBinding(designateShip);
         scopeSteeringKeysToCockpit();
     }
 
@@ -264,6 +270,7 @@ public class KeyBindings {
         strafeRight.setKeyConflictContext(StellurgyKeyConflictContext.PILOTING);      // E — strafe
         flightVerticalUp.setKeyConflictContext(StellurgyKeyConflictContext.PILOTING);   // R — vertical
         flightVerticalDown.setKeyConflictContext(StellurgyKeyConflictContext.PILOTING); // F — vertical
+        designateShip.setKeyConflictContext(StellurgyKeyConflictContext.PILOTING);     // T — designate
         // Stellurgy keys that share a key with another Stellurgy action get the complement, so
         // the cockpit binding wins while piloting and the other works on foot:
         //  X = jetpack toggle (foot) vs throttle-cut (cockpit),
@@ -283,6 +290,13 @@ public class KeyBindings {
             gs.keyBindLeft.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);      // A vs yaw-left
             gs.keyBindRight.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);     // D vs yaw-right
             gs.keyBindSwapHands.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING); // F vs vertical-down
+            gs.keyBindChat.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);      // T vs designate
+            // The cursor does nothing to the world from the helm: no blow, no block broken or
+            // placed, no use, no pick. A pilot's mouse steers the flight cursor, and a stray click
+            // that took a block out of his own hull is not a control anybody meant to give him.
+            gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);
+            gs.keyBindUseItem.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);
+            gs.keyBindPickBlock.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);
         }
     }
     //Getters for keybindings
@@ -710,6 +724,17 @@ public class KeyBindings {
      * two disagree folds the ship's own yaw - i.e. the A/D steering - into the "mouse" delta and
      * banks the craft whenever the pilot turns. Reading the mouse directly cannot alias that way.</p>
      */
+    /**
+     * No block is outlined as the one about to be hit while the player pilots: from the helm the cursor
+     * acts on nothing, and the outline would promise that it does.
+     */
+    @SubscribeEvent
+    public void onHelmBlockHighlight(net.minecraftforge.client.event.DrawBlockHighlightEvent event) {
+        if (StellurgyKeyConflictContext.PILOTING.isActive()) {
+            event.setCanceled(true);
+        }
+    }
+
     @SubscribeEvent
     public void onShipPilotMouseMoved(net.minecraftforge.client.event.MouseEvent event) {
         // Only motion of a GRABBED cursor is steering. A GUI that has just closed leaves the mouse
@@ -778,6 +803,12 @@ public class KeyBindings {
         if (pilotSeat != null && jumpTrigger.isPressed()) {
             PacketHandler.sendToServer(new PacketMachine(pilotSeat, TilePilotSeat.PACKET_JUMP));
             kbTrace("SHIP jump trigger -> seat " + pilotSeat.getPos());
+        }
+        // Edge-triggered target designation (T). Same seat gate: the server names the ship ahead of
+        // this pilot and hands it to the batteries of the ship the seat belongs to.
+        if (pilotSeat != null && designateShip.isPressed()) {
+            PacketHandler.sendToServer(new PacketMachine(pilotSeat, TilePilotSeat.PACKET_DESIGNATE_SHIP));
+            kbTrace("SHIP designate -> seat " + pilotSeat.getPos());
         }
 
         if (player.getRidingEntity() != null && player.getRidingEntity() instanceof EntityRocket) {

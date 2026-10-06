@@ -10,7 +10,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 
 import java.util.*;
 
@@ -30,7 +30,7 @@ public final class ContourFieldExplosionHandler {
         Map<TileEntityContourInjector, Set<BlockPos>> injectorBlocks = new LinkedHashMap<>();
         // The registry is already keyed by domain, so naming it here is the whole filter — there is
         // nothing else in this set to sort out.
-        for (ISubsystemNetworkNode node : SubsystemNetworkRegistry.snapshot(ShieldNetworkManager.DOMAIN)) {
+        for (ISubsystemNetworkNode node : SubsystemNetworkManager.of(world).snapshot(ShieldNetworkManager.DOMAIN)) {
             if (!(node instanceof TileEntityContourInjector)) {
                 continue;
             }

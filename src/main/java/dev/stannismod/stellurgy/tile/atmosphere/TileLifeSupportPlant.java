@@ -16,7 +16,6 @@ import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModulePower;
@@ -212,8 +211,8 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
         }
     }
 
@@ -231,8 +230,8 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
 
     private void leaveNetwork() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
         }
     }
 

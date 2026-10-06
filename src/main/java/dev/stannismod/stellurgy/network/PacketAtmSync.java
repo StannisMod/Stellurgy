@@ -43,7 +43,8 @@ public class PacketAtmSync extends BasePacket {
     public void write(ByteBuf out) {
         NBTTagCompound nbt = new NBTTagCompound();
 
-        nbt.setShort("pressure", (short) summary.pressureCentiAtm());
+        // An int, as the model holds it: a short wraps above 327.67 atm, which a sealed room can reach.
+        nbt.setInteger("pressure", summary.pressureCentiAtm());
         nbt.setBoolean("breathable", summary.breathable());
         nbt.setString("warning", summary.warningKey());
         // The statements travel by NAME, never by ordinal: inserting one in the middle of the enum
@@ -68,7 +69,7 @@ public class PacketAtmSync extends BasePacket {
             for (int i = 0; i < list.tagCount(); i++) {
                 holding.add(list.getStringTagAt(i));
             }
-            summary = new AtmosphereSummary(nbt.getShort("pressure"), nbt.getBoolean("breathable"),
+            summary = new AtmosphereSummary(nbt.getInteger("pressure"), nbt.getBoolean("breathable"),
                     nbt.getString("warning"), holding);
         } catch (IOException e) {
             e.printStackTrace();

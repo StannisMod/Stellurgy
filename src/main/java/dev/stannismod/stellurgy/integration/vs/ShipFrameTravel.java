@@ -198,8 +198,6 @@ public final class ShipFrameTravel {
         boolean seedAnchored;
     }
 
-    /** One tick, in seconds - turns the deck's carry velocity into a per-tick displacement. */
-    private static final double TICK_SECONDS = 0.05;
     /** How far (blocks) beyond the anchored ship's subspace claim/hull an aboard body may travel before
      *  the capture is released: a body stays aboard everywhere inside the ship's own block region grown
      *  by this margin, and leaving that region is one of the handful of facts that end an episode.
@@ -387,9 +385,9 @@ public final class ShipFrameTravel {
         double[] shipVel = VSIntegration.shipVelocityAtPointFor(
                 entity.world, candidate, entity.posX, entity.posY, entity.posZ);
         captureState(entity, candidate, local[0], local[1], local[2],
-                shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS,
-                shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS,
-                shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS);
+                shipVel == null ? 0.0 : shipVel[0],
+                shipVel == null ? 0.0 : shipVel[1],
+                shipVel == null ? 0.0 : shipVel[2]);
         stateOf(entity).hullStand = hullStand;
         logCapture(entity, candidate, local[0], local[1], local[2]);
         return true;
@@ -1702,9 +1700,9 @@ public final class ShipFrameTravel {
         // value above was ship-RELATIVE.
         double[] shipVel = VSIntegration.shipVelocityAtPointFor(
                 world, shipId, worldPos[0], worldPos[1], worldPos[2]);
-        double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
-        double carryY = shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS;
-        double carryZ = shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS;
+        double carryX = shipVel == null ? 0.0 : shipVel[0];
+        double carryY = shipVel == null ? 0.0 : shipVel[1];
+        double carryZ = shipVel == null ? 0.0 : shipVel[2];
         worldMotion[0] += carryX;
         worldMotion[1] += carryY;
         worldMotion[2] += carryZ;
@@ -1867,9 +1865,9 @@ public final class ShipFrameTravel {
         }
         double[] shipVel = VSIntegration.shipVelocityAtPointFor(
                 world, shipId, worldPos[0], worldPos[1], worldPos[2]);
-        double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
-        double carryY = shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS;
-        double carryZ = shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS;
+        double carryX = shipVel == null ? 0.0 : shipVel[0];
+        double carryY = shipVel == null ? 0.0 : shipVel[1];
+        double carryZ = shipVel == null ? 0.0 : shipVel[2];
         worldMotion[0] += carryX;
         worldMotion[1] += carryY;
         worldMotion[2] += carryZ;
@@ -1996,9 +1994,9 @@ public final class ShipFrameTravel {
 
         double[] shipVel = VSIntegration.shipVelocityAtPointFor(
                 world, shipId, worldPos[0], worldPos[1], worldPos[2]);
-        double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
-        double carryY = shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS;
-        double carryZ = shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS;
+        double carryX = shipVel == null ? 0.0 : shipVel[0];
+        double carryY = shipVel == null ? 0.0 : shipVel[1];
+        double carryZ = shipVel == null ? 0.0 : shipVel[2];
         remember(entity, shipId, sub[0], sub[1], sub[2], carryX, carryY, carryZ);
         ShipFrameState refreshed = stateOf(entity);
         if (refreshed != null) {

@@ -29,7 +29,6 @@ import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -99,7 +98,7 @@ public class TileVentilationPort extends TileEntity implements ITickable, IZoneP
         if (zone.tick(handler, pos, canFormBlob()))
             sealChanged();
         if (was != zone.isSealed())
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
     }
 
     private void sealChanged() {
@@ -239,8 +238,8 @@ public class TileVentilationPort extends TileEntity implements ITickable, IZoneP
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
         }
     }
 
@@ -262,8 +261,8 @@ public class TileVentilationPort extends TileEntity implements ITickable, IZoneP
         AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler != null)
             handler.unregisterBlob(this);
-        SubsystemNetworkRegistry.unregister(this);
-        SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+        SubsystemNetworkManager.of(world).unregister(this);
+        SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
     }
 
     @Override

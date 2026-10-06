@@ -17,7 +17,6 @@ import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 import dev.stannismod.stellurgy.tile.heat.TileHeatRadiator;
 
@@ -133,7 +132,7 @@ public final class ThermalBody {
         if (shipId == null && (hull == null || hull.isEmpty())) {
             return loops;
         }
-        for (ISubsystemNetworkNode node : SubsystemNetworkRegistry.snapshot(HeatNetwork.DOMAIN)) {
+        for (ISubsystemNetworkNode node : SubsystemNetworkManager.of(world).snapshot(HeatNetwork.DOMAIN)) {
             BlockPos pos = node.getNodePos();
             if (pos == null || node.getNodeWorld() != world) {
                 continue;
