@@ -1,14 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
 import dev.stannismod.stellurgy.damage.DamageLayer;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
 import java.util.List;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -86,6 +90,51 @@ public class DamageLayerTest {
         layer.applyTo(destination, 100, 64, 100);
         assertEquals("the record did not keep its place relative to the blocks it travelled with",
                 4, destination.getStage(new BlockPos(112, 68, 102)));
+    }
+
+    /**
+     * A hole whose record names a block this install no longer has keeps that NAME through a
+     * relocation. The record is the only statement of what stood there; a carry that resolves it on
+     * the way re-records the hole as something else (air, through the defaulted block registry) or
+     * drops it, and either way the hull forgets what it was — on exactly the path a ship that
+     * crossed takes.
+     *
+     * <p>The record is arranged the way such a save arises: written by the map's own writer while
+     * the block existed, the name changed in the written tag, read back by the map's own reader.</p>
+     *
+     * <p>red-witnessed: with {@code DamageLayer#applyTo} at
+     * {@code data.recordDestroyed(pos, entry.originalBlock, entry.originalMeta);} given
+     * {@code BlockDamageSavedData.blockFromName(entry.originalBlock)} in place of the name (the form
+     * it shipped with), this fails at "the hole's record lost the name of the block it was
+     * expected:&lt;stellurgytest:no_such_block&gt; but was:&lt;null&gt;" (2026-10-06; null because
+     * the lookup now answers null for an unknown name and the record is dropped — before that fix
+     * it answered AIR and the record read {@code minecraft:air}).</p>
+     */
+    @Test
+    public void aRecordNamingAnUnregisteredBlockKeepsItsNameThroughARelocation() {
+        MinecraftBootstrap.ensure();
+        String gone = "stellurgytest:no_such_block";
+        BlockPos hole = new BlockPos(YARD_X + 4, YARD_Y + 2, YARD_Z + 6);
+        BlockDamageSavedData source = new BlockDamageSavedData();
+        source.recordDestroyed(hole, Blocks.IRON_BLOCK, 0);
+        NBTTagCompound saved = source.writeToNBT(new NBTTagCompound());
+        NBTTagList entries = saved.getTagList("entries", 10);
+        for (int i = 0; i < entries.tagCount(); i++) {
+            entries.getCompoundTagAt(i).setString("block", gone);
+        }
+        source.readFromNBT(saved);
+        requireArranged("the source record must name the unregistered block: "
+                + source.getDestroyedBlockName(hole), gone.equals(source.getDestroyedBlockName(hole)));
+
+        DamageLayer layer = DamageLayer.harvest(source, YARD_X, YARD_Y, YARD_Z,
+                YARD_X + 20, YARD_Y + 20, YARD_Z + 20, YARD_X, YARD_Y, YARD_Z);
+        NBTTagCompound carried = new NBTTagCompound();
+        layer.writeToNBT(carried);
+        BlockDamageSavedData destination = new BlockDamageSavedData();
+        DamageLayer.readFromNBT(carried).applyTo(destination, 100, 64, 100);
+
+        assertEquals("the hole's record lost the name of the block it was",
+                gone, destination.getDestroyedBlockName(new BlockPos(104, 66, 106)));
     }
 
     @Test

@@ -107,8 +107,7 @@ public final class DamageLayer {
                     z + entry.offset.getZ());
             data.setStage(pos, entry.stage);
             if (entry.originalBlock != null) {
-                data.recordDestroyed(pos, BlockDamageSavedData.blockFromName(entry.originalBlock),
-                        entry.originalMeta);
+                data.recordDestroyed(pos, entry.originalBlock, entry.originalMeta);
             }
         }
     }

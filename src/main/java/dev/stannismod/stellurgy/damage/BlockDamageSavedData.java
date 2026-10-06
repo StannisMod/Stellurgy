@@ -9,6 +9,7 @@ import net.minecraft.world.World;
 import net.minecraft.world.storage.MapStorage;
 import net.minecraft.world.storage.WorldSavedData;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -106,13 +107,23 @@ public class BlockDamageSavedData extends WorldSavedData {
         if (block == null || block.getRegistryName() == null) {
             return;
         }
+        recordDestroyed(pos, block.getRegistryName().toString(), meta);
+    }
+
+    /**
+     * Record a provenance by NAME, exactly as given — for a record being carried rather than
+     * observed. The name is never resolved here: a record naming a block this install does not have
+     * is still the only statement of what stood there, and resolving it would turn it into a
+     * different statement or into none.
+     */
+    void recordDestroyed(BlockPos pos, String registryName, int meta) {
         long key = pos.toLong();
         Entry entry = entries.get(key);
         if (entry == null) {
             entry = new Entry();
             entries.put(key, entry);
         }
-        entry.originalBlock = block.getRegistryName().toString();
+        entry.originalBlock = registryName;
         entry.originalMeta = meta;
         markDirty();
     }
@@ -207,8 +218,7 @@ public class BlockDamageSavedData extends WorldSavedData {
         Claim held = claims.get(key);
         if (held != null && held.holder != holder && now - held.renewedAt <= 1) {
             return false;
-        }
-        claims.put(key, new Claim(holder, now));
+        }        claims.put(key, new Claim(holder, now));
         return true;
     }
 
@@ -255,9 +265,18 @@ public class BlockDamageSavedData extends WorldSavedData {
         return nbt;
     }
 
-    /** Resolve a recorded provenance name back to a block, or null if that block is no longer present. */
-    public static Block blockFromName(String registryName) {
-        return registryName == null ? null : Block.REGISTRY.getObject(new ResourceLocation(registryName));
+    /**
+     * Resolve a recorded provenance name back to a block, or null if no block of that name is
+     * registered. Asked by membership rather than by lookup alone: the block registry is a defaulted
+     * one and answers an unknown name with AIR, which a caller would take for "fill with air".
+     */
+    @Nullable
+    public static Block blockFromName(@Nullable String registryName) {
+        if (registryName == null) {
+            return null;
+        }
+        ResourceLocation key = new ResourceLocation(registryName);
+        return Block.REGISTRY.containsKey(key) ? Block.REGISTRY.getObject(key) : null;
     }
 
     private static final class Entry {

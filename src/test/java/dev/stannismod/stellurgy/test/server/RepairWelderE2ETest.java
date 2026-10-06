@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import org.junit.Before;
 import org.junit.Test;
 
+import dev.stannismod.stellurgy.damage.DamageState;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -26,14 +27,16 @@ import static org.junit.Assert.assertTrue;
  * finished blocks, at a speed its size buys — and that shares the hull with any other bay without
  * two of them paying for one repair.</p>
  *
- * <p>What is pinned here is the CONTRACT (C20 REPAIR-1, 3, 4, 5, 6, 7, 10, 13), not the price list.
+ * <p>What is pinned here is the CONTRACT (C20 REPAIR-1, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14), not the price list.
  * The assertions say that material or energy left, never how much, and that one size is faster than
  * another, never by how much: the prices are tuned numbers, and a test that pinned them would fail the
  * first time somebody balanced the game rather than the first time somebody broke it.</p>
  *
  * <p>What the bay scenarios do NOT see: the bay's screen (they read the bay's answer where production
- * keeps it, not where a player reads it), and a bay that unloads and resumes (REPAIR-8) or two bays
- * draining two blocks faster than one (REPAIR-14), which nothing here measures.</p>
+ * keeps it, not where a player reads it); a bay's hull unloading as a player leaving unloads it, or a
+ * server restart under a working bay (REPAIR-8 is pinned across the bay's own chunk saved, dropped and
+ * read back, which saves and re-reads the bay the same way, with no time passing between); and how
+ * much faster two bays are (REPAIR-14 is pinned as two jobs that overlap, never as a rate).</p>
  */
 public class RepairWelderE2ETest extends AbstractSharedServerTest {
 
@@ -433,16 +436,17 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
      * REPAIR-6: a hole whose record names a block that no longer exists is refused, said to be, and
      * its record kept — by a bay that has the energy and the blocks to fill any other hole.
      *
-     * <p>red-witnessed: with {@code Work#at} at
-     * {@code if (block == null || block == net.minecraft.init.Blocks.AIR)} reduced to the null test
-     * (the bay then prices the hole as an item-less block and answers NO_RECIPE), this fails at "the bay
-     * never said the hole is one it may not fill — no `repair_bay_outcome` carrying bay =
-     * 19199999,129,153598 and to = UNFILLABLE was recorded within 40 ticks" (2026-10-06).</p>
+     * <p>red-witnessed: with {@code BlockDamageSavedData#blockFromName} at
+     * {@code return Block.REGISTRY.containsKey(key) ? Block.REGISTRY.getObject(key) : null;} reduced
+     * to the plain lookup (the defaulted registry then answers AIR, and the bay prices the hole as an
+     * item-less block and answers NO_RECIPE), this fails at "the bay never said the hole is one it may
+     * not fill — no `repair_bay_outcome` carrying bay = 19199999,129,51198 and to = UNFILLABLE was
+     * recorded within 40 ticks" (2026-10-06).</p>
      *
      * <p>red-witnessed: with {@code data.clear(pos);} inserted in {@code Work#at}'s branch at
-     * {@code if (block == null || block == net.minecraft.init.Blocks.AIR)}, this fails at "the
-     * refused hole was filled or its record dropped: {...block:minecraft:air,wasDestroyed:false,
-     * destroyedBlock:...}" (2026-10-06).</p>
+     * {@code if (block == null)}, this fails at "the refused hole was filled or its record dropped:
+     * {...block:minecraft:air,wasDestroyed:false,destroyedBlock:...}" (2026-10-06, taken on the
+     * pre-change form of that branch, which also tested for AIR).</p>
      *
      * <p>red-witnessed: with a reserve draw inserted into {@code TileRepairBay#look}'s branch at
      * {@code unfillable = true;}, this fails at "refusing the hole took from the reserve:
@@ -552,6 +556,268 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
                 "the same bay, given energy, never took the stage off", workBudget(spec,
                         spec.integer("energyPerStage") * struck.integer("stage")),
                 "pos", xyz(target), "to", "0");
+    }
+
+    /**
+     * How long the bay that was unloaded is given to say so. A chunk drop marks its tiles for
+     * removal and the world tells each one at its next tile pass, so the record lands on the next
+     * world tick; five ticks is the one read step a wait takes anyway. A deadline, not a dose.
+     */
+    private static final int NEXT_TILE_PASS_BUDGET_TICKS = 5;
+    private static final String SPARE_ENGINE = "stellurgy:rocketmotor";
+    /** Its item is a skull, not a block — so no reserve of finished blocks can ever pay for one. */
+    private static final String NO_FINISHED_BLOCK = "minecraft:skull";
+
+    /**
+     * REPAIR-8: a bay unloaded in the middle of a job resumes it where it stopped — the energy it
+     * had already put in comes back with it, and nothing is added or charged for its being away —
+     * so the whole job costs exactly one job's energy, unload and all.
+     *
+     * <p>The subject is a hole, the longest single step a bay takes, so the unload lands inside it.
+     * The unload is the bay's chunk saved, dropped and read back from disk in one call: the bay
+     * that resumes is a NEW object built from what the old one wrote, which is the whole of what an
+     * unload asks of it.</p>
+     *
+     * <p>What it does NOT see: time spent away — the drop and the reload are one call, so no tick
+     * passes unloaded (nothing of the bay's runs while unloaded and it keeps no clock, so there is no
+     * decision of ours in that interval to observe); and the hull unloading as a player leaving it
+     * unloads it. That path was the first form of this test and is not reliable today: the substrate
+     * unloads a hull by queueing all of its claimed chunks at once, the provider sweeps at most a
+     * hundred per tick, and a working bay touching its own chunk on the tick between sweeps withdraws
+     * that chunk's unload — measured: the hull reported unloaded while the bay's chunk stayed loaded
+     * and the bay finished the hole.</p>
+     *
+     * <p>red-witnessed: with {@code TileRepairBay#writeToNBT} at
+     * {@code nbt.setInteger(NBT_BANKED, banked);} removed, this fails at "the bay came back with
+     * different progress than it left with — its unload said {...job:19200001,129,255996,
+     * banked:133}, its return said {...banked:0} expected:&lt;133&gt; but was:&lt;0&gt;" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with a draw of the buffer, {@code charge.spend(1000);}, inserted into
+     * {@code TileRepairBay#onLoad} after {@code lookCountdown = world.rand.nextInt(LOOK_INTERVAL_TICKS);}
+     * (a bay that bills for having been away), this fails at "the job cost other than one job's
+     * energy across the unload: {...energy:16000,reserve:4...} -> {...energy:7000,reserve:3...}"
+     * (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRepairBay#look} at {@code settle(RepairOutcome.REPAIRING);}
+     * answering UNDAMAGED instead, this fails at "the bay never started on the hole — no
+     * `repair_bay_outcome` carrying bay = 19199999,129,51198 and to = REPAIRING was recorded within 40
+     * ticks" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRepairBay#rebuild} answering false before
+     * {@code int slot = reserveSlotOf(work.price);}, this fails at "the bay never finished the hole it
+     * resumed — no `repair_bay_rebuilt` carrying pos = 19200001,129,102396 and placed = true was
+     * recorded within 400 ticks" (2026-10-06).</p>
+     *
+     * <p>NOT YET: the two waits on {@code repair_bay_unloaded} and {@code repair_bay_loaded}. No
+     * decision of ours sits under them — the world tells a tile it unloaded and that it loaded,
+     * whatever the tile is — so the only break that reddens them is breaking the instrument; none
+     * was attempted.</p>
+     */
+    @Test
+    public void aBayUnloadedMidJobResumesItAndIsBilledForOneJob() throws Exception {
+        Hull hull = hull("the hull with a working bay that unloads");
+        int[] target = hull.at(0, 0, -4);
+        int[] bay = hull.at(-2, 0, -2);
+        placeAboard(hull, target, HULL_BLOCK);
+        placeAboard(hull, bay, BAY);
+        stock(bay);
+        Reply spec = readBay(bay);
+        int holeMaxStage = stage(target).integer("maxStage");
+        // A hole is a block's whole run of stages, each at production's price per stage.
+        int job = spec.integer("energyPerStage") * holeMaxStage;
+        // Twice the job, so the buffer cannot run dry inside it even if the job were paid twice:
+        // a restart must show as a larger bill, not as a bay that stalls for want of energy.
+        Reply fed = arrange("stellurgytest energy inject 0 " + xyz(bay, " ") + " " + 2 * job);
+        requireArranged("the bay must take the whole charge it was handed: " + fed,
+                fed.integer("accepted") == 2 * job);
+        Reply before = readBay(bay);
+
+        long mark = events.markInstrumented();
+        Reply hole = shoot(hull, target, holeMaxStage, 323006);
+        requireArranged("the target must be a hole that remembers it was " + HULL_BLOCK + ": " + hole,
+                "minecraft:air".equals(hole.text("block")) && HULL_BLOCK.equals(hole.text("destroyedBlock")));
+        events.awaitRecordWithFields(mark, "repair_bay_outcome", "the bay never started on the hole",
+                2 * spec.integer("lookIntervalTicks"), "bay", xyz(bay), "to", "REPAIRING");
+
+        long cycled = events.markInstrumented();
+        Reply cycle = arrange("stellurgytest chunk cycle 0 " + (bay[0] >> 4) + " " + (bay[2] >> 4));
+        requireArranged("the bay's chunk must be saved, dropped and read back as a new chunk: " + cycle,
+                cycle.bool("dropped") && cycle.bool("reloaded") && !cycle.bool("sameInstance"));
+        String unloaded = events.awaitRecordWithFields(cycled, "repair_bay_unloaded",
+                "the bay whose chunk was dropped was never told it unloaded", NEXT_TILE_PASS_BUDGET_TICKS,
+                "bay", xyz(bay));
+        requireArranged("the bay must unload in the middle of the hole, holding it and with energy put"
+                + " in, or nothing here is resumed: " + unloaded,
+                xyz(target).equals(Events.text(unloaded, "job")) && Events.number(unloaded, "banked") > 0);
+        // The reload is inside the cycle call, so its record is already written.
+        String loaded = events.awaitRecordWithFields(cycled, "repair_bay_loaded",
+                "the bay read back from its chunk never entered the world", NEXT_TILE_PASS_BUDGET_TICKS,
+                "bay", xyz(bay));
+        assertEquals("the bay came back with different progress than it left with — its unload said "
+                + unloaded + ", its return said " + loaded,
+                (long) Events.number(unloaded, "banked"), (long) Events.number(loaded, "banked"));
+
+        events.awaitRecordWithFields(cycled, "repair_bay_rebuilt", "the bay never finished the hole it resumed",
+                workBudget(spec, job), "pos", xyz(target), "placed", "true");
+        Reply after = readBay(bay);
+        assertEquals("the job cost other than one job's energy across the unload: " + before + " -> " + after,
+                job, before.integer("energy") - after.integer("energy"));
+    }
+
+    /**
+     * REPAIR-14 (and REPAIR-12, which it presupposes): two bays on one hull with two holes each
+     * take one, and both work at once — each started on its own before the other had finished, so
+     * the hull mends twice as fast rather than one hole after the other.
+     *
+     * <p>Asserted as an ORDER of production's own records, never as a duration: each bay's
+     * {@code REPAIRING} came before the OTHER bay's rebuild. Holes, the longest single step, so two
+     * bays starting a look apart still overlap by most of a job.</p>
+     *
+     * <p>red-witnessed: with {@code BlockDamageSavedData#claim} at
+     * {@code if (held != null && held.holder != holder && now - held.renewedAt <= 1)} widened to
+     * refuse any holder while ANY other holder's claim is live (one bay per world at a time), this
+     * fails at "the two holes were not worked at once by two bays: rebuilt {...tick:1336,...
+     * bay:19200003,129,153598,pos:19200001,129,153596...} and {...tick:1517,...bay:19200003,129,153598,
+     * pos:19200003,129,153596...}" — one bay did both, one after the other (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRepairBay#rebuild} answering false before
+     * {@code int slot = reserveSlotOf(work.price);}, this fails at "the bays never rebuilt both holes —
+     * no `repair_bay_rebuilt` carrying placed = true for both holes was recorded within 800 ticks"
+     * (2026-10-06).</p>
+     */
+    @Test
+    public void twoBaysOnOneHullWorkTwoHolesAtOnce() throws Exception {
+        Hull hull = hull("the hull two repair bays mend together");
+        int[] firstHole = hull.at(0, 0, -4);
+        int[] secondHole = hull.at(2, 0, -4);
+        int[] left = hull.at(-2, 0, -2);
+        int[] right = hull.at(2, 0, -2);
+        placeAboard(hull, firstHole, HULL_BLOCK);
+        placeAboard(hull, secondHole, HULL_BLOCK);
+        placeAboard(hull, left, BAY);
+        placeAboard(hull, right, BAY);
+        stock(left);
+        stock(right);
+        Reply spec = readBay(left);
+        int holeMaxStage = stage(firstHole).integer("maxStage");
+        // Unpowered while the holes are made, so neither bay can start before both exist.
+        Reply first = shoot(hull, firstHole, holeMaxStage, 323007);
+        Reply second = shoot(hull, secondHole, holeMaxStage, 323008);
+        requireArranged("both targets must be holes with a record: " + first + ", " + second,
+                first.bool("wasDestroyed") && second.bool("wasDestroyed")
+                        && "minecraft:air".equals(first.text("block")) && "minecraft:air".equals(second.text("block")));
+
+        int job = spec.integer("energyPerStage") * holeMaxStage;
+        long mark = events.markInstrumented();
+        arrange("stellurgytest energy inject 0 " + xyz(left, " ") + " " + 2 * job);
+        arrange("stellurgytest energy inject 0 " + xyz(right, " ") + " " + 2 * job);
+        String rebuilt = events.awaitMatching(mark, "repair_bay_rebuilt",
+                reply -> Events.anyRecordHasAll(reply, "pos", xyz(firstHole), "placed", "true")
+                        && Events.anyRecordHasAll(reply, "pos", xyz(secondHole), "placed", "true"),
+                "carrying placed = true for both holes", "the bays never rebuilt both holes",
+                2 * workBudget(spec, job));
+        String one = Events.recordsWhereAll(rebuilt, "pos", xyz(firstHole), "placed", "true").get(0);
+        String two = Events.recordsWhereAll(rebuilt, "pos", xyz(secondHole), "placed", "true").get(0);
+        String outcomes = events.since(mark, "repair_bay_outcome");
+        long oneStarted = firstRepairingTick(outcomes, Events.text(one, "bay"));
+        long twoStarted = firstRepairingTick(outcomes, Events.text(two, "bay"));
+        assertTrue("the two holes were not worked at once by two bays: rebuilt " + one + " and " + two
+                        + " after " + outcomes,
+                !Events.text(one, "bay").equals(Events.text(two, "bay"))
+                        && oneStarted < (long) Events.number(two, "tick")
+                        && twoStarted < (long) Events.number(one, "tick"));
+    }
+
+    /**
+     * Wear kept in a TILE is in the bay's work, and is paid for like any block: a worn engine aboard
+     * is restaged in place, and one spare engine buys as many stages as an engine has — more than a
+     * plain block's four, so a credit counted in the wrong home's stages shows as a second engine
+     * drawn.
+     *
+     * <p>red-witnessed: with {@code TileRepairBay#damagedIn} at {@code found.add(at);} removed (the
+     * pool drawn from the damage map alone), this fails at "the bay never restaged the worn engine —
+     * no `block_stage_set` carrying pos = 19200001,129,102396 and to = 0 was recorded within 580
+     * ticks" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRepairBay#restage} at {@code held = work.maxStage;} given
+     * {@code DamageState.DEFAULT_MAX_STAGE}, this fails at "one spare engine did not pay for every
+     * stage an engine has: {...reserve:2...} expected:&lt;3&gt; but was:&lt;2&gt;" (2026-10-06).</p>
+     */
+    @Test
+    public void aWornEngineAboardIsRestagedByTheBayOutOfOneSpare() throws Exception {
+        Hull hull = hull("the hull with a worn engine");
+        int[] engine = hull.at(0, 0, -4);
+        int[] bay = hull.at(-2, 0, -2);
+        placeAboard(hull, engine, SPARE_ENGINE);
+        placeAboard(hull, bay, BAY);
+        placeAboard(hull, offset(bay, 0, 1, 0), POWER);
+        Reply stocked = arrange("stellurgytest repairbay stock 0 " + xyz(bay, " ") + " " + SPARE_ENGINE + " " + STOCK);
+        requireArranged("the reserve did not take the spare engines it was handed: " + stocked,
+                stocked.integer("inserted") == STOCK);
+        Reply spec = readBay(bay);
+        int engineStages = stage(engine).integer("maxStage");
+        // More stages than a plain block has, and fewer than the engine has: all of them must come
+        // out of ONE spare, which a credit of a plain block's stages could not cover.
+        int worn = DamageState.DEFAULT_MAX_STAGE + 2;
+        requireArranged("the engine must have more stages than a plain block plus two, or one spare"
+                + " covering them all says nothing (it has " + engineStages + ")", engineStages > worn);
+
+        long mark = events.markInstrumented();
+        Reply struck = shoot(hull, engine, worn, 323009);
+        Reply records = arrange("stellurgytest damage records 0 " + xyz(engine, " ") + " " + xyz(engine, " "));
+        requireArranged("the engine must be worn, standing, and carry its wear in its own tile — not in"
+                + " the damage map: " + struck + ", " + records,
+                struck.integer("stage") == worn && SPARE_ENGINE.equals(struck.text("block"))
+                        && records.integer("count") == 0);
+        events.awaitRecordWithFields(mark, "block_stage_set", "the bay never restaged the worn engine",
+                workBudget(spec, spec.integer("energyPerStage") * worn), "pos", xyz(engine), "to", "0");
+        Reply after = readBay(bay);
+        assertEquals("one spare engine did not pay for every stage an engine has: " + after,
+                STOCK - 1, after.integer("reserve"));
+    }
+
+    /**
+     * REPAIR-7 on the bay: a damaged block that no finished block stands for — its item is a skull,
+     * not a block — is refused as having no price at all, which is not the same answer as a price
+     * that is merely not on hand. Asked of a bay that is powered and stocked, so neither of the other
+     * two refusals can be the answer.
+     *
+     * <p>red-witnessed: with {@code Work#at}'s staged branch at {@code if (!isFinishedBlock(price))}
+     * reduced to {@code if (price.isEmpty())} (the form it shipped with), this fails at "a bay meeting
+     * a block no finished block stands for never said it has no price — no `repair_bay_outcome`
+     * carrying bay = 19199999,129,204798 and to = NO_RECIPE was recorded within 40 ticks"
+     * (2026-10-06).</p>
+     */
+    @Test
+    public void aDamagedBlockNoFinishedBlockStandsForIsRefusedAsUnpriced() throws Exception {
+        Hull hull = hull("the hull with a damaged skull aboard");
+        int[] target = hull.at(0, 0, -4);
+        int[] bay = hull.at(-2, 0, -2);
+        placeAboard(hull, target, NO_FINISHED_BLOCK);
+        placeAboard(hull, bay, BAY);
+        placeAboard(hull, offset(bay, 0, 1, 0), POWER);
+        stock(bay);
+        Reply spec = readBay(bay);
+
+        long mark = events.markInstrumented();
+        Reply struck = shoot(hull, target, 1, 323010);
+        requireArranged("the skull must be damaged and standing: " + struck,
+                struck.integer("stage") >= 1 && NO_FINISHED_BLOCK.equals(struck.text("block")));
+        events.awaitRecordWithFields(mark, "repair_bay_outcome",
+                "a bay meeting a block no finished block stands for never said it has no price",
+                2 * spec.integer("lookIntervalTicks"), "bay", xyz(bay), "to", "NO_RECIPE");
+    }
+
+    /**
+     * The first tick {@code bay} said REPAIRING in {@code outcomes}; {@code Long.MAX_VALUE} when it
+     * never did, which no rebuild's tick can follow.
+     */
+    private static long firstRepairingTick(String outcomes, String bay) {
+        long first = Long.MAX_VALUE;
+        for (String record : Events.recordsWhereAll(outcomes, "bay", bay, "to", "REPAIRING")) {
+            first = Math.min(first, (long) Events.number(record, "tick"));
+        }
+        return first;
     }
 
     /** One scenario's hull, parked in its own plot, and the subspace address of its pilot seat. */

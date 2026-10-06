@@ -19,7 +19,10 @@ public enum RepairOutcome {
     REPAIRING,
     /** Nothing here is damaged — or, for a bay, nothing that another bay has not already taken. */
     UNDAMAGED,
-    /** The damaged block has no price: nothing crafts it (welder), or no item stands for it (bay). */
+    /**
+     * The damaged block has no price: nothing crafts it (welder), or no finished block stands for it
+     * (bay — its item is not a block a reserve can hold).
+     */
     NO_RECIPE,
     /** The price exists and is not on hand. */
     NO_MATERIALS,

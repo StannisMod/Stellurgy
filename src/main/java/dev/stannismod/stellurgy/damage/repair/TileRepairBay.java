@@ -5,7 +5,6 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.Items;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.ItemStackHelper;
 import net.minecraft.item.Item;
@@ -22,6 +21,10 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.WorldServer;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.gen.ChunkProviderServer;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
@@ -32,6 +35,7 @@ import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.wrapper.InvWrapper;
 
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.capability.CapabilityWear;
 import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
 import dev.stannismod.stellurgy.damage.DamageState;
 import dev.stannismod.stellurgy.damage.RepairOutcome;
@@ -49,8 +53,10 @@ import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -58,11 +64,12 @@ import java.util.UUID;
  * stands on, out of a reserve of finished blocks.
  *
  * <h3>What it serves</h3>
- * <p>Only the ship it stands on. Its work is every damaged position the world's damage map holds
- * inside that ship's shipyard — a block with stages on it, or a hole with the record of what stood
- * there. A bay standing anywhere else answers {@link RepairOutcome#NO_STRUCTURE} and touches
+ * <p>Only the ship it stands on. Its work is every damaged position inside that ship's shipyard,
+ * whichever home keeps the stage: a block the world's damage map records — stages on it, or a hole
+ * with the record of what stood there — and a block that keeps its own wear in a tile, an engine
+ * among them. A bay standing anywhere else answers {@link RepairOutcome#NO_STRUCTURE} and touches
  * nothing: a bay on a base reaching out to whatever is damaged nearby would mend a neighbour's
- * wall. Blocks that keep their own wear in a tile are not in the map, and so are not in its work.</p>
+ * wall.</p>
  *
  * <h3>What it is paid in</h3>
  * <p>Finished blocks, and only those: that is what separates this rung from a fabricator that eats
@@ -137,8 +144,7 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
     public void onLoad() {
         // A random phase, so the bays of a hull that load in one tick do not all look in one tick.
         if (world != null && !world.isRemote) {
-            lookCountdown = world.rand.nextInt(LOOK_INTERVAL_TICKS);
-        }
+            lookCountdown = world.rand.nextInt(LOOK_INTERVAL_TICKS);        }
     }
 
     @Override
@@ -173,9 +179,7 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
         boolean lacked = false;
         boolean unfillable = false;
         boolean unpriced = false;
-        // The yard box is exclusive at its maximum; the record walk is inclusive.
-        for (BlockPos candidate : data.positionsIn((int) yard.minX, (int) yard.minY, (int) yard.minZ,
-                (int) yard.maxX - 1, (int) yard.maxY - 1, (int) yard.maxZ - 1)) {
+        for (BlockPos candidate : damagedIn(data, yard)) {
             Work work = Work.at(world, data, candidate);
             if (work == null) {
                 continue;
@@ -208,6 +212,47 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
                 : unfillable ? RepairOutcome.UNFILLABLE
                 : unpriced ? RepairOutcome.NO_RECIPE
                 : RepairOutcome.UNDAMAGED);
+    }
+
+    /**
+     * Every position of the ship whose shipyard is {@code yard} that may be work: what the damage
+     * map records inside it, then the blocks that keep their own wear in a tile and have some.
+     *
+     * <p>A stage has two homes and both are walked, because a block that carries its own wear — an
+     * engine, a tank — never appears in the map, and a pool drawn from the map alone would leave
+     * the parts that matter most to a ship out of every bay's work.</p>
+     *
+     * <p>What it costs: the map's half walks the recorded positions, not the volume; the tile half
+     * walks the tiles of the yard's chunks that are LOADED, read without loading any — so a look is
+     * bounded by what this one ship holds, never by the world's tile list.</p>
+     *
+     * <p>The chunks are read straight off the provider's map, not through {@code getLoadedChunk}:
+     * that getter also withdraws a pending unload of the chunk it returns, and a look over every
+     * chunk of a hull that is being unloaded would keep the whole hull in memory.</p>
+     */
+    private Set<BlockPos> damagedIn(BlockDamageSavedData data, AxisAlignedBB yard) {
+        // The yard box is exclusive at its maximum; both walks below are inclusive.
+        int minX = (int) yard.minX, minY = (int) yard.minY, minZ = (int) yard.minZ;
+        int maxX = (int) yard.maxX - 1, maxY = (int) yard.maxY - 1, maxZ = (int) yard.maxZ - 1;
+        Set<BlockPos> found = new LinkedHashSet<>(data.positionsIn(minX, minY, minZ, maxX, maxY, maxZ));
+        ChunkProviderServer chunks = ((WorldServer) world).getChunkProvider();
+        for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
+            for (int cz = minZ >> 4; cz <= maxZ >> 4; cz++) {
+                Chunk chunk = chunks.id2ChunkMap.get(ChunkPos.asLong(cx, cz));
+                if (chunk == null) {
+                    continue;
+                }
+                for (TileEntity tile : chunk.getTileEntityMap().values()) {
+                    BlockPos at = tile.getPos();
+                    if (at.getY() >= minY && at.getY() <= maxY && at.getX() >= minX && at.getX() <= maxX
+                            && at.getZ() >= minZ && at.getZ() <= maxZ
+                            && CapabilityWear.get(tile) != null && DamageState.getStage(world, at) > 0) {
+                        found.add(at);
+                    }
+                }
+            }
+        }
+        return found;
     }
 
     /** One tick of the claimed job: put energy in, and take a step once enough is in. */
@@ -378,10 +423,14 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
          * What the damaged position at {@code pos} asks of a bay, or null when it asks nothing — not
          * loaded, or its record says nothing a bay can act on.
          *
-         * <p>A hole's record names its block by registry name, and the block registry answers a
-         * name it does not know with AIR rather than with nothing, so AIR here is "that block no
-         * longer exists": the hole is unfillable, and its record stays as the only statement of
-         * what the hull was.</p>
+         * <p>A hole's record names its block by registry name; a name the registry no longer has
+         * makes the hole unfillable, and its record stays as the only statement of what the hull
+         * was.</p>
+         *
+         * <p>A block is priced by the item that stands for it, and only a finished block can pay
+         * (see {@link #isFinishedBlock}). A block whose item is anything else — a door, a sign, a
+         * skull — has no price a reserve could ever hold, which is a different answer from a price
+         * that is merely not on hand.</p>
          */
         @Nullable
         private static Work at(net.minecraft.world.World world, BlockDamageSavedData data, BlockPos pos) {
@@ -395,24 +444,23 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
                     return null;
                 }
                 Block block = BlockDamageSavedData.blockFromName(name);
-                if (block == null || block == net.minecraft.init.Blocks.AIR) {
+                if (block == null) {
                     return new Work(Kind.UNFILLABLE, pos, ItemStack.EMPTY, null, 0, 0);
                 }
                 @SuppressWarnings("deprecation")
                 IBlockState state = block.getStateFromMeta(data.getDestroyedMeta(pos));
-                Item item = Item.getItemFromBlock(block);
-                if (item == Items.AIR) {
+                ItemStack price = new ItemStack(Item.getItemFromBlock(block), 1, block.damageDropped(state));
+                if (!isFinishedBlock(price)) {
                     return new Work(Kind.UNPRICED, pos, ItemStack.EMPTY, null, 0, 0);
                 }
-                return new Work(Kind.HOLE, pos, new ItemStack(item, 1, block.damageDropped(state)), state,
-                        0, 0);
+                return new Work(Kind.HOLE, pos, price, state, 0, 0);
             }
             int stage = DamageState.getStage(world, pos);
             if (stage <= 0) {
                 return null;
             }
             ItemStack price = here.getBlock().getItem(world, pos, here);
-            if (price.isEmpty()) {
+            if (!isFinishedBlock(price)) {
                 return new Work(Kind.UNPRICED, pos, ItemStack.EMPTY, null, 0, 0);
             }
             return new Work(Kind.STAGED, pos, price, null, stage, DamageState.getMaxStage(world, pos));
@@ -553,11 +601,19 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
 
     // --- the reserve, as an inventory --------------------------------------------------------
 
-    /** The reserve holds finished blocks and nothing else. */
     @Override
     public boolean isItemValidForSlot(int index, ItemStack stack) {
+        return isFinishedBlock(stack);
+    }
+
+    /**
+     * Whether {@code stack} is a finished block — the only thing the reserve takes, and so the only
+     * thing a bay can be paid in. One rule for both, so a block the reserve refuses is never
+     * reported as one the reserve merely lacks.
+     */
+    private static boolean isFinishedBlock(ItemStack stack) {
         Item item = stack.getItem();
-        return item instanceof ItemBlock || item instanceof ItemBlockSpecial;
+        return !stack.isEmpty() && (item instanceof ItemBlock || item instanceof ItemBlockSpecial);
     }
 
     @Override

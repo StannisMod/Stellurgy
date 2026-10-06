@@ -28,6 +28,11 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  *       the hole the bay was working, {@code placed} whether a block was put there, and
  *       {@code block} what stands there now, and {@code reserve} how many items the bay's reserve
  *       holds as the rebuild returns.</li>
+ *   <li>{@code repair_bay_unloaded} — at the HEAD of {@code TileRepairBay#onChunkUnload}, as its
+ *       chunk goes: {@code job} the position it was working ({@code none} if idle) and
+ *       {@code banked} the energy it had put toward the step in hand, both before it lets go.</li>
+ *   <li>{@code repair_bay_loaded} — at the RETURN of {@code TileRepairBay#onLoad}, as a bay enters
+ *       its world — placed, or read back from its chunk: {@code banked} as it arrived.</li>
  * </ul>
  *
  * <p>A stage a bay takes off a block is NOT recorded here: it goes through
@@ -46,6 +51,36 @@ public abstract class MixinTileRepairBayEvents {
 
     @Shadow
     private BlockPos job;
+
+    @Shadow
+    private int banked;
+
+    @Inject(method = "onChunkUnload", at = @At("HEAD"), require = 1)
+    private void stellurgyTest$unloading(CallbackInfo ci) {
+        TileEntity self = (TileEntity) (Object) this;
+        World world = self.getWorld();
+        if (world == null || world.isRemote) {
+            return;
+        }
+        TestTrace.instrument(world, INSTRUMENT);
+        TestTrace.record(world, "repair_bay_unloaded", "\"dim\":" + world.provider.getDimension()
+                + ",\"bay\":\"" + at(self.getPos()) + "\""
+                + ",\"job\":\"" + (job == null ? "none" : at(job)) + "\""
+                + ",\"banked\":" + banked);
+    }
+
+    @Inject(method = "onLoad", at = @At("RETURN"), require = 1)
+    private void stellurgyTest$loaded(CallbackInfo ci) {
+        TileEntity self = (TileEntity) (Object) this;
+        World world = self.getWorld();
+        if (world == null || world.isRemote) {
+            return;
+        }
+        TestTrace.instrument(world, INSTRUMENT);
+        TestTrace.record(world, "repair_bay_loaded", "\"dim\":" + world.provider.getDimension()
+                + ",\"bay\":\"" + at(self.getPos()) + "\""
+                + ",\"banked\":" + banked);
+    }
 
     @Inject(method = "settle", at = @At("HEAD"), require = 1)
     private void stellurgyTest$settled(RepairOutcome next, CallbackInfo ci) {
