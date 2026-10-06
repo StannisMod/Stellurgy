@@ -2885,8 +2885,8 @@ public class TestProbeCommand extends CommandBase {
         // craft) until they were moved onto the `ship_usable` event.
         m.put("managed", true);
         // READY: the substrate's initial-ticks delay is over and its resolver has the surrounding
-        // chunks — the same two conjuncts the physics loop selects on, and the pair
-        // `ShipLoadedAnnouncer` publishes `ShipEvent.ShipLoadedEvent` for. `false` here on a
+        // chunks — the same two conjuncts the physics loop selects on, and the pair the ship
+        // manager announces `ShipLifecycleEvent.ShipUsable` for. `false` here on a
         // `managed:true` ship is a craft that exists and does not move yet, which is exactly the
         // state a caller that means "I can fly this now" must not mistake for success.
         //

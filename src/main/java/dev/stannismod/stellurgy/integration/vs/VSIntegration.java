@@ -62,9 +62,6 @@ public final class VSIntegration {
         // Forge fires no world tick event on that side; both are pure Stellurgy types, so this line loads
         // nothing VS-importing of its own.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new DeckFollowsItsShip());
-        // Publish "a ship became usable" on the bus. Registered here for the same reason as the line
-        // above: it is a pure Stellurgy type and only runs where a substrate exists to have ships at all.
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ShipLoadedAnnouncer());
         // Two craft stop when they meet. Its own module, deletable in one piece — see its javadoc
         // for what it deliberately does not do.
         ShipMeetingStop.register();
@@ -96,22 +93,6 @@ public final class VSIntegration {
      */
     public static int markAllShipsDead(World world) {
         return VSBridge.markAllShipsDead(world);
-    }
-
-    /**
-     * Every ship in {@code world} that is LOADED and past its settling delay, as
-     * {@code substrate uuid -> Stellurgy durable id}. Empty when the world holds none — never null, so a
-     * caller on a world without ships and a caller who asked too early write the same
-     * loop.
-     *
-     * <p>A stronger fact than "registered" or "constructed" and a weaker one than "being flown":
-     * see {@link ShipLoadedAnnouncer}, which is the reason this exists.</p>
-     */
-    public static java.util.Map<String, java.util.UUID> shipsReadyForPhysics(World world) {
-        if (world == null) {
-            return java.util.Collections.emptyMap();
-        }
-        return VSBridge.shipsReadyForPhysics(world);
     }
 
     /**
@@ -578,9 +559,10 @@ public final class VSIntegration {
         // DECLARE the departure before cutting. The cut is what makes this world's registry drop the
         // craft, and that drop is indistinguishable from a destruction to anything merely watching -
         // so the classification is made HERE, by the code that knows where the ship is going, and the
-        // announcer publishes "left for dim N" rather than "gone". Without this a crossing tells
-        // every consumer that the craft it is carrying, crew aboard, has ceased to exist.
-        ShipLoadedAnnouncer.declareDeparture(srcWorld, srcShipId,
+        // ship manager announces the removal as a departure to dim N rather than a destruction.
+        // Without this a crossing tells every consumer that the craft it is carrying, crew aboard,
+        // has ceased to exist.
+        VSBridge.declareDeparture(srcWorld, srcShipId,
                 dstWorld == null ? srcWorld.provider.getDimension()
                         : dstWorld.provider.getDimension());
         // Cut a TIGHT box (not the 256-tall column) and paste into clear sky at dstY (above the
@@ -592,7 +574,7 @@ public final class VSIntegration {
             // Nothing was cut, so nothing will leave the registry on account of this crossing. Take
             // the mark back, or a genuine later destruction of this craft would be reported as a
             // departure to a cell it never reached.
-            ShipLoadedAnnouncer.abandonDeparture(srcWorld, srcShipId);
+            VSBridge.abandonDeparture(srcWorld, srcShipId);
         }
         // Declare the source FINISHED. It is collected on the next tick of this world whether or not
         // anything had it loaded — which is the case that used to have no collector at all and left a

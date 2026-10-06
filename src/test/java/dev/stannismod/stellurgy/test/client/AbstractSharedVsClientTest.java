@@ -121,7 +121,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      * be a literal {@code true} in the reply builder — it meant "the lookup found a ship and built a
      * report" and nothing about readiness, so every wait on it was a wait on nothing. Real readiness
      * is the conjunction the physics loop selects by, and it is now published as
-     * {@code ShipEvent.ShipLoadedEvent} and recorded off the bus as {@code ship_usable}.</p>
+     * {@code ShipLifecycleEvent.ShipUsable} and recorded off the bus as {@code ship_usable}.</p>
      *
      * <p>The {@code mark} is the one taken BEFORE the assembly — the same mark
      * {@link #awaitShipSpawned} uses. Both facts happen after it, in that order, and a mark taken
@@ -140,8 +140,8 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
         // same value: `ship` is the craft's durable Stellurgy name, taken off its own record, and `vsShip`
         // is the substrate's opaque key — minted in different places, and a caller arrives holding
         // whichever its own chain produced. The comment here claimed until 2026-09-17 that they were
-        // "the same value (one ship, one identity)"; `ShipLoadedAnnouncer` posts
-        // `ShipLoadedEvent(world, durable, substrateKey)` from two separate sources, so they are not.
+        // "the same value (one ship, one identity)"; the usable event carries the durable id and the
+        // physics uuid as two separate fields, read off the record in two places, so they are not.
         //
         // Over the CHAIN, not the first record: a load is undone by an unload, and where ships may
         // unload (a scenario that turned the test server's permanent loading off) the load recorded

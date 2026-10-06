@@ -2091,7 +2091,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // The IDENTITY is already known: this scenario ASSEMBLED the ship, and the registry's own
         // `ship_spawned` record above names it. What still has to be waited for is a different fact
         // — the physics object being USABLE, which a registry add does not prove. That fact is
-        // production's own `ShipEvent.ShipLoadedEvent`, recorded off the bus as `ship_usable`: the
+        // production's own `ShipLifecycleEvent.ShipUsable`, recorded off the bus as `ship_usable`: the
         // conjunction the physics loop selects a ship by, where the old `managed:true` poll read a
         // literal `true` in the probe's reply builder and so waited on nothing. The wait is still
         // keyed BY ID: these scenarios hover, tumble and invert their ship on purpose, and a bounded

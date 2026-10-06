@@ -403,24 +403,25 @@ public final class ServerEventRecorder {
      *
      * <p>Production's own event, subscribed to like any other consumer would rather than
      * observed by a test mixin: this fact has a non-test audience and is published for it
-     * ({@code ShipEvent.ShipLoadedEvent}). That is why the recorded type is named for USABILITY
+     * ({@code ShipLifecycleEvent.ShipUsable}). That is why the recorded type is named for USABILITY
      * and not "loaded" — {@code ship_loaded} is already taken by the test mixin on the physics
      * object's CONSTRUCTOR, which is a weaker claim: a ship exists there and does not move yet.
      * A test that means "I can fly this now" wants this one.</p>
      *
-     * <p>Both ids are recorded even though they are the same value (one ship, one identity), so a
-     * reader can match on either spelling without knowing that.</p>
+     * <p>{@code ship} is the DURABLE id and {@code vsShip} the physics id; they are the same value
+     * for a craft that kept its identity (one ship, one identity), and both are recorded so a reader
+     * can match on either spelling without knowing that.</p>
      */
     @SubscribeEvent
-    public static void onShipUsable(dev.stannismod.stellurgy.api.event.ShipEvent.ShipLoadedEvent event) {
+    public static void onShipUsable(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipUsable event) {
         World world = event.world;
         instrument(world, "server_bus_ship_usable");
         if (world == null) {
             return;
         }
         record(world, "ship_usable",
-                "\"ship\":\"" + str(event.shipId) + "\""
-                        + ",\"vsShip\":\"" + str(event.substrateId) + "\""
+                "\"ship\":\"" + str(event.durableId == null ? null : event.durableId.toString()) + "\""
+                        + ",\"vsShip\":\"" + event.shipUuid + "\""
                         + ",\"dim\":" + world.provider.getDimension());
     }
 
@@ -431,10 +432,31 @@ public final class ServerEventRecorder {
      * recorder of its own: the mass trigger arms on it, so it has a non-test audience. One record
      * per announcement, so "exactly once per transition" is a count over a window rather than a
      * tally somebody had to reset. {@code edge} is which half ({@code named}/{@code unnamed});
-     * {@code durable} is the vessel's id, which survives a crossing where {@code ship} does not.</p>
+     * {@code durable} is the vessel's id, which survives a crossing where {@code ship} does not; and
+     * a departure carries {@code destinationDim}, the one cause that has a destination.</p>
+     *
+     * <p>The usable edge is the third member of the family and is NOT recorded here: it carries no
+     * cause, and it has its own type ({@code ship_usable}, above) that more than forty waits already
+     * read.</p>
      */
     @SubscribeEvent
-    public static void onShipLifecycle(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent event) {
+    public static void onShipNamed(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipNamed event) {
+        recordLifecycle(event, "named", event.cause, "");
+    }
+
+    @SubscribeEvent
+    public static void onShipUnnamed(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipUnnamed event) {
+        recordLifecycle(event, "unnamed", event.cause,
+                event instanceof dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipDeparted
+                        ? ",\"destinationDim\":" + ((dev.stannismod.stellurgy.api.event.ShipLifecycleEvent
+                                .ShipDeparted) event).destinationDim
+                        : "");
+    }
+
+    private static void recordLifecycle(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent event,
+                                        String edge,
+                                        dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause,
+                                        String extra) {
         World world = event.world;
         instrument(world, "server_bus_ship_lifecycle");
         if (world == null) {
@@ -444,10 +466,9 @@ public final class ServerEventRecorder {
                 "\"ship\":\"" + event.shipUuid + "\""
                         + ",\"durable\":" + (event.durableId == null
                                 ? "null" : "\"" + event.durableId + "\"")
-                        + ",\"cause\":\"" + event.cause + "\""
-                        + ",\"edge\":\"" + (event instanceof
-                                dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipUnnamed
-                                ? "unnamed" : "named") + "\""
+                        + ",\"cause\":\"" + cause + "\""
+                        + ",\"edge\":\"" + edge + "\""
+                        + extra
                         + ",\"dim\":" + world.provider.getDimension());
     }
 

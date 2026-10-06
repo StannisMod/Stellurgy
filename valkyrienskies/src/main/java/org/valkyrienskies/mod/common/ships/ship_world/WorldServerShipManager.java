@@ -55,6 +55,17 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * meant a handler mutating the very collection the loop was walking.</p>
      */
     private final List<ShipLifecycleEvent> pendingLifecycle;
+    /**
+     * Craft a crossing has DECLARED it is about to cut out of this world, and the dimension each one
+     * is going to — consumed by that craft's removal from the registry, which is then announced as a
+     * departure instead of a destruction.
+     *
+     * <p>A departure and a destruction end the same way here — the record leaves the registry — so
+     * only the code that knows can tell them apart, and it says so BEFORE it cuts. A mark lives until
+     * the removal it predicts (the cut is what causes it) or until the crossing takes it back
+     * ({@link #abandonDeparture}); there is no clock on it.</p>
+     */
+    private final Map<UUID, Integer> departing;
 
     public WorldServerShipManager(World world) {
         this.world = (WorldServer) world;
@@ -67,6 +78,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         this.backgroundLoadQueue = new LinkedHashSet<>();
         this.loadingInBackground = new HashSet<>();
         this.pendingLifecycle = new ArrayList<>();
+        this.departing = new HashMap<>();
         this.threadSafeLoadedShips = ImmutableList.of();
         this.physicsThread = new Thread(physicsLoop);
         this.physicsThread.start();
@@ -157,8 +169,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 // Copy ship blocks to the world
                 physicsObject.destroyShip();
                 // Then remove the ship from the world, and the ship map.
-                noteLifecycle(physicsObject.getShipData(), ShipLifecycleEvent.Cause.DESTROYED);
-                QueryableShipData.get(world).removeShip(physicsObject.getShipData());
+                removeRecord(physicsObject.getShipData());
                 iterator.remove();
             }
         }
@@ -209,9 +220,12 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         }
         // Removed after the walk rather than during it: the registry's iterator is its own, and this
         // loop does not need to know what it promises about removal underneath itself.
+        // Announced like every other removal: a record collected here leaves the registry exactly as
+        // a destroyed loaded ship does, and a crossing out of an UNLOADED source ends HERE — so this is
+        // where its departure is said, or nobody says it.
         if (finished != null) {
             for (ShipData data : finished) {
-                QueryableShipData.get(world).removeShip(data);
+                removeRecord(data);
             }
         }
         // Then execute queued ship spawn operations
@@ -230,6 +244,27 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         loadingController.sendUpdatesToPlayers();
         // And then update the thread safe ship list.
         this.threadSafeLoadedShips = ImmutableList.copyOf(loadedShips.values());
+        // ...and announce the ships that became USABLE on this tick. The substrate does not step a
+        // ship until it is past its settling delay and its surrounding-chunk cache is filled, and both
+        // halves are decided inside `onTick` above, so this tick is the one the fact became true on.
+        // LAST, after the thread-safe list: a handler resolves the craft it hears about, and most
+        // lookups read that list — announced before it, a ship loaded this tick would be "usable" and
+        // unfindable at once. Once per ship object, which is once per load.
+        //
+        // NOT `isPhysicsEnabled`, deliberately: that is an operational switch somebody throws, so a
+        // parked craft nobody has commanded is fully loaded with it false. Requiring it made "usable"
+        // mean "is anyone flying this", and a caller waiting to BEGIN flying waited for a state its
+        // own next action causes — 1 red became 42 on the first gate that used it.
+        for (PhysicsObject ship : getAllLoadedPhysObj()) {
+            if (!ship.isUsableAnnounced() && ship.isPhysicsReady()
+                    && ship.getCachedSurroundingChunks() != null) {
+                ship.markUsableAnnounced();
+                ShipData data = ship.getShipData();
+                pendingLifecycle.add(new ShipLifecycleEvent.ShipUsable(world, data.getUuid(),
+                        data.getStellurgyDurableId()));
+            }
+        }
+        publishLifecycleEvents();
     }
 
     private void spawnNewShips() {
@@ -402,7 +437,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             PhysicsObject physicsObject = new PhysicsObject(world, toSpawn);
             loadedShips.put(toSpawn.getUuid(), physicsObject);
             // The ship is now resolvable by id: this is the naming edge for a spawn.
-            noteLifecycle(toSpawn, spawnData.cause);
+            noteNamed(toSpawn, spawnData.cause);
         }
         spawnQueue.clear();
     }
@@ -436,35 +471,116 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             // block set, so nothing is resurrected).
             loaded.destroyShip();
             loadedShips.remove(uuid);
-            noteLifecycle(loaded.getShipData(), ShipLifecycleEvent.Cause.DESTROYED);
+            removeRecord(loaded.getShipData());
         }
-        QueryableShipData.get(world).getShip(uuid).ifPresent(remnant -> {
-            if (remnant.getBlockPositions() != null && remnant.getBlockPositions().isEmpty()) {
-                // Announced even though the spawn a few lines below re-registers the same identity:
-                // the registration a consumer was holding really does end here, and a consumer that
-                // saw only the re-registration would keep state built against the remnant.
-                noteLifecycle(remnant, ShipLifecycleEvent.Cause.DESTROYED);
-                QueryableShipData.get(world).removeShip(remnant);
-            }
-        });
+        // Announced even though the spawn a few lines below re-registers the same identity: the
+        // registration a consumer was holding really does end here, and a consumer that saw only the
+        // re-registration would keep state built against the remnant.
+        Optional<ShipData> remnant = QueryableShipData.get(world).getShip(uuid);
+        if (remnant.isPresent() && remnant.get().getBlockPositions() != null
+                && remnant.get().getBlockPositions().isEmpty()) {
+            removeRecord(remnant.get());
+        }
     }
 
     /**
-     * Record a lifecycle transition for announcement at the end of this tick's pass.
+     * End {@code ship}'s registration in this world: announce it and remove the record — and do
+     * neither if that record is no longer the one registered under its uuid.
      *
-     * <p>Both identities are read HERE, while the record is still in hand: by publication time a
-     * destroyed ship is out of the registry and could not be asked for its durable id.</p>
+     * <p><b>The announcement belongs to the RECORD, not to the physics object.</b> A registration has
+     * two halves — the registry entry and, while loaded, its ship object — and they can be taken down
+     * on different paths: an assembly re-using an identity deregisters the blockless entry first
+     * ({@link #deregisterBlocklessRemnant}), and the spawn drain then destroys the object it left
+     * loaded. Announcing each half said the craft ended twice; measured 2026-10-06 on a same-world
+     * crossing, a {@code DEPARTED} immediately followed, in the same tick, by a {@code DESTROYED} for
+     * the same vessel, because the first consumed the declared departure. So the entry's removal is
+     * the one announcement, and a half whose entry is already gone announces nothing.</p>
      */
-    private void noteLifecycle(@Nullable ShipData ship, ShipLifecycleEvent.Cause cause) {
+    private void removeRecord(@Nonnull ShipData ship) {
+        Optional<ShipData> registered = QueryableShipData.get(world).getShip(ship.getUuid());
+        if (!registered.isPresent() || registered.get() != ship) {
+            return;
+        }
+        noteRemoved(ship);
+        QueryableShipData.get(world).removeShip(ship);
+    }
+
+    /**
+     * Deregister {@code uuid}'s record if it is a BLOCKLESS remnant — for an assembly about to re-use
+     * that identity — and announce the removal like any other. Answers whether a record was removed.
+     *
+     * <p>Here and not in the caller because every removal from the registry is a lifecycle edge, and
+     * the manager is the one place that announces them: a remnant deleted from outside would leave
+     * the registration a consumer was holding ended with nothing said.</p>
+     */
+    public boolean deregisterBlocklessRemnant(@Nonnull UUID uuid) {
+        enforceGameThread();
+        Optional<ShipData> remnant = QueryableShipData.get(world).getShip(uuid);
+        if (!remnant.isPresent() || remnant.get().getBlockPositions() == null
+                || !remnant.get().getBlockPositions().isEmpty()) {
+            return false;
+        }
+        removeRecord(remnant.get());
+        return true;
+    }
+
+    /**
+     * A crossing is about to cut {@code uuid} out of this world into {@code destinationDim}. Declared
+     * BEFORE the cut, so the removal it causes is announced as a departure by the code that knows,
+     * rather than as a destruction.
+     */
+    public void declareDeparture(@Nonnull UUID uuid, int destinationDim) {
+        enforceGameThread();
+        departing.put(uuid, destinationDim);
+    }
+
+    /** The declared departure did not happen — nothing was cut — so a later removal of this craft
+     *  would be a real destruction. */
+    public void abandonDeparture(@Nonnull UUID uuid) {
+        enforceGameThread();
+        departing.remove(uuid);
+    }
+
+    /**
+     * Record a naming for announcement at the end of this pass.
+     *
+     * <p>Both identities are read HERE, while the record is in hand.</p>
+     */
+    private void noteNamed(@Nullable ShipData ship, ShipLifecycleEvent.Cause cause) {
         if (ship == null) {
             return;
         }
-        UUID shipUuid = ship.getUuid();
-        UUID durableId = ship.getStellurgyDurableId();
-        pendingLifecycle.add(cause == ShipLifecycleEvent.Cause.UNLOADED
-                || cause == ShipLifecycleEvent.Cause.DESTROYED
-                ? new ShipLifecycleEvent.ShipUnnamed(world, shipUuid, durableId, cause)
-                : new ShipLifecycleEvent.ShipNamed(world, shipUuid, durableId, cause));
+        pendingLifecycle.add(new ShipLifecycleEvent.ShipNamed(world, ship.getUuid(),
+                ship.getStellurgyDurableId(), cause));
+    }
+
+    /** Record that the ship object of a still-registered craft was dropped. */
+    private void noteUnloaded(@Nullable ShipData ship) {
+        if (ship == null) {
+            return;
+        }
+        pendingLifecycle.add(new ShipLifecycleEvent.ShipUnnamed(world, ship.getUuid(),
+                ship.getStellurgyDurableId(), ShipLifecycleEvent.Cause.UNLOADED));
+    }
+
+    /**
+     * Record that a craft's registration in this world ENDED — called only by {@link #removeRecord},
+     * which every removal path goes through, and before the removal, while its durable id can still
+     * be read off it.
+     *
+     * <p>A declared departure turns the removal into a {@link ShipLifecycleEvent.ShipDeparted} and is
+     * consumed by it; any other removal is a {@link ShipLifecycleEvent.Cause#DESTROYED}.</p>
+     */
+    private void noteRemoved(@Nullable ShipData ship) {
+        if (ship == null) {
+            return;
+        }
+        Integer destination = departing.remove(ship.getUuid());
+        pendingLifecycle.add(destination != null
+                ? new ShipLifecycleEvent.ShipDeparted(world, ship.getUuid(),
+                        ship.getStellurgyDurableId(), destination)
+                : new ShipLifecycleEvent.ShipUnnamed(world, ship.getUuid(),
+                        ship.getStellurgyDurableId(), ShipLifecycleEvent.Cause.DESTROYED));
     }
 
     /**
@@ -526,7 +642,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             }
             // The naming edge for a ship that already existed. A background load reaches this same
             // loop once the controller promotes it, so there is one edge per load however it started.
-            noteLifecycle(toLoad, ShipLifecycleEvent.Cause.LOADED);
+            noteNamed(toLoad, ShipLifecycleEvent.Cause.LOADED);
         }
         loadQueue.clear();
         // Load ships that aren't required immediately in the background.
@@ -589,7 +705,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 throw new IllegalStateException("How did we fail to unload " + physicsObject.getShipData());
             }
             // The craft is still registered and still on disk - only the ship object is gone.
-            noteLifecycle(physicsObject.getShipData(), ShipLifecycleEvent.Cause.UNLOADED);
+            noteUnloaded(physicsObject.getShipData());
         }
         unloadQueue.clear();
     }

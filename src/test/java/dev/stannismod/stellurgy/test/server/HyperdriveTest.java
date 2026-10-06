@@ -744,9 +744,10 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>red-witnessed: {@code PhysicsObject#unload} at {@code provider.queueUnload(claimedChunkCache.getChunkAt(chunkPos.x, chunkPos.z));}
      * (the ship's chunks kept in memory) fails "the capacitor's chunk must leave memory ... no
      * `chunk_unloaded` ... within 200 ticks", 2026-10-05</p>
-     * <p>red-witnessed: {@code ShipLoadedAnnouncer#onWorldTick} at {@code MinecraftForge.EVENT_BUS.post(new ShipEvent.ShipLoadedEvent(}
+     * <p>red-witnessed: {@code WorldServerShipManager#tick} at {@code pendingLifecycle.add(new ShipLifecycleEvent.ShipUsable(}
      * (the load never announced) fails "the ship must come back when it is asked for — no `ship_usable`
-     * ... within 200 ticks", 2026-10-05</p>
+     * ... within 200 ticks", 2026-10-05 on the per-tick watcher that published this edge until then,
+     * and RE-TAKEN 2026-10-06 at the anchor above, its one publisher since: the same failure.</p>
      */
     @Test
     public void aBanksChargeSurvivesAREALunloadAndReload() throws Exception {

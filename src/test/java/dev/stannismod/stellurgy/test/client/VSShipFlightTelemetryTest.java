@@ -998,7 +998,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
         // READINESS, as production's own event. This was a bounded poll of `ship-info` for
         // `managed:true`, under a comment calling that the one gate no event records — which stopped
-        // being true: `ShipEvent.ShipLoadedEvent` is published on the tick a craft becomes ready to
+        // being true: `ShipLifecycleEvent.ShipUsable` is published on the tick a craft becomes ready to
         // be flown, recorded as `ship_usable`, and the base waits on it.
         //
         // And `managed` answers a WEAKER question than this scenario needs. It is true once a
