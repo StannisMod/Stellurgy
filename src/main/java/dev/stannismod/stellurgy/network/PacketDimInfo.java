@@ -116,7 +116,13 @@ public class PacketDimInfo extends BasePacket {
     @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
     public void executeClient(EntityPlayer thePlayer) {
         if (deleteDim) {
-            DimensionManager.getInstance().forgetDimension(dimNumber);
+            // Against a remote server this client made the Forge registration itself, so it withdraws
+            // it; in single player the integrated server owns it and has already withdrawn it.
+            if (dev.stannismod.stellurgy.client.ServerView.current().remote()) {
+                DimensionManager.getInstance().withdrawDimension(dimNumber);
+            } else {
+                DimensionManager.getInstance().forgetDimension(dimNumber);
+            }
         } else {
             dimProperties = new DimensionProperties(dimNumber);
             dimProperties.readFromNBT(dimNBT);

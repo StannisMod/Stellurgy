@@ -21,7 +21,12 @@ import static org.junit.Assert.assertTrue;
  *       nothing spent), the D134-2 "shield is a barrier only while up" rule;</li>
  *   <li>a strike that <b>outmatches</b> the shield is <b>gracefully penetrated</b>: the shield spends
  *       everything it has, the remainder passes downstream, and the shield drops toward zero — the same
- *       "shields fall" degrade as the kinetic path.</li>
+ *       "shields fall" degrade as the kinetic path;</li>
+ *   <li>a fully absorbed kinetic strike that <b>declares a travelling body</b> is <b>reflected</b> — the
+ *       body leaves along the outward normal and no faster than it arrived — while an otherwise
+ *       identical strike carrying no body is stopped at the shell, and neither costs more than the
+ *       other. A body is a body whether or not it happens to be a Forge entity: a shot that lives as a
+ *       record has to reach the same reflection as a thrown block does.</li>
  * </ul>
  *
  * <p>The strike is driven with {@code /stellurgytest shield strike ...}, which calls the real service on the
@@ -75,6 +80,12 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + downResult, (!Reply.of(downResult).bool("intercepted")));
     }
 
+    /**
+     * red-witnessed: with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, Math.max(1, residual));}'s short-pay residual forced to 0, this
+     * fails with "an overmatching strike was reported fully absorbed — the shield cannot afford it:
+     * {...fullyAbsorbed:true,residual:0...}"; the charged-shield method stayed green on that run.
+     * 2026-09-30.
+     */
     @Test
     public void strikeGracefullyPenetratesAShieldItOutmatches() throws Exception {
         int gx = 1010, gz = 822;
@@ -110,11 +121,131 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + " before=" + storedBefore + "):\n" + result, storedAfter < storedBefore / 4L);
     }
 
+    /**
+     * red-witnessed: with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())}'s reflection branch disabled, this fails
+     * with "a fully absorbed kinetic strike carrying a travelling body was not reflected ...
+     * {...reflected:false...}". The bodiless half and the equal-bill verdict were not separately
+     * witnessed. 2026-09-30.
+     *
+     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code ShieldStrikeService#absorb} at {@code Vec3d newVelocity = generator.reflectBodyVelocity(hitPoint, strike.getBodyVelocity());}
+     * handing the body back its own velocity, this fails at "the reflected body still travels inward
+     * (newVz=-2.0, it arrived at -2.0)"; with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, 0);}'s full pay answering a
+     * residual of 1, at "an abstract kinetic source with no travelling body was not fully absorbed ...
+     * {...fullyAbsorbed:false...residual:1...}"; with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())} reflecting
+     * every fully paid kinetic strike, a bodiless one along its own ray, at "a strike with no travelling
+     * body was reflected ... {...declaredBody:false...reflected:true...}". A first attempt at the last
+     * — dropping only the {@code hasBody()} test — stayed green: the shell mirrors a null velocity to
+     * null and the result then reads unreflected.</p>
+     */
+    @Test
+    public void aDeclaredBodyIsReflectedWhereAnIdenticalBodilessStrikeIsStopped() throws Exception {
+        int gx = 1010, gz = 834;
+        int ex = gx + 1;
+        place("affs:shield_generator", gx, gz);
+        place("affs:field_generator", ex, gz);
+        for (int i = 0; i < 15; i++) {
+            chargeIteration(gx, gz);
+        }
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
+
+        // Both strikes are the same ray, the same declared energy and the same KINETIC kind, fired at a
+        // shield that can afford either. The ONLY difference is that one declares the body it carries —
+        // a shot travelling inward at 2 b/t — so the two outcomes can differ for exactly one reason.
+        int impactEnergy = 2000;
+        double inwardSpeed = 2.0D;
+        String withBody = strike(ex, gz, impactEnergy, "KINETIC", 0.0D, 0.0D, -inwardSpeed);
+        assertTrue("a declared body was not reported as declared — the probe never handed one to the "
+                + "service, so nothing below tests reflection:\n" + withBody,
+                Reply.of(withBody).bool("declaredBody"));
+        assertTrue("a shield that could pay did not fully absorb the strike:\n" + withBody,
+                Reply.of(withBody).bool("fullyAbsorbed"));
+        assertTrue("a fully absorbed kinetic strike carrying a travelling body was not reflected — a "
+                + "shot that lives as a record must bounce like a thrown body does:\n" + withBody,
+                Reply.of(withBody).bool("reflected"));
+
+        // It came in along -Z, so it must leave along +Z: the shell reverses the inward component.
+        double newVz = readDouble(withBody, "newVz");
+        assertTrue("the reflected body still travels inward (newVz=" + newVz + ", it arrived at "
+                + (-inwardSpeed) + "): the shell did not turn it around:\n" + withBody, newVz > 0.0D);
+        // And it may never leave faster than it arrived — the shell cannot hand out energy it never
+        // absorbed. This holds at any restitution setting; only the perfect-mirror default is an equality.
+        double speed = Math.sqrt(square(readDouble(withBody, "newVx")) + square(readDouble(withBody, "newVy"))
+                + square(newVz));
+        assertTrue("the shell accelerated the body it reflected (out=" + speed + " in=" + inwardSpeed
+                + "): a mirror returns energy, it does not create it:\n" + withBody,
+                speed <= inwardSpeed + 1.0E-6D);
+
+        String bodiless = strike(ex, gz, impactEnergy, "KINETIC");
+        assertTrue("a bodiless declared strike was reported as carrying a body:\n" + bodiless,
+                !Reply.of(bodiless).bool("declaredBody"));
+        assertTrue("an abstract kinetic source with no travelling body was not fully absorbed:\n" + bodiless,
+                Reply.of(bodiless).bool("fullyAbsorbed"));
+        assertTrue("a strike with no travelling body was reflected — there is nothing there to reflect:\n"
+                + bodiless, !Reply.of(bodiless).bool("reflected"));
+
+        // One impact, one pricing path: reflecting is not a surcharge. Same declared energy, same kind,
+        // same shell => the same bill, whether or not a body came back out.
+        long bodyCost = readLong(withBody, "absorbed");
+        long bodilessCost = readLong(bodiless, "absorbed");
+        assertTrue("reflecting a body was billed differently from stopping one (" + bodyCost + " vs "
+                + bodilessCost + "): the reflection must scale speed, never the cost.",
+                bodyCost == bodilessCost);
+    }
+
+    /**
+     * red-witnessed: with a line inserted before {@code ShieldStrikeService#absorb} at {@code double fractionStopped = (double) spent / (double) cost;} reflecting any
+     * body on a SHORT pay, this fails with "an overmatching strike was reported fully absorbed ...
+     * {...reflected:true,newVz:2.0...}". 2026-09-30.
+     */
+    @Test
+    public void aBodyThatOutmatchesTheShieldPenetratesInsteadOfBouncing() throws Exception {
+        int gx = 1010, gz = 846;
+        int ex = gx + 1;
+        place("affs:shield_generator", gx, gz);
+        place("affs:field_generator", ex, gz);
+        for (int i = 0; i < 15; i++) {
+            chargeIteration(gx, gz);
+        }
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
+        long storedBefore = read(ex, gz).shieldStored();
+
+        // The other side of the condition the reflection rule straddles. Same declared body, but an
+        // energy the shield cannot cover: the shield spends what it has, the remainder passes, and the
+        // body keeps going the way it was going. A short pay must never bounce anything back.
+        int impactEnergy = (int) (storedBefore * 3L);
+        String result = strike(ex, gz, impactEnergy, "KINETIC", 0.0D, 0.0D, -2.0D);
+        // Without this the whole test passes on a strike that never carried a body at all — "did not
+        // reflect" is the trivial answer to "there was nothing there".
+        assertTrue("the body this test declares never reached the service:\n" + result,
+                Reply.of(result).bool("declaredBody"));
+        assertTrue("an overmatching strike was reported fully absorbed — the shield cannot afford it:\n"
+                + result, !Reply.of(result).bool("fullyAbsorbed"));
+        assertTrue("a shield that could not pay still reflected the body: graceful penetration means the "
+                + "body carries on, not that it bounces for free:\n" + result,
+                !Reply.of(result).bool("reflected"));
+        assertTrue("no residual impact passed a shield that could not fully pay:\n" + result,
+                readLong(result, "residual") > 0);
+    }
+
     private String strike(int ex, int gz, int impactEnergy, String kind) throws Exception {
+        return exec(strikeCommand(ex, gz, impactEnergy, kind));
+    }
+
+    /** The same strike, additionally DECLARING the travelling body it carries at that world velocity. */
+    private String strike(int ex, int gz, int impactEnergy, String kind, double vx, double vy, double vz)
+            throws Exception {
+        return exec(strikeCommand(ex, gz, impactEnergy, kind) + " " + vx + " " + vy + " " + vz);
+    }
+
+    private String strikeCommand(int ex, int gz, int impactEnergy, String kind) {
         double cx = ex + 0.5D, cy = Y + 0.5D, cz = gz + 0.5D;
         double ox = cx, oy = cy, oz = cz + RADIUS + 3.0D; // outside the +Z shell
-        return exec("stellurgytest shield strike " + DIM + " " + ox + " " + oy + " " + oz
-                + " 0 0 -1 10 " + impactEnergy + " " + kind);
+        return "stellurgytest shield strike " + DIM + " " + ox + " " + oy + " " + oz
+                + " 0 0 -1 10 " + impactEnergy + " " + kind;
+    }
+
+    private static double square(double v) {
+        return v * v;
     }
 
     private ShieldTile read(int x, int z) throws Exception {
@@ -139,9 +270,12 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         return Long.parseLong(mReply.text(STORED));
     }
 
+    private static double readDouble(String json, String key) {
+        return Reply.of(json).number(key);
+    }
+
     private static long readLong(String json, String key) {
-        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
-        return Reply.of(json).integer(key);
+        return Reply.of(json).longInteger(key);
     }
 
     private static String join(List<String> resp) {

@@ -28,7 +28,6 @@ import dev.stannismod.stellurgy.atmosphere.LifeSupportNetwork;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.util.AudioRegistry;
@@ -509,15 +508,15 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
         }
     }
 
     private void leaveVentilationNetwork() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(LifeSupportNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(LifeSupportNetwork.DOMAIN, world);
         }
     }
 

@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.affs.te;
 
 import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
-import dev.stannismod.stellurgy.world.WorldRuntime;
 import dev.stannismod.stellurgy.affs.block.BlockFieldGenerator;
 import dev.stannismod.stellurgy.affs.config.ModConfig;
 import dev.stannismod.stellurgy.affs.network.PacketFieldTouchEffect;
@@ -13,6 +12,7 @@ import dev.stannismod.stellurgy.affs.world.FieldSource;
 import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
 import dev.stannismod.stellurgy.affs.world.WorldFieldFrame;
 import dev.stannismod.stellurgy.affs.world.projectile.IEnergyProjectile;
+import dev.stannismod.stellurgy.affs.world.shield.ShieldCondition;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkState;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind;
@@ -41,7 +41,6 @@ import java.util.*;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 public class TileEntityFieldGenerator extends TileEntity implements ITickable, FieldSource, ISubsystemSink {
 
@@ -53,22 +52,6 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DamageSource SHIELD_COLLISION_DAMAGE = new DamageSource("affs.shield_collision");
 
-    /**
-     * What a server world knows about its emitters: which are loaded, and on which side of a shell
-     * each player was last seen. Owned by the world ({@link WorldRuntime}), so it goes when the world
-     * goes — server stop unloads worlds without unloading their chunks, so no emitter would ever
-     * have removed itself, and the next world's dimension of the same number would have inherited
-     * the previous world's powered shells.
-     */
-    private static final class WorldEmitters {
-        final Set<TileEntityFieldGenerator> active = new HashSet<>();
-        final Map<UUID, PlayerLastSafePosition> lastSafe = new HashMap<>();
-    }
-
-    private static WorldEmitters emittersOf(World world) {
-        return WorldRuntime.of(world, WorldEmitters.class, WorldEmitters::new);
-    }
-
     // Coil capacity is read from config at construction (config is loaded in preInit, before any tile
     // is built). Small and fast: the field activates at shieldActivationThreshold of this capacity.
     // Both intake and extraction are UNTHROTTLED at the storage (maxReceive == maxExtract == capacity):
@@ -79,7 +62,14 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     //   - extraction is unthrottled because absorbing one hit may need to spend far more than a tick's
     //     intake, so a per-tick extract cap would make the coil unable to block any impact above it.
     private final ShieldEnergyStorage energy = new ShieldEnergyStorage(ModConfig.emitterCoilBuffer, ModConfig.emitterCoilBuffer, ModConfig.emitterCoilBuffer);
+    // The radius this emitter was TOLD to hold. It is what the player set, what the maintenance draw is
+    // billed against, and what a repair restores to — damage never moves it.
     private int radius = DEFAULT_RADIUS;
+    // The radius it actually projects, which is the declared one shrunk by the block's own condition.
+    // Recomputed each server tick and replicated, so the field the client draws is the field that
+    // exists. Kept as a field rather than derived per call because the SDF asks for it once per sample
+    // point, and a damage lookup per sample is a different order of cost.
+    private int effectiveRadius = DEFAULT_RADIUS;
     // The frame this emitter's field lives in (§4.3): identity standalone, ship-frame on a VS hull.
     // Resolved from the block's position (a network is entirely on one ship or standalone) and refreshed
     // each tick, so an emitter assembled into a ship after placement picks up its ship frame.
@@ -96,6 +86,16 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     private boolean fieldPowered = false;
     private int shieldReceivedThisTick = 0;
     private int shieldConsumedThisTick = 0;
+    /**
+     * Which side of THIS emitter's shell each player was last seen clear of it on: {@code true} outside,
+     * {@code false} inside. A player touching the membrane is held on the side recorded here.
+     *
+     * <p>Kept per emitter because the answer is per shell: a player standing inside one shield and
+     * outside its neighbour has a different side for each, and a single record per player made one
+     * shell's in/out decision out of whichever emitter wrote last. Not saved — it is the memory of a
+     * crossing in progress, and dies with the tile.</p>
+     */
+    private final Map<UUID, Boolean> playerOutsideShell = new HashMap<>();
 
     @Override
     public void update() {
@@ -113,6 +113,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         shieldReceivedThisTick = 0;
         shieldConsumedThisTick = 0;
 
+        refreshEffectiveRadius();
         refreshFieldPowerState(true);
         if (fieldPowered) {
             int requiredEnergy = getShieldDrainThisTick();
@@ -134,8 +135,23 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         tickClientSync();
     }
 
+    /**
+     * The radius this emitter actually projects — every piece of geometry reads this one: the SDF, the
+     * zone partition, the ray entry, the influence box and the snapshot the client renders from. A
+     * damaged emitter answers with a smaller sphere here, and the shell shrinks everywhere at once
+     * because there is nowhere else to ask.
+     */
     @Override
     public int getRadius() {
+        return effectiveRadius;
+    }
+
+    /**
+     * The radius this emitter was told to hold, whatever condition it is in. The ENERGY BILL is priced
+     * against this and not against {@link #getRadius()}: a shrunken emitter costs what it was asked to
+     * cost, or a shot-up shield would be cheaper to run than an intact one.
+     */
+    public int getDeclaredRadius() {
         return radius;
     }
 
@@ -149,9 +165,34 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         markDirty();
 
         if (world != null && !world.isRemote) {
+            refreshEffectiveRadius();
             refreshFieldPowerState(true);
             queueClientSync(true);
         }
+    }
+
+    /**
+     * Re-read this emitter's own condition and let it drive the radius.
+     *
+     * <p>PULLED, not pushed (nothing tells a shield it was hit), and re-derived from the DECLARED
+     * radius every time rather than accumulated — which is what makes a repair restore the field
+     * without anyone remembering to undo anything.</p>
+     *
+     * <p>A change is replicated with a snapshot: the client renders the field from the emitter
+     * snapshot, so a shell that shrank on the server and not on the screen would throw away the whole
+     * point of choosing a consequence a player can see.</p>
+     */
+    private void refreshEffectiveRadius() {
+        if (world == null || world.isRemote) {
+            return;
+        }
+        int derived = ShieldCondition.effectiveRadius(world, pos, radius, MIN_RADIUS);
+        if (derived == effectiveRadius) {
+            return;
+        }
+        effectiveRadius = derived;
+        markDirty();
+        queueClientSync(true);
     }
 
     public String getAccessCode() {
@@ -170,7 +211,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         priority = value;
         if (world != null && !world.isRemote) {
             markDirty();
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             queueClientSync(false);
         }
     }
@@ -180,9 +221,9 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         super.onLoad();
         resolveFieldFrame();
         if (world != null && !world.isRemote) {
-            emittersOf(world).active.add(this);
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
+            refreshEffectiveRadius();
             refreshFieldPowerState(true);
         }
     }
@@ -224,6 +265,31 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
      *  deflection subtracts. Zero standalone; the hull's motion on a moving ship. Test observability. */
     public Vec3d getShellVelocity() {
         return shellVelocityAt(getWorldCenter());
+    }
+
+    /**
+     * Mirror a DECLARED travelling body's velocity off this shell at a world point, with the same law
+     * {@link #pushEntityBack} uses for a travelling entity: take the velocity relative to the shell,
+     * reflect it about the outward normal, then add the shell's own motion back so the deflected body
+     * still rides a moving ship. The two populations share one reflection law rather than two
+     * implementations free to disagree.
+     *
+     * <p>Two deliberate differences from the entity path. The bounce is scaled by the restitution
+     * tunable (default 1.0 — a perfect mirror, i.e. identical to the entity path); and there is no
+     * minimum-kick fallback for a degenerate mirror. An entity must end up somewhere, so it is nudged
+     * outward; a shot has the better option of ceasing to exist, and the caller ends it at the crossing
+     * point rather than leaving a near-motionless record alive.</p>
+     */
+    public Vec3d reflectBodyVelocity(Vec3d worldPoint, Vec3d velocity) {
+        if (worldPoint == null || velocity == null) {
+            return null;
+        }
+        Vec3d shellVelocity = shellVelocityAt(worldPoint);
+        Vec3d relative = FieldSurfaceMath.subtract(velocity, shellVelocity);
+        Vec3d normal = FieldSurfaceMath.sphereOutwardNormal(getWorldCenter(), worldPoint, relative);
+        Vec3d reflected = FieldSurfaceMath.reflect(relative, normal);
+        double restitution = Math.max(0.0D, Math.min(1.0D, ModConfig.shieldStrikeReflectionRestitution));
+        return FieldSurfaceMath.scale(reflected, restitution).add(shellVelocity);
     }
 
     /** TEST ONLY: set the coil's stored shield energy directly and refresh the powered state. Lets an
@@ -320,7 +386,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     }
 
     private double getFieldRadiusSq() {
-        double fieldRadius = radius + 0.5D;
+        double fieldRadius = getRadius() + 0.5D;
         return fieldRadius * fieldRadius;
     }
 
@@ -385,26 +451,25 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         double currentCenterY = (currentBox.minY + currentBox.maxY) * 0.5D;
         double currentCenterZ = (currentBox.minZ + currentBox.maxZ) * 0.5D;
         double currentDistSq = distanceSqToCenter(currentCenterX, currentCenterY, currentCenterZ);
-        double innerRadius = Math.max(0.0D, radius - FieldSurfaceMath.FIELD_HALF_THICKNESS);
-        double outerRadius = radius + FieldSurfaceMath.FIELD_HALF_THICKNESS;
+        double innerRadius = Math.max(0.0D, getRadius() - FieldSurfaceMath.FIELD_HALF_THICKNESS);
+        double outerRadius = getRadius() + FieldSurfaceMath.FIELD_HALF_THICKNESS;
         double innerRadiusSq = innerRadius * innerRadius;
         double outerRadiusSq = outerRadius * outerRadius;
 
         if (entity instanceof EntityPlayer) {
-            PlayerLastSafePosition safePosition = emittersOf(world).lastSafe.get(entity.getUniqueID());
             if (!intersectsShell) {
                 if (currentDistSq >= outerRadiusSq) {
-                    rememberPlayerSafePosition(entity, true);
+                    rememberPlayerSide(entity, true);
                 } else if (currentDistSq <= innerRadiusSq) {
-                    rememberPlayerSafePosition(entity, false);
+                    rememberPlayerSide(entity, false);
                 }
                 return false;
             }
 
-            if (safePosition != null) {
-                return safePosition.outside;
-            }
-            return true;
+            // A player this shell has never seen clear of it is held out: the membrane is a barrier
+            // against whoever it cannot place, not a door for them.
+            Boolean outside = playerOutsideShell.get(entity.getUniqueID());
+            return outside == null || outside;
         }
 
         if (!intersectsShell) {
@@ -493,7 +558,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         Vec3d committedMotion = reflectedMotion.add(shellVelocity);
 
         double entityRadius = Math.max(entity.width, entity.height) * 0.5D;
-        Vec3d targetCenter = fieldCenter.add(FieldSurfaceMath.scale(normal, radius + FieldSurfaceMath.FIELD_HALF_THICKNESS + entityRadius + 0.05D));
+        Vec3d targetCenter = fieldCenter.add(FieldSurfaceMath.scale(normal, getRadius() + FieldSurfaceMath.FIELD_HALF_THICKNESS + entityRadius + 0.05D));
         setEntityCenter(entity, targetCenter);
 
         entity.motionX = committedMotion.x;
@@ -514,10 +579,10 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         }
 
         if (entity instanceof EntityPlayer) {
-            rememberPlayerSafePosition(entity, true);
+            rememberPlayerSide(entity, true);
         }
 
-        Vec3d touchPoint = fieldCenter.add(FieldSurfaceMath.scale(normal, radius + FieldSurfaceMath.FIELD_HALF_THICKNESS));
+        Vec3d touchPoint = fieldCenter.add(FieldSurfaceMath.scale(normal, getRadius() + FieldSurfaceMath.FIELD_HALF_THICKNESS));
         onFieldTouched(touchPoint, entity);
     }
 
@@ -607,6 +672,12 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         return Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, requestedRadius));
     }
 
+    /**
+     * The passive-maintenance draw for one 20-tick cycle, priced against the DECLARED radius — never
+     * the one damage left it projecting. A bill that followed the shrink would make being shot at a way
+     * to save energy, which is a reward dressed as a consequence and the kind of inversion nobody
+     * notices until someone optimises for it.
+     */
     public int getShieldCycleCost() {
         return estimateShieldCost(radius);
     }
@@ -645,9 +716,8 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            emittersOf(world).active.remove(this);
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.invalidate();
     }
@@ -655,25 +725,26 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            emittersOf(world).active.remove(this);
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }
 
-    /** The emitters loaded in {@code world}, a server world. */
-    public static Set<TileEntityFieldGenerator> getActiveGenerators(World world) {
-        return emittersOf(world).active;
-    }
-
     /**
-     * Cheap short-circuit for the strike / residual-ray paths: true iff any emitter is loaded in
-     * {@code world}. Lets a raytrace-layer hook bail in O(1) in the common no-shields-present case
-     * before touching per-generator geometry.
+     * Every field generator loaded in {@code world}, powered or not.
+     *
+     * <p>Read from the server's network registry, which a generator joins when it loads and leaves when
+     * it breaks, unloads or its world does — so there is no second list to fall out of step with it,
+     * and none outlives the server. Empty for a client world: generators are server tiles, and a
+     * client never holds them.</p>
      */
-    public static boolean hasActiveGenerators(World world) {
-        return !emittersOf(world).active.isEmpty();
+    public static List<TileEntityFieldGenerator> loadedIn(World world) {
+        if (world == null || world.isRemote) {
+            return Collections.emptyList();
+        }
+        return SubsystemNetworkManager.of(world).nodesIn(ShieldNetworkManager.DOMAIN, world,
+                TileEntityFieldGenerator.class);
     }
 
     private int getShieldDrainForPhase(int phase) {
@@ -762,24 +833,14 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         Vec3d motion = FieldSurfaceMath.subtract(
                 new Vec3d(entity.motionX, entity.motionY, entity.motionZ), shellVelocityAt(currentCenter));
         Vec3d normal = FieldSurfaceMath.sphereOutwardNormal(fieldCenter, currentCenter, motion);
-        return fieldCenter.add(FieldSurfaceMath.scale(normal, radius + FieldSurfaceMath.FIELD_HALF_THICKNESS));
+        return fieldCenter.add(FieldSurfaceMath.scale(normal, getRadius() + FieldSurfaceMath.FIELD_HALF_THICKNESS));
     }
 
-    private void rememberPlayerSafePosition(Entity entity, boolean outside) {
+    private void rememberPlayerSide(Entity entity, boolean outside) {
         if (!(entity instanceof EntityPlayer) || entity.world == null || entity.world.isRemote) {
             return;
         }
-        UUID uuid = entity.getUniqueID();
-        Map<UUID, PlayerLastSafePosition> lastSafe = emittersOf(entity.world).lastSafe;
-        PlayerLastSafePosition safePosition = lastSafe.get(uuid);
-        if (safePosition == null) {
-            safePosition = new PlayerLastSafePosition();
-            lastSafe.put(uuid, safePosition);
-        }
-        safePosition.outside = outside;
-        safePosition.x = entity.posX;
-        safePosition.y = entity.posY;
-        safePosition.z = entity.posZ;
+        playerOutsideShell.put(entity.getUniqueID(), outside);
     }
 
     private void queueClientSync(boolean includeSnapshot) {
@@ -837,6 +898,9 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public NBTTagCompound writeToNBT(NBTTagCompound compound) {
         super.writeToNBT(compound);
         compound.setInteger("radius", radius);
+        // Replicated, not merely saved: this tag is also the client's update tag, and the client
+        // cannot derive the shrink itself — a block's damage stage is server-side state.
+        compound.setInteger("effectiveRadius", effectiveRadius);
         compound.setInteger("energy", energy.getEnergyStored());
         compound.setString("accessCode", accessCode);
         compound.setInteger("priority", priority);
@@ -851,6 +915,9 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public void readFromNBT(NBTTagCompound compound) {
         super.readFromNBT(compound);
         radius = clampRadius(compound.getInteger("radius"));
+        effectiveRadius = compound.hasKey("effectiveRadius")
+                ? Math.max(MIN_RADIUS, Math.min(radius, compound.getInteger("effectiveRadius")))
+                : radius;
         energy.setEnergyStored(Math.max(0, Math.min(energy.getMaxEnergyStored(), compound.getInteger("energy"))));
         shieldReceivedThisTick = Math.max(0, compound.getInteger("shieldReceivedThisTick"));
         shieldConsumedThisTick = Math.max(0, compound.getInteger("shieldConsumedThisTick"));
@@ -919,12 +986,5 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
 
     private static int clampTier(int tier) {
         return Math.max(0, Math.min(BlockFieldGenerator.TIER_COUNT - 1, tier));
-    }
-
-    private static final class PlayerLastSafePosition {
-        private boolean outside;
-        private double x;
-        private double y;
-        private double z;
     }
 }

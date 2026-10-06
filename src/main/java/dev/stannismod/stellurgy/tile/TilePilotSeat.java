@@ -52,6 +52,8 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
     public static final byte PACKET_AUTO_TAKEOFF_TOGGLE = 2;
     /** Control-packet id: commit the ship to the jump armed at its navigation computer (no payload). */
     public static final byte PACKET_JUMP = 3;
+    /** Control-packet id: name the ship ahead of the pilot as this ship's batteries' target (no payload). */
+    public static final byte PACKET_DESIGNATE_SHIP = 4;
 
     private boolean linked = false;
     private int afcDx, afcDy, afcDz;
@@ -279,6 +281,12 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
             TileAdvancedFlightComputer afc = isPilotOf(player) ? getFlightComputer() : null;
             if (afc != null) {
                 afc.onJumpKey();
+            }
+        } else if (id == PACKET_DESIGNATE_SHIP) {
+            // Only the seated pilot names a target: the ship ahead is "ahead" of the helm, and the
+            // batteries it commands are those of the ship this seat belongs to.
+            if (world != null && !world.isRemote && isPilotOf(player)) {
+                dev.stannismod.stellurgy.weapon.ShipDesignation.designate(world, pos, player);
             }
         }
     }

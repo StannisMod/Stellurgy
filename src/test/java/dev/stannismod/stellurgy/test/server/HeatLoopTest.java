@@ -195,9 +195,9 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * The loop block's own neighbour notification is what closes it, and this is what would fail if
      * that were removed.</p>
      *
-     * <p>red-witnessed: with {@code HeatNetwork#onLoopNeighbourChanged} at {@code SubsystemNetworkManager.markDirty(DOMAIN, world);} no longer marking the domain dirty when a loop's
+     * <p>red-witnessed: with {@code HeatNetwork#onLoopNeighbourChanged} at {@code SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);} no longer marking the domain dirty when a loop's
      * neighbour changes: "a machine placed against a finished loop must be found by it (stored=0)",
-     * 2026-09-30. The premise at its head is an arrangement and is not witnessed.</p>
+     * 2026-09-30, taken on the pre-merge static form {@code SubsystemNetworkManager.markDirty(DOMAIN, world)}. The premise at its head is an arrangement and is not witnessed.</p>
      *
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "it warms" is the stored verdict read through a division.</p>

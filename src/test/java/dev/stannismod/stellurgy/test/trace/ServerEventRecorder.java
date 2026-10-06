@@ -74,11 +74,12 @@ public final class ServerEventRecorder {
             return;
         }
         MinecraftForge.EVENT_BUS.register(ServerEventRecorder.class);
+        MinecraftForge.EVENT_BUS.register(DamageOccurrenceRecorder.class);
         ServerEventLog.of(server).startRecording();
     }
 
     /** The log an event on {@code world} is written into, or null when there is none to write to. */
-    private static ServerEventLog logFor(World world) {
+    static ServerEventLog logFor(World world) {
         if (world != null && !world.isRemote) {
             MinecraftServer server = world.getMinecraftServer();
             return server instanceof SideTraceOwner ? ServerEventLog.of(server) : null;

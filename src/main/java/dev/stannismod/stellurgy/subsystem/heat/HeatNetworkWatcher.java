@@ -32,6 +32,6 @@ public final class HeatNetworkWatcher {
         if (world == null || world.isRemote) {
             return;
         }
-        SubsystemNetworkManager.markDirty(HeatNetwork.DOMAIN, world);
+        SubsystemNetworkManager.of(world).markDirty(HeatNetwork.DOMAIN, world);
     }
 }

@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import org.junit.After;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -65,6 +66,21 @@ import static org.junit.Assert.assertTrue;
  * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
+
+    /**
+     * How many territories out along +X the search for a big planet may go — a bound on the
+     * arrangement's cost, not a property of anything; a field that yields none within it is refused
+     * as an arrangement and prints every sphere it measured.
+     */
+    private static final int TERRITORIES_SEARCHED = 32;
+
+    /**
+     * How wide, in half-cells, a planet's sphere must be for the band scenario: twice the realized
+     * half-cell leaves a band between the two at least one half-cell wide, so the crossing's two
+     * thresholds (a ten-thousandth and a thousandth of the radius, {@code CellSeam}) sit far from a
+     * craft at its middle. An arrangement bound, not a property of the crossing.
+     */
+    private static final long MIN_SPHERE_IN_HALF_CELLS = 2L;
 
     /** How much WORLD an async crossing is allowed to settle in, in server ticks — thirty seconds. */
     private static final int SETTLE_TICKS = 600;
@@ -242,7 +258,9 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * the moon's sphere but not past the outward threshold (the hysteresis), 264745 blocks from a moon
      * whose sphere is 264731 must be left where it is: {"started":true,"wouldCarry":true …}" —
      * carried straight back out. The outward scenario stays green on it. And the CONTROL between the
-     * spheres: with {@code SpaceSubsystem#zoneMembershipIn} at {@code double childRadius = ZoneScale.realizedRadiusBlocks(child, zoneBody, tick)} measuring the moon's sphere against the STAR
+     * spheres: with {@code SpaceSubsystem#zoneMembershipIn} at {@code double childRadius = ZoneScale.extentRadiusBlocks(child, zoneBody, tick)}
+     * (taken on the pre-2026-10-06 form, which read {@code realizedRadiusBlocks} — the same number for
+     * a moon whose sphere is below a half-cell) measuring the moon's sphere against the STAR
      * (the 638 428-block sphere, the shape of a defect this code has shipped once), it fails with "a
      * craft 397096.1095767623 blocks from a moon whose sphere is 264731 must be left where it is:
      * {"started":true,"wouldCarry":true …}". And the POSITIVE half of the band check: with
@@ -735,6 +753,73 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                 Math.abs(stopped.number("cruiseForward")) < EXACTLY_ZERO
                         && Math.abs(stopped.number("cruiseRight")) < EXACTLY_ZERO
                         && Math.abs(stopped.number("cruiseUp")) < EXACTLY_ZERO);
+    }
+
+    /**
+     * A planet's zone EXTENDS to its sphere of influence, not to the one cell around it that is
+     * realized: a craft between the two is still keeping station with the planet, and only past the
+     * sphere is it carried out into its parent's lattice.
+     *
+     * <p>Asked of production's crossing decision directly ({@code space zone-membership}), for a
+     * craft production addresses on the planet's own lattice; the probe states a distance and nothing
+     * else. No ship: what a live hull does once the decision is made is the other scenarios' subject.
+     * The planet is the widest-sphered star-lit planet the procedural field holds in the first
+     * territories out from the origin ({@code space zone-planets}, its sphere of influence about its
+     * star), refused as an arrangement unless that sphere reaches past two half-cells. Measured
+     * 2026-10-06 at the harness seed: {@code 10577143_2_2}, 2 838 272 986 blocks.</p>
+     *
+     * <p>red-witnessed: with {@code SpaceSubsystem#sphereRadiusOf} at
+     * {@code return ZoneScale.extentRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);} reading
+     * {@code ZoneScale.realizedRadiusBlocks} (the capped form it shipped with), this fails at "a craft
+     * 1427136493 blocks from 10577143_2_2 — past its realized half-cell (16000000) but inside its
+     * sphere (2838272986) — was carried out of its zone: {...carried:true,to:10577188_2_2...}"
+     * (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code SpaceSubsystem#sphereRadiusOf} at
+     * {@code return ZoneScale.extentRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);} answering
+     * twice the extent, this fails at "a craft
+     * 2841111259 blocks from 10577143_2_2, past its sphere (2838272986), was left in its zone:
+     * {...carried:false...}" (2026-10-06).</p>
+     */
+    @Test
+    public void aCraftKeepsStationWithABigPlanetOutToItsSphereAndLeavesPastIt() throws Exception {
+        Reply planets = Reply.of(exec("stellurgytest space zone-planets " + TERRITORIES_SEARCHED))
+                .requireOk("list the field's planets and their spheres");
+        String giant = null;
+        long extent = 0L;
+        for (String element : planets.objectArray("planets")) {
+            Reply planet = Reply.of("zone-planets planets", element);
+            // the producer always writes `cell` and `soi` on every element, so a missing one is a broken probe.
+            // `soi` and not `radius`: the radius is what the crossing reads — the subject — and an
+            // arrangement chosen by it would move with the defect it is meant to expose.
+            if (planet.longInteger("soi") > extent) {
+                extent = planet.longInteger("soi");
+                giant = planet.text("cell");
+            }
+        }
+        System.out.println("[zone-extent] widest sphere " + extent + " at " + giant + " of " + planets);
+        requireArranged("the field must hold a planet whose sphere reaches past two half-cells: " + planets,
+                giant != null && extent > MIN_SPHERE_IN_HALF_CELLS * GalacticCoord.HALF_CELL);
+
+        long between = (GalacticCoord.HALF_CELL + extent) / 2L;
+        Reply inBand = Reply.of(exec("stellurgytest space zone-membership " + giant + " " + between))
+                .requireOk("ask the crossing about a craft inside the sphere");
+        requireArranged("the in-band craft must stand past the realized half-cell and inside the sphere,"
+                        + " measured where the registry puts it: " + inBand,
+                inBand.number("distance") > GalacticCoord.HALF_CELL && inBand.number("distance") < extent);
+        assertFalse("a craft " + between + " blocks from " + giant + " — past its realized half-cell ("
+                + GalacticCoord.HALF_CELL + ") but inside its sphere (" + extent + ") — was carried out of its"
+                + " zone: " + inBand, inBand.bool("carried"));
+
+        long beyond = (long) (extent * (1d + 10d * CellSeam.SPHERE_CARRY_FRACTION)) + 1L;
+        Reply outside = Reply.of(exec("stellurgytest space zone-membership " + giant + " " + beyond))
+                .requireOk("ask the crossing about a craft past the sphere");
+        System.out.println("[zone-extent] in band " + inBand + " | outside " + outside);
+        requireArranged("the outside craft must stand past the sphere's outward threshold, measured where the"
+                        + " registry puts it: " + outside,
+                outside.number("distance") > extent * (1d + CellSeam.SPHERE_CARRY_FRACTION));
+        assertTrue("a craft " + beyond + " blocks from " + giant + ", past its sphere (" + extent + "), was"
+                + " left in its zone: " + outside, outside.bool("carried"));
     }
 
     @After

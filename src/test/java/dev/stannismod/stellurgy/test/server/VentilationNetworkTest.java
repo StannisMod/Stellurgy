@@ -108,10 +108,11 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * vent's half is first required to BE a network — a sink with its duct — before "no source on its
      * side" says anything about the cable.</p>
      *
-     * <p>red-witnessed: with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = SubsystemNetworkRegistry.snapshot(domain);} letting other domains' cables into
+     * <p>red-witnessed: with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);} letting other domains' cables into
      * the life-support graph: "the vent's ventilation network must end at the shield cable, with no
      * source on its side: … \"sources\":1", 2026-09-30. The sink premise is an arrangement and is not
-     * witnessed.</p>
+     * witnessed. Taken on the pre-merge form {@code SubsystemNetworkRegistry.snapshot(domain)}, the
+     * same per-domain snapshot read from the static registry.</p>
      *
      * <p>Not asserted: the room's carbon dioxide and oxygen after a solve, because with no source on
      * the vent's network nothing can regenerate the room or draw from it through the network, so

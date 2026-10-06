@@ -26,7 +26,6 @@ import javax.annotation.Nullable;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 public class TileEntityContourInjector extends TileEntity implements ITickable, ISubsystemSink {
 
@@ -122,16 +121,16 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
     }
 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.invalidate();
     }
@@ -139,8 +138,8 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }

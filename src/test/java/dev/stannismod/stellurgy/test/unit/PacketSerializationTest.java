@@ -62,14 +62,15 @@ public class PacketSerializationTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict on the readout, 2026-09-30. PRESSURE -
-     * {@code PacketAtmSync#write} at {@code nbt.setShort("pressure", (short) summary.pressureCentiAtm());} writing half the pressure: "expected:&lt;850&gt; but was:&lt;425&gt;".
-     * BREATHABLE - {@code PacketAtmSync#readClient} at {@code summary = new AtmosphereSummary(nbt.getShort("pressure"), nbt.getBoolean("breathable"),} reading the flag negated: "expected:&lt;false&gt; but
+     * {@code PacketAtmSync#write} at {@code nbt.setInteger("pressure", summary.pressureCentiAtm());} writing half the pressure: "expected:&lt;850&gt; but was:&lt;425&gt;".
+     * BREATHABLE - {@code PacketAtmSync#readClient} at {@code summary = new AtmosphereSummary(nbt.getInteger("pressure"), nbt.getBoolean("breathable"),} reading the flag negated: "expected:&lt;false&gt; but
      * was:&lt;true&gt;". WARNING - {@code PacketAtmSync#readClient} at {@code nbt.getString("warning"), holding);} reading the warning under another key:
      * "expected:&lt;[msg.noOxygen]&gt; but was:&lt;[]&gt;". STATEMENTS IN ORDER -
      * {@code PacketAtmSync#readClient} at {@code holding.add(list.getStringTagAt(i));} prepending each statement instead of appending it: "the statements must
      * survive in order ... expected:&lt;[NOT_BREATHABLE, TOXIC]&gt; but was:&lt;[TOXIC,
      * NOT_BREATHABLE]&gt;". The readable-bytes check was not part of this change and is not
-     * witnessed here.</p>
+     * witnessed here. PRESSURE and BREATHABLE were taken on the pre-change form, when the pressure
+     * crossed as a short ({@code setShort} / {@code getShort}); the code named above is its int form.</p>
      */
     @Test
     public void packetAtmSyncRoundTrip() {
@@ -96,6 +97,33 @@ public class PacketSerializationTest {
         assertEquals("msg.noOxygen", back.warningKey());
         assertEquals("the statements must survive in order — they are the label a player reads",
                 java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"), back.assertions());
+    }
+
+    /**
+     * A pressure past what a short holds reaches the client as itself. The model allows any
+     * {@code int} of centi-atm ({@code AirState#getPressureCentiAtm} clamps only at
+     * {@code Integer.MAX_VALUE}), so 400 atm — 40 000, above a short's 32 767 — must not arrive as a
+     * wrapped negative.
+     *
+     * <p>red-witnessed: with {@code PacketAtmSync#write} at {@code nbt.setInteger("pressure", summary.pressureCentiAtm());}
+     * and {@code PacketAtmSync#readClient} at {@code nbt.getInteger("pressure")} back on their short
+     * forms ({@code setShort("pressure", (short) …)} / {@code getShort("pressure")}), this fails with
+     * "a 400 atm room must reach the client as 400 atm expected:&lt;40000&gt; but was:&lt;-25536&gt;"
+     * (2026-10-06).</p>
+     */
+    @Test
+    public void packetAtmSyncCarriesAPressureAboveAShort() {
+        int fourHundredAtm = 40_000;
+        PacketAtmSync sent = new PacketAtmSync(new dev.stannismod.stellurgy.atmosphere.AtmosphereSummary(
+                fourHundredAtm, false, "", java.util.Collections.<String>emptyList()));
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
+        PacketAtmSync received = new PacketAtmSync();
+        received.readClient(buffer);
+
+        dev.stannismod.stellurgy.atmosphere.AtmosphereSummary back =
+                PacketSerializationTest.field(received, "summary");
+        assertEquals("a 400 atm room must reach the client as 400 atm", fourHundredAtm, back.pressureCentiAtm());
     }
 
     @Test

@@ -10,7 +10,6 @@ import dev.stannismod.stellurgy.subsystem.heat.IHeatNode;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemCable;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 /**
  * What every block of a coolant loop has in common: it is part of the loop's thermal mass, it
@@ -85,8 +84,8 @@ public abstract class TileHeatLoopBlock extends TileEntity implements ISubsystem
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(HeatNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(HeatNetwork.DOMAIN, world);
         }
     }
 
@@ -104,8 +103,8 @@ public abstract class TileHeatLoopBlock extends TileEntity implements ISubsystem
 
     private void leaveNetwork() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(HeatNetwork.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(HeatNetwork.DOMAIN, world);
         }
     }
 

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.affs.te;
 
 import dev.stannismod.stellurgy.affs.config.ModConfig;
+import dev.stannismod.stellurgy.affs.world.shield.ShieldCondition;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
@@ -18,7 +19,6 @@ import javax.annotation.Nullable;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 public class TileEntityShieldGenerator extends TileEntity implements ITickable, ISubsystemSource {
 
@@ -53,7 +53,7 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
         shieldProducedThisTick = 0;
         shieldExtractedThisTick = 0;
 
-        int convertible = Math.min(CONVERSION_PER_TICK, feStorage.getEnergyStored());
+        int convertible = Math.min(getConversionPerTick(), feStorage.getEnergyStored());
         convertible = Math.min(convertible, shieldStorage.getMaxEnergyStored() - shieldStorage.getEnergyStored());
         if (convertible > 0) {
             feStorage.drainInternal(convertible);
@@ -71,8 +71,8 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] load generator at {} dim={}", pos, world.provider.getDimension());
             }
@@ -82,8 +82,8 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] invalidate generator at {} dim={}", pos, world.provider.getDimension());
             }
@@ -94,8 +94,8 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] chunk unload generator at {} dim={}", pos, world.provider.getDimension());
             }
@@ -149,8 +149,17 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
         return shieldStorage.getEnergyStored();
     }
 
+    /**
+     * How much FE this generator can turn into shield energy in one tick, in the condition it is in.
+     * A battered plant converts less: the rated figure scaled by the block's own damage stage, pulled
+     * from the world rather than pushed by whatever hit it.
+     */
+    public int getConversionPerTick() {
+        return ShieldCondition.derate(world, pos, CONVERSION_PER_TICK);
+    }
+
     public int getShieldProductionPotential() {
-        return Math.max(0, Math.min(CONVERSION_PER_TICK, Math.min(feStorage.getEnergyStored(), shieldStorage.getMaxEnergyStored() - shieldStorage.getEnergyStored())));
+        return Math.max(0, Math.min(getConversionPerTick(), Math.min(feStorage.getEnergyStored(), shieldStorage.getMaxEnergyStored() - shieldStorage.getEnergyStored())));
     }
 
     /**
