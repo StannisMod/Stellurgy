@@ -40,7 +40,7 @@ public class Atmosphere {
     //We're probably not getting a polluted atmosphere type
     public static final Atmosphere AIR = new Atmosphere(false, true, "air");
     public static final Atmosphere PRESSURIZEDAIR = new Atmosphere(false, true, true, "PressurizedAir");
-    // Twelve of these used to be twelve CLASSES, each carrying its own copy of the same tick method.
+    // Eleven of these (not HIGHOXYGEN) were eleven CLASSES, each with its own copy of one tick method.
     // What they do now lives in one table, and what is left of them here is a name and two flags.
     public static final Atmosphere LOWOXYGEN = new Atmosphere(true, false, true, "lowO2");
     public static final Atmosphere HIGHOXYGEN = new Atmosphere(true, false, true, "highO2");
@@ -89,7 +89,7 @@ public class Atmosphere {
      */
     public boolean isImmune(EntityLivingBase player) {
         return dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(
-                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.exposureOf(this),
+                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.effectOn(this),
                 player);
     }
 
@@ -115,7 +115,7 @@ public class Atmosphere {
      */
     public String getDisplayMessage() {
         String key = dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards
-                .exposureOf(this).messageKey();
+                .effectOn(this).messageKey();
         return key.isEmpty() ? "" : dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(key);
     }
 
@@ -128,7 +128,7 @@ public class Atmosphere {
      */
     public void onTick(EntityLivingBase player) {
         dev.stannismod.stellurgy.atmosphere.hazard.HazardExposure exposure =
-                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.exposureOf(this);
+                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.effectOn(this);
         // Nothing acts on this tick: ask no further. Asking about protection is not free — it spends
         // a unit of the suit's air — so it is asked only when there is something to be protected FROM.
         if (!exposure.firesOn(player.world.getTotalWorldTime())) {

@@ -124,6 +124,7 @@ public class StellurgyBlocks {
     public static Block blockGasSeparator;
     public static Block blockLifeSupportPlant;
     public static Block blockVentilationDuct;
+    public static Block blockVentilationPort;
     public static Block blockJettisonPort;
     public static Block blockHeatPipe;
     public static Block blockHeatAccumulator;

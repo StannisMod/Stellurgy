@@ -89,7 +89,7 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
 
     @Override
     public boolean canPerformFunction() {
-        if (world.isRemote || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+        if (world.isRemote)
             return false;
         if (++ticksSinceOperation < 20)
             return false;

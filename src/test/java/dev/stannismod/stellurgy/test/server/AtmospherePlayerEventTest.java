@@ -146,8 +146,10 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
      * The overworld is breathable, and the gate says so for a player standing in it.
      *
      * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType} at
-     * {@code if (StellurgyConfiguration.getCurrentConfig().enableOxygen)} preceded by a return of
-     * VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own
+     * {@code HashedBlockPosition pos = new HashedBlockPosition(pos2);} preceded by a return of
+     * VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28 — taken on the form
+     * before the atmosphere on/off switch was removed (2026-10-06), when the return sat in front of
+     * that switch's {@code if}; the method's first line is now the one quoted. Removing the handler's own
      * dimension check instead stays GREEN — no other world's handler exists in this scenario to
      * answer for the overworld.</p>
      *

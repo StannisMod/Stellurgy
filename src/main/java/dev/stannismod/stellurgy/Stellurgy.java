@@ -719,6 +719,7 @@ public class Stellurgy {
         GameRegistry.registerTileEntity(TileGasSeparator.class, "StellurgyGasSeparator");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileLifeSupportPlant.class, "StellurgyLifeSupportPlant");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileVentilationDuct.class, "StellurgyVentilationDuct");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort.class, "StellurgyVentilationPort");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort.class, "StellurgyJettisonPort");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatPipe.class, "StellurgyHeatPipe");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.heat.TileHeatAccumulator.class, "StellurgyHeatAccumulator");
@@ -1146,6 +1147,7 @@ public class Stellurgy {
         StellurgyBlocks.blockGasSeparator = new dev.stannismod.stellurgy.block.BlockGasSeparator(TileGasSeparator.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("gasSeparator").setHardness(3f);
         StellurgyBlocks.blockLifeSupportPlant = new BlockTile(dev.stannismod.stellurgy.tile.atmosphere.TileLifeSupportPlant.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("lifeSupportPlant").setHardness(3f);
         StellurgyBlocks.blockVentilationDuct = new dev.stannismod.stellurgy.block.BlockVentilationDuct().setCreativeTab(tabAdvRocketry).setUnlocalizedName("ventilationDuct").setHardness(1f);
+        StellurgyBlocks.blockVentilationPort = new BlockTile(dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("ventilationPort").setHardness(3f);
         StellurgyBlocks.blockJettisonPort = new BlockTile(dev.stannismod.stellurgy.tile.infrastructure.TileJettisonPort.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("jettisonPort").setHardness(3f);
         StellurgyBlocks.blockHeatPipe = new dev.stannismod.stellurgy.block.BlockHeatPipe().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatPipe").setHardness(1f);
         StellurgyBlocks.blockHeatAccumulator = new dev.stannismod.stellurgy.block.BlockHeatAccumulator().setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatAccumulator").setHardness(3f);
@@ -1360,6 +1362,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGasSeparator.setRegistryName("gasSeparator"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockLifeSupportPlant.setRegistryName("lifeSupportPlant"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockVentilationDuct.setRegistryName("ventilationDuct"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockVentilationPort.setRegistryName("ventilationPort"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJettisonPort.setRegistryName("jettisonPort"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatPipe.setRegistryName("heatPipe"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockHeatAccumulator.setRegistryName("heatAccumulator"));
@@ -1551,6 +1554,9 @@ public class Stellurgy {
             throw new IllegalStateException("the weight table is written once per process");
         }
         weights = new WeightEngine("config/advRocketry/weights.json");
+        // Read now rather than on first use: a table file the pack broke stops the start with the
+        // file's name, instead of crashing the game the first time a hull melts or a slug is thrown.
+        dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE.all();
 
         CapabilitySpaceArmor.register();
         // The player's own bindings: one home for what this mod holds on him, attached to the

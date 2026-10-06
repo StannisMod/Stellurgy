@@ -92,7 +92,7 @@ public class AtmosphereHandler {
 
         //If O2 is allowed and
         DimensionProperties dimProp = DimensionManager.getInstance().getDimensionProperties(dimId);
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen && dimProp.hasSurface() && (StellurgyConfiguration.getCurrentConfig().overrideGCAir || dimId != dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getMoonId() || dimProp.isNativeDimension)) {
+        if (dimProp.hasSurface() && (StellurgyConfiguration.getCurrentConfig().overrideGCAir || dimId != dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getMoonId() || dimProp.isNativeDimension)) {
 
             //dunno how, but double registering could happen.
             //don't let old registered handler survive in the background forever
@@ -173,7 +173,7 @@ public class AtmosphereHandler {
 
         // I am very sure all this shit here was NEVER tested!
 
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen && !world.isRemote && world.getChunkFromBlockCoords(new BlockPos(bpos)).isLoaded()) {
+        if (!world.isRemote && world.getChunkFromBlockCoords(new BlockPos(bpos)).isLoaded()) {
             HashedBlockPosition pos = new HashedBlockPosition(bpos);
 
             AtmosphereHandler handler = getOxygenHandler(world);
@@ -366,8 +366,6 @@ public class AtmosphereHandler {
      */
     @Nullable
     public AirState getAirStateAt(@Nonnull BlockPos pos) {
-        if (!StellurgyConfiguration.getCurrentConfig().enableOxygen)
-            return null;
         AtmosphereBlob blob = getBlobContaining(new HashedBlockPosition(pos));
         return blob == null ? null : blob.getAirState();
     }
@@ -474,7 +472,7 @@ public class AtmosphereHandler {
      */
     private void respire(@Nullable net.minecraft.entity.EntityLivingBase entity) {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
-        if (entity == null || !config.enableOxygen || !config.lifeSupportZones)
+        if (entity == null || !config.breathingRequiresO2)
             return;
         // Once a second, not once a tick, because the rate is expressed per second. Phased on the
         // ENTITY's own age rather than world time: a shared `% 20` clock would make every living
@@ -511,29 +509,6 @@ public class AtmosphereHandler {
     public static boolean isSyncTick(int ticksExisted) {
         return ticksExisted % SYNC_PERIOD_TICKS == 0;
     }
-
-    //Called from World.setBlockMetaDataWithNotify
-	/*public static void onBlockMetaChange(World world, int x , int y, int z) {
-		if(Configuration.enableOxygen && !world.isRemote && world.getChunkFromBlockCoords(new BlockPos(x, y, z)).isLoaded()) {
-			AtmosphereHandler handler = getOxygenHandler(world.provider.getDimension());
-			HashedBlockPosition pos = new HashedBlockPosition(x, y, z);
-
-
-			if(handler == null)
-				return; //WTF
-
-			for(AreaBlob blob : handler.getBlobWithinRadius(pos, maxBlobRadius())) {
-
-				if(blob.contains(pos) && !blob.isPositionAllowed(world, pos))
-					blob.removeBlock(x, y, z);
-				else if(!blob.contains(pos) && blob.isPositionAllowed(world, pos))
-					handler.onBlockRemove(pos);
-				else if(!blob.contains(pos) && !blob.isPositionAllowed(world, pos) && blob.getBlobSize() == 0) {
-					blob.addBlock(blob.getRootPosition());
-				}
-			}
-		}
-	}*/
 
     /**
      * Let go of what this subsystem remembers about a player, answering whether it was there: the
@@ -665,27 +640,42 @@ public class AtmosphereHandler {
     }
 
     /**
+     * Whether this handler's zone is still being measured off-thread, in which case
+     * {@link #addBlock(IBlobHandler, HashedBlockPosition)} answering false says nothing yet.
+     */
+    public boolean isFilling(@Nonnull IBlobHandler handler) {
+        AreaBlob blob = blobs.get(handler);
+        return blob instanceof AtmosphereBlob && ((AtmosphereBlob) blob).isFilling();
+    }
+
+    /**
+     * What the last finished flood fill of this handler's zone found — closed or open — or
+     * {@code null} when there is no answer: one is running, or the zone was cleared since.
+     */
+    @Nullable
+    public Boolean lastFillClosed(@Nonnull IBlobHandler handler) {
+        AreaBlob blob = blobs.get(handler);
+        return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).lastFillClosed() : null;
+    }
+
+    /**
      * @param pos2
      * @return Atmosphere at this location
      */
     @Nonnull
     public Atmosphere getAtmosphereType(@Nonnull BlockPos pos2) {
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            HashedBlockPosition pos = new HashedBlockPosition(pos2);
+        HashedBlockPosition pos = new HashedBlockPosition(pos2);
 
-            for (AreaBlob blob : blobs.values()) {
-                if (blob.contains(pos)) {
-                    Atmosphere atmosphere = (Atmosphere) blob.getData();
+        for (AreaBlob blob : blobs.values()) {
+            if (blob.contains(pos)) {
+                Atmosphere atmosphere = (Atmosphere) blob.getData();
 
-                    if (atmosphere != null)
-                        return atmosphere;
-                }
+                if (atmosphere != null)
+                    return atmosphere;
             }
-
-            return getDefaultAtmosphereType();
         }
 
-        return Atmosphere.AIR;
+        return getDefaultAtmosphereType();
     }
 
     /**
@@ -704,17 +694,14 @@ public class AtmosphereHandler {
      */
     @Nullable
     public Atmosphere getAtmosphereType(@Nonnull Entity entity) {
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
-            for (AreaBlob blob : blobs.values()) {
-                if (blob.contains(pos)) {
-                    return (Atmosphere) blob.getData();
-                }
+        HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
+        for (AreaBlob blob : blobs.values()) {
+            if (blob.contains(pos)) {
+                return (Atmosphere) blob.getData();
             }
-
-            return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();
         }
-        return Atmosphere.AIR;
+
+        return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();
     }
 
     /**
@@ -724,12 +711,10 @@ public class AtmosphereHandler {
      * @return The atmosphere pressure this entity is inside of, or -1 to use default
      */
     public int getAtmospherePressure(@Nonnull Entity entity) {
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
-            for (AreaBlob blob : blobs.values()) {
-                if (blob.contains(pos) && blob instanceof AtmosphereBlob) {
-                    return ((AtmosphereBlob) blob).getPressure();
-                }
+        HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
+        for (AreaBlob blob : blobs.values()) {
+            if (blob.contains(pos) && blob instanceof AtmosphereBlob) {
+                return ((AtmosphereBlob) blob).getPressure();
             }
         }
         return -1;
@@ -740,18 +725,14 @@ public class AtmosphereHandler {
      * @return true if the entity can breathe in the this atmosphere
      */
     public boolean canEntityBreathe(@Nonnull EntityLiving entity) {
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
-            for (AreaBlob blob : blobs.values()) {
-                Atmosphere atmosphere = (Atmosphere) blob.getData();
-                if (blob.contains(pos) && atmosphere != null && atmosphere.isImmune(entity)) {
-                    return true;
-                }
+        HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
+        for (AreaBlob blob : blobs.values()) {
+            Atmosphere atmosphere = (Atmosphere) blob.getData();
+            if (blob.contains(pos) && atmosphere != null && atmosphere.isImmune(entity)) {
+                return true;
             }
-            return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere().isImmune(entity);
         }
-
-        return true;
+        return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere().isImmune(entity);
     }
 
     /**
@@ -804,14 +785,7 @@ public class AtmosphereHandler {
      */
     @Nonnull
     public Atmosphere getAtmosphereType(@Nonnull IBlobHandler handler) {
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            Atmosphere atmosphere = (Atmosphere) blobs.get(handler).getData();
-            if (atmosphere != null)
-                return atmosphere;
-            else
-                return getDefaultAtmosphereType();
-        }
-
-        return Atmosphere.AIR;
+        Atmosphere atmosphere = (Atmosphere) blobs.get(handler).getData();
+        return atmosphere != null ? atmosphere : getDefaultAtmosphereType();
     }
 }

@@ -18,7 +18,8 @@ import dev.stannismod.stellurgy.api.capability.IHeatEmitter;
  * whether it makes waste heat is not what it is. Holding one of these and forwarding two methods is
  * the whole contract.
  *
- * <p>The buffer is deliberately shallow — about a second of the current draw. Heat that no loop comes
+ * <p>The buffer is deliberately shallow — about a second of the largest draw since a loop last
+ * collected. Heat that no loop comes
  * to collect is heat that went into the air around the machine, which is what happens on a planet
  * where nobody built a coolant loop, and it is why a base needs no thermal build at all.
  */
@@ -35,16 +36,24 @@ public final class WasteHeat implements IHeatEmitter {
      * <p>Derived from what was ACTUALLY spent rather than from the machine's rating, so a machine
      * running at a tenth of its rate heats a ship a tenth as fast — the same relation its power cost
      * already has, and the reason an idle ship is a cool one.
+     *
+     * <p>A spend bounds only what IT adds, never what is already banked. A machine may pay more than
+     * once before a loop collects — a plant regenerates and then pays a port's upkeep in the same
+     * tick — and sizing the whole buffer by the latest payment let a 1-FE upkeep discard the
+     * regeneration's heat. Spending nothing makes no heat and destroys none.
      */
     public void spend(int energySpent) {
-        if (energySpent <= 0 || !HeatNetwork.enabled()) {
+        if (!HeatNetwork.enabled()) {
             pending = 0;
             return;
         }
+        if (energySpent <= 0)
+            return;
         int fraction = Math.max(0, StellurgyConfiguration.getCurrentConfig().shipHeatWasteFraction);
         long made = (long) energySpent * fraction / 1000L;
-        long cap = (long) energySpent * fraction / 1000L * BUFFER_TICKS;
-        pending = (int) Math.max(0L, Math.min(cap, pending + made));
+        long cap = made * BUFFER_TICKS;
+        if (pending < cap)
+            pending = (int) Math.min(cap, pending + made);
     }
 
     @Override

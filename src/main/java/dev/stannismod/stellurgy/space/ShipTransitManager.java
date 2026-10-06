@@ -327,6 +327,7 @@ public final class ShipTransitManager {
         NBTTagCompound snapshot;    // packed ship (StorageChunk NBT), re-cut from hyperspace on a cadence
         boolean restored;           // recreated from a persisted TransitRecord: no live hyperspace ship / lane
         boolean lastResortReported; // the "not even the snapshot landed" line is said once, not per retry
+        boolean arrivalDelayed;     // the target cell found no slot; said once, the ship waits in its lane
         boolean snapshotFailureReported; // likewise for a re-cut that keeps failing
         int placementAttempts;      // ticks spent putting the crew back aboard after the hull landed
         boolean placementStalled;   // the "this is taking too long" line is said once, not per retry
@@ -443,7 +444,13 @@ public final class ShipTransitManager {
         // the lane, the crew capture, the floor snapshot — is work the direct path must not do.
         double distance = (frames == null ? CellFrames.STATIC : frames)
                 .distanceBetween(origin, target, now);
-        if (isDirectCrossing(distance, speed)) {
+        boolean direct = jumpsDirect(distance, speed, target);
+        if (!direct && isDirectCrossing(distance, speed)) {
+            LOGGER.info("[SPACE] jump for ship {} is short enough to cross directly but no slot is free "
+                            + "for target cell {} - flying it through hyperspace, where the arrival waits",
+                    shipId, target.cellKey());
+        }
+        if (direct) {
             if (directCrosser == null) {
                 // Nothing is wired to perform one, so the jump is flown the long way. Said out loud:
                 // a mechanism that silently does not exist is indistinguishable from one that was not
@@ -613,9 +620,28 @@ public final class ShipTransitManager {
                 continue; // still en route - parked, coordinate advanced logically
             }
             // Refcount handoff, half 2: load the target cell once (kept live for the arrived ship).
+            // A full pool is the server's limit, not a failure of this jump: the ship WAITS where it
+            // is - parked in its lane with its crew aboard, ledger still IN_TRANSIT - and asks again
+            // next tick. Nothing is charged while it waits. Uncaught, the throw left the world tick
+            // and stopped the server.
             if (!t.targetMaterialized) {
-                t.targetSlotDim = space.materialize(t.target);
+                try {
+                    t.targetSlotDim = space.materialize(t.target);
+                } catch (SpaceManager.PoolExhaustedException full) {
+                    if (!t.arrivalDelayed) {
+                        t.arrivalDelayed = true;
+                        LOGGER.warn("[SPACE] transit arrival for ship {} delayed: no slot for target cell {} "
+                                + "({}). It waits in its hyperspace lane until one frees.",
+                                entry.getKey(), t.target.cellKey(), full.getMessage());
+                        crosser.messageCrew(t.crew, "msg.shiptransit.arrivaldelayed");
+                    }
+                    continue;
+                }
                 t.targetMaterialized = true;
+                if (t.arrivalDelayed) {
+                    LOGGER.info("[SPACE] transit arrival for ship {} resumed: target cell {} has slot {}",
+                            entry.getKey(), t.target.cellKey(), t.targetSlotDim);
+                }
             }
             // A live transit crosses its parked hyperspace ship into the target; a RESTORED transit has no
             // hyperspace ship (that world is wiped on restart) - it pastes its persisted snapshot in.
@@ -1004,6 +1030,17 @@ public final class ShipTransitManager {
     public static boolean isDirectCrossing(double distanceBlocks, long speedBlocksPerTick) {
         return dev.stannismod.stellurgy.hyperdrive.JumpSpeed
                 .transitTicks(distanceBlocks, speedBlocksPerTick) <= DIRECT_CROSSING_MAX_TICKS;
+    }
+
+    /**
+     * Whether THIS jump will be performed as a direct crossing: short enough
+     * ({@link #isDirectCrossing}) AND its target cell can be loaded now. A direct crossing loads the
+     * destination in the departure tick while the origin is still held, so with no slot it could only
+     * refuse after the burst was paid; the hyperspace path releases the origin first and waits at
+     * arrival, so the jump still happens. The departure and the pilot's console both ask this.
+     */
+    public boolean jumpsDirect(double distanceBlocks, long speedBlocksPerTick, GalacticCoord target) {
+        return isDirectCrossing(distanceBlocks, speedBlocksPerTick) && space.canMaterialize(target);
     }
 
     /**
