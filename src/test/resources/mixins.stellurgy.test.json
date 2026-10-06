@@ -108,6 +108,7 @@
     "PilotInputAccessor",
     "MixinRocketEventHandlerCameraFrame",
     "MixinEntityRendererEyeProbe",
+    "MixinGuiGameOverReady",
     "MixinNetHandlerPosLookCount",
     "MixinShipFrameReseatStep",
     "MixinPacketSystemBodiesSyncEvents",

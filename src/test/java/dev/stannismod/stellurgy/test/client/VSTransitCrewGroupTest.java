@@ -1321,6 +1321,7 @@ private String hud() throws Exception {
         // command after it: the harness echoes a marker line into this same chat for every command
         // it runs.
         long deathMark = events.mark();
+        long deathScreenMark = clientEvents().mark();
 
         // THE VERDICT, and it is production's own record of the kill: WHO died and OF WHAT.
         //
@@ -1390,6 +1391,56 @@ private String hud() throws Exception {
             scenario().arrangementFailed(never.getMessage() + " | transit-status="
                     + exec("stellurgytest space transit-status"));
         }
+
+        // ...and the body. This is the one scenario of the group whose subject is the shared
+        // player's death, and a death is the one thing the group's reset refuses to repair: health
+        // written onto a body the server has finished with closes the death screen and leaves a
+        // player no slot write reaches. So the scenario that takes the body gives it back, the way a
+        // player does — the death screen's Respawn button.
+        respawnThroughTheDeathScreen(deathScreenMark);
+    }
+
+    /** {@code GuiGameOver}'s Respawn button: its {@code actionPerformed} case 0 calls
+     *  {@code respawnPlayer()} and closes the screen. */
+    private static final int RESPAWN_BUTTON_ID = 0;
+
+    /**
+     * Deadline for each record the respawn is chained on, in ticks. A deadline, not a measurement:
+     * each record is published by healthy code every time, so the budget is wrong only when it is
+     * SHORT; it bounds one packet each way plus the client rebuilding its world, and the death
+     * screen's own twenty-update button delay.
+     */
+    private static final int RESPAWN_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * Give the shared player back after a death, through the death screen.
+     *
+     * <p>Chained on records, never on a guess, and on the LAST death screen. A dead client builds a
+     * fresh one whenever anything closes the current one, and a fresh one starts its button delay
+     * over — measured 2026-10-06: twenty client ticks counted from the first opening, after the
+     * server had moved the dead body to another world, found the Respawn button disabled. So: the
+     * last {@code client_gui_opened} of a {@code GuiGameOver}, then that screen's
+     * {@code death_screen_ready} (the tick vanilla enables its buttons), then the press, then the
+     * client's rebuilt world ({@code client_dimension_changed} {@code via:respawn}, at the TAIL of
+     * {@code handleRespawn}). The bot refuses to press a disabled button, so a screen re-opened
+     * after the read is a red naming the button, never a silent no-op.</p>
+     */
+    private void respawnThroughTheDeathScreen(long clientMark) throws Exception {
+        Events client = clientEvents();
+        client.awaitField(clientMark, "client_gui_opened", "gui", "GuiGameOver",
+                "the death must bring the player's client to the death screen, the only place a"
+                        + " player can respawn from", RESPAWN_LINK_BUDGET_TICKS);
+        java.util.List<String> opens = Events.recordsWhere(
+                client.since(clientMark, "client_gui_opened"), "gui", "GuiGameOver");
+        long lastOpen = (long) Events.number(opens.get(opens.size() - 1), "seq");
+        client.await(lastOpen, "death_screen_ready",
+                "the death screen the client shows now must enable its Respawn button",
+                RESPAWN_LINK_BUDGET_TICKS);
+        long respawnMark = client.mark();
+        bot().clickButtonById(RESPAWN_BUTTON_ID);
+        client.awaitField(respawnMark, "client_dimension_changed", "via", "respawn",
+                "pressing Respawn must make the server rebuild the player and his client its world",
+                RESPAWN_LINK_BUDGET_TICKS);
     }
 
     /**
