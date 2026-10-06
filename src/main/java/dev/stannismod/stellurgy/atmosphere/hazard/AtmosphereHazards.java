@@ -192,6 +192,19 @@ public final class AtmosphereHazards {
      * effects into a table.
      */
     public static boolean isImmune(HazardExposure exposure, EntityLivingBase entity) {
+        return immune(exposure, entity, true);
+    }
+
+    /**
+     * The same question, asked for nothing: no suit spends anything to answer it. For a caller that
+     * wants to KNOW whether somebody is protected rather than protect him — the air is not acting on
+     * him, so nothing is owed. A tank with air left answers yes.
+     */
+    public static boolean wouldBeImmune(HazardExposure exposure, EntityLivingBase entity) {
+        return immune(exposure, entity, false);
+    }
+
+    private static boolean immune(HazardExposure exposure, EntityLivingBase entity, boolean commit) {
         if (exposure.isEmpty()) {
             return true;
         }
@@ -218,28 +231,28 @@ public final class AtmosphereHazards {
         // air, so a check that ran it before a cheaper one had failed would drain the tank for a
         // verdict already decided.
         if (exposure.needsFullSuit()
-                && !(protects(exposure, entity, EntityEquipmentSlot.LEGS)
-                && protects(exposure, entity, EntityEquipmentSlot.FEET))) {
+                && !(protects(exposure, entity, EntityEquipmentSlot.LEGS, commit)
+                && protects(exposure, entity, EntityEquipmentSlot.FEET, commit))) {
             return false;
         }
-        return protects(exposure, entity, EntityEquipmentSlot.HEAD)
-                && protects(exposure, entity, EntityEquipmentSlot.CHEST);
+        return protects(exposure, entity, EntityEquipmentSlot.HEAD, commit)
+                && protects(exposure, entity, EntityEquipmentSlot.CHEST, commit);
     }
 
     private static boolean protects(HazardExposure exposure, EntityLivingBase entity,
-                                    EntityEquipmentSlot slot) {
-        return protects(exposure, entity.getItemStackFromSlot(slot));
+                                    EntityEquipmentSlot slot, boolean commit) {
+        return protects(exposure, entity.getItemStackFromSlot(slot), commit);
     }
 
-    private static boolean protects(HazardExposure exposure, @Nonnull ItemStack stack) {
+    private static boolean protects(HazardExposure exposure, @Nonnull ItemStack stack, boolean commit) {
         if (ItemAirUtils.INSTANCE.isStackValidAirContainer(stack)
                 && new ItemAirUtils.ItemAirWrapper(stack)
-                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, true)) {
+                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, commit)) {
             return true;
         }
         return !stack.isEmpty()
                 && stack.hasCapability(CapabilitySpaceArmor.PROTECTIVEARMOR, null)
                 && stack.getCapability(CapabilitySpaceArmor.PROTECTIVEARMOR, null)
-                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, true);
+                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, commit);
     }
 }

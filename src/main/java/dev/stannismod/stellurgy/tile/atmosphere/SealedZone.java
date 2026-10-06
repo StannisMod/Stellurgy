@@ -117,7 +117,9 @@ final class SealedZone {
         } else if (!sealed && canHold && ++ticksSinceSealCheck >= SEAL_CHECK_TICKS) {
             ticksSinceSealCheck = 0;
             checkSeal(handler, anchor);
-            if (awaitingFill) {
+            // A fill in flight is asked again next tick; one the pool turned away waits the interval,
+            // so a server too busy to measure is asked again in seconds, not every tick.
+            if (awaitingFill && handler.isFilling(owner)) {
                 ticksSinceSealCheck = SEAL_CHECK_TICKS;
             }
         }
@@ -146,8 +148,10 @@ final class SealedZone {
             ok = answered;
         } else {
             ok = handler.addBlock(owner, new HashedBlockPosition(anchor));
-            if (!ok && handler.isFilling(owner)) {
-                // Taking this as "open" let a reloaded room out to space until the next check.
+            // An empty zone is a verdict only when a fill ran and found it open. Still running, or
+            // turned away by a full pool, it is no answer at all — taking it as "open" let a reloaded
+            // room out to space until the next check.
+            if (!ok && (handler.isFilling(owner) || handler.lastFillClosed(owner) == null)) {
                 awaitingFill = true;
                 return false;
             }

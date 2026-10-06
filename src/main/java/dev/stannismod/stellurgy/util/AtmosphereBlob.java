@@ -130,6 +130,9 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
                         try {
                             Stellurgy.serverState().atmosphereFillPool.execute(this);
                         } catch (RejectedExecutionException e) {
+                            // Nothing will run, so nothing is in flight: left set, this zone could
+                            // never be measured again. No answer either — lastFillClosed stays null.
+                            executing = false;
                             Stellurgy.logger.warn("Atmosphere calculation at " + this.getRootPosition() + " aborted due to oversize queue!");
                         }
                     else

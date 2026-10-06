@@ -39,8 +39,9 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
     private static final int EXPOSURE_TICKS = 200;
 
     /**
-     * red-witnessed: with {@code Poisoning#tick} at {@code if (damage > 0.0F)} made unreachable (the
-     * dose kept, the harm never dealt): "health 100.0 -> 100.0"; with {@code AtmosphereAssertions#holdsAt}
+     * red-witnessed: with {@code Poisoning#tick} at {@code if (toxic && damage > 0.0F)} made unreachable
+     * (the dose kept, the harm never dealt): "health 100.0 -> 100.0" — taken before 2026-10-06, when the
+     * line had no {@code toxic &&}, which {@code enableToxicity}'s default leaves true; with {@code AtmosphereAssertions#holdsAt}
      * at {@code return around != null && around.isToxic();} reading the zone's air only: "air with carbon
      * monoxide past its limit is said to be poisonous, outdoors too". Run apart: the statement is
      * asserted first and would have hidden the harm.
