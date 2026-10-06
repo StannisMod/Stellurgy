@@ -717,8 +717,13 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             // WINDOW: the captured fraction and the y RANGE are properties of the traverse rather
             // than of one instant; a record could say capture began, not what fraction of a walk it
             // held for. What it cannot see: a capture dropped and regained inside one 4-tick sample.
+            // STIMULUS: each step is a dose of held W counted in the CLIENT's live-world ticks, the
+            // clock the walk is simulated on: twelve doses of four are a fixed length of walk, and the
+            // platform above is laid for it. Counted on the later of two clocks, a server lagging the
+            // client lengthened the walk — measured 2026-10-06, he walked off the platform's far edge
+            // at the tenth sample and fell to y 139, twice, the same 138.998 both times.
             for (int i = 0; i < 12; i++) {
-                advanceServerAndClient(4);
+                bot().waitWorldTicks(4);
                 samples++;
                 DeckCapture cap = DeckCapture.read(this::exec);
                 boolean t = cap.alreadyTracked;
