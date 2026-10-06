@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
 import org.junit.FixMethodOrder;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
@@ -760,24 +759,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
     }
 
     @Test
-    @Ignore("RED ON A REAL DEFECT, DETERMINISTICALLY, and its two links PASS before it: the deck"
-            + " does take him back and the mode committed IS aboard. What fails is the line after —"
-            + " the capture read there is gone (alreadyTracked:false, anchorShipId:null,"
-            + " hullStand:false) and the body has dropped. MEASURED, both sides agreeing: captured"
-            + " at tick 1527 worldY 153.130 with from=null (so nothing overwrote the capture),"
-            + " released at tick 1537 with reason=steppedOntoTerrain, y=150.851, worldSupport=true,"
-            + " shipSupport=0, onGround=false, motionY=-0.597. Ten ticks, 2.279 blocks, and that"
-            + " motionY is the eighth step of vanilla free fall from rest — so a body holding the"
-            + " ABOARD state received no ship-frame gravity for ten consecutive ticks, and the"
-            + " release is where the fall ended rather than why it happened. The terrain gate is"
-            + " NOT the fault: it reports geometry, and here the feet are at 150.851 against a block"
-            + " top at 151.0, i.e. inside the floor. It reproduces alone at ~97s of execution, so it"
-            + " needs no tier. RE-ENABLE when the ABOARD state delivers what it promises — the"
-            + " acceptance is this method green on two consecutive full tiers. NOTE for whoever"
-            + " ignores or re-enables anything else here: this class runs NAME_ASCENDING in a shared"
-            + " world and this method is the LAST one, so nothing downstream inherits its world;"
-            + " that is not true of its siblings — this very red was uncovered by ignoring the"
-            + " method that ran immediately before it.")
     public void aPlayerWhoRelogsOnAnInvertedDeckStaysAboardIt() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -919,21 +900,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
      * logout), because a leg where the body never moved would pass without exercising anything.</p>
      */
     @Test
-    @Ignore("RED WITH A VERDICT THAT MOVES WITH CONCURRENCY, and the mechanism is the ORDER of deck"
-            + " mode commits after a login rather than whether one happens. It waits for a"
-            + " `deck_mode_committed` naming `aboard` as the LAST mode for the crew uuid within 200"
-            + " ticks of the relog and expires — but the record type is NOT missing: the failure"
-            + " prints a login trail that contains deck_hold_login, deck_hold_pin, deck_entered,"
-            + " deck_mode_committed, deck_gate_decided, deck_carry and deck_hold_ended, so a mode"
-            + " WAS committed after the login and something later replaced it as the last one. The"
-            + " wait's own triage reports recording:true with the seam present, so the instrument"
-            + " is not blind. MEASURED over four runs of one tree in one session: GREEN on a full"
-            + " client tier, RED on a second full tier, RED in a four-class run, GREEN alone — two"
-            + " green and two red, which is why neither 'it is broken' nor 'the test is wrong'"
-            + " stands on its own. Do NOT re-enable on a green run at a smaller scope: that is one"
-            + " of the two outcomes it already produces. RE-ENABLE when the mode a login leaves"
-            + " behind is settled by the time the restore is complete — the acceptance is this"
-            + " method green on two consecutive full tiers.")
     public void aCrewMemberWhoLogsOutWalkingComesBackStandingStillOnHisDeckSpot() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;

@@ -53,12 +53,12 @@ import static org.junit.Assert.assertTrue;
  * It is static because JUnit builds a fresh test instance per method while the client JVM keeps the
  * setting.</p>
  */
-@Ignore("HELD FOR THE DECK CONTRACT, by the maintainer's rulings of 2026-10-03 and 2026-10-04: two"
-        + " client-tier runs reddened a DIFFERENT scenario each — the between-scenario release left an"
-        + " `aboard record` before aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding, then"
-        + " aJumpAnnouncesItselfInChatOnTheHudAndInTheSky failed alone. Not diagnosed. RE-ENABLE with the"
-        + " contract on moving an entity aboard a craft; the acceptance is this class green on a full"
-        + " client tier, twice.")
+@Ignore("HELD FOR THE DECK CONTRACT, by the maintainer's rulings of 2026-10-03 and 2026-10-04. Of the"
+        + " two full client tiers on 2026-10-06 one was green and one red in"
+        + " aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet: after the arrival the crew member was held by"
+        + " the deck of ANOTHER craft whose hull overlaps the arrival point (an earlier scenario's ship),"
+        + " not by his own — measured, not diagnosed. RE-ENABLE once the arrival keeps him on his own"
+        + " ship; the acceptance is this class green on a full client tier, twice.")
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
 
@@ -1397,7 +1397,7 @@ private String hud() throws Exception {
         // written onto a body the server has finished with closes the death screen and leaves a
         // player no slot write reaches. So the scenario that takes the body gives it back, the way a
         // player does — the death screen's Respawn button.
-        respawnThroughTheDeathScreen(deathScreenMark);
+        respawnThroughTheDeathScreen(deathScreenMark, hyperDim);
     }
 
     /** {@code GuiGameOver}'s Respawn button: its {@code actionPerformed} case 0 calls
@@ -1424,14 +1424,32 @@ private String hud() throws Exception {
      * client's rebuilt world ({@code client_dimension_changed} {@code via:respawn}, at the TAIL of
      * {@code handleRespawn}). The bot refuses to press a disabled button, so a screen re-opened
      * after the read is a red naming the button, never a silent no-op.</p>
+     *
+     * <p>And the last screen is the one shown in the world the SERVER holds the body in. A dead body
+     * can still be moved: the jump this scenario flies out carries its crew, the dead one included,
+     * and the client then rebuilds its world under the death screen and opens a new one there.
+     * Measured 2026-10-06 in a full client tier: the last screen was read before the client had
+     * followed the body from the hyperspace world to dimension 4, the move closed it, and the press
+     * met no screen at all ("No current GUI to click"). So where the body is now is read off the
+     * server, and when that is not where it died, the client's arrival there is a link of its own
+     * and the screen is taken after it.</p>
      */
-    private void respawnThroughTheDeathScreen(long clientMark) throws Exception {
+    private void respawnThroughTheDeathScreen(long clientMark, int deathDim) throws Exception {
         Events client = clientEvents();
-        client.awaitField(clientMark, "client_gui_opened", "gui", "GuiGameOver",
+        int bodyDim = Reply.of(exec("stellurgytest player health")).integer("dim");
+        long screenMark = clientMark;
+        if (bodyDim != deathDim) {
+            String followed = client.awaitRecordWithField(clientMark, "client_dimension_changed",
+                    "dim", bodyDim, "the server moved the dead body from dimension " + deathDim
+                            + " to " + bodyDim + ", and the client must follow it there before its"
+                            + " death screen can be pressed", RESPAWN_LINK_BUDGET_TICKS);
+            screenMark = (long) Events.number(followed, "seq");
+        }
+        client.awaitField(screenMark, "client_gui_opened", "gui", "GuiGameOver",
                 "the death must bring the player's client to the death screen, the only place a"
                         + " player can respawn from", RESPAWN_LINK_BUDGET_TICKS);
         java.util.List<String> opens = Events.recordsWhere(
-                client.since(clientMark, "client_gui_opened"), "gui", "GuiGameOver");
+                client.since(screenMark, "client_gui_opened"), "gui", "GuiGameOver");
         long lastOpen = (long) Events.number(opens.get(opens.size() - 1), "seq");
         client.await(lastOpen, "death_screen_ready",
                 "the death screen the client shows now must enable its Respawn button",
