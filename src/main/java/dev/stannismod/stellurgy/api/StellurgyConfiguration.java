@@ -303,6 +303,14 @@ public class StellurgyConfiguration {
     public int lifeSupportRecirculatorPower;
     @ConfigProperty
     public long lifeSupportCarbonPerDust;
+    /**
+     * A scrubber's draw and what one cartridge charge pays for, in the respiration rate's unit: the
+     * composition's unit times the zone volume in blocks, so an amount of gas rather than a pressure.
+     */
+    @ConfigProperty
+    public long lifeSupportScrubberRate;
+    @ConfigProperty
+    public long lifeSupportScrubberCo2PerCharge;
     @ConfigProperty
     public int jettisonPortIntervalTicks;
     @ConfigProperty
@@ -321,6 +329,8 @@ public class StellurgyConfiguration {
     public int lifeSupportPlantCarbonPerDust;
     @ConfigProperty
     public int lifeSupportDuctThroughput;
+    @ConfigProperty
+    public int lifeSupportPortFePerTick;
     @ConfigProperty
     public long lifeSupportBreachVentRate;
     @ConfigProperty
@@ -677,6 +687,8 @@ public class StellurgyConfiguration {
         stellurgyConfig.lifeSupportRecirculatorRate = partialPressure(config, "lifeSupportRecirculatorRate", 6000, "CO2 a single recirculator turns back into oxygen each second, in millionths of an atmosphere. At the default it keeps up with three crew in a room of any size.");
         stellurgyConfig.lifeSupportRecirculatorPower = config.get(OXYGEN, "lifeSupportRecirculatorPower", 400, "Power a recirculator draws per operation. Reversing combustion is endothermic: the energy cost is the point, not a tax.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportCarbonPerDust = partialPressure(config, "lifeSupportCarbonPerDust", 60000, "CO2 that must be regenerated before one carbon dust is produced, in millionths of an atmosphere. At the defaults a recirculator running flat out yields a dust every ten seconds.");
+        stellurgyConfig.lifeSupportScrubberRate = partialPressure(config, "lifeSupportScrubberRate", 2000, "CO2 a single scrubber beside a sealed oxygen vent absorbs from the vent's room each second, in the same unit as lifeSupportRespirationRate. The default is one crew member's breath, so N scrubbers keep up with N crew; that crew count is a progression choice, not a measurement. The CO2 is gone: a scrubber returns no oxygen, which is what the recirculator is for.");
+        stellurgyConfig.lifeSupportScrubberCo2PerCharge = partialPressure(config, "lifeSupportScrubberCo2PerCharge", 20000, "CO2 one charge of a scrubber cartridge absorbs, in the same unit as lifeSupportScrubberRate. The default is ten seconds at the default rate, which keeps a cartridge's life under full load what it was before scrubbers touched the air: one charge every 200 ticks. A scrubber in a room with nothing to absorb spends nothing.");
         stellurgyConfig.jettisonPortIntervalTicks = config.get(OXYGEN, "jettisonPortIntervalTicks", 20, "How often a jettison port tries to throw its contents overboard, in ticks. This is a duty cycle, not a throttle on how much leaves: the port ejects whatever stack it holds, so a faster port empties a busier scrubber line rather than exporting more per firing.", 1, Integer.MAX_VALUE).getInt();
         stellurgyConfig.jettisonPortClearance = config.get(OXYGEN, "jettisonPortClearance", 3, "How many blocks in front of a jettison port must be empty before it will fire. The port refuses rather than firing into a wall, and it HOLDS its cargo while blocked instead of voiding it, so the only cost of a badly placed port is that nothing leaves.", 1, 64).getInt();
         stellurgyConfig.lifeSupportFluidPerAtmBlock = config.get(OXYGEN, "lifeSupportFluidPerAtmBlock", 1000, "How many millibuckets of gas one whole atmosphere of partial pressure amounts to in ONE block of room. This is the exchange rate between air in a room and gas in a pipe: at the default, emptying a 20-block cabin of its 0.21 atm of oxygen yields 4200 mB.", 1, Integer.MAX_VALUE).getInt();
@@ -686,6 +698,7 @@ public class StellurgyConfiguration {
         stellurgyConfig.lifeSupportPlantPower = config.get(OXYGEN, "lifeSupportPlantPower", 2000, "Power a central plant draws per second while regenerating at its full rate; a plant running below capacity draws proportionally less. Reversing combustion is endothermic — the energy is the mechanic, and centralising it is what buys the better rate.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportPlantCarbonPerDust = config.get(OXYGEN, "lifeSupportPlantCarbonPerDust", 1200000, "Regeneration work a central plant must do before one carbon dust is produced, in the same millionths-times-blocks unit as lifeSupportPlantRate. The default is the per-room figure scaled to a nominal 20-block cabin, so a plant and a recirculator yield the same dust for the same gas.", 1, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportDuctThroughput = config.get(OXYGEN, "lifeSupportDuctThroughput", 120000, "Regeneration work one ventilation duct block will carry each second, in the same unit as lifeSupportPlantRate. This is a THROUGHPUT, not a gas content: the duct carries a rate, and running a second line is how a ship supports more crew.", 0, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.lifeSupportPortFePerTick = config.get(OXYGEN, "lifeSupportPortFePerTick", 1, "Energy a ventilation port draws each tick to hold its zone, in FE per tick. It is not wired to the port: a life-support plant pays it through the ventilation ducts that connect the two, so a port with no plant behind it holds no zone. 0 makes ports free, but they still need a plant on their network.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.lifeSupportBreachVentRate = partialPressure(config, "lifeSupportBreachVentRate", 50000, "How fast a breached zone loses its air to space, in millionths of an atmosphere per second across all three gases. At the default a sea-level room empties in about twenty seconds, which is the window a player has to close a bulkhead or patch the hull. 0 disables venting: a breached room then keeps its air, which is the pre-3.0.0 behaviour.");
         stellurgyConfig.dropExTorches = config.get(OXYGEN, "dropExtinguishedTorches", false, "Drop an extinguished torch instead of a vanilla torch, when breaking an extinguished torch.").getBoolean();
         sealableBlockWhiteList = config.getStringList("sealableBlockWhiteList", OXYGEN, new String[]{}, "Blocks that should count as sealable. Format: modid:block  for example \"minecraft:chest\"");

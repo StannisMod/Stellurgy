@@ -77,9 +77,10 @@ public class SubsystemNetworkRestartTest {
      * not re-registering a duct restored from the save: "the ventilation graph must come back with the
      * same cable count … \"cables\":0". SOURCES — the same in {@code TileLifeSupportPlant#onLoad} at
      * {@code SubsystemNetworkRegistry.register(this);}: "and the same source count: … \"sources\":0".
-     * SINKS — the same in {@code TileOxygenVent#onLoad} at {@code SubsystemNetworkRegistry.register(this);}:
-     * "and the same sink count: … \"sinks\":0". PRIORITY — {@code TileOxygenVent#readFromNBT} at {@code zonePriority = Math.max(PRIORITY_MIN, Math.min(PRIORITY_MAX, nbt.getInteger("zonePriority")));} not reading the priority back: "the vent's zone priority must survive the
-     * restart … expected:&lt;1&gt; but was:&lt;0&gt;". BIAS — {@code TileEntityShieldConsole#readFromNBT} at {@code shieldEnergyResistanceBias = compound.hasKey("shieldEnergyResistanceBias")} not
+     * SINKS — the same in {@code TileVentilationPort#onLoad} at {@code SubsystemNetworkRegistry.register(this);}:
+     * "and the same sink count: … \"sinks\":0". PRIORITY — {@code TileVentilationPort#readFromNBT} at {@code zonePriority = Math.max(PRIORITY_MIN, Math.min(PRIORITY_MAX, nbt.getInteger("zonePriority")));} not reading the priority back: "the vent's zone priority must survive the
+     * restart … expected:&lt;1&gt; but was:&lt;0&gt;". (SINKS and PRIORITY were taken while the zone's
+     * sink was the oxygen vent; both lines moved unchanged to the port on 2026-10-05.) BIAS — {@code TileEntityShieldConsole#readFromNBT} at {@code shieldEnergyResistanceBias = compound.hasKey("shieldEnergyResistanceBias")} not
      * reading the bias back: "the console's resistance bias must survive the restart … expected:&lt;0.75&gt;
      * but was:&lt;0.5&gt;". The first boot's premises are arrangements and are not witnessed. (CABLES,
      * SOURCES and SINKS were recorded against each {@code onLoad}'s declaration line; the quoted call
@@ -98,7 +99,7 @@ public class SubsystemNetworkRestartTest {
         // ─────── Boot 1: build both networks, set both settings ───────
         firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
 
-        place(firstBoot, "stellurgy:oxygenVent", VENT);
+        place(firstBoot, "stellurgy:ventilationPort", VENT);
         place(firstBoot, "stellurgy:ventilationDuct", DUCT_A);
         place(firstBoot, "stellurgy:ventilationDuct", DUCT_B);
         place(firstBoot, "stellurgy:lifeSupportPlant", PLANT);
@@ -122,7 +123,7 @@ public class SubsystemNetworkRestartTest {
         assertEquals("premise: two ducts must be in the network before the restart: "
                 + ventilationBefore, 2, cablesBefore);
         assertEquals("premise: the plant must be its source: " + ventilationBefore, 1, sourcesBefore);
-        assertEquals("premise: the vent must be its sink: " + ventilationBefore, 1, sinksBefore);
+        assertEquals("premise: the port must be its sink: " + ventilationBefore, 1, sinksBefore);
 
         firstBoot.close();
         firstBoot = null;
@@ -148,7 +149,7 @@ public class SubsystemNetworkRestartTest {
 
         // The settings, by contrast, are only here because their own tiles wrote them to NBT.
         Reply priorityAfter = arrange(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z);
-        assertEquals("the vent's zone priority must survive the restart — it is the vent's own "
+        assertEquals("the port's zone priority must survive the restart — it is the port's own "
                         + "setting, not the network's: " + priorityAfter,
                 ZONE_PRIORITY, priorityAfter.integer("priority"));
 

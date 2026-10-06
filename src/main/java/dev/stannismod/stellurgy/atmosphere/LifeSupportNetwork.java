@@ -1,6 +1,12 @@
 package dev.stannismod.stellurgy.atmosphere;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The ventilation domain: a central regeneration plant, the zones it serves, and the ducts between
@@ -25,7 +31,50 @@ public final class LifeSupportNetwork {
      * through the same wall never join one graph.
      */
     public static final SubsystemNetworkDomain DOMAIN = new SubsystemNetworkDomain("LifeSupport") {
+        @Override
+        public void onComponentTicked(SubsystemNetworkState state, List<ISubsystemNetworkNode> members) {
+            payPortUpkeep(members);
+        }
     };
+
+    /** A node that can pay a port's running cost out of its own power: the plant. */
+    public interface UpkeepSupply {
+        /** Pay {@code fe} this tick if the buffer holds it; answers whether it was paid. */
+        boolean payUpkeep(int fe);
+    }
+
+    /** A node whose running cost the network pays: the port. */
+    public interface UpkeepConsumer {
+        /** This tick's running cost has been paid. */
+        void upkeepPaid();
+    }
+
+    /**
+     * Every port on a network is kept running by the plants on it — the power reaches the port through
+     * the ducts, never by a cable to the port, so a port with no plant behind it is a port without
+     * power. One plant pays as many ports as its buffer covers; the next takes over when it runs short.
+     * Order inside a component is the membership's, which is stable between rebuilds.
+     */
+    static void payPortUpkeep(List<ISubsystemNetworkNode> members) {
+        if (!StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+            return;
+        int fe = Math.max(0, StellurgyConfiguration.getCurrentConfig().lifeSupportPortFePerTick);
+        List<UpkeepSupply> supplies = new ArrayList<>();
+        for (ISubsystemNetworkNode member : members) {
+            if (member instanceof UpkeepSupply)
+                supplies.add((UpkeepSupply) member);
+        }
+        for (ISubsystemNetworkNode member : members) {
+            if (!(member instanceof UpkeepConsumer))
+                continue;
+            for (UpkeepSupply supply : supplies) {
+                if (supply.payUpkeep(fe)) {
+                    ((UpkeepConsumer) member).upkeepPaid();
+                    break;
+                }
+            }
+        }
+    }
 
     /** The network solves every tick; the config states rates per second, as the rest of the tier does. */
     public static final int TICKS_PER_SECOND = 20;

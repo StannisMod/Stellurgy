@@ -25,6 +25,8 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  {@link #stand}. A fresh instance per test method, so one scenario's never reaches another. */
     private int cyBase;
     private int czBase;
+    /** The world the helpers build in: the overworld, unless a scenario says otherwise. */
+    private int dim = 0;
 
     /**
      * Ask for this scenario's site, prove its volume empty, and answer the X the fixture is centred
@@ -70,9 +72,10 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  that matters: an unmaintained room is not a room full of stale air, it is a room the system
      *  has no opinion about.
      *
-     *  <p>red-witnessed: with {@code TileOxygenVent#notEnoughEnergyForFunction} at {@code if (handler != null)} no longer clearing the zone when the vent
-     *  has too little energy to run: "an unpowered vent must not be maintaining a zone: …
-     *  \"airO2\":210000000", 2026-09-30.</p> */
+     *  <p>red-witnessed: with {@code TileOxygenVent#keepZone} at {@code if (zone.tick(atmhandler, pos, isTurnedOn() && hasEnoughEnergy(getPowerPerOperation())))}
+     *  holding the zone whenever the vent is switched on, power or not: "an unpowered vent must not
+     *  be maintaining a zone: … \"airSource\":\"zone\"", 2026-10-05 (re-taken after the zone moved
+     *  into the shared zone keeper).</p> */
     @Test
     public void anUnpoweredRoomHasNoZoneForLifeSupportToTouch() throws Exception {
         int cx = stand("a sealed room with an unpowered vent");
@@ -408,6 +411,200 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         assertEquals("with nothing jettisoned: " + info, 0, info.integer("ejected"));
     }
 
+    /**
+     * A sealed room whose vent has no oxygen to give is still breathed down by whoever is in it.
+     * The vent's tank is the room's SUPPLY; the room's air is what the crew consume, and a supply
+     * that is empty does not stop the consuming — that is the whole danger of a supply failure.
+     *
+     * <p>Observed as a WINDOW on the zone's carbon dioxide: respiration turns oxygen into CO2 one
+     * breath at a time, and nothing else in this room touches CO2 (no plant, no recirculator, no
+     * scrubber; a vent adds oxygen only). One breath is
+     * {@code lifeSupportRespirationRate / zone volume}, the same division {@code respire} makes, so
+     * "rose by at least one breath" separates "breathed" from "frozen" exactly. The breathing
+     * entity is the probe's player, driven by {@code player tick-living}: the same
+     * {@code LivingUpdateEvent} a ticking player raises, on whose arrival production decides
+     * whether to respire.</p>
+     *
+     * <p>The CONTROL is the same window once the tank holds oxygen, read AFTER the subject's and
+     * asserted before it: if the subject leg reads zero, the control says whether the probe's player
+     * breathes in this room at all, and an instrument that never fired is not reported as the
+     * defect.</p>
+     *
+     * <p>red-witnessed: with {@code TileOxygenVent#isMaintainingAtmosphere} at {@code return
+     * zone.isSealed();} also requiring {@code hasFluid} — the gate as it stood before 2026-10-05 —
+     * "a room whose vent has no oxygen must still be breathed down: CO2 0 -&gt; 0, one breath is
+     * 105263", the control green, 2026-10-05.</p>
+     */
+    @Test
+    public void aRoomWhoseVentHasNoOxygenIsStillBreathedDown() throws Exception {
+        int cx = stand("a sealed room whose vent has no oxygen to give");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        forceTickAndReseal(cx);
+
+        Reply sealed = ventInfo(cx);
+        requireArranged("the room must be a sealed zone whose vent holds no oxygen: " + sealed,
+                sealed.bool("isSealed") && sealed.integer("fluidAmount") == 0
+                        && sealed.integer("blobSize") > 0 && "zone".equals(sealed.text("airSource")));
+        long breath = configValue("lifeSupportRespirationRate") / sealed.integer("blobSize");
+        requireArranged("one breath must move a measurable amount of gas in this room: " + breath,
+                breath > 0L);
+
+        // The breathing player, standing in the room.
+        arrange("stellurgytest player ensure-fake 0 " + cx + " " + (cyBase + 1) + " " + czBase);
+
+        long before = ventInfo(cx).longInteger("airCO2");
+        breathe(40);
+        long after = ventInfo(cx).longInteger("airCO2");
+
+        // CONTROL: the same room with oxygen in the tank, where the vent supplies it.
+        injectOxygen(cx, 1000);
+        forceTick(cx, 1);
+        long controlBefore = ventInfo(cx).longInteger("airCO2");
+        breathe(40);
+        long controlAfter = ventInfo(cx).longInteger("airCO2");
+        requireArranged("the probe's player must breathe in this room once the vent is supplied"
+                        + " (CO2 " + controlBefore + " -> " + controlAfter + ", one breath " + breath + ")",
+                controlAfter - controlBefore >= breath);
+
+        assertTrue("a room whose vent has no oxygen must still be breathed down: CO2 " + before
+                + " -> " + after + ", one breath is " + breath, after - before >= breath);
+    }
+
+    /**
+     * A vent pays its tank only for oxygen it actually lets into the room. A room already at sea
+     * level lacks nothing, so a vent standing in one spends nothing, however long it runs.
+     *
+     * <p>Fresh air here is the world's own: this room stands in the overworld, whose outdoor air is
+     * sea-level Earth air, and a new zone holds what was in its place — which the reading at the head
+     * confirms rather than assumes.</p>
+     *
+     * <p>red-witnessed: with {@code TileOxygenVent#supplyOxygen} draining
+     * {@code ceil(volume * getGasUsageMultiplier())} every tick before {@code if (missing <= 0L)} —
+     * the running cost the vent paid before 2026-10-05 — "a vent must spend nothing on a room that
+     * lacks nothing: … expected:&lt;993&gt; but was:&lt;891&gt;", 2026-10-05. PAYS WHEN LACKING —
+     * {@code TileOxygenVent#supplyOxygen} at {@code if (missing <= 0L)} returning whatever the room
+     * lacks: "and the same vent must pay out of its tank once the room lacks oxygen: …
+     * \"fluidAmount\":1000", 2026-10-05.</p>
+     */
+    @Test
+    public void aVentSpendsNothingOnARoomThatLacksNothing() throws Exception {
+        int cx = stand("a sealed room already at sea level, with a full vent");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        injectOxygen(cx, 1000);
+        forceTickAndReseal(cx);
+
+        Reply full = ventInfo(cx);
+        requireArranged("the room must be a sealed zone at sea-level oxygen: " + full,
+                full.bool("isSealed") && full.longInteger("airO2") == ppm(210_000));
+        int tankBefore = full.integer("fluidAmount");
+
+        forceTick(cx, 100);
+
+        Reply after = ventInfo(cx);
+        assertEquals("a vent must spend nothing on a room that lacks nothing: " + after,
+                tankBefore, after.integer("fluidAmount"));
+
+        // The same tank, read the same way, once the room DOES lack oxygen: it pays. Without this
+        // half "nothing was spent" would also be what a vent that never spends looks like.
+        arrange("stellurgytest vent setair " + dim + " " + cx + " " + cyBase + " " + czBase
+                + " " + ppm(790_000) + " " + ppm(150_000) + " 0");
+        forceTick(cx, 20);
+        Reply lacking = ventInfo(cx);
+        assertTrue("and the same vent must pay out of its tank once the room lacks oxygen: " + lacking,
+                lacking.integer("fluidAmount") < tankBefore
+                        && lacking.longInteger("airO2") > ppm(150_000));
+    }
+
+    /**
+     * A room sealed where there is no air holds no air. Sealing a volume closes it; it does not fill
+     * it, so on an airless world a new zone starts as vacuum and has only what a supply puts in.
+     *
+     * <p>Built on Luna, the shared server's airless moon, found by name. The site is this scenario's
+     * own plot, read in Luna's world: the allocator's horizontal non-overlap does not depend on the
+     * dimension.</p>
+     *
+     * <p>red-witnessed: with {@code SealedZone#airAround} at {@code return around == null ?
+     * AirState.vacuum() : around.copy();} answering {@code AirState.earthLike()} — a new zone full of
+     * sea-level air, as before 2026-10-05 — "a room sealed on an airless world must hold no oxygen: …
+     * \"airO2\":210000000", 2026-10-05. NO AIR AT ALL — the same method answering 79 % nitrogen and no
+     * oxygen: "and no air at all: … expected:&lt;0&gt; but was:&lt;79&gt;", 2026-10-05.
+     * SUPPLIED — {@code TileOxygenVent#supplyOxygen} at {@code if (missing <= 0L)} returning whatever
+     * the room lacks: "oxygen must reach the room once its vent's tank pays for it: …
+     * \"fluidAmount\":1000", 2026-10-05.</p>
+     */
+    @Test
+    public void aRoomSealedOnAnAirlessWorldStartsAsVacuum() throws Exception {
+        Reply luna = ask("stellurgytest planet named Luna");
+        requireArranged("the shared server must have a world named Luna: " + luna,
+                luna.arrayLength("dims") == 1);
+        int lunaDim = (int) luna.arrayNumber("dims", 0);
+        int outdoors = planetIntField(lunaDim, "atmosphereDensity");
+        requireArranged("Luna must keep no air (atmosphereDensity " + outdoors + ")", outdoors == 0);
+
+        FixtureSite plot = site();
+        // Keeps the DIMENSION loaded, putting the probe's player beside the room; nobody breathes,
+        // because nothing drives his living update here. It does not keep the room's CHUNKS: the
+        // player is never added to the world's chunk map, and a world nobody watches that cannot be
+        // respawned in queues every chunk for unloading each tick (`PlayerChunkMap#tick`). A room
+        // unloaded between two probe calls comes back as a fresh vent that has not sealed yet.
+        arrange("stellurgytest player ensure-fake " + lunaDim + " " + plot.x + " " + (plot.y + 8) + " "
+                + plot.z);
+        java.util.List<String> heldChunks = new java.util.ArrayList<>();
+        for (int chunkX = plot.x >> 4; chunkX <= (plot.x + 4) >> 4; chunkX++) {
+            for (int chunkZ = plot.z >> 4; chunkZ <= (plot.z + 4) >> 4; chunkZ++) {
+                String chunk = lunaDim + " " + chunkX + " " + chunkZ;
+                arrange("stellurgytest chunk forceload " + chunk);
+                heldChunks.add(chunk);
+            }
+        }
+        try {
+            roomOnLunaStartsAsVacuum(plot, lunaDim);
+        } finally {
+            for (String chunk : heldChunks) {
+                arrange("stellurgytest chunk release " + chunk);
+            }
+        }
+    }
+
+    private void roomOnLunaStartsAsVacuum(FixtureSite plot, int lunaDim) throws Exception {
+        FixtureSite lunar = FixtureSite.openAir(lunaDim, plot.x, plot.z);
+        lunar.requireClear(this::exec, 4, 8, "a sealed room on Luna");
+        dim = lunaDim;
+        cyBase = plot.y + 2;
+        czBase = plot.z + 2;
+        int cx = plot.x + 2;
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        forceTickAndReseal(cx);
+
+        Reply sealed = ventInfo(cx);
+        requireArranged("the room must be a sealed zone: " + sealed,
+                sealed.bool("isSealed") && "zone".equals(sealed.text("airSource")));
+        assertEquals("a room sealed on an airless world must hold no oxygen: " + sealed,
+                0L, sealed.longInteger("airO2"));
+        assertEquals("and no air at all: " + sealed, 0L, sealed.longInteger("airPressure"));
+
+        // The same reading once a supply pays: oxygen arrives, and only what the tank gave. Without
+        // this half a zero would also be what a probe that cannot see this zone's air reads.
+        int given = 1000;
+        injectOxygen(cx, given);
+        forceTick(cx, 20);
+        Reply supplied = ventInfo(cx);
+        assertTrue("oxygen must reach the room once its vent's tank pays for it: " + supplied,
+                supplied.longInteger("airO2") > 0L && supplied.integer("fluidAmount") < given);
+    }
+
+    /** Raise the probe player's living update for {@code ticks} server ticks, and wait them out. */
+    private void breathe(int ticks) throws Exception {
+        arrange("stellurgytest player tick-living " + ticks);
+        GameTicks.advance(client(), GameTicks.server(), ticks + 2);
+    }
+
     /** Open sky around the port, on a stone floor, so its exit is clear whichever way it faces. */
     private void clearAirPocket(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 4) + " " + (cyBase - 1) + " " + (czBase - 4)
@@ -422,15 +619,15 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
     private void buildSealableRoom(int cx) throws Exception {
         int by = cyBase, bz = czBase;
-        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
+        arrange("stellurgytest fill " + dim + " " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
                 + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
         for (int yy = by + 1; yy <= by + 2; yy++) {
-            arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
+            arrange("stellurgytest fill " + dim + " " + (cx - 2) + " " + yy + " " + (bz - 2)
                     + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
-            arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
+            arrange("stellurgytest fill " + dim + " " + (cx - 1) + " " + yy + " " + (bz - 1)
                     + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
         }
-        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
+        arrange("stellurgytest fill " + dim + " " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
                 + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
     }
 
@@ -448,7 +645,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + cyBase + " " + czBase + " " + block);
+        Reply resp = arrange("stellurgytest place " + dim + " " + x + " " + cyBase + " " + czBase + " " + block);
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
@@ -457,11 +654,11 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     }
 
     private void injectEnergyAt(int x, int amount) throws Exception {
-        arrange("stellurgytest energy inject 0 " + x + " " + cyBase + " " + czBase + " " + amount);
+        arrange("stellurgytest energy inject " + dim + " " + x + " " + cyBase + " " + czBase + " " + amount);
     }
 
     private void injectOxygen(int cx, int amount) throws Exception {
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cyBase + " " + czBase
+        arrange("stellurgytest fluid inject " + dim + " " + cx + " " + cyBase + " " + czBase
                 + " oxygen " + amount);
     }
 
@@ -475,17 +672,17 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      * ticked at all.
      */
     private void forceTick(int x, int ticks) throws Exception {
-        arrange("stellurgytest tile force-tick 0 " + x + " " + cyBase + " " + czBase + " " + ticks);
+        arrange("stellurgytest tile force-tick " + dim + " " + x + " " + cyBase + " " + czBase + " " + ticks);
     }
 
     private void forceTickAndReseal(int cx) throws Exception {
         forceTick(cx, 1);
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cyBase + " " + czBase);
+        arrange("stellurgytest vent reseal " + dim + " " + cx + " " + cyBase + " " + czBase);
         forceTick(cx, 5);
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cyBase + " " + czBase);
+        return ask("stellurgytest vent info " + dim + " " + cx + " " + cyBase + " " + czBase);
     }
 
     private Reply separatorInfo(int x) throws Exception {
@@ -502,5 +699,257 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
     private long configValue(String key) throws Exception {
         return arrange("stellurgytest config get " + key).longInteger("value");
+    }
+
+    // ---- tier 2: scrubbers beside an oxygen vent -------------------------------------------------
+    //
+    // The room these scenarios stand in: a stone shell on a two-layer floor, its upper floor layer
+    // holding the vent with a scrubber on either side of it. The second layer is there so the room
+    // seals whatever the seal check makes of a scrubber block: a scrubber it counts as open air is a
+    // pocket closed by the layer below, not a hole.
+
+    /** A position in a T2 room, relative to its site, in the probe's "dim x y z" form. */
+    private static String t2At(FixtureSite site, int dx, int dy, int dz) {
+        return site.dim + " " + (site.x + dx) + " " + (site.y + dy) + " " + (site.z + dz);
+    }
+
+    private static String t2Vent(FixtureSite site) {
+        return t2At(site, 2, 2, 2);
+    }
+
+    private static String[] t2Scrubbers(FixtureSite site) {
+        return new String[]{t2At(site, 1, 2, 2), t2At(site, 3, 2, 2)};
+    }
+
+    /**
+     * Build the room with its vent and both scrubbers, give the vent power and a tank of oxygen, tick
+     * it once so it holds a zone, and seal it.
+     *
+     * @return the zone's volume in blocks, as the seal check measured it
+     */
+    private int buildSealedT2Room(FixtureSite site) throws Exception {
+        arrange("stellurgytest fill " + t2At(site, 0, 1, 0) + " " + (site.x + 4) + " " + (site.y + 6)
+                + " " + (site.z + 4) + " minecraft:stone");
+        arrange("stellurgytest fill " + t2At(site, 1, 3, 1) + " " + (site.x + 3) + " " + (site.y + 5)
+                + " " + (site.z + 3) + " minecraft:air");
+        String vent = t2Vent(site);
+        arrange("stellurgytest fill " + vent + " " + vent.substring(vent.indexOf(' ') + 1)
+                + " stellurgy:oxygenvent");
+        for (String scrubber : t2Scrubbers(site)) {
+            arrange("stellurgytest fill " + scrubber + " " + scrubber.substring(scrubber.indexOf(' ') + 1)
+                    + " stellurgy:oxygenscrubber");
+        }
+        arrange("stellurgytest energy inject " + vent + " 1000");
+        arrange("stellurgytest fluid inject " + vent + " oxygen 1000");
+        arrange("stellurgytest tile force-tick " + vent + " 1");
+        Reply sealed = arrange("stellurgytest vent reseal " + vent);
+        requireArranged("the T2 room must seal before its scrubbers are asked anything: " + sealed,
+                sealed.bool("sealed") && sealed.integer("blobSize") > 0);
+        return sealed.integer("blobSize");
+    }
+
+    private void chargeT2Cartridges(FixtureSite site) throws Exception {
+        for (String scrubber : t2Scrubbers(site)) {
+            arrange("stellurgytest hatch fill " + scrubber + " 0 stellurgy:carbonscrubbercartridge 1 0");
+        }
+    }
+
+    /**
+     * Run the vent for whole seconds of world, topping its power buffer up before each. A working
+     * scrubber costs the vent power every tick, and a buffer charged once would brown the room out
+     * part-way and drop the zone — which would end the experiment, not answer it.
+     */
+    private void runT2Seconds(FixtureSite site, int seconds) throws Exception {
+        String vent = t2Vent(site);
+        // EXPERIMENT: the dose is whole seconds of the vent running; the reads after it compare
+        // amounts, and no record marks "a scrubber drew" for a link to close on.
+        for (int i = 0; i < seconds; i++) {
+            arrange("stellurgytest energy inject " + vent + " 1000");
+            arrange("stellurgytest tile force-tick " + vent + " 20");
+        }
+    }
+
+    /** The cartridge damage of the scrubber at this position: the charges it has spent. */
+    private int spentCharges(String scrubber) throws Exception {
+        return ask("stellurgytest hatch read " + scrubber).element("slots", "slot", "0").integer("meta");
+    }
+
+    /**
+     * Tier 2: a scrubber beside a sealed vent takes its room's carbon dioxide out, and its cartridge
+     * pays exactly the charges that CO2 is worth; with no cartridge it takes nothing.
+     *
+     * <p>The CO2 is put in by the probe rather than breathed in: the subject is what the scrubber
+     * decides about the room's CO2, and with nothing breathing in the room every change in it is the
+     * scrubber's. The empty-cartridge half is the control that the same room, vent and scrubbers draw
+     * nothing until a cartridge is there to pay.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-05. NO CARTRIDGE — {@code
+     * TileCO2Scrubber#absorb} at {@code wanted = Math.min(wanted, remainingCharges() * perCharge -
+     * absorbedUnpaid);} removed with its {@code if}: "a scrubber with no cartridge must take no CO2 out
+     * of its room expected:&lt;5000000&gt; but was:&lt;4714288&gt;". TAKES CO2 — {@code
+     * TileOxygenVent#scrub} at {@code if (scrubber.absorb(air, volume))} never calling it, which is
+     * HEAD's behaviour: "a charged scrubber must take CO2 out of its sealed room: 5000000 -&gt; 5000000
+     * over 21 s". PAYS — {@code TileCO2Scrubber#absorb} at {@code while (absorbedUnpaid >= perCharge
+     * && useCharge())} never entered: "the cartridges must pay for the CO2 they took, 20000000 a
+     * charge: between 91999264 and 91999264 drawn, but 0 + 0 charges spent". EACH — {@code
+     * TileOxygenVent#scrub} breaking out of its loop after the first scrubber that absorbed: "and each
+     * cartridge must have spent a charge for its share (0, 2)".</p>
+     */
+    @Test
+    public void aScrubberTakesItsRoomsCarbonDioxideAndPaysForItInCharges() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed T2 room: a vent with a scrubber either side");
+        int volume = buildSealedT2Room(site);
+        String vent = t2Vent(site);
+        arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000)
+                + " " + ppm(5_000));
+
+        long beforeEmpty = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+        runT2Seconds(site, 2);
+        long afterEmpty = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+        assertEquals("a scrubber with no cartridge must take no CO2 out of its room", beforeEmpty, afterEmpty);
+
+        long rate = arrange("stellurgytest config get lifeSupportScrubberRate").longInteger("value");
+        long perCharge = arrange("stellurgytest config get lifeSupportScrubberCo2PerCharge").longInteger("value");
+        // Each second a scrubber takes rate/volume of partial pressure, a little under `rate` of gas,
+        // so twice perCharge/rate seconds is worth at least one charge to each cartridge.
+        int seconds = (int) (2 * perCharge / rate) + 1;
+        System.out.println("[T2] volume=" + volume + " rate=" + rate + " perCharge=" + perCharge
+                + " seconds=" + seconds + " co2AtCharge=" + afterEmpty);
+        // The room held afterEmpty when the cartridges went in — nothing is drawn without one, as the
+        // half above just showed — so every draw from here on is measured from it.
+        chargeT2Cartridges(site);
+        runT2Seconds(site, seconds);
+        // WINDOW: the vent may also tick between probe calls, so the charges are read between two
+        // readings of the room and each bound below names the reading it rests on.
+        long co2BeforeCharges = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+        int spentA = spentCharges(t2Scrubbers(site)[0]);
+        int spentB = spentCharges(t2Scrubbers(site)[1]);
+        long co2AfterCharges = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+
+        assertTrue("a charged scrubber must take CO2 out of its sealed room: " + afterEmpty + " -> "
+                + co2BeforeCharges + " over " + seconds + " s", co2BeforeCharges < afterEmpty);
+        // The gas the two drew by each reading; each cartridge carries its own unpaid remainder below
+        // one charge, so together they have spent the whole charges of the total, or one fewer.
+        long drawnAtLeast = (afterEmpty - co2BeforeCharges) * volume;
+        long drawnAtMost = (afterEmpty - co2AfterCharges) * volume;
+        int spent = spentA + spentB;
+        assertTrue("the cartridges must pay for the CO2 they took, " + perCharge + " a charge: between "
+                        + drawnAtLeast + " and " + drawnAtMost + " drawn, but " + spentA + " + " + spentB
+                        + " charges spent",
+                spent >= drawnAtLeast / perCharge - 1 && spent <= drawnAtMost / perCharge);
+        assertTrue("and each cartridge must have spent a charge for its share (" + spentA + ", " + spentB
+                + ")", spentA >= 1 && spentB >= 1);
+    }
+
+    /**
+     * A sealed room whose chunk is saved, dropped and read back keeps its air: the reloaded vent
+     * seals its room again and nothing is let out while it does.
+     *
+     * <p>The air is a mix no world has outdoors, so a zone that came back as the air around it rather
+     * than as its saved air could not pass either. Nitrogen and CO2 are what is read because the vent
+     * supplies neither: a loss of them can only be air let out, while oxygen would be topped up from
+     * the tank and hide one.</p>
+     *
+     * <p>red-witnessed: with {@code SealedZone#checkSeal} at {@code if (!ok && handler.isFilling(owner))}
+     * never taken — the off-thread fill's "not yet" read as "open", which is what HEAD does: "a
+     * reloaded sealed room must keep its nitrogen and CO2: … \"airN2\":700000000 … -&gt; …
+     * \"airN2\":450000000,\"airO2\":1178562,\"airCO2\":0,\"airPressure\":45", 2026-10-05.</p>
+     */
+    @Test
+    public void aSealedRoomKeepsItsAirAcrossAChunkReload() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed room whose chunk is reloaded");
+        buildSealedT2Room(site);
+        String vent = t2Vent(site);
+        arrange("stellurgytest vent setair " + vent + " " + ppm(700_000) + " " + ppm(210_000)
+                + " " + ppm(90_000));
+        Reply before = ask("stellurgytest vent info " + vent);
+
+        int ventX = site.x + 2, ventZ = site.z + 2;
+        Reply cycled = arrange("stellurgytest chunk cycle " + site.dim + " " + (ventX >> 4) + " " + (ventZ >> 4));
+        requireArranged("the vent's chunk must really leave memory and come back from disk: " + cycled,
+                cycled.bool("dropped") && cycled.bool("reloaded") && !cycled.bool("sameInstance"));
+        // EXPERIMENT: six seconds of the reloaded vent running, longer than one whole seal-check
+        // interval, so a room that comes back unsealed has had time to be found sealed again.
+        runT2Seconds(site, 6);
+        Reply after = ask("stellurgytest vent info " + vent);
+
+        requireArranged("the reloaded vent must have sealed its room again: " + after, after.bool("isSealed"));
+        assertTrue("a reloaded sealed room must keep its nitrogen and CO2: " + before + " -> " + after,
+                before.longInteger("airN2") == after.longInteger("airN2")
+                        && before.longInteger("airCO2") == after.longInteger("airCO2"));
+    }
+
+    /**
+     * Scrubbers work on a room's CO2 and leave the vent's oxygen alone: a vent with two charged
+     * scrubbers still tops up a room that lacks oxygen, and pays its tank for it.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-05. SUPPLIES — {@code
+     * TileOxygenVent#supplyOxygen} at {@code long rate = (long) Math.ceil(volume * FLOW_PER_BLOCK}
+     * computed from {@code runningCostPerBlock()} instead, the scrubber-cut rate HEAD used: "a vent with
+     * two scrubbers must still give oxygen to a room that lacks it: 100000000 -&gt; 100000000". PAYS —
+     * {@code TileOxygenVent#supplyOxygen} at {@code FluidStack paid = this.drain((int)
+     * Math.min(Integer.MAX_VALUE, cost), true);} draining with {@code false}: "and pay its tank for it:
+     * 1000 -&gt; 1000".</p>
+     */
+    @Test
+    public void aVentWithTwoScrubbersStillSuppliesOxygen() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed T2 room short of oxygen");
+        buildSealedT2Room(site);
+        chargeT2Cartridges(site);
+        String vent = t2Vent(site);
+        arrange("stellurgytest vent setair " + vent + " " + ppm(790_000) + " " + ppm(100_000) + " 0");
+
+        Reply before = ask("stellurgytest vent info " + vent);
+        runT2Seconds(site, 1);
+        Reply after = ask("stellurgytest vent info " + vent);
+
+        assertTrue("a vent with two scrubbers must still give oxygen to a room that lacks it: "
+                        + before.longInteger("airO2") + " -> " + after.longInteger("airO2"),
+                after.longInteger("airO2") > before.longInteger("airO2"));
+        assertTrue("and pay its tank for it: " + before.integer("fluidAmount") + " -> "
+                        + after.integer("fluidAmount"),
+                after.integer("fluidAmount") < before.integer("fluidAmount"));
+    }
+
+    /**
+     * With {@code lifeSupportZones} off the vent is the classic one: charged scrubbers cut its running
+     * cost, and the same scrubbers with their cartridges gone stop cutting it.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-05. CUT — {@code
+     * TileOxygenVent#runningCostPerBlock} at {@code Math.max(FLOW_PER_BLOCK - numScrubbers *
+     * FLOW_SAVED_PER_SCRUBBER, 0)} with no scrubbers counted: "two charged scrubbers must cut a classic
+     * vent's running cost to nothing expected:&lt;997&gt; but was:&lt;974&gt;". UNCUT WHEN EMPTY —
+     * {@code TileOxygenVent#chargeScrubbers} at {@code numScrubbers = scrubber.useCharge() ? numScrubbers
+     * + 1 : numScrubbers;} spending the charge without recounting: "and once their cartridges are gone
+     * the vent must pay its running cost again: 1000 -&gt; 1000".</p>
+     */
+    @Test
+    public void withZonesOffChargedScrubbersCutTheVentsRunningCost() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed T2 room run the classic way");
+        arrange("stellurgytest config set lifeSupportZones false");
+        try {
+            buildSealedT2Room(site);
+            chargeT2Cartridges(site);
+            String vent = t2Vent(site);
+
+            int beforeCharged = ask("stellurgytest vent info " + vent).integer("fluidAmount");
+            runT2Seconds(site, 1);
+            int afterCharged = ask("stellurgytest vent info " + vent).integer("fluidAmount");
+            assertEquals("two charged scrubbers must cut a classic vent's running cost to nothing",
+                    beforeCharged, afterCharged);
+
+            for (String scrubber : t2Scrubbers(site)) {
+                arrange("stellurgytest hatch fill " + scrubber + " 0 minecraft:air 1 0");
+            }
+            // The vent counts its charged scrubbers once per charge interval; ten seconds covers one.
+            runT2Seconds(site, 10);
+            int beforeEmpty = ask("stellurgytest vent info " + vent).integer("fluidAmount");
+            runT2Seconds(site, 1);
+            int afterEmpty = ask("stellurgytest vent info " + vent).integer("fluidAmount");
+            assertTrue("and once their cartridges are gone the vent must pay its running cost again: "
+                    + beforeEmpty + " -> " + afterEmpty, afterEmpty < beforeEmpty);
+        } finally {
+            arrange("stellurgytest config set lifeSupportZones true");
+        }
     }
 }

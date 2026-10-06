@@ -63,6 +63,7 @@ tile.airRecirculator.name=Рециркулятор воздуха
 tile.gasSeparator.name=Газоразделитель
 tile.lifeSupportPlant.name=Установка жизнеобеспечения
 tile.ventilationDuct.name=Вентиляционный канал
+tile.ventilationPort.name=Вентиляционный порт
 tile.jettisonPort.name=Шлюз сброса
 tile.heatPipe.name=Контур охлаждения
 tile.heatAccumulator.name=Тепловой аккумулятор

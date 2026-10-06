@@ -665,6 +665,25 @@ public class AtmosphereHandler {
     }
 
     /**
+     * Whether this handler's zone is still being measured off-thread, in which case
+     * {@link #addBlock(IBlobHandler, HashedBlockPosition)} answering false says nothing yet.
+     */
+    public boolean isFilling(@Nonnull IBlobHandler handler) {
+        AreaBlob blob = blobs.get(handler);
+        return blob instanceof AtmosphereBlob && ((AtmosphereBlob) blob).isFilling();
+    }
+
+    /**
+     * What the last finished flood fill of this handler's zone found — closed or open — or
+     * {@code null} when there is no answer: one is running, or the zone was cleared since.
+     */
+    @Nullable
+    public Boolean lastFillClosed(@Nonnull IBlobHandler handler) {
+        AreaBlob blob = blobs.get(handler);
+        return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).lastFillClosed() : null;
+    }
+
+    /**
      * @param pos2
      * @return Atmosphere at this location
      */
