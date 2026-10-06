@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.client;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.junit.FixMethodOrder;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
@@ -19,6 +21,7 @@ import dev.stannismod.stellurgy.test.ShipFrameCheck;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.ShipReadiness;
+import dev.stannismod.stellurgy.test.trace.ShipLoadDecisionHold;
 
 import static org.junit.Assert.assertTrue;
 
@@ -536,13 +539,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: a ship reloaded from a save drops a walking client player through its deck ---------
 
     @Test
-    @Ignore("HELD FOR THE BODY-MOVEMENT CONTRACT BATCH, by the maintainer's ruling of 2026-09-23:"
-            + " every deck-hold red waits for the contract on moving an entity aboard a craft. Red"
-            + " on a full client tier: the returning player's own client never took him onto the"
-            + " RELOADED deck (no capture within 240 ticks), and its log shows the ship loaded and"
-            + " then unloaded again after he returned. Green alone, and green on the next full tier"
-            + " — intermittent, not gone. RE-ENABLE with that batch; the acceptance is this method"
-            + " green on a full tier, twice.")
     public void aClientPlayerReturningToASavedShipStandsOnItsDeckInsteadOfFallingThrough() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -646,6 +642,165 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             // In a `finally` and not at the end of the happy path: a scenario that fails here would
             // otherwise leave the default OFF for every scenario that runs after it in this JVM,
             // which turns one red into a class of them and hides the original.
+            ShipReadiness.holdShipsLoaded(this::exec,
+                    "the unload was this scenario's subject; the rest of the class needs the default");
+        }
+    }
+
+    // ---- Bug: a client that falls behind across an unload and a reload drops the ship ----------
+
+    /**
+     * Where the player is sent so the server lets the ship go, as an offset on each of X and Z from the
+     * hull: an XZ distance of about 424 blocks. The substrate unloads a ship with no player within its
+     * unload distance and stops sending it to a player past its unwatch distance (192 and 160 blocks in
+     * its shipped config), so this is past both with room for a config that raises them.
+     */
+    private static final int WALK_AWAY_BLOCKS = 300;
+
+    /**
+     * A client that took the server's UNLOAD of a ship and the RELOAD after it in ONE decision of its
+     * ship manager keeps the ship — the reload is the server's later instruction.
+     *
+     * <p>The server sends the two as separate messages on separate ticks: the player walks out of
+     * range, the ship is unloaded, he comes back, it is loaded and its chunks sent again. A client that
+     * has fallen behind drains both messages before its manager's next pass. That is the state this
+     * scenario puts the client in, with a {@code ShipLoadDecisionHold}: the manager takes no decision
+     * while the two arrive, then takes one. Without the hold the scenario above walks the same path,
+     * and whether its client fell behind was up to the box — which is how that scenario's red went
+     * undiagnosed as intermittent.</p>
+     *
+     * <p>The verdict is read at the decision: the ships the first pass after the release left loaded.
+     * Its consequence for the player — his own client holding him on the deck — is read after it.</p>
+     *
+     * <p>Each break below was run alone against this method, which is green alone with all of them
+     * restored, 2026-10-06.</p>
+     *
+     * <p>red-witnessed: with {@code WorldClientShipManager#queueShipLoad} at
+     * {@code pendingLoadState.put(shipID, true)} changed to {@code putIfAbsent}, so the reload no
+     * longer supersedes the queued unload, this fails at the verdict "must keep THIS ship loaded" with
+     * {@code ship_load_decisions_resumed} {@code deferredPasses:16, loadedCount:0, loaded:""}.</p>
+     *
+     * <p>red-witnessed: with {@code WorldClientShipManager#loadShip} at
+     * {@code loadedShips.containsKey(toLoadID)} answering by unloading the loaded ship and building it
+     * again instead of returning, this fails at the deck link "must hold him on the deck of the ship it kept" — no
+     * {@code deck_entered} opened on the ship: rebuilt, it had lost the chunks re-sent while it was
+     * held.</p>
+     *
+     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at
+     * {@code physObjectWorld.queueShipLoad(loadID)} removed, this fails at the first arrangement link,
+     * no client {@code ship_loaded} of the ship.</p>
+     *
+     * <p>red-witnessed: with {@code WorldShipLoadingController#determineLoadAndUnload} at
+     * {@code shipManager.queueShipUnload(data.getUuid())} removed, this fails at the server
+     * {@code ship_unloaded} link.</p>
+     *
+     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at
+     * {@code physObjectWorld.queueShipUnload(unloadID)} removed, this fails at the link "the server's
+     * UNLOAD of the ship must reach the held client".</p>
+     *
+     * <p>red-witnessed: NOT YET for the server {@code ship_loaded} link after the return. Attempted:
+     * {@code WorldShipLoadingController#determineLoadAndUnload} at
+     * {@code shipManager.queueShipLoad(data.getUuid())} removed — it fails earlier, in
+     * {@link #buildShip}'s {@code ship_usable} link, because the same call loads the ship the first
+     * time.</p>
+     *
+     * <p>red-witnessed: NOT YET for the link "the server's RELOAD of the ship must reach the held
+     * client". Attempted: {@code ShipIndexDataMessageHandler#onMessage} at
+     * {@code physObjectWorld.queueShipLoad(loadID)} removed — it fails at the first arrangement link,
+     * because the same call carries the client's first load.</p>
+     *
+     * <p>The four checks below guard the test's own instruments, so their breaks are in test code.</p>
+     *
+     * <p>red-witnessed: with {@code ShipLoadDecisionHold#deferPass} at {@code return held;} changed to
+     * answer false, so the hold never holds, this fails at "the held client must not have decided on
+     * either instruction before the release" — the client unloaded the ship on its own pass.</p>
+     *
+     * <p>red-witnessed: with {@code ShipLoadDecisionHold#deferPass} at
+     * {@code w.deferredPasses++;} removed, this fails at "the hold must actually have skipped the
+     * manager's passes" with {@code deferredPasses=0}.</p>
+     *
+     * <p>red-witnessed: with {@code ShipLoadDecisionHold#passRan} at
+     * {@code if (w.released && !w.resumeReported)} never taken, this fails at the
+     * {@code ship_load_decisions_resumed} link.</p>
+     *
+     * <p>red-witnessed: with {@code MixinPhysicsObjectEvents#stellurgyTest$loaded} at
+     * {@code TestTrace.instrumentHere(INSTRUMENT);} removed there and in its unload twin, this fails at
+     * the check that the {@code physics_object_events} observation point executed.</p>
+     */
+    @Test
+    public void aClientThatFellBehindAcrossAnUnloadAndAReloadKeepsTheShip() throws Exception {
+        final FixtureSite site = site();
+        ShipReadiness.letShipsUnload(this::exec,
+                "this scenario's subject is the client's answer to the server unloading a ship and"
+                        + " loading it again");
+        ClientWindow hold = null;
+        try {
+            Events server = serverEvents();
+            Events client = clientEvents();
+            long clientBuildMark = client.mark();
+            double[] ship = buildShip(site);
+            // An unload superseded by a reload is only a question for a client that HAS the ship.
+            awaitThisShip(client, clientBuildMark, "ship_loaded",
+                    "arrangement: the client must have loaded the ship before it stops deciding");
+
+            // Every link below is waited on with DECK_LINK_BUDGET_TICKS, a deadline: measured
+            // 2026-10-06 on one fork, the reload reached the held client 1 client tick after his
+            // return was applied, the resumed pass ran 1 tick after the release, and the whole hold
+            // lasted 16 passes.
+            long heldMark = client.mark();
+            hold = ClientWindow.open(bot(), ShipLoadDecisionHold.class.getName());
+
+            long awayMark = server.markInstrumented();
+            exec("tp @a " + (ship[0] + WALK_AWAY_BLOCKS) + " 120 " + (ship[2] + WALK_AWAY_BLOCKS)
+                    + " 0 0");
+            awaitThisShip(server, awayMark, "ship_unloaded",
+                    "arrangement: with the player out of range the server must unload the ship");
+            client.awaitRecordWithFields(heldMark, "client_ship_load_queued",
+                    "arrangement: the server's UNLOAD of the ship must reach the held client",
+                    DECK_LINK_BUDGET_TICKS, "vsShip", scenarioShipId, "load", "false");
+
+            // Above the hull's reported position, so he comes down onto its deck.
+            long backMark = server.markInstrumented();
+            long landingMark = client.mark();
+            exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+            awaitThisShip(server, backMark, "ship_loaded",
+                    "arrangement: the player's return must load the ship on the server again");
+            client.awaitRecordWithFields(landingMark, "client_ship_load_queued",
+                    "arrangement: the server's RELOAD of the ship must reach the held client",
+                    DECK_LINK_BUDGET_TICKS, "vsShip", scenarioShipId, "load", "true");
+
+            // The state under test, read: both instructions are queued and the client has acted on
+            // neither. An absence, so the observation point says it was there to see one.
+            String unloadsWhileHeld = client.since(heldMark, "ship_unloaded");
+            String loadsWhileHeld = client.since(heldMark, "ship_loaded");
+            Events.assertInstrumentRan(unloadsWhileHeld, "physics_object_events",
+                    "the client neither unloaded nor reloaded the ship while it was held");
+            scenario().requireArranged("the held client must not have decided on either instruction"
+                            + " before the release: unloads " + unloadsWhileHeld + " | loads " + loadsWhileHeld,
+                    Events.countRecords(unloadsWhileHeld, "vsShip", scenarioShipId) == 0
+                            && Events.countRecords(loadsWhileHeld, "vsShip", scenarioShipId) == 0);
+
+            long releaseMark = client.mark();
+            int deferredPasses = Integer.parseInt(hold.call("release"));
+            scenario().requireArranged("the hold must actually have skipped the manager's passes,"
+                    + " or the client was never behind: deferredPasses=" + deferredPasses, deferredPasses > 0);
+            String decided = Events.lastRecord(client.await(releaseMark, "ship_load_decisions_resumed",
+                    "the client's ship manager must decide again once released", DECK_LINK_BUDGET_TICKS));
+            List<String> loaded = Arrays.asList(Events.text(decided, "loaded").split(","));
+            assertTrue("a client that decided on the server's unload and the reload after it in ONE pass"
+                            + " must keep THIS ship (" + scenarioShipId + ") loaded — the reload is the"
+                            + " later instruction. The pass: " + decided
+                            + "\n  client unloads since the release: "
+                            + client.since(releaseMark, "ship_unloaded"),
+                    loaded.contains(scenarioShipId));
+
+            ShipIdentity.awaitCaptureHeldBy(client, landingMark, scenarioShipId,
+                    "the returning player's own client must hold him on the deck of the ship it kept",
+                    DECK_LINK_BUDGET_TICKS);
+        } finally {
+            if (hold != null) {
+                hold.close();
+            }
             ShipReadiness.holdShipsLoaded(this::exec,
                     "the unload was this scenario's subject; the rest of the class needs the default");
         }

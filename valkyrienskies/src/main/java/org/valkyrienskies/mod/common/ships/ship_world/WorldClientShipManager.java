@@ -20,8 +20,16 @@ public class WorldClientShipManager implements IPhysObjectWorld {
 
     private final World world;
     private final Map<UUID, PhysicsObject> loadedShips;
-    // Use LinkedHashSet as a queue because it preserves order and doesn't allow duplicates
-    private final LinkedHashSet<UUID> loadQueue, unloadQueue;
+    /**
+     * The server's LATEST load/unload instruction per ship since the last tick: true = loaded,
+     * false = unloaded. One map and not a load queue beside an unload queue, because the server sends
+     * an unload and the later reload of the same ship in two messages on different ticks, and a client
+     * that falls behind drains both before its next tick. Two queues drained loads-first then turned
+     * "unloaded, then loaded again" into "unloaded": the load was skipped as already loaded, the
+     * unload then dropped the ship, and the server, which still counts this client as watching it,
+     * never sends another load.
+     */
+    private final LinkedHashMap<UUID, Boolean> pendingLoadState;
     private ImmutableList<PhysicsObject> threadSafeLoadedShips;
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger logger = LogManager.getLogger();
@@ -29,8 +37,7 @@ public class WorldClientShipManager implements IPhysObjectWorld {
     public WorldClientShipManager(World world) {
         this.world = world;
         this.loadedShips = new HashMap<>();
-        this.loadQueue = new LinkedHashSet<>();
-        this.unloadQueue = new LinkedHashSet<>();
+        this.pendingLoadState = new LinkedHashMap<>();
         this.threadSafeLoadedShips = ImmutableList.of();
     }
 
@@ -54,46 +61,55 @@ public class WorldClientShipManager implements IPhysObjectWorld {
 
     private void loadAndUnloadShips() {
         QueryableShipData queryableShipData = QueryableShipData.get(world);
-        // Load ships queued for loading
-        for (final UUID toLoadID : loadQueue) {
-            if (loadedShips.containsKey(toLoadID)) {
-                logger.error("Tried loading a for ship that was already loaded? UUID is\n" + toLoadID);
-                continue;
-            }
-            Optional<ShipData> toLoadOptional = queryableShipData.getShip(toLoadID);
-            if (!toLoadOptional.isPresent()) {
-                logger.error("No ship found for UUID:\n" + toLoadID);
-                continue;
-            }
-            ShipData shipData = toLoadOptional.get();
-
-            PhysicsObject physicsObject = new PhysicsObject(world, shipData);
-
-            for (final Chunk chunk : physicsObject.getClaimedChunkCache()) {
-                chunk.loaded = true;
-            }
-
-            loadedShips.put(toLoadID, physicsObject);
-            if (VSConfig.showAnnoyingDebugOutput) {
-                System.out.println("Successfully loaded " + shipData);
+        for (final Map.Entry<UUID, Boolean> pending : pendingLoadState.entrySet()) {
+            if (pending.getValue()) {
+                loadShip(queryableShipData, pending.getKey());
+            } else {
+                unloadShip(pending.getKey());
             }
         }
-        loadQueue.clear();
+        pendingLoadState.clear();
+    }
 
-        // Unload ships queued for unloading
-        for (final UUID toUnloadID : unloadQueue) {
-            if (!loadedShips.containsKey(toUnloadID)) {
-                logger.error("Tried unloading that isn't loaded? ID is\n" + toUnloadID);
-                continue;
-            }
-            PhysicsObject removedShip = loadedShips.get(toUnloadID);
-            removedShip.unload();
-            loadedShips.remove(toUnloadID);
-            if (VSConfig.showAnnoyingDebugOutput) {
-                System.out.println("Successfully unloaded " + removedShip.getShipData());
-            }
+    private void loadShip(QueryableShipData queryableShipData, UUID toLoadID) {
+        // Already loaded is the state asked for. It is reached when an unload and the reload after it
+        // arrive within one tick: the unload is superseded, and the object kept is current, because the
+        // reloaded ship's chunks reached it through updateChunk while it was still loaded. Unloading
+        // and rebuilding it instead would discard exactly those chunks — the client unload drops every
+        // claimed chunk from the provider, and the server does not send them again.
+        if (loadedShips.containsKey(toLoadID)) {
+            return;
         }
-        unloadQueue.clear();
+        Optional<ShipData> toLoadOptional = queryableShipData.getShip(toLoadID);
+        if (!toLoadOptional.isPresent()) {
+            logger.error("No ship found for UUID:\n" + toLoadID);
+            return;
+        }
+        ShipData shipData = toLoadOptional.get();
+
+        PhysicsObject physicsObject = new PhysicsObject(world, shipData);
+
+        for (final Chunk chunk : physicsObject.getClaimedChunkCache()) {
+            chunk.loaded = true;
+        }
+
+        loadedShips.put(toLoadID, physicsObject);
+        if (VSConfig.showAnnoyingDebugOutput) {
+            System.out.println("Successfully loaded " + shipData);
+        }
+    }
+
+    private void unloadShip(UUID toUnloadID) {
+        // Not loaded is the state asked for: the mirror of loadShip, reached when a load and the
+        // unload after it arrive within one tick and the load was superseded before it ran.
+        PhysicsObject removedShip = loadedShips.remove(toUnloadID);
+        if (removedShip == null) {
+            return;
+        }
+        removedShip.unload();
+        if (VSConfig.showAnnoyingDebugOutput) {
+            System.out.println("Successfully unloaded " + removedShip.getShipData());
+        }
     }
 
     @Override
@@ -137,13 +153,13 @@ public class WorldClientShipManager implements IPhysObjectWorld {
     @Override
     public void queueShipLoad(@Nonnull UUID shipID) {
         enforceGameThread();
-        loadQueue.add(shipID);
+        pendingLoadState.put(shipID, true);
     }
 
     @Override
     public void queueShipUnload(@Nonnull UUID shipID) {
         enforceGameThread();
-        unloadQueue.add(shipID);
+        pendingLoadState.put(shipID, false);
     }
 
     @Nonnull

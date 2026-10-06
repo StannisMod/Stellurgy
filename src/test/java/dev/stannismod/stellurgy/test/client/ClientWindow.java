@@ -39,6 +39,15 @@ public final class ClientWindow {
         bot.invokeStaticInt(windowClass, "peek", handle);
     }
 
+    /**
+     * Call a verb of the window's own kind on THIS window — a static {@code verb(int handle)} beside
+     * {@code peek} and {@code close}, for a kind with a lifecycle step of its own
+     * ({@code ShipLoadDecisionHold.release}). Answers what the verb returned, as text.
+     */
+    public String call(String verb) throws Exception {
+        return bot.invokeStaticInt(windowClass, verb, handle).get("returned").getAsString();
+    }
+
     /** End the window and write its summary; a second call does nothing. */
     public void close() throws Exception {
         if (closed) {
