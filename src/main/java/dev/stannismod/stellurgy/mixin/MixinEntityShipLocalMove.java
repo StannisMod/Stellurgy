@@ -43,32 +43,9 @@ public abstract class MixinEntityShipLocalMove {
             ci.cancel();
             return;
         }
-        // A body whose movement ShipFrameTravel resolves must NEVER be moved through the world-frame
-        // pipeline: vanilla collides its upright box against world blocks it is not standing on, and
-        // the physics mod's injector (hooked behind us at this same point) collides it against hull
-        // POLYGONS in world space - for a crew member whose capsule legitimately overlaps hull
-        // geometry (an aboard body standing on a deck open in the SHIP frame may legally have its
-        // world capsule inside hull blocks - any steep or inverted interior) that shove is a
-        // constant fight against the ship-frame resolution. The live symptom: the server applies a
-        // walking client's packet deltas through Entity.move, the polygon collision deflects them,
-        // and the crew member is dragged around in small jerks. Apply the displacement RAW instead
-        // and cancel: collision for this body is the ship-frame sweep's job, and the world position
-        // is derived state.
-        if (dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isResolving(self)) {
-            // Every world-frame move request against a resolved body is announced, naming the body,
-            // and in test mode traced - the discriminator for "who still pushes a resolved body
-            // through the world pipeline".
-            dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.noteWorldMove(
-                    self, String.valueOf(type), x, y, z);
-            if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()
-                    && (x * x + y * y + z * z) > 1.0E-6) {
-                dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/MOVE]"
-                        + " remote=" + self.world.isRemote
-                        + " id=" + self.getEntityId()
-                        + " type=" + type
-                        + " d=(" + x + "," + y + "," + z + ")");
-            }
-            self.setPosition(self.posX + x, self.posY + y, self.posZ + z);
+        // A player on a ship's outer hull, his own step: replayed against the hull with the sweep
+        // his client collided it with.
+        if (dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.replayHullStandStep(self, type, x, y, z)) {
             ci.cancel();
             return;
         }

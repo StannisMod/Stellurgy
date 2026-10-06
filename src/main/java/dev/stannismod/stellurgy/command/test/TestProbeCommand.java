@@ -2564,8 +2564,8 @@ public class TestProbeCommand extends CommandBase {
         // fields it carried: the reply named no body and no tick, so every number in it described
         // whichever resolution this side had performed last. On a shared client that is routinely
         // another scenario's body. Each of its columns is now a record that names its subject —
-        // `ship_frame_tick`, `ship_frame_walk`, `deck_guard_pass`, `deck_released`,
-        // `ship_frame_world_move` — and the live frame-consistency question the last three columns
+        // `ship_frame_tick`, `ship_frame_walk`, `deck_guard_pass`, `deck_released` — and the live
+        // frame-consistency question the last three columns
         // answered is `ship-frame-check`, which computes it on demand for a NAMED subject.
         if (args.length >= 1 && "player-ship-data".equalsIgnoreCase(args[0])) {
             net.minecraft.server.MinecraftServer server = sender.getServer();

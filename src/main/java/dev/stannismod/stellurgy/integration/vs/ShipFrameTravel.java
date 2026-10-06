@@ -118,21 +118,6 @@ public final class ShipFrameTravel {
     }
 
     /**
-     * Seam: the move-suppression hook caught a world-frame mover asking to displace a resolved body.
-     *
-     * <p>Who still pushes a resolved body through the world pipeline — the discriminator for a
-     * crew member being dragged around in small jerks while the ship-frame resolution holds him.</p>
-     *
-     * <p>A SEAM, and nothing else. It used to keep a lifetime count and the shape of the most recent
-     * request in two statics, which answered "has this ever happened on this side" and nothing about
-     * a window, a body or an order. The entity is a parameter because the hook has it and the count
-     * never did: every reading taken from those two fields on a shared client was a total over every
-     * body the JVM had ever resolved.</p>
-     */
-    public static void noteWorldMove(Entity entity, String type, double x, double y, double z) {
-    }
-
-    /**
      * The body's own capture, held on the entity object ({@link ShipFrameBody}).
      *
      * <p><b>On the object, and it has to be.</b> Vanilla {@code Entity} declares equality by network
@@ -744,14 +729,9 @@ public final class ShipFrameTravel {
     }
 
     /**
-     * Whether this class is currently resolving {@code entity}'s movement in a ship frame - i.e. it is
-     * captured and standing on a deck (its ship-frame position is held across ticks). Read-only.
-     *
-     * <p>This is the single "is on a deck" truth. The client deck camera gates on it so the view is
-     * levelled to the deck ONLY for a body actually resolved on it - the same gate the movement uses -
-     * rather than for any body merely inside the ship's world AABB. A ship's axis-aligned world box
-     * overlaps a large air (and, when grounded, terrain) volume around the hull; gating the camera on
-     * containment hijacks the view of anyone flying THROUGH that airspace without standing on the deck.</p>
+     * Whether this class is currently resolving {@code entity}'s movement - which, since a body on a
+     * deck is the deck frame's ({@link DeckFrameTick}), means it holds him on a ship's OUTER hull.
+     * Read-only. Not a "which deck holds him" question: that is {@link #capturedShipId}.
      */
     public static boolean isResolving(Entity entity) {
         return entity != null && stateOf(entity) != null;
@@ -1085,9 +1065,9 @@ public final class ShipFrameTravel {
         // Always true by now - a body no deck holds returned null above; kept for its readers.
         m.put("tracked", true);
         m.put("heldBy", DeckFrameTick.holds(entity) ? "deckFrame" : "travelResolver");
-        // Whether THIS class moves the body as well - the gate of the world-frame move pass-through
-        // and of the gravity controller's skip. A body the deck frame holds should answer false; a
-        // true beside "deckFrame" is a body two mechanisms both think they move.
+        // Whether THIS class moves the body as well - the hull-stand resolution, and the gravity
+        // controller's skip. A body the deck frame holds should answer false; a true beside
+        // "deckFrame" is a body two mechanisms both think they move.
         m.put("resolverMoves", isResolving(entity));
         m.put("subPos", feet.getX() + "," + feet.getY() + "," + feet.getZ());
         m.put("chunkLoaded", world.isBlockLoaded(feet));
@@ -1760,6 +1740,70 @@ public final class ShipFrameTravel {
         VSIntegration.suppressShipDrag(entity);
         noteTickHistory('h', sub[0], sub[1], sub[2], carryX, carryY, carryZ, grounded,
                 obstacles.size(), r.collidedX, r.collidedZ);
+        return true;
+    }
+
+    /**
+     * Replay a hull-standing player's own movement-packet step on the server, against the hull, with
+     * the sweep his client's {@link #hullStandTravel} collides the same step with.
+     *
+     * <p>The server makes a client's claimed step through {@code Entity.move}. Left to that
+     * pipeline, a body on the outer hull is collided with world blocks that are not where the hull
+     * is, and by the physics mod's own callback with the hull's polygons, which on the way out writes
+     * the step into his velocity. Here the step meets the hull's blocks in their true orientation and
+     * nothing else; what the network handler then does with the result is vanilla's.</p>
+     *
+     * <p>No gravity and no slide are added: the step is the client's, already integrated, and the
+     * sweep only decides how much of it the hull lets through.</p>
+     *
+     * @return {@code true} when the step was made here and the caller must not make it again;
+     *         {@code false} for any other body or mover, and when the craft's transform is away this
+     *         tick (traced; the world makes the step, and the next {@link #handles} releases him)
+     */
+    public static boolean replayHullStandStep(Entity entity, net.minecraft.entity.MoverType type,
+                                              double dx, double dy, double dz) {
+        if (type != net.minecraft.entity.MoverType.PLAYER) {
+            return false;
+        }
+        ShipFrameState state = stateOf(entity);
+        if (state == null || !state.hullStand) {
+            return false;
+        }
+        World world = entity.world;
+        double[][] axes = shipAxesFor(world, state.shipId);
+        double half = entity.width / 2.0;
+        double[] box = {entity.posX - half, entity.posY, entity.posZ - half,
+                entity.posX + half, entity.posY + entity.height, entity.posZ + half};
+        List<double[]> obstacles = axes == null ? null : hullObstaclesFor(world, state.shipId, entity,
+                box,
+                Math.abs(dx) + entity.stepHeight + 1.0,
+                Math.abs(dy) + entity.stepHeight + 1.0,
+                Math.abs(dz) + entity.stepHeight + 1.0);
+        if (obstacles == null) {
+            if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
+                dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/MOVE] hull-stand replay"
+                        + " declined, transform away ship=" + state.shipId
+                        + " id=" + entity.getEntityId());
+            }
+            return false;
+        }
+        HullSweep.Result r = HullSweep.sweep(box, dx, dy, dz, obstacles, axes, WORLD_UP,
+                entity.stepHeight, entity.onGround);
+        double gotX = r.liftX + r.dx, gotY = r.liftY + r.dy, gotZ = r.liftZ + r.dz;
+        entity.setPosition(entity.posX + gotX, entity.posY + gotY, entity.posZ + gotZ);
+        // Vanilla's move stops the velocity along every axis it clipped; so does this one.
+        if (r.collidedX) {
+            entity.motionX = 0.0;
+        }
+        if (r.collidedY) {
+            entity.motionY = 0.0;
+        }
+        if (r.collidedZ) {
+            entity.motionZ = 0.0;
+        }
+        entity.collidedHorizontally = r.collidedX || r.collidedZ;
+        entity.collidedVertically = r.collidedY;
+        entity.collided = entity.collidedHorizontally || entity.collidedVertically;
         return true;
     }
 
