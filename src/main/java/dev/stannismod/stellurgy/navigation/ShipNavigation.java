@@ -72,6 +72,16 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     }
 
     @Override
+    public int driveRefusalKelvin() {
+        return dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().shipHeatDriveRefusalKelvin;
+    }
+
+    @Override
+    public String hullCarryRefusal() {
+        return dev.stannismod.stellurgy.integration.vs.VSIntegration.assemblyRefusalAt(world, flightComputerPos);
+    }
+
+    @Override
     public boolean destinationCellAvailable() {
         SpaceSubsystem stack = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
         GalacticCoord target = target();

@@ -32,8 +32,10 @@ import static org.junit.Assert.assertTrue;
  * because a block can be in that list without having been copied — which is the defect the second
  * scenario exists for.</p>
  *
- * <p>What it does not see: a crossing. The hull is handed to the assembly by probe, the way the rocket
- * assembler hands it, so the path by which a crossing reaches the same assembly is not walked here.</p>
+ * <p>A crossing is seen through its production entry ({@code VSIntegration#crossShip}, driven by the
+ * {@code vs ship-repack} probe), for the one question that belongs here: whether it refuses a hull the
+ * substrate would not rebuild BEFORE it cuts anything. What it does not see is a jump: the jump gate's
+ * refusal of the same hull is a unit test of the gate.</p>
  */
 public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
 
@@ -138,6 +140,98 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
                     "minecraft:stone",
                     ask("stellurgytest space get-block " + dim + " " + x + " " + DECK_Y + " 0").text("block"));
         }
+    }
+
+    /**
+     * A ship that grew past the detection reach after it was assembled is NOT cut by a crossing: the
+     * crossing asks the substrate first, is refused, and leaves every block of the ship where it was —
+     * rather than cutting it out and handing the far end a hull it will not build.
+     *
+     * <p>Contract: this fails if {@code VSIntegration#crossShip} stops refusing, before the cut, a hull
+     * whose {@code VSBridge#assemblyRefusal} is not null.</p>
+     *
+     * <p>red-witnessed: with {@code VSIntegration#crossShip} at {@code if (refusal != null)} made never to
+     * refuse, this fails with "must not cross" on a reply reading {@code "ok":true} — the crossing cut
+     * the hull and reported success over an assembly the substrate then refuses (2026-10-06).</p>
+     */
+    @Test
+    public void aShipThatGrewPastTheReachIsNotCutByACrossing() throws Exception {
+        int dim = emptyWorld();
+        int hullEnd = 4;
+        arrange("stellurgytest place " + dim + " 0 " + DECK_Y + " 0 stellurgy:advancedFlightComputer");
+        arrange("stellurgytest fill " + dim + " 1 " + DECK_Y + " 0 " + hullEnd + " " + DECK_Y
+                + " 0 minecraft:stone");
+        Assembled craft = assemble(dim, 0, DECK_Y, 0, hullEnd, DECK_Y, 0);
+        assertSpawned(craft, "the small hull the scenario grows must first be a ship");
+
+        // Grow it in its own shipyard, in line with the hull, to one block past the reach.
+        Reply afc = arrange("stellurgytest space yard-afc " + dim + " " + craft.ship);
+        assertTrue("the new ship's flight computer must stand in its shipyard: " + afc, afc.bool("found"));
+        int ax = afc.integer("x"), ay = afc.integer("y"), az = afc.integer("z");
+        int past = SpatialDetector.MAX_REACH + 1;
+        Reply grown = arrange("stellurgytest fill " + dim + " " + (ax + hullEnd + 1) + " " + ay + " " + az
+                + " " + (ax + past) + " " + ay + " " + az + " minecraft:stone");
+        int hull = craft.built + grown.integer("placed");
+        assertEquals("the growth must land in the ship's own shipyard before the crossing is asked",
+                hull, yardBlocks(dim, craft.ship));
+
+        // The crossing, sent to open sky in the same world.
+        int dstX = 0, dstY = DECK_Y + 50, dstZ = 400;
+        Reply crossed = ask("stellurgytest vs ship-repack " + dim + " id " + craft.ship + " 0 " + DECK_Y
+                + " 0 " + dstX + " " + dstY + " " + dstZ);
+        assertFalse("a hull reaching " + past + " blocks from its computer must not cross: " + crossed,
+                crossed.bool("ok"));
+        String refusal = crossed.textOr("refusal", null);
+        assertTrue("the crossing must say it was refused, and why: " + crossed,
+                refusal != null && !refusal.isEmpty());
+        assertEquals("a refused crossing must leave every block of the ship in its shipyard",
+                hull, yardBlocks(dim, craft.ship));
+        assertEquals("nothing may have been pasted at the destination",
+                "minecraft:air",
+                ask("stellurgytest space get-block " + dim + " " + dstX + " " + dstY + " " + dstZ).text("block"));
+    }
+
+    /**
+     * A ship whose flight computer was broken after it was assembled is NOT cut by a crossing: the
+     * far end anchors its rebuild on that computer, and without one it would take nothing.
+     *
+     * <p>Contract: this fails if {@code VSIntegration#crossShip} stops refusing, before the cut, a hull
+     * in which it finds no flight computer.</p>
+     *
+     * <p>red-witnessed: with {@code VSIntegration#crossShip} at {@code if (refusal != null)} made never to
+     * refuse, this fails with "the crossing must say it was refused, and why" — the hull was cut and
+     * pasted, and the reply carries {@code "refusal":null} (2026-10-06).</p>
+     */
+    @Test
+    public void aShipWithItsComputerBrokenIsNotCutByACrossing() throws Exception {
+        int dim = emptyWorld();
+        int hullEnd = 4;
+        arrange("stellurgytest place " + dim + " 0 " + DECK_Y + " 0 stellurgy:advancedFlightComputer");
+        arrange("stellurgytest fill " + dim + " 1 " + DECK_Y + " 0 " + hullEnd + " " + DECK_Y
+                + " 0 minecraft:stone");
+        Assembled craft = assemble(dim, 0, DECK_Y, 0, hullEnd, DECK_Y, 0);
+        assertSpawned(craft, "the hull whose computer the scenario breaks must first be a ship");
+
+        Reply afc = arrange("stellurgytest space yard-afc " + dim + " " + craft.ship);
+        assertTrue("the new ship's flight computer must stand in its shipyard: " + afc, afc.bool("found"));
+        arrange("stellurgytest place " + dim + " " + afc.integer("x") + " " + afc.integer("y") + " "
+                + afc.integer("z") + " minecraft:stone");
+        assertFalse("the computer must be gone before the crossing is asked",
+                arrange("stellurgytest space yard-afc " + dim + " " + craft.ship).bool("found"));
+        int hull = yardBlocks(dim, craft.ship);
+
+        int dstX = 0, dstY = DECK_Y + 50, dstZ = 400;
+        Reply crossed = ask("stellurgytest vs ship-repack " + dim + " id " + craft.ship + " 0 " + DECK_Y
+                + " 0 " + dstX + " " + dstY + " " + dstZ);
+        assertFalse("a hull with no flight computer must not cross: " + crossed, crossed.bool("ok"));
+        String refusal = crossed.textOr("refusal", null);
+        assertTrue("the crossing must say it was refused, and why: " + crossed,
+                refusal != null && !refusal.isEmpty());
+        assertEquals("a refused crossing must leave every block of the ship in its shipyard",
+                hull, yardBlocks(dim, craft.ship));
+        assertEquals("nothing may have been pasted at the destination",
+                "minecraft:air",
+                ask("stellurgytest space get-block " + dim + " " + dstX + " " + dstY + " " + dstZ).text("block"));
     }
 
     // ---- the chain every scenario shares ---------------------------------------------------------

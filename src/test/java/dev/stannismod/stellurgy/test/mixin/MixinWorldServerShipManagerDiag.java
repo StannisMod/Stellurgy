@@ -103,14 +103,14 @@ public abstract class MixinWorldServerShipManagerDiag {
      * flag are the two inputs to VS's "Ship too big or bedrock detected!" abort. A huge found set
      * means the flood escaped the craft into terrain; a true {@code cleanHouse} means it hit bedrock.
      */
-    @Redirect(method = "spawnNewShips",
+    @Redirect(method = "detectShip",
             at = @At(value = "INVOKE",
                     target = "Lorg/valkyrienskies/mod/common/ships/block_relocation/BlockFinder;"
                             + "getBlockFinderFor(Lorg/valkyrienskies/mod/common/ships/block_relocation/BlockFinder$BlockFinderType;"
                             + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/world/World;IZ)"
                             + "Lorg/valkyrienskies/mod/common/ships/block_relocation/SpatialDetector;"),
             require = 0)
-    private SpatialDetector stellurgyTest$recordFloodResult(BlockFinder.BlockFinderType type, BlockPos pos,
+    private static SpatialDetector stellurgyTest$recordFloodResult(BlockFinder.BlockFinderType type, BlockPos pos,
                                                      World floodWorld, int maxSize, boolean corners) {
         SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners);
         if (detector != null) {

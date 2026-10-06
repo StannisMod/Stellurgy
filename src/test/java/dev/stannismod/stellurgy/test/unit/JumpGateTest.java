@@ -43,10 +43,24 @@ public class JumpGateTest {
         long flightEnergyCost = 400_000L;
         double driveCoolantKelvin = 0.0D;
         boolean destinationCellAvailable = true;
+        String hullCarryRefusal = null;
+        // 0 = no heat limit in force. No method here is about the drive's heat, and the fake's
+        // coolant reads 0 K, so any limit would answer the same.
+        int driveRefusalKelvin = 0;
+
+        @Override
+        public int driveRefusalKelvin() {
+            return driveRefusalKelvin;
+        }
 
         @Override
         public boolean destinationCellAvailable() {
             return destinationCellAvailable;
+        }
+
+        @Override
+        public String hullCarryRefusal() {
+            return hullCarryRefusal;
         }
 
         @Override
@@ -324,6 +338,28 @@ public class JumpGateTest {
 
         assertTrue("the burst costs what it costs; meeting it exactly is meeting it",
                 JumpGate.check(ship).allowed());
+    }
+
+    /**
+     * A hull the far end would not rebuild as one ship is refused before the burst, not warned about:
+     * the jump would cut it out of this world and leave loose blocks at the other end.
+     *
+     * <p>Contract: this fails if {@code JumpGate#clauses} stops refusing, HARD, a ship whose
+     * {@code hullCarryRefusal} is not null.</p>
+     *
+     * <p>red-witnessed: with {@code JumpGate#clauses} at {@code return ship.hullCarryRefusal() == null ? null}
+     * made always null, this fails with "a hull that cannot arrive as a ship must not be sent:
+     * Verdict[]" (2026-10-06).</p>
+     */
+    @Test
+    public void aHullTheFarEndWouldNotRebuildIsRefusedBeforeTheBurst() {
+        FakeShip ship = new FakeShip();
+        ship.hullCarryRefusal = "extends more than 128 blocks from its anchor";
+
+        JumpGate.Verdict verdict = JumpGate.check(ship);
+
+        assertFalse("a hull that cannot arrive as a ship must not be sent: " + verdict, verdict.allowed());
+        assertEquals(JumpGate.MSG_HULL_TOO_LARGE, verdict.firstMessage());
     }
 
     @Test

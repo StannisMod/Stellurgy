@@ -1774,6 +1774,7 @@ msg.jumpgate.notarget=No jump target set
 msg.jumpgate.alreadythere=The ship is already in that cell - there is nothing to fly
 msg.jumpgate.targetlost=The target body cannot be located - re-aim before jumping
 msg.jumpgate.destinationfull=The destination region is full right now - the arrival may have to wait in hyperspace
+msg.jumpgate.hulltoolarge=The hull has grown past what one ship can be - too many blocks, or reaching too far from the flight computer - and could not be rebuilt at the far end
 
 # --- Hyperdrive family -------------------------------------------------------
 tile.hyperdriveGenerator.name=Hyperspace Field Generator

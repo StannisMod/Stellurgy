@@ -421,18 +421,42 @@ public final class VSIntegration {
         public final java.util.UUID shipUuid;
         public final int minShipY;
         public final int maxShipY;
+        /**
+         * Why the crossing was refused BEFORE anything was cut — the substrate would not have built
+         * the hull at the far end — or {@code null} when it was not refused. A refused crossing
+         * leaves the source ship exactly as it was.
+         */
+        public final String refusal;
 
         CrossResult(BlockPos anchor, java.util.UUID shipUuid, int minShipY, int maxShipY) {
+            this(anchor, shipUuid, minShipY, maxShipY, null);
+        }
+
+        CrossResult(BlockPos anchor, java.util.UUID shipUuid, int minShipY, int maxShipY, String refusal) {
             this.anchor = anchor;
             this.shipUuid = shipUuid;
             this.minShipY = minShipY;
             this.maxShipY = maxShipY;
+            this.refusal = refusal;
         }
 
-        /** {@code true} iff a ship was re-assembled at the destination. */
+        /**
+         * {@code true} iff a ship was re-assembled at the destination: blocks were pasted AND an
+         * assembly was queued under a name. Pasted blocks the assembly would not take are loose
+         * blocks, not a ship.
+         */
         public boolean ok() {
-            return anchor != null;
+            return anchor != null && shipUuid != null;
         }
+    }
+
+    /**
+     * Why the substrate would refuse to build a ship anchored on the flight computer at
+     * {@code afcPos}, or {@code null} when it would build it. A hull that grew past what one ship can
+     * be after it was assembled is the case: it still flies, and it cannot be carried as one ship.
+     */
+    public static String assemblyRefusalAt(World world, BlockPos afcPos) {
+        return VSBridge.assemblyRefusal(world, afcPos);
     }
 
     /**
@@ -506,6 +530,21 @@ public final class VSIntegration {
             return new CrossResult(null, null, 0, 0); // source shipyard empty
         }
         int minShipY = band[0], maxShipY = band[1];
+        // Ask the substrate, BEFORE the cut, whether it will build this hull at the far end: once the
+        // source is cut, a refusal there leaves the ship as loose blocks registered nowhere. The far
+        // end assembles on the flight computer it finds first in the pasted box, and the paste keeps
+        // the layout, so the first one found here is the anchor it will use.
+        BlockPos sourceComputer = flightComputerInFootprint(srcWorld, yMinX, minShipY, yMinZ,
+                yMaxX - yMinX, maxShipY - minShipY + 1, yMaxZ - yMinZ);
+        String refusal = sourceComputer == null ? "the hull carries no flight computer"
+                : VSBridge.assemblyRefusal(srcWorld, sourceComputer);
+        if (refusal != null) {
+            LOGGER.warn("[SPACE] crossShip: ship {} in dim {} cannot be carried - {}. Nothing was cut; the"
+                            + " ship stays where it is.",
+                    srcShipUuid != null ? srcShipUuid : "at (" + sx + "," + sy + "," + sz + ")",
+                    srcWorld.provider.getDimension(), refusal);
+            return new CrossResult(null, null, minShipY, maxShipY, refusal);
+        }
         // The source ship is deliberately NOT deregistered before the cut, and the order is the whole
         // point. Valkyrien Skies maintains a ship's block set from a chunk hook that resolves the ship
         // THROUGH the per-world registry, so a ship taken out of that registry first is a ship whose
@@ -623,6 +662,13 @@ public final class VSIntegration {
             // reads it there — which is the same value `srcDurableName` used to carry, from the
             // same tile, with no call site able to forget it.
             shipUuid = assembleTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
+            if (shipUuid == null) {
+                LOGGER.error("[SPACE] crossShip: pasted the ship from dim {} into dim {} at ({},{},{}) but"
+                                + " the assembly took nothing - the source was ALREADY cut, so the ship is"
+                                + " now loose blocks at the paste site and is registered nowhere",
+                        srcWorld.provider.getDimension(), dstWorld.provider.getDimension(),
+                        dstX, dstY, dstZ);
+            }
         } else {
             // The only DESTRUCTIVE failure of the four: the source has already been cut by this point,
             // so the ship exists as loose blocks at the paste site and nowhere else. Logged at ERROR

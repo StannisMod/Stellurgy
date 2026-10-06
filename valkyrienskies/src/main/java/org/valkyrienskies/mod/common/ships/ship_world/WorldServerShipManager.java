@@ -192,7 +192,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             if (loadedShips.containsKey(toSpawn.getUuid())) {
                 throw new IllegalStateException("Tried spawning a ShipData that was already loaded?\n" + toSpawn);
             }
-            final SpatialDetector detector = BlockFinder.getBlockFinderFor(blockBlockFinderType, physicsInfuserPos, world, VSConfig.maxDetectedShipSize + 1, true);
+            final SpatialDetector detector = detectShip(world, physicsInfuserPos, blockBlockFinderType);
             if (VSConfig.showAnnoyingDebugOutput) {
                 System.out.println("Attempting to spawn " + toSpawn + " on the thread " + Thread.currentThread().getName());
             }
@@ -394,6 +394,21 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * than at the queue because only here is the answer authoritative: a spawn is queued a tick or
      * more earlier, when the remnant may not exist yet.</p>
      */
+    /** The structure a spawn anchored at {@code anchor} would take, found the way the spawn finds it. */
+    private static SpatialDetector detectShip(World world, BlockPos anchor, BlockFinder.BlockFinderType type) {
+        return BlockFinder.getBlockFinderFor(type, anchor, world, VSConfig.maxDetectedShipSize + 1, true);
+    }
+
+    /**
+     * Why a spawn anchored at {@code anchor} in {@code world} would be refused, or {@code null} when
+     * it would be built — the same detection and the same rule the spawn applies, asked without
+     * queueing anything. For a caller about to do something it cannot undo before the spawn runs: a
+     * crossing cuts the source ship first, and only then hands the blocks to a spawn.
+     */
+    public static String spawnRefusalAt(World world, BlockPos anchor, BlockFinder.BlockFinderType type) {
+        return spawnRefusal(detectShip(world, anchor, type));
+    }
+
     /**
      * Why the structure a detection found cannot become a ship, or {@code null} when it can: more
      * blocks than {@link VSConfig#maxDetectedShipSize}, attached to bedrock, or continuing past

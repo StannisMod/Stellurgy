@@ -109,10 +109,24 @@ final class VSBridge {
         // flight computer was duplicated, which the facade re-mints for before it gets here.
         ship.setStellurgyDurableIdBeforeRegistration(name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
-        manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS);
+        manager.queueShipSpawn(ship, afcPos, assemblyFinder());
         logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
                 ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
         return ship.getUuid();
+    }
+
+    /**
+     * Why the substrate would refuse to build a ship from the structure standing at {@code afcPos} in
+     * {@code world}, or {@code null} when it would build it — the spawn's own detection and rule,
+     * asked without queueing anything.
+     */
+    static String assemblyRefusal(World world, BlockPos afcPos) {
+        return WorldServerShipManager.spawnRefusalAt(world, afcPos, assemblyFinder());
+    }
+
+    /** How a tier-2 assembly finds its hull; the refusal above asks with the same one. */
+    private static BlockFinder.BlockFinderType assemblyFinder() {
+        return BlockFinder.BlockFinderType.FIND_ALL_BLOCKS;
     }
 
     /**

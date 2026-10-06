@@ -6,7 +6,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 
 /**
@@ -159,6 +158,15 @@ public final class JumpGate {
         }
 
         /**
+         * Why the hull could not be rebuilt as one ship at the far end, or {@code null} when it can.
+         * Defaulted to {@code null}: a context that cannot ask the physics substrate never refuses on
+         * this clause, and the crossing itself still refuses before cutting anything.
+         */
+        default String hullCarryRefusal() {
+            return null;
+        }
+
+        /**
          * How hot the coolant the drive is bolted to is running, in kelvin, or {@code 0} when nothing
          * measured it - no coolant loop against the generator, or a world where ships carry no heat
          * at all.
@@ -173,6 +181,13 @@ public final class JumpGate {
         default double driveCoolantKelvin() {
             return 0.0D;
         }
+
+        /**
+         * The coolant temperature, in kelvin, at which the drive refuses to fire, or {@code 0} when no
+         * such limit is in force. Not defaulted: the gate itself holds no configuration, so every
+         * context says which limit its ship is held to.
+         */
+        int driveRefusalKelvin();
 
         /** Energy stored aboard the ship and reachable by the drive. */
         default long storedEnergy() {
@@ -248,6 +263,8 @@ public final class JumpGate {
     public static final String MSG_NO_DRIVE = "msg.jumpgate.nodrive";
     /** The window does not enclose the whole hull — possible, and it will cost the hull. */
     public static final String MSG_WINDOW_UNDERSIZED = "msg.jumpgate.windowundersized";
+    /** The hull is past what one ship can be, so the far end could not rebuild it. A ship to cut down. */
+    public static final String MSG_HULL_TOO_LARGE = "msg.jumpgate.hulltoolarge";
     /** The drive's coolant is too hot for it to fire. Free, and it clears itself once the loop sheds. */
     public static final String MSG_DRIVE_OVERHEATED = "msg.jumpgate.driveoverheated";
     /** There is no capacitor for the drive to draw from — nothing aboard can ever open a window. */
@@ -359,6 +376,16 @@ public final class JumpGate {
         clauses.get(Stage.DRIVE).add(new Predicate() {
             @Override
             public Objection check(ShipContext ship) {
+                // HARD, before the burst: the jump would cut the hull out of this world and the far end
+                // would refuse to rebuild it, leaving loose blocks and no ship. Refusing here costs
+                // the pilot nothing.
+                return ship.hullCarryRefusal() == null ? null
+                        : new Objection(Severity.HARD, MSG_HULL_TOO_LARGE);
+            }
+        });
+        clauses.get(Stage.DRIVE).add(new Predicate() {
+            @Override
+            public Objection check(ShipContext ship) {
                 // The thermal rung of the failure ladder, and the only one that acts on a machine
                 // rather than on a body: past this temperature the drive will not fire at all.
                 //
@@ -367,7 +394,7 @@ public final class JumpGate {
                 // is refused has lost nothing, and a refusal raised after the burst is one he has
                 // already paid for. There is nothing to confirm past: a drive this hot does not
                 // become willing because the pilot means it.
-                int refusalKelvin = StellurgyConfiguration.getCurrentConfig().shipHeatDriveRefusalKelvin;
+                int refusalKelvin = ship.driveRefusalKelvin();
                 if (ship.drivePower() <= 0L || refusalKelvin <= 0) {
                     return null; // no drive is already refused above; no threshold means no clause
                 }

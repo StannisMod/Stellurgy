@@ -2128,6 +2128,7 @@ public class TestProbeCommand extends CommandBase {
                 m.put("anchorY", anchor == null ? -1 : anchor.getY());
                 m.put("anchorZ", anchor == null ? -1 : anchor.getZ());
                 m.put("anchorSolid", anchorSolid);
+                m.put("refusal", res.refusal);
                 m.put("ridersCarried", riders.size());
                 send(sender, jsonMap(m));
             } catch (Throwable t) {
@@ -8164,6 +8165,29 @@ public class TestProbeCommand extends CommandBase {
                     w, build, minX, minY, minZ);
             send(sender, "{\"ok\":true,\"ship\":" + (ship == null ? "null" : "\"" + ship + "\"")
                     + ",\"built\":" + built + "}");
+            return;
+        }
+        // yard-afc <dim> <shipUuid> - READ-ONLY. Where that ship's flight computer stands in its
+        // shipyard (`x`,`y`,`z`), or `found:false`. For a scenario that adds to or reads around a hull
+        // that is already a ship, where its blocks live in the subspace and not where it is drawn.
+        if (args.length >= 3 && "yard-afc".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer w = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (w == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID ship;
+            try {
+                ship = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"not a ship uuid: " + escapeJson(args[2]) + "\"}");
+                return;
+            }
+            net.minecraft.util.math.BlockPos afc =
+                    dev.stannismod.stellurgy.integration.vs.VSIntegration.flightComputerOf(w, ship);
+            send(sender, afc == null ? "{\"ok\":true,\"found\":false}"
+                    : "{\"ok\":true,\"found\":true,\"x\":" + afc.getX() + ",\"y\":" + afc.getY()
+                    + ",\"z\":" + afc.getZ() + "}");
             return;
         }
         // yard-blocks <dim> <shipUuid> - READ-ONLY. How many non-air blocks physically stand in the
