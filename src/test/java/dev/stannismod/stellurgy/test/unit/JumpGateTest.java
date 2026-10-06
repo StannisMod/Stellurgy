@@ -42,6 +42,12 @@ public class JumpGateTest {
         long storedEnergy = 1_000_000L;
         long flightEnergyCost = 400_000L;
         double driveCoolantKelvin = 0.0D;
+        boolean destinationCellAvailable = true;
+
+        @Override
+        public boolean destinationCellAvailable() {
+            return destinationCellAvailable;
+        }
 
         @Override
         public boolean hasNavComputer() {
@@ -107,6 +113,28 @@ public class JumpGateTest {
         public double driveCoolantKelvin() {
             return driveCoolantKelvin;
         }
+    }
+
+    /**
+     * A target whose cell the server cannot load now is a WARNING the pilot confirms, never a
+     * refusal: the pool is a snapshot, and the departure itself frees the slot the arrival often gets.
+     *
+     * <p>red-witnessed: with {@code JumpGate#clauses} at {@code new Objection(Severity.ADVISORY, MSG_DESTINATION_FULL)}
+     * raised as {@code Severity.HARD}: "a full destination warns, it does not forbid", 2026-10-06.
+     * With the clause's {@code ship.destinationCellAvailable() ? null} answering null always:
+     * "the pilot must be asked to confirm a jump into a full region", 2026-10-06.</p>
+     */
+    @Test
+    public void aFullDestinationIsAWarningThePilotConfirmsNotARefusal() {
+        FakeShip ship = new FakeShip();
+        ship.destinationCellAvailable = false;
+
+        JumpGate.Verdict verdict = JumpGate.check(ship);
+
+        assertTrue("a full destination warns, it does not forbid: " + verdict, verdict.allowed());
+        assertTrue("the pilot must be asked to confirm a jump into a full region: " + verdict,
+                verdict.needsConfirmation());
+        assertEquals(JumpGate.MSG_DESTINATION_FULL, verdict.firstMessage());
     }
 
     @Test

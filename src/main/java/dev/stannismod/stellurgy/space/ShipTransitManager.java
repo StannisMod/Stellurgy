@@ -327,6 +327,7 @@ public final class ShipTransitManager {
         NBTTagCompound snapshot;    // packed ship (StorageChunk NBT), re-cut from hyperspace on a cadence
         boolean restored;           // recreated from a persisted TransitRecord: no live hyperspace ship / lane
         boolean lastResortReported; // the "not even the snapshot landed" line is said once, not per retry
+        boolean arrivalDelayed;     // the target cell found no slot; said once, the ship waits in its lane
         boolean snapshotFailureReported; // likewise for a re-cut that keeps failing
         int placementAttempts;      // ticks spent putting the crew back aboard after the hull landed
         boolean placementStalled;   // the "this is taking too long" line is said once, not per retry
@@ -613,9 +614,28 @@ public final class ShipTransitManager {
                 continue; // still en route - parked, coordinate advanced logically
             }
             // Refcount handoff, half 2: load the target cell once (kept live for the arrived ship).
+            // A full pool is the server's limit, not a failure of this jump: the ship WAITS where it
+            // is - parked in its lane with its crew aboard, ledger still IN_TRANSIT - and asks again
+            // next tick. Nothing is charged while it waits. Uncaught, the throw left the world tick
+            // and stopped the server.
             if (!t.targetMaterialized) {
-                t.targetSlotDim = space.materialize(t.target);
+                try {
+                    t.targetSlotDim = space.materialize(t.target);
+                } catch (SpaceManager.PoolExhaustedException full) {
+                    if (!t.arrivalDelayed) {
+                        t.arrivalDelayed = true;
+                        LOGGER.warn("[SPACE] transit arrival for ship {} delayed: no slot for target cell {} "
+                                + "({}). It waits in its hyperspace lane until one frees.",
+                                entry.getKey(), t.target.cellKey(), full.getMessage());
+                        crosser.messageCrew(t.crew, "msg.shiptransit.arrivaldelayed");
+                    }
+                    continue;
+                }
                 t.targetMaterialized = true;
+                if (t.arrivalDelayed) {
+                    LOGGER.info("[SPACE] transit arrival for ship {} resumed: target cell {} has slot {}",
+                            entry.getKey(), t.target.cellKey(), t.targetSlotDim);
+                }
             }
             // A live transit crosses its parked hyperspace ship into the target; a RESTORED transit has no
             // hyperspace ship (that world is wiped on restart) - it pastes its persisted snapshot in.

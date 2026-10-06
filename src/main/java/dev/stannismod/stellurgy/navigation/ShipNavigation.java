@@ -71,6 +71,13 @@ public final class ShipNavigation implements JumpGate.ShipContext {
         return currentCoord();
     }
 
+    @Override
+    public boolean destinationCellAvailable() {
+        SpaceSubsystem stack = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
+        GalacticCoord target = target();
+        return stack == null || target == null || stack.manager.canMaterialize(target);
+    }
+
     // ─── What the drive answers ────────────────────────────────────────────────
 
     @Override

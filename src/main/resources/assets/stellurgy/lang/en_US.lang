@@ -1029,6 +1029,7 @@ msg.shiptransit.arrived=§aArrived - the ship is back in normal space. Helm cont
 msg.shiptransit.directfailed=§cThe crossing failed - your ship is at its destination but not cleanly placed. It is safe; report this.
 msg.shiptransit.arrivalrecovered=§eThe jump completed, but not cleanly - your ship is at its arrival point rather than on course. It is safe; report this.
 msg.shiptransit.arrivalstalled=§cThe jump cannot finish right now. Your ship is not lost - it stays in transit and will arrive. Report this.
+msg.shiptransit.arrivaldelayed=§eArrival delayed: the destination region is full. Your ship holds in hyperspace and arrives as soon as room frees up.
 
 #########################
 ##### TOOLTIP STUFF #####
@@ -1772,6 +1773,7 @@ msg.jumpgate.positionunknown=Position unknown - the ship must re-localize before
 msg.jumpgate.notarget=No jump target set
 msg.jumpgate.alreadythere=The ship is already in that cell - there is nothing to fly
 msg.jumpgate.targetlost=The target body cannot be located - re-aim before jumping
+msg.jumpgate.destinationfull=The destination region is full right now - the arrival may have to wait in hyperspace
 
 # --- Hyperdrive family -------------------------------------------------------
 tile.hyperdriveGenerator.name=Hyperspace Field Generator
