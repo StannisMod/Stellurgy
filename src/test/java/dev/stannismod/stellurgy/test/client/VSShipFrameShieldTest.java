@@ -107,6 +107,22 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
      *  followed, not that it matched. */
     private static final double SHELL_MOVED_BLOCKS = 0.5;
 
+    /**
+     * A shield emitter on an assembled craft projects its shell on the flying hull, deflects off it,
+     * and keeps riding the hull — with a live surface velocity — when the craft is flown.
+     *
+     * <p>Its stillness before the drive is the craft's own Flight-Assist hold, and the move is a
+     * velocity command the hold obeys; a never-flown craft is simulated, so nothing here relies on
+     * it being inert.</p>
+     *
+     * <p>red-witnessed: with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}
+     * replaced by {@code WorldFieldFrame.INSTANCE}, this fails "the ship's emitter must resolve a SHIP
+     * frame and report it ready … no `field_frame_resolved` carrying shipFramed:true AND ready:true
+     * was recorded within 200 ticks" — 2026-10-06. With {@code ShipFieldFrame#surfaceVelocityAt} at
+     * {@code new Vec3d(v[0], v[1], v[2])} replaced by {@code ZERO}, it passes the hull-moved gate and
+     * fails "the shell's surface velocity stayed zero on a moving ship (speed=0.0)" — 2026-10-06. The
+     * two tracking verdicts between them (shell moved, shell still on the hull) are not witnessed.</p>
+     */
     @Test
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
 

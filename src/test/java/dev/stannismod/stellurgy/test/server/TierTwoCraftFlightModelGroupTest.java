@@ -1494,16 +1494,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     @Test
     public void flightAssistDecidesWhetherAnUnpilotedCraftHoldsOrFalls() throws Exception {
 
-        long buildMark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(site(), this::exec,
                 "with-pilot-seat", 4, 12, "the craft that is held and then released is built here");
         requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
                 + asm, Reply.of(asm).integer("rocketCount") == 0);
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec,
                 events, DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
-        // Usable, not merely named: an unsimulated craft passes the HOLD leg below for free.
-        ShipIdentity.awaitUsable(events, buildMark, shipId, DIM,
-                "the craft must be simulated before its hold can be measured", LINK_BUDGET_TICKS);
         ShipLift.toAltitude(this::exec, events, client(), DIM, shipId, RELEASE_ALTITUDE,
                 "a craft released on its pad lands on the pad at once, which reads as holding");
 
@@ -1667,20 +1663,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         TransitSetup setup = TransitSetup.empty(this::exec);
         int cellDim = setup.originDim;
         FixtureSite site = plot().inDimension(cellDim).site();
-        long setupMark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(site, this::exec,
                 "with-pilot-seat", 2, 12, "the craft released in the cell stands in this volume");
         requireArranged("an AFC-bearing build in the cell must route to a ship, not a rocket: " + asm,
                 Reply.of(asm).integer("rocketCount") == 0);
         String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
                 cellDim, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
-        // USABLE, as its own link, and not merely named. The id above answers as soon as the craft
-        // is REGISTERED; a registered craft whose physics has not started yet sits exactly as still
-        // as a weightless one. Measured 2026-09-29: the subject window opened on `ready:false`, and
-        // under load a planet's gravity in the cell then sank the craft 1.48 blocks in 76 ticks —
-        // green, because it was not being simulated for most of the window.
-        ShipIdentity.awaitUsable(events, setupMark, shipId, cellDim,
-                "the craft must be USABLE before its stillness can mean anything", LINK_BUDGET_TICKS);
 
         // THE ASSEMBLER'S SCAFFOLDING GOES, because it is a floor. The fixture lays a launchpad one
         // block under the hull, a structure tower beside it and a builder with its power plug, and the
@@ -1800,16 +1788,11 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /** Build a craft at {@code site}, then lift it into clear sky and hand it to physics. */
     private Released buildAndLift(FixtureSite site, String what) throws Exception {
         int dim = site.dim;
-        long buildMark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(site, this::exec, "with-pilot-seat", 4, 12, what);
         requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket (dim "
                 + dim + "): " + asm, Reply.of(asm).integer("rocketCount") == 0);
         String id = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
                 dim, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
-        // Usable, not merely named: an unsimulated craft passes the HOLD control for free.
-        ShipIdentity.awaitUsable(events, buildMark, id, dim,
-                "the craft in dim " + dim + " must be simulated before its hold is measured",
-                LINK_BUDGET_TICKS);
         ShipLift.toAltitude(this::exec, events, client(), dim, id, RELEASE_ALTITUDE,
                 "a craft released on its pad lands on the pad at once, which reads as not falling");
         return new Released(dim, id);

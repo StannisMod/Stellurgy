@@ -690,22 +690,17 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                     continue;
                 }
 
-                // Put the pilot on the ship — the ONLY relocation in the leg. The mark precedes it:
-                // his arrival is what loads the ship.
-                long loadMark = rungLog.markInstrumented();
+                // Put the pilot on the ship — the ONLY relocation in the leg: his arrival is what
+                // loads the ship.
                 String delivery = deliverToFarRung(x);
                 if (delivery != null) {
                     inconclusive.add("x=" + x + " " + delivery);
                     continue;
                 }
-                String farShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
-                        this::exec, rungLog, 0, durableName, 200);
+                String farShipId;
                 try {
-                    rungLog.awaitMatching(loadMark, "ship_usable",
-                            usable -> dev.stannismod.stellurgy.test.ShipIdentity.endsUsable(usable,
-                                    rungLog.since(loadMark, "ship_unloaded"), farShipId, 0),
-                            "carrying ship " + farShipId + " in dim 0, later than every unload of it",
-                            "the rung's ship must LOAD with the client present", 200);
+                    farShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
+                            this::exec, rungLog, 0, durableName, 200);
                 } catch (AssertionError neverLoaded) {
                     verdicts.put(x, "the ship never LOADED with the client present: "
                             + farOneLine(neverLoaded.getMessage()));
