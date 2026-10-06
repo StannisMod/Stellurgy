@@ -40,19 +40,36 @@ import java.util.List;
  */
 public final class RepairCost {
 
-    private RepairCost() {
+    /**
+     * One recipe slot's share of the price: anything the slot ACCEPTS pays for it, not only the
+     * variant a recipe book happens to show first — an ore-dictionary slot takes every mod's copper.
+     */
+    private static final class Charge {
+        private final Ingredient accepts;
+        private final int count;
+
+        private Charge(Ingredient accepts, int count) {
+            this.accepts = accepts;
+            this.count = count;
+        }
+    }
+
+    private final List<Charge> charges;
+
+    private RepairCost(List<Charge> charges) {
+        this.charges = charges;
     }
 
     /**
-     * The materials one stage of repair at {@code pos} costs, or {@code null} when this block cannot
-     * be priced — no crafting recipe, or nothing there to repair.
+     * What one stage of repair at {@code pos} costs, or {@code null} when this block cannot be
+     * priced — no crafting recipe, or nothing there to repair.
      *
      * <p>Ingredient counts are rounded UP, so the cheapest possible recipe still costs one item per
      * stage: a repair is never free. Where several recipes make the same block the first registered
      * one wins, which is arbitrary but stable; a block whose recipes differ wildly in cost would need
      * a rule of its own, and none does today.</p>
      */
-    public static List<ItemStack> perStage(World world, BlockPos pos) {
+    public static RepairCost perStage(World world, BlockPos pos) {
         if (world == null || pos == null) {
             return null;
         }
@@ -68,32 +85,36 @@ public final class RepairCost {
         int stages = Math.max(1, DamageState.getMaxStage(world, pos));
         double fraction = StellurgyConfiguration.getCurrentConfig().repairCostPerStageFraction / stages;
 
-        List<ItemStack> cost = new ArrayList<>();
+        List<Charge> cost = new ArrayList<>();
         for (Ingredient ingredient : recipe.getIngredients()) {
             ItemStack[] variants = ingredient.getMatchingStacks();
             if (variants.length == 0) {
                 continue;
             }
+            // The slot's quantity; every variant of one vanilla or ore-dictionary slot carries the same.
             int needed = (int) Math.ceil(variants[0].getCount() * fraction);
             if (needed <= 0) {
                 continue;
             }
-            ItemStack charge = variants[0].copy();
-            charge.setCount(needed);
-            cost.add(charge);
+            cost.add(new Charge(ingredient, needed));
         }
-        return cost.isEmpty() ? null : cost;
+        return cost.isEmpty() ? null : new RepairCost(cost);
     }
 
     /**
-     * Take {@code cost} out of the player's inventory, or answer false having taken nothing.
+     * Take this cost out of the player's inventory, or answer false having taken nothing.
      *
-     * <p>Simulated first by the caller and then taken, rather than taken optimistically and refunded:
+     * <p>Each slot's share is taken from whatever stacks that slot accepts, in inventory order.
+     * Simulated first by the caller and then taken, rather than taken optimistically and refunded:
      * a partial charge for a repair that then could not happen is the shape that quietly eats
      * materials. Creative players are charged nothing, as everywhere else.</p>
+     *
+     * <p>Slots are paid in recipe order, each from the first stacks it accepts. Where two slots
+     * accept overlapping sets that greedy order can refuse an inventory a different assignment would
+     * have paid from; no vanilla or Stellurgy recipe has such a pair today.</p>
      */
-    public static boolean consume(EntityPlayer player, List<ItemStack> cost, boolean simulate) {
-        if (player == null || cost == null) {
+    public boolean consume(EntityPlayer player, boolean simulate) {
+        if (player == null) {
             return false;
         }
         if (player.capabilities.isCreativeMode) {
@@ -107,11 +128,11 @@ public final class RepairCost {
             scratch.set(i, inventory.getStackInSlot(i).copy());
         }
 
-        for (ItemStack wanted : cost) {
-            int remaining = wanted.getCount();
+        for (Charge wanted : charges) {
+            int remaining = wanted.count;
             for (int i = 0; i < scratch.size() && remaining > 0; i++) {
                 ItemStack inSlot = scratch.get(i);
-                if (inSlot.isEmpty() || !OreDictionary.itemMatches(wanted, inSlot, false)) {
+                if (inSlot.isEmpty() || !wanted.accepts.apply(inSlot)) {
                     continue;
                 }
                 int take = Math.min(remaining, inSlot.getCount());

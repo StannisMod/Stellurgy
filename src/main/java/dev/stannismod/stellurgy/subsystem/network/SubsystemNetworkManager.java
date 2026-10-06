@@ -32,7 +32,8 @@ import java.util.TreeSet;
  * commodity does not silently reduce the whole network to its own capacity, and it means the
  * per-tick answer names WHICH constraint bound it ({@link SubsystemNetworkStatus}) instead of only
  * how much arrived. Under a deficit, sink demand is opened in descending priority tiers, so a
- * starved supply fills what the player marked important first and equal priorities share the rest.
+ * starved supply fills what the player marked important first, and equal priorities share the rest
+ * max-min fairly — evenly, each capped at its own request, within what the cables can carry.
  *
  * <h3>One per running server</h3>
  * <p>An instance holds every network of one server session — which nodes exist and each world's
@@ -466,22 +467,29 @@ public final class SubsystemNetworkManager {
                 }
             }
 
-            // Priority-tiered redistribution: open the sink demand edges in descending priority order,
-            // augmenting the flow at each tier, so a scarce supply fills the highest-priority
-            // consumers first and equal-priority ones share what remains. With a single priority (the
-            // default — everything in one implicit group) this is one pass, identical to plain max-flow.
+            // Priority-tiered redistribution: the tiers are served in descending priority order, each
+            // on top of the flow the tiers above it already hold, so a scarce supply fills the
+            // highest-priority consumers first. Within a tier the share is max-min fair (shareTier).
             TreeSet<Integer> priorityTiers = new TreeSet<>(Collections.reverseOrder());
             for (int[] demand : sinkDemand) {
                 priorityTiers.add(demand[1]);
             }
+            int[] requestedBySink = new int[sinkDemand.size()];
+            for (int i = 0; i < requestedBySink.length; i++) {
+                requestedBySink[i] = sinkDemand.get(i)[0];
+            }
             int maxFlow = 0;
             for (int tier : priorityTiers) {
+                List<Integer> tierSinks = new ArrayList<>();
                 for (int i = 0; i < sinkRefs.size(); i++) {
-                    if (sinkDemand.get(i)[1] == tier) {
-                        sinkRefs.get(i).setCapacity(sinkDemand.get(i)[0]);
+                    if (sinkDemand.get(i)[1] == tier && requestedBySink[i] > 0) {
+                        tierSinks.add(i);
                     }
                 }
-                maxFlow += solver.maxFlow(superSource, superSink);
+                // Position order, so the one thing order decides — who gets an indivisible remainder
+                // unit — never depends on how a hash set happened to iterate.
+                tierSinks.sort((a, b) -> comparePositions(sinks.get(a).pos, sinks.get(b).pos));
+                maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);
             }
 
             boolean hasCables = !cables.isEmpty();
@@ -587,6 +595,139 @@ public final class SubsystemNetworkManager {
         }
     }
 
+    /**
+     * Serve one priority tier on top of whatever flow the solver already holds, and answer how much
+     * it received.
+     *
+     * <p><b>Max-min fair, through the cables.</b> Every sink of the tier is raised by the same amount
+     * at once, capped at its own request, for as long as the network can carry the raise to all of
+     * them together; a sink whose request is met drops out, and so does a sink that cannot take one
+     * unit more with the others where they are (a cable to it is full). The rest keep rising with
+     * what is left. So a scarce supply is split evenly, a sink asking for less than its share gets
+     * what it asked and leaves the surplus to the others, and nothing is ever promised that the
+     * cables cannot carry, because every raise is tested as a max flow before it is kept.</p>
+     *
+     * <p>The tier still receives exactly its max flow: a sink left below its request could not be
+     * given one unit more by ANY routing, so no augmenting path to the super sink remains. Plain max
+     * flow decided the same total and split it by search order instead.</p>
+     *
+     * <p>Flow is an integer, so where the tier's last units cannot be split evenly (two sinks behind
+     * one cable with one unit left) they go one at a time in {@code tierSinks}' order, which the
+     * caller makes position order.</p>
+     *
+     * <p>Cost: a tier that can be served in full is one max flow. A scarce tier takes, per round, a
+     * binary search over the raise (about log2 of the largest request, each step a trial max flow)
+     * and one trial per still-rising sink; every round retires at least one sink, so a tier of n
+     * sinks costs O(n * (n + log R)) max flows on the component's graph.</p>
+     */
+    private static int shareTier(MaxFlowSolver solver, int from, int to, List<MaxFlowSolver.EdgeRef> refs,
+                                 int[] requested, List<Integer> tierSinks) {
+        int[] given = new int[refs.size()];
+        int received = 0;
+
+        int whole = 0;
+        for (int i : tierSinks) {
+            whole += requested[i];
+        }
+        if (trialFlow(solver, from, to, refs, given, tierSinks, requested, Integer.MAX_VALUE) == whole) {
+            for (int i : tierSinks) {
+                given[i] = requested[i];
+                refs.get(i).setCapacity(given[i]);
+            }
+            return solver.maxFlow(from, to);
+        }
+
+        List<Integer> rising = new ArrayList<>(tierSinks);
+        while (!rising.isEmpty()) {
+            int leastLeft = Integer.MAX_VALUE;
+            int mostLeft = 0;
+            for (int i : rising) {
+                leastLeft = Math.min(leastLeft, requested[i] - given[i]);
+                mostLeft = Math.max(mostLeft, requested[i] - given[i]);
+            }
+            // The largest equal raise every rising sink can take together.
+            int low = 0;
+            int high = mostLeft;
+            while (low < high) {
+                int mid = low + (high - low + 1) / 2;
+                int wanted = 0;
+                for (int i : rising) {
+                    wanted += Math.min(mid, requested[i] - given[i]);
+                }
+                if (trialFlow(solver, from, to, refs, given, rising, requested, mid) == wanted) {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            if (low > 0) {
+                for (int i : rising) {
+                    given[i] += Math.min(low, requested[i] - given[i]);
+                    refs.get(i).setCapacity(given[i]);
+                }
+                received += solver.maxFlow(from, to);
+            }
+
+            List<Integer> stillRising = new ArrayList<>();
+            for (int i : rising) {
+                if (given[i] >= requested[i]) {
+                    continue;
+                }
+                if (low >= leastLeft) {
+                    // The raise stopped because a request was met, not because the network ran out.
+                    stillRising.add(i);
+                } else if (trialFlow(solver, from, to, refs, given, Collections.singletonList(i), requested, 1) > 0) {
+                    stillRising.add(i);
+                }
+            }
+            if (low == 0 && stillRising.size() == rising.size()) {
+                // Each could take one more alone but not all together: the indivisible remainder,
+                // one unit at a time in the caller's order. The first always succeeds, so this
+                // round makes progress.
+                for (int i : stillRising) {
+                    refs.get(i).setCapacity(given[i] + 1);
+                    int got = solver.maxFlow(from, to);
+                    if (got > 0) {
+                        given[i] += got;
+                        received += got;
+                    } else {
+                        refs.get(i).setCapacity(given[i]);
+                    }
+                }
+            }
+            rising = stillRising;
+        }
+        return received;
+    }
+
+    /**
+     * The flow the solver could add if each sink in {@code raised} had {@code raise} more capacity
+     * (at most up to its request) — computed and then undone, flows and capacities both.
+     */
+    private static int trialFlow(MaxFlowSolver solver, int from, int to, List<MaxFlowSolver.EdgeRef> refs,
+                                 int[] given, List<Integer> raised, int[] requested, int raise) {
+        int[] saved = solver.flows();
+        for (int i : raised) {
+            refs.get(i).setCapacity(given[i] + Math.min(raise, requested[i] - given[i]));
+        }
+        int flow = solver.maxFlow(from, to);
+        for (int i : raised) {
+            refs.get(i).setCapacity(given[i]);
+        }
+        solver.restoreFlows(saved);
+        return flow;
+    }
+
+    private static int comparePositions(BlockPos a, BlockPos b) {
+        if (a.getX() != b.getX()) {
+            return Integer.compare(a.getX(), b.getX());
+        }
+        if (a.getY() != b.getY()) {
+            return Integer.compare(a.getY(), b.getY());
+        }
+        return Integer.compare(a.getZ(), b.getZ());
+    }
+
     private static final class CableNode {
         private final BlockPos pos;
         private final ISubsystemCable cable;
@@ -647,6 +788,31 @@ public final class SubsystemNetworkManager {
                 }
             }
             return flow;
+        }
+
+        /** Every edge's flow, in graph order — what {@link #restoreFlows} puts back after a trial. */
+        private int[] flows() {
+            int count = 0;
+            for (List<Edge> edges : graph) {
+                count += edges.size();
+            }
+            int[] flows = new int[count];
+            int k = 0;
+            for (List<Edge> edges : graph) {
+                for (Edge edge : edges) {
+                    flows[k++] = edge.flow;
+                }
+            }
+            return flows;
+        }
+
+        private void restoreFlows(int[] flows) {
+            int k = 0;
+            for (List<Edge> edges : graph) {
+                for (Edge edge : edges) {
+                    edge.flow = flows[k++];
+                }
+            }
         }
 
         private boolean bfs(int source, int sink, int[] level) {

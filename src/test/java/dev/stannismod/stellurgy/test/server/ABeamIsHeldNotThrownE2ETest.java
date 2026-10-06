@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -29,6 +30,8 @@ public class ABeamIsHeldNotThrownE2ETest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = 84, Z = 9500;
     private static final int DWELL_X = 9600, STARVED_X = 9660;
+    /** The clear scenario's own lane: {@code buildSite} clears 64 blocks from here, past STARVED_X's. */
+    private static final int CLEARED_X = 9730;
     /** Deep enough that a short dwell cannot reach the far side; see the dwell scenario. */
     private static final int WALL_DEPTH = 30;
     /** Controller + three emitters + two cooling jackets; the controller is not a part. */
@@ -145,6 +148,64 @@ public class ABeamIsHeldNotThrownE2ETest extends AbstractSharedServerTest {
         litFirst.removeIf(edge -> Events.number(edge, "seq") >= darkSeq);
         assertTrue("the gun went dark without ever having burned: then this measured a weapon that"
                 + " cannot fire, not one that ran its capacitor down: " + burns, !litFirst.isEmpty());
+    }
+
+    /**
+     * A beam burning on a target whose target is taken away goes OUT, and the players around it are
+     * told so — its channel announces it dark — rather than keeping the last segment they were sent.
+     *
+     * <p>The extinguish must be the CLEAR's, not the feed's: a buffer that ran dry in the window would
+     * put the beam out by the starved road ({@code turret_beam} lit:false), so the gun is fed just
+     * before the clear and the window must hold no starved edge before the dark announcement.</p>
+     *
+     * <p>red-witnessed: with {@code TileTurret#update} at {@code extinguishBeam();} removed from the
+     * no-target branch (the shape it shipped with: {@code mechanism.clearCommand(); return;}), this
+     * fails at "the beam gun's target was cleared and its beam was never announced dark: the players
+     * watching keep drawing it — no `turret_beam_announced` carrying pos = 9730,84,9500 and lit = false
+     * was recorded within 600 ticks", with a lit {@code turret_beam_announced} in the same window, so
+     * the instrument ran (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code Channel#update} (in {@code BeamReplication}) at
+     * {@code final boolean burning = lit && path != null && path.size() >= 2;} answering false, this
+     * fails at the lit wait "the beam gun never announced itself lit ... no `turret_beam_announced`
+     * carrying pos = 9730,84,9500 and lit = true" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileTurret#update} at {@code spec = assembly.getSpec();} answering
+     * {@code GunSpec.EMPTY}, this fails at the assembly wait "the beam gun never assembled — no
+     * `turret_assembled` carrying pos = 9730,84,9500 and operable = true and parts = 5 was recorded
+     * within 600 ticks", with other `turret_assembled` records in the window, so the instrument ran
+     * (2026-10-06, logs/r1-assembled-witness.log).</p>
+     */
+    @Test
+    public void clearingTheTargetPutsTheBeamOut() throws Exception {
+        buildSite(CLEARED_X);
+        long built = events.markInstrumented();
+        buildBeamGun(CLEARED_X);
+        Weapons.awaitAssembled(events, built, CLEARED_X, Y, Z, PARTS, "the beam gun never assembled");
+
+        long aimed = events.mark();
+        charge(CLEARED_X);
+        aimAt(CLEARED_X, CLEARED_X + 30);
+        events.awaitRecordWithFields(aimed, "turret_beam_announced",
+                "the beam gun never announced itself lit, so there is nothing for a clear to put out",
+                Weapons.SUBJECT_TICKS, "pos", Weapons.at(CLEARED_X, Y, Z), "lit", "true");
+
+        charge(CLEARED_X);
+        long cleared = events.mark();
+        ask("stellurgytest turret cleartarget " + DIM + " " + CLEARED_X + " " + Y + " " + Z)
+                .requireOk("take the gun's target away");
+        String dark = events.awaitRecordWithFields(cleared, "turret_beam_announced",
+                "the beam gun's target was cleared and its beam was never announced dark: the players"
+                        + " watching keep drawing it", Weapons.SUBJECT_TICKS,
+                "pos", Weapons.at(CLEARED_X, Y, Z), "lit", "false");
+
+        long darkSeq = (long) Events.number(dark, "seq");
+        List<String> starved = Events.recordsWhereAll(events.since(cleared, "turret_beam"),
+                "pos", Weapons.at(CLEARED_X, Y, Z), "lit", "false");
+        starved.removeIf(edge -> Events.number(edge, "seq") > darkSeq);
+        requireArranged("the beam went dark by its own burn before the clear could matter (a starved"
+                + " or refused tick), so this window does not show what the clear did: " + starved,
+                starved.isEmpty());
     }
 
     // ---- driving

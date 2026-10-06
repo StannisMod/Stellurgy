@@ -1472,7 +1472,15 @@ public class TestProbeCommand extends CommandBase {
             }
             BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
             int charge = parseIntOr(args[5], 0);
+            // <material> may carry a metadata as <item>#<meta> (a spruce plank is minecraft:planks#1);
+            // without one the stack is meta 0.
             String materialId = args[6];
+            int materialMeta = 0;
+            int metaMark = materialId.indexOf('#');
+            if (metaMark >= 0) {
+                materialMeta = parseIntOr(materialId.substring(metaMark + 1), 0);
+                materialId = materialId.substring(0, metaMark);
+            }
             int materialCount = args.length >= 8 ? parseIntOr(args[7], 0) : 0;
 
             net.minecraft.entity.player.EntityPlayerMP welder = weldingPlayer(world, pos);
@@ -1485,7 +1493,7 @@ public class TestProbeCommand extends CommandBase {
                     ? null : net.minecraft.item.Item.getByNameOrId(materialId);
             if (material != null && materialCount > 0) {
                 welder.inventory.addItemStackToInventory(
-                        new net.minecraft.item.ItemStack(material, materialCount));
+                        new net.minecraft.item.ItemStack(material, materialCount, materialMeta));
             }
 
             int stageBefore = dev.stannismod.stellurgy.damage.DamageState.getStage(world, pos);
@@ -6739,6 +6747,107 @@ public class TestProbeCommand extends CommandBase {
         // `fromCellKey` answers WIDTH_UNKNOWN by construction, and handing that to a crossing is the
         // defect the seam contract exists to forbid: the arithmetic downstream multiplies by a width it
         // does not have. A guessed width would not fail either - it would rename the cell.
+        // zone-planets <territories>: every star-lit PLANET and GAS_GIANT standing in a galactic cell of
+        // the systems in the first <territories> territories out from the origin along +X, each with its
+        // sphere of influence about its system's star (`ReferenceFrames.soiRadiusBlocks`, the law) as
+        // `soi`, and the radius the crossing reads (`zoneSphereRadiusOf`) as `radius`. Read-only; an
+        // arrangement aid for a scenario that needs a body of a given size, and the two are reported
+        // apart so that arrangement does not read the very radius a scenario may be testing.
+        if (args.length >= 2 && "zone-planets".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry planetsReg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            long planetsTick = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
+            int territories = Math.max(0, parseIntOr(args[1], 0));
+            long spacing = dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults().minSpacing;
+            StringBuilder planetsOut = new StringBuilder("{\"ok\":true,\"tick\":" + planetsTick + ",\"planets\":[");
+            java.util.Set<String> seenPlanets = new java.util.HashSet<>();
+            for (int step = 0; step < territories; step++) {
+                dev.stannismod.stellurgy.space.GalacticCoord look =
+                        dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(step * spacing, 0L, 0L, 0L, 0L, 0L);
+                for (dev.stannismod.stellurgy.space.GalacticCoord seat : planetsReg.anchorsInTerritory(look,
+                        dev.stannismod.stellurgy.universe.TelescopeScan.MAX_SEATS_PER_LOOK)) {
+                    java.util.List<dev.stannismod.stellurgy.universe.SystemBody> members = planetsReg.systemBodiesAt(seat);
+                    dev.stannismod.stellurgy.universe.SystemBody star = null;
+                    for (dev.stannismod.stellurgy.universe.SystemBody b : members) {
+                        if (b.kind() == dev.stannismod.stellurgy.universe.SystemBodyKind.STAR) {
+                            star = b;
+                            break;
+                        }
+                    }
+                    if (star == null) {
+                        continue;
+                    }
+                    for (dev.stannismod.stellurgy.universe.SystemBody b : members) {
+                        if (!b.definesFrame() || b.name().zone() != null
+                                || (b.kind() != dev.stannismod.stellurgy.universe.SystemBodyKind.PLANET
+                                && b.kind() != dev.stannismod.stellurgy.universe.SystemBodyKind.GAS_GIANT)
+                                || !seenPlanets.add(b.name().cellKey())) {
+                            continue;
+                        }
+                        java.util.OptionalLong r = dev.stannismod.stellurgy.space.SpaceSubsystem
+                                .zoneSphereRadiusOf(planetsReg, b.name(), planetsTick);
+                        if (seenPlanets.size() > 1) {
+                            planetsOut.append(',');
+                        }
+                        planetsOut.append("{\"cell\":\"").append(b.name().cellKey()).append("\",\"kind\":\"")
+                                .append(b.kind()).append("\",\"radius\":").append(r.isPresent() ? r.getAsLong() : 0L)
+                                .append(",\"soi\":").append((long) dev.stannismod.stellurgy.space.ReferenceFrames
+                                        .soiRadiusBlocks(b, star, planetsTick))
+                                .append('}');
+                    }
+                }
+            }
+            send(sender, planetsOut.append("]}").toString());
+            return;
+        }
+        // zone-membership <zoneCellKey> <offsetBlocks>: where production's crossing says a craft
+        // belongs when it stands <offsetBlocks> out along +X from the body whose own cell is that key -
+        // addressed on that zone's own lattice by production (`latticeWidthOfZone`,
+        // `ZoneScale.addressOnLattice`) and decided by production (`zoneMembershipOf`). Read-only:
+        // `carried:false` is the crossing's "leave it alone", `carried:true` names the cell it moves the
+        // craft to. The probe states only the distance; the address and the verdict are production's.
+        if (args.length >= 3 && "zone-membership".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.GalacticCoord memberZone =
+                    dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[1]);
+            if (memberZone == null) {
+                send(sender, "{\"error\":\"unparsable cell key\",\"cellKey\":\"" + args[1] + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.UniverseRegistry memberReg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            long memberTick = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
+            long memberWidth = dev.stannismod.stellurgy.space.SpaceSubsystem.latticeWidthOfZone(
+                    memberReg, memberZone, memberTick);
+            if (memberWidth <= 0L) {
+                send(sender, "{\"error\":\"no body frames a zone at this cell\",\"cellKey\":\"" + args[1] + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.GalacticCoord craft = dev.stannismod.stellurgy.space.ZoneScale
+                    .addressOnLattice(memberZone.cellKey(), memberWidth,
+                            dev.stannismod.stellurgy.space.BlockDelta.of(parseLongOr(args[2], 0L), 0L, 0L));
+            dev.stannismod.stellurgy.space.GalacticCoord moved = craft == null ? null
+                    : dev.stannismod.stellurgy.space.SpaceSubsystem.zoneMembershipIn(memberReg, craft, memberTick);
+            // `distance`: where the registry puts that address, measured to the body - the quantity the
+            // crossing compares with the sphere, read through the same registry calls it reads.
+            double memberDistance = -1d;
+            if (craft != null) {
+                for (dev.stannismod.stellurgy.universe.SystemBody b : memberReg.bodiesAt(memberZone)) {
+                    if (b.definesFrame()) {
+                        memberDistance = memberReg.originAt(craft.cellCentre(), memberTick)
+                                .plus(craft.localX(), craft.localY(), craft.localZ())
+                                .distanceTo(b.absoluteAt(memberTick));
+                        break;
+                    }
+                }
+            }
+            send(sender, "{\"ok\":true,\"address\":\"" + (craft == null ? "" : craft.cellKey()) + "\""
+                    + ",\"distance\":" + memberDistance
+                    + ",\"carried\":" + (moved != null)
+                    + (moved == null ? "" : ",\"to\":\"" + moved.cellKey() + "\",\"toZone\":\""
+                            + (moved.zone() == null ? "" : moved.zone()) + "\"")
+                    + ",\"tick\":" + memberTick + "}");
+            return;
+        }
         // zone-sphere <zoneCellKey>: the sphere and the lattice of the zone whose own cell is that key -
         // the radius a craft is carried OUT of it at, and the width its cells are named on. Read-only,
         // and both are production's readings (`SpaceSubsystem.zoneSphereRadiusOf` /

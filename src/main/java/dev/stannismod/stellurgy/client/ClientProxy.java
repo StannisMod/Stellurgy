@@ -231,6 +231,7 @@ public class ClientProxy extends CommonProxy {
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemCarbonScrubberCartridge, 0, new ModelResourceLocation("stellurgy:carbonCartridge", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemSealDetector, 0, new ModelResourceLocation("stellurgy:sealDetector", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemJackhammer, 0, new ModelResourceLocation("stellurgy:jackHammer", "inventory"));
+        ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemRepairWelder, 0, new ModelResourceLocation("stellurgy:repairWelder", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemAsteroidChip, 0, new ModelResourceLocation("stellurgy:asteroidChip", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemJetpack, 0, new ModelResourceLocation("stellurgy:jetPack", "inventory"));
         ModelLoader.setCustomModelResourceLocation(StellurgyItems.itemAtmAnalyser, 0, new ModelResourceLocation("stellurgy:atmAnalyser", "inventory"));

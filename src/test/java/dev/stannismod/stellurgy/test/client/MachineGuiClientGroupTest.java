@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import dev.stannismod.stellurgy.test.NavStatus;
+import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
 
@@ -18,6 +19,7 @@ import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.TelescopeReading;
+import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -110,6 +112,19 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
     /** Addresses the probe seeds into the brought crystal: sectors 100..102, named {@code probe-N}. */
     private static final int SEEDED = 3;
     private static final int FIRST_SECTOR = 100;
+
+    /** The console's hold-fire packet id, {@code TileWeaponConsole#NET_TOGGLE_HOLD_FIRE}. */
+    private static final int CONSOLE_TOGGLE_HOLD_FIRE = 0;
+    /** The sensor's mode packet id, {@code TileFireControlSensor#NET_TOGGLE_MODE}. */
+    private static final int SENSOR_TOGGLE_MODE = 0;
+    /**
+     * How far down the plot the far press leaves from, in blocks: three times vanilla's 8-block chest
+     * reach ({@code TileEntityLockableLoot#isUsableByPlayer}'s 64.0 squared), so no rounding of the
+     * player's position can bring him within it, and inside the plot's 128.
+     */
+    private static final int FAR_FROM_CONSOLE = 24;
+    /** Vanilla's container reach, squared: {@code TileEntityLockableLoot#isUsableByPlayer}'s 64.0. */
+    private static final double VANILLA_CONTAINER_REACH_SQ = 64.0D;
 
     private static final String SHIP_COUNT = "ship";
     private static final String SOURCE_COUNT = "source";
@@ -685,25 +700,14 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
         // Stand in the MIDDLE of the footing block, not at its edge: the block at z-1 spans
         // [z-1, z), so z-1.5 is half a block beyond it and over open air.
         //
-        // Re-issued rather than waited out: a single teleport followed by a fixed wait puts the
-        // player on a footing his own client has not received yet, and he falls through it — the
-        // same fall, to the same fraction of a block, every time. Standing still is a convergence,
-        // so it is polled.
-        // The teleport is the STIMULUS and `client_pos_look_applied` is the link: the wait ends
-        // when the CLIENT has applied a server position write, which is the thing the fixed wait
-        // was standing in for. The re-issue stays because a click that lands before the client has
-        // the footing drops him through it, and no amount of reading recovers that — so it is
-        // re-sent every 20 ticks while the log is read every 5.
-        long placedMark = clientEvents().mark();
-        try {
-            clientEvents().awaitMatching(placedMark, "client_pos_look_applied",
-                    reply -> !Events.records(reply).isEmpty(), "applying a server position write",
-                    "the player must be put on the footing beside the machine", 120,
-                    () -> exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 0.5) + " 0 0"), 20);
-        } catch (AssertionError never) {
-            scenario().arrangementFailed("the client never applied the teleport onto the footing: "
-                    + never.getMessage());
-        }
+        // The fall this used to suffer under load (y ≈ 148.8 with the footing at 150) is a placement
+        // into a chunk column the client had not been sent: it shows a blank stand-in there, sees air
+        // under its feet and falls, and the server accepts the fall. Re-issuing the teleport and
+        // ending the wait on ANY applied position write did not ask the question that matters. The
+        // placement now waits for the client to hold the real column first (its own
+        // `chunk_data_applied`), then places once and links on the placement landing near the stand.
+        standOnFloorTheClientHolds(x + 0.5, Y + 1, z - 0.5, 0f, 0f,
+                "the player must be put on the footing beside the machine");
         double standingY = bot().reportState().get("playerY").getAsDouble();
         scenario().requireArranged("the player fell off the footing (y=" + standingY + ", wanted "
                 + (Y + 1) + ") — every click from here would be out of reach."
@@ -731,6 +735,13 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>red-witnessed: with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger("d")))}) skipped:
      * "clicking the distance button twice must move the aim out from 1: … aimDistance:1",
      * 2026-09-28.</p>
+     *
+     * <p>red-witnessed: NOT YET, with {@code ClientEvents#placeOntoGroundItHolds} at
+     * {@code awaitPlacedNear(clientLog, placeMark, x, z, what, tickBudget);} for the stand wait in
+     * {@link #buildObservatoryAndStandBesideIt}: it links on the client's {@code chunk_data_applied}
+     * and {@code client_pos_look_applied}, both of which vanilla decides (the chunk send and the
+     * teleport's position packet) — no Stellurgy code sits on that path to invert, so the only red
+     * this wait can show is an arrangement failure, which is the outcome it exists to name.</p>
      */
     @Test
     public void theOperatorAimsTheTelescopeAndObservesWithNothingButClicks() throws Exception {
@@ -1283,6 +1294,212 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * teleport, and each command is its own round trip, so those block changes were flushed to the
      * client on an earlier tick than the move; the client applying the move is the receipt for them.</p>
      */
+    /**
+     * A machine packet's address is the CLIENT's to write, so a press can name a weapon console its
+     * sender is nowhere near. The server answers it by the console's own usability rule — the same
+     * world, within a chest's reach — and a press from beyond it changes nothing; the same press from
+     * beside the console still holds the battery's fire.
+     *
+     * <p>Both presses are forged by the real client ({@link ForgedMachinePress}) rather than clicked:
+     * a far player has no screen to click, and a modified client does not need one. That is the
+     * subject — what the SERVER does with a press it did not see a screen for. What this does not see:
+     * the screen's own button, which {@code WeaponGuiButtonsReachTheServerE2ETest} drives, and a press
+     * from another dimension (the forger can only address its own world).</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}
+     * answering {@code true} unconditionally (the shape it shipped with), this fails at "the console
+     * judged a press from 24 blocks away as within reach: {...weapon_console_press_judged,
+     * pos:4016,150,4016,player:ForgeTestClient,reachable:true}" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}
+     * keeping its log line but not its {@code return}, this fails at "a press from beyond reach held the
+     * battery's fire anyway: {...network:true,...holdFire:true...}" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}
+     * answering {@code false} unconditionally, this fails at "the console refused a press from the
+     * player standing on it: {...reachable:false}" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}
+     * removed, this fails at "a press from the player standing on the console did not hold fire:
+     * {...holdFire:false...}" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}
+     * removed, this fails at the arrangement wait "the console never joined a weapon network ... no
+     * `weapon_orders_seeded` carrying consoles = 4144,150,4016"; with {@code TileWeaponConsole#useNetworkData}
+     * returning before {@code if (!canInteractWithContainer(player))}, at the far wait "the console never
+     * judged the far press: it never reached the server" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: NOT YET, with {@code TileWeaponConsole#useNetworkData} at
+     * {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR
+     * {@code weapon_console_press_judged} wait and the two
+     * {@code awaitClientPlacedNear} waits, for the reasons given on
+     * {@link #aFireControlSensorPressFromBeyondReachChangesNothing}: a break silencing the near press
+     * silences the far one first, and the placement waits link on vanilla's teleport.</p>
+     */
+    @Test
+    public void aWeaponConsolePressFromBeyondReachChangesNothing() throws Exception {
+        int dim = plot().dim;
+        int x = plot().x(MACHINE_DX);
+        int z = plot().z(MACHINE_DZ);
+        String console = dim + " " + x + " " + Y + " " + z;
+        Events events = serverEvents();
+
+        scenario().arranging("a weapon console with a turret beside it, so it commands a network");
+        warmupPlotChunks();
+        String turret = exec("stellurgytest place " + dim + " " + (x + 1) + " " + Y + " " + z + " stellurgy:turret");
+        scenario().requireArranged("the turret must place: " + turret, Reply.of(turret).bool("placed"));
+        long joined = events.markInstrumented();
+        String placed = exec("stellurgytest place " + console + " stellurgy:weaponConsole");
+        scenario().requireArranged("the console must place: " + placed, Reply.of(placed).bool("placed"));
+        events.awaitRecordWithFields(joined, "weapon_orders_seeded",
+                "the console never joined a weapon network, so a press has nothing to change",
+                Weapons.ARRANGEMENT_TICKS, "consoles", Weapons.at(x, Y, z));
+        Reply before = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
+        scenario().requireArranged("the console must command a network that is not holding fire: " + before,
+                before.bool("network") && !before.bool("holdFire"));
+
+        // FAR: on a block of its own, down the plot — FAR_FROM_CONSOLE squared against the 64 a chest allows.
+        int farZ = z + FAR_FROM_CONSOLE;
+        exec("stellurgytest place " + dim + " " + x + " " + Y + " " + farZ + " minecraft:stone");
+        long farStand = clientEvents().mark();
+        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
+        awaitClientPlacedNear(farStand, x + 0.5, farZ + 0.5, "the press must leave from where he now stands");
+        double farSq = serverDistanceSqTo(x, Y, z);
+        scenario().requireArranged("the far press must leave from beyond reach: squared distance " + farSq
+                + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, farSq > VANILLA_CONTAINER_REACH_SQ);
+
+        scenario().asserting("a press from beyond reach is judged out of reach and changes nothing");
+        long farPress = events.mark();
+        ForgedMachinePress.send(bot(), x, Y, z, CONSOLE_TOGGLE_HOLD_FIRE);
+        String farJudged = events.awaitRecordWithFields(farPress, "weapon_console_press_judged",
+                "the console never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+                "pos", Weapons.at(x, Y, z));
+        assertEquals("the console judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
+                + farJudged, "false", Events.text(farJudged, "reachable"));
+        Reply afterFar = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
+        scenario().requireArranged("the console lost its network during the far press: " + afterFar,
+                afterFar.bool("network"));
+        assertFalse("a press from beyond reach held the battery's fire anyway: " + afterFar,
+                afterFar.bool("holdFire"));
+
+        scenario().asserting("the same press from the player standing on the console holds fire");
+        long nearStand = clientEvents().mark();
+        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z + 0.5) + " 0 90");
+        awaitClientPlacedNear(nearStand, x + 0.5, z + 0.5, "the press must leave from beside the console");
+        double nearSq = serverDistanceSqTo(x, Y, z);
+        scenario().requireArranged("the near press must leave from within reach: squared distance " + nearSq
+                + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, nearSq <= VANILLA_CONTAINER_REACH_SQ);
+        long nearPress = events.mark();
+        ForgedMachinePress.send(bot(), x, Y, z, CONSOLE_TOGGLE_HOLD_FIRE);
+        String nearJudged = events.awaitRecordWithFields(nearPress, "weapon_console_press_judged",
+                "the console never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+                "pos", Weapons.at(x, Y, z));
+        assertEquals("the console refused a press from the player standing on it: " + nearJudged,
+                "true", Events.text(nearJudged, "reachable"));
+        Reply afterNear = Reply.of(exec("stellurgytest weaponconsole read " + console)).requireOk("read the console");
+        assertTrue("a press from the player standing on the console did not hold fire: " + afterNear,
+                afterNear.bool("holdFire"));
+    }
+
+    /**
+     * The fire-control sensor answers a press the way the weapon console does: by vanilla's usability
+     * rule, so a press from beyond a chest's reach leaves its mode alone, and the same press from the
+     * player standing on it switches it to illuminating. Both presses are forged by the real client
+     * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerE2ETest}'s.
+     *
+     * <p>red-witnessed (2026-10-06, one inversion per run):
+     * {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering
+     * true fails "the sensor judged a press from 24 blocks away as within reach"; answering false fails
+     * "the sensor refused a press from the player standing on it";
+     * {@code TileFireControlSensor#useNetworkData} at {@code if (!canInteractWithContainer(player))}
+     * logging without its {@code return} fails "a press from beyond reach switched the sensor anyway
+     * {...mode:ACTIVE...}"; the same method at {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);}
+     * removed fails "a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}";
+     * the same method returning before {@code if (!canInteractWithContainer(player))} fails at the far
+     * wait, "the sensor never judged the far press: it never reached the server".</p>
+     *
+     * <p>red-witnessed: NOT YET, with {@code TileFireControlSensor#useNetworkData} at
+     * {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR
+     * {@code sensor_press_judged} wait and the two
+     * {@code awaitClientPlacedNear} waits. Any production break that silences the near press silences
+     * the far one first (one path, one seam), so it reds the far wait instead; the only break that
+     * reaches the near wait alone is one conditional on distance — the reach decision itself, which the
+     * near verdict after it pins. The placement waits link on vanilla's own position packet
+     * ({@code client_pos_look_applied} after {@code /tp}); no Stellurgy code decides it, so there is
+     * nothing of ours to break.</p>
+     */
+    @Test
+    public void aFireControlSensorPressFromBeyondReachChangesNothing() throws Exception {
+        int dim = plot().dim;
+        int x = plot().x(MACHINE_DX);
+        int z = plot().z(MACHINE_DZ);
+        String sensor = dim + " " + x + " " + Y + " " + z;
+        Events events = serverEvents();
+
+        scenario().arranging("a fire-control sensor, listening");
+        warmupPlotChunks();
+        String placed = exec("stellurgytest place " + sensor + " stellurgy:fireControlSensor");
+        scenario().requireArranged("the sensor must place: " + placed, Reply.of(placed).bool("placed"));
+        Reply before = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
+        scenario().requireArranged("a fresh sensor must be listening, or switching it proves nothing: " + before,
+                "PASSIVE".equals(before.text("mode")));
+
+        int farZ = z + FAR_FROM_CONSOLE;
+        exec("stellurgytest place " + dim + " " + x + " " + Y + " " + farZ + " minecraft:stone");
+        long farStand = clientEvents().mark();
+        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (farZ + 0.5) + " 0 0");
+        awaitClientPlacedNear(farStand, x + 0.5, farZ + 0.5, "the press must leave from where he now stands");
+        double farSq = serverDistanceSqTo(x, Y, z);
+        scenario().requireArranged("the far press must leave from beyond reach: squared distance " + farSq
+                + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, farSq > VANILLA_CONTAINER_REACH_SQ);
+
+        scenario().asserting("a press from beyond reach is judged out of reach and leaves the mode alone");
+        long farPress = events.mark();
+        ForgedMachinePress.send(bot(), x, Y, z, SENSOR_TOGGLE_MODE);
+        String farJudged = events.awaitRecordWithFields(farPress, "sensor_press_judged",
+                "the sensor never judged the far press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+                "pos", Weapons.at(x, Y, z));
+        assertEquals("the sensor judged a press from " + FAR_FROM_CONSOLE + " blocks away as within reach: "
+                + farJudged, "false", Events.text(farJudged, "reachable"));
+        Reply afterFar = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
+        assertEquals("a press from beyond reach switched the sensor anyway: " + afterFar,
+                "PASSIVE", afterFar.text("mode"));
+
+        scenario().asserting("the same press from the player standing on the sensor switches it");
+        long nearStand = clientEvents().mark();
+        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z + 0.5) + " 0 90");
+        awaitClientPlacedNear(nearStand, x + 0.5, z + 0.5, "the press must leave from beside the sensor");
+        double nearSq = serverDistanceSqTo(x, Y, z);
+        scenario().requireArranged("the near press must leave from within reach: squared distance " + nearSq
+                + " on the server, against " + VANILLA_CONTAINER_REACH_SQ, nearSq <= VANILLA_CONTAINER_REACH_SQ);
+        long nearPress = events.mark();
+        ForgedMachinePress.send(bot(), x, Y, z, SENSOR_TOGGLE_MODE);
+        String nearJudged = events.awaitRecordWithFields(nearPress, "sensor_press_judged",
+                "the sensor never judged the near press: it never reached the server", GUI_LINK_BUDGET_TICKS,
+                "pos", Weapons.at(x, Y, z));
+        assertEquals("the sensor refused a press from the player standing on it: " + nearJudged,
+                "true", Events.text(nearJudged, "reachable"));
+        Reply afterNear = Reply.of(exec("stellurgytest sensor read " + sensor)).requireOk("read the sensor");
+        assertEquals("a press from the player standing on the sensor did not switch it: " + afterNear,
+                "ACTIVE", afterNear.text("mode"));
+    }
+
+    /**
+     * The player's squared distance to the centre of the block at (x, y, z), from the position the
+     * SERVER holds for him ({@code player position-of}) — the quantity a usability check compares, at
+     * the side that compares it.
+     */
+    private double serverDistanceSqTo(int x, int y, int z) throws Exception {
+        Reply at = Reply.of(exec("stellurgytest player position-of " + PlayerState.botName(this::exec)))
+                .requireOk("read the player's position on the server");
+        double dx = at.number("playerPosX") - (x + 0.5D);
+        double dy = at.number("playerPosY") - (y + 0.5D);
+        double dz = at.number("playerPosZ") - (z + 0.5D);
+        double sq = dx * dx + dy * dy + dz * dz;
+        System.out.println("[reach] server position " + at + " -> squared distance " + sq + " to " + x + "," + y + "," + z);
+        return sq;
+    }
+
     @Test
     public void buildingScannerGuiOffStationDoesNotThrowOnClient() throws Exception {
         int dim = plot().dim;

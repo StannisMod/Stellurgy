@@ -250,6 +250,60 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
     }
 
     /**
+     * A planet the server deletes leaves no Forge dimension behind on a client connected to it
+     * remotely. That client registered the dimension itself when it first heard of the planet, so
+     * nobody else will withdraw it, and a body later made on the same id would keep the deleted one's
+     * dimension type.
+     *
+     * <p>The client's own record of the deletion ({@code client_dim_forgotten}) carries whether
+     * Forge's registry in the client JVM still holds the id once the client is done with it. The
+     * harness client is always remote (a separate server JVM), so this does not see the single-player
+     * branch, where the registration is the integrated server's and must be left alone.</p>
+     *
+     * <p>red-witnessed: with {@code PacketDimInfo#executeClient} at
+     * {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every
+     * client only forgetting, the shape it shipped with — this fails with "the client forgot the
+     * deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,
+     * withdraw:false,forgeRegistered:true}" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code PacketDimInfo#executeClient} at
+     * {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails
+     * at "the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14";
+     * with its {@code if (deleteDim)} branch never taken, at "the client was never told the planet was
+     * deleted — no `client_dim_forgotten` carrying dim = 14" (2026-10-06).</p>
+     */
+    @Test
+    public void aDeletedPlanetLeavesNoForgeDimensionOnARemoteClient() throws Exception {
+        scenario().arranging("op the bot and generate a planet the client learns of");
+        opTheBot();
+        Events clientLog = clientEvents();
+        long heard = clientLog.mark();
+        String before = exec("stellurgytest dim list");
+        exec("ar planet generate 0 WithdrawTarget");
+        String after = exec("stellurgytest dim list");
+        int targetDim = newDimFromDiff(before, after);
+        scenario().record("targetDim", targetDim);
+        scenario().requireArranged("planet generate must yield a new dim id; before=" + before
+                + " after=" + after, targetDim != -1);
+        clientLog.awaitRecordWithFields(heard, "client_dim_registered",
+                "the client never learned of the generated planet", REPLY_BUDGET_TICKS,
+                "dim", String.valueOf(targetDim), "registered", "true");
+        scenario().requireArranged("the client must have registered the planet with Forge itself, or"
+                        + " there is nothing for the deletion to withdraw (a planet with no surface is"
+                        + " never registered)",
+                ClientDimensions.forgeRegistered(bot(), targetDim));
+
+        scenario().asserting("after the deletion the client's Forge registry no longer holds the id");
+        long deleted = clientLog.mark();
+        exec("ar planet delete " + targetDim);
+        String forgotten = clientLog.awaitRecordWithFields(deleted, "client_dim_forgotten",
+                "the client was never told the planet was deleted", REPLY_BUDGET_TICKS,
+                "dim", String.valueOf(targetDim));
+        assertEquals("the client forgot the deleted planet but its Forge registry still holds dimension "
+                + targetDim + ": " + forgotten, "false", Events.text(forgotten, "forgeRegistered"));
+    }
+
+    /**
      * The planet's own world type has to reach the CLIENT, because client-side terrain code
      * identifies a world by it — and a secondary world's {@code WorldInfo} used to answer with the
      * SAVE's world type, so every planet a player entered claimed to be the overworld's kind.

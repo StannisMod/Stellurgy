@@ -16,6 +16,7 @@ import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.relauncher.Side;
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
@@ -74,6 +75,14 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     /** Server&rarr;client: what the open screen should say. See {@link ReadoutSync}. */
     private static final byte NET_READOUT = 2;
     private static final byte NET_NEXT_HULL_ALLEGIANCE = 3;
+
+    /**
+     * How far a player may be from the console's centre and still use it, squared, in blocks: the
+     * 64.0 that vanilla's {@code TileEntityLockableLoot#isUsableByPlayer} and
+     * {@code TileEntityFurnace#isUsableByPlayer} compare against, so a console is exactly as far
+     * away as a chest is.
+     */
+    private static final double CONTAINER_REACH_SQ = 64.0D;
 
     /** The screen's lines, in the order {@link #readoutLines} produces them. */
     private static final int READOUT_LINES = 5;
@@ -618,6 +627,12 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
         // Who may press these buttons is the GUI's own rule; a packet is the same press, so it answers
         // to the same rule rather than to a second one written here.
         if (!canInteractWithContainer(player)) {
+            // The address in a machine packet is the client's to write, so a press can name a
+            // console its sender is nowhere near. Refused, and said so: a press that silently did
+            // nothing would read, from the server log, exactly like a button nobody pressed.
+            Stellurgy.logger.warn("Weapon console at {} (dim {}) refused machine packet {} from {}: the"
+                            + " player is not within reach of it", pos, world.provider.getDimension(), id,
+                    player == null ? "nobody" : player.getName());
             return;
         }
         if (id == NET_TOGGLE_HOLD_FIRE) {
@@ -639,9 +654,21 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
         return StellurgyBlocks.blockWeaponConsole.getLocalizedName();
     }
 
+    /**
+     * Vanilla's rule for who may use a container, applied to a console that has no inventory: the
+     * player is in this console's world, the console is still the block there, and he is within
+     * {@link #CONTAINER_REACH_SQ}. It answers both for the open screen ({@code ContainerModular}
+     * closes it when this turns false) and for a press arriving as a packet.
+     *
+     * <p>The distance is {@code EntityPlayer#getDistanceSq(double, double, double)} on purpose: on a
+     * ship this console's position is a shipyard address, and Valkyrien Skies' overwrite of that
+     * method measures to where the block really is.</p>
+     */
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return entity != null && world != null && entity.world == world && !isInvalid()
+                && entity.getDistanceSq(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)
+                <= CONTAINER_REACH_SQ;
     }
 
     // ---- lifecycle

@@ -99,7 +99,7 @@ public class ItemRepairWelder extends Item {
             return Outcome.REPAIRED;
         }
 
-        List<ItemStack> cost = RepairCost.perStage(world, pos);
+        RepairCost cost = RepairCost.perStage(world, pos);
         if (cost == null) {
             return Outcome.NO_RECIPE;
         }
@@ -107,11 +107,11 @@ public class ItemRepairWelder extends Item {
         if (storedEnergy(tool) < energyCost) {
             return Outcome.NO_CHARGE;
         }
-        if (!RepairCost.consume(player, cost, true)) {
+        if (!cost.consume(player, true)) {
             return Outcome.NO_MATERIALS;
         }
 
-        RepairCost.consume(player, cost, false);
+        cost.consume(player, false);
         setStoredEnergy(tool, storedEnergy(tool) - energyCost);
         DamageState.setStage(world, pos, stage - 1);
         world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 3);

@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Reply;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -27,15 +28,20 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
     private static final String MATERIAL = "minecraft:iron_ingot";
     /** Smelted, never crafted — so nothing can price a repair of it. */
     private static final String UNPRICEABLE = "minecraft:stone";
+    /** Crafted from four planks of any wood: each slot accepts six items. */
+    private static final String CRAFTED_FROM_ANY_PLANK = "minecraft:crafting_table";
+    /** Spruce — the slot's second variant, never its first. */
+    private static final String SECOND_PLANK = "minecraft:planks#1";
 
     private static final int PLENTY_OF_CHARGE = 100000;
     private static final int PLENTY_OF_MATERIAL = 64;
 
     /**
-     * red-witnessed: with {@code ItemRepairWelder#weld} at {@code RepairCost.consume(player, cost, false);} (the real material withdrawal) removed,
+     * red-witnessed: with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);} (the real material withdrawal) removed,
      * this fails with "the repair took no material — nothing may be created from nothing:
      * {...materialBefore:64,materialAfter:64...}". The stage and charge verdicts were not separately
-     * witnessed. 2026-09-30.
+     * witnessed. 2026-09-30, taken on the pre-change form {@code RepairCost.consume(player, cost, false);},
+     * which is now the instance call named above.
      */
     @Test
     public void oneUseTakesOneStageAndIsPaidForTwice() throws Exception {
@@ -95,6 +101,37 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
         assertEquals("a block nothing crafts must say so rather than be repaired for free or refused "
                 + "as if the player were empty-handed: " + noRecipe,
                 "NO_RECIPE", extractString(noRecipe, "outcome"));
+    }
+
+    /**
+     * A recipe slot that accepts several items is paid with ANY of them, not only the one listed
+     * first: the crafting table's slots accept all six planks (vanilla's {@code crafting_table.json}
+     * lists {@code minecraft:planks} data 0..5, oak first), and a player carrying only spruce
+     * (data 1) can weld one.
+     *
+     * <p>red-witnessed: with {@code RepairCost#consume} at {@code !wanted.accepts.apply(inSlot)}
+     * replaced by a match against the slot's first variant only
+     * ({@code !OreDictionary.itemMatches(wanted.accepts.getMatchingStacks()[0], inSlot, false)} — the
+     * shape it shipped with), this fails at "a player carrying spruce planks could not pay for a
+     * crafting table, whose slots accept every plank: {...outcome:NO_MATERIALS,...materialBefore:64,
+     * materialAfter:64...} expected:&lt;[REPAIRED]&gt; but was:&lt;[NO_MATERIALS]&gt;" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);}
+     * removed, this fails at "the repair was granted but no spruce left the inventory:
+     * {...outcome:REPAIRED,...materialBefore:64,materialAfter:64...}" (2026-10-06).</p>
+     */
+    @Test
+    public void aSlotAcceptingSeveralItemsIsPaidWithAnyOfThem() throws Exception {
+        int x = X + 20;
+        int damaged = placeAndDamage(x, Y, Z, CRAFTED_FROM_ANY_PLANK, 2, 78005);
+        requireArranged("the crafting table must be damaged but standing, or there is nothing to"
+                + " weld (stage " + damaged + ")", damaged >= 1);
+
+        String weld = weld(x, Y, Z, PLENTY_OF_CHARGE, SECOND_PLANK, PLENTY_OF_MATERIAL);
+        assertEquals("a player carrying spruce planks could not pay for a crafting table, whose"
+                + " slots accept every plank: " + weld, "REPAIRED", extractString(weld, "outcome"));
+        assertTrue("the repair was granted but no spruce left the inventory: " + weld,
+                extractInt(weld, "materialAfter") < extractInt(weld, "materialBefore"));
     }
 
     /**

@@ -160,6 +160,9 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
         Vec3d target = getEffectiveTarget();
         if (target == null) {
             mechanism.clearCommand();
+            // No target, so nothing burns: a beam that was lit when its target was taken away goes
+            // out here, or the players watching keep the last segment they were sent.
+            extinguishBeam();
             return;
         }
 

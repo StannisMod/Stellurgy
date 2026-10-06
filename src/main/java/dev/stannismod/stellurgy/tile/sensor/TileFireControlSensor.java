@@ -75,6 +75,13 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
 
     private static final byte NET_TOGGLE_MODE = 0;
 
+    /**
+     * How far a player may be from the sensor's centre and still use it, squared, in blocks: the 64.0
+     * vanilla's {@code TileEntityLockableLoot#isUsableByPlayer} and {@code TileEntityFurnace#isUsableByPlayer}
+     * compare against.
+     */
+    private static final double CONTAINER_REACH_SQ = 64.0D;
+
     /** Enough for a few seconds of illumination, so a momentary supply dip is not a lost lock. */
     private static final int MIN_ENERGY_BUFFER = 8_000;
 
@@ -511,8 +518,16 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
 
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
-        // The GUI's own rule for who may use it; a packet is the same press.
-        if (side.isClient() || !canInteractWithContainer(player)) {
+        if (side.isClient()) {
+            return;
+        }
+        // The GUI's own rule for who may use it; a packet is the same press. Refused out loud: the
+        // address in a machine packet is the client's to write, and a silent refusal reads in the log
+        // like a button nobody pressed.
+        if (!canInteractWithContainer(player)) {
+            dev.stannismod.stellurgy.Stellurgy.logger.warn("Fire-control sensor at {} (dim {}) refused machine"
+                            + " packet {} from {}: the player is not within reach of it", pos,
+                    world.provider.getDimension(), id, player == null ? "nobody" : player.getName());
             return;
         }
         if (id == NET_TOGGLE_MODE) {
@@ -525,9 +540,18 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
         return StellurgyBlocks.blockFireControlSensor.getLocalizedName();
     }
 
+    /**
+     * Vanilla's rule for who may use a container: the player is in this sensor's world, the sensor is
+     * still standing, and he is within {@link #CONTAINER_REACH_SQ}. Answers for the open screen and for
+     * a press arriving as a packet alike. {@code EntityPlayer#getDistanceSq(double, double, double)} on
+     * purpose: aboard a ship this position is a shipyard address, and Valkyrien Skies' overwrite of
+     * that method measures to where the block really is.
+     */
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
-        return true;
+        return entity != null && world != null && entity.world == world && !isInvalid()
+                && entity.getDistanceSq(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)
+                <= CONTAINER_REACH_SQ;
     }
 
     // ---- what the client is told: the READOUT, because the sweep happens where it cannot see

@@ -92,10 +92,16 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
     /** The one body the counted star declares by hand, beside the worlds its count asks for. */
     private static final int COUNTED_DECLARED = 9612;
 
+    /** A planet whose one moon states {@link #HELD_TWICE}, an id a planet of the star holds. */
+    private static final int SECUNDUS = 9613;
+    /** A planet whose two moons both state {@link #TERTIUS_MOON}: the first holds it, the second is refused. */
+    private static final int TERTIUS = 9614;
+    private static final int TERTIUS_MOON = 9615;
+
     /** Every DIMID this file states — the ids the allocator must NOT hand the unnumbered body. */
     private final int[] authoredDims = {PRIMUS, PRIMUS_MOON, HEAVY, LIGHT, DRILLER,
             DRILLER_UNRESOLVED, MOD_TERRAIN, BOGUS_TERRAIN, STATES_NO_WEATHER, STATES_A_WEATHER_LENGTH,
-            FIRST_FREE, HELD_TWICE, COUNTED_DECLARED};
+            FIRST_FREE, HELD_TWICE, COUNTED_DECLARED, SECUNDUS, TERTIUS, TERTIUS_MOON};
 
     private static final String UNNUMBERED = "Unnumbered";
 
@@ -210,6 +216,28 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                 + "        <planet name=\"" + STATES_THE_SAME_ID + "\" DIMID=\"" + HELD_TWICE + "\">\n"
                 + "            <mass>1.0</mass>\n"
                 + "            <radius>1.0</radius>\n"
+                + "        </planet>\n"
+                // aRefusedMoonIsNoLongerItsParentsChild: a moon stating an id a planet of the star
+                // holds, and a planet whose two moons state one id between them.
+                + "        <planet name=\"Secundus\" DIMID=\"" + SECUNDUS + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
+                + "            <planet name=\"SecundusMoonOnAHeldId\" DIMID=\"" + HELD_TWICE + "\">\n"
+                + "                <mass>1.0</mass>\n"
+                + "                <radius>1.0</radius>\n"
+                + "            </planet>\n"
+                + "        </planet>\n"
+                + "        <planet name=\"Tertius\" DIMID=\"" + TERTIUS + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
+                + "            <planet name=\"TertiusFirstMoon\" DIMID=\"" + TERTIUS_MOON + "\">\n"
+                + "                <mass>1.0</mass>\n"
+                + "                <radius>1.0</radius>\n"
+                + "            </planet>\n"
+                + "            <planet name=\"TertiusSecondMoon\" DIMID=\"" + TERTIUS_MOON + "\">\n"
+                + "                <mass>1.0</mass>\n"
+                + "                <radius>1.0</radius>\n"
+                + "            </planet>\n"
                 + "        </planet>\n"
                 // atmosphereAndGravityOutsideTheirRangeAreClampedIntoIt
                 + "        <planet name=\"Heavy\" DIMID=\"" + HEAVY + "\">\n"
@@ -430,6 +458,39 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
         actual.put("Sol.listsStatesTheSameIdUnder", solDimsOfSecond.toString());
         assertEquals("the earlier of two bodies stating " + HELD_TWICE + " must hold it, and the later"
                 + " be loaded nowhere — not even into its star: " + owner + " / " + second + " / " + sol,
+                expected, actual);
+    }
+
+    /**
+     * A moon refused for a held {@code DIMID} is no longer its parent's moon: the parent does not list
+     * that id among its children, since the body under it is not its moon. Unless it IS — two moons of
+     * one planet stating one id leave the first holding it, and that one stays the planet's child.
+     *
+     * <p>red-witnessed: with {@code DimensionManager#createAndLoadDimensions} at
+     * {@code detachFromParseParent(refused);} not called (the shape it shipped with), this fails showing
+     * {@code Secundus.children=[9611]} — the id of HoldsTheId, a planet of the star (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code DimensionManager#detachFromParseParent} at
+     * {@code if (holder != null && holder.getParentPlanet() == parentId)} never taken, this fails
+     * showing {@code Tertius.children=[]} — the first moon, which holds the id, dropped with the
+     * refused second (2026-10-06).</p>
+     */
+    @Test
+    public void aRefusedMoonIsNoLongerItsParentsChild() throws Exception {
+        DimList dims = dims();
+        requireArranged("the two parents and the moon that holds Tertius's id must be registered: " + dims,
+                dims.holds(SECUNDUS) && dims.holds(TERTIUS) && dims.holds(TERTIUS_MOON));
+
+        Reply secundus = authored(SECUNDUS);
+        Reply tertius = authored(TERTIUS);
+        Map<String, String> expected = new LinkedHashMap<>();
+        expected.put("Secundus.children", "[]");
+        expected.put("Tertius.children", Arrays.toString(new int[]{TERTIUS_MOON}));
+        Map<String, String> actual = new LinkedHashMap<>();
+        actual.put("Secundus.children", Arrays.toString(secundus.intArray("children")));
+        actual.put("Tertius.children", Arrays.toString(tertius.intArray("children")));
+        assertEquals("a parent must list exactly the moons that are its own — not the holder of a refused"
+                + " moon's id, and still the first of two moons on one id: " + secundus + " / " + tertius,
                 expected, actual);
     }
 

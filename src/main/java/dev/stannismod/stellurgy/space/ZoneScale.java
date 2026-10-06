@@ -154,11 +154,25 @@ public final class ZoneScale {
      * their parent's address.</p>
      */
     public static long realizedRadiusBlocks(SystemBody body, SystemBody primary, long tick) {
+        return Math.min(extentRadiusBlocks(body, primary, tick), GalacticCoord.HALF_CELL);
+    }
+
+    /**
+     * How far {@code body}'s zone EXTENDS, in blocks — where a craft stops keeping station with the
+     * body and is carried out to its parent's lattice.
+     *
+     * <p>The sphere of influence itself, uncapped: the extent is a property of the BODY, so Jupiter's
+     * zone reaches twelve cells out although only the one around Jupiter is realized
+     * ({@link #realizedRadiusBlocks}). A body with no primary (a rogue) has no sphere, and its extent is
+     * the realized bound alone; a massless body has no zone at all and answers {@code 0}, with the
+     * same duty on the caller as {@link #realizedRadiusBlocks}' zero.</p>
+     */
+    public static long extentRadiusBlocks(SystemBody body, SystemBody primary, long tick) {
         if (body == null || !(body.massEarths() > 0d)) {
             return 0L;
         }
         double soi = ReferenceFrames.soiRadiusBlocks(body, primary, tick);
-        return (long) (soi > 0d ? Math.min(soi, GalacticCoord.HALF_CELL) : GalacticCoord.HALF_CELL);
+        return soi > 0d ? (long) soi : GalacticCoord.HALF_CELL;
     }
 
     /**
