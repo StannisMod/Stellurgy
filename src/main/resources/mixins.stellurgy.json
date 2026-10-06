@@ -12,7 +12,6 @@
     "MixinEntityLivingDeckFrame",
     "MixinEntityLivingShipTravel",
     "MixinEntityPlayerJetpackKeys",
-    "MixinEntityPlayerShipFlight",
     "MixinEntityShipEyes",
     "MixinEntityShipFrameCapture",
     "MixinEntityShipLocalMove",

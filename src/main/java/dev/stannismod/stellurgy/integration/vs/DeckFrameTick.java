@@ -228,10 +228,6 @@ public final class DeckFrameTick {
         }
         DeckHeld slot = (DeckHeld) player;
         Episode episode = slot.stellurgy$deckEpisode();
-        if (episode != null && player.capabilities.isFlying) {
-            handOverFlyer(player, episode);
-            return false;
-        }
         if (episode != null && !admissible(player)) {
             release(player, "excludedState");
             return false;
@@ -270,7 +266,7 @@ public final class DeckFrameTick {
             release(player, local == null || stay == null ? "shipUnloaded" : "leftShipRegion");
             return false;
         }
-        if (!ShipFrameTravel.deckMayKeep(player, shipId, local)) {
+        if (!isFlying(player) && !ShipFrameTravel.deckMayKeep(player, shipId, local)) {
             release(player, "noDeckBelow");
             return false;
         }
@@ -476,18 +472,13 @@ public final class DeckFrameTick {
     }
 
     /**
-     * A player held by a deck took to the air on it: flight aboard is the travel resolver's, so the
-     * deck is handed over to it at the point he is at - opened there FIRST, so no instant exists in
-     * which nothing holds him - and this episode ends without a release. The same on both sides.
+     * A player in creative flight. Flying aboard is a MODE of the hold, not a reason to let go: his
+     * own flight, run in the deck's frame, is the deck-axis flight the crew contract asks for — up is
+     * the deck normal there, and vanilla adds no gravity while he flies. What it changes is when the
+     * deck lets him go: only by leaving the craft's region, never for want of a deck under his feet.
      */
-    private static void handOverFlyer(EntityPlayer player, Episode episode) {
-        double[] at = VSIntegration.toShipFrameFor(player.world, episode.shipId,
-                player.posX, player.posY, player.posZ);
-        if (at != null) {
-            ShipFrameTravel.takeOverFlyer(player, episode.shipId, at);
-        }
-        ((DeckHeld) player).stellurgy$setDeckEpisode(null);
-        trace(player, "handOver flying");
+    private static boolean isFlying(Entity entity) {
+        return entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying;
     }
 
     /** The player this client plays: the one body on a client whose movement the client owns. */
@@ -503,10 +494,6 @@ public final class DeckFrameTick {
         }
         DeckHeld slot = (DeckHeld) entity;
         Episode episode = slot.stellurgy$deckEpisode();
-        if (episode != null && entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying) {
-            handOverFlyer((EntityPlayer) entity, episode);
-            return false;
-        }
         if (episode != null && !admissible(entity)) {
             release(entity, "excludedState");
             return false;
@@ -556,7 +543,7 @@ public final class DeckFrameTick {
             return false;
         }
         // Off the deck's edge, or out on the outer hull: the world's, not the deck's.
-        if (!ShipFrameTravel.deckMayKeep(entity, shipId, local)) {
+        if (!isFlying(entity) && !ShipFrameTravel.deckMayKeep(entity, shipId, local)) {
             release(entity, "noDeckBelow");
             return false;
         }
@@ -753,9 +740,10 @@ public final class DeckFrameTick {
      * every update while holding it, so the two can never disagree.
      *
      * <p>A living body is the deck's in exactly the states the travel resolver would hold it in, by
-     * asking the resolver's own predicate, and only on the server; one that is riding or ridden
-     * belongs to its vehicle. A player is held on the server only, and not while he flies: flight
-     * aboard has no counterpart here yet and stays with the travel resolver. An item in water or lava
+     * asking the resolver's own predicate; one that is riding or ridden belongs to its vehicle. A
+     * creative flyer is excluded by that predicate unless a deck already holds him or may claim him
+     * where he is (standing contact, an enclosed interior), and a held one keeps flying in the deck's
+     * frame (see {@link #isFlying}). An item in water or lava
      * is left to the world - which states exclude a body that is not living is an open question, and
      * this is only where the first admission put the line.</p>
      */
@@ -765,9 +753,6 @@ public final class DeckFrameTick {
         }
         if (entity instanceof EntityItem) {
             return !entity.isInWater() && !entity.isInLava();
-        }
-        if (entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying) {
-            return false;
         }
         // On the server, and on a client only the player it plays. A client moves a mob by
         // interpolating toward the world positions the server sends, so its update run in the deck's
@@ -931,6 +916,10 @@ public final class DeckFrameTick {
             trace(entity, "decline noFloor ship=" + shipId + " local=(" + local[0] + "," + local[1]
                     + "," + local[2] + ") reach=" + reach);
         }
-        return null;
+        // An ENCLOSED interior - a hull cavity with a deck below and a roof above in the craft's own
+        // frame - is the deck's even with nothing under the feet yet: the deck's gravity seats the
+        // body there (a hatch entry, an inverted cockpit, a flyer who stops flying inside).
+        return entity instanceof EntityLivingBase
+                ? ShipFrameTravel.interiorCandidate((EntityLivingBase) entity) : null;
     }
 }

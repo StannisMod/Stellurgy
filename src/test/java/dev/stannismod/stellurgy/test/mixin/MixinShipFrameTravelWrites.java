@@ -342,66 +342,6 @@ public abstract class MixinShipFrameTravelWrites {
                         + ",\"outcome\":\"" + TestTrace.json(String.valueOf(outcome)) + "\"");
     }
 
-    /** Production's own exclusion check, for the refusal payload below. Shadowed rather than
-     *  reimplemented: the reason a seed is refused is production's answer, and a copy of that
-     *  decision here would agree with it until the day it changed. */
-    @Shadow
-    private static String excludedStateOf(EntityLivingBase entity) {
-        throw new AssertionError();
-    }
-
-    /** The apply the redirect below must still perform. Private on the target, so shadowed. */
-    @Shadow
-    private static void applySeedCapture(Entity entity, String shipId, double subX, double subY,
-                                         double subZ, double[] world) {
-        throw new AssertionError();
-    }
-
-    /**
-     * The three seeding outcomes {@code seedShipFrameCapture} decides, taken at the returns that
-     * ARE those decisions — ordinal 1 refused, 2 the anchor ship absent, 3 applied. Ordinal 0 is its
-     * argument guard, which production never reported.
-     *
-     * <p>No seam is owed for any of them: the body and the ship id are this method's own arguments,
-     * and the branch is the return. The refusal's reason comes from asking production's own check
-     * again, on the same body in the same tick.</p>
-     */
-    @Inject(method = "seedShipFrameCapture", at = @At(value = "RETURN", ordinal = 1), remap = false)
-    private static void stellurgyTest$seedRefused(Entity entity, String shipId, double subX, double subY,
-                                           double subZ, CallbackInfoReturnable<Boolean> cir) {
-        String excluded = entity instanceof EntityLivingBase
-                ? excludedStateOf((EntityLivingBase) entity) : null;
-        stellurgyTest$seedRecord(entity, shipId, "refused:" + excluded);
-    }
-
-    @Inject(method = "seedShipFrameCapture", at = @At(value = "RETURN", ordinal = 2), remap = false)
-    private static void stellurgyTest$seedNotLoaded(Entity entity, String shipId, double subX, double subY,
-                                             double subZ, CallbackInfoReturnable<Boolean> cir) {
-        stellurgyTest$seedRecord(entity, shipId, "not-loaded");
-    }
-
-    @Inject(method = "seedShipFrameCapture", at = @At(value = "RETURN", ordinal = 3), remap = false)
-    private static void stellurgyTest$seedOk(Entity entity, String shipId, double subX, double subY,
-                                      double subZ, CallbackInfoReturnable<Boolean> cir) {
-        stellurgyTest$seedRecord(entity, shipId, "ok");
-    }
-
-    /**
-     * A queued seed that APPLIED. Its method takes no arguments and its locals are typed by a
-     * private nested class, so neither a read nor a capture reaches the body — but the apply call
-     * itself carries both halves, which is why this one needs nothing in production either.
-     */
-    @Redirect(method = "tryApplyPendingSeed",
-            at = @At(value = "INVOKE",
-                    target = "Ldev/stannismod/stellurgy/integration/vs/ShipFrameTravel;"
-                            + "applySeedCapture(Lnet/minecraft/entity/Entity;Ljava/lang/String;DDD[D)V"),
-            remap = false)
-    private static void stellurgyTest$pendingSeedOk(Entity body, String shipId, double subX, double subY,
-                                             double subZ, double[] world) {
-        applySeedCapture(body, shipId, subX, subY, subZ, world);
-        stellurgyTest$seedRecord(body, shipId, "pending-ok");
-    }
-
     /**
      * A pass of the re-seat that puts aboard bodies back on their deck points after the ships move.
      *

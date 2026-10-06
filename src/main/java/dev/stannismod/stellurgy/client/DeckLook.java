@@ -67,15 +67,6 @@ public final class DeckLook {
         public Float deckYaw(net.minecraft.entity.EntityLivingBase entity) {
             return heldDeckYawFor(entity);
         }
-
-        /** The flying-aboard vertical intent: read at CALL time (during the local player's own
-         *  travel) so it is EXACTLY the movementInput state vanilla's world-frame fly impulse
-         *  consumed this tick - the resolution subtracts that impulse and re-applies it on deck
-         *  axes, and an off-by-one-tick sample would leave a world-frame residual. */
-        @Override
-        public Integer flyIntent(net.minecraft.entity.EntityLivingBase entity) {
-            return flyIntentFor(entity);
-        }
     }
 
     /** The held deck heading for {@code entity}, or {@code null} when this client does not own
@@ -87,16 +78,6 @@ public final class DeckLook {
         }
         PilotInput input = PilotInput.of(player);
         return input.deckActive ? (float) input.deckYawDeg : null;
-    }
-
-    /** The local player's vertical fly intent (+1 ascend / -1 descend / 0), or {@code null} when
-     *  this client does not own {@code entity}'s movement. */
-    private static Integer flyIntentFor(net.minecraft.entity.EntityLivingBase entity) {
-        EntityPlayerSP player = Minecraft.getMinecraft().player;
-        if (entity == null || player == null || entity != player || player.movementInput == null) {
-            return null;
-        }
-        return (player.movementInput.jump ? 1 : 0) - (player.movementInput.sneak ? 1 : 0);
     }
 
     /** Slack for the external-write comparison: our own writes round-trip through float exactly,

@@ -675,28 +675,17 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * A crew member who starts creative flight on the deck stays captured, flies along the deck's
      * normal, and is put back on the deck when he turns flight off.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck
-     * gravity ({@code ShipFrameTravel#travel} at {@code motion[1] -= LIVING_GRAVITY}) withheld from any
-     * body that has flown aboard: "turning
-     * flight off must hand the body to deck gravity and put it in CONTACT with the ship's geometry …
-     * no `deck_contact` carrying ship = … was recorded within 240 ticks". THE ROLL IS ACCEPTED —
-     * {@code VSIntegration#flightComputerOf} answering null:
-     * "attitude hold must accept the roll". THE CAPTURE IS KEPT — {@code ShipFrameTravel#excludedStateOf}
-     * at {@code if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying())} treating a
-     * creative flyer as excluded even when aboard: "starting
-     * flight on the deck must NOT release the capture". THE DESCENT — the aboard fly impulse
-     * ({@code ShipFrameTravel#flyingAboardTravel} at {@code motion[1] += flyImpulse * fly}) dropped for
-     * descend: "holding descend must sink along the DECK
-     * NORMAL (subspace -Y): 131.0 -&gt; 132.0". The ABOARD commit after the dismount is the
-     * arrangement's link (server-committed).</p>
-     *
-     * <p>red-witnessed: with {@code ShipFrameTravel#flyingAboardTravel} at {@code double worldMotionY =
-     * entity.motionY - flyImpulse * fly} and {@code motion[1] += flyImpulse * fly} both inverted to
-     * leave vanilla's impulse on the world axis, "holding ascend must climb along the DECK NORMAL
-     * (subspace +Y), not the world's up: the climb leans 70.93884710214297 degrees off it
-     * (dySub=0.7087 dxzSub=2.0511), at most 45.0 allowed", 2026-10-04 — the lean form of the ascent
-     * verdict, read from the census's unfloored point. Healthy the same day: lean 0.0099 degrees,
-     * dySub 1.7416.</p>
+     * <p>red-witnessed: re-taken on the deck frame after the hand-built flight was deleted,
+     * 2026-10-06. THE CAPTURE IS KEPT — {@code ShipFrameTravel#excludedStateOf} at
+     * {@code boolean aboard = DeckFrameTick.holds(entity) || (st != null && !st.hullStand);} without its
+     * deck-frame disjunct, so a flyer the deck holds counts as excluded: "starting flight on the deck
+     * must NOT release the capture". THE ROLL IS ACCEPTED — {@code VSIntegration#flightComputerOf}
+     * answering null: "attitude hold must accept the roll" (2026-09-28, unchanged code). NOT YET for
+     * the ascent, the descent and the landing: with {@code DeckFrameTick#runInDeckFrame} at
+     * {@code !isFlying(entity) && !ShipFrameTravel.deckMayKeep(entity, shipId, local)} applying the
+     * deck-keep test to a flyer as well, the method stays GREEN — its climb never leaves the reach of
+     * that test, so the flyer's own keep rule is not exercised here. The records taken before named the
+     * deleted {@code ShipFrameTravel.flyingAboardTravel}.</p>
      */
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {

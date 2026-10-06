@@ -290,13 +290,13 @@ public final class ShipFrameTravel {
                 // while the body still touches the hull and has no deck under it in the ship's own
                 // frame. A standing deck below means the body reached a surface that IS a deck in
                 // the ship frame (a hatch entry, or a hull region that reads as a subspace top face
-                // at this attitude): hand over to ABOARD semantics - deck gravity, deck camera.
-                // Losing hull contact (walked off the hull edge, the ship rotated away) hands the
-                // body back to vanilla mid-air.
+                // at this attitude), and a deck is the deck frame's: let go here, and the deck frame,
+                // which asks before this class does, takes him on his next update. Losing hull
+                // contact (walked off the hull edge, the ship rotated away) hands the body back to
+                // vanilla mid-air.
                 if (shipSupportObstacleCountAt(entity, state.shipId, gate) > 0) {
-                    state.hullStand = false;
-                    logCapture(entity, state.shipId, state.localX, state.localY, state.localZ);
-                    return true;
+                    release(entity, "deckBelow");
+                    return false;
                 }
                 if (!hullContactFor(entity, state.shipId)) {
                     release(entity, "noHullContact");
@@ -304,41 +304,10 @@ public final class ShipFrameTravel {
                 }
                 return true;
             }
-            // No subspace floor within reach below the body means ship-frame gravity can never
-            // seat it on a deck - it is on the OUTER hull (the world-facing surface of a
-            // non-upright ship) or past the underside. World semantics own it there: transition to
-            // HULL-STAND while the body still touches the hull, or release to vanilla when it does
-            // not. A jump/fall over a deck always keeps its floor within reach and never trips
-            // this; a hatch entry re-captures by first contact the moment a real deck is below.
-            //
-            // EXCEPT inside the ship's own block region, under a ship-frame roof: an ENCLOSED body
-            // with a deck below it belongs to the deck whether or not anything is under its feet,
-            // and its deck can legitimately sit farther than the probe's reach while deck gravity
-            // is still cancelling the velocity it entered with (a fast interior entry rises away
-            // from the deck in the ship frame before falling back). Interior = the deck's;
-            // releasing it here handed a just-captured interior body straight back to world gravity.
-            if (!hasDeckBelowAt(entity, state.shipId, gate)) {
-                AxisAlignedBB own = VSIntegration.subspaceStayRegion(entity.world, state.shipId, 0.0);
-                boolean interior = own != null
-                        && own.contains(new net.minecraft.util.math.Vec3d(gate[0], gate[1], gate[2]))
-                        // Same enclosure test as the capture gate: only a ROOFED body (a hull
-                        // cavity) is held past the deck probe's reach; open air over the deck
-                        // keeps the normal release semantics.
-                        && hasRoofAboveAt(entity, state.shipId, gate);
-                if (!interior) {
-                    if (hullContactFor(entity, state.shipId)) {
-                        state.hullStand = true;
-                        // Hull-stand is world semantics, not a deck position - so this body stops
-                        // answering as aboard ({@link #aboardShipId}), and the durable record's one
-                        // writer drops it on its next pass. Nothing is written from here.
-                        logCapture(entity, state.shipId, state.localX, state.localY, state.localZ);
-                        return true;
-                    }
-                    release(entity, "noDeckBelow");
-                    return false;
-                }
-            }
-            return true;
+            // An episode in ABOARD mode: nothing opens one any more - a body on a deck is the deck
+            // frame's - so reaching here is an episode that outlived that change. Let it go, by name.
+            release(entity, "aboardIsTheDeckFrames");
+            return false;
         }
         // First contact - the one way aboard that is not a seat dismount: capture only a body
         // actually standing on a ship's deck in that ship's OWN frame - and NEVER one standing on
@@ -350,37 +319,22 @@ public final class ShipFrameTravel {
         if (isSupportedByWorldTerrain(entity)) {
             return false;
         }
-        String candidate = firstContactCandidate(entity);
-        boolean hullStand = false;
-        if (candidate == null) {
-            // Interior boarding: a body INSIDE a ship's own subspace block region, ENCLOSED by
-            // ship blocks overhead in that frame and with a deck below it IN THAT SHIP'S FRAME, is
-            // the deck's to claim even without standing support - ship-frame gravity can seat it
-            // (a body that stopped flying inside the hull, fell in through a hatch, or relogged
-            // there). Without this the interior of a non-upright ship belonged to WORLD gravity:
-            // the body was either pinned to the interior world-floor by the outer-hull fallback
-            // (a world camera on a "captured" body) or fell clean out through an opening. Checked
-            // BEFORE that fallback - hull contact from INSIDE must not demote an interior body to
-            // world semantics. The region is the ship's own block bounds (margin 0), NOT the grown
-            // stay region: a body merely in the surrounding airspace keeps world gravity,
-            // movement and camera untouched, and the terrain veto above already keeps anyone
-            // standing on the ground out.
-            candidate = interiorCandidate(entity);
+        // A body on a deck, or in an enclosed interior, is the deck frame's (DeckFrameTick), which
+        // asks before this class does; what is left for first contact here is the OUTER hull - the
+        // world-facing surface of a non-upright ship, walkable at any attitude but with world-frame
+        // semantics, or any hull face a falling body is about to hit. Captured in HULL-STAND mode:
+        // world kinematics, ship-geometry collision - the body lands on the hull instead of the
+        // physics mod bouncing it off and dropping it through the skin. Never a flyer: flight over
+        // a hull is world flight.
+        if (entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying) {
+            return false;
         }
-        if (candidate == null) {
-            // No deck under the body in any candidate's frame - but its box may still be meeting a
-            // ship's OUTER hull: the world-facing surface of a non-upright ship, walkable at any
-            // attitude but with world-frame semantics, or any hull face a falling body is about to
-            // hit. Capture in HULL-STAND mode: world kinematics, ship-geometry collision - the body
-            // lands on the hull instead of the physics mod bouncing it off and dropping it through
-            // the skin.
-            for (String shipId : VSIntegration.shipIdsAt(
-                    entity.world, entity.posX, entity.posY, entity.posZ)) {
-                if (hullContactFor(entity, shipId)) {
-                    candidate = shipId;
-                    hullStand = true;
-                    break;
-                }
+        String candidate = null;
+        for (String shipId : VSIntegration.shipIdsAt(
+                entity.world, entity.posX, entity.posY, entity.posZ)) {
+            if (hullContactFor(entity, shipId)) {
+                candidate = shipId;
+                break;
             }
         }
         if (candidate == null) {
@@ -401,7 +355,7 @@ public final class ShipFrameTravel {
                 shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS,
                 shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS,
                 shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS);
-        stateOf(entity).hullStand = hullStand;
+        stateOf(entity).hullStand = true;
         logCapture(entity, candidate, local[0], local[1], local[2]);
         return true;
     }
@@ -415,10 +369,10 @@ public final class ShipFrameTravel {
 
     /** The excluded state keeping this body on world-frame semantics — one of the few facts that
      *  end an aboard episode, and the same set that refuses a new capture — or {@code null}
-     *  when none. ONE predicate for every consumer — {@link #handles} (which releases on it) and
-     *  {@link #seedShipFrameCapture} (which must REFUSE to force-capture an excluded body: a seed
-     *  that ignored creative flight snapped a flying player to the deck point every window tick,
-     *  freezing him mid-air while handles() released him right back each tick — a per-tick war). */
+     *  when none. ONE predicate for every consumer — {@link #handles} (which releases on it) and the
+     *  deck frame's admission and seeds (which must REFUSE an excluded body: a seed that ignored
+     *  creative flight once snapped a flying player to the deck point every window tick, freezing him
+     *  mid-air while the holder released him right back each tick — a per-tick war). */
     private static String excludedStateOf(EntityLivingBase entity) {
         if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying()) {
             return "excludedState";
@@ -437,7 +391,7 @@ public final class ShipFrameTravel {
             // anywhere else (open airspace, flown away from his seat, over terrain) keeps
             // world-frame flight untouched.
             ShipFrameState st = stateOf(entity);
-            boolean aboard = st != null && !st.hullStand;
+            boolean aboard = DeckFrameTick.holds(entity) || (st != null && !st.hullStand);
             if (!aboard && !flyCaptureEligible(entity)) {
                 return "creativeFlight";
             }
@@ -500,28 +454,17 @@ public final class ShipFrameTravel {
     }
 
     /**
-     * Seam: a queued seed found its anchor ship absent on this side.
+     * Seam: a queued seed did not put the body on its deck — its anchor ship is absent on this side,
+     * or the deck frame refused the body.
      *
      * <p>A dismount whose seed never lands hands the body to vanilla's world-frame dismount spot,
      * which on a non-upright ship maps OFF the deck. So the outcome is the fact worth keeping, and
-     * the body it concerns is the half that decides whose it was.</p>
+     * the body it concerns is the half that decides whose it was. It needs a method because both
+     * outcomes happen inside a no-argument method whose body and queue slot are locals of a private
+     * type; the body is empty and its parameters are exactly those locals: it computes nothing,
+     * allocates nothing and stores nothing.</p>
      *
-     * <p><b>This is the ONE seed outcome that still needs a method here, and the reason is written
-     * down so it can be argued with.</b> Four others were reported through this same call and are
-     * gone: the refusal, the missing ship and the success in {@code seedShipFrameCapture} all take
-     * the body and the ship id as that method's own ARGUMENTS, with its four returns naming the
-     * branches; and the applied queued seed is carried by the {@code applySeedCapture} call itself.
-     * None of those needed anything to exist here.</p>
-     *
-     * <p>This one does, on all four counts. It happens inside a NO-ARGUMENT method, so there is
-     * nothing to read; the body and the queue slot are LOCALS; the slot's type is a private nested
-     * class, so no local capture can name it, and widening that type so a test could would move the
-     * defect down a level rather than remove it; and the only call at this point carries the world
-     * and the ship id but NOT the body, which is the half that says whose seed this was. The body is
-     * empty and its parameters are exactly those locals: it computes nothing, allocates nothing and
-     * stores nothing.</p>
-     *
-     * @param outcome {@code pending-not-loaded} — the only value that reaches here
+     * @param outcome {@code pending-not-loaded} or {@code refused-by-deck}
      */
     private static void noteSeedOutcome(Entity entity, String shipId, String outcome) {
     }
@@ -541,21 +484,6 @@ public final class ShipFrameTravel {
             episode.installEpoch = body.stellurgy$captureEpoch() + 1;
             body.stellurgy$setCaptureEpoch(episode.installEpoch);
         }
-    }
-
-    /**
-     * Take over a player the deck's own frame was holding and has stopped holding because he took
-     * to the air: creative flight aboard is this class's alone. A HAND-OVER, the reverse of the one in
-     * {@link #handles} - the same craft, at the deck point he is at, and no drop recorded.
-     */
-    static void takeOverFlyer(EntityLivingBase entity, String shipId, double[] local) {
-        double[] v = VSIntegration.shipVelocityAtPointFor(
-                entity.world, shipId, entity.posX, entity.posY, entity.posZ);
-        captureState(entity, shipId, local[0], local[1], local[2],
-                v == null ? 0.0 : v[0] * TICK_SECONDS,
-                v == null ? 0.0 : v[1] * TICK_SECONDS,
-                v == null ? 0.0 : v[2] * TICK_SECONDS);
-        logCapture(entity, shipId, local[0], local[1], local[2]);
     }
 
     /** Remove the capture with an explicit, logged reason: an episode never ends implicitly, it
@@ -594,85 +522,6 @@ public final class ShipFrameTravel {
         ShipFrameState state = stateOf(entity);
         return state == null || state.hullStand
                 ? null : new double[]{state.localX, state.localY, state.localZ};
-    }
-
-    /**
-     * Force a ship-frame capture for {@code entity} onto an explicit SHIP-FRAME (subspace) deck point,
-     * snapping the body there and holding it. MUST be called on the side that OWNS the body's movement -
-     * for a player that is the CLIENT (its own {@code EntityPlayerSP.travel}). The world position the body
-     * is snapped to and the stored subspace anchor are both computed HERE, on this side, from the same
-     * subspace point through this side's own ship transform, so the body sits exactly on its held deck point.
-     * The
-     * deck point travels as a SUBSPACE triple in a packet, never a world position: the client maps it
-     * through its OWN transform, keeping the snapped body and its stored anchor consistent on the side that
-     * owns the movement. The travel then keeps the body on the deck across ticks. Returns false off a loaded
-     * ship. Idempotent enough to re-send: pair with an {@link #isResolving} check at the call site so a
-     * re-seed after the capture already took is skipped (no repeated teleport).
-     */
-    public static boolean seedShipFrameCapture(Entity entity, String shipId,
-                                               double subX, double subY, double subZ) {
-        if (entity == null || shipId == null) {
-            return false;
-        }
-        // NEVER force-capture a body in a state that keeps world-frame semantics - riding, elytra,
-        // creative flight it is not claimable in, water, lava, a ladder, levitation. handles()
-        // would release it right back next tick, and the re-sent seed then snaps it to the deck
-        // point again - a per-tick teleport war that froze a creative-FLYING ex-pilot mid-air at
-        // the seat column.
-        // Refuse; the sender's window keeps trying and expires harmlessly if the state persists.
-        if (entity instanceof EntityLivingBase) {
-            String excluded = excludedStateOf((EntityLivingBase) entity);
-            if (excluded != null) {
-                if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
-                    dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/CAP] seed "
-                            + "REFUSED (" + excluded + ") remote=" + entity.world.isRemote
-                            + " id=" + entity.getEntityId() + " ship=" + shipId);
-                }
-                return false;
-            }
-        }
-        // Anchored to one ship for the whole episode: the seed names its ship explicitly - the
-        // server resolved it unambiguously from the SUBSPACE seat block (claims of distinct ships
-        // never overlap), so the client never has to guess by containment among overlapping world
-        // boxes.
-        double[] world = VSIntegration.toWorldFrameFor(entity.world, shipId, subX, subY, subZ);
-        if (world == null) {
-            // Playtest trace ([FF-TRACE/CAP], -Dstellurgy.tests=true): the anchor ship is not
-            // loaded on this side (yet). No-op; the dismount window re-sends.
-            if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
-                dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/CAP] seed FAILED "
-                        + "(anchor ship not loaded) ship=" + shipId + " sub=(" + subX + "," + subY + ","
-                        + subZ + ") entityPos=(" + entity.posX + "," + entity.posY + "," + entity.posZ + ")");
-            }
-            return false;
-        }
-        if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
-            dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/CAP] seed OK ship="
-                    + shipId + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
-        }
-        applySeedCapture(entity, shipId, subX, subY, subZ, world);
-        return true;
-    }
-
-    /** The seed's apply body: install the capture on the explicit deck point, snap the body there,
-     *  zero its motion. Shared by the direct seed and the pending-seed path. */
-    private static void applySeedCapture(Entity entity, String shipId,
-                                         double subX, double subY, double subZ, double[] world) {
-        // Motion is zeroed below = "at rest RELATIVE TO THE DECK"; the carry the zeroed motion is
-        // considered to contain is therefore zero too.
-        captureState(entity, shipId, subX, subY, subZ, 0.0, 0.0, 0.0);
-        ShipFrameState installed = stateOf(entity);
-        if (installed != null) {
-            installed.seedAnchored = true;
-        }
-        entity.setPositionAndUpdate(world[0], world[1], world[2]);
-        entity.motionX = 0.0;
-        entity.motionY = 0.0;
-        entity.motionZ = 0.0;
-        entity.fallDistance = 0.0f;
-        // The capture supersedes the physics mod's own drag anchor (often freshly armed by the very
-        // contact that led here); disarm it or it fights the resolution from a stale point.
-        VSIntegration.suppressShipDrag(entity);
     }
 
     // ---- Pending dismount seed (client main thread only). --------------------------------------
@@ -881,13 +730,14 @@ public final class ShipFrameTravel {
                             + "seed applied ship=" + slot.shipId + " superseded=" + captureExists
                             + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
                 }
-                // A deck point for the player this client plays is the deck frame's to hold; the
-                // travel resolver takes it only for a body the deck refuses, and gives up a capture
-                // of its own here so the body is never held twice.
+                // A deck point for the player this client plays is the deck frame's to hold, and only
+                // its: a body it refuses is in a state no deck holds, so the seed is spent either way
+                // and the server's window decides whether to send another. A capture of this class's
+                // own is given up so the body is never held twice.
                 if (DeckFrameTick.holdSeeded(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world)) {
                     ((ShipFrameBody) body).stellurgy$setShipFrame(null);
                 } else {
-                    applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
+                    noteSeedOutcome(body, slot.shipId, "refused-by-deck");
                 }
                 seeds.remove(body);
         }
@@ -1486,7 +1336,7 @@ public final class ShipFrameTravel {
      *  with a deck below AND a roof above in that ship's frame - or null. The interior-boarding
      *  candidate (a hatch entry, an inverted cockpit): such a body is the deck's to claim even
      *  without standing support, because ship-frame gravity can seat it. */
-    private static String interiorCandidate(EntityLivingBase entity) {
+    static String interiorCandidate(EntityLivingBase entity) {
         for (String shipId : VSIntegration.shipIdsAt(
                 entity.world, entity.posX, entity.posY, entity.posZ)) {
             double[] sub = VSIntegration.toShipFrameFor(
@@ -1701,172 +1551,13 @@ public final class ShipFrameTravel {
         if (anchored == null) {
             return false; // no open episode, so there is no anchor to resolve this tick through
         }
-        String shipId = anchored.shipId;
-
+        // Only the outer hull is this class's: a body ON a deck is the deck frame's (DeckFrameTick),
+        // which runs its own unmodified update in the deck's frame, flight aboard included.
         if (anchored.hullStand) {
             return hullStandTravel(entity, anchored, strafe, vertical, forward, jumpMovementFactor);
         }
-        if (entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying) {
-            return flyingAboardTravel(entity, anchored, strafe, vertical, forward,
-                    jumpMovementFactor);
-        }
-
-        // The deck frame, DERIVED from where the body actually is, rather than read back from the
-        // last commit and policed against it. Nothing is compared, so there is no drift to detect
-        // and a body something else moved is simply a body that is somewhere else. (The committed
-        // deck point still exists and is still written below — `followShipPoses` re-images it after
-        // the craft's pose advances, and a live derivation there would hand back the same stale
-        // point it exists to remove. It is carry-over for that pass, not a claim about the body.)
-        double[] local = VSIntegration.toShipFrameFor(world, shipId, entity.posX, entity.posY, entity.posZ);
-        // The body's velocity RELATIVE to the ship. The world position of a resolved body is
-        // derived from its ship-frame position every tick, so the ship's own carry is applied by
-        // the transform - a ship-frame velocity that still CONTAINS the carry counts it twice. On a
-        // static ship the two agree and the error is invisible (every early test); on a MOVING ship
-        // an airborne body rockets away at the ship's own velocity (a jump on a climbing ship flung
-        // the crew member out of the stay region), and a station-keeping ship's residual creep is a
-        // constant no-input drag on the crew. Subtract EXACTLY the carry the last commit added
-        // (held in STATE - a fresh sample would leak the frame's acceleration as inertia and slide
-        // crew off a hard-slewing deck), and add a fresh carry back at this tick's commit.
-        double[] motion = VSIntegration.rotateToShipFrameFor(world, shipId,
-                entity.motionX - anchored.carryX,
-                entity.motionY - anchored.carryY,
-                entity.motionZ - anchored.carryZ);
-        if (local == null || motion == null) {
-            // A declined tick hands this body to VANILLA travel while the capture stays held:
-            // vanilla applies world-frame gravity and moves the body world-down. Traced
-            // (test-gated) because the decline is otherwise silent and the body's next resolved
-            // tick then starts from a position this class did not choose.
-            if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
-                dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/DECLINE]"
-                        + " remote=" + world.isRemote
-                        + " id=" + entity.getEntityId()
-                        + " ship=" + shipId
-                        + " local=" + (local != null)
-                        + " motion=" + (motion != null)
-                        + " pos=(" + entity.posX + "," + entity.posY + "," + entity.posZ + ")");
-            }
-            return false;
-        }
-
-        // "Standing" is the deck contact this class established last tick; nothing else writes
-        // onGround for an entity whose move we own.
-        boolean wasOnDeck = entity.onGround;
-
-        // Friction of the block under the feet, sampled ALONG THE DECK NORMAL rather than world -Y.
-        float friction = AIR_FRICTION;
-        if (wasOnDeck) {
-            BlockPos under = new BlockPos(local[0], local[1] - 1.0D, local[2]);
-            IBlockState underState = world.getBlockState(under);
-            friction = underState.getBlock().getSlipperiness(underState, world, under, entity) * AIR_FRICTION;
-        }
-        float speedFactor = SPEED_NORMALISER / (friction * friction * friction);
-        float moveFactor = wasOnDeck ? entity.getAIMoveSpeed() * speedFactor : jumpMovementFactor;
-
-        // Walking input, in the deck plane. The entity's yaw is a WORLD yaw; the direction he is
-        // actually facing along the deck is his world look mapped into the ship frame.
-        float deckYaw = deckYawDeg(entity, shipId);
-        noteWalkInputs(entity, strafe, forward, deckYaw, motion[0], motion[1], motion[2]);
-        if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()
-                && (world.getTotalWorldTime() % 10) == 0
-                && (strafe != 0f || forward != 0f
-                        || Math.abs(motion[0]) > 0.05 || Math.abs(motion[2]) > 0.05)) {
-            dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/WALK]"
-                    + " remote=" + world.isRemote
-                    + " id=" + entity.getEntityId()
-                    + " strafe=" + strafe + " forward=" + forward
-                    + " deckYaw=" + deckYaw + " worldYaw=" + entity.rotationYaw
-                    + " motionShip=(" + motion[0] + "," + motion[1] + "," + motion[2] + ")"
-                    + " worldMotion=(" + entity.motionX + "," + entity.motionY + ","
-                    + entity.motionZ + ")");
-        }
-        moveRelative(motion, strafe, vertical, forward, moveFactor, deckYaw);
-
-        // Gravity toward the deck: plain -Y here, at vanilla's exact magnitude, BEFORE the sweep. This
-        // is a deliberate deviation from vanilla's after-move ordering. Because this class re-derives
-        // the ship-frame VELOCITY from the world velocity each tick, applying gravity after the sweep
-        // leaves the deck-normal residual to be re-projected through a rotating transform, and during a
-        // roll it briefly changes sign and drops the entity off the deck. Applying it first keeps the
-        // motion fed into the sweep unambiguously deck-downward, which holds crew on a rolling deck.
-        // The cost is a jump that rises one gravity step short of vanilla's - a fair trade
-        // for a body that does not slide off when the ship turns.
-        motion[1] -= LIVING_GRAVITY;
-
-        // Sweep the deck-aligned box through the deck-aligned blocks.
-        Sweep sweep = sweepShipFrame(world, entity, local, motion[0], motion[1], motion[2], wasOnDeck);
-
-        boolean onDeck = sweep.collidedVertically && sweep.wantY < 0.0;
-        if (sweep.collidedX) motion[0] = 0.0;
-        if (sweep.collidedY) motion[1] = 0.0;
-        if (sweep.collidedZ) motion[2] = 0.0;
-
-        // Drag, in the deck frame: 0.98 along the deck normal, `friction` in the deck plane - the same
-        // two constants vanilla uses, now applied to the axes they were meant for. `friction` is the
-        // PRE-move value, as in vanilla.
-        motion[1] *= GRAVITY_AXIS_DRAG;
-        motion[0] *= friction;
-        motion[2] *= friction;
-
-        // Commit: the deck-frame result, expressed back on world axes (through the ANCHOR ship).
-        double[] worldPos = VSIntegration.toWorldFrameFor(world, shipId, sweep.x, sweep.y, sweep.z);
-        double[] worldMotion = VSIntegration.rotateToWorldFrameFor(world, shipId,
-                motion[0], motion[1], motion[2]);
-        if (worldPos == null || worldMotion == null) {
-            // Traced for the same reason as the branch above, and it was the ONLY decline path with
-            // no trace at all: it leaves the body to vanilla for the tick, silently, and the next
-            // tick's guard then reads a full tick of vanilla movement as a foreign teleport.
-            if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
-                dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/DECLINE]"
-                        + " transformGone remote=" + world.isRemote
-                        + " id=" + entity.getEntityId()
-                        + " ship=" + shipId
-                        + " worldPos=" + (worldPos != null)
-                        + " worldMotion=" + (worldMotion != null)
-                        + " pos=(" + entity.posX + "," + entity.posY + "," + entity.posZ + ")");
-            }
-            return false; // the ship went away mid-tick; leave the entity untouched for vanilla
-        }
-        // Re-add the deck's carry (freshly sampled for THIS commit; the value is remembered so the
-        // next tick can subtract exactly it): entity.motion is a WORLD velocity, and the ship-frame
-        // value above was ship-RELATIVE.
-        double[] shipVel = VSIntegration.shipVelocityAtPointFor(
-                world, shipId, worldPos[0], worldPos[1], worldPos[2]);
-        double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
-        double carryY = shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS;
-        double carryZ = shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS;
-        worldMotion[0] += carryX;
-        worldMotion[1] += carryY;
-        worldMotion[2] += carryZ;
-        remember(entity, shipId, sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ);
-        noteCommittedPose(world, shipId, sweep.x, sweep.y, sweep.z, worldPos, "aboard");
-        double fallenAlongDeck = sweep.wantY < 0.0 ? -(sweep.y - (sweep.startY)) : 0.0;
-        entity.setPosition(worldPos[0], worldPos[1], worldPos[2]);
-        entity.motionX = worldMotion[0];
-        entity.motionY = worldMotion[1];
-        entity.motionZ = worldMotion[2];
-        entity.onGround = onDeck;
-        entity.collidedHorizontally = sweep.collidedX || sweep.collidedZ;
-        entity.collidedVertically = sweep.collidedVertically;
-        entity.collided = entity.collidedHorizontally || entity.collidedVertically;
-
-        updateFallState(world, entity, sweep, fallenAlongDeck, onDeck);
-        updateLimbSwing(entity, sweep.x - local[0], sweep.z - local[2]);
-        // A resolved body must be invisible to the physics mod's own entity-drag: its anchor is fed
-        // by the (suppressed) collision injector, so whatever it holds is stale, and its world-tick
-        // mover otherwise undoes this commit (live: a constant pull toward a stale point, and the
-        // walking thrash whose entityMoved exactly negated this commit's motion). Cleared every
-        // resolved tick; a release hands the body back and the mod re-arms naturally on contact.
-        VSIntegration.suppressShipDrag(entity);
-        noteTickHistory('a', sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ, onDeck,
-                sweep.obstacleCount, sweep.collidedX, sweep.collidedZ);
-        return true;
+        return false;
     }
-
-    /** Vanilla's per-tick vertical damping while creative-flying ({@code EntityPlayer.travel}:
-     *  {@code motionY = d3 * 0.6}), applied here along the DECK normal instead. */
-    private static final double FLY_VERTICAL_DRAG = 0.6D;
-    /** Vanilla's vertical fly impulse per input tick is {@code flySpeed * 3} ({@code
-     *  EntityPlayerSP.onLivingUpdate}); the factor is re-applied on deck axes. */
-    private static final double FLY_IMPULSE_FACTOR = 3.0D;
 
     /**
      * The client's answers about a body whose LOOK and INPUT this side owns - the two questions
@@ -1886,11 +1577,6 @@ public final class ShipFrameTravel {
         /** The held DECK-frame heading (degrees) for {@code entity}, or {@code null} when this
          *  client does not hold that body's look. */
         Float deckYaw(EntityLivingBase entity);
-
-        /** The vertical fly intent (+1 ascend / -1 descend / 0) for {@code entity} at CALL time -
-         *  so it is exactly the input state vanilla's own impulse used THIS tick - or {@code null}
-         *  when this client does not own that body's movement. */
-        Integer flyIntent(EntityLivingBase entity);
     }
 
     /** The installed client port, or {@code null} on a dedicated server, which has no client look
@@ -1925,97 +1611,6 @@ public final class ShipFrameTravel {
                     + clientLookSource.getClass().getName() + "); a second install is a lifecycle bug");
         }
         clientLookSource = source;
-    }
-
-    /**
-     * One tick of FLYING-ABOARD movement - a creative flyer the deck owns keeps flying, in the
-     * deck's frame: vanilla creative-flight kinematics - fly-speed horizontal input, the
-     * {@code 0.6} vertical damping, NO gravity - computed on DECK
-     * axes with the held-carry velocity rule, swept against the ship's own blocks. One frame for
-     * input, aim, camera and motion; the partial "captured but flying world-frame" split is
-     * exactly the old force-capture war and must never exist.
-     *
-     * <p>Vanilla applies the vertical fly impulse as a WORLD {@code motionY} write before travel
-     * runs ({@code EntityPlayerSP.onLivingUpdate}); this branch subtracts exactly that impulse
-     * (a deliberate, commented world-frame step - undoing a world-frame writer) and re-applies it
-     * along the deck's up, so ascend/descend follow the deck like everything else.</p>
-     */
-    private static boolean flyingAboardTravel(EntityLivingBase entity, ShipFrameState anchored,
-                                              float strafe, float vertical, float forward,
-                                              float flyMoveFactor) {
-        World world = entity.world;
-        String shipId = anchored.shipId;
-        double[] local = VSIntegration.toShipFrameFor(world, shipId, entity.posX, entity.posY, entity.posZ);
-        int fly = 0;
-        ClientLookSource client = clientLookSource;
-        if (client != null) {
-            Integer j = client.flyIntent(entity);
-            if (j != null) {
-                fly = j;
-            }
-        }
-        double flyImpulse = entity instanceof EntityPlayer
-                ? ((EntityPlayer) entity).capabilities.getFlySpeed() * FLY_IMPULSE_FACTOR : 0.0;
-        // Deliberate world-frame step: remove the WORLD-axis vertical impulse vanilla already
-        // added for THIS tick's input, so it is not counted once on world axes and again on deck
-        // axes below.
-        double worldMotionY = entity.motionY - flyImpulse * fly;
-        double[] motion = VSIntegration.rotateToShipFrameFor(world, shipId,
-                entity.motionX - anchored.carryX,
-                worldMotionY - anchored.carryY,
-                entity.motionZ - anchored.carryZ);
-        if (local == null || motion == null) {
-            return false;
-        }
-        float deckYaw = deckYawDeg(entity, shipId);
-        moveRelative(motion, strafe, vertical, forward, flyMoveFactor, deckYaw);
-        // Ascend/descend along the DECK's up - the same impulse vanilla applies along world Y.
-        motion[1] += flyImpulse * fly;
-
-        // Sweep the deck-aligned box; a flyer still collides with his ship's geometry.
-        Sweep sweep = sweepShipFrame(world, entity, local, motion[0], motion[1], motion[2], false);
-        boolean onDeck = sweep.collidedVertically && sweep.wantY < 0.0;
-        if (sweep.collidedX) motion[0] = 0.0;
-        if (sweep.collidedY) motion[1] = 0.0;
-        if (sweep.collidedZ) motion[2] = 0.0;
-
-        // Vanilla's flight drags, on the axes they were meant for: 0.6 along the deck normal,
-        // the airborne friction in the deck plane. No gravity while flying.
-        motion[1] *= FLY_VERTICAL_DRAG;
-        motion[0] *= AIR_FRICTION;
-        motion[2] *= AIR_FRICTION;
-
-        // Commit - identical shape to the walking path: subspace-authoritative position, carry
-        // re-added freshly and remembered.
-        double[] worldPos = VSIntegration.toWorldFrameFor(world, shipId, sweep.x, sweep.y, sweep.z);
-        double[] worldMotion = VSIntegration.rotateToWorldFrameFor(world, shipId,
-                motion[0], motion[1], motion[2]);
-        if (worldPos == null || worldMotion == null) {
-            return false;
-        }
-        double[] shipVel = VSIntegration.shipVelocityAtPointFor(
-                world, shipId, worldPos[0], worldPos[1], worldPos[2]);
-        double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
-        double carryY = shipVel == null ? 0.0 : shipVel[1] * TICK_SECONDS;
-        double carryZ = shipVel == null ? 0.0 : shipVel[2] * TICK_SECONDS;
-        worldMotion[0] += carryX;
-        worldMotion[1] += carryY;
-        worldMotion[2] += carryZ;
-        remember(entity, shipId, sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ);
-        entity.setPosition(worldPos[0], worldPos[1], worldPos[2]);
-        entity.motionX = worldMotion[0];
-        entity.motionY = worldMotion[1];
-        entity.motionZ = worldMotion[2];
-        entity.onGround = onDeck;
-        entity.collidedHorizontally = sweep.collidedX || sweep.collidedZ;
-        entity.collidedVertically = sweep.collidedVertically;
-        entity.collided = entity.collidedHorizontally || entity.collidedVertically;
-        entity.fallDistance = 0.0F;
-        updateLimbSwing(entity, sweep.x - local[0], sweep.z - local[2]);
-        VSIntegration.suppressShipDrag(entity);
-        noteTickHistory('f', sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ, onDeck,
-                sweep.obstacleCount, sweep.collidedX, sweep.collidedZ);
-        return true;
     }
 
     /**
@@ -2257,33 +1852,8 @@ public final class ShipFrameTravel {
             net.minecraftforge.common.ForgeHooks.onLivingJump(entity);
             return true;
         }
-        // Ship-RELATIVE velocity, exactly as travel(): a jump is "up 0.42 relative to the deck".
-        // Subtract and re-add the SAME held carry (state), leaving it for the next travel tick to
-        // subtract again - a fresh sample here would double-book the carry against travel's.
-        double[] motion = VSIntegration.rotateToShipFrameFor(entity.world, shipId,
-                entity.motionX - anchored.carryX,
-                entity.motionY - anchored.carryY,
-                entity.motionZ - anchored.carryZ);
-        if (motion == null) {
-            return false;
-        }
-        motion[1] = up;
-        if (entity.isSprinting()) {
-            float rad = deckYawDeg(entity, shipId) * 0.017453292F;
-            motion[0] -= MathHelper.sin(rad) * 0.2F;
-            motion[2] += MathHelper.cos(rad) * 0.2F;
-        }
-        double[] worldMotion = VSIntegration.rotateToWorldFrameFor(entity.world, shipId,
-                motion[0], motion[1], motion[2]);
-        if (worldMotion == null) {
-            return false;
-        }
-        entity.motionX = worldMotion[0] + anchored.carryX;
-        entity.motionY = worldMotion[1] + anchored.carryY;
-        entity.motionZ = worldMotion[2] + anchored.carryZ;
-        entity.isAirBorne = true;
-        net.minecraftforge.common.ForgeHooks.onLivingJump(entity);
-        return true;
+        // A jump on a deck is the deck frame's: vanilla's own jump, run in the deck's frame.
+        return false;
     }
 
 
@@ -2488,147 +2058,6 @@ public final class ShipFrameTravel {
         motion[0] += strafe * cos - forward * sin;
         motion[1] += up;
         motion[2] += forward * cos + strafe * sin;
-    }
-
-    /** Result of a deck-frame collision sweep: the resolved feet position and what blocked it. */
-    private static final class Sweep {
-        double x, y, z;
-        double startY;
-        double wantY;
-        int obstacleCount;
-        boolean collidedX, collidedY, collidedZ, collidedVertically;
-    }
-
-    /**
-     * Vanilla's axis-by-axis box sweep, run on the ship's blocks in the ship's frame - including the
-     * step-up assist, without which a crew member could not walk over a single raised block on his own
-     * deck. {@code World.getCollisionBoxes} takes the box as a parameter, independent of where the
-     * entity actually is, which is what makes resolving in a foreign frame possible at all.
-     */
-    private static Sweep sweepShipFrame(World world, EntityLivingBase entity, double[] local,
-                                        double wantX, double wantY, double wantZ, boolean wasOnDeck) {
-        double halfWidth = entity.width / 2.0;
-        AxisAlignedBB box = new AxisAlignedBB(
-                local[0] - halfWidth, local[1], local[2] - halfWidth,
-                local[0] + halfWidth, local[1] + entity.height, local[2] + halfWidth);
-
-        // De-penetrate the START box. The subspace position comes through a world<->subspace round
-        // trip that carries ~1e-8 of float noise, so a captured anchor can land a hair INSIDE the
-        // deck plane. Vanilla's axis sweep only prevents CROSSING a box - it cannot resolve one that
-        // already overlaps - so a sunk-by-epsilon box lets gravity through and the body never reads
-        // on-deck (an onGround coin flip per capture). Lift onto the highest shallowly-overlapping
-        // top first; a deep embed (a real wall/teleport-into-block) is left for the sweep to treat
-        // as it always did.
-        double lift = 0.0;
-        for (AxisAlignedBB startObstacle : world.getCollisionBoxes(entity, box)) {
-            double pen = startObstacle.maxY - box.minY;
-            if (pen > 0.0 && pen <= 0.1 && pen > lift) {
-                lift = pen;
-            }
-        }
-        if (lift > 0.0) {
-            box = box.offset(0.0, lift, 0.0);
-        }
-
-        List<AxisAlignedBB> obstacles = world.getCollisionBoxes(entity,
-                box.expand(wantX, wantY, wantZ));
-
-        double gotY = wantY;
-        for (AxisAlignedBB obstacle : obstacles) {
-            gotY = obstacle.calculateYOffset(box, gotY);
-        }
-        box = box.offset(0.0, gotY, 0.0);
-
-        double gotX = wantX;
-        for (AxisAlignedBB obstacle : obstacles) {
-            gotX = obstacle.calculateXOffset(box, gotX);
-        }
-        box = box.offset(gotX, 0.0, 0.0);
-
-        double gotZ = wantZ;
-        for (AxisAlignedBB obstacle : obstacles) {
-            gotZ = obstacle.calculateZOffset(box, gotZ);
-        }
-        box = box.offset(0.0, 0.0, gotZ);
-
-        // Step assist: retry the horizontal move lifted by stepHeight and keep it if it gets further.
-        boolean grounded = wasOnDeck || (gotY != wantY && wantY < 0.0);
-        if (entity.stepHeight > 0.0F && grounded && (gotX != wantX || gotZ != wantZ)) {
-            AxisAlignedBB stepped = new AxisAlignedBB(
-                    local[0] - halfWidth, local[1], local[2] - halfWidth,
-                    local[0] + halfWidth, local[1] + entity.height, local[2] + halfWidth);
-            double stepY = entity.stepHeight;
-            List<AxisAlignedBB> stepObstacles = world.getCollisionBoxes(entity,
-                    stepped.expand(wantX, stepY, wantZ));
-
-            for (AxisAlignedBB obstacle : stepObstacles) {
-                stepY = obstacle.calculateYOffset(stepped, stepY);
-            }
-            stepped = stepped.offset(0.0, stepY, 0.0);
-
-            double stepX = wantX;
-            for (AxisAlignedBB obstacle : stepObstacles) {
-                stepX = obstacle.calculateXOffset(stepped, stepX);
-            }
-            stepped = stepped.offset(stepX, 0.0, 0.0);
-
-            double stepZ = wantZ;
-            for (AxisAlignedBB obstacle : stepObstacles) {
-                stepZ = obstacle.calculateZOffset(stepped, stepZ);
-            }
-            stepped = stepped.offset(0.0, 0.0, stepZ);
-
-            // Settle back down onto whatever we stepped onto.
-            double settle = -stepY;
-            for (AxisAlignedBB obstacle : stepObstacles) {
-                settle = obstacle.calculateYOffset(stepped, settle);
-            }
-            stepped = stepped.offset(0.0, settle, 0.0);
-
-            if (stepX * stepX + stepZ * stepZ > gotX * gotX + gotZ * gotZ) {
-                box = stepped;
-                gotX = stepX;
-                gotZ = stepZ;
-                gotY = stepY + settle;
-            }
-        }
-
-        Sweep out = new Sweep();
-        out.obstacleCount = obstacles.size();
-        out.startY = local[1];
-        out.wantY = wantY;
-        out.x = box.minX + halfWidth;
-        out.y = box.minY;
-        out.z = box.minZ + halfWidth;
-        out.collidedX = gotX != wantX;
-        out.collidedY = gotY != wantY;
-        out.collidedZ = gotZ != wantZ;
-        out.collidedVertically = out.collidedY;
-        return out;
-    }
-
-    /**
-     * Fall distance accumulates along the DECK normal, and landing is dispatched to the block that was
-     * landed ON - sampled, like everything else here, in the ship's frame. Vanilla does this inside
-     * {@code Entity.move}; a deck of hay must break a crew member's fall exactly as one on the ground
-     * does, and farmland must be trampled.
-     *
-     * <p>{@code Block.onLanded} is deliberately NOT dispatched. Its default zeroes {@code motionY} and
-     * a slime block negates it - both on WORLD axes, which on a rolled deck would push a body sideways.
-     * The deck-frame sweep has already stopped the fall correctly.</p>
-     */
-    private static void updateFallState(World world, EntityLivingBase entity, Sweep sweep,
-                                        double fallenAlongDeck, boolean onDeck) {
-        if (onDeck) {
-            if (entity.fallDistance > 0.0F) {
-                BlockPos landedOn = new BlockPos(sweep.x, sweep.y - 0.20000000298023224D, sweep.z);
-                world.getBlockState(landedOn).getBlock()
-                        .onFallenUpon(world, landedOn, entity, entity.fallDistance);
-            }
-            entity.fallDistance = 0.0F;
-        } else if (fallenAlongDeck > 0.0) {
-            entity.fallDistance += (float) fallenAlongDeck;
-        }
     }
 
     /** Vanilla's walk-animation bookkeeping, which lives outside the branch we cancelled. Driven by the

@@ -215,11 +215,10 @@ public final class AboardBodies {
             // out from under the cargo, which reads afterwards as "the crossing dropped it".
             //
             // Declared to the deck's own frame, which takes items and mobs and lets them move on the
-            // deck from there. The travel resolver's seed is only for a body that frame refuses: the
-            // resolver re-seats every body it holds each tick and lets go only from a living body's
-            // own travel, so an item seeded to it stayed pinned where it was put down.
-            boolean held = DeckFrameTick.holdAt(restored, shipId, sub[0], sub[1], sub[2])
-                    || ShipFrameTravel.seedShipFrameCapture(restored, shipId, sub[0], sub[1], sub[2]);
+            // deck from there. A body that frame refuses is in a state the deck does not hold (in
+            // water, riding, ...) and is the world's: it is placed, not held, and the warning below
+            // says so.
+            boolean held = DeckFrameTick.holdAt(restored, shipId, sub[0], sub[1], sub[2]);
             if (!held) {
                 // Placed but not held: say so rather than counting it as a clean carry. The body is
                 // where it should be THIS tick and will be left behind the moment the craft moves,
