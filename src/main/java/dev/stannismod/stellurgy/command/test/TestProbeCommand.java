@@ -10436,7 +10436,11 @@ public class TestProbeCommand extends CommandBase {
      * {@code /stellurgytest infra service-state <dim> <x> <y> <z>} — reads
      * {@link dev.stannismod.stellurgy.tile.infrastructure.TileRocketServiceStation}'s
      * package-private state via reflection: linkedRocket entity id (or -1
-     * if unlinked), partsToRepair count, and assemblers count.
+     * if unlinked), partsToRepair count, and assemblers count. Then, without
+     * reflection, the station's own repair: {@code outcome} ({@code none} for no
+     * answer), {@code reserve} (items held), {@code energy}, {@code size} and
+     * {@code rate} (the bay law at the station's size), {@code energyPerStage} and
+     * {@code lookIntervalTicks}.
      */
     private void handleInfraServiceState(MinecraftServer server,
                                          ICommandSender sender,
@@ -10497,6 +10501,32 @@ public class TestProbeCommand extends CommandBase {
             info.put("reflectionError",
                     e.getClass().getSimpleName() + ": " + e.getMessage());
         }
+        // The station's own repair, read through what production exposes: its answer through the
+        // screen's sync interface, its reserve and battery through their capabilities, and the bay
+        // law at the station's size as production computes it, so a caller sizes its waits from
+        // production's numbers.
+        dev.stannismod.stellurgy.tile.infrastructure.TileRocketServiceStation station =
+                (dev.stannismod.stellurgy.tile.infrastructure.TileRocketServiceStation) tile;
+        int answer = station.getData(0);
+        info.put("outcome", answer < 0 ? "none"
+                : dev.stannismod.stellurgy.damage.RepairOutcome.values()[answer].name());
+        net.minecraftforge.items.IItemHandler reserve = station.getCapability(
+                net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+        int reserved = 0;
+        for (int i = 0; reserve != null && i < reserve.getSlots(); i++) {
+            reserved += reserve.getStackInSlot(i).getCount();
+        }
+        info.put("reserve", reserved);
+        net.minecraftforge.energy.IEnergyStorage battery =
+                station.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+        info.put("energy", battery == null ? -1 : battery.getEnergyStored());
+        int size = dev.stannismod.stellurgy.damage.repair.RepairBaySize.of(world, tile.getPos());
+        info.put("size", size);
+        info.put("rate", dev.stannismod.stellurgy.damage.repair.RepairBaySize.powerPerTick(size));
+        info.put("energyPerStage", dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig()
+                .repairBayEnergyPerStage);
+        info.put("lookIntervalTicks",
+                dev.stannismod.stellurgy.tile.infrastructure.TileRocketServiceStation.LOOK_INTERVAL_TICKS);
         send(sender, jsonMap(info));
     }
 
@@ -16402,6 +16432,27 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"stage\":" + victim.getStage() + "}");
             return;
         }
+        if (args.length >= 5 && "part-wear".equalsIgnoreCase(args[0])) {
+            // infra part-wear <entityId> <x> <y> <z> — the wear of the part at that position of a
+            // rocket's own storage (the position inject-broken-part answers), read through the wear
+            // capability the part keeps, and the block standing there.
+            EntityRocket rocket = findRocket(server, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (rocket == null || rocket.storage == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":\"" + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            BlockPos at = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+            dev.stannismod.stellurgy.api.capability.IPartWear wear =
+                    dev.stannismod.stellurgy.api.capability.CapabilityWear.get(rocket.storage.getTileEntity(at));
+            if (wear == null) {
+                send(sender, "{\"error\":\"no wear-bearing part there\",\"pos\":[" + at.getX() + ","
+                        + at.getY() + "," + at.getZ() + "]}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"stage\":" + wear.getStage() + ",\"maxStage\":" + wear.getMaxStage()
+                    + ",\"block\":\"" + rocket.storage.getBlockState(at).getBlock().getRegistryName() + "\"}");
+            return;
+        }
         if (args.length >= 5 && "service-relink".equalsIgnoreCase(args[0])) {
             // force a {@code TileRocketServiceStation} to re-scan
             // its linkedRocket's broken parts without unlinking first.
@@ -17088,7 +17139,7 @@ public class TestProbeCommand extends CommandBase {
                     + "\",\"amount\":" + amount + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z> | inject-broken-part <entityId> <stage> | service-relink <dim> <x> <y> <z> | service-scan-assemblers <dim> <x> <y> <z> | railgun-receive-cargo <dim> <x> <y> <z> <itemId> [count] | railgun-fire <srcDim> <sx> <sy> <sz> <destDim> <dx> <dy> <dz> <itemId> [count] | astrobody-set-research <dim> <x> <y> <z> <bits> | astrobody-load-chip <dim> <x> <y> <z> | astrobody-chip-data <dim> <x> <y> <z> | databus-set-data <dim> <x> <y> <z> <type> <amount>\"}");
+        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z> | inject-broken-part <entityId> <stage> | part-wear <entityId> <x> <y> <z> | service-relink <dim> <x> <y> <z> | service-scan-assemblers <dim> <x> <y> <z> | railgun-receive-cargo <dim> <x> <y> <z> <itemId> [count] | railgun-fire <srcDim> <sx> <sy> <sz> <destDim> <dx> <dy> <dz> <itemId> [count] | astrobody-set-research <dim> <x> <y> <z> <bits> | astrobody-load-chip <dim> <x> <y> <z> | astrobody-chip-data <dim> <x> <y> <z> | databus-set-data <dim> <x> <y> <z> <type> <amount>\"}");
     }
 
     // Fixture-building primitives -----------------------------------------
@@ -20444,18 +20495,23 @@ public class TestProbeCommand extends CommandBase {
                 }
                 stack = ores.get(0).copy();
             } else {
-                net.minecraft.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(spec));
+                // <item-id>[#damage]: a damage after '#' stocks that variant — a worn spare part.
+                int mark = spec.indexOf('#');
+                String itemId = mark >= 0 ? spec.substring(0, mark) : spec;
+                net.minecraft.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
                 if (item == null) {
                     info.put("error", "item not found: " + spec);
                     send(sender, jsonMap(info));
                     return;
                 }
-                stack = new net.minecraft.item.ItemStack(item);
+                stack = new net.minecraft.item.ItemStack(item, 1,
+                        mark >= 0 ? parseIntOr(spec.substring(mark + 1), 0) : 0);
             }
             stack.setCount(count);
             ((dev.stannismod.stellurgy.tile.infrastructure.TileRocketServiceStation) te)
                     .getRepairInventory().setStackInSlot(slot, stack);
             info.put("loaded", stack.getItem().getRegistryName().toString());
+            info.put("damage", stack.getItemDamage());
             info.put("count", count);
             info.put("ok", true);
             send(sender, jsonMap(info));

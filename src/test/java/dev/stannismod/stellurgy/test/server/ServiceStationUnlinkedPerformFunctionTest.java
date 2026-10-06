@@ -9,22 +9,21 @@ import static org.junit.Assert.assertTrue;
  * Regression guard for the standalone-repair null-deref invariant (PR #23
  * review note #5).
  *
- * <p>{@code TileRocketServiceStation.tryStandaloneRepair()} dereferences
- * {@code ((EntityRocket) linkedRocket).storage} with no null/type check. That
- * is safe <i>by construction</i>: {@code tryStandaloneRepair} is only ever
- * reached from {@code performFunction()}'s {@code if (linkedRocket instanceof
- * EntityRocket)} branch, and {@code unlinkRocket()} additionally clears
- * {@code partsToRepair} — so the standalone path can never run with a null (or
- * non-rocket) {@code linkedRocket}.</p>
+ * <p>{@code performFunction()} works the linked rocket's storage only inside its
+ * {@code if (linkedRocket instanceof EntityRocket)} branch, so with no rocket
+ * linked it must do nothing. (Until 2026-10-06 the branch also held the
+ * station's standalone repair, which dereferenced
+ * {@code ((EntityRocket) linkedRocket).storage}; that repair now runs from the
+ * station's own tick behind its own {@code instanceof} check, and an unlinked
+ * station that ticks here exercises it too.)</p>
  *
  * <p>This pins that invariant directly: driving {@code performFunction} on a
- * powered but UNLINKED service station must be a safe no-op — it must not reach
- * the standalone-repair path and must not throw. The {@code service-perform-
- * function} probe wraps the call in try/catch and reports {@code "performFunction
- * threw"} on any {@link RuntimeException}, so a regression (the {@code
- * instanceof} guard removed, or {@code tryStandaloneRepair} hoisted out of it)
- * surfaces here as a failed {@code "ok":true} assertion rather than a silent
- * NPE in production.</p>
+ * powered but UNLINKED service station must be a safe no-op and must not
+ * throw. The {@code service-perform-function} probe wraps the call in
+ * try/catch and reports {@code "performFunction threw"} on any
+ * {@link RuntimeException}, so a regression (the {@code instanceof} guard
+ * removed) surfaces here as a failed {@code "ok":true} assertion rather than a
+ * silent NPE in production.</p>
  */
 public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedServerTest {
 
@@ -56,11 +55,11 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
         assertTrue("station must be unlinked: " + pre, (Reply.of(pre).integer("linkedRocketId") == -1));
         assertTrue("repair queue must be empty: " + pre, (Reply.of(pre).integer("partsToRepairCount") == 0));
 
-        // The concern: performFunction must NOT reach tryStandaloneRepair's
-        // ((EntityRocket) linkedRocket).storage with a null linkedRocket.
+        // The concern: performFunction must NOT reach ((EntityRocket) linkedRocket).storage
+        // with a null linkedRocket.
         String pf = exec("stellurgytest infra service-perform-function 0 " + X + " " + Y + " " + Z);
         assertTrue("performFunction on an unlinked powered station must be a safe "
-                + "no-op (no NPE/CCE reaching the standalone-repair path): " + pf,
+                + "no-op (no NPE/CCE reaching the rocket's storage): " + pf,
                 Reply.of(pf).ok());
 
         // State still sane after the no-op.

@@ -5,6 +5,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import dev.stannismod.stellurgy.damage.RepairOutcome;
+import dev.stannismod.stellurgy.damage.repair.BayEngine;
 import dev.stannismod.stellurgy.damage.repair.TileRepairBay;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 
@@ -30,7 +32,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  *       holds as the rebuild returns.</li>
  *   <li>{@code repair_bay_unloaded} — at the HEAD of {@code TileRepairBay#onChunkUnload}, as its
  *       chunk goes: {@code job} the position it was working ({@code none} if idle) and
- *       {@code banked} the energy it had put toward the step in hand, both before it lets go.</li>
+ *       {@code banked} the energy its engine had put toward the step in hand, both before it lets
+ *       go.</li>
  *   <li>{@code repair_bay_loaded} — at the RETURN of {@code TileRepairBay#onLoad}, as a bay enters
  *       its world — placed, or read back from its chunk: {@code banked} as it arrived.</li>
  * </ul>
@@ -53,7 +56,8 @@ public abstract class MixinTileRepairBayEvents {
     private BlockPos job;
 
     @Shadow
-    private int banked;
+    @Final
+    private BayEngine engine;
 
     @Inject(method = "onChunkUnload", at = @At("HEAD"), require = 1)
     private void stellurgyTest$unloading(CallbackInfo ci) {
@@ -66,7 +70,7 @@ public abstract class MixinTileRepairBayEvents {
         TestTrace.record(world, "repair_bay_unloaded", "\"dim\":" + world.provider.getDimension()
                 + ",\"bay\":\"" + at(self.getPos()) + "\""
                 + ",\"job\":\"" + (job == null ? "none" : at(job)) + "\""
-                + ",\"banked\":" + banked);
+                + ",\"banked\":" + ((BayEngineAccessor) (Object) engine).stellurgyTest$banked());
     }
 
     @Inject(method = "onLoad", at = @At("RETURN"), require = 1)
@@ -79,7 +83,7 @@ public abstract class MixinTileRepairBayEvents {
         TestTrace.instrument(world, INSTRUMENT);
         TestTrace.record(world, "repair_bay_loaded", "\"dim\":" + world.provider.getDimension()
                 + ",\"bay\":\"" + at(self.getPos()) + "\""
-                + ",\"banked\":" + banked);
+                + ",\"banked\":" + ((BayEngineAccessor) (Object) engine).stellurgyTest$banked());
     }
 
     @Inject(method = "settle", at = @At("HEAD"), require = 1)

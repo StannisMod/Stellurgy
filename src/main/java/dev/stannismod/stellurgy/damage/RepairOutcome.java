@@ -13,7 +13,7 @@ package dev.stannismod.stellurgy.damage;
  * ({@link #NO_STRUCTURE}) or meet a hole it may not fill ({@link #UNFILLABLE}).</p>
  */
 public enum RepairOutcome {
-    /** The welder took a stage off. */
+    /** A stage was taken off: the welder's one use, or one step of a machine's work landing. */
     REPAIRED,
     /** A bay is working a damaged position of its ship. */
     REPAIRING,
@@ -30,6 +30,9 @@ public enum RepairOutcome {
     NO_CHARGE,
     /** The only work is a hole whose recorded block no longer exists; the record is kept. */
     UNFILLABLE,
-    /** A bay that is not on a ship: there is no structure for it to serve. */
+    /**
+     * There is no structure to serve: a bay that is not on a ship, or a service station with no
+     * rocket linked.
+     */
     NO_STRUCTURE
 }

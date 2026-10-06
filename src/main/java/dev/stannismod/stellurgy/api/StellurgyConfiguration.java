@@ -536,8 +536,6 @@ public class StellurgyConfiguration {
      */
     @ConfigProperty(needsSync = true)
     public boolean shipsCollide = true;
-    @ConfigProperty(needsSync = true)
-    public double serviceStationStandaloneRepairMultiplier = 3.0;
     /**
      * Share of a block's own crafting recipe charged to repair it from destroyed-adjacent back to
      * pristine BY HAND, spread over its stages. 1.0 means a full hand repair costs about what the
@@ -552,7 +550,8 @@ public class StellurgyConfiguration {
     public int repairWelderCapacity = 100000;
     /**
      * The most Forge Energy per tick a repair bay of ANY size puts into its work — the ceiling of
-     * its size law, {@code rate(N) = max * N / (N + halfRateSize)}. A progression choice, not a
+     * its size law, {@code rate(N) = max * N / (N + halfRateSize)}. A rocket service station
+     * repairing on its own is a bay under this law too, sized by the frames around it. A progression choice, not a
      * physical quantity; there is no derivation and there will not be one. At the defaults a lone
      * controller (size 1) works at about 44 FE/t, a stage every 2.3 s.
      */
@@ -566,8 +565,8 @@ public class StellurgyConfiguration {
     @ConfigProperty
     public int repairBayHalfRateSize = 8;
     /**
-     * Forge Energy a repair bay puts into one stage of damage; a hole costs a block's full run of
-     * stages. Its own number and not the welder's, which happens to equal it today: the two rungs
+     * Forge Energy a repair bay — or a rocket service station repairing on its own — puts into one
+     * stage of damage; a hole costs a block's full run of stages. Its own number and not the welder's, which happens to equal it today: the two rungs
      * are priced separately and must be retunable separately.
      */
     @ConfigProperty
@@ -1015,13 +1014,12 @@ public class StellurgyConfiguration {
         stellurgyConfig.wearWarnProbability = config.get(ROCKET, "wearWarnProbability", 0.05, "Failure probability (0..1) at or above which the pilot is warned before launch that the rocket is worn. Also the threshold that blocks launch when wearCriticalBlocksLaunch is true").getDouble();
         stellurgyConfig.wearCriticalBlocksLaunch = config.get(ROCKET, "wearCriticalBlocksLaunch", false, "If true, a rocket whose failure probability is at/above wearWarnProbability is refused launch (no explosion). If false, the pilot is warned but may still launch and risk the stochastic explosion").getBoolean();
         stellurgyConfig.shipsCollide = config.get(ROCKET, "shipsCollide", true, "If true, two ships whose bounding boxes overlap are both held at rest while they overlap, and a collision event naming both is posted. Crude by design: nothing is conserved, no momentum is transferred and the hulls are compared as boxes rather than blocks. Set false to restore the old behaviour, in which two ships pass through each other").getBoolean();
-        stellurgyConfig.serviceStationStandaloneRepairMultiplier = config.get(ROCKET, "serviceStationStandaloneRepairMultiplier", 3.0, "Resource cost multiplier when the service station repairs a worn part WITHOUT a linked PrecisionAssembler (consumes the repair recipe's non-part ingredients times this factor). The assembler-backed path stays at 1x").getDouble();
         stellurgyConfig.repairCostPerStageFraction = config.get(ROCKET, "repairCostPerStageFraction", 1.0, "Share of a block's own crafting recipe charged for a FULL hand repair with the welder, spread evenly over its damage stages (1.0 = repairing a block from its worst stage costs about what crafting it costs). Ingredient counts round up, so no stage is ever free").getDouble();
         stellurgyConfig.repairWelderEnergyPerStage = config.get(ROCKET, "repairWelderEnergyPerStage", 2000, "Forge Energy the repair welder spends per stage of damage removed").getInt();
         stellurgyConfig.repairWelderCapacity = config.get(ROCKET, "repairWelderCapacity", 100000, "Forge Energy the repair welder holds when fully charged").getInt();
-        stellurgyConfig.repairBayMaxPowerPerTick = config.get(ROCKET, "repairBayMaxPowerPerTick", 400, "Ceiling, in Forge Energy per tick, of what a repair bay of any size puts into its work. A bay of size N works at this times N / (N + repairBayHalfRateSize): bigger is always faster, each added frame buys less, and no size reaches the ceiling. At the defaults a lone controller works at about 44 FE/t", 1, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.repairBayMaxPowerPerTick = config.get(ROCKET, "repairBayMaxPowerPerTick", 400, "Ceiling, in Forge Energy per tick, of what a repair bay of any size puts into its work. A bay of size N works at this times N / (N + repairBayHalfRateSize): bigger is always faster, each added frame buys less, and no size reaches the ceiling. At the defaults a lone controller works at about 44 FE/t. A rocket service station repairing without an assembler is a bay under this law, sized by the frames around it", 1, Integer.MAX_VALUE).getInt();
         stellurgyConfig.repairBayHalfRateSize = config.get(ROCKET, "repairBayHalfRateSize", 8, "Repair bay size (controller plus connected frames) at which a bay works at half of repairBayMaxPowerPerTick. Larger values make added frames pay off for longer", 1, Integer.MAX_VALUE).getInt();
-        stellurgyConfig.repairBayEnergyPerStage = config.get(ROCKET, "repairBayEnergyPerStage", 2000, "Forge Energy a repair bay spends to take one stage of damage off a block. Rebuilding a hole costs a block's full run of stages", 1, Integer.MAX_VALUE).getInt();
+        stellurgyConfig.repairBayEnergyPerStage = config.get(ROCKET, "repairBayEnergyPerStage", 2000, "Forge Energy a repair bay, or a rocket service station repairing without an assembler, spends to take one stage of damage off a block. Rebuilding a hole costs a block's full run of stages", 1, Integer.MAX_VALUE).getInt();
         stellurgyConfig.repairBayEnergyCapacity = config.get(ROCKET, "repairBayEnergyCapacity", 100000, "Forge Energy a repair bay can buffer", 1, Integer.MAX_VALUE).getInt();
         stellurgyConfig.wearTankLeakChanceMax = config.get(ROCKET, "wearTankLeakChanceMax", 0.5, "Chance (0..1) that a fully-worn fuel tank carrying fuel/oxidizer leaks at launch. Scaled by the tank's wear stage. A leak both bleeds fuel and adds to the launch failure (explosion) probability").getDouble();
         stellurgyConfig.wearTankLeakFuelLoss = config.get(ROCKET, "wearTankLeakFuelLoss", 0.25, "Fraction of a fuel type's loaded fuel lost when a worn tank of that type leaks at launch").getDouble();

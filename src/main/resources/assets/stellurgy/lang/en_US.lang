@@ -749,6 +749,12 @@ msg.serviceStation.wornSeatsText=Seats
 msg.serviceStation.wornTanksText=Tanks
 msg.serviceStation.assemblerScan=Scan for assemblers
 msg.serviceStation.link=You program the linker with the service station at
+msg.serviceStation.repairing=Repairing the rocket.
+msg.serviceStation.undamaged=Nothing left to repair.
+msg.serviceStation.no_recipe=§cNo spare part stands for this wear.
+msg.serviceStation.no_materials=§cNo spare part this repair needs.
+msg.serviceStation.no_charge=§cOut of energy.
+msg.serviceStation.no_structure=No rocket linked.
 
 msg.itemsatellite.pwr=Power Storage: 
 msg.itemsatellite.nopwr=No Power Storage

@@ -587,10 +587,11 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
      * that chunk's unload — measured: the hull reported unloaded while the bay's chunk stayed loaded
      * and the bay finished the hole.</p>
      *
-     * <p>red-witnessed: with {@code TileRepairBay#writeToNBT} at
+     * <p>red-witnessed: with {@code BayEngine#writeTo} at
      * {@code nbt.setInteger(NBT_BANKED, banked);} removed, this fails at "the bay came back with
-     * different progress than it left with — its unload said {...job:19200001,129,255996,
-     * banked:133}, its return said {...banked:0} expected:&lt;133&gt; but was:&lt;0&gt;" (2026-10-06).</p>
+     * different progress than it left with — its unload said {...job:19200001,129,153596,
+     * banked:266}, its return said {...banked:0} expected:&lt;266&gt; but was:&lt;0&gt;" (2026-10-06,
+     * re-taken when the banked energy moved out of {@code TileRepairBay#writeToNBT} into the engine).</p>
      *
      * <p>red-witnessed: with a draw of the buffer, {@code charge.spend(1000);}, inserted into
      * {@code TileRepairBay#onLoad} after {@code lookCountdown = world.rand.nextInt(LOOK_INTERVAL_TICKS);}
@@ -739,9 +740,12 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
      * no `block_stage_set` carrying pos = 19200001,129,102396 and to = 0 was recorded within 580
      * ticks" (2026-10-06).</p>
      *
-     * <p>red-witnessed: with {@code TileRepairBay#restage} at {@code held = work.maxStage;} given
+     * <p>red-witnessed: with {@code BayEngine#holdCredit} at
+     * {@code credits.put(step.creditKey(), step.creditPerSpare);} given
      * {@code DamageState.DEFAULT_MAX_STAGE}, this fails at "one spare engine did not pay for every
-     * stage an engine has: {...reserve:2...} expected:&lt;3&gt; but was:&lt;2&gt;" (2026-10-06).</p>
+     * stage an engine has: {...outcome:UNDAMAGED,energy:100000,reserve:2...} expected:&lt;3&gt; but
+     * was:&lt;2&gt;" (2026-10-06, re-taken when the credit moved out of {@code TileRepairBay#restage}
+     * into the engine the service station shares).</p>
      */
     @Test
     public void aWornEngineAboardIsRestagedByTheBayOutOfOneSpare() throws Exception {
@@ -782,11 +786,12 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
      * that is merely not on hand. Asked of a bay that is powered and stocked, so neither of the other
      * two refusals can be the answer.
      *
-     * <p>red-witnessed: with {@code Work#at}'s staged branch at {@code if (!isFinishedBlock(price))}
-     * reduced to {@code if (price.isEmpty())} (the form it shipped with), this fails at "a bay meeting
-     * a block no finished block stands for never said it has no price — no `repair_bay_outcome`
-     * carrying bay = 19199999,129,204798 and to = NO_RECIPE was recorded within 40 ticks"
-     * (2026-10-06).</p>
+     * <p>red-witnessed: with {@code Step#restage} at
+     * {@code return isFinishedBlock(price) ? Optional.of(new Step(price, maxStage)) : Optional.empty();}
+     * reduced to {@code !price.isEmpty()} (the form the staged branch shipped with), this fails at "a
+     * bay meeting a block no finished block stands for never said it has no price — no
+     * `repair_bay_outcome` carrying bay = 19199999,129,102398 and to = NO_RECIPE was recorded within
+     * 40 ticks" (2026-10-06, re-taken when the price moved out of {@code Work#at} into the engine).</p>
      */
     @Test
     public void aDamagedBlockNoFinishedBlockStandsForIsRefusedAsUnpriced() throws Exception {
@@ -979,5 +984,318 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
 
     private static String extractString(String json, String key) {
         return Reply.of(json).text(key);
+    }
+
+    // --- the rocket service station, repairing on its own: the bay's law, reached through a rocket ---
+
+    /** The block a station is, by its registry id. */
+    private static final String SERVICE_STATION = "stellurgy:serviceStation";
+    /** What switches a station on: production runs its repair only under redstone power. */
+    private static final String SWITCH = "minecraft:redstone_block";
+    /**
+     * How worn the motor is made. Three stages: more than one, so "a stage per step" and "to pristine
+     * in one go" give different records, and fewer than a motor's stage count (asserted against
+     * production's own {@code maxStage}), so one spare's credit covers the whole repair.
+     */
+    private static final int MOTOR_WEAR = 3;
+    /**
+     * Spares stocked when one should pay for everything. Two: a station that drew a spare per stage
+     * would empty this before its third stage, and a station that drew none would leave it full.
+     */
+    private static final int SPARES = 2;
+    /** The item damage a WORN spare is stocked at: any wear but none, read as a spare that is not pristine. */
+    private static final int WORN_SPARE = 5;
+    /** How far out from the launchpad the scenario reaches: the station stands three blocks off its west edge. */
+    private static final int STATION_HALO = 3;
+    /** How far above the site the subject reaches: the rocket's seat, its topmost part, at site + 5. */
+    private static final int STATION_REACH = 5;
+
+    /**
+     * C20 REPAIR-11: a rocket service station with no assembler beside it repairs as the repair bay
+     * does — a worn motor is taken down ONE stage per step, never to pristine in one go; the first
+     * step draws one spare of the motor's own kind into credit, and that one spare pays for every
+     * stage of the repair; every step takes energy. Then the station says the rocket is whole.
+     *
+     * <p>NOT seen: the station's screen (its answer is read where production keeps it), and a frame
+     * built against the station (it stands alone, size 1). The rocket never leaves its pad, so
+     * nothing here moves into another scenario's world.</p>
+     *
+     * <p>red-witnessed: with {@code return false;} inserted at the head of
+     * {@code TileRocketServiceStation#restage}, before {@code wear.setStage(wear.getStage() - 1);}, this
+     * fails at "the station never brought the worn motor back to pristine — no
+     * `service_station_restaged` carrying station = 4017,151,4020 and part = 0,0,0 and stage = 0 was
+     * recorded within 310 ticks" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRocketServiceStation#restage} at
+     * {@code wear.setStage(wear.getStage() - 1);} given {@code wear.setStage(0);}, this fails at "the
+     * station must take the motor down one stage per step, never to pristine in one go:
+     * [{...stage:0,reserve:1,energy:8000}] expected:&lt;[2, 1, 0]&gt; but was:&lt;[0]&gt;" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code BayEngine#holdCredit} at
+     * {@code reserve.extractItem(slotOf(step.price, reserve), 1, false);} removed, this fails at "the
+     * first stage must draw exactly one spare into credit: [{...stage:2,reserve:2,energy:8000}, ...]
+     * expected:&lt;1&gt; but was:&lt;2&gt;" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code BayEngine#holdCredit}'s guard {@code if (heldCredit(step) > 0)}
+     * removed, so every stage draws a spare, this fails at "one spare must pay for every stage of this
+     * motor's wear — credit, not a spare a stage: [{...stage:2,reserve:1...}, {...stage:1,reserve:0...},
+     * ...] expected:&lt;1&gt; but was:&lt;0&gt;" (2026-10-06; taken on the pre-change form, in which the
+     * draw read {@code if (slot >= 0 && !reserve.extractItem(slot, 1, false).isEmpty())}; it now reads
+     * {@code reserve.extractItem(slotOf(step.price, reserve), 1, false);}).</p>
+     *
+     * <p>red-witnessed: with {@code BayEngine#work} at {@code int got = draw.applyAsInt(want);} given
+     * {@code int got = want;}, this fails at "a stage was taken off without taking energy:
+     * {...energy:10000...} then [{...stage:2,reserve:1,energy:10000}, ...]" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRocketServiceStation#look} at {@code : RepairOutcome.UNDAMAGED);}
+     * answering NO_RECIPE instead, this fails at "after the last stage the station never looked again
+     * and found the rocket whole — no `service_station_outcome` carrying to = UNDAMAGED after the last
+     * stage was recorded within 40 ticks" (2026-10-06).</p>
+     */
+    @Test
+    public void aServiceStationRestagesAWornMotorAStageAtATimeOutOfOneSpare() throws Exception {
+        Station station = station("a worn motor on its pad, and the service station that restages it");
+        stockStation(station, 0, station.spare, 0, SPARES);
+        chargeStation(station);
+        Reply before = readStation(station);
+        requireArranged("the station must stand alone with its reserve stocked and energy for every stage: "
+                + before, before.integer("assemblersCount") == 0 && before.integer("reserve") == SPARES
+                && before.integer("energy") >= MOTOR_WEAR * before.integer("energyPerStage"));
+
+        long mark = events.markInstrumented();
+        switchOn(station);
+        events.awaitRecordWithFields(mark, "service_station_restaged",
+                "the station never brought the worn motor back to pristine", stationDeadline(before, MOTOR_WEAR),
+                "station", xyz(station.at), "part", xyz(station.part), "stage", "0");
+        java.util.List<String> steps = Events.recordsWhere(events.since(mark, "service_station_restaged"),
+                "station", xyz(station.at));
+
+        java.util.List<Integer> stages = new java.util.ArrayList<>();
+        for (String step : steps) {
+            stages.add((int) Events.number(step, "stage"));
+        }
+        assertEquals("the station must take the motor down one stage per step, never to pristine in one go: "
+                + steps, java.util.Arrays.asList(2, 1, 0), stages);
+        assertEquals("the first stage must draw exactly one spare into credit: " + steps,
+                SPARES - 1, (int) Events.number(steps.get(0), "reserve"));
+        for (String step : steps) {
+            assertEquals("one spare must pay for every stage of this motor's wear — credit, not a spare a stage: "
+                    + steps, SPARES - 1, (int) Events.number(step, "reserve"));
+        }
+        double energy = before.integer("energy");
+        for (String step : steps) {
+            assertTrue("a stage was taken off without taking energy: " + before + " then " + steps,
+                    Events.number(step, "energy") < energy);
+            energy = Events.number(step, "energy");
+        }
+
+        long lastStep = (long) Events.number(steps.get(steps.size() - 1), "seq");
+        int look = before.integer("lookIntervalTicks");
+        events.awaitMatching(mark, "service_station_outcome",
+                reply -> stationSaidAfter(reply, lastStep, station, "UNDAMAGED"),
+                "carrying to = UNDAMAGED after the last stage",
+                "after the last stage the station never looked again and found the rocket whole", 2 * look);
+    }
+
+    /**
+     * C20 REPAIR-7 on the station: out of energy, and holding no spare that pays, are two different
+     * answers, and neither spends anything; then the same station, given a spare that pays, restages
+     * the motor out of it — leaving the spare that did not pay where it was — and once the rocket is
+     * whole says so and spends nothing more.
+     *
+     * <p>The spare that does not pay is a WORN motor of the motor's own kind: a spare equals the
+     * price only at the same item damage, so the rule that refuses it is the rule under test, not an
+     * empty slot.</p>
+     *
+     * <p>red-witnessed: with {@code TileRocketServiceStation#look} at
+     * {@code settle(RepairOutcome.NO_CHARGE);} answering NO_MATERIALS instead, this fails at "a station
+     * with a spare that pays and no energy never said it had no energy — no `service_station_outcome`
+     * carrying station = 4081,151,4020 and to = NO_CHARGE was recorded within 40 ticks" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with a reserve draw, {@code repairInventory.extractItem(0, 1, false);},
+     * inserted before {@code TileRocketServiceStation#look}'s {@code settle(RepairOutcome.NO_CHARGE);},
+     * this fails at "a station refusing for want of energy took from its reserve or touched the motor:
+     * {...outcome:NO_CHARGE,reserve:0,energy:0...} / {...stage:3,maxStage:10...}" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code BayEngine#slotOf} at {@code ItemStack.areItemsEqual(held, wanted)}
+     * given {@code ItemStack.areItemsEqualIgnoreDurability}, this fails at "a station holding only a worn
+     * spare never said it had nothing to pay with — no `service_station_outcome` carrying station =
+     * 4081,151,4020 and to = NO_MATERIALS was recorded within 40 ticks" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRocketServiceStation#getPowerPerOperation} at
+     * {@code return hasValidAssembler() ? 10 : 0;} given {@code return 10;} (the fee as it stood before),
+     * this fails at "a station refusing for want of a spare that pays spent something, or touched the
+     * motor: {...outcome:NO_MATERIALS,reserve:1,energy:9990...} then {...energy:9970...}"
+     * (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code return false;} inserted at the head of
+     * {@code TileRocketServiceStation#restage}, before {@code wear.setStage(wear.getStage() - 1);}, this
+     * fails at "given a spare that pays, the station never brought the motor back to pristine — no
+     * `service_station_restaged` carrying station = 4081,151,4020 and part = 0,0,0 and stage = 0 was
+     * recorded within 310 ticks" (2026-10-06; taken when the third phase stocked one pristine spare
+     * rather than {@code SPARES}, under its message of then).</p>
+     *
+     * <p>red-witnessed: with {@code BayEngine#holdCredit} at
+     * {@code reserve.extractItem(slotOf(step.price, reserve), 1, false);} drawing 2, this fails at "one
+     * pristine spare must pay for the whole repair, beside the worn one that paid nothing:
+     * {...stage:0,reserve:1,energy:4000} expected:&lt;2&gt; but was:&lt;1&gt;" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileRocketServiceStation#look} at {@code : RepairOutcome.UNDAMAGED);}
+     * answering NO_RECIPE instead, this fails at "after restaging the motor the station never said the
+     * rocket was whole — no `service_station_outcome` carrying to = UNDAMAGED after the motor was
+     * restaged was recorded within 40 ticks" (2026-10-06; taken when the third phase stocked one
+     * pristine spare rather than {@code SPARES}).</p>
+     *
+     * <p>red-witnessed: with an energy draw, {@code draw(1);}, inserted before
+     * {@code TileRocketServiceStation#look}'s {@code settle(lacked ? RepairOutcome.NO_MATERIALS} whenever
+     * it is about to answer UNDAMAGED, this fails at "a station with nothing to repair spent something:
+     * {...outcome:UNDAMAGED,reserve:1,energy:3999...} then {...energy:3997...}" (2026-10-06; taken when
+     * the third phase stocked one pristine spare rather than {@code SPARES}).</p>
+     */
+    @Test
+    public void everyRefusalOfTheServiceStationIsItsOwnAnswerAndCostsNothing() throws Exception {
+        Station station = station("a worn motor on its pad, and a service station that will not always repair it");
+        stockStation(station, 0, station.spare, 0, 1);
+        Reply arranged = readStation(station);
+        requireArranged("the station must stand alone, a spare that pays in its reserve and its battery empty: "
+                + arranged, arranged.integer("assemblersCount") == 0 && arranged.integer("reserve") == 1
+                && arranged.integer("energy") == 0);
+        int look = arranged.integer("lookIntervalTicks");
+
+        long starving = events.markInstrumented();
+        switchOn(station);
+        events.awaitRecordWithFields(starving, "service_station_outcome",
+                "a station with a spare that pays and no energy never said it had no energy",
+                2 * look, "station", xyz(station.at), "to", "NO_CHARGE");
+        Reply starved = readStation(station);
+        Reply motorStarved = readPart(station);
+        assertTrue("a station refusing for want of energy took from its reserve or touched the motor: "
+                + starved + " / " + motorStarved,
+                starved.integer("reserve") == 1 && motorStarved.integer("stage") == MOTOR_WEAR);
+
+        long lacking = events.markInstrumented();
+        stockStation(station, 0, station.spare, WORN_SPARE, 1);
+        chargeStation(station);
+        events.awaitRecordWithFields(lacking, "service_station_outcome",
+                "a station holding only a worn spare never said it had nothing to pay with",
+                2 * look, "station", xyz(station.at), "to", "NO_MATERIALS");
+        Reply lackingAt = readStation(station);
+        requireArranged("the station must hold energy while it lacks a spare, or 'it spent none' means nothing: "
+                + lackingAt, lackingAt.integer("energy") > 0);
+        // WINDOW: two looks of a station that keeps refusing — no record is written while its answer
+        // stays the same, so the two reads ARE the observation.
+        GameTicks.advance(client(), GameTicks.server(), 2 * look);
+        Reply lackingAfter = readStation(station);
+        Reply motorLacking = readPart(station);
+        assertTrue("a station refusing for want of a spare that pays spent something, or touched the motor: "
+                + lackingAt + " then " + lackingAfter + " / " + motorLacking,
+                lackingAfter.integer("energy") == lackingAt.integer("energy")
+                        && lackingAfter.integer("reserve") == 1 && motorLacking.integer("stage") == MOTOR_WEAR);
+
+        long paying = events.markInstrumented();
+        stockStation(station, 1, station.spare, 0, SPARES);
+        String whole = events.awaitRecordWithFields(paying, "service_station_restaged",
+                "given spares that pay, the station never brought the motor back to pristine",
+                stationDeadline(lackingAt, MOTOR_WEAR), "station", xyz(station.at), "part", xyz(station.part),
+                "stage", "0");
+        assertEquals("one pristine spare must pay for the whole repair, beside the worn one that paid nothing: "
+                + whole, SPARES, (int) Events.number(whole, "reserve"));
+        long wholeSeq = (long) Events.number(whole, "seq");
+        events.awaitMatching(paying, "service_station_outcome",
+                reply -> stationSaidAfter(reply, wholeSeq, station, "UNDAMAGED"),
+                "carrying to = UNDAMAGED after the motor was restaged",
+                "after restaging the motor the station never said the rocket was whole", 2 * look);
+        Reply undamaged = readStation(station);
+        // WINDOW: two looks of a station with nothing to do, as above.
+        GameTicks.advance(client(), GameTicks.server(), 2 * look);
+        Reply undamagedAfter = readStation(station);
+        assertTrue("a station with nothing to repair spent something: " + undamaged + " then " + undamagedAfter,
+                undamagedAfter.integer("energy") == undamaged.integer("energy")
+                        && undamagedAfter.integer("reserve") == undamaged.integer("reserve"));
+    }
+
+    /** A service station linked to a freshly built rocket one of whose motors is worn; switched off. */
+    private static final class Station {
+        private final int rocket;
+        /** The worn motor's position in the rocket's own storage. */
+        private final int[] part;
+        /** The block that motor is, which is also the item a spare of it is. */
+        private final String spare;
+        private final int[] at;
+
+        private Station(int rocket, int[] part, String spare, int[] at) {
+            this.rocket = rocket;
+            this.part = part;
+            this.spare = spare;
+            this.at = at;
+        }
+    }
+
+    private Station station(String what) throws Exception {
+        FixtureSite site = site();
+        int rocket = dev.stannismod.stellurgy.test.RocketFixture.rocketEntityId(
+                dev.stannismod.stellurgy.test.RocketFixture.assembleAt(site, this::exec, "simple",
+                        STATION_HALO, STATION_REACH, what));
+        Reply worn = Reply.of(exec("stellurgytest infra inject-broken-part " + rocket + " " + MOTOR_WEAR));
+        requireArranged("a motor of the rocket must be worn to " + MOTOR_WEAR + ": " + worn,
+                worn.ok() && worn.integer("stage") == MOTOR_WEAR);
+        int[] part = worn.blockPos("partPos");
+        Reply motor = Reply.of(exec("stellurgytest infra part-wear " + rocket + " " + xyz(part, " ")));
+        requireArranged("the worn motor must have more stages than its wear, so one spare can pay for all: "
+                + motor, motor.ok() && motor.integer("maxStage") > MOTOR_WEAR);
+        int[] at = {site.x - STATION_HALO, site.y + 1, site.z};
+        Reply.of(exec("stellurgytest place 0 " + xyz(at, " ") + " " + SERVICE_STATION)).requireOk("place the station");
+        Reply link = Reply.of(exec("stellurgytest infra link 0 " + xyz(at, " ") + " " + rocket));
+        requireArranged("the station must link to the rocket: " + link, link.ok() && link.bool("linked"));
+        return new Station(rocket, part, motor.text("block"), at);
+    }
+
+    private void switchOn(Station station) throws Exception {
+        Reply.of(exec("stellurgytest place 0 " + station.at[0] + " " + (station.at[1] + 1) + " " + station.at[2]
+                + " " + SWITCH)).requireOk("switch the station on");
+    }
+
+    private void stockStation(Station station, int slot, String item, int damage, int count) throws Exception {
+        Reply stocked = Reply.of(exec("stellurgytest wear station-load 0 " + xyz(station.at, " ") + " " + slot
+                + " " + item + "#" + damage + " " + count));
+        requireArranged("the station's reserve must take " + count + " of " + item + "#" + damage + ": " + stocked,
+                stocked.ok() && stocked.integer("damage") == damage && stocked.integer("count") == count);
+    }
+
+    /** Fill the station's battery through its energy capability, the way a cable would. */
+    private void chargeStation(Station station) throws Exception {
+        Reply charged = Reply.of(exec("stellurgytest energy inject 0 " + xyz(station.at, " ") + " "
+                + Integer.MAX_VALUE));
+        requireArranged("the station must take energy: " + charged, charged.ok() && charged.integer("stored") > 0);
+    }
+
+    private Reply readStation(Station station) throws Exception {
+        return Reply.of(exec("stellurgytest infra service-state 0 " + xyz(station.at, " ")));
+    }
+
+    private Reply readPart(Station station) throws Exception {
+        return Reply.of(exec("stellurgytest infra part-wear " + station.rocket + " " + xyz(station.part, " ")))
+                .requireOk("read the worn motor");
+    }
+
+    /**
+     * A deadline for {@code stages} stages of the station's work, from production's own numbers: one
+     * look, then each stage's energy at the station's rate. Doubled because it is a DEADLINE, not a
+     * measurement — the wait closes the moment its record arrives, so the margin is spent only by a
+     * red.
+     */
+    private static int stationDeadline(Reply station, int stages) {
+        int perStage = (int) Math.ceil(station.integer("energyPerStage") / station.number("rate"));
+        return 2 * (station.integer("lookIntervalTicks") + stages * perStage);
+    }
+
+    /** Whether a {@code service_station_outcome} of {@code station} saying {@code to} came after {@code seq}. */
+    private static boolean stationSaidAfter(String reply, long seq, Station station, String to) {
+        for (String record : Events.recordsWhereAll(reply, "station", xyz(station.at), "to", to)) {
+            if ((long) Events.number(record, "seq") > seq) {
+                return true;
+            }
+        }
+        return false;
     }
 }

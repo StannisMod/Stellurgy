@@ -7,12 +7,8 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.ItemStackHelper;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemBlock;
-import net.minecraft.item.ItemBlockSpecial;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
@@ -52,10 +48,9 @@ import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -71,20 +66,12 @@ import java.util.UUID;
  * nothing: a bay on a base reaching out to whatever is damaged nearby would mend a neighbour's
  * wall.</p>
  *
- * <h3>What it is paid in</h3>
- * <p>Finished blocks, and only those: that is what separates this rung from a fabricator that eats
- * raw materials. A hole takes one block of the recorded kind and is filled with THAT block. A
- * staged block draws one block of its own kind and turns it into as many stages of credit as the
- * block has, held by this bay; restaging spends that credit a stage at a time, so mending a crack
- * never costs more than replacing the block, and it leaves the block — and whatever it holds —
- * where it is.</p>
- *
- * <h3>Time and energy</h3>
- * <p>Work is Forge Energy actually delivered: a stage costs a fixed amount, a hole a block's full
- * run of stages, and how fast the energy goes in is the size law in {@link RepairBaySize}. What has
- * been put in toward the next step is kept, saved with the bay, and spent by whichever job comes
- * next — so a bay that was unloaded or unpowered resumes, and is never billed for work it did not
- * do.</p>
+ * <h3>What it is paid in, and what it takes</h3>
+ * <p>Finished blocks out of its reserve, and Forge Energy at the rate its size buys — the rung's one
+ * law, which this bay runs through its {@link BayEngine} exactly as the rocket service station does.
+ * A hole takes one block of the recorded kind and is filled with THAT block; a staged block is
+ * restaged in place a stage at a time out of credit, so mending a crack never costs more than
+ * replacing the block, and it leaves the block — and whatever it holds — where it is.</p>
  *
  * <h3>Sharing a hull</h3>
  * <p>Any number of bays may stand on one ship. Each CLAIMS the position it works, in the world's
@@ -108,10 +95,6 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
 
     private static final String NBT_RESERVE = "reserve";
     private static final String NBT_ENERGY = "energy";
-    private static final String NBT_CREDITS = "credits";
-    private static final String NBT_CREDIT_ITEM = "item";
-    private static final String NBT_CREDIT_STAGES = "stages";
-    private static final String NBT_BANKED = "banked";
 
     private static final int DATA_OUTCOME = 0;
     private static final int DATA_SIZE = 1;
@@ -119,12 +102,8 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
     private final NonNullList<ItemStack> reserve = NonNullList.withSize(RESERVE_SLOTS, ItemStack.EMPTY);
     private final Charge charge = new Charge();
     private final IItemHandler reserveHandler = new InvWrapper(this);
-    /** Stages paid for and not yet spent, by the item that paid for them. */
-    private final Map<String, Integer> credits = new HashMap<>();
-    /** Energy already put toward the next step of work. */
-    private int banked;
-    /** The fraction of a unit of energy this tick's rate left over; under one, so never saved. */
-    private double carry;
+    /** What this bay has paid for and put in: the rung's price and energy law, shared with the station. */
+    private final BayEngine engine = new BayEngine();
 
     /** The position this bay holds a claim on and is working, or null. Never saved: claims are not. */
     private BlockPos job;
@@ -192,7 +171,7 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
                 unpriced = true;
                 continue;
             }
-            if (!canPay(work)) {
+            if (!engine.canPay(work.step, reserveHandler)) {
                 lacked = true;
                 continue;
             }
@@ -268,42 +247,30 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
             lookCountdown = 0;
             return;
         }
-        if (!canPay(work)) {
+        RepairOutcome step = engine.work(work.step, reserveHandler, this::draw, RepairBaySize.powerPerTick(size),
+                () -> work.kind == Kind.HOLE ? rebuild(work) : restage(work));
+        if (step == RepairOutcome.NO_MATERIALS || step == RepairOutcome.NO_CHARGE) {
             releaseJob();
-            settle(RepairOutcome.NO_MATERIALS);
+            settle(step);
             return;
         }
-        int cost = work.energyCost();
-        int needed = cost - banked;
-        if (needed > 0) {
-            carry += RepairBaySize.powerPerTick(size);
-            int want = (int) Math.min(needed, Math.floor(carry));
-            int got = charge.spend(want);
-            // Never let power that found nothing to do pile up into a later burst.
-            carry = Math.min(carry - got, 1.0D);
-            banked += got;
-            if (got > 0) {
-                markDirty();
-            }
-            if (want > 0 && got == 0) {
-                releaseJob();
-                settle(RepairOutcome.NO_CHARGE);
-                return;
-            }
-        }
-        if (banked < cost) {
+        if (step != RepairOutcome.REPAIRED) {
             return;
         }
-        boolean applied = work.kind == Kind.HOLE ? rebuild(work) : restage(work);
-        if (!applied) {
-            return;
-        }
-        banked -= cost;
         markDirty();
         if (Work.at(world, data, job) == null) {
             releaseJob();
             lookCountdown = 0;
         }
+    }
+
+    /** Take up to {@code amount} out of the buffer toward the step in hand; answers what was taken. */
+    private int draw(int amount) {
+        int got = charge.spend(amount);
+        if (got > 0) {
+            markDirty();
+        }
+        return got;
     }
 
     /**
@@ -312,7 +279,7 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
      * refused leaves the record, the block and the reserve as they were.
      */
     private boolean rebuild(Work work) {
-        int slot = reserveSlotOf(work.price);
+        int slot = BayEngine.slotOf(work.step.price(), reserveHandler);
         if (slot < 0 || !world.setBlockState(work.pos, work.place, 3)) {
             return false;
         }
@@ -321,47 +288,12 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
         return true;
     }
 
-    /** Take one stage off a staged block, paid from credit, or from one block drawn into credit. */
+    /** Take one stage off a staged block; the engine has already seen it paid for. */
     private boolean restage(Work work) {
-        String key = creditKey(work.price);
-        int held = credits.containsKey(key) ? credits.get(key) : 0;
-        if (held <= 0) {
-            int slot = reserveSlotOf(work.price);
-            if (slot < 0) {
-                return false;
-            }
-            decrStackSize(slot, 1);
-            held = work.maxStage;
-        }
-        credits.put(key, held - 1);
         DamageState.setStage(world, work.pos, work.stage - 1);
         IBlockState state = world.getBlockState(work.pos);
         world.notifyBlockUpdate(work.pos, state, state, 3);
         return true;
-    }
-
-    private boolean canPay(Work work) {
-        if (work.kind == Kind.STAGED) {
-            Integer held = credits.get(creditKey(work.price));
-            if (held != null && held > 0) {
-                return true;
-            }
-        }
-        return reserveSlotOf(work.price) >= 0;
-    }
-
-    private int reserveSlotOf(ItemStack wanted) {
-        for (int i = 0; i < reserve.size(); i++) {
-            ItemStack held = reserve.get(i);
-            if (!held.isEmpty() && ItemStack.areItemsEqual(held, wanted)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static String creditKey(ItemStack price) {
-        return price.getItem().getRegistryName() + "@" + price.getMetadata();
     }
 
     private void settle(RepairOutcome next) {
@@ -397,26 +329,18 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
     private static final class Work {
         private final Kind kind;
         private final BlockPos pos;
-        /** The item that pays for it; empty for UNFILLABLE and UNPRICED. */
-        private final ItemStack price;
+        /** What one step of it costs; null for UNFILLABLE and UNPRICED, which have no price. */
+        private final BayEngine.Step step;
         /** For a hole, what to put back. */
         private final IBlockState place;
         private final int stage;
-        private final int maxStage;
 
-        private Work(Kind kind, BlockPos pos, ItemStack price, IBlockState place, int stage, int maxStage) {
+        private Work(Kind kind, BlockPos pos, BayEngine.Step step, IBlockState place, int stage) {
             this.kind = kind;
             this.pos = pos;
-            this.price = price;
+            this.step = step;
             this.place = place;
             this.stage = stage;
-            this.maxStage = maxStage;
-        }
-
-        /** Energy one step of this work costs: a stage, or for a hole a block's full run of them. */
-        private int energyCost() {
-            int perStage = StellurgyConfiguration.getCurrentConfig().repairBayEnergyPerStage;
-            return kind == Kind.HOLE ? perStage * DamageState.DEFAULT_MAX_STAGE : perStage;
         }
 
         /**
@@ -427,10 +351,9 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
          * makes the hole unfillable, and its record stays as the only statement of what the hull
          * was.</p>
          *
-         * <p>A block is priced by the item that stands for it, and only a finished block can pay
-         * (see {@link #isFinishedBlock}). A block whose item is anything else — a door, a sign, a
-         * skull — has no price a reserve could ever hold, which is a different answer from a price
-         * that is merely not on hand.</p>
+         * <p>What a step costs is the engine's to say ({@link BayEngine.Step}); a block no finished
+         * block stands for has no price a reserve could ever hold, which is a different answer from a
+         * price that is merely not on hand.</p>
          */
         @Nullable
         private static Work at(net.minecraft.world.World world, BlockDamageSavedData data, BlockPos pos) {
@@ -445,25 +368,22 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
                 }
                 Block block = BlockDamageSavedData.blockFromName(name);
                 if (block == null) {
-                    return new Work(Kind.UNFILLABLE, pos, ItemStack.EMPTY, null, 0, 0);
+                    return new Work(Kind.UNFILLABLE, pos, null, null, 0);
                 }
                 @SuppressWarnings("deprecation")
                 IBlockState state = block.getStateFromMeta(data.getDestroyedMeta(pos));
-                ItemStack price = new ItemStack(Item.getItemFromBlock(block), 1, block.damageDropped(state));
-                if (!isFinishedBlock(price)) {
-                    return new Work(Kind.UNPRICED, pos, ItemStack.EMPTY, null, 0, 0);
-                }
-                return new Work(Kind.HOLE, pos, price, state, 0, 0);
+                Optional<BayEngine.Step> step = BayEngine.Step.rebuild(block, state);
+                return step.isPresent() ? new Work(Kind.HOLE, pos, step.get(), state, 0)
+                        : new Work(Kind.UNPRICED, pos, null, null, 0);
             }
             int stage = DamageState.getStage(world, pos);
             if (stage <= 0) {
                 return null;
             }
-            ItemStack price = here.getBlock().getItem(world, pos, here);
-            if (!isFinishedBlock(price)) {
-                return new Work(Kind.UNPRICED, pos, ItemStack.EMPTY, null, 0, 0);
-            }
-            return new Work(Kind.STAGED, pos, price, null, stage, DamageState.getMaxStage(world, pos));
+            Optional<BayEngine.Step> step = BayEngine.Step.restage(world, pos, here,
+                    DamageState.getMaxStage(world, pos));
+            return step.isPresent() ? new Work(Kind.STAGED, pos, step.get(), null, stage)
+                    : new Work(Kind.UNPRICED, pos, null, null, 0);
         }
     }
 
@@ -570,17 +490,7 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
         super.writeToNBT(nbt);
         nbt.setTag(NBT_RESERVE, ItemStackHelper.saveAllItems(new NBTTagCompound(), reserve));
         nbt.setInteger(NBT_ENERGY, charge.stored);
-        NBTTagList list = new NBTTagList();
-        for (Map.Entry<String, Integer> credit : credits.entrySet()) {
-            if (credit.getValue() > 0) {
-                NBTTagCompound tag = new NBTTagCompound();
-                tag.setString(NBT_CREDIT_ITEM, credit.getKey());
-                tag.setInteger(NBT_CREDIT_STAGES, credit.getValue());
-                list.appendTag(tag);
-            }
-        }
-        nbt.setTag(NBT_CREDITS, list);
-        nbt.setInteger(NBT_BANKED, banked);
+        engine.writeTo(nbt);
         return nbt;
     }
 
@@ -590,30 +500,14 @@ public class TileRepairBay extends TileEntity implements ITickable, IInventory, 
         reserve.clear();
         ItemStackHelper.loadAllItems(nbt.getCompoundTag(NBT_RESERVE), reserve);
         charge.stored = nbt.getInteger(NBT_ENERGY);
-        credits.clear();
-        NBTTagList list = nbt.getTagList(NBT_CREDITS, 10);
-        for (int i = 0; i < list.tagCount(); i++) {
-            NBTTagCompound tag = list.getCompoundTagAt(i);
-            credits.put(tag.getString(NBT_CREDIT_ITEM), tag.getInteger(NBT_CREDIT_STAGES));
-        }
-        banked = nbt.getInteger(NBT_BANKED);
+        engine.readFrom(nbt);
     }
 
     // --- the reserve, as an inventory --------------------------------------------------------
 
     @Override
     public boolean isItemValidForSlot(int index, ItemStack stack) {
-        return isFinishedBlock(stack);
-    }
-
-    /**
-     * Whether {@code stack} is a finished block — the only thing the reserve takes, and so the only
-     * thing a bay can be paid in. One rule for both, so a block the reserve refuses is never
-     * reported as one the reserve merely lacks.
-     */
-    private static boolean isFinishedBlock(ItemStack stack) {
-        Item item = stack.getItem();
-        return !stack.isEmpty() && (item instanceof ItemBlock || item instanceof ItemBlockSpecial);
+        return BayEngine.isFinishedBlock(stack);
     }
 
     @Override

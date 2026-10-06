@@ -318,6 +318,12 @@ msg.serviceStation.wornSeatsText=Сиденья
 msg.serviceStation.wornTanksText=Резервуары
 msg.serviceStation.assemblerScan=Сканировать сборщики
 msg.serviceStation.link=Вы подключили частотный связыватель к станции техобслуживания на
+msg.serviceStation.repairing=Ремонт ракеты.
+msg.serviceStation.undamaged=Ремонтировать нечего.
+msg.serviceStation.no_recipe=§cДля этого износа нет запчасти.
+msg.serviceStation.no_materials=§cНет нужной запчасти.
+msg.serviceStation.no_charge=§cНет энергии.
+msg.serviceStation.no_structure=Ракета не подключена.
 
 msg.guidanceComputerHatch.loadingState=Состояние загрузки:
 msg.guidanceComputerHatch.ejectonlanding=Автоматический выброс при посадке

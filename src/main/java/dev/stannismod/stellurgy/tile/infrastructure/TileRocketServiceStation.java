@@ -23,17 +23,17 @@ import dev.stannismod.stellurgy.block.BlockRocketMotor;
 import dev.stannismod.stellurgy.block.BlockSeat;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.capability.CapabilityWear;
 import dev.stannismod.stellurgy.api.capability.IPartWear;
+import dev.stannismod.stellurgy.damage.RepairOutcome;
+import dev.stannismod.stellurgy.damage.repair.BayEngine;
+import dev.stannismod.stellurgy.damage.repair.RepairBaySize;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import dev.stannismod.stellurgy.tile.multiblock.machine.TilePrecisionAssembler;
 import dev.stannismod.stellurgy.util.IBrokenPartBlock;
 import dev.stannismod.stellurgy.util.InventoryUtil;
 import dev.stannismod.stellurgy.util.StorageChunk;
 import dev.stannismod.stellurgy.util.nbt.NBTHelper;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
@@ -49,11 +49,12 @@ import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.*;
 import java.util.stream.Collectors;
 import dev.stannismod.stellurgy.libvulpes.util.MachineReach;
 
-public class TileRocketServiceStation extends TileEntityRFConsumer implements IModularInventory, ITickable, IAdjBlockUpdate, IInfrastructure, ILinkableTile, INetworkMachine, IButtonInventory, IProgressBar, IComparatorOverride {
+public class TileRocketServiceStation extends TileEntityRFConsumer implements IModularInventory, ITickable, IAdjBlockUpdate, IInfrastructure, ILinkableTile, INetworkMachine, IButtonInventory, IProgressBar, IComparatorOverride, IDataSync {
 
     EntityRocketBase linkedRocket;
 
@@ -76,9 +77,29 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
     List<TileBrokenPart> partsToRepair = new LinkedList<>();
     List<IBlockState> statesToRepair = new LinkedList<>();
 
-    // Input slots for the standalone (assembler-less) repair path.
+    /**
+     * How often a station with no part in hand looks for one, in ticks. A bound on the cost of
+     * looking, which walks the frames around the station and every tile of the linked rocket; a
+     * station working a part does not wait on it.
+     */
+    public static final int LOOK_INTERVAL_TICKS = 20;
+    private static final int DATA_OUTCOME = 0;
+
+    // The reserve of the station's own repair: spare parts, paid in as the repair bay is paid.
     private static final int REPAIR_SLOTS = 6;
     private final EmbeddedInventory repairInventory = new EmbeddedInventory(REPAIR_SLOTS);
+    /** The repair ladder's T1 law, the same one a ship's repair bay runs. */
+    private final BayEngine engine = new BayEngine();
+    /** The worn part of the linked rocket this station is restaging, or null. Never saved. */
+    private TileEntity job;
+    private int lookCountdown;
+    /** The station's size as a bay, as of its last look. */
+    private int size = 1;
+    /**
+     * What the station's own repair is doing; null while it is not running (switched off, or an
+     * assembler has the work) and before its first look. Not saved: a look restores it.
+     */
+    private RepairOutcome outcome;
 
     public TileRocketServiceStation() {
         super(10000);
@@ -301,10 +322,6 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
 
                 if (hasValidAssembler()) {
                     giveWorkToAssemblers();
-                } else {
-                    // No assembler nearby -> repair one part from the station's own
-                    // input slots at the configured resource penalty.
-                    tryStandaloneRepair();
                 }
             }
         }
@@ -313,7 +330,167 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
         }
     }
 
-    /** The standalone-repair material input inventory (test/automation access). */
+    /**
+     * The assembler path's operating cost: paid each time that path runs, and only when it has an
+     * assembler to run. With none, the station's repair is its own and is paid for by the energy each
+     * stage takes ({@link BayEngine}); charging a second fee for an assembler that is not there would
+     * be a refusal that costs.
+     */
+    @Override
+    public int getPowerPerOperation() {
+        return hasValidAssembler() ? 10 : 0;
+    }
+
+    @Override
+    public void update() {
+        super.update();
+        if (!world.isRemote) {
+            serviceStandalone();
+        }
+    }
+
+    /**
+     * The station's own repair — the repair bay's work, reached through a linked rocket rather than a
+     * ship's hull: every part of the rocket that keeps its own wear, restaged one stage at a time, out
+     * of the spares in the reserve, at the energy the bay's law asks.
+     *
+     * <p>It runs while the station is switched on by redstone and has no assembler: an assembler
+     * takes a worn motor out and rebuilds it by recipe, which is the rung above this one, and the two
+     * never work at once. While it does not run it gives no answer at all, rather than a stale one; a
+     * station with no rocket linked says it has nothing to serve.</p>
+     */
+    private void serviceStandalone() {
+        if (!(linkedRocket instanceof EntityRocket)) {
+            job = null;
+            settle(RepairOutcome.NO_STRUCTURE);
+            return;
+        }
+        if (!getEquivalentPower() || hasValidAssembler()) {
+            job = null;
+            settle(null);
+            return;
+        }
+        EntityRocket rocket = (EntityRocket) linkedRocket;
+        if (job != null) {
+            work(rocket);
+            return;
+        }
+        if (lookCountdown > 0) {
+            lookCountdown--;
+            return;
+        }
+        lookCountdown = LOOK_INTERVAL_TICKS;
+        look(rocket);
+    }
+
+    /**
+     * Find a worn part of the rocket this station can pay for, and say what the station is doing.
+     * A refusal the player can cure by stocking the reserve is reported over one he cannot.
+     */
+    private void look(EntityRocket rocket) {
+        size = RepairBaySize.of(world, pos);
+        boolean lacked = false;
+        boolean unpriced = false;
+        for (TileEntity part : rocket.storage.getTileEntityList()) {
+            IPartWear wear = CapabilityWear.get(part);
+            if (wear == null || wear.getStage() <= 0) {
+                continue;
+            }
+            Optional<BayEngine.Step> step = stepFor(rocket, part, wear);
+            if (!step.isPresent()) {
+                unpriced = true;
+                continue;
+            }
+            if (!engine.canPay(step.get(), repairInventory)) {
+                lacked = true;
+                continue;
+            }
+            if (energy.getUniversalEnergyStored() <= 0) {
+                settle(RepairOutcome.NO_CHARGE);
+                return;
+            }
+            job = part;
+            settle(RepairOutcome.REPAIRING);
+            return;
+        }
+        settle(lacked ? RepairOutcome.NO_MATERIALS
+                : unpriced ? RepairOutcome.NO_RECIPE
+                : RepairOutcome.UNDAMAGED);
+    }
+
+    /** One tick of the part in hand: energy in, and a stage off once enough is in. */
+    private void work(EntityRocket rocket) {
+        IPartWear wear = CapabilityWear.get(job);
+        Optional<BayEngine.Step> step = wear == null || wear.getStage() <= 0
+                || !rocket.storage.getTileEntityList().contains(job)
+                ? Optional.empty() : stepFor(rocket, job, wear);
+        if (!step.isPresent()) {
+            job = null;
+            lookCountdown = 0;
+            return;
+        }
+        RepairOutcome result = engine.work(step.get(), repairInventory, this::draw,
+                RepairBaySize.powerPerTick(size), () -> restage(job, wear));
+        if (result == RepairOutcome.NO_MATERIALS || result == RepairOutcome.NO_CHARGE) {
+            job = null;
+            settle(result);
+            return;
+        }
+        if (result != RepairOutcome.REPAIRED) {
+            return;
+        }
+        markDirty();
+        if (wear.getStage() <= 0) {
+            job = null;
+            lookCountdown = 0;
+        }
+    }
+
+    /**
+     * What one stage of {@code part} costs: a spare of the same kind, pristine. A rocket's part is
+     * not at a position of any world the damage map knows, so its stage is read from, and written
+     * to, its own wear — the only home a rocket part's stage has.
+     */
+    private static Optional<BayEngine.Step> stepFor(EntityRocket rocket, TileEntity part, IPartWear wear) {
+        BlockPos at = part.getPos();
+        return BayEngine.Step.restage(part.getWorld(), at, rocket.storage.getBlockState(at), wear.getMaxStage());
+    }
+
+    /**
+     * Take one stage off {@code part}, and tell the players near the rocket. A part brought back to
+     * pristine leaves the assembler's queue: it is no longer work for anyone.
+     */
+    private boolean restage(TileEntity part, IPartWear wear) {
+        wear.setStage(wear.getStage() - 1);
+        if (wear.getStage() <= 0) {
+            int queued = partsToRepair.indexOf(part);
+            if (queued >= 0) {
+                partsToRepair.remove(queued);
+                statesToRepair.remove(queued);
+            }
+        }
+        syncRocket();
+        return true;
+    }
+
+    /** Take up to {@code amount} out of the battery toward the stage in hand; answers what was taken. */
+    private int draw(int amount) {
+        int got = energy.extractEnergy(amount, false);
+        if (got > 0) {
+            markDirty();
+        }
+        return got;
+    }
+
+    /** Say what the station's own repair is doing; null while it is not running. */
+    private void settle(@Nullable RepairOutcome next) {
+        if (outcome != next) {
+            outcome = next;
+            markDirty();
+        }
+    }
+
+    /** The reserve of the station's own repair (test/automation access). */
     public net.minecraftforge.items.IItemHandlerModifiable getRepairInventory() {
         return repairInventory;
     }
@@ -347,109 +524,14 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
         return false;
     }
 
-    /**
-     * Repair one worn part using the station's own input inventory, consuming the
-     * part's PrecisionAssembler repair-recipe non-part ingredients times
-     * {@code serviceStationStandaloneRepairMultiplier}. No-op (leaves the part
-     * worn) if there is no repair recipe or the materials are missing.
-     */
-    private boolean tryStandaloneRepair() {
-        if (partsToRepair.isEmpty()) {
-            return false;
-        }
-        TileBrokenPart part = partsToRepair.get(0);
-        IBlockState state = statesToRepair.get(0);
-        if (!(part.getBlockType() instanceof IBrokenPartBlock)) {
-            partsToRepair.remove(0);
-            statesToRepair.remove(0);
-            return false;
-        }
-        ItemStack worn = ((IBrokenPartBlock) part.getBlockType()).getDropItem(state, world, part);
-        IRecipe recipe = findRepairRecipe(worn);
-        if (recipe == null) {
-            // Not standalone-repairable (no recipe) — skip so the queue advances.
-            partsToRepair.remove(0);
-            statesToRepair.remove(0);
-            return false;
-        }
-
-        double mult = StellurgyConfiguration.getCurrentConfig().serviceStationStandaloneRepairMultiplier;
-        if (!consumeStandaloneMaterials(recipe, worn, mult, true)) {
-            return false; // not enough materials yet; keep the part queued
-        }
-        consumeStandaloneMaterials(recipe, worn, mult, false);
-
-        part.setStage(0);
-        StorageChunk storage = ((EntityRocket) linkedRocket).storage;
-        storage.setBlockState(part.getPos(), state);
-        partsToRepair.remove(0);
-        statesToRepair.remove(0);
-        syncRocket();
-        return true;
-    }
-
-    private IRecipe findRepairRecipe(ItemStack worn) {
-        for (IRecipe recipe : RecipesMachine.getInstance().getRecipes(TilePrecisionAssembler.class)) {
-            for (List<ItemStack> slot : recipe.getIngredients()) {
-                for (ItemStack variant : slot) {
-                    if (ItemStack.areItemsEqual(variant, worn)) {
-                        return recipe;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Either check (simulate=true) or consume (simulate=false) the recipe's
-     * non-part ingredients ×mult from the station inventory. The part slot (the
-     * worn item itself) is skipped — only materials are charged.
-     */
-    private boolean consumeStandaloneMaterials(IRecipe recipe, ItemStack worn, double mult, boolean simulate) {
-        for (List<ItemStack> slot : recipe.getIngredients()) {
-            if (slot.isEmpty()) {
-                continue;
-            }
-            boolean isPartSlot = slot.stream().anyMatch(s -> ItemStack.areItemsEqual(s, worn));
-            if (isPartSlot) {
-                continue;
-            }
-            int needed = (int) Math.ceil(slot.get(0).getCount() * mult);
-            if (needed <= 0) {
-                continue;
-            }
-            int remaining = needed;
-            for (int i = 0; i < repairInventory.getSlots() && remaining > 0; i++) {
-                ItemStack inSlot = repairInventory.getStackInSlot(i);
-                if (inSlot.isEmpty()) {
-                    continue;
-                }
-                boolean matches = slot.stream().anyMatch(
-                        v -> net.minecraftforge.oredict.OreDictionary.itemMatches(v, inSlot, false));
-                if (!matches) {
-                    continue;
-                }
-                int take = Math.min(remaining, inSlot.getCount());
-                if (!simulate) {
-                    repairInventory.extractItem(i, take, false);
-                }
-                remaining -= take;
-            }
-            if (remaining > 0) {
-                return false; // cannot satisfy this material
-            }
-        }
-        return true;
-    }
-
     @Override
     public boolean canPerformFunction() {
         if (world.isRemote || world.getWorldTime() % 20 != 0) {
             return false;
         }
 
-        boolean hasWork = partsToRepair.size() > 0 || Arrays.stream(partsProcessing).anyMatch(Objects::nonNull);
+        boolean hasWork = partsToRepair.size() > 0 || Arrays.stream(partsProcessing).anyMatch(Objects::nonNull)
+                || job != null;
 
         if (hasWork) {
             return true;
@@ -460,11 +542,6 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
             world.setBlockState(pos, state.withProperty(BlockTile.STATE, false));
         }
         return false;
-    }
-
-    @Override
-    public int getPowerPerOperation() {
-        return 10;
     }
 
     @Override
@@ -490,6 +567,7 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
     @Override
     public void unlinkRocket() {
         linkedRocket = null;
+        job = null;
 
         dropRepairStats();
     }
@@ -528,6 +606,7 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
         if (nbt.hasKey("repairInv")) {
             repairInventory.readFromNBT(nbt.getCompoundTag("repairInv"));
         }
+        engine.readFrom(nbt);
 
         assemblerPoses = NBTHelper.readCollection("assemblerPoses", nbt, ArrayList::new, NBTHelper::readBlockPos);
         partsProcessing = NBTHelper.readCollection("partsProcessing", nbt, ArrayList::new, NBTHelper::readTileEntity).toArray(new TileBrokenPart[0]);
@@ -543,6 +622,7 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
         NBTTagCompound invTag = new NBTTagCompound();
         repairInventory.writeToNBT(invTag);
         nbt.setTag("repairInv", invTag);
+        engine.writeTo(nbt);
 
         NBTHelper.writeCollection("assemblerPoses", nbt, this.assemblers, te -> NBTHelper.writeBlockPos(te.getPos()));
         NBTHelper.writeCollection("partsProcessing", nbt, Arrays.asList(this.partsProcessing), NBTHelper::writeTileEntity);
@@ -583,9 +663,10 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
 
         modules.add(new ModuleProgress(120, 26, 0, TextureResources.progressToMission, this));
 
-        // Input slots for the standalone repair path (materials when no assembler).
+        // The reserve of spare parts the station's own repair is paid from.
         // Kept above y=89 so they don't collide with the player inventory.
         modules.add(new ModuleSlotArray(8, 26, repairInventory, 0, REPAIR_SLOTS));
+        modules.add(new ModuleSync(DATA_OUTCOME, this));
 
         if (!world.isRemote) {
             PacketHandler.sendToPlayer(new PacketMachine(this, (byte) 1), player);
@@ -595,6 +676,10 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
     }
 
     private void updateText() {
+        // What the station's own repair is doing (its RepairOutcome, lower-cased into the key).
+        destroyProgressText.setText(LibVulpes.proxy.getLocalizedString(outcome == null
+                ? "msg.serviceStation.serviceProgressNA"
+                : "msg.serviceStation." + outcome.name().toLowerCase(Locale.ROOT)));
         if (linkedRocket != null) {
             if (!(linkedRocket instanceof EntityRocket)) {
 //                System.out.println("Huh, error....");
@@ -665,6 +750,17 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
     @Override
     public void setProgress(int id, int progress) {
 
+    }
+
+    @Override
+    public int getData(int id) {
+        return outcome == null ? -1 : outcome.ordinal();
+    }
+
+    /** The screen's copy of the outcome, told by the server. */
+    @Override
+    public void setData(int id, int value) {
+        outcome = value < 0 || value >= RepairOutcome.values().length ? null : RepairOutcome.values()[value];
     }
 
     @Override

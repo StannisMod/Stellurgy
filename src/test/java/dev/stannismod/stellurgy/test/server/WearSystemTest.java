@@ -105,49 +105,6 @@ public class WearSystemTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void standaloneRepairResetsMotorWear() throws Exception {
-        final FixtureSite bSite = FixtureSite.openAir(0, 2900, 3080);
-        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
-        int[] builder = buildFixture(bSite);
-        int rocketId = assembleAndGetId(builder);
-        // Wear one motor to stage 5 (no PrecisionAssembler nearby -> standalone path).
-        String inject = String.join("\n", client().execute("stellurgytest infra inject-broken-part " + rocketId + " 5"));
-        assertTrue("inject-broken-part failed: " + inject, Reply.of(inject).ok());
-        assertTrue("worn motor must give a non-zero breaking probability",
-                breakingProbOf(rocketId) > 0);
-
-        // Service station off to the side, with its own clear pocket + redstone power.
-        int sx = bx - 4, sy = by + 1, sz = bz;
-        client().execute("stellurgytest fill 0 " + (sx - 1) + " " + sy + " " + (sz - 1)
-                + " " + (sx + 1) + " " + (sy + 2) + " " + (sz + 1) + " minecraft:air");
-        String place = String.join("\n", client().execute(
-                "stellurgytest place 0 " + sx + " " + sy + " " + sz + " stellurgy:serviceStation"));
-        assertTrue("service station place failed: " + place, Reply.of(place).bool("placed"));
-        // Redstone power — performFunction requires getEquivalentPower=true.
-        client().execute("stellurgytest place 0 " + sx + " " + (sy + 1) + " " + sz + " minecraft:redstone_block");
-
-        String link = String.join("\n", client().execute(
-                "stellurgytest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("link failed: " + link, Reply.of(link).ok());
-
-        // Load the stage-5 repair recipe's non-part materials (ingot + plate),
-        // each well above the x3 standalone multiplier.
-        String load0 = String.join("\n", client().execute(
-                "stellurgytest wear station-load 0 " + sx + " " + sy + " " + sz + " 0 ore:ingotTitaniumIridium 16"));
-        assertTrue("station-load ingot failed: " + load0, Reply.of(load0).ok());
-        String load1 = String.join("\n", client().execute(
-                "stellurgytest wear station-load 0 " + sx + " " + sy + " " + sz + " 1 ore:plateTitaniumAluminide 16"));
-        assertTrue("station-load plate failed: " + load1, Reply.of(load1).ok());
-
-        // Drive performFunction directly (no assembler -> standalone repair branch).
-        client().execute("stellurgytest infra service-perform-function 0 " + sx + " " + sy + " " + sz);
-        client().execute("stellurgytest infra service-perform-function 0 " + sx + " " + sy + " " + sz);
-
-        assertEquals("standalone repair must reset the worn motor (breaking prob back to 0)",
-                0.0, breakingProbOf(rocketId), 1e-6);
-    }
-
-    @Test
     public void wornTankAndSeatSurfaceForLaunchGate() throws Exception {
         final FixtureSite bSite = FixtureSite.openAir(0, 2960, 3080);
         final int bx = bSite.x, by = bSite.y, bz = bSite.z;
