@@ -265,6 +265,16 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     private static final double FLY_IN_ACROSS = 2.12;
 
     /**
+     * How far from the ship's pose, on X and on Z, the fly-in leg sends the player before the fly-in,
+     * in blocks. Two bounds and this sits between them: FAR enough that he is out of the ship's
+     * region — the hull's box is about seven blocks across and production's stay margin is four, so
+     * any capture is released — and NEAR enough, two chunks, that his client keeps the ship loaded.
+     * It was 200, and measured 2026-10-05 that is past the near bound: on the first tick back the
+     * client held no ship at all, and he fell onto the deck while it loaded.
+     */
+    private static final int FLY_IN_AWAY_BLOCKS = 32;
+
+    /**
      * How far the levelled camera roll may move while the ship is STATIONARY, in degrees.
      *
      * <p>The TEST'S OWN: the ship is not moving, so the honest statement is that the roll does not
@@ -300,6 +310,53 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 reply -> Events.countRecords(reply, "vsShip", scenarioShipId) > 0,
                 "naming this scenario's ship (" + scenarioShipId + ")", what,
                 DECK_LINK_BUDGET_TICKS);
+    }
+
+    /**
+     * The oldest decision in a {@code deck_gate_explained} reply that the window made about
+     * {@code body} with production's breakdown on it, or {@code null} when there is none yet. A
+     * record that stopped the window ({@code budgetExhausted}) carries no breakdown and is no
+     * decision; one whose breakdown threw says so in {@code gateRead} and is no decision either.
+     */
+    private static String firstGateDecision(String gateReply, int body) {
+        for (String record : Events.records(gateReply)) {
+            if (isGateDecisionAbout(record, body)) {
+                return record;
+            }
+        }
+        return null;
+    }
+
+    /** Whether {@code record} is a window decision about {@code body} carrying production's whole
+     *  breakdown. The producer always writes {@code e}; {@code gateRead} is asked for by name
+     *  because the budget-exhausted record omits it. */
+    private static boolean isGateDecisionAbout(String record, int body) {
+        Reply r = Reply.of(record);
+        return r.integer("e") == body && r.has("gateRead") && "ok".equals(r.text("gateRead"));
+    }
+
+    /**
+     * The oldest decision in a {@code deck_gate_explained} reply in which {@code body}'s own client
+     * holds it ON this scenario's deck — tracked, anchored on this ship, and not in hull-stand — or
+     * {@code null} when there is none yet. Read bare inside the wait's predicate: on a decision whose
+     * {@code gateRead} is ok the producer always writes {@code alreadyTracked} and {@code hullStand},
+     * and {@code anchorShipId} is non-null exactly when the body is tracked, which is the only time
+     * it is read.
+     */
+    private String firstOnThisDeck(String gateReply, int body) {
+        for (String record : Events.records(gateReply)) {
+            if (!isGateDecisionAbout(record, body)) {
+                continue;
+            }
+            Reply r = Reply.of(record);
+            // the producer always writes alreadyTracked and hullStand on a decision whose gateRead is
+            // ok, and anchorShipId is non-null whenever alreadyTracked is true — the only time it is read
+            if (r.bool("alreadyTracked") && !r.bool("hullStand")
+                    && scenarioShipId.equals(r.text("anchorShipId"))) {
+                return record;
+            }
+        }
+        return null;
     }
 
     /**
@@ -344,7 +401,19 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // was then lost shows up in the release absence over the sink window below.
         Events clientEvents = clientEvents();
         long landingMark = clientEvents.mark();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        long serverLandingMark = serverEvents().mark();
+        // The SERVER is read below, and it only knows where he is from his client's movement packets:
+        // a client capture is taken while he is still falling (measured: 1.5 above the deck), so a
+        // server read after it can find him in the air over the deck — once, red, with the server's
+        // body 0.52 up and nothing under its feet. So the link is the client's LANDING on this ship
+        // after the teleport applied, and then a fence: the server has handled every packet his
+        // client sent up to it. The window's budget is one link's — the landing link may take at
+        // most DECK_LINK_BUDGET_TICKS, under the log's 256-deep ring.
+        String landed = landOnTheDeckUnderGateWatch(landingMark, serverLandingMark, scenarioShipId,
+                "the player's OWN client must resolve him on the deck of THIS grounded ship — a"
+                        + " fall-through leaves the client with no landing on it at all, which is the"
+                        + " fault this scenario exists for", DECK_LINK_BUDGET_TICKS,
+                DECK_LINK_BUDGET_TICKS, ship[0], ship[1] + 4, ship[2]);
         // Carrying this scenario's ship: the record names the hull that took the body, and this class
         // shares its world — a type-only wait returns on a sibling scenario's capture and calls the
         // fall-through "resolved". And over the EPISODE rather than the edge alone: an episode that
@@ -352,10 +421,10 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // next line sees nobody holding him, so the predicate is the chain — the opening, with no
         // later release and no later entry onto another hull.
         String landing = ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
-                "the player's OWN client must resolve him on the deck of THIS grounded ship — a"
-                        + " fall-through leaves the client with no capture at all, which is the fault"
-                        + " this scenario exists for", DECK_LINK_BUDGET_TICKS);
-        System.out.println("[deckcap] grounded client capture=" + landing);
+                "the player's OWN client must still hold him on the deck of THIS grounded ship after"
+                        + " he landed on it", DECK_LINK_BUDGET_TICKS);
+        closeDeckGateWindow();
+        System.out.println("[deckcap] grounded client landing=" + landed + " capture=" + landing);
 
         // Server oracle: does the server capture the standing player on the deck at all, and is the deck
         // solid under his feet in the ship frame? deck-capture prints the whole handles() decision.
@@ -692,13 +761,13 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double sx = info.x, sy = info.y, sz = info.z;
 
         // NEGATIVE (the bug): a player who has NEVER stood on this deck flies into its airspace, off the
-        // deck. He comes straight from far, so nothing has captured him (his ship-frame movement state is
-        // empty). His view must stay his own - not snap to the tilted deck's horizon.
+        // deck. He comes from outside the ship's region, so nothing has captured him (his ship-frame
+        // movement state is empty). His view must stay his own - not snap to the tilted deck's horizon.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (sx + 200) + " 120 " + (sz + 200) + " 0 0");
+        exec("tp @a " + (sx + FLY_IN_AWAY_BLOCKS) + " " + sy + " " + (sz + FLY_IN_AWAY_BLOCKS) + " 0 0");
         // He must be AWAY on the client, because the claim below is about a body the deck has never
         // touched: a client still standing on the deck is still being captured there.
-        awaitClientPlacedNear(awayMark, sx + 200, sz + 200,
+        awaitClientPlacedNear(awayMark, sx + FLY_IN_AWAY_BLOCKS, sz + FLY_IN_AWAY_BLOCKS,
                 "the negative leg needs a body that has never stood on this deck");
         // THE FLY-IN POINT IS PLACED RELATIVE TO THE DECK, not to the pose. The pose is the centre of
         // mass, and where that sits under the deck is a property of the hull, not of this scenario:
@@ -717,58 +786,103 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double[] flyIn = rotateByShip(pose, FLY_IN_ACROSS, deckTopAboveCom + FLY_IN_DECK_CLEARANCE, 0.0);
         final double fx = sx + flyIn[0], fz = sz + flyIn[2];
         Events clientEvents = clientEvents();
+        // The body falls from the fly-in point onto the tilted deck within a few ticks, so "he is in
+        // the airspace, off the deck" is true for a STRETCH that ends at his landing, and any read
+        // taken after a wait returns describes wherever the speed of the box left him by then. Both
+        // the premise and the verdict are therefore read off records stamped inside that stretch:
+        // the client's own gate decision on the first tick at the new point (the per-tick window,
+        // armed BEFORE the teleport so it cannot miss that tick), and the ORDER of the camera's edges
+        // against the tick the deck took him.
+        //
+        // The window's budget is one link's: it is read up to the landing link below, which may take
+        // at most DECK_LINK_BUDGET_TICKS, and a record a tick fits that under the log's 256-deep ring.
+        int body = openDeckGateWindow(DECK_LINK_BUDGET_TICKS);
         long flyInMark = clientEvents.mark();
         exec("tp @a " + fx + " " + (sy + flyIn[1]) + " " + fz + " 0 0");
-        // The reads below must describe him AT the off-deck point, and he starts falling onto the
-        // deck the tick his client applies it — so the placement is linked, read every tick rather
-        // than every five. A read that followed the link ran after at least one client pass there.
         // An ARRANGEMENT link: the placement is vanilla's teleport and the premise of the reads below.
-        ArrangementFailure.arranged(() -> clientEvents.awaitMatchingEvery(flyInMark, "client_pos_look_applied",
-                reply -> ClientEvents.appliedNear(reply, fx, fz),
-                "placing the client at the fly-in point",
-                "the fly-in teleport must reach the client before its view there can be read",
-                DECK_LINK_BUDGET_TICKS, 1));
-        // EXPERIMENT: one client tick counted FROM the placement's own record. The record is taken
-        // while the client drains its task queue, and a read queued behind it could run before the
-        // client ticks or draws at the new point at all — describing the old one. One tick is one
-        // pass there; he has fallen about a tenth of a block by then.
-        bot().waitWorldTicks(1);
-        DeckCapture flyInCap = DeckCapture.read(this::exec);
-        boolean inAABB = flyInCap.aboardByContainment;
-        boolean onShipBlock = flyInCap.supportedByShip;
-        boolean tracked = flyInCap.alreadyTracked;
-        // Being TRACKED is not by itself a broken arrangement here, and demanding otherwise is what
-        // made this scenario intermittent. A body that touches the outer hull is taken into HULL-STAND
-        // mode - which is tracked, and is precisely the mode that keeps world gravity, world movement
-        // and the WORLD camera - and the fly-in point sits a few blocks over a deck rolled 45deg, so
-        // whether that contact happens inside the single tick this samples is a race with the server's
-        // own capture pass. Measured 2026-08-14, one red in a four-run sweep:
-        // alreadyTracked:true hullStand:true supportedByShip:false shipSupportObstacles:0 - a
-        // hull-stand body, asserted against as though it were a deck capture.
-        // What must NOT be true is the thing this leg is about: he must not be ABOARD on a deck, since
-        // only that engages the deck camera. That is tracked-and-not-hull-standing.
-        boolean hullStand = flyInCap.hullStand;
-        boolean aboardOnADeck = tracked && !hullStand;
-        boolean flyInCam = Boolean.parseBoolean(deckCameraText("active"));
-        double flyInRoll = deckCamera("roll");
-        System.out.println("[deckcap] cam fly-in active=" + flyInCam + " roll=" + flyInRoll + " inAABB="
-                + inAABB + " onShipBlock=" + onShipBlock + " tracked=" + tracked + " hullStand="
-                + hullStand + " cap=" + flyInCap.raw());
-        assertTrue("setup: the fly-in point must be inside the ship's AABB, off any deck block, and the "
-                + "player must not be ABOARD on one (hull-stand is allowed - it keeps world-frame "
-                + "semantics, which is what this leg asserts): " + flyInCap.raw(),
-                inAABB && !onShipBlock && !aboardOnADeck);
-        // The negative, as an ABSENCE in the log as well as a static read: the renderer records the
-        // camera's ENGAGE edge, so "it did not hijack his view" is "no `deck_camera_changed` with
-        // active:true since the mark" — and the instrument says out loud it was listening, or the
-        // silence would mean nothing.
-        String flyInCamEdges = clientEvents.since(flyInMark, "deck_camera_changed");
-        Events.assertInstrumentRan(flyInCamEdges, "deck_camera_events",
+        // The wait returns on the first placement near the point, so the newest record is that one.
+        String placements = ArrangementFailure.arranged(() -> ClientEvents.awaitPlacedNear(clientEvents,
+                flyInMark, fx, fz, "the fly-in teleport must reach the client before anything about"
+                        + " him at that point can be read", DECK_LINK_BUDGET_TICKS));
+        final long placed = Reply.of(Events.lastRecord(placements)).longInteger("seq");
+
+        // The deck takes him: the first gate decision after the placement in which his own client
+        // holds him ON this ship's deck (tracked, not hull-stand). It is the END of the stretch the
+        // negative is about, and an ARRANGEMENT link — a body the deck never takes is not this
+        // scenario's subject, and the positive control below is where a deck that takes nobody fails.
+        String gate = ArrangementFailure.arranged(() -> clientEvents.awaitMatching(placed + 1,
+                "deck_gate_explained", seen -> firstOnThisDeck(seen, body) != null,
+                "a gate decision holding him on " + scenarioShipId + "'s deck",
+                "he must fall from the fly-in point onto the tilted deck, which ends the stretch"
+                        + " in which he is in its airspace and not on it", DECK_LINK_BUDGET_TICKS));
+        String firstTick = firstGateDecision(gate, body);
+        String takenOnDeck = firstOnThisDeck(gate, body);
+        // The INSTANT the deck took him is production's own mode commit, not the window's record of
+        // it: the window writes once a tick, so its first "held" record can come after a frame the
+        // capture had already been drawn in. `deck_mode_committed` is written by `logCapture`, which
+        // every first contact and every hull-to-deck hand-over calls right after installing the
+        // state. Blind spot, named by the recorder: a re-capture on the hull-stand travel path records
+        // "aboard" for a body that stays in hull-stand, which can only make this instant EARLIER —
+        // the lenient direction for the order asserted below.
+        String modes = clientEvents.since(placed + 1, "deck_mode_committed");
+        String aboardCommit = null;
+        for (String record : Events.recordsWhere(modes, "ship", scenarioShipId)) {
+            // the producer always writes `mode` on this record
+            if ("aboard".equals(Reply.of(record).text("mode"))) {
+                aboardCommit = record;
+                break;
+            }
+        }
+        scenario().requireArranged("the gate held him on this ship's deck, so production must have"
+                + " committed him aboard it: modes=" + modes + " gate=" + takenOnDeck, aboardCommit != null);
+        long takenSeq = Reply.of(aboardCommit).longInteger("seq");
+        System.out.println("[deckcap] fly-in first gate tick=" + firstTick + " held=" + takenOnDeck
+                + " committed=" + aboardCommit);
+
+        // The premise, from the gate's FIRST decision at the new point: his client holds this ship,
+        // he is inside its box, off every deck block, and not held aboard. Hull-stand is allowed — it
+        // keeps world gravity, world movement and the WORLD camera, which is what this leg asserts.
+        // Containment is asked of THIS ship by name: a client that does not hold the ship answers
+        // "not contained" about every point (measured 2026-10-05 from 200 blocks away: shipCount 0 on
+        // the first tick back, and the deck had him five ticks later), which is a reading about
+        // loading and not about where the point is.
+        Reply first = Reply.of(firstTick);
+        scenario().requireArranged("the fly-in point must be inside THIS ship's box as his client holds"
+                        + " it, off any deck block, and he must not be ABOARD on a deck there, on the"
+                        + " first tick his client decided at it: " + firstTick,
+                java.util.Arrays.asList(first.textArray("containingShipIds")).contains(scenarioShipId)
+                        && !first.bool("supportedByShip")
+                        && !(first.bool("alreadyTracked") && !first.bool("hullStand"))
+                        && takenSeq > first.longInteger("seq"));
+
+        // The negative, as ORDER on one log: the renderer records the camera's ENGAGE edge, and an
+        // engage that precedes the tick the deck took him engaged on a body in the airspace — the
+        // hijack. Over the same stretch, his view must also not have been engaged when he arrived:
+        // the newest edge before the placement, since he was sent away, is not an engage.
+        String camEdges = clientEvents.since(awayMark, "deck_camera_changed");
+        Events.assertInstrumentRan(camEdges, "deck_camera_events",
                 "the deck camera stayed out of a fly-in player's view");
-        assertTrue("a player flying through a ship's airspace, not standing on its deck, must keep his "
-                + "own view; the deck camera must not hijack it (active=" + flyInCam + " roll="
-                + flyInRoll + " edges=" + flyInCamEdges + ")",
-                !flyInCam && Events.countRecords(flyInCamEdges, "active", "true") == 0);
+        String engagedOnArrival = null;
+        String hijack = null;
+        for (String edge : Events.records(camEdges)) {
+            Reply e = Reply.of(edge);
+            long seq = e.longInteger("seq");
+            if (seq < placed) {
+                engagedOnArrival = e.bool("active") ? edge : null;
+                continue;
+            }
+            // the producer always writes `active` on both of its edges (engage and release)
+            if (seq < takenSeq && e.bool("active") && hijack == null) {
+                hijack = edge;
+            }
+        }
+        assertTrue("a player in a ship's airspace, not standing on its deck, must keep his own view;"
+                + " the deck camera engaged before the deck took him (engage=" + hijack
+                + ", camera on arrival=" + engagedOnArrival + ", committed aboard at seq " + takenSeq
+                + ", the episode edges=" + clientEvents.since(placed + 1, "deck_entered")
+                + ", modes=" + modes + ", camera edges=" + camEdges + ")",
+                hijack == null && engagedOnArrival == null);
+        closeDeckGateWindow();
 
         // POSITIVE control: level the ship and land him ON the deck. Now the deck camera SHOULD engage -
         // so the negative above is a real on-deck/off-deck discrimination, not the camera never firing.

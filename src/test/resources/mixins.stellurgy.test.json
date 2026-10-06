@@ -91,6 +91,7 @@
     "MixinShipFrameTravelShove",
     "MixinClientDeckPoseTrace",
     "MixinClientDeckPoseTickTrace",
+    "MixinEntityDummyCarryEvents",
     "MixinHullSweepInputs",
     "MixinShipVelocityAtPoint",
     "MixinBoundarySkyDiag",
