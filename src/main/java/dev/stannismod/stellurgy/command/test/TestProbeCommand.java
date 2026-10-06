@@ -13280,9 +13280,11 @@ public class TestProbeCommand extends CommandBase {
                     // compute the charges a measured draw is worth instead of restating the defaults.
                     "lifeSupportScrubberRate",
                     "lifeSupportScrubberCo2PerCharge",
-                    // The off-switch for zone contents. A test of the classic vent turns it off for
-                    // its own scenario and back on before it leaves.
-                    "lifeSupportZones",
+                    // What the air's chemistry does to living things. A test turns one off for its own
+                    // scenario, puts back what it found, and pins that the effect stops and the
+                    // systems do not.
+                    "breathingRequiresO2",
+                    "enableToxicity",
                     // Disableability-contract tests: toggle each opt-in
                     // mechanic and its tuning knobs from the test JVM.
                     "advancedWeightSystem",

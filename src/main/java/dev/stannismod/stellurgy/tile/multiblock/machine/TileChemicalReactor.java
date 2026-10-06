@@ -63,26 +63,24 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
 
     public static void reloadRecipesSpecial() {
         //Chemical Reactor
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            RecipesMachine recipesMachine = RecipesMachine.getInstance();
-            List<IRecipe> recipes = recipesMachine.getRecipes(TileChemicalReactor.class);
+        RecipesMachine recipesMachine = RecipesMachine.getInstance();
+        List<IRecipe> recipes = recipesMachine.getRecipes(TileChemicalReactor.class);
 
-            //The special recipes still in the registry: one another mod removed since generation is not
-            List<IRecipe> recipesSpecial = new LinkedList<>();
-            for (IRecipe recipe : recipes) {
-                if (isSealingRecipe(recipe)) {
-                    recipesSpecial.add(recipe);
-                }
+        //The special recipes still in the registry: one another mod removed since generation is not
+        List<IRecipe> recipesSpecial = new LinkedList<>();
+        for (IRecipe recipe : recipes) {
+            if (isSealingRecipe(recipe)) {
+                recipesSpecial.add(recipe);
             }
+        }
 
-            //Clear special recipes from the registry
-            recipes.removeAll(recipesSpecial);
+        //Clear special recipes from the registry
+        recipes.removeAll(recipesSpecial);
 
-            //Regenerate special recipes, but only those that weren't removed by another mod since first generation
-            for (IRecipe recipe : recipesSpecial) {
-                Item item = recipe.getOutput().get(0).getItem();
-                registerRecipe(recipesMachine, item);
-            }
+        //Regenerate special recipes, but only those that weren't removed by another mod since first generation
+        for (IRecipe recipe : recipesSpecial) {
+            Item item = recipe.getOutput().get(0).getItem();
+            registerRecipe(recipesMachine, item);
         }
     }
 
@@ -194,13 +192,11 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
     @Override
     public void registerRecipes() {
         //Chemical Reactor
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
-            RecipesMachine recipesMachine = RecipesMachine.getInstance();
+        RecipesMachine recipesMachine = RecipesMachine.getInstance();
 
-            for (ResourceLocation key : Item.REGISTRY.getKeys()) {
-                Item item = Item.REGISTRY.getObject(key);
-                registerRecipe(recipesMachine, item);
-            }
+        for (ResourceLocation key : Item.REGISTRY.getKeys()) {
+            Item item = Item.REGISTRY.getObject(key);
+            registerRecipe(recipesMachine, item);
         }
     }
 

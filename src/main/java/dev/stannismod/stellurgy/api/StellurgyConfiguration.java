@@ -134,8 +134,16 @@ public class StellurgyConfiguration {
      *  moment it hurts somebody rather than snapshotting it at load. */
     @ConfigProperty
     public int vacuumDamage = 1;
+    /**
+     * What the air's chemistry does to living things. Neither switches a SYSTEM off: zones, machines
+     * and gases run either way. {@code breathingRequiresO2} covers everything about oxygen in a body —
+     * respiration, a suit's tank, suffocation and oxygen toxicity; {@code enableToxicity} covers
+     * poison. Vacuum, pressure and heat are physics and answer to neither.
+     */
     @ConfigProperty
-    public boolean enableOxygen = true;
+    public boolean breathingRequiresO2 = true;
+    @ConfigProperty
+    public boolean enableToxicity = true;
     @ConfigProperty(needsSync = true)
     public boolean launchingDestroysBlocks;
     @ConfigProperty(needsSync = true)
@@ -276,8 +284,6 @@ public class StellurgyConfiguration {
     public boolean laserDrillOresBlackList;
     @ConfigProperty
     public int oxygenVentSize;
-    @ConfigProperty
-    public boolean lifeSupportZones;
     /**
      * The oxygen band, the ignition floor and the crew's draw, in the COMPOSITION's own unit rather
      * than the millionths the config file states them in.
@@ -670,7 +676,8 @@ public class StellurgyConfiguration {
 
 
         //Oxygen
-        stellurgyConfig.enableOxygen = config.get(OXYGEN, "EnableAtmosphericEffects", true, "Enable damage from lack of oxygen and effects from non-standard atmospheres.").getBoolean();
+        stellurgyConfig.breathingRequiresO2 = config.get(OXYGEN, "breathingRequiresO2", true, "Living things need oxygen: they breathe it into CO2, a suit spends its tank, and air with too little or too much of it hurts. When false none of that happens to anybody, but life support still runs — zones keep their gases and machines still move them. Vacuum, pressure and heat are not affected.").getBoolean();
+        stellurgyConfig.enableToxicity = config.get(OXYGEN, "enableToxicity", true, "Poisons in the air build up a dose in whoever breathes them and hurt past it. When false nobody takes a dose or poison damage, and the air still holds and reports its poisons.").getBoolean();
         stellurgyConfig.vacuumDamage = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
         stellurgyConfig.overrideGCAir = config.get(OXYGEN, "OverrideGCAir", true, "Disable Galacticraft air and use Stellurgy oxygen on GC planets.").getBoolean();
         stellurgyConfig.oxygenVentConsumptionMult = config.get(OXYGEN, "oxygenVentConsumptionMultiplier", 1f, "Multiplier for oxygen vent O2 use per tick.").getDouble();
@@ -678,7 +685,6 @@ public class StellurgyConfiguration {
         stellurgyConfig.spaceSuitOxygenTime = config.get(OXYGEN, "spaceSuitO2Buffer", 30, "Maximum suit O2 buffer time in minutes.").getInt();
         stellurgyConfig.suitTankCapacity = (float) config.get(OXYGEN, "suitTankCapacity", 1.0f, "Multiplier for suit extra tank capacity.", 0, Float.MAX_VALUE).getDouble();
         stellurgyConfig.scrubberRequiresCartrige = config.get(OXYGEN, "scrubberRequiresCartrige", true, "Require cartridges for oxygen scrubbers.").getBoolean();
-        stellurgyConfig.lifeSupportZones = config.get(OXYGEN, "lifeSupportZones", true, "Track nitrogen/oxygen/CO2 separately inside a sealed zone: crew consume O2 and exhale CO2, and the breathability of the room follows its oxygen partial pressure. When false a sealed zone behaves exactly as it did before, with a fixed breathable atmosphere.").getBoolean();
         stellurgyConfig.lifeSupportMinPartialO2 = partialPressure(config, "lifeSupportMinPartialO2", 160000, "Oxygen partial pressure below which a zone stops being breathable, in millionths of an atmosphere (210000 is sea-level air).");
         stellurgyConfig.lifeSupportCombustionMinPartialO2 = partialPressure(config, "lifeSupportCombustionMinPartialO2", 150000, "Oxidiser partial pressure below which nothing will burn, in millionths of an atmosphere. This is NOT the breathing threshold and must not be set to it: a room can be too thin to breathe and still light a torch, which is why the two are separate numbers. Real materials stop burning a little below where a person stops coping, which is where the default sits. Set it to 0 and nothing burns anywhere.");
         stellurgyConfig.lifeSupportMaxPartialO2 = partialPressure(config, "lifeSupportMaxPartialO2", 300000, "Oxygen partial pressure above which a zone becomes toxic and fire-prone, in millionths of an atmosphere.");

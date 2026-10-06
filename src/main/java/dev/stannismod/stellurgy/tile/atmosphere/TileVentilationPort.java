@@ -129,10 +129,10 @@ public class TileVentilationPort extends TileEntity implements ITickable, IZoneP
         return zone.isSealed();
     }
 
-    /** Only while life support is on and something has paid for it. */
+    /** Only while something has paid for it. */
     @Override
     public boolean canFormBlob() {
-        return StellurgyConfiguration.getCurrentConfig().lifeSupportZones && isPowered();
+        return isPowered();
     }
 
     @Override
@@ -222,8 +222,7 @@ public class TileVentilationPort extends TileEntity implements ITickable, IZoneP
     /** The zone's gases, while there is a zone for the network to serve. */
     @Nullable
     private AirState zoneAirForNetwork() {
-        if (world == null || world.isRemote || !zone.isSealed()
-                || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+        if (world == null || world.isRemote || !zone.isSealed())
             return null;
         AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         return handler == null ? null : handler.getAirState(this);

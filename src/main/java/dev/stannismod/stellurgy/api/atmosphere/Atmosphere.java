@@ -89,7 +89,7 @@ public class Atmosphere {
      */
     public boolean isImmune(EntityLivingBase player) {
         return dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(
-                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.exposureOf(this),
+                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.effectOn(this),
                 player);
     }
 
@@ -115,7 +115,7 @@ public class Atmosphere {
      */
     public String getDisplayMessage() {
         String key = dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards
-                .exposureOf(this).messageKey();
+                .effectOn(this).messageKey();
         return key.isEmpty() ? "" : dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(key);
     }
 
@@ -128,7 +128,7 @@ public class Atmosphere {
      */
     public void onTick(EntityLivingBase player) {
         dev.stannismod.stellurgy.atmosphere.hazard.HazardExposure exposure =
-                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.exposureOf(this);
+                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.effectOn(this);
         // Nothing acts on this tick: ask no further. Asking about protection is not free — it spends
         // a unit of the suit's air — so it is asked only when there is something to be protected FROM.
         if (!exposure.firesOn(player.world.getTotalWorldTime())) {

@@ -84,7 +84,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
 
     @Override
     public boolean canPerformFunction() {
-        if (world.isRemote || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+        if (world.isRemote)
             return false;
         if (++ticksSinceOperation < 20)
             return false;

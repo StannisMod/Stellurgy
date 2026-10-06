@@ -155,10 +155,28 @@ public final class AtmosphereHazards {
         table.put(atmosphere, new HazardExposure(Arrays.asList(rows)));
     }
 
-    /** What this air is doing to the people in it. Never null: unknown air does nothing. */
+    /**
+     * What this air can do to the people in it — a description of the AIR, which a detector reads:
+     * air with no oxygen lacks it whatever the configuration says. What it actually does to somebody
+     * is {@link #effectOn}. Never null: unknown air does nothing.
+     */
     public static HazardExposure exposureOf(Atmosphere atmosphere) {
         HazardExposure found = atmosphere == null ? null : BY_ATMOSPHERE.get(atmosphere);
         return found == null ? HazardExposure.NONE : found;
+    }
+
+    /**
+     * What this air DOES to a living thing as the server is configured: with {@code breathingRequiresO2}
+     * off, a body needs no oxygen, so the air's oxygen hazards fall away and no suit spends its tank.
+     */
+    public static HazardExposure effectOn(Atmosphere atmosphere) {
+        return asConfigured(exposureOf(atmosphere));
+    }
+
+    /** {@code exposure} as it acts on a body under the current {@code breathingRequiresO2}. */
+    static HazardExposure asConfigured(HazardExposure exposure) {
+        return StellurgyConfiguration.getCurrentConfig().breathingRequiresO2
+                ? exposure : exposure.withoutOxygenNeed();
     }
 
     // ─── who is exposed ────────────────────────────────────────────────────────────────────────

@@ -25,9 +25,6 @@ import javax.annotation.Nullable;
  * never a breathable atmosphere out of nothing. Its published atmosphere is derived from those gases
  * from the start, because the flood fill that seals it runs off-thread and the room would otherwise
  * read as pressurised while it is still being measured.</p>
- *
- * <p>With {@code lifeSupportZones} off a zone has no gases worth keeping and this does not touch them:
- * the anchor declares the room's atmosphere itself, as it did before zones had contents.</p>
  */
 final class SealedZone {
 
@@ -84,13 +81,9 @@ final class SealedZone {
     /** Register the zone with the world's handler, giving it its air. Called on the owner's first tick. */
     void register(@Nonnull AtmosphereHandler handler, @Nonnull BlockPos anchor) {
         handler.registerBlob(owner, anchor);
-        if (StellurgyConfiguration.getCurrentConfig().lifeSupportZones) {
-            AirState air = pendingAirState != null ? pendingAirState : airAround(handler, anchor);
-            handler.setAirState(owner, air);
-            handler.setAtmosphereType(owner, air.deriveAtmosphere());
-        } else if (pendingAirState != null) {
-            handler.setAirState(owner, pendingAirState);
-        }
+        AirState air = pendingAirState != null ? pendingAirState : airAround(handler, anchor);
+        handler.setAirState(owner, air);
+        handler.setAtmosphereType(owner, air.deriveAtmosphere());
         pendingAirState = null;
         sealed = false;
         registered = true;
@@ -164,7 +157,7 @@ final class SealedZone {
         breached = !ok;
         everSealed |= ok;
         sealed = ok;
-        if (ok && StellurgyConfiguration.getCurrentConfig().lifeSupportZones) {
+        if (ok) {
             handler.refreshDerivedAtmosphere(owner);
         }
         return ok;
@@ -184,7 +177,7 @@ final class SealedZone {
      * together: vacuum does not sort them.
      */
     private void ventBreachedAir(AtmosphereHandler handler) {
-        if (!breached || sealed || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones) {
+        if (!breached || sealed) {
             return;
         }
         long ratePerSecond = StellurgyConfiguration.getCurrentConfig().lifeSupportBreachVentRate;

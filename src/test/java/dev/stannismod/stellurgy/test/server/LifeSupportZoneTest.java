@@ -722,12 +722,13 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     }
 
     /**
-     * Build the room with its vent and both scrubbers, give the vent power and a tank of oxygen, tick
-     * it once so it holds a zone, and seal it.
+     * Build the room with its vent and both scrubbers, give the vent power and {@code oxygenMb} of
+     * oxygen, tick it once so it holds a zone, and seal it.
      *
+     * @param oxygenMb what the vent's tank holds; 0 for a room nothing tops up
      * @return the zone's volume in blocks, as the seal check measured it
      */
-    private int buildSealedT2Room(FixtureSite site) throws Exception {
+    private int buildSealedT2Room(FixtureSite site, int oxygenMb) throws Exception {
         arrange("stellurgytest fill " + t2At(site, 0, 1, 0) + " " + (site.x + 4) + " " + (site.y + 6)
                 + " " + (site.z + 4) + " minecraft:stone");
         arrange("stellurgytest fill " + t2At(site, 1, 3, 1) + " " + (site.x + 3) + " " + (site.y + 5)
@@ -740,7 +741,9 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
                     + " stellurgy:oxygenscrubber");
         }
         arrange("stellurgytest energy inject " + vent + " 1000");
-        arrange("stellurgytest fluid inject " + vent + " oxygen 1000");
+        if (oxygenMb > 0) {
+            arrange("stellurgytest fluid inject " + vent + " oxygen " + oxygenMb);
+        }
         arrange("stellurgytest tile force-tick " + vent + " 1");
         Reply sealed = arrange("stellurgytest vent reseal " + vent);
         requireArranged("the T2 room must seal before its scrubbers are asked anything: " + sealed,
@@ -798,7 +801,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     @Test
     public void aScrubberTakesItsRoomsCarbonDioxideAndPaysForItInCharges() throws Exception {
         FixtureSite site = clearedSite(0, 6, "a sealed T2 room: a vent with a scrubber either side");
-        int volume = buildSealedT2Room(site);
+        int volume = buildSealedT2Room(site, 1000);
         String vent = t2Vent(site);
         arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000)
                 + " " + ppm(5_000));
@@ -858,7 +861,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     @Test
     public void aSealedRoomKeepsItsAirAcrossAChunkReload() throws Exception {
         FixtureSite site = clearedSite(0, 6, "a sealed room whose chunk is reloaded");
-        buildSealedT2Room(site);
+        buildSealedT2Room(site, 1000);
         String vent = t2Vent(site);
         arrange("stellurgytest vent setair " + vent + " " + ppm(700_000) + " " + ppm(210_000)
                 + " " + ppm(90_000));
@@ -894,7 +897,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     @Test
     public void aVentWithTwoScrubbersStillSuppliesOxygen() throws Exception {
         FixtureSite site = clearedSite(0, 6, "a sealed T2 room short of oxygen");
-        buildSealedT2Room(site);
+        buildSealedT2Room(site, 1000);
         chargeT2Cartridges(site);
         String vent = t2Vent(site);
         arrange("stellurgytest vent setair " + vent + " " + ppm(790_000) + " " + ppm(100_000) + " 0");
@@ -911,45 +914,192 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
                 after.integer("fluidAmount") < before.integer("fluidAmount"));
     }
 
+    // ---- what the air's chemistry does to living things, and the two settings for it ----------------
+    //
+    // The subject breathes in a sealed T2 room: an iron golem, which neither heals nor despawns, so
+    // every point of health it loses is the room's doing and none is given back. Each scenario reads
+    // the effect with its setting OFF, then turns the setting back ON and reads the same instrument
+    // again: the second half is what makes the first a statement about the setting rather than about
+    // a room that could not hurt anybody. A setting is put back to what the scenario found.
+
+    /** Set a configuration key for this scenario, answering what it held so it can be put back. */
+    private String setConfig(String key, String value) throws Exception {
+        return arrange("stellurgytest config set " + key + " " + value).reported("oldValue");
+    }
+
     /**
-     * With {@code lifeSupportZones} off the vent is the classic one: charged scrubbers cut its running
-     * cost, and the same scrubbers with their cartridges gone stop cutting it.
+     * Force-load the chunk a T2 room's occupant stands in, answering it in the probe's "dim cx cz"
+     * form so the scenario can release it. A living thing is updated only where the 32 blocks around
+     * it are loaded, or where its own chunk is held (`World#updateEntityWithOptionalForce`); a plot
+     * away from the connected player has neither, and its golem would never breathe at all.
+     */
+    private String holdT2Chunk(FixtureSite site) throws Exception {
+        String chunk = site.dim + " " + ((site.x + 2) >> 4) + " " + ((site.z + 2) >> 4);
+        arrange("stellurgytest chunk forceload " + chunk);
+        return chunk;
+    }
+
+    /** An iron golem standing on the floor of a T2 room, answered by its entity id. */
+    private int golemInT2Room(FixtureSite site) throws Exception {
+        Reply spawned = arrange("stellurgytest entity spawn " + site.dim + " " + (site.x + 2.5) + " "
+                + (site.y + 3) + " " + (site.z + 2.5) + " minecraft:villager_golem");
+        requireArranged("the golem must be in the room: " + spawned, spawned.bool("spawned"));
+        return spawned.integer("entityId");
+    }
+
+    private double health(FixtureSite site, int entityId) throws Exception {
+        return ask("stellurgytest entity info " + site.dim + " " + entityId).number("health");
+    }
+
+    /**
+     * {@code breathingRequiresO2} off: a living thing in a sealed room turns no oxygen into CO2. With
+     * it on, the same golem in the same room does.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-10-05. CUT — {@code
-     * TileOxygenVent#runningCostPerBlock} at {@code Math.max(FLOW_PER_BLOCK - numScrubbers *
-     * FLOW_SAVED_PER_SCRUBBER, 0)} with no scrubbers counted: "two charged scrubbers must cut a classic
-     * vent's running cost to nothing expected:&lt;997&gt; but was:&lt;974&gt;". UNCUT WHEN EMPTY —
-     * {@code TileOxygenVent#chargeScrubbers} at {@code numScrubbers = scrubber.useCharge() ? numScrubbers
-     * + 1 : numScrubbers;} spending the charge without recounting: "and once their cartridges are gone
-     * the vent must pay its running cost again: 1000 -&gt; 1000".</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-10-06. OFF — {@code AtmosphereHandler#respire}
+     * at {@code if (entity == null || !config.breathingRequiresO2)} without the setting: "with breathing
+     * not needing oxygen nobody may turn it into CO2: … -&gt; … \"airO2\":209642860,\"airCO2\":357140".
+     * ON — the same line returning always: "and the same golem breathes the room's oxygen into CO2 once
+     * it needs oxygen: 0 -&gt; 0".</p>
      */
     @Test
-    public void withZonesOffChargedScrubbersCutTheVentsRunningCost() throws Exception {
-        FixtureSite site = clearedSite(0, 6, "a sealed T2 room run the classic way");
-        arrange("stellurgytest config set lifeSupportZones false");
+    public void withBreathingNotNeedingOxygenNobodyUsesIt() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed room with somebody in it");
+        buildSealedT2Room(site, 0);
+        String vent = t2Vent(site);
+        arrange("stellurgytest vent setair " + vent + " " + ppm(790_000) + " " + ppm(210_000) + " 0");
+        String chunk = holdT2Chunk(site);
+        golemInT2Room(site);
+        String found = setConfig("breathingRequiresO2", "false");
         try {
-            buildSealedT2Room(site);
-            chargeT2Cartridges(site);
-            String vent = t2Vent(site);
+            Reply before = ask("stellurgytest vent info " + vent);
+            // EXPERIMENT: five seconds of the golem living in the room; respiration happens once a
+            // second, and no record marks a breath for a link to close on.
+            GameTicks.advance(client(), GameTicks.server(), 100);
+            Reply after = ask("stellurgytest vent info " + vent);
+            assertTrue("with breathing not needing oxygen nobody may turn it into CO2: " + before + " -> " + after,
+                    before.longInteger("airO2") == after.longInteger("airO2")
+                            && before.longInteger("airCO2") == after.longInteger("airCO2"));
 
-            int beforeCharged = ask("stellurgytest vent info " + vent).integer("fluidAmount");
-            runT2Seconds(site, 1);
-            int afterCharged = ask("stellurgytest vent info " + vent).integer("fluidAmount");
-            assertEquals("two charged scrubbers must cut a classic vent's running cost to nothing",
-                    beforeCharged, afterCharged);
-
-            for (String scrubber : t2Scrubbers(site)) {
-                arrange("stellurgytest hatch fill " + scrubber + " 0 minecraft:air 1 0");
-            }
-            // The vent counts its charged scrubbers once per charge interval; ten seconds covers one.
-            runT2Seconds(site, 10);
-            int beforeEmpty = ask("stellurgytest vent info " + vent).integer("fluidAmount");
-            runT2Seconds(site, 1);
-            int afterEmpty = ask("stellurgytest vent info " + vent).integer("fluidAmount");
-            assertTrue("and once their cartridges are gone the vent must pay its running cost again: "
-                    + beforeEmpty + " -> " + afterEmpty, afterEmpty < beforeEmpty);
+            setConfig("breathingRequiresO2", "true");
+            long co2On = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+            // EXPERIMENT: the same five seconds with breathing needing oxygen again.
+            GameTicks.advance(client(), GameTicks.server(), 100);
+            long co2After = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+            assertTrue("and the same golem breathes the room's oxygen into CO2 once it needs oxygen: "
+                    + co2On + " -> " + co2After, co2After > co2On);
         } finally {
-            arrange("stellurgytest config set lifeSupportZones true");
+            setConfig("breathingRequiresO2", found);
+            arrange("stellurgytest chunk release " + chunk);
+        }
+    }
+
+    /**
+     * {@code breathingRequiresO2} off: a living thing in a room with no oxygen is not hurt. With it on,
+     * the same golem in the same room is.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-06. OFF — {@code
+     * AtmosphereHazards#asConfigured} at {@code return StellurgyConfiguration.getCurrentConfig().breathingRequiresO2}
+     * answering true always: "with breathing not needing oxygen a room without it must hurt nobody
+     * expected:&lt;100.0&gt; but was:&lt;94.0&gt;". ON — the same line answering false always: "and the
+     * same golem in the same room is hurt once it needs oxygen: 100.0 -&gt; 100.0".</p>
+     */
+    @Test
+    public void withBreathingNotNeedingOxygenNobodySuffocates() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed room of nitrogen with somebody in it");
+        // No oxygen in the tank: a vent topping the room up would make it air worth breathing.
+        buildSealedT2Room(site, 0);
+        String vent = t2Vent(site);
+        arrange("stellurgytest vent setair " + vent + " " + ppm(1_000_000) + " 0 0");
+        String chunk = holdT2Chunk(site);
+        int golem = golemInT2Room(site);
+        String found = setConfig("breathingRequiresO2", "false");
+        try {
+            double before = health(site, golem);
+            // EXPERIMENT: three seconds in air with no oxygen; the harm comes every half second.
+            GameTicks.advance(client(), GameTicks.server(), 60);
+            double after = health(site, golem);
+            assertEquals("with breathing not needing oxygen a room without it must hurt nobody",
+                    before, after, 0.0D);
+
+            setConfig("breathingRequiresO2", "true");
+            // EXPERIMENT: the same three seconds with breathing needing oxygen again.
+            GameTicks.advance(client(), GameTicks.server(), 60);
+            double suffocated = health(site, golem);
+            assertTrue("and the same golem in the same room is hurt once it needs oxygen: " + after
+                    + " -> " + suffocated, suffocated < after);
+        } finally {
+            setConfig("breathingRequiresO2", found);
+            arrange("stellurgytest chunk release " + chunk);
+        }
+    }
+
+    /**
+     * {@code enableToxicity} off: a living thing breathing poisoned air is not hurt. With it on, the
+     * same golem in the same room is.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-06. OFF — {@code Poisoning#tick} at
+     * {@code boolean toxic = StellurgyConfiguration.getCurrentConfig().enableToxicity;} set true: "with
+     * toxicity off poisoned air must hurt nobody expected:&lt;100.0&gt; but was:&lt;93.998375&gt;". ON —
+     * the same line set false: "and the same golem in the same air is poisoned once toxicity is on:
+     * 100.0 -&gt; 100.0".</p>
+     */
+    @Test
+    public void withToxicityOffPoisonHurtsNobody() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed room of poisoned air with somebody in it");
+        buildSealedT2Room(site, 0);
+        String vent = t2Vent(site);
+        // Carbon monoxide at ten times its limit: a dose past the harm threshold in a few seconds.
+        arrange("stellurgytest vent setair " + vent + " " + ppm(789_000) + " " + ppm(210_000) + " 0"
+                + " carbonmonoxide=" + ppm(1_000));
+        String chunk = holdT2Chunk(site);
+        int golem = golemInT2Room(site);
+        String found = setConfig("enableToxicity", "false");
+        try {
+            double before = health(site, golem);
+            // EXPERIMENT: six seconds of breathing the poison; a dose is taken once a second.
+            GameTicks.advance(client(), GameTicks.server(), 120);
+            double after = health(site, golem);
+            assertEquals("with toxicity off poisoned air must hurt nobody", before, after, 0.0D);
+
+            setConfig("enableToxicity", "true");
+            // EXPERIMENT: the same six seconds with toxicity on.
+            GameTicks.advance(client(), GameTicks.server(), 120);
+            double poisoned = health(site, golem);
+            assertTrue("and the same golem in the same air is poisoned once toxicity is on: " + after
+                    + " -> " + poisoned, poisoned < after);
+        } finally {
+            setConfig("enableToxicity", found);
+            arrange("stellurgytest chunk release " + chunk);
+        }
+    }
+
+    /**
+     * With both settings off life support still runs: a charged scrubber still takes its room's CO2.
+     * The settings are about what the air does to living things, never about the machines.
+     *
+     * <p>red-witnessed: with {@code TileOxygenVent#scrub} at {@code if (++ticksSinceScrub < SCRUB_TICKS)}
+     * preceded by a return while {@code breathingRequiresO2} is off: "with both chemistry settings off a
+     * charged scrubber must still take CO2: 5000000 -&gt; 5000000", 2026-10-06.</p>
+     */
+    @Test
+    public void withBothChemistrySettingsOffTheMachinesStillMoveGas() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed T2 room with the chemistry settings off");
+        buildSealedT2Room(site, 1000);
+        String vent = t2Vent(site);
+        arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000)
+                + " " + ppm(5_000));
+        String breathing = setConfig("breathingRequiresO2", "false");
+        String toxicity = setConfig("enableToxicity", "false");
+        try {
+            chargeT2Cartridges(site);
+            long before = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+            runT2Seconds(site, 2);
+            long after = ask("stellurgytest vent info " + vent).longInteger("airCO2");
+            assertTrue("with both chemistry settings off a charged scrubber must still take CO2: "
+                    + before + " -> " + after, after < before);
+        } finally {
+            setConfig("breathingRequiresO2", breathing);
+            setConfig("enableToxicity", toxicity);
         }
     }
 }

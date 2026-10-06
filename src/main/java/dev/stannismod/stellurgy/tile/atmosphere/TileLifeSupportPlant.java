@@ -80,7 +80,7 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
      */
     @Override
     public int getAvailable() {
-        if (world == null || world.isRemote || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+        if (world == null || world.isRemote)
             return 0;
         if (!hasRoomForDust())
             return 0;

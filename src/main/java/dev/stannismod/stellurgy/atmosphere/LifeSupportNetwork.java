@@ -56,8 +56,6 @@ public final class LifeSupportNetwork {
      * Order inside a component is the membership's, which is stable between rebuilds.
      */
     static void payPortUpkeep(List<ISubsystemNetworkNode> members) {
-        if (!StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
-            return;
         int fe = Math.max(0, StellurgyConfiguration.getCurrentConfig().lifeSupportPortFePerTick);
         List<UpkeepSupply> supplies = new ArrayList<>();
         for (ISubsystemNetworkNode member : members) {

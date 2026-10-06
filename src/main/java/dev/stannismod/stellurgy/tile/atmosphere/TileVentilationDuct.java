@@ -40,8 +40,6 @@ public class TileVentilationDuct extends TileEntity implements ISubsystemCable {
 
     @Override
     public int getThroughputPerTick() {
-        if (!StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
-            return 0;
         return LifeSupportNetwork.perTick(StellurgyConfiguration.getCurrentConfig().lifeSupportDuctThroughput);
     }
 

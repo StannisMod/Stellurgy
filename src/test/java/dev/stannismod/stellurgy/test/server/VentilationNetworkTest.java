@@ -205,10 +205,10 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * zone. The second half is what makes the first a reading about power rather than about a room
      * that could not seal.
      *
-     * <p>red-witnessed: with {@code TileVentilationPort#canFormBlob} at {@code return
-     * StellurgyConfiguration.getCurrentConfig().lifeSupportZones && isPowered();} no longer asking
-     * whether it was paid: "a port with no plant on its network must hold no zone: {\"ok\":true,
-     * \"sealed\":true,…", 2026-10-05. PAID — {@code LifeSupportNetwork#payPortUpkeep} at {@code if
+     * <p>red-witnessed: with {@code TileVentilationPort#canFormBlob} at {@code return isPowered();}
+     * no longer asking whether it was paid: "a port with no plant on its network must hold no zone:
+     * {\"ok\":true, \"sealed\":true,…", 2026-10-05 — taken on the form before the life-support
+     * switch was removed (2026-10-06), when the line also asked that switch. PAID — {@code LifeSupportNetwork#payPortUpkeep} at {@code if
      * (supply.payUpkeep(fe))} never crediting the port: "with a powered plant on the duct the port
      * must be paid and hold its room: … \"powered\":false", 2026-10-05.</p>
      */

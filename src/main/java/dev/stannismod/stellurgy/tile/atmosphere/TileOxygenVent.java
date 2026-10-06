@@ -56,9 +56,6 @@ import java.util.List;
  *
  * <p>Tier 2 is the {@link TileCO2Scrubber} beside it: the vent keeps the room, the scrubbers take its
  * carbon dioxide out, and the vent powers each of them while it works.</p>
- *
- * <p>With {@code lifeSupportZones} off a room has no tracked gases, and the vent DECLARES its
- * atmosphere: pressurised while its tank pays its running cost, the world's own once it cannot.</p>
  */
 public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZonePort, IModularInventory, INetworkMachine, IAdjBlockUpdate, IToggleableMachine, IButtonInventory, IToggleButton {
 
@@ -68,17 +65,12 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
     private final SealedZone zone = new SealedZone(this, this::markDirty);
     /** The seal as the server last reported it; the client keeps no zone of its own. */
     private boolean clientSealed;
-    /**
-     * The tank holds oxygen. With zones on this is a reading of the tank; with zones off it is the
-     * classic "the tank paid this tick's running cost", whose change is what declares the room.
-     */
+    /** The tank holds oxygen, as of this vent's last operation. */
     private boolean hasFluid;
     private boolean soundInit;
     private boolean allowTrace;
     private boolean blockUpdated;
-    /** Zones off: the scrubbers that cut this vent's running cost on their last charge. */
-    private int numScrubbers;
-    /** Zones on: the scrubbers that absorbed CO2 in their last second, each of which this vent powers. */
+    /** The scrubbers that absorbed CO2 in their last second, each of which this vent powers. */
     private int workingScrubbers;
     private List<TileCO2Scrubber> scrubbers;
     private int radius = 0;
@@ -87,14 +79,10 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
     private ModuleToggleSwitch traceToggle;
     /** How often an unsealed vent widens its diagnostic trace by one block. */
     private static final int TRACE_STEP_TICKS = 10;
-    /** Zones off: how often a scrubber cartridge is charged for the work it has been doing. */
-    private static final int SCRUBBER_CHARGE_TICKS = 200;
-    /** Zones on: scrubbers work once a second, because their rate is stated per second. */
+    /** Scrubbers work once a second, because their rate is stated per second. */
     private static final int SCRUB_TICKS = 20;
     /** The vent's own flow per block of room per tick, before the oxygenVentConsumptionMultiplier. */
     private static final float FLOW_PER_BLOCK = 0.01f;
-    /** Zones off: how much of {@link #FLOW_PER_BLOCK} each charged scrubber saves. */
-    private static final float FLOW_SAVED_PER_SCRUBBER = 0.005f;
     /** Power one scrubber's work costs the vent, per tick, before the OxygenVentPowerMultiplier. */
     private static final int POWER_PER_SCRUBBER = 10;
 
@@ -104,7 +92,6 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
      * across all of its ticks.
      */
     private int ticksSinceTraceStep;
-    private int ticksSinceScrubberCharge;
     private int ticksSinceScrub;
 
 
@@ -113,7 +100,6 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
         hasFluid = true;
         soundInit = false;
         allowTrace = false;
-        numScrubbers = 0;
         scrubbers = new LinkedList<>();
         state = RedstoneState.ON;
         redstoneControl = new ModuleRedstoneOutputButton(174, 4, PACKET_REDSTONE_ID, "", this);
@@ -136,13 +122,12 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
     }
 
     private void activateAdjBlocks() {
-        numScrubbers = 0;
-        numScrubbers = toggleAdjBlock(pos.add(1, 0, 0), true) ? numScrubbers + 1 : numScrubbers;
-        numScrubbers = toggleAdjBlock(pos.add(-1, 0, 0), true) ? numScrubbers + 1 : numScrubbers;
-        numScrubbers = toggleAdjBlock(pos.add(0, 1, 0), true) ? numScrubbers + 1 : numScrubbers;
-        numScrubbers = toggleAdjBlock(pos.add(0, -1, 0), true) ? numScrubbers + 1 : numScrubbers;
-        numScrubbers = toggleAdjBlock(pos.add(0, 0, 1), true) ? numScrubbers + 1 : numScrubbers;
-        numScrubbers = toggleAdjBlock(pos.add(0, 0, -1), true) ? numScrubbers + 1 : numScrubbers;
+        toggleAdjBlock(pos.add(1, 0, 0), true);
+        toggleAdjBlock(pos.add(-1, 0, 0), true);
+        toggleAdjBlock(pos.add(0, 1, 0), true);
+        toggleAdjBlock(pos.add(0, -1, 0), true);
+        toggleAdjBlock(pos.add(0, 0, 1), true);
+        toggleAdjBlock(pos.add(0, 0, -1), true);
     }
 
     private void deactivateAdjBlocks() {
@@ -189,15 +174,11 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
         super.onChunkUnload();
     }
 
-    /**
-     * One for the vent's fan, plus each scrubber's: with zones on only the scrubbers that are
-     * absorbing, with zones off every scrubber that cuts the running cost.
-     */
+    /** One for the vent's fan, plus one scrubber's for each scrubber that is absorbing. */
     @Override
     public int getPowerPerOperation() {
-        StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
-        int scrubbing = config.lifeSupportZones ? workingScrubbers : numScrubbers;
-        return (int) ((scrubbing * POWER_PER_SCRUBBER + 1) * config.oxygenVentPowerMultiplier);
+        return (int) ((workingScrubbers * POWER_PER_SCRUBBER + 1)
+                * StellurgyConfiguration.getCurrentConfig().oxygenVentPowerMultiplier);
     }
 
     @Override
@@ -311,17 +292,12 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
             return;
         }
 
-        if (StellurgyConfiguration.getCurrentConfig().lifeSupportZones) {
-            scrub(atmhandler);
-            supplyOxygen(atmhandler);
-            hasFluid = tank.getFluidAmount() > 0;
-        } else {
-            chargeScrubbers();
-            declareFromRunningCost(atmhandler);
-        }
+        scrub(atmhandler);
+        supplyOxygen(atmhandler);
+        hasFluid = tank.getFluidAmount() > 0;
     }
 
-    /** Zones on: once a second every scrubber beside this vent absorbs CO2 from its room. */
+    /** Once a second every scrubber beside this vent absorbs CO2 from its room. */
     private void scrub(AtmosphereHandler atmhandler) {
         if (++ticksSinceScrub < SCRUB_TICKS)
             return;
@@ -339,19 +315,6 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
         if (working > 0) {
             atmhandler.refreshDerivedAtmosphere(this);
             markDirty();
-        }
-    }
-
-    /** Zones off: the classic cartridge, one charge per scrubber every {@link #SCRUBBER_CHARGE_TICKS}. */
-    private void chargeScrubbers() {
-        if (!StellurgyConfiguration.getCurrentConfig().scrubberRequiresCartrige)
-            return;
-        if (++ticksSinceScrubberCharge >= SCRUBBER_CHARGE_TICKS) {
-            ticksSinceScrubberCharge = 0;
-            numScrubbers = 0;
-            for (TileCO2Scrubber scrubber : scrubbers) {
-                numScrubbers = scrubber.useCharge() ? numScrubbers + 1 : numScrubbers;
-            }
         }
     }
 
@@ -392,28 +355,6 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
             air.addOxygen(admitted, AirState.ambientKelvin());
             atmhandler.refreshDerivedAtmosphere(this);
             markDirty();
-        }
-    }
-
-    /**
-     * Zones off: the classic vent. It burns its running cost every tick, and the room is pressurised
-     * while the tank pays it and the world's own atmosphere once it cannot.
-     */
-    private void declareFromRunningCost(AtmosphereHandler atmhandler) {
-        int amtToDrain = (int) Math.ceil((atmhandler.getBlobSize(this) * runningCostPerBlock()));
-        FluidStack drainedFluid = this.drain(amtToDrain, false);
-
-        if ((drainedFluid != null && drainedFluid.amount >= amtToDrain) || amtToDrain == 0) {
-            this.drain(amtToDrain, true);
-            if (!hasFluid) {
-                hasFluid = true;
-                activateAdjBlocks();
-                atmhandler.setAtmosphereType(this, Atmosphere.PRESSURIZEDAIR);
-            }
-        } else if (hasFluid) {
-            hasFluid = false;
-            deactivateAdjBlocks();
-            atmhandler.setAtmosphereType(this, atmhandler.getDefaultAtmosphereType());
         }
     }
 
@@ -468,12 +409,6 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
         if (clientSealed) {
             activateAdjBlocks();
         }
-    }
-
-    /** Zones off: the oxygen a tick costs per block of room, which every charged scrubber cuts. */
-    private float runningCostPerBlock() {
-        return (float) (Math.max(FLOW_PER_BLOCK - numScrubbers * FLOW_SAVED_PER_SCRUBBER, 0)
-                * StellurgyConfiguration.getCurrentConfig().oxygenVentConsumptionMult);
     }
 
     @Override
