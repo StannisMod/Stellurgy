@@ -56,6 +56,13 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * plant's waste heat must end up in the loop it touches (stored=0)", 2026-09-30. The three
      * premises at its head are arrangements and are not witnessed.</p>
      *
+     * <p>The plant pays its port's upkeep from the same buffer, after the tick's regeneration, so this
+     * verdict also holds a later, smaller spend to the heat an earlier one banked.
+     * red-witnessed: with {@code WasteHeat#spend} at {@code pending = (int) Math.min(cap, pending + made);}
+     * replaced by its pre-fix form {@code pending = (int) Math.max(0L, Math.min(cap, pending + made))},
+     * which sizes the buffer by the latest spend alone: "the plant's waste heat must end up in the loop
+     * it touches (stored=0)", 2026-10-06.</p>
+     *
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "hotter than it started" is this same verdict read through a division.</p>
      */

@@ -121,10 +121,6 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
     /**
      * A port's running cost, paid from this plant's buffer — the power a port draws reaches it through
      * the ducts, from here.
-     *
-     * <p>It is not handed to {@link #wasteHeat}: that component sizes its buffer by the LAST spend, so
-     * a one-FE payment arriving after the tick's regeneration would shrink the buffer to nothing and
-     * discard the regeneration's heat — and a few FE make no heat a loop could measure anyway.</p>
      */
     @Override
     public boolean payUpkeep(int fe) {
@@ -133,6 +129,7 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
         if (energy.getUniversalEnergyStored() < fe)
             return false;
         energy.extractEnergy(fe, false);
+        wasteHeat.spend(fe);
         markDirty();
         return true;
     }
