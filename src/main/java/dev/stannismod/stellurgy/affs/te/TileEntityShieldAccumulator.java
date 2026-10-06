@@ -16,7 +16,6 @@ import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 /**
  * Bulk shield-energy reserve. It is BOTH an {@link ISubsystemSource} and an {@link ISubsystemSink}: it fills
@@ -36,16 +35,16 @@ public class TileEntityShieldAccumulator extends TileEntity implements ISubsyste
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
     }
 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.invalidate();
     }
@@ -53,8 +52,8 @@ public class TileEntityShieldAccumulator extends TileEntity implements ISubsyste
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }
@@ -103,7 +102,7 @@ public class TileEntityShieldAccumulator extends TileEntity implements ISubsyste
 
     @Override
     public int getFreeCapacity() {
-        return Math.max(0, storage.getMaxEnergyStored() - storage.getEnergyStored());
+        return Math.max(0, getEffectiveMaxShieldStored() - storage.getEnergyStored());
     }
 
     @Override
@@ -127,6 +126,19 @@ public class TileEntityShieldAccumulator extends TileEntity implements ISubsyste
 
     public int getMaxShieldStored() {
         return storage.getMaxEnergyStored();
+    }
+
+    /**
+     * The reserve this accumulator can actually hold in the condition it is in — the rated capacity
+     * scaled by its own damage stage. A battered bank stops accepting sooner, so a fight that damages
+     * the storage shortens how long the shield can be held up afterwards.
+     *
+     * <p>What is already inside is not destroyed by the shrink: energy that was banked before the hit
+     * is still there to spend, it simply cannot be topped back up to where it was.</p>
+     */
+    public int getEffectiveMaxShieldStored() {
+        return dev.stannismod.stellurgy.affs.world.shield.ShieldCondition.derate(world, pos,
+                storage.getMaxEnergyStored());
     }
 
     public int getShieldReceivedThisTick() {

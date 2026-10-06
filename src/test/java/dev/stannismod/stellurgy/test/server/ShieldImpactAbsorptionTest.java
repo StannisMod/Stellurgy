@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.EntityState;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
@@ -9,6 +11,7 @@ import java.util.List;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -33,6 +36,9 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     private static final int ENERGY_PROJECTILE_COST = 10_000; // ModConfig.energyProjectileImpactEnergy default
     private static final String STORED = "shieldStored";
     private static final String ENTITY_ID = "entityId";
+
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @Test
     public void chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake() throws Exception {
@@ -79,6 +85,20 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
                         + "the shield.", drop >= ENERGY_PROJECTILE_COST - 1_000L);
     }
 
+    /**
+     * A powered shield keeps a block it covers through a blast that destroys the same block unshielded,
+     * and pays for it out of its coil.
+     *
+     * <p>The payment is read off the shield's own decision — the coil as the blast is heard and as it
+     * is decided, inside one handler call — and not off two probe reads of the coil a round trip
+     * apart, which a refill from the network could make equal under load.</p>
+     *
+     * <p>red-witnessed: with {@code TileEntityFieldGenerator#tryAbsorbExplosionImpact} at
+     * {@code return impactEnergy > 0 && consumeShieldEnergy(impactEnergy) >= impactEnergy;} reduced to
+     * {@code return impactEnergy > 0;} — the glass still saved, nothing paid — this fails at "the
+     * emitter took the glass out of the blast without paying for it (coil 37689 as the blast was
+     * heard, 37689 once decided)" (2026-10-03).</p>
+     */
     @Test
     public void chargedShieldProtectsBlocksFromExplosion() throws Exception {
         // Control first: an unshielded glass block is destroyed by the blast. Without this the shielded
@@ -104,7 +124,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
 
         int px = ex + 2, pz = gz; // inside the emitter's radius-4 field
         place("minecraft:glass", px, pz);
-        long storedBefore = read(ex, gz).shieldStored();
+        long blast = events.markInstrumented();
         exec("stellurgytest shield explode " + DIM + " " + (px + 0.5D) + " " + (Y + 1.5D) + " " + (pz + 0.5D) + " 4");
 
         String shieldedBlock = exec("stellurgytest block at " + DIM + " " + px + " " + Y + " " + pz);
@@ -116,10 +136,46 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         assertEquals("a glass block inside a powered shield was destroyed by an explosion — the field did "
                         + "not protect it:\n" + shieldedBlock,
                 "minecraft:glass", Reply.of("stellurgytest block at", shieldedBlock).text("block"));
-        long storedAfter = read(ex, gz).shieldStored();
-        assertTrue("shield energy did not drop while absorbing the explosion (before=" + storedBefore
-                        + " after=" + storedAfter + "): the block may have survived for another reason.",
-                storedAfter < storedBefore);
+
+        // That the shield PAID for it, read off the decision itself rather than off two coil samples
+        // taken a probe round-trip apart: the network refills an emitter every tick, so a debit sampled
+        // that way can be paid back before the second read and look like no debit at all. Both records
+        // below are written inside the one handler call that decided the blast, with no tick between.
+        // Read, not awaited: the probe detonates inside its own call and the handler records inside the
+        // detonation (ForceFieldExplosionHandler#onExplosionDetonate, HEAD and RETURN), so both records
+        // exist by the time the command has answered.
+        Reply decided = Reply.of("shield_explosion_decided",
+                oneBlastRecord(events.since(blast, "shield_explosion_decided"), px, pz));
+        Reply heard = Reply.of("shield_explosion_heard",
+                oneBlastRecord(events.since(blast, "shield_explosion_heard"), px, pz));
+        String glass = px + "," + Y + "," + pz;
+        requireArranged("the blast never reached the glass, so its surviving says nothing about the"
+                + " shield: " + heard, heard.holdsText("candidates", glass));
+        String emitter = ex + "," + Y + "," + gz;
+        long storedHeard = heard.element("emitters", "pos", emitter).longInteger("stored");
+        long storedDecided = decided.element("emitters", "pos", emitter).longInteger("stored");
+        System.out.println("FIXTURE shield-explosion: glass " + glass + " emitter " + emitter + " coil heard="
+                + storedHeard + " decided=" + storedDecided + "; heard " + heard + "; decided " + decided);
+        assertTrue("the emitter took the glass out of the blast without paying for it (coil "
+                        + storedHeard + " as the blast was heard, " + storedDecided + " once decided)",
+                storedDecided < storedHeard);
+    }
+
+    /**
+     * The one record in {@code since} for the blast centred over {@code (x, Y+1, z)}; fails naming the
+     * reply when the handler wrote none for it, or the recorder never ran.
+     */
+    private static String oneBlastRecord(String since, int x, int z) {
+        Events.assertInstrumentRan(since, "shield_explosion_events", "the shield's decision on the blast");
+        java.util.List<String> here = Events.recordsWhere(since, "at", blastCentre(x, z));
+        requireArranged("the shield's handler did not record exactly one decision for the blast, so"
+                + " there is no decision to read the payment from: " + since, here.size() == 1);
+        return here.get(0);
+    }
+
+    /** The {@code at} the explosion recorder writes for a blast centred over block {@code (x, Y+1, z)}. */
+    private static String blastCentre(int x, int z) {
+        return (x + 0.5D) + "," + (Y + 1.5D) + "," + (z + 0.5D);
     }
 
     @Test

@@ -6,8 +6,10 @@ import net.minecraft.world.World;
 import dev.stannismod.stellurgy.Stellurgy;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -47,30 +49,40 @@ public class IngameTestOrchestrator {
         return player;
     }
 
-    /** One tick of a server world: run every step that has come due by its clock. */
+    /**
+     * One tick of a server world: run every step that has come due by its clock.
+     *
+     * <p>The due steps are taken out of the schedule BEFORE any of them runs, because a step schedules
+     * its successor into that same map; running them inside the walk fails the walk as soon as one
+     * step that is not the last one walked adds a successor (two runs in flight at once).</p>
+     */
     public void onWorldTick(World tickingWorld) {
         if (eventScheduler.isEmpty()) {
             return;
         }
+        List<PlayerMapping> due = new ArrayList<>();
         Iterator<Entry<Long, PlayerMapping>> itr = eventScheduler.entrySet().iterator();
         while (itr.hasNext()) {
             Entry<Long, PlayerMapping> e = itr.next();
             if (tickingWorld.getTotalWorldTime() >= e.getKey()) {
                 itr.remove();
-                BaseTest test = e.getValue().test;
-                try {
-                    e.getValue().func.invoke(test, e.getValue().world, getPlayerFromAnywhere());
-                } catch (AssertionError e1) {
-                    Stellurgy.logger.error("Test Failed!!!");
-                    Stellurgy.logger.catching(e1);
-                    getPlayerFromAnywhere().sendMessage(new TextComponentString(test.getName() + " Failed!"));
-                } catch (Exception e2) {
-                    e2.printStackTrace();
-                }
+                due.add(e.getValue());
+            }
+        }
+        for (PlayerMapping step : due) {
+            BaseTest test = step.test;
+            try {
+                step.func.invoke(test, step.world, getPlayerFromAnywhere());
+            } catch (AssertionError e1) {
+                Stellurgy.logger.error("Test Failed!!!");
+                Stellurgy.logger.catching(e1);
+                getPlayerFromAnywhere().sendMessage(new TextComponentString(test.getName() + " Failed!"));
+            } catch (Exception e2) {
+                e2.printStackTrace();
+            }
 
-                if (test.passed()) {
-                    getPlayerFromAnywhere().sendMessage(new TextComponentString(test.getName() + " Passed!"));
-                }
+            if (test.passed()) {
+                getPlayerFromAnywhere().sendMessage(new TextComponentString(test.getName() + " Passed!"));
             }
         }
     }

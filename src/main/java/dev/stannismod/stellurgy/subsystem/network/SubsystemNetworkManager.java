@@ -3,11 +3,9 @@ package dev.stannismod.stellurgy.subsystem.network;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import net.minecraftforge.event.world.WorldEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
-import dev.stannismod.stellurgy.api.Constants;
+import net.minecraftforge.fml.relauncher.Side;
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.util.WrongSideException;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -34,33 +32,112 @@ import java.util.TreeSet;
  * commodity does not silently reduce the whole network to its own capacity, and it means the
  * per-tick answer names WHICH constraint bound it ({@link SubsystemNetworkStatus}) instead of only
  * how much arrived. Under a deficit, sink demand is opened in descending priority tiers, so a
- * starved supply fills what the player marked important first and equal priorities share the rest.
+ * starved supply fills what the player marked important first, and equal priorities share the rest
+ * max-min fairly — evenly, each capped at its own request, within what the cables can carry.
+ *
+ * <h3>One per running server</h3>
+ * <p>An instance holds every network of one server session — which nodes exist and each world's
+ * solved topology. It is a field of the server's {@code ServerState}, built when a server is about to
+ * start, before the first world loads and its tiles register, and dropped with it when that server has
+ * stopped; the next session gets a fresh one. So a node, a console setting or a solved flow can never outlive the server it belonged
+ * to, whether or not every world was unloaded cleanly on the way out. {@link SubsystemNetworkEvents}
+ * drives it from the world tick and world unload.</p>
  */
-@Mod.EventBusSubscriber(modid = Constants.modId)
 public final class SubsystemNetworkManager {
 
     private static final int INF = 1_000_000_000;
 
-    private SubsystemNetworkManager() {
-    }
+    private final SubsystemNetworkRegistry registry = new SubsystemNetworkRegistry();
 
-    /** Call when the topology changed — a node placed, broken, or its connectivity altered. */
-    public static void markDirty(SubsystemNetworkDomain domain, World world) {
-        if (domain == null || world == null || world.isRemote) {
-            return;
-        }
-        getState(domain, world).dirty = true;
+    private final Map<SubsystemNetworkDomain, Map<Integer, WorldState>> worldStates = new HashMap<>();
+
+    /** Built by the server's {@code ServerState}, one per server session. */
+    public SubsystemNetworkManager() {
     }
 
     /**
-     * The network the block at this position belongs to, or null if it is in none. A client world is
-     * in none by construction: networks are solved on the server and never exist on the client side.
+     * The networks of the server running this world.
+     *
+     * @throws IllegalArgumentException for a null world
+     * @throws WrongSideException       for a client world: networks are solved on the server, and a
+     *                                  client world has none to join or to mark
+     * @throws IllegalStateException    when no server session is running, which with a server world in
+     *                                  hand means the lifecycle hooks did not run
+     */
+    public static SubsystemNetworkManager of(World world) {
+        if (world == null) {
+            throw new IllegalArgumentException("subsystem networks belong to a server world, not to no world");
+        }
+        requireServerSide(world);
+        SubsystemNetworkManager current = Stellurgy.subsystemNetworks();
+        if (current == null) {
+            throw new IllegalStateException("no subsystem networks: the server holding dim "
+                    + world.provider.getDimension() + " has not started or has already stopped");
+        }
+        return current;
+    }
+
+    /**
+     * The network the block at this position belongs to, or null if it is in none — and null for a
+     * null domain, world or position, and on a server world while no server session is running.
+     *
+     * <p>SERVER ONLY. A client world throws: on an integrated server the client thread could reach
+     * the server's tables by dimension, and the answer would look right while being read across
+     * threads. A screen that must show network state is told it by the server, as the weapon
+     * console's is.</p>
+     *
+     * @throws WrongSideException for a client world
      */
     public static SubsystemNetworkState getState(SubsystemNetworkDomain domain, World world, BlockPos pos) {
-        if (domain == null || world == null || pos == null || world.isRemote) {
+        if (world != null) {
+            requireServerSide(world);
+        }
+        SubsystemNetworkManager current = Stellurgy.subsystemNetworks();
+        return current == null ? null : current.stateAt(domain, world, pos);
+    }
+
+    private static void requireServerSide(World world) {
+        if (world.isRemote) {
+            throw new WrongSideException("a subsystem network of dim " + world.provider.getDimension(),
+                    Side.SERVER, Side.CLIENT);
+        }
+    }
+
+    public void register(ISubsystemNetworkNode node) {
+        registry.register(node);
+    }
+
+    public void unregister(ISubsystemNetworkNode node) {
+        registry.unregister(node);
+    }
+
+    /** Every node of this domain on this server, as a copy the caller may iterate freely. */
+    public Set<ISubsystemNetworkNode> snapshot(SubsystemNetworkDomain domain) {
+        return registry.snapshot(domain);
+    }
+
+    /**
+     * The nodes of this domain loaded in this world that are a {@code type}, as a list the caller
+     * owns. A domain that needs "every X that is loaded" asks here rather than keeping its own list
+     * beside this one: the registry is written at exactly the moments such a list would be.
+     */
+    public <T> List<T> nodesIn(SubsystemNetworkDomain domain, World world, Class<T> type) {
+        return registry.nodesIn(domain, world, type);
+    }
+
+    /** Call when the topology changed — a node placed, broken, or its connectivity altered. */
+    public void markDirty(SubsystemNetworkDomain domain, World world) {
+        if (domain == null || world == null || world.isRemote) {
+            return;
+        }
+        worldState(domain, world).dirty = true;
+    }
+
+    private SubsystemNetworkState stateAt(SubsystemNetworkDomain domain, World world, BlockPos pos) {
+        if (domain == null || world == null || pos == null) {
             return null;
         }
-        Map<Integer, WorldState> byDim = SubsystemNetworks.current().worldStates.get(domain);
+        Map<Integer, WorldState> byDim = worldStates.get(domain);
         if (byDim == null) {
             return null;
         }
@@ -68,30 +145,22 @@ public final class SubsystemNetworkManager {
         return state == null ? null : state.stateByPos.get(pos);
     }
 
-    @SubscribeEvent
-    public static void onWorldTick(TickEvent.WorldTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
-        World world = event.world;
-        if (world == null || world.isRemote) {
-            return;
-        }
-        for (SubsystemNetworkDomain domain : SubsystemNetworkRegistry.domains()) {
+    /** Every domain's rebuild-if-dirty plus solve, for this world. */
+    void tick(World world) {
+        for (SubsystemNetworkDomain domain : registry.domains()) {
             tick(domain, world);
         }
     }
 
     /**
-     * One domain's rebuild-if-dirty plus solve, for this world. Extracted from the tick handler so
-     * the work has a name a caller can invoke: the event is one caller, and anything that needs the
-     * network advanced without waiting on the natural tick loop is another.
+     * One domain's rebuild-if-dirty plus solve, for this world. The world tick is one caller, and
+     * anything that needs the network advanced without waiting on the natural tick loop is another.
      */
-    public static void tick(SubsystemNetworkDomain domain, World world) {
+    public void tick(SubsystemNetworkDomain domain, World world) {
         if (domain == null || world == null || world.isRemote) {
             return;
         }
-        WorldState state = getState(domain, world);
+        WorldState state = worldState(domain, world);
         if (state.dirty) {
             // Topology changes are expensive; only rebuild adjacency when the network actually changed.
             state.rebuild(domain, world);
@@ -101,29 +170,28 @@ public final class SubsystemNetworkManager {
         state.solve();
     }
 
-    @SubscribeEvent
-    public static void onWorldUnload(WorldEvent.Unload event) {
-        World world = event.getWorld();
-        if (world == null || world.isRemote) {
-            return;
-        }
-        for (SubsystemNetworkDomain domain : SubsystemNetworkRegistry.domains()) {
-            Map<Integer, WorldState> byDim = SubsystemNetworks.current().worldStates.get(domain);
+    /** Every domain that has registered a node on this server. */
+    public Set<SubsystemNetworkDomain> domains() {
+        return registry.domains();
+    }
+
+    /** This world is going away: its solved state and its nodes go with it. */
+    void releaseWorld(World world) {
+        for (SubsystemNetworkDomain domain : registry.domains()) {
+            Map<Integer, WorldState> byDim = worldStates.get(domain);
             if (byDim != null) {
                 byDim.remove(world.provider.getDimension());
             }
-            SubsystemNetworkRegistry.clearWorld(domain, world);
+            registry.clearWorld(domain, world);
         }
     }
 
-    private static WorldState getState(SubsystemNetworkDomain domain, World world) {
-        Map<Integer, WorldState> byDim =
-                SubsystemNetworks.current().worldStates.computeIfAbsent(domain, key -> new HashMap<>());
+    private WorldState worldState(SubsystemNetworkDomain domain, World world) {
+        Map<Integer, WorldState> byDim = worldStates.computeIfAbsent(domain, key -> new HashMap<>());
         return byDim.computeIfAbsent(world.provider.getDimension(), key -> new WorldState());
     }
 
-    /** One world's solved topology for one domain. */
-    static final class WorldState {
+    private final class WorldState {
         private boolean dirty = true;
         private final List<ComponentTopology> components = new ArrayList<>();
         private final Map<BlockPos, SubsystemNetworkState> stateByPos = new HashMap<>();
@@ -134,7 +202,7 @@ public final class SubsystemNetworkManager {
             Set<SubsystemNetworkState> consumedStates = new HashSet<>();
             stateByPos.clear();
 
-            Set<ISubsystemNetworkNode> nodes = SubsystemNetworkRegistry.snapshot(domain);
+            Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);
             Map<BlockPos, ISubsystemCable> cables = new HashMap<>();
             Map<BlockPos, ISubsystemSource> sources = new HashMap<>();
             Map<BlockPos, ISubsystemSink> sinks = new HashMap<>();
@@ -399,22 +467,29 @@ public final class SubsystemNetworkManager {
                 }
             }
 
-            // Priority-tiered redistribution: open the sink demand edges in descending priority order,
-            // augmenting the flow at each tier, so a scarce supply fills the highest-priority
-            // consumers first and equal-priority ones share what remains. With a single priority (the
-            // default — everything in one implicit group) this is one pass, identical to plain max-flow.
+            // Priority-tiered redistribution: the tiers are served in descending priority order, each
+            // on top of the flow the tiers above it already hold, so a scarce supply fills the
+            // highest-priority consumers first. Within a tier the share is max-min fair (shareTier).
             TreeSet<Integer> priorityTiers = new TreeSet<>(Collections.reverseOrder());
             for (int[] demand : sinkDemand) {
                 priorityTiers.add(demand[1]);
             }
+            int[] requestedBySink = new int[sinkDemand.size()];
+            for (int i = 0; i < requestedBySink.length; i++) {
+                requestedBySink[i] = sinkDemand.get(i)[0];
+            }
             int maxFlow = 0;
             for (int tier : priorityTiers) {
+                List<Integer> tierSinks = new ArrayList<>();
                 for (int i = 0; i < sinkRefs.size(); i++) {
-                    if (sinkDemand.get(i)[1] == tier) {
-                        sinkRefs.get(i).setCapacity(sinkDemand.get(i)[0]);
+                    if (sinkDemand.get(i)[1] == tier && requestedBySink[i] > 0) {
+                        tierSinks.add(i);
                     }
                 }
-                maxFlow += solver.maxFlow(superSource, superSink);
+                // Position order, so the one thing order decides — who gets an indivisible remainder
+                // unit — never depends on how a hash set happened to iterate.
+                tierSinks.sort((a, b) -> comparePositions(sinks.get(a).pos, sinks.get(b).pos));
+                maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);
             }
 
             boolean hasCables = !cables.isEmpty();
@@ -520,6 +595,139 @@ public final class SubsystemNetworkManager {
         }
     }
 
+    /**
+     * Serve one priority tier on top of whatever flow the solver already holds, and answer how much
+     * it received.
+     *
+     * <p><b>Max-min fair, through the cables.</b> Every sink of the tier is raised by the same amount
+     * at once, capped at its own request, for as long as the network can carry the raise to all of
+     * them together; a sink whose request is met drops out, and so does a sink that cannot take one
+     * unit more with the others where they are (a cable to it is full). The rest keep rising with
+     * what is left. So a scarce supply is split evenly, a sink asking for less than its share gets
+     * what it asked and leaves the surplus to the others, and nothing is ever promised that the
+     * cables cannot carry, because every raise is tested as a max flow before it is kept.</p>
+     *
+     * <p>The tier still receives exactly its max flow: a sink left below its request could not be
+     * given one unit more by ANY routing, so no augmenting path to the super sink remains. Plain max
+     * flow decided the same total and split it by search order instead.</p>
+     *
+     * <p>Flow is an integer, so where the tier's last units cannot be split evenly (two sinks behind
+     * one cable with one unit left) they go one at a time in {@code tierSinks}' order, which the
+     * caller makes position order.</p>
+     *
+     * <p>Cost: a tier that can be served in full is one max flow. A scarce tier takes, per round, a
+     * binary search over the raise (about log2 of the largest request, each step a trial max flow)
+     * and one trial per still-rising sink; every round retires at least one sink, so a tier of n
+     * sinks costs O(n * (n + log R)) max flows on the component's graph.</p>
+     */
+    private static int shareTier(MaxFlowSolver solver, int from, int to, List<MaxFlowSolver.EdgeRef> refs,
+                                 int[] requested, List<Integer> tierSinks) {
+        int[] given = new int[refs.size()];
+        int received = 0;
+
+        int whole = 0;
+        for (int i : tierSinks) {
+            whole += requested[i];
+        }
+        if (trialFlow(solver, from, to, refs, given, tierSinks, requested, Integer.MAX_VALUE) == whole) {
+            for (int i : tierSinks) {
+                given[i] = requested[i];
+                refs.get(i).setCapacity(given[i]);
+            }
+            return solver.maxFlow(from, to);
+        }
+
+        List<Integer> rising = new ArrayList<>(tierSinks);
+        while (!rising.isEmpty()) {
+            int leastLeft = Integer.MAX_VALUE;
+            int mostLeft = 0;
+            for (int i : rising) {
+                leastLeft = Math.min(leastLeft, requested[i] - given[i]);
+                mostLeft = Math.max(mostLeft, requested[i] - given[i]);
+            }
+            // The largest equal raise every rising sink can take together.
+            int low = 0;
+            int high = mostLeft;
+            while (low < high) {
+                int mid = low + (high - low + 1) / 2;
+                int wanted = 0;
+                for (int i : rising) {
+                    wanted += Math.min(mid, requested[i] - given[i]);
+                }
+                if (trialFlow(solver, from, to, refs, given, rising, requested, mid) == wanted) {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            if (low > 0) {
+                for (int i : rising) {
+                    given[i] += Math.min(low, requested[i] - given[i]);
+                    refs.get(i).setCapacity(given[i]);
+                }
+                received += solver.maxFlow(from, to);
+            }
+
+            List<Integer> stillRising = new ArrayList<>();
+            for (int i : rising) {
+                if (given[i] >= requested[i]) {
+                    continue;
+                }
+                if (low >= leastLeft) {
+                    // The raise stopped because a request was met, not because the network ran out.
+                    stillRising.add(i);
+                } else if (trialFlow(solver, from, to, refs, given, Collections.singletonList(i), requested, 1) > 0) {
+                    stillRising.add(i);
+                }
+            }
+            if (low == 0 && stillRising.size() == rising.size()) {
+                // Each could take one more alone but not all together: the indivisible remainder,
+                // one unit at a time in the caller's order. The first always succeeds, so this
+                // round makes progress.
+                for (int i : stillRising) {
+                    refs.get(i).setCapacity(given[i] + 1);
+                    int got = solver.maxFlow(from, to);
+                    if (got > 0) {
+                        given[i] += got;
+                        received += got;
+                    } else {
+                        refs.get(i).setCapacity(given[i]);
+                    }
+                }
+            }
+            rising = stillRising;
+        }
+        return received;
+    }
+
+    /**
+     * The flow the solver could add if each sink in {@code raised} had {@code raise} more capacity
+     * (at most up to its request) — computed and then undone, flows and capacities both.
+     */
+    private static int trialFlow(MaxFlowSolver solver, int from, int to, List<MaxFlowSolver.EdgeRef> refs,
+                                 int[] given, List<Integer> raised, int[] requested, int raise) {
+        int[] saved = solver.flows();
+        for (int i : raised) {
+            refs.get(i).setCapacity(given[i] + Math.min(raise, requested[i] - given[i]));
+        }
+        int flow = solver.maxFlow(from, to);
+        for (int i : raised) {
+            refs.get(i).setCapacity(given[i]);
+        }
+        solver.restoreFlows(saved);
+        return flow;
+    }
+
+    private static int comparePositions(BlockPos a, BlockPos b) {
+        if (a.getX() != b.getX()) {
+            return Integer.compare(a.getX(), b.getX());
+        }
+        if (a.getY() != b.getY()) {
+            return Integer.compare(a.getY(), b.getY());
+        }
+        return Integer.compare(a.getZ(), b.getZ());
+    }
+
     private static final class CableNode {
         private final BlockPos pos;
         private final ISubsystemCable cable;
@@ -580,6 +788,31 @@ public final class SubsystemNetworkManager {
                 }
             }
             return flow;
+        }
+
+        /** Every edge's flow, in graph order — what {@link #restoreFlows} puts back after a trial. */
+        private int[] flows() {
+            int count = 0;
+            for (List<Edge> edges : graph) {
+                count += edges.size();
+            }
+            int[] flows = new int[count];
+            int k = 0;
+            for (List<Edge> edges : graph) {
+                for (Edge edge : edges) {
+                    flows[k++] = edge.flow;
+                }
+            }
+            return flows;
+        }
+
+        private void restoreFlows(int[] flows) {
+            int k = 0;
+            for (List<Edge> edges : graph) {
+                for (Edge edge : edges) {
+                    edge.flow = flows[k++];
+                }
+            }
         }
 
         private boolean bfs(int source, int sink, int[] level) {

@@ -222,9 +222,9 @@ public class CellSeamTest {
      * <b>Where the sphere and the cube both fire, the SPHERE aims the carry.</b>
      *
      * <p>The cube a carry consults is the galactic one — {@code HALF_CELL + CARRY_MARGIN} from the
-     * cell's centre, in every cell, zoned or not ({@code CellSeam.shouldCarry}) — and the widest
-     * sphere production realizes is capped at {@code HALF_CELL} ({@code ZoneScale.realizedRadiusBlocks}).
-     * At that cap a craft just past the sphere is also past the cube, so "the sphere fires first" is
+     * cell's centre, in every cell, zoned or not ({@code CellSeam.shouldCarry}) — and a sphere of
+     * {@code HALF_CELL}, the widest span production realizes ({@code ZoneScale.realizedRadiusBlocks}),
+     * is the radius at which the two meet. There a craft just past the sphere is also past the cube, so "the sphere fires first" is
      * not arithmetic there: both fire, and only the ORDER inside
      * {@code CellCrossingController.carryDestination} decides where the craft goes. Asked of the
      * cube, it would be the +X neighbour — a cube face nowhere near the sphere it crossed.</p>

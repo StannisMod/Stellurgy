@@ -31,8 +31,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * connections.</p>
  *
  * <p>Recorded on the CLIENT: the only production caller is {@code PacketSpaceClockSync.executeClient},
- * which libVulpes's channel decoder hands to the client main thread through
- * {@code LibVulpes.proxy.addScheduledTask} before {@code HandlerClient.channelRead0} runs it, so
+ * which libVulpes's channel queues on the client main thread ({@code BasePacketHandlerClient}), so
  * {@link TestTrace#recordHere} resolves to the client log. The class itself is common code that must
  * load on a dedicated server, but nothing there ever calls {@code accept}; this mixin belongs in the
  * {@code client} list of the test mixin config, and a server-side weave would apply and never run.</p>

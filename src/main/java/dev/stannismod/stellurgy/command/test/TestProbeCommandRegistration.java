@@ -49,11 +49,15 @@ public final class TestProbeCommandRegistration {
         if (!isTestMode()) {
             return;
         }
-        TestProbeCommand command = new TestProbeCommand();
+        // What belongs to THIS server's life: on the bus from here, off it when the server stops.
+        ServerScoped scope = ServerScoped.start();
+        TestProbeCommand command = new TestProbeCommand(scope.hold(new WeaponFireVetoProbe()));
         event.registerServerCommand(command);
         // register the rocket-event recorder at server start so
         // counters are accurate from the first rocket lifecycle event.
         command.rocketEvents.ensureRegistered();
+        // The ordered event log, and the damage-occurrence listener every tile gets, both on the
+        // test side.
         attachTestEventRecorder(event.getServer());
         Stellurgy.logger.info("Registered /stellurgytest test-only probe commands (-D" + FLAG + "=true)");
         bootstrapTestServerBridge();

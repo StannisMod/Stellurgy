@@ -29,10 +29,6 @@ public class MaterialRegistry {
 
 	/** Effectively final, process lifetime: filled only by MaterialRegistry.registerMixedMaterial. */
 	static HashMap<Object, MixedMaterial> mixedMaterialList = new HashMap<>();
-	/** Effectively final, process lifetime: filled only by AllowedProducts.registerProduct. One map for
-	 *  every registry: each constructor used to replace it, so a registry built after the products were
-	 *  registered would have wiped them. */
-	static final HashMap<AllowedProducts, List<Block>> productBlockListMapping = new HashMap<>();
 	/**
 	 * Effectively final, process lifetime: filled only by this class's constructor, once per registry -
 	 * the two the mod classes build when they initialise (LibVulpes.materialRegistry,
@@ -54,6 +50,15 @@ public class MaterialRegistry {
 	 * what keeps them apart; it is not left to whichever mod container happens to be active.
 	 */
 	private final String registryDomain;
+
+	/**
+	 * This registry's blocks for each block product, in the order {@link #registerOres} built them, so
+	 * block {@code i} of a product holds this registry's materials {@code 16*i .. 16*i+15} — the indexing
+	 * {@code Material#getBlock} relies on, which holds only while no other registry's blocks are in the
+	 * list. Effectively final, side lifetime: filled only by this registry's {@code registerOres}, once,
+	 * at pre-init.
+	 */
+	private final Map<AllowedProducts, List<Block>> productBlocks = new HashMap<>();
 
 	public MaterialRegistry(String registryDomain) {
 		this.registryDomain = registryDomain;
@@ -224,11 +229,14 @@ public class MaterialRegistry {
 	}
 
 	public List<Block> getBlockListForProduct(AllowedProducts product) {
-		return productBlockListMapping.get(product);
+		if (!product.isBlock()) {
+			throw new IllegalArgumentException(product.getName() + " is not a block product, so no registry builds blocks for it");
+		}
+		return productBlocks.computeIfAbsent(product, key -> new ArrayList<>());
 	}
 
 	public Block getBlockForProduct(AllowedProducts product, dev.stannismod.stellurgy.libvulpes.api.material.Material material, int index) {
-		for(Block block : productBlockListMapping.get(product) ) {
+		for(Block block : getBlockListForProduct(product)) {
 			if(((BlockOre)block).ores[index] == material)
 				return block;
 		}

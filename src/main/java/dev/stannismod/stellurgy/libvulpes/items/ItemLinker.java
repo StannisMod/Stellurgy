@@ -2,16 +2,25 @@ package dev.stannismod.stellurgy.libvulpes.items;
 
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.EntitySelectors;
 import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkAimedTile;
 import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
@@ -192,9 +201,89 @@ public class ItemLinker extends Item {
 	}
 
 	protected void applySettings(@Nonnull ItemStack itemStack, ILinkableTile pad, EntityPlayer player, World world) {
-		if(!isSet(itemStack)) 
+		if(!isSet(itemStack))
 			pad.onLinkStart(itemStack, (TileEntity)pad, player, world);
 		else
 			pad.onLinkComplete(itemStack, (TileEntity)pad, player, world);
+	}
+
+	/**
+	 * A right-click that is not on a linkable machine, with a linker bound to an
+	 * {@link ILinkAimedTile}: that tile is handed what the player's line of sight lands on.
+	 *
+	 * <p>Reached for a click into the air and also for a click on an ordinary block within arm's
+	 * reach, because {@link #onItemUse} answers FAIL there and vanilla then offers the same click
+	 * here. A linker bound to any other kind of machine does nothing, as it always did.</p>
+	 *
+	 * <p>A binding written without a dimension ({@code dimId -1}, which several older machines
+	 * write) is read as this dimension, the only one it can have been made in that this click can
+	 * reach.</p>
+	 */
+	@Override
+	@Nonnull
+	public ActionResult<ItemStack> onItemRightClick(World world, EntityPlayer player, @Nonnull EnumHand hand) {
+		ItemStack stack = player.getHeldItem(hand);
+		if (world.isRemote || !isSet(stack))
+			return new ActionResult<>(EnumActionResult.PASS, stack);
+
+		int boundDim = getDimId(stack);
+		BlockPos bound = getMasterCoords(stack);
+		boolean here = boundDim == -1 || boundDim == world.provider.getDimension();
+		if (!here || !world.isBlockLoaded(bound)) {
+			// We cannot tell what it is bound to, so we cannot tell that this click was not meant
+			// for it; saying nothing would read as a designation that was taken.
+			player.sendMessage(new TextComponentTranslation("msg.linker.aim.boundNotLoaded"));
+			return new ActionResult<>(EnumActionResult.FAIL, stack);
+		}
+		TileEntity tile = world.getTileEntity(bound);
+		if (!(tile instanceof ILinkAimedTile))
+			return new ActionResult<>(EnumActionResult.PASS, stack);
+
+		RayTraceResult aimedAt = lineOfSight(player, (WorldServer) world);
+		if (aimedAt == null) {
+			player.sendMessage(new TextComponentTranslation("msg.linker.aim.nothingInSight"));
+			return new ActionResult<>(EnumActionResult.FAIL, stack);
+		}
+		boolean taken = ((ILinkAimedTile) tile).onLinkAimed(stack, aimedAt, player);
+		return new ActionResult<>(taken ? EnumActionResult.SUCCESS : EnumActionResult.FAIL, stack);
+	}
+
+	/**
+	 * The first entity or block the player's line of sight crosses, or null when it crosses
+	 * nothing.
+	 *
+	 * <p>Out to the server's view distance: that is the farthest the server keeps the world loaded
+	 * around a player, so it is the farthest anything he can see exists here at all — and a trace
+	 * past it would load and generate chunks for a click. The loaded square reaches at least that far
+	 * along every axis from any point of the player's own chunk, so the whole ray stays inside it.</p>
+	 */
+	private static RayTraceResult lineOfSight(EntityPlayer player, WorldServer world) {
+		double range = world.getMinecraftServer().getPlayerList().getViewDistance() * 16.0D;
+		Vec3d eye = player.getPositionEyes(1.0F);
+		Vec3d end = eye.add(player.getLook(1.0F).scale(range));
+
+		RayTraceResult hit = world.rayTraceBlocks(eye, end, false, true, false);
+		if (hit != null && hit.typeOfHit != RayTraceResult.Type.BLOCK)
+			hit = null;
+		double nearest = hit == null ? range : eye.distanceTo(hit.hitVec);
+
+		// The six-double constructor: the (Vec3d, Vec3d) one is client-only in 1.12 and is not there
+		// on a dedicated server.
+		AxisAlignedBB swept = new AxisAlignedBB(eye.x, eye.y, eye.z, end.x, end.y, end.z).grow(1.0D);
+		List<Entity> along = world.getEntitiesInAABBexcluding(player, swept, EntitySelectors.NOT_SPECTATING);
+		for (Entity candidate : along) {
+			if (!candidate.canBeCollidedWith())
+				continue;
+			RayTraceResult crossing = candidate.getEntityBoundingBox()
+					.grow(candidate.getCollisionBorderSize()).calculateIntercept(eye, end);
+			if (crossing == null)
+				continue;
+			double distance = eye.distanceTo(crossing.hitVec);
+			if (distance < nearest) {
+				nearest = distance;
+				hit = new RayTraceResult(candidate, crossing.hitVec);
+			}
+		}
+		return hit;
 	}
 }
