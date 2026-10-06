@@ -336,6 +336,47 @@ public class ShipTransitManagerTest {
                 java.util.Collections.frequency(crosser.crewMessages, "msg.shiptransit.arrived"));
     }
 
+    /**
+     * A jump short enough to cross directly, whose target cell can get no slot, is flown through
+     * hyperspace instead: the direct crossing would load the destination while the origin is still
+     * held and could only refuse after the burst was paid; the hyperspace path releases the origin
+     * first, and the arrival then takes that slot.
+     *
+     * <p>red-witnessed: with {@code ShipTransitManager#jumpsDirect} at {@code && space.canMaterialize(target)}
+     * removed: "a short jump into a full pool is not handed to the direct crosser expected:&lt;0&gt; but
+     * was:&lt;1&gt;", 2026-10-06.</p>
+     */
+    @Test
+    public void aShortJumpIntoAFullPoolFliesThroughHyperspaceAndLands() {
+        SpaceManager space = new SpaceManager(new FakeBinder(10), () -> 0L, never());
+        HyperspaceTiles tiles = new HyperspaceTiles();
+        FakeCrosser crosser = new FakeCrosser();
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser);
+        List<String> directCrossings = new ArrayList<>();
+        mgr.setDirectCrosser((shipId, origin, originSlotDim, originAnchor, target) -> {
+            directCrossings.add(shipId);
+            return true;
+        });
+
+        int originDim = space.materialize(cell(1)); // the ship's own claim holds the only slot
+        assertTrue("premise: the leg is short enough to cross directly",
+                ShipTransitManager.isDirectCrossing(GalacticCoord.CELL, ARRIVE_IN_ONE_TICK));
+        assertFalse("premise: the target cell can get no slot now", space.canMaterialize(cell(2)));
+
+        boolean began = mgr.beginTransit("s", cell(1), originDim, new BlockPos(0, 64, 0), cell(2),
+                ARRIVE_IN_ONE_TICK);
+
+        assertTrue("the jump still departs", began);
+        assertEquals("a short jump into a full pool is not handed to the direct crosser", 0,
+                directCrossings.size());
+        assertTrue("it flies through hyperspace instead", mgr.isInTransit("s"));
+
+        mgr.tick();
+
+        assertFalse("and lands in the slot its own departure freed", mgr.isInTransit("s"));
+        assertTrue(space.isLoaded(cell(2)));
+    }
+
     @Test
     public void arrivalRetriesUntilTheAsyncHyperspaceShipBecomesCrossable() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());

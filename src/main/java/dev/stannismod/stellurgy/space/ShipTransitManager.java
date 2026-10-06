@@ -444,7 +444,13 @@ public final class ShipTransitManager {
         // the lane, the crew capture, the floor snapshot — is work the direct path must not do.
         double distance = (frames == null ? CellFrames.STATIC : frames)
                 .distanceBetween(origin, target, now);
-        if (isDirectCrossing(distance, speed)) {
+        boolean direct = jumpsDirect(distance, speed, target);
+        if (!direct && isDirectCrossing(distance, speed)) {
+            LOGGER.info("[SPACE] jump for ship {} is short enough to cross directly but no slot is free "
+                            + "for target cell {} - flying it through hyperspace, where the arrival waits",
+                    shipId, target.cellKey());
+        }
+        if (direct) {
             if (directCrosser == null) {
                 // Nothing is wired to perform one, so the jump is flown the long way. Said out loud:
                 // a mechanism that silently does not exist is indistinguishable from one that was not
@@ -1024,6 +1030,17 @@ public final class ShipTransitManager {
     public static boolean isDirectCrossing(double distanceBlocks, long speedBlocksPerTick) {
         return dev.stannismod.stellurgy.hyperdrive.JumpSpeed
                 .transitTicks(distanceBlocks, speedBlocksPerTick) <= DIRECT_CROSSING_MAX_TICKS;
+    }
+
+    /**
+     * Whether THIS jump will be performed as a direct crossing: short enough
+     * ({@link #isDirectCrossing}) AND its target cell can be loaded now. A direct crossing loads the
+     * destination in the departure tick while the origin is still held, so with no slot it could only
+     * refuse after the burst was paid; the hyperspace path releases the origin first and waits at
+     * arrival, so the jump still happens. The departure and the pilot's console both ask this.
+     */
+    public boolean jumpsDirect(double distanceBlocks, long speedBlocksPerTick, GalacticCoord target) {
+        return isDirectCrossing(distanceBlocks, speedBlocksPerTick) && space.canMaterialize(target);
     }
 
     /**
