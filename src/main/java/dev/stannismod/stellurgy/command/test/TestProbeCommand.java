@@ -8128,6 +8128,94 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"slot\":" + slot + "}");
             return;
         }
+        // assemble-box <dim> <x1> <y1> <z1> <x2> <y2> <z2> - ARRANGEMENT: hand the blocks standing in
+        // that inclusive box to the production assembly, the way the rocket assembler does (cut, paste
+        // back, assemble the pasted snapshot; the craft is anchored on the flight computer inside it).
+        // Replies with the craft's name - null when production refused to assemble it - and `built`,
+        // the non-air blocks in the box at the moment it was handed over. The spawn itself happens on a
+        // later tick of the ship manager; this verb only queues it.
+        if (args.length >= 8 && "assemble-box".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer w = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (w == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            int x1 = parseIntOr(args[2], 0), y1 = parseIntOr(args[3], 0), z1 = parseIntOr(args[4], 0);
+            int x2 = parseIntOr(args[5], 0), y2 = parseIntOr(args[6], 0), z2 = parseIntOr(args[7], 0);
+            int minX = Math.min(x1, x2), minY = Math.min(y1, y2), minZ = Math.min(z1, z2);
+            int maxX = Math.max(x1, x2), maxY = Math.max(y1, y2), maxZ = Math.max(z1, z2);
+            int built = 0;
+            for (net.minecraft.util.math.BlockPos p : net.minecraft.util.math.BlockPos.getAllInBoxMutable(
+                    new net.minecraft.util.math.BlockPos(minX, minY, minZ),
+                    new net.minecraft.util.math.BlockPos(maxX, maxY, maxZ))) {
+                if (!w.isAirBlock(p)) {
+                    built++;
+                }
+            }
+            dev.stannismod.stellurgy.util.StorageChunk build = dev.stannismod.stellurgy.util.StorageChunk
+                    .cutWorldBB(w, new net.minecraft.util.math.AxisAlignedBB(
+                            minX, minY, minZ, maxX + 1, maxY + 1, maxZ + 1));
+            if (build == null) {
+                send(sender, "{\"error\":\"could not cut the box\"}");
+                return;
+            }
+            build.pasteInWorld(w, minX, minY, minZ);
+            java.util.UUID ship = dev.stannismod.stellurgy.integration.vs.VSIntegration.assembleTier2Ship(
+                    w, build, minX, minY, minZ);
+            send(sender, "{\"ok\":true,\"ship\":" + (ship == null ? "null" : "\"" + ship + "\"")
+                    + ",\"built\":" + built + "}");
+            return;
+        }
+        // yard-blocks <dim> <shipUuid> - READ-ONLY. How many non-air blocks physically stand in the
+        // chunks of that ship's claim: the hull as the world holds it, as against the registry's own
+        // list of positions (`ship-info`'s `blocks`), which a block can be in without having been
+        // copied. `known:false` when this world's registry has no such ship.
+        if (args.length >= 3 && "yard-blocks".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer w = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (w == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID ship;
+            try {
+                ship = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"not a ship uuid: " + escapeJson(args[2]) + "\"}");
+                return;
+            }
+            net.minecraft.util.math.AxisAlignedBB yard =
+                    dev.stannismod.stellurgy.integration.vs.VSIntegration.shipyardBoundsOf(w, ship);
+            if (yard == null) {
+                send(sender, "{\"ok\":true,\"known\":false}");
+                return;
+            }
+            int blocks = 0;
+            int chunks = 0;
+            for (int cx = (int) yard.minX >> 4; cx < (int) yard.maxX >> 4; cx++) {
+                for (int cz = (int) yard.minZ >> 4; cz < (int) yard.maxZ >> 4; cz++) {
+                    net.minecraft.world.chunk.Chunk chunk = w.getChunkProvider().provideChunk(cx, cz);
+                    chunks++;
+                    for (net.minecraft.world.chunk.storage.ExtendedBlockStorage section
+                            : chunk.getBlockStorageArray()) {
+                        if (section == net.minecraft.world.chunk.Chunk.NULL_BLOCK_STORAGE || section.isEmpty()) {
+                            continue;
+                        }
+                        for (int y = 0; y < 16; y++) {
+                            for (int z = 0; z < 16; z++) {
+                                for (int x = 0; x < 16; x++) {
+                                    if (section.get(x, y, z).getMaterial()
+                                            != net.minecraft.block.material.Material.AIR) {
+                                        blocks++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            send(sender, "{\"ok\":true,\"known\":true,\"yardBlocks\":" + blocks + ",\"chunks\":" + chunks + "}");
+            return;
+        }
         if (args.length >= 2 && "vs-count".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer w = net.minecraftforge.common.DimensionManager.getWorld(
                     parseIntOr(args[1], Integer.MIN_VALUE));

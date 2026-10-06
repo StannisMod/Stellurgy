@@ -62,6 +62,31 @@ public abstract class MixinWorldServerShipManagerDiag {
         SpawnMemory.here().noteSpawnEntry(spawnQueue.size());
     }
 
+    /** Named so a reader can tell "no spawn was refused" from "nobody was watching the spawn pass". */
+    private static final String SPAWN_INSTRUMENT = "ship_spawn_pass";
+
+    /** Declared on every pass, refusal or not, so an absent {@code ship_spawn_refused} is a reading. */
+    @Inject(method = "spawnNewShips", at = @At("HEAD"), require = 1)
+    private void stellurgyTest$spawnPassRan(CallbackInfo ci) {
+        dev.stannismod.stellurgy.test.trace.TestTrace.instrumentHere(SPAWN_INSTRUMENT);
+    }
+
+    /**
+     * VS has decided a queued ship will not be built — the decision itself, with VS's own reason, and
+     * both of the ship's names so a scenario can ask about its own craft.
+     */
+    @Inject(method = "refuseSpawn", at = @At("HEAD"), require = 1)
+    private void stellurgyTest$spawnRefused(org.valkyrienskies.mod.common.ships.ShipData toSpawn,
+                                            BlockPos anchor, String reason, CallbackInfo ci) {
+        dev.stannismod.stellurgy.test.trace.TestTrace.instrumentHere(SPAWN_INSTRUMENT);
+        dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_refused",
+                "\"vsShip\":\"" + toSpawn.getUuid() + "\",\"stellurgyShip\":\""
+                        + toSpawn.getStellurgyDurableId() + "\",\"reason\":\""
+                        + dev.stannismod.stellurgy.test.trace.TestTrace.json(reason) + "\",\"x\":"
+                        + anchor.getX() + ",\"y\":" + anchor.getY() + ",\"z\":" + anchor.getZ()
+                        + ",\"dim\":" + world.provider.getDimension());
+    }
+
     /**
      * At the pass's end, sample the queryable registry. A count that reads &ge;1 here for a ship the
      * later poll sees as 0 means it registered and was then destroyed; a count stuck at 0 while runs
@@ -89,19 +114,15 @@ public abstract class MixinWorldServerShipManagerDiag {
                                                      World floodWorld, int maxSize, boolean corners) {
         SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners);
         if (detector != null) {
-            // The flood's outcome AS A RECORD, beside the statics below: VS drops a spawn whose flood
-            // is too big or touched bedrock with one line on System.err and a `continue`, so a queued
-            // craft that never registers otherwise leaves a wait expiring on "no ship_spawned" and
-            // nothing to say why. `refused` applies VS's own abort rule to the same two inputs.
-            boolean refused = detector.foundSet.size()
-                    > org.valkyrienskies.mod.common.config.VSConfig.maxDetectedShipSize
-                    || detector.cleanHouse;
+            // The flood's INPUTS as a record. Whether VS refuses the spawn on them is VS's decision,
+            // recorded where it is taken (`ship_spawn_refused`, below) rather than re-derived here: a
+            // copy of the rule in this file had already fallen behind it once.
             dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_flood",
                     "\"x\":" + pos.getX() + ",\"y\":" + pos.getY() + ",\"z\":" + pos.getZ()
                             + ",\"dim\":" + floodWorld.provider.getDimension()
                             + ",\"found\":" + detector.foundSet.size()
                             + ",\"bedrock\":" + detector.cleanHouse
-                            + ",\"refused\":" + refused);
+                            + ",\"reachExceeded\":" + detector.reachExceeded);
             SpawnMemory.here().noteDetector(detector.foundSet.size(), detector.cleanHouse, stellurgyTest$blacklistSize());
             if (detector.foundSet.size() > FLOOD_SHAPE_THRESHOLD) {
                 stellurgyTest$recordFloodShape(detector, pos, floodWorld);

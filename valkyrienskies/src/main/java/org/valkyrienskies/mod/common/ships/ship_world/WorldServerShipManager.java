@@ -17,6 +17,7 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.ChunkProviderServer;
 import org.apache.commons.lang3.tuple.ImmutableTriple;
+import org.joml.Vector3dc;
 import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.physics.BlockPhysicsDetails;
 import org.valkyrienskies.mod.common.ships.QueryableShipData;
@@ -24,8 +25,11 @@ import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.block_relocation.BlockFinder;
 import org.valkyrienskies.mod.common.ships.block_relocation.IRelocationAwareTile;
 import org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector;
+import org.valkyrienskies.mod.common.ships.chunk_claims.VSChunkClaim;
+import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 import org.valkyrienskies.mod.common.ships.physics_data.BasicCenterOfMassProvider;
 import org.valkyrienskies.mod.common.ships.physics_data.IPhysicsObjectCenterOfMassProvider;
+import org.valkyrienskies.mod.common.util.VSMath;
 import org.valkyrienskies.mod.common.util.multithreaded.CalledFromWrongThreadException;
 import org.valkyrienskies.mod.common.util.multithreaded.VSWorldPhysicsLoop;
 import javax.annotation.Nonnull;
@@ -192,25 +196,13 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             if (VSConfig.showAnnoyingDebugOutput) {
                 System.out.println("Attempting to spawn " + toSpawn + " on the thread " + Thread.currentThread().getName());
             }
-            if (detector.foundSet.size() > VSConfig.maxDetectedShipSize || detector.cleanHouse) {
-                System.err.println("Ship too big or bedrock detected!");
-                /*
-                if (creator != null) {
-                    creator.sendMessage(new TextComponentString(
-                            "Ship construction canceled because its exceeding the ship size limit; "
-                                    +
-                                    "or because it's attached to bedrock. " +
-                                    "Raise it with /physsettings maxshipsize [number]"));
-                }
-
-                 */
+            final String refusal = spawnRefusal(detector);
+            if (refusal != null) {
+                refuseSpawn(toSpawn, physicsInfuserPos, refusal);
                 continue; // Skip ship construction
             }
-            // Fill the chunk claims
-            int radius = 7;
-            // TEMP CODE
-            // Eventually want to create mechanisms that control how many chunks are allocated to a ship
-            // But for now, lets just give them a bunch of chunks.
+            // Fill the chunk claims: as far as a detection can reach, so no found block falls outside.
+            int radius = VSChunkClaim.RADIUS;
             ChunkPos centerPos = toSpawn.getChunkClaim().getCenterPos();
             for (int chunkX = -radius; chunkX <= radius; chunkX++) {
                 for (int chunkZ = -radius; chunkZ <= radius; chunkZ++) {
@@ -221,7 +213,13 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             IPhysicsObjectCenterOfMassProvider centerOfMassProvider = new BasicCenterOfMassProvider();
             // Then create the ship chunks
             MutableBlockPos srcLocationPos = new MutableBlockPos();
-            BlockPos centerDifference = toSpawn.getChunkClaim().getRegionCenter().subtract(physicsInfuserPos);
+            BlockPos centerDifference = shipyardOffset(toSpawn.getChunkClaim(), physicsInfuserPos, detector);
+            // The ship starts where its anchor stood, and the anchor's shipyard image is wherever the
+            // offset put it - which is the region center only when the hull fits around that.
+            Vector3dc anchorInYard = VSMath.toVector3d(physicsInfuserPos.add(centerDifference));
+            ShipTransform startPose = new ShipTransform(VSMath.toVector3d(physicsInfuserPos), anchorInYard);
+            toSpawn.setShipTransform(startPose);
+            toSpawn.setPrevTickShipTransform(startPose);
             MutableBlockPos pasteLocationPos = new MutableBlockPos();
             Map<Long, Chunk> copiedChunksMap = new HashMap<>();
             // Bounds of the region being taken out of the world, tracked so that the damage records
@@ -396,6 +394,59 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * than at the queue because only here is the answer authoritative: a spawn is queued a tick or
      * more earlier, when the remnant may not exist yet.</p>
      */
+    /**
+     * Why the structure a detection found cannot become a ship, or {@code null} when it can: more
+     * blocks than {@link VSConfig#maxDetectedShipSize}, attached to bedrock, or continuing past
+     * {@link SpatialDetector#MAX_REACH} from its anchor.
+     */
+    private static String spawnRefusal(SpatialDetector detector) {
+        if (detector.cleanHouse) {
+            return "attached to bedrock";
+        }
+        if (detector.foundSet.size() > VSConfig.maxDetectedShipSize) {
+            return "more than " + VSConfig.maxDetectedShipSize + " blocks";
+        }
+        if (detector.reachExceeded) {
+            return "extends more than " + SpatialDetector.MAX_REACH + " blocks from its anchor";
+        }
+        return null;
+    }
+
+    /** A queued ship that will not be built: nothing is copied, and its blocks stay where they stand. */
+    private void refuseSpawn(ShipData toSpawn, BlockPos anchor, String reason) {
+        org.apache.logging.log4j.LogManager.getLogger(WorldServerShipManager.class).warn("Refusing to spawn ship {} anchored at {} in dim {}: the structure {}. Its blocks"
+                        + " are left in the world.", toSpawn.getUuid(), anchor, world.provider.getDimension(),
+                reason);
+    }
+
+    /**
+     * How far each found block moves when it is copied into the shipyard.
+     *
+     * <p>Along X and Z the anchor goes to the claim's region center, and the claim reaches as far as
+     * the detection could ({@link VSChunkClaim#RADIUS}). Along Y the anchor goes to the region
+     * center's height when the whole hull fits around it; a hull reaching further above or below its
+     * anchor than that allows is moved just enough to stay inside the world's 0..255, which a hull
+     * found in a world always can, since it was found inside them.</p>
+     */
+    private static BlockPos shipyardOffset(VSChunkClaim claim, BlockPos anchor, SpatialDetector detector) {
+        int minY = Integer.MAX_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        MutableBlockPos pos = new MutableBlockPos();
+        TIntIterator blocks = detector.foundSet.iterator();
+        while (blocks.hasNext()) {
+            SpatialDetector.setPosWithRespectTo(blocks.next(), detector.firstBlock, pos);
+            minY = Math.min(minY, pos.getY());
+            maxY = Math.max(maxY, pos.getY());
+        }
+        BlockPos center = claim.getRegionCenter();
+        int dy = center.getY() - anchor.getY();
+        if (minY <= maxY) {
+            dy = Math.max(dy, -minY);
+            dy = Math.min(dy, 255 - maxY);
+        }
+        return new BlockPos(center.getX() - anchor.getX(), dy, center.getZ() - anchor.getZ());
+    }
+
     private void dropOwnBlocklessRemnant(@Nonnull UUID uuid) {
         final PhysicsObject loaded = loadedShips.get(uuid);
         if (loaded != null && loaded.getShipData().getBlockPositions() != null
