@@ -2,7 +2,6 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
@@ -53,12 +52,6 @@ import static org.junit.Assert.assertTrue;
  * It is static because JUnit builds a fresh test instance per method while the client JVM keeps the
  * setting.</p>
  */
-@Ignore("HELD FOR THE DECK CONTRACT, by the maintainer's rulings of 2026-10-03 and 2026-10-04. Of the"
-        + " two full client tiers on 2026-10-06 one was green and one red in"
-        + " aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet: after the arrival the crew member was held by"
-        + " the deck of ANOTHER craft whose hull overlaps the arrival point (an earlier scenario's ship),"
-        + " not by his own — measured, not diagnosed. RE-ENABLE once the arrival keeps him on his own"
-        + " ship; the acceptance is this class green on a full client tier, twice.")
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
 
@@ -1477,10 +1470,6 @@ private String hud() throws Exception {
      * 2026-09-28. Skipping it everywhere reddened the DEPARTURE first ("into dim 13"), which is why
      * the inversion was scoped. The wait before the verdict is the link that the ship arrived.</p>
      */
-    @Ignore("RED IN ITS PREPARE, on a leak of this class rather than on what it asserts: a ship from an"
-            + " earlier scenario stays parked in the shared destination cell, the between-scenario reset"
-            + " leaves the player standing on it, and his aboard record is re-stamped, so the reset's"
-            + " 'bound to nothing' check fails. Lift once finished scenarios dispose of their ships.")
     @Test
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
 
@@ -1640,10 +1629,6 @@ private String hud() throws Exception {
      * reason — it advances on the renderer's first line, before any branch, so a still sky and a still
      * corridor are distinguishable.
      */
-    @Ignore("RED IN ITS PREPARE, on a leak of this class rather than on what it asserts: a ship from an"
-            + " earlier scenario stays parked in the shared destination cell, the between-scenario reset"
-            + " leaves the player standing on it, and his aboard record is re-stamped, so the reset's"
-            + " 'bound to nothing' check fails. Lift once finished scenarios dispose of their ships.")
     @Test
     public void aStandingCrewMemberStillSeesTheHyperspaceCorridor() throws Exception {
 

@@ -317,17 +317,12 @@ public class VSItemOnADeckTest extends AbstractDeckBodyTest {
      * the player there more cheaply than hull-stand does. This is that reading.
      */
     @Test
-    @org.junit.Ignore("The pilot-deck fixture's blocks below the deck are of unknown extent: dropped over"
-            + " the corner column of the inverted craft, the item ends inside a gap at ship-frame Y 122.4,"
-            + " falling at 0.33 blocks/tick and not moving, with no ship association and no deck episode."
-            + " This reading needs a craft whose outer surface is a known plain slab. Re-enable on one.")
     public void anItemOnTheOuterHullOfAnInvertedCraftStaysWhereItLanded() throws Exception {
         outerHull(null);
     }
 
     /** As above, with the craft flying sideways under the item. */
     @Test
-    @org.junit.Ignore("Same arrangement as the static outer-hull scenario; see its reason.")
     public void anItemOnTheOuterHullOfAFlyingInvertedCraftRidesWithIt() throws Exception {
         outerHull(HULL_FLIGHT_VELOCITY);
     }
