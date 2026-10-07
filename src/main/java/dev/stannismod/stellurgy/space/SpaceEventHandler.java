@@ -106,11 +106,13 @@ public final class SpaceEventHandler {
         private final List<PendingSeat> pendingSeats = new ArrayList<>();
 
         /**
-         * player -> the ship whose cell was materialized for him at login, so the occupant refcount that
-         * materialize took can be handed back when he leaves. A refcount is a claim on one of a small
-         * fixed pool of slot worlds; leaking one per login would exhaust the pool.
+         * player -> the cell materialized for him at login, so the occupant refcount that materialize
+         * took can be handed back when he leaves. A refcount is a claim on one of a small fixed pool of
+         * slot worlds; leaking one per login would exhaust the pool. The CELL is kept, not his ship: the
+         * ship can cross, jump or descend while he is online, and the claim stays on the cell it was
+         * taken on.
          */
-        private final java.util.Map<UUID, UUID> heldCells = new java.util.HashMap<>();
+        private final java.util.Map<UUID, GalacticCoord> heldCells = new java.util.HashMap<>();
 
         /**
          * Players who came back aboard a ship the server has no record of, waiting to be told so. Written
@@ -187,11 +189,11 @@ public final class SpaceEventHandler {
                 // it must also pin him against world gravity while his client re-captures.
                 part().pendingSeats.add(new PendingSeat(player.getUniqueID(), aboard, placement.dimension));
             }
-            if (placement.reason == LoginRestore.Reason.ABOARD_SETTLED) {
+            if (placement.claimedCell != null) {
                 // The materialize above took an occupant refcount on his behalf; remember it so his
                 // logout gives it back. Without the pairing the cell is pinned to a pool slot for the
                 // rest of the server's life and the pool bleeds one slot per restored player.
-                part().heldCells.put(player.getUniqueID(), placement.shipId);
+                part().heldCells.put(player.getUniqueID(), placement.claimedCell);
             }
         } else if (placement.reason == LoginRestore.Reason.NO_TAG
                 || placement.reason == LoginRestore.Reason.SHIP_UNKNOWN) {
@@ -325,15 +327,12 @@ public final class SpaceEventHandler {
     }
 
     private void releaseHeldCell(UUID playerId) {
-        UUID shipId = part().heldCells.remove(playerId);
+        GalacticCoord claimed = part().heldCells.remove(playerId);
         SpaceSubsystem stack = Stellurgy.spaceSubsystem();
-        if (shipId == null || stack == null) {
+        if (claimed == null || stack == null) {
             return;
         }
-        ShipLedger.Entry entry = stack.ledger.get(shipId);
-        if (entry != null) {
-            stack.manager.dematerialize(entry.coord);
-        }
+        stack.manager.dematerialize(claimed);
     }
 
     /**

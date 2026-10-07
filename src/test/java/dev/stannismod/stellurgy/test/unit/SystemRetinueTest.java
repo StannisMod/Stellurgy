@@ -38,6 +38,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class SystemRetinueTest {
 
+    /**
+     * A body's orbit is measured against the configuration, whose class initializer touches vanilla's
+     * block registry; without the vanilla bootstrap that throws and poisons the class for every later
+     * test in this JVM.
+     */
+    @org.junit.BeforeClass
+    public static void bootstrap() {
+        dev.stannismod.stellurgy.test.MinecraftBootstrap.ensure();
+    }
+
     private static final long SEED = 0xA57E401DL;
 
     private static GalacticCoord cell(long sx, long sy, long sz) {

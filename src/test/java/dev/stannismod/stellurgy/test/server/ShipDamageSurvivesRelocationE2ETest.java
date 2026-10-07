@@ -49,6 +49,8 @@ public class ShipDamageSurvivesRelocationE2ETest extends AbstractSharedServerTes
     private static final int SRC_X = 7600, SRC_Z = 7200;
     /** Where the relocation puts the ship down. Far enough that its new yard cannot be the old one. */
     private static final int DST_X = 7600, DST_Y = 96, DST_Z = 7400;
+    /** Where the filler craft is built — clear of the source, the destination and the second site. */
+    private static final int FILLER_X = 7400, FILLER_Z = 7200;
     /** A second build site, for the scenario that mines a block out of a ship instead of moving it. */
     private static final int AFC_X = 7800, AFC_Z = 7200;
 
@@ -87,14 +89,29 @@ public class ShipDamageSurvivesRelocationE2ETest extends AbstractSharedServerTes
      * left-behind verdict is held by TWO lines: {@code BlockDamageSavedData#move} at {@code Entry entry = entries.remove(from.toLong());} copying instead of
      * moving stayed GREEN on its own, because {@code StorageChunk#cutWorldBB} at {@code if (!worldObj.isRemote)}'s clear of the cut region
      * still emptied the old yard; with both broken it fails with "the relocation left 4 damage records
-     * at the vacated subspace address 19200001,129,51200". 2026-09-30.
+     * at the vacated subspace address 19200001,129,51200". 2026-09-30. The filler craft was added on
+     * 2026-10-07, when given-back claims began to be reused, and the first record re-taken with it:
+     * "the relocated ship does not carry the damage it left with" (seat 19200001,129,102400 before,
+     * 19200001,129,51200 after) (2026-10-07).
      */
     @Test
     public void aRelocatedShipCarriesItsDamageAndLeavesNoneBehind() throws Exception {
         ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        // A shipyard claim given back is handed out again, lowest first, and a relocation gives back
+        // the ship's own claim before the re-assembled hull asks for one — so on its own the ship would
+        // come back into its old yard, and the address control below could never be met. A filler
+        // craft built FIRST holds a lower claim; scrapped before the relocation, its claim is the one
+        // the re-assembled hull takes.
+        WarShip filler = WarShip.build(events, this::exec, FixtureSite.openAir(0, FILLER_X, FILLER_Z),
+                null, "the filler craft whose claim the relocated hull is to take");
         FixtureSite site = FixtureSite.openAir(0, SRC_X, SRC_Z);
         WarShip ship = WarShip.build(events, this::exec, site, builder -> addPlainSubjectBlock(site),
                 "the craft whose damage is carried");
+        long scrapped = events.mark();
+        requireArranged("the filler craft must be there to scrap",
+                ask("stellurgytest vs destroy-ship 0 " + filler.vsShip).bool("marked"));
+        events.awaitField(scrapped, "ship_removed", "vsShip", filler.vsShip,
+                "the filler craft was never collected, so its claim was never given back", LINK_TICKS);
 
         // A block of this ship whose subspace address we know, used only as the anchor the yard is
         // read around. The shot below is aimed away from it so that it survives to be that anchor.

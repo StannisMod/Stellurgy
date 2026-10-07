@@ -41,6 +41,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class VoidContentTest {
 
+    /**
+     * A body's orbit is measured against the configuration, whose class initializer touches vanilla's
+     * block registry; without the vanilla bootstrap that throws and poisons the class for every later
+     * test in this JVM.
+     */
+    @org.junit.BeforeClass
+    public static void bootstrap() {
+        dev.stannismod.stellurgy.test.MinecraftBootstrap.ensure();
+    }
+
     /** The temperature, in kelvin, below which a world is colder than anything a star lights.
      *  The TEST'S OWN: the coldest lit world in the shipped table is well above it. */
     private static final int STARLESS_KELVIN = 200;

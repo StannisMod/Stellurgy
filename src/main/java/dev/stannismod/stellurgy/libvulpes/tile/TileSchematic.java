@@ -4,6 +4,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTUtil;
 import net.minecraft.util.ITickable;
 import org.apache.commons.lang3.ArrayUtils;
 import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
@@ -12,11 +13,24 @@ import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A holo-projector ghost: shows, in turn, each block a structure accepts at this cell, and goes away
+ * by itself after {@code ttl} ticks.
+ *
+ * <p>A ghost may be projected into a cell that held something a block may be placed over — water,
+ * snow, tall grass. That block is {@link #setDisplacedState remembered}, and when the ghost goes —
+ * because it expired or because the projector was pointed elsewhere — {@link #vanish} puts it back.
+ * A ghost that only ever stood in air leaves air.</p>
+ */
 public class TileSchematic extends TilePlaceholder implements ITickable {
+
+	private static final String NBT_DISPLACED = "displaced";
 
 	private final int ttl = 6000;
 	private int timeAlive = 0;
 	private List<BlockMeta> possibleBlocks;
+	/** What stood in this cell before the ghost did. */
+	private IBlockState displaced = Blocks.AIR.getDefaultState();
 
 	public TileSchematic() {
 		possibleBlocks = new ArrayList<>();
@@ -30,7 +44,18 @@ public class TileSchematic extends TilePlaceholder implements ITickable {
 	public void setReplacedBlock(List<BlockMeta> block) {
 		possibleBlocks = block;
 	}
-	
+
+	/** Remember what the ghost was placed over, to be put back by {@link #vanish}. */
+	public void setDisplacedState(IBlockState state) {
+		displaced = state;
+		markDirty();
+	}
+
+	/** Remove the ghost from the world, putting back the block it was placed over. */
+	public void vanish() {
+		world.setBlockState(pos, displaced, 3);
+	}
+
 	@Override
 	public int getBlockMetadata() {
 		if(possibleBlocks.size() == 0)
@@ -50,7 +75,7 @@ public class TileSchematic extends TilePlaceholder implements ITickable {
 
 		if(!world.isRemote) {
 			if(timeAlive == ttl) {
-				world.setBlockToAir(pos);
+				vanish();
 			}
 		}
 		timeAlive++;
@@ -75,6 +100,8 @@ public class TileSchematic extends TilePlaceholder implements ITickable {
 			nbt.setIntArray("blockMetas", ArrayUtils.toPrimitive(blockMetas.toArray(bufferSpace2)));
 		}
 
+		nbt.setTag(NBT_DISPLACED, NBTUtil.writeBlockState(new NBTTagCompound(), displaced));
+
 		return nbt;
 	}
 
@@ -93,5 +120,7 @@ public class TileSchematic extends TilePlaceholder implements ITickable {
 					possibleBlocks.add(new BlockMeta(Block.getBlockById(block[i]), metas[i]));
 			}
 		}
+
+		displaced = NBTUtil.readBlockState(nbt.getCompoundTag(NBT_DISPLACED));
 	}
 }

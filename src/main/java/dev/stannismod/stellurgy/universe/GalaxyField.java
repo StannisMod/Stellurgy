@@ -693,12 +693,42 @@ public final class GalaxyField {
     }
 
     /**
+     * Whether this table holds a type a galaxy holding authored content may be drawn from. When it does
+     * not, {@link #pickType} draws such a galaxy from the whole table, and
+     * {@link #guaranteedAuthoredReachLy} shrinks to what that table can promise.
+     */
+    boolean hostsAuthoredContent() {
+        return totalHomeWeight > 0L;
+    }
+
+    /**
+     * How far from its declaration origin authored content is certain to stay inside its galaxy, in
+     * light years, for THIS table.
+     *
+     * <p>With a type large enough to host authored content, the draw is restricted to such types and
+     * the shipped guarantee holds. Without one, a galaxy holding authored content is drawn from the
+     * whole table and may be its smallest type, so the promise is what that type's smallest radius
+     * leaves — stating the shipped figure there vouched for a galaxy the draw could not produce.</p>
+     */
+    public double guaranteedAuthoredReachLy() {
+        if (hostsAuthoredContent()) {
+            return UniverseScale.GUARANTEED_AUTHORED_REACH_LY;
+        }
+        double smallest = Double.MAX_VALUE;
+        for (GalaxyGenConfig.GalaxyType t : config.galaxyTypes) {
+            smallest = Math.min(smallest, t.minRadiusLy);
+        }
+        return (1d - UniverseScale.HOME_GALAXY_ORIGIN_FRACTION) * smallest;
+    }
+
+    /**
      * Draw a type by weight — over the whole table, or over the subset a galaxy holding authored
      * content may be.
      *
      * <p>A table with nothing large enough falls back to the whole table: a pack that ships only dwarf
      * galaxies gets the universe it asked for, and its authored content had better be near the
-     * centre.</p>
+     * centre. The fallback is reported where the table is put in force (the generator), and the
+     * guarantee it can no longer give is withdrawn by {@link #guaranteedAuthoredReachLy}.</p>
      */
     private GalaxyGenConfig.GalaxyType pickType(long h, boolean restrictToLarge) {
         boolean restricted = restrictToLarge && totalHomeWeight > 0L;

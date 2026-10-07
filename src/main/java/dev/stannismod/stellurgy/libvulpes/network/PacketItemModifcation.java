@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.network;
 
 import io.netty.buffer.ByteBuf;
-import net.minecraft.client.Minecraft;
+import io.netty.buffer.Unpooled;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -9,13 +9,23 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.EnumHand;
-import net.minecraft.world.World;
-import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import java.io.IOException;
 
+/**
+ * A packet about the item a player holds in his main hand: the player's dimension and entity id, a
+ * packet id, an optional compound, and whatever bytes that item writes for that id.
+ *
+ * <p>Decoding reads bytes only; the holder is looked up, and his item handed its bytes, on the game
+ * thread.</p>
+ *
+ * <p><b>From a client, the only item it may speak for is the one in its own hand.</b> The server
+ * applies the packet only when the player it names is the sender himself, in his own world; the item
+ * is the sender's main-hand item, read when the packet executes. Bytes that do not decode are a dropped
+ * packet, logged.</p>
+ */
 public class PacketItemModifcation extends BasePacket {
 
 	private NBTTagCompound nbt;
@@ -24,6 +34,15 @@ public class PacketItemModifcation extends BasePacket {
 	private int entityId;
 	private EntityPlayer entity;
 	private INetworkItem machine;
+
+	/** The world the sender named. Read off the wire; compared only on the game thread. */
+	private int dimId;
+	/**
+	 * The item's own bytes, copied out of the decoder's buffer; {@code null} when the packet did not
+	 * decode, and {@link #malformed} then says why.
+	 */
+	private byte[] payload;
+	private String malformed;
 
 	public PacketItemModifcation() {
 		nbt = new NBTTagCompound();
@@ -66,110 +85,97 @@ public class PacketItemModifcation extends BasePacket {
 
 	@Override
 	public void read(ByteBuf in) {
-		PacketBuffer buffer = new PacketBuffer(in);
-		read(buffer, true);
-	}
-
-	public void read(PacketBuffer in, boolean server) {
-		//DEBUG:
-		World world;
-		world = DimensionManager.getWorld(in.readInt());
-
-		int entityId = in.readInt();
-		packetId = in.readByte();
-
-		Entity ent = world.getEntityByID(entityId);
-		if(ent == null) {
-			for(Entity e : world.playerEntities) {
-				if(e.getEntityId() == entityId) {
-					ent = e;
-					break;
-				}
-			}
-		}
-
-		if(in.readBoolean()) {
-			NBTTagCompound nbt = null;
-
-			try {
-				nbt = in.readCompoundTag();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-			this.nbt = nbt;
-		}
-
-		if(ent instanceof EntityPlayer) {
-			ItemStack itemStack = ((EntityPlayer)ent).getHeldItem(EnumHand.MAIN_HAND);
-			if(!itemStack.isEmpty() && itemStack.getItem() instanceof INetworkItem) {
-				((INetworkItem)itemStack.getItem()).readDataFromNetwork(in, packetId, nbt, itemStack);
-			}
-		}
-		else {
-			//Error
-		}
-	}
-
-	public void execute(EntityPlayer player, Side side) {
-
-		if(player != null) {
-			ItemStack itemStack = player.getHeldItem(EnumHand.MAIN_HAND);
-			if(!itemStack.isEmpty() && itemStack.getItem() instanceof INetworkItem) {
-				((INetworkItem)itemStack.getItem()).useNetworkData(player, side, packetId, nbt, itemStack);
-			}
-		}
-		else {
-			//Error
-		}
-	}
-
-	@Override
-	public void executeServer(EntityPlayerMP player) {
-		execute(player, Side.SERVER);
-	}
-
-	@Override
-	public void executeClient(EntityPlayer player) {
-		execute(player, Side.CLIENT);
+		decode(new PacketBuffer(in));
 	}
 
 	@Override
 	@SideOnly(Side.CLIENT)
 	public void readClient(ByteBuf in) {
-		PacketBuffer buffer = new PacketBuffer(in);
+		decode(new PacketBuffer(in));
+	}
 
-		//DEBUG:
-		World world;
-
-		buffer.readInt();
-		world = Minecraft.getMinecraft().world;
-
-		int entityId = buffer.readInt();
-		packetId = buffer.readByte();
-
-		Entity ent = world.getEntityByID(entityId);
-
-		if(buffer.readBoolean()) {
-			NBTTagCompound nbt = null;
-
-			try {
-				nbt = buffer.readCompoundTag();
-			} catch (IOException e) {
-				e.printStackTrace();
+	/** Header, compound and payload bytes. Touches no world. */
+	private void decode(PacketBuffer in) {
+		try {
+			dimId = in.readInt();
+			entityId = in.readInt();
+			packetId = in.readByte();
+			if (in.readBoolean()) {
+				NBTTagCompound read = in.readCompoundTag();
+				if (read != null) {
+					nbt = read;
+				}
 			}
-
-			this.nbt = nbt;
+			payload = new byte[in.readableBytes()];
+			in.readBytes(payload);
+		} catch (IOException | RuntimeException e) {
+			payload = null;
+			malformed = e.toString();
+			in.skipBytes(in.readableBytes());
 		}
+	}
 
-		if(ent instanceof EntityPlayer) {
-			ItemStack itemStack = ((EntityPlayer)ent).getHeldItem(EnumHand.MAIN_HAND);
-			if(!itemStack.isEmpty() && itemStack.getItem() instanceof INetworkItem) {
-				((INetworkItem)itemStack.getItem()).readDataFromNetwork(in, packetId, nbt, itemStack);
+	/** The packet as the log names it. */
+	private String describe() {
+		return "held-item packet " + packetId + " for entity " + entityId + " in dimension " + dimId;
+	}
+
+	/** The item of {@code stack} when it speaks this channel, else {@code null}. */
+	private static INetworkItem networkItemOf(ItemStack stack) {
+		return !stack.isEmpty() && stack.getItem() instanceof INetworkItem ? (INetworkItem) stack.getItem() : null;
+	}
+
+	@Override
+	public void executeServer(EntityPlayerMP player) {
+		if (payload == null) {
+			PacketSenderCheck.refuse(player, describe(), "it does not decode (" + malformed + ")");
+			return;
+		}
+		if (entityId != player.getEntityId()) {
+			PacketSenderCheck.refuse(player, describe(), "it names a holder other than the sender (entity "
+					+ player.getEntityId() + ")");
+			return;
+		}
+		if (!PacketSenderCheck.inSendersWorld(player, dimId)) {
+			PacketSenderCheck.refuse(player, describe(), "it names a world other than the sender's ("
+					+ player.world.provider.getDimension() + ")");
+			return;
+		}
+		ItemStack itemStack = player.getHeldItem(EnumHand.MAIN_HAND);
+		INetworkItem item = networkItemOf(itemStack);
+		if (item == null) {
+			return;
+		}
+		try {
+			item.readDataFromNetwork(Unpooled.wrappedBuffer(payload), packetId, nbt, itemStack);
+		} catch (RuntimeException e) {
+			// Whatever an item's reader throws on these bytes, the bytes are the client's.
+			PacketSenderCheck.refuse(player, describe(), "its payload of " + payload.length
+					+ " bytes does not decode as the item reads it (" + e + ")");
+			return;
+		}
+		item.useNetworkData(player, Side.SERVER, packetId, nbt, itemStack);
+	}
+
+	@Override
+	public void executeClient(EntityPlayer player) {
+		if (payload == null || player == null || player.world == null) {
+			return;
+		}
+		// The holder the server named reads the bytes into his own item; the receiving player's item
+		// applies them.
+		Entity holder = player.world.getEntityByID(entityId);
+		if (holder instanceof EntityPlayer) {
+			ItemStack held = ((EntityPlayer) holder).getHeldItem(EnumHand.MAIN_HAND);
+			INetworkItem heldItem = networkItemOf(held);
+			if (heldItem != null) {
+				heldItem.readDataFromNetwork(Unpooled.wrappedBuffer(payload), packetId, nbt, held);
 			}
 		}
-		else {
-			//Error
+		ItemStack itemStack = player.getHeldItem(EnumHand.MAIN_HAND);
+		INetworkItem item = networkItemOf(itemStack);
+		if (item != null) {
+			item.useNetworkData(player, Side.CLIENT, packetId, nbt, itemStack);
 		}
 	}
 }

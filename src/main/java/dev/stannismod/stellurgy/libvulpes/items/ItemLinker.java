@@ -172,9 +172,9 @@ public class ItemLinker extends Item {
 		position.setInteger("MasterX", EMPTYSETTING);
 		position.setInteger("MasterY", EMPTYSETTING);
 		position.setInteger("MasterZ", EMPTYSETTING);
-		position.setInteger("dimId", -1);
 
 		itemStack.setTagInfo("MasterPos", position);
+		setDimId(itemStack, -1);
 	}
 	@Override
 	@Nonnull

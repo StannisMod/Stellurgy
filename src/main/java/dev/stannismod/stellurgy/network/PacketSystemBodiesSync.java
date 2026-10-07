@@ -94,10 +94,8 @@ public final class PacketSystemBodiesSync extends BasePacket {
          * the list is sent as a unit and a procedural body has no id of any kind — it has no
          * dimension until somebody lands on it.</p>
          *
-         * <p>Resolved server-side from the invariant the universe layer already holds: a moon shares
-         * its parent's CELL, and a cell holds at most one real body with moons excepted. So the
-         * parent of a moon is the non-moon body of the same cell, and there is never a second
-         * candidate.</p>
+         * <p>Resolved server-side from the moon's name: a moon is named in its parent's ZONE, whose
+         * key is the parent's cell key, so the parent is the non-moon body of that cell.</p>
          */
         public final int parentIndex;
 

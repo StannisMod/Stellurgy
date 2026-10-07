@@ -147,9 +147,16 @@ public abstract class TileEntityRFConsumer extends TileEntity implements IPower,
 		energy.setEnergyStored(value);
 	}
 
+	/**
+	 * Energy taken from outside. A consumer spends its store through {@link #energy} directly, so this
+	 * answers only callers that are not the machine itself, and refuses them while {@link #canExtract()}
+	 * says no.
+	 */
 	@Override
 	public int extractEnergy(int amt, boolean simulate) {
-		return energy.extractEnergy(amt, false);
+		if(!canExtract())
+			return 0;
+		return energy.extractEnergy(amt, simulate);
 	}
 
 	@Override

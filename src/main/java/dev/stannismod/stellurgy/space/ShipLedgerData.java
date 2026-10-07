@@ -45,8 +45,6 @@ public final class ShipLedgerData extends WorldSavedData {
     /** NBT key of the persisted space clock — a save-schema constant. */
     private static final String KEY_CLOCK = "spaceClock";
 
-    private static final int NBT_VERSION = 1;
-
     /** The persisted snapshot: ship UUID -> its settled ledger entry. */
     private final Map<UUID, ShipLedger.Entry> entries = new HashMap<>();
     /** The persisted in-flight transit records (a jump survives a restart). */
@@ -259,7 +257,6 @@ public final class ShipLedgerData extends WorldSavedData {
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
-        nbt.setInteger("version", NBT_VERSION);
         NBTTagList list = new NBTTagList();
         for (Map.Entry<UUID, ShipLedger.Entry> e : entries.entrySet()) {
             NBTTagCompound c = new NBTTagCompound();

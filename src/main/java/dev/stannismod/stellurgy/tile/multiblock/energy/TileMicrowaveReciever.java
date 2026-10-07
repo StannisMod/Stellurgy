@@ -3,12 +3,10 @@ package dev.stannismod.stellurgy.tile.multiblock.energy;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
@@ -35,26 +33,19 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerProducer;
 import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public class TileMicrowaveReciever extends TileMultiPowerProducer implements ITickable {
-
-    // key: BlockPos.toLong(), value: saved non-empty stacks for that hatch (slot order preserved)
-    private final Map<Long, NonNullList<ItemStack>> savedHatchInv = new HashMap<>();
 
     static final BlockMeta iron_block = new BlockMeta(StellurgyBlocks.blockSolarPanel);
     static final Object[][][] structure = new Object[][][]{
@@ -161,41 +152,6 @@ public class TileMicrowaveReciever extends TileMultiPowerProducer implements ITi
         }
         return new java.util.ArrayList<>(set);
     }
-
-    @Override
-    public boolean attemptCompleteStructure(IBlockState state) {
-        if (!world.isRemote) {
-            // Snapshot BEFORE formation (real hatches)
-            snapshotHatchInventories();
-        }
-        boolean ok = super.attemptCompleteStructure(state);
-
-        if (!world.isRemote) {
-            if (ok) {
-                // Formation succeeded -> push snapshot into placeholders (alive state)
-                writeSnapshotIntoPlaceholders();
-            } else {
-                // Formation failed -> discard
-                savedHatchInv.clear();
-            }
-        }
-        return ok;
-    }
-
-
-    @Override
-    public void deconstructMultiBlock(World worldIn, BlockPos destroyedPos, boolean blockBroken, IBlockState state) {
-        if (!worldIn.isRemote) {
-            snapshotFromPlaceholders();
-        }
-
-        super.deconstructMultiBlock(worldIn, destroyedPos, blockBroken, state);
-
-        if (!worldIn.isRemote) {
-            restoreHatchInventories();
-        }
-    }
-
 
     @Override
     public void update() {
@@ -385,314 +341,5 @@ public class TileMicrowaveReciever extends TileMultiPowerProducer implements ITi
             powerMadeLastTick = nbt.getInteger("amtPwr");
         }
     }
-
-    @Override
-    public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
-        super.writeToNBT(nbt);
-
-        // ---- saved hatch inventories ----
-        NBTTagList hatchList = new NBTTagList();
-        if (savedHatchInv != null && !savedHatchInv.isEmpty()) {
-            for (Map.Entry<Long, NonNullList<ItemStack>> e : savedHatchInv.entrySet()) {
-                NBTTagCompound entry = new NBTTagCompound();
-                entry.setLong("pos", e.getKey());
-
-                NBTTagList items = new NBTTagList();
-                NonNullList<ItemStack> arr = e.getValue();
-                for (int slot = 0; slot < arr.size(); slot++) {
-                    ItemStack s = arr.get(slot);
-                    if (s.isEmpty()) continue;
-                    NBTTagCompound it = new NBTTagCompound();
-                    it.setInteger("slot", slot);
-                    s.writeToNBT(it);
-                    items.appendTag(it);
-                }
-                entry.setTag("items", items);
-                hatchList.appendTag(entry);
-            }
-        }
-        nbt.setTag("savedHatchInv", hatchList);
-
-        return nbt;
-    }
-
-    @Override
-    public void readFromNBT(NBTTagCompound nbt) {
-        super.readFromNBT(nbt);
-
-        // ---- saved hatch inventories ----
-        savedHatchInv.clear(); 
-
-        NBTTagList hatchList = nbt.getTagList("savedHatchInv", 10);
-        for (int i = 0; i < hatchList.tagCount(); i++) {
-            NBTTagCompound entry = hatchList.getCompoundTagAt(i);
-            long posKey = entry.getLong("pos");
-            NBTTagList items = entry.getTagList("items", 10);
-
-            int maxSlot = -1;
-            for (int j = 0; j < items.tagCount(); j++) {
-                int slot = items.getCompoundTagAt(j).getInteger("slot");
-                if (slot > maxSlot) maxSlot = slot;
-            }
-            NonNullList<ItemStack> arr = NonNullList.withSize(Math.max(maxSlot + 1, 1), ItemStack.EMPTY);
-
-            for (int j = 0; j < items.tagCount(); j++) {
-                NBTTagCompound it = items.getCompoundTagAt(j);
-                int slot = it.getInteger("slot");
-                arr.set(slot, new ItemStack(it));
-            }
-            savedHatchInv.put(posKey, arr);
-        }
-    }
-
-    // Push the pre-formation snapshot into the placeholders' replaced inventories (after formation)
-    private void writeSnapshotIntoPlaceholders() {
-        if (world == null || savedHatchInv.isEmpty()) return;
-
-        final Object[][][] struct = getStructure();
-        if (struct == null) return;
-
-        final Vector3F<Integer> off = getControllerOffset(struct);
-        final EnumFacing front = getFrontDirection(world.getBlockState(pos));
-
-        for (int y = 0; y < struct.length; y++) {
-            for (int z = 0; z < struct[0].length; z++) {
-                for (int x = 0; x < struct[0][0].length; x++) {
-                    if (struct[y][z][x] == null) continue;
-
-                    int gx = pos.getX() + (x - off.x) * front.getFrontOffsetZ() - (z - off.z) * front.getFrontOffsetX();
-                    int gy = pos.getY() - y + off.y;
-                    int gz = pos.getZ() - (x - off.x) * front.getFrontOffsetX() - (z - off.z) * front.getFrontOffsetZ();
-                    BlockPos bp = new BlockPos(gx, gy, gz);
-
-                    TileEntity te = world.getTileEntity(bp);
-                    if (!(te instanceof TilePlaceholder)) continue;
-
-                    NonNullList<ItemStack> snapshot = savedHatchInv.get(bp.toLong());
-                    if (snapshot == null || snapshot.isEmpty()) continue;
-
-                    TileEntity rep = ((TilePlaceholder) te).getReplacedTileEntity();
-                    if (!(rep instanceof IInventory)) continue;
-
-                    IInventory inv = (IInventory) rep;
-
-                    // First try to restore to original slots
-                    for (int i = 0; i < snapshot.size(); i++) {
-                        ItemStack src = snapshot.get(i);
-                        if (src.isEmpty()) continue;
-                        ItemStack cur = (i < inv.getSizeInventory()) ? inv.getStackInSlot(i) : ItemStack.EMPTY;
-                        if (i < inv.getSizeInventory() && cur.isEmpty()) {
-                            inv.setInventorySlotContents(i, src.copy());
-                            snapshot.set(i, ItemStack.EMPTY);
-                        }
-                    }
-                    // Then merge leftovers
-                    for (int i = 0; i < snapshot.size(); i++) {
-                        ItemStack left = snapshot.get(i);
-                        if (left.isEmpty()) continue;
-
-                        ItemStack rem = left.copy();
-                        // merge into existing stacks
-                        for (int slot = 0; slot < inv.getSizeInventory() && !rem.isEmpty(); slot++) {
-                            ItemStack dst = inv.getStackInSlot(slot);
-                            if (dst.isEmpty()) continue;
-                            if (ItemStack.areItemsEqual(dst, rem) && ItemStack.areItemStackTagsEqual(dst, rem)) {
-                                int can = Math.min(inv.getInventoryStackLimit(), dst.getMaxStackSize()) - dst.getCount();
-                                if (can > 0) {
-                                    int move = Math.min(can, rem.getCount());
-                                    dst.grow(move);
-                                    rem.shrink(move);
-                                    inv.setInventorySlotContents(slot, dst);
-                                }
-                            }
-                        }
-                        // fill empties
-                        for (int slot = 0; slot < inv.getSizeInventory() && !rem.isEmpty(); slot++) {
-                            if (inv.getStackInSlot(slot).isEmpty()) {
-                                int put = Math.min(inv.getInventoryStackLimit(), rem.getMaxStackSize());
-                                ItemStack putStack = rem.splitStack(put);
-                                inv.setInventorySlotContents(slot, putStack);
-                            }
-                        }
-                        // any remainder stays in snapshot (shouldn’t normally happen)
-                        snapshot.set(i, rem.isEmpty() ? ItemStack.EMPTY : rem);
-                    }
-                    inv.markDirty();
-                }
-            }
-        }
-
-        // After pushing into placeholders, discard snapshot
-        savedHatchInv.clear();
-    }
-
-    // Pull current contents back out of placeholders' replaced inventories (before teardown)
-    private void snapshotFromPlaceholders() {
-        savedHatchInv.clear();
-        if (world == null) return;
-
-        final Object[][][] struct = getStructure();
-        if (struct == null) return;
-
-        final Vector3F<Integer> off = getControllerOffset(struct);
-        final EnumFacing front = getFrontDirection(world.getBlockState(pos));
-
-        for (int y = 0; y < struct.length; y++) {
-            for (int z = 0; z < struct[0].length; z++) {
-                for (int x = 0; x < struct[0][0].length; x++) {
-                    if (struct[y][z][x] == null) continue;
-
-                    int gx = pos.getX() + (x - off.x) * front.getFrontOffsetZ() - (z - off.z) * front.getFrontOffsetX();
-                    int gy = pos.getY() - y + off.y;
-                    int gz = pos.getZ() - (x - off.x) * front.getFrontOffsetX() - (z - off.z) * front.getFrontOffsetZ();
-                    BlockPos bp = new BlockPos(gx, gy, gz);
-
-                    TileEntity te = world.getTileEntity(bp);
-
-                    // Prefer the underlying hatch if this position is a placeholder
-                    IInventory inv = null;
-                    if (te instanceof TilePlaceholder) {
-                        TileEntity rep = ((TilePlaceholder) te).getReplacedTileEntity();
-                        if (rep instanceof TileInventoryHatch) inv = (IInventory) rep;
-                    } else if (te instanceof TileInventoryHatch) {
-                        // Real multiblock component hatch (hidden block), still a live TE
-                        inv = (IInventory) te;
-                    }
-
-                    if (inv != null) {
-                        NonNullList<ItemStack> copy = NonNullList.withSize(inv.getSizeInventory(), ItemStack.EMPTY);
-                        boolean any = false;
-                        for (int i = 0; i < inv.getSizeInventory(); i++) {
-                            ItemStack s = inv.getStackInSlot(i);
-                            if (!s.isEmpty()) {
-                                copy.set(i, s.copy());
-                                any = true;
-                            }
-                        }
-                        if (any) savedHatchInv.put(bp.toLong(), copy);
-                    }
-                }
-            }
-        }
-    }
-
-
-
-
-    private void snapshotHatchInventories() {
-        savedHatchInv.clear();
-        final Object[][][] struct = getStructure();
-        if (struct == null || world == null) return;
-
-        final Vector3F<Integer> off = getControllerOffset(struct);
-        final EnumFacing front = getFrontDirection(world.getBlockState(pos));
-
-        for (int y = 0; y < struct.length; y++) {
-            for (int z = 0; z < struct[0].length; z++) {
-                for (int x = 0; x < struct[0][0].length; x++) {
-                    if (struct[y][z][x] == null) continue;
-
-                    int gx = pos.getX() + (x - off.x) * front.getFrontOffsetZ() - (z - off.z) * front.getFrontOffsetX();
-                    int gy = pos.getY() - y + off.y;
-                    int gz = pos.getZ() - (x - off.x) * front.getFrontOffsetX() - (z - off.z) * front.getFrontOffsetZ();
-                    BlockPos bp = new BlockPos(gx, gy, gz);
-
-                    if (!world.getChunkFromBlockCoords(bp).isLoaded()) continue;
-
-                    TileEntity te = world.getTileEntity(bp);
-
-                    // If already replaced, pull from the placeholder’s replaced tile
-                    if (te instanceof TilePlaceholder) te = ((TilePlaceholder) te).getReplacedTileEntity();
-
-                    if (te instanceof IInventory) {
-                        IInventory inv = (IInventory) te;
-                        NonNullList<ItemStack> copy = NonNullList.withSize(inv.getSizeInventory(), ItemStack.EMPTY);
-                        boolean any = false;
-                        for (int i = 0; i < inv.getSizeInventory(); i++) {
-                            ItemStack s = inv.getStackInSlot(i);
-                            if (!s.isEmpty()) {
-                                copy.set(i, s.copy());
-                                any = true;
-                            }
-                        }
-                        if (any) savedHatchInv.put(bp.toLong(), copy);
-                    }
-                }
-            }
-        }
-    }
-
-    private void restoreHatchInventories() {
-        if (world == null || savedHatchInv.isEmpty()) return;
-
-        for (Map.Entry<Long, NonNullList<ItemStack>> e : savedHatchInv.entrySet()) {
-            BlockPos bp = BlockPos.fromLong(e.getKey());
-            TileEntity te = world.getTileEntity(bp);
-
-            // If placeholder is still present for any reason, restore into the underlying replaced tile
-            if (te instanceof TilePlaceholder) te = ((TilePlaceholder) te).getReplacedTileEntity();
-
-            if (te instanceof IInventory) {
-                IInventory inv = (IInventory) te;
-                NonNullList<ItemStack> items = e.getValue();
-
-                // naive merge: try to put stacks back in their original slots first, then merge to any slot
-                // 1) original slots
-                for (int i = 0; i < items.size(); i++) {
-                    ItemStack src = items.get(i);
-                    if (src.isEmpty()) continue;
-                    ItemStack cur = inv.getStackInSlot(i);
-                    if (cur.isEmpty()) {
-                        inv.setInventorySlotContents(i, src.copy());
-                        items.set(i, ItemStack.EMPTY);
-                    }
-                }
-                // 2) merge leftovers anywhere they fit, otherwise drop
-                for (int i = 0; i < items.size(); i++) {
-                    ItemStack left = items.get(i);
-                    if (left.isEmpty()) continue;
-
-                    ItemStack rem = left.copy();
-                    // try merging into existing stacks
-                    for (int slot = 0; slot < inv.getSizeInventory() && !rem.isEmpty(); slot++) {
-                        ItemStack dst = inv.getStackInSlot(slot);
-                        if (dst.isEmpty()) continue;
-                        if (ItemStack.areItemsEqual(dst, rem) && ItemStack.areItemStackTagsEqual(dst, rem)) {
-                            int can = Math.min(inv.getInventoryStackLimit(), dst.getMaxStackSize()) - dst.getCount();
-                            if (can > 0) {
-                                int move = Math.min(can, rem.getCount());
-                                dst.grow(move);
-                                rem.shrink(move);
-                                inv.setInventorySlotContents(slot, dst);
-                            }
-                        }
-                    }
-                    // fill empty slots
-                    for (int slot = 0; slot < inv.getSizeInventory() && !rem.isEmpty(); slot++) {
-                        if (inv.getStackInSlot(slot).isEmpty()) {
-                            int put = Math.min(inv.getInventoryStackLimit(), rem.getMaxStackSize());
-                            ItemStack putStack = rem.splitStack(put);
-                            inv.setInventorySlotContents(slot, putStack);
-                        }
-                    }
-                    // drop remainder to world
-                    if (!rem.isEmpty()) {
-                        world.spawnEntity(new EntityItem(world, bp.getX() + 0.5, bp.getY() + 0.5, bp.getZ() + 0.5, rem));
-                    }
-                    items.set(i, ItemStack.EMPTY);
-                }
-                inv.markDirty();
-            } else {
-                // no inventory to restore into -> drop all
-                for (ItemStack s : e.getValue()) {
-                    if (!s.isEmpty()) {
-                        world.spawnEntity(new EntityItem(world, bp.getX() + 0.5, bp.getY() + 0.5, bp.getZ() + 0.5, s.copy()));
-                    }
-                }
-            }
-        }
-        savedHatchInv.clear();
-    }
-
 
 }

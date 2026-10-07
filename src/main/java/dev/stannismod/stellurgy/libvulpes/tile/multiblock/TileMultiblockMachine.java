@@ -23,8 +23,11 @@ import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
 import dev.stannismod.stellurgy.libvulpes.util.IFluidHandlerInternal;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 
@@ -122,12 +125,14 @@ public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 			timeAlive = 0x1;
 		}
 
+		retryFormationIfDue();
+
 		//In case the machine jams for some reason
 		if (!isRunning() && world.getTotalWorldTime() % 1000L == 0)
 			onInventoryUpdated();
 
 		if (isRunning()) {
-			if ((!world.isRemote && hasEnergy(powerPerTick)) || (world.isRemote && hadPowerLastTick)) {
+			if ((!world.isRemote && hasEnergy(requiredPowerPerTick())) || (world.isRemote && hadPowerLastTick)) {
 
 				//Increment for both client and server
 				onRunningPoweredTick();
@@ -250,27 +255,103 @@ public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 	}
 
 
-	public void consumeItems(IRecipe recipe) {
-		List<List<ItemStack>> ingredients = recipe.getIngredients();
+	/** One ingredient of a recipe, matched to the input slot that pays for it. */
+	private static final class IngredientClaim {
+		/** The hatch's place in the port list the claims were made over. */
+		final int hatchIndex;
+		final IInventory hatch;
+		final int slot;
+		final int count;
 
-		for (List<ItemStack> ingredient : ingredients) {
+		IngredientClaim(int hatchIndex, IInventory hatch, int slot, int count) {
+			this.hatchIndex = hatchIndex;
+			this.hatch = hatch;
+			this.slot = slot;
+			this.count = count;
+		}
+	}
 
-			ingredientCheck:
+	/**
+	 * Matches every item ingredient of {@code recipe} to an input slot, counting what the ingredients
+	 * before it already took from that slot; null when no matching exists. The same claims decide
+	 * whether the recipe can start and what starting it consumes, so one stack is never promised to
+	 * two ingredients.
+	 */
+	private List<IngredientClaim> claimIngredientSlots(IRecipe recipe) {
+		List<IInventory> hatches = getItemInPorts();
+		Map<IInventory, int[]> taken = new IdentityHashMap<>();
+		for (IInventory hatch : hatches)
+			taken.put(hatch, new int[hatch.getSizeInventory()]);
 
-			for (IInventory hatch : getItemInPorts()) {
-				for (int i = 0; i < hatch.getSizeInventory(); i++) {
-					ItemStack stackInSlot = hatch.getStackInSlot(i);
+		List<IngredientClaim> claims = new ArrayList<>();
+		return claimFrom(recipe.getIngredients(), 0, hatches, taken, claims) ? claims : null;
+	}
 
-					for (ItemStack stack : ingredient) {
-						if (!stackInSlot.isEmpty() && stackInSlot.getCount() >= stack.getCount() && (stackInSlot.isItemEqual(stack) || (stack.getItemDamage() == OreDictionary.WILDCARD_VALUE && stackInSlot.getItem() == stack.getItem()))) {
-							hatch.decrStackSize(i, stack.getCount());
-							hatch.markDirty();
-							world.notifyBlockUpdate(pos, world.getBlockState(((TileEntity) hatch).getPos()), world.getBlockState(((TileEntity) hatch).getPos()), 6);
-							break ingredientCheck;
-						}
+	/**
+	 * Claims ingredient {@code next} and every one after it, trying slots in hatch order and taking
+	 * the first that leaves the rest claimable. The first-fit is not enough on its own: an ingredient
+	 * whose alternatives overlap another's can take the only slot the other could use. An ingredient
+	 * identical to the one before it starts where that one was claimed, so a recipe listing one item
+	 * many times is searched as a combination, not as every ordering of the same slots.
+	 */
+	private static boolean claimFrom(List<List<ItemStack>> ingredients, int next, List<IInventory> hatches,
+			Map<IInventory, int[]> taken, List<IngredientClaim> claims) {
+		if (next == ingredients.size())
+			return true;
+
+		List<ItemStack> ingredient = ingredients.get(next);
+		int firstHatch = 0;
+		int firstSlot = 0;
+		if (next > 0 && sameIngredient(ingredient, ingredients.get(next - 1))) {
+			IngredientClaim previous = claims.get(claims.size() - 1);
+			firstHatch = previous.hatchIndex;
+			firstSlot = previous.slot;
+		}
+
+		for (int h = firstHatch; h < hatches.size(); h++) {
+			IInventory hatch = hatches.get(h);
+			int[] takenFromSlot = taken.get(hatch);
+
+			for (int i = (h == firstHatch ? firstSlot : 0); i < hatch.getSizeInventory(); i++) {
+				ItemStack stackInSlot = hatch.getStackInSlot(i);
+				if (stackInSlot.isEmpty())
+					continue;
+
+				for (ItemStack stack : ingredient) {
+					if (stackInSlot.getCount() - takenFromSlot[i] >= stack.getCount() && (stackInSlot.isItemEqual(stack) || (stack.getItemDamage() == OreDictionary.WILDCARD_VALUE && stackInSlot.getItem() == stack.getItem()))) {
+						takenFromSlot[i] += stack.getCount();
+						claims.add(new IngredientClaim(h, hatch, i, stack.getCount()));
+						if (claimFrom(ingredients, next + 1, hatches, taken, claims))
+							return true;
+						claims.remove(claims.size() - 1);
+						takenFromSlot[i] -= stack.getCount();
 					}
 				}
 			}
+		}
+		return false;
+	}
+
+	private static boolean sameIngredient(List<ItemStack> a, List<ItemStack> b) {
+		if (a.size() != b.size())
+			return false;
+		for (int i = 0; i < a.size(); i++) {
+			if (!ItemStack.areItemStacksEqual(a.get(i), b.get(i)))
+				return false;
+		}
+		return true;
+	}
+
+
+	/**
+	 * Takes the ingredients of a recipe that {@link #canProcessRecipe} has just accepted on the same
+	 * hatch contents; it consumes exactly the slots that check claimed.
+	 */
+	public void consumeItems(IRecipe recipe) {
+		for (IngredientClaim claim : claimIngredientSlots(recipe)) {
+			claim.hatch.decrStackSize(claim.slot, claim.count);
+			claim.hatch.markDirty();
+			world.notifyBlockUpdate(pos, world.getBlockState(((TileEntity) claim.hatch).getPos()), world.getBlockState(((TileEntity) claim.hatch).getPos()), 6);
 		}
 
 
@@ -284,11 +365,12 @@ public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 		//Drain Fluid containers
 		for(IFluidHandlerInternal fluidInput : fluidInPorts) {
 			for(int i = 0; i < recipe.getFluidIngredients().size(); i++) {
-				FluidStack fluidStack = recipe.getFluidIngredients().get(i).copy();
-				fluidStack.amount = fluidInputCounter[i];
+				if(fluidInputCounter[i] <= 0)
+					continue;
+				FluidStack stillOwed = recipe.getFluidIngredients().get(i).copy();
+				stillOwed.amount = fluidInputCounter[i];
 
-				FluidStack drainedFluid;
-				drainedFluid = fluidInput.drainInternal(recipe.getFluidIngredients().get(i), true);
+				FluidStack drainedFluid = fluidInput.drainInternal(stillOwed, true);
 
 				if(drainedFluid != null)
 					fluidInputCounter[i] -= drainedFluid.amount;
@@ -313,35 +395,7 @@ public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 		boolean itemCheck = outputItems.size() == 0;
 
 
-		List<List<ItemStack>> ingredients = recipe.getIngredients();
-		short mask = 0x0;
-		recipeCheck:
-
-			for(int ingredientNum = 0;ingredientNum < ingredients.size(); ingredientNum++) {
-
-				List<ItemStack> ingredient = ingredients.get(ingredientNum);
-				ingredientCheck:
-
-					for(IInventory hatch : getItemInPorts()) {
-
-						for(int i = 0; i < hatch.getSizeInventory(); i++) {
-							ItemStack stackInSlot = hatch.getStackInSlot(i);
-
-							for(ItemStack stack : ingredient) {
-								if(stackInSlot != ItemStack.EMPTY && stackInSlot.getCount() >= stack.getCount() && (stackInSlot.isItemEqual(stack) || (stack.getItemDamage() == OreDictionary.WILDCARD_VALUE && stack.getItem() == stackInSlot.getItem()))) {
-									mask |= (1 << ingredientNum);
-									break ingredientCheck;
-								}
-							}
-						}
-
-						//If no matching item is found for the ingredient
-						//break recipeCheck;
-					}
-
-
-			}
-		if(mask != (1 << ( ( ingredients.size() ) )) - 1) {
+		if(claimIngredientSlots(recipe) == null) {
 			invCheckFlag = false;
 			return false;
 		}

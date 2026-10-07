@@ -25,10 +25,13 @@ public class MultiBattery implements IUniversalEnergy {
 	@Override
 	public int extractEnergy(int amt, boolean simulate) {
 		int amtExtracted = 0;
-		
-		for(IUniversalEnergy battery : batteries)
-			amtExtracted += battery.extractEnergy(amt, simulate);
-		
+
+		for(IUniversalEnergy battery : batteries) {
+			if(amtExtracted >= amt)
+				break;
+			amtExtracted += battery.extractEnergy(amt - amtExtracted, simulate);
+		}
+
 		return amtExtracted;
 	}
 
@@ -52,8 +55,10 @@ public class MultiBattery implements IUniversalEnergy {
 	
 	@Override
 	public void setMaxEnergyStored(int max) {
+		if(batteries.isEmpty())
+			return;
 		max /= batteries.size();
-		
+
 		for(IUniversalEnergy battery : batteries) {
 			battery.setMaxEnergyStored(max);
 		}
@@ -76,14 +81,14 @@ public class MultiBattery implements IUniversalEnergy {
 		//TODO: fix distribution
 		if(difference > 0)
 		while(amtAdded < difference) {
-			int recieved = acceptEnergy(difference, false);
+			int recieved = acceptEnergy(difference - amtAdded, false);
 			if(recieved == 0)
 				break;
 			amtAdded += recieved;
 		}
 		else if(difference < 0)
 			while(amtAdded < -difference) {
-				int recieved =  extractEnergy(-difference, false);
+				int recieved =  extractEnergy(-difference - amtAdded, false);
 				if(recieved == 0)
 					break;
 				amtAdded += recieved;

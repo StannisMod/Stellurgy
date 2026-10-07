@@ -256,10 +256,15 @@ public class TileMultiBlock extends TileEntity {
 			} else if (world.getTileEntity(destroyedPos) != null)
 				world.getTileEntity(destroyedPos).invalidate();
 		}
-		//Make all pointers incomplete
 		else if(tile instanceof IMultiblock) {
 			((IMultiblock)tile).setIncomplete();
-			tile.invalidate();
+			// A block whose unformed state carries no tile (a visible component) keeps its pointer:
+			// the state change above does not drop a tile of the same block, so it is dropped here.
+			// A hatch or a plug keeps a tile in both states, and that tile is what holds the items,
+			// fluid and energy put into it - the next lookup must find it, not a fresh empty one.
+			IBlockState unformed = world.getBlockState(destroyedPos);
+			if(!unformed.getBlock().hasTileEntity(unformed))
+				tile.invalidate();
 		}
 	}
 
@@ -339,7 +344,10 @@ public class TileMultiBlock extends TileEntity {
 					int globalZ = pos.getZ() - (x - offset.x)*front.getFrontOffsetX()  - (z-offset.z)*front.getFrontOffsetZ();
 					BlockPos globalPos = new BlockPos(globalX, globalY, globalZ);
 
-					if(!world.getChunkFromBlockCoords(globalPos).isLoaded())
+					// Asked of what is in memory. A chunk lookup would load or generate the chunk on a
+					// server before answering; allowEmpty=false keeps the client refusing a chunk it was
+					// never sent, which it answers with an empty placeholder.
+					if(!world.isBlockLoaded(globalPos, false))
 						return false;
 
 					TileEntity tile = world.getTileEntity(globalPos);
@@ -384,7 +392,10 @@ public class TileMultiBlock extends TileEntity {
 						&& structure[y][z][x] == Blocks.AIR)
 							replacableBlocks.add(globalPos);
 						else {
-							LibVulpes.proxy.spawnParticle("errorBox", world, globalX, globalY, globalZ, 0, 0, 0);
+							// The client's own walk shows the box. A server's walk in a single-player
+							// game would hand the particle to the client's renderer from the server thread.
+							if(world.isRemote)
+								LibVulpes.proxy.spawnParticle("errorBox", world, globalX, globalY, globalZ, 0, 0, 0);
 							return false;
 						}
 					}

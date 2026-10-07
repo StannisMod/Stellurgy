@@ -181,9 +181,8 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
                 + " 0 " + dstX + " " + dstY + " " + dstZ);
         assertFalse("a hull reaching " + past + " blocks from its computer must not cross: " + crossed,
                 crossed.bool("ok"));
-        String refusal = crossed.textOr("refusal", null);
-        assertTrue("the crossing must say it was refused, and why: " + crossed,
-                refusal != null && !refusal.isEmpty());
+        assertFalse("the crossing must say it was refused, and why: " + crossed,
+                crossed.text("refusal").isEmpty());
         assertEquals("a refused crossing must leave every block of the ship in its shipyard",
                 hull, yardBlocks(dim, craft.ship));
         assertEquals("nothing may have been pasted at the destination",
@@ -224,9 +223,8 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         Reply crossed = ask("stellurgytest vs ship-repack " + dim + " id " + craft.ship + " 0 " + DECK_Y
                 + " 0 " + dstX + " " + dstY + " " + dstZ);
         assertFalse("a hull with no flight computer must not cross: " + crossed, crossed.bool("ok"));
-        String refusal = crossed.textOr("refusal", null);
-        assertTrue("the crossing must say it was refused, and why: " + crossed,
-                refusal != null && !refusal.isEmpty());
+        assertFalse("the crossing must say it was refused, and why: " + crossed,
+                crossed.text("refusal").isEmpty());
         assertEquals("a refused crossing must leave every block of the ship in its shipyard",
                 hull, yardBlocks(dim, craft.ship));
         assertEquals("nothing may have been pasted at the destination",
@@ -318,8 +316,7 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         long mark = log.markInstrumented();
         Reply handed = arrange("stellurgytest space assemble-box " + dim + " " + x1 + " " + y1 + " " + z1
                 + " " + x2 + " " + y2 + " " + z2);
-        String ship = handed.textOr("ship", null);
-        assertNotNull("the box must hold a flight computer for the assembly to take it: " + handed, ship);
+        String ship = handed.text("ship");
         String reply = log.awaitMatching(mark, null,
                 since -> Events.anyRecordHasAll(since, "type", "ship_spawned", "vsShip", ship)
                         || Events.anyRecordHasAll(since, "type", "ship_spawn_refused", "vsShip", ship),

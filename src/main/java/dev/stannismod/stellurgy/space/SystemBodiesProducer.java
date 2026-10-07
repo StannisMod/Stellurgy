@@ -292,12 +292,12 @@ public final class SystemBodiesProducer {
     /**
      * Re-emit {@code bodies} with each MOON pointing at the body it belongs to.
      *
-     * <p>Resolved from the invariant the universe layer already holds rather than from a new
-     * identity: a moon shares its parent's CELL, and a cell holds at most one REAL body (moons
-     * excepted, which is exactly why they can share one). So the parent of a moon is the non-moon
-     * body of the same cell — and if there is none, the moon says so with {@link
-     * RenderBody#NO_PARENT} instead of pointing at a neighbour. A wrong parent would draw a moon
-     * orbiting a world it has nothing to do with, which is worse than an unparented moon.</p>
+     * <p>Resolved from the moon's NAME: a moon is named in its parent's zone, and the zone's key IS
+     * the parent's cell key, so the parent is the non-moon body whose cell that key names. A moon of a
+     * parent with no zone keeps the parent's own cell (a degradation the universe layer reports), and
+     * there the parent is the non-moon body of that same cell. If neither finds one, the moon says so
+     * with {@link RenderBody#NO_PARENT} instead of pointing at a neighbour: a wrong parent would draw a
+     * moon orbiting a world it has nothing to do with, which is worse than an unparented moon.</p>
      */
     private static List<RenderBody> linkMoonsToTheirParents(List<SystemBody> source,
                                                             List<RenderBody> bodies) {
@@ -316,11 +316,16 @@ public final class SystemBodiesProducer {
             SystemBody b = source.get(i);
             RenderBody r = bodies.get(i);
             Integer parent = b.kind() == SystemBodyKind.MOON
-                    ? primaryByCell.get(b.name().cellKey()) : null;
+                    ? primaryByCell.get(parentCellKeyOf(b.name())) : null;
             linked.add(parent == null ? r
                     : new RenderBody(r.kindOrdinal, r.localX, r.localY, r.localZ, r.dimId,
                             r.descendTarget, r.boundaryRadius, r.radiusBlocks, parent));
         }
         return linked;
+    }
+
+    /** The key of the cell a moon named {@code moonName} belongs to: its zone's, or its own without one. */
+    private static String parentCellKeyOf(GalacticCoord moonName) {
+        return moonName.zone() != null ? moonName.zone() : moonName.cellKey();
     }
 }

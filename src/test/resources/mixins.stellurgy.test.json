@@ -6,6 +6,7 @@
   "compatibilityLevel": "JAVA_8",
   "target": "@env(DEFAULT)",
   "mixins": [
+    "MixinTileMultiBlockFormationEvents",
     "MixinChunkLoadCount",
     "MixinWorldEntityRemoval",
     "MixinWorldFlightComputerTickCensus",
@@ -101,7 +102,8 @@
     "MixinMinecraftServerSideTrace",
     "MixinMinecraftServerShipLoadHold",
     "MixinShipLoadingHold",
-    "MixinEntityTraceMemory"
+    "MixinEntityTraceMemory",
+    "MixinArrivalSpawnMountRefusal"
   ],
   "client": [
     "MixinClientCursorActs",

@@ -430,6 +430,8 @@ public final class RegionScan {
         private final long strideCells;
         /** The metric the horizon is converted to cells by: the generator's whose sky is surveyed. */
         private final IUniverseLaws laws;
+        /** Whether the reach was derived against the stock star table because the sky stated none. */
+        private final boolean stockSky;
 
         /**
          * @param archetypes the star types the sky can produce — the reach is DERIVED against the
@@ -440,6 +442,14 @@ public final class RegionScan {
         public Tuning(double limitMagnitude, Iterable<GalaxyGenConfig.StarType> archetypes,
                       double halfAngleRadians, int maxCells, int baseTicks, int cellsPerStep,
                       long strideCells, IUniverseLaws laws) {
+            this(limitMagnitude, archetypes, false, halfAngleRadians, maxCells, baseTicks,
+                    cellsPerStep, strideCells, laws);
+        }
+
+        private Tuning(double limitMagnitude, Iterable<GalaxyGenConfig.StarType> archetypes,
+                       boolean stockSky, double halfAngleRadians, int maxCells, int baseTicks,
+                       int cellsPerStep, long strideCells, IUniverseLaws laws) {
+            this.stockSky = stockSky;
             this.laws = laws;
             this.limitMagnitude = limitMagnitude;
             this.reachLightYears = StellarMagnitude.instrumentReachLightYears(archetypes, limitMagnitude);
@@ -457,19 +467,37 @@ public final class RegionScan {
          * re-read one system or step over whole ones.
          */
         public static Tuning fromConfig(IGalaxyGenerator generator) {
-            StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
+            return fromConfig(generator, StellurgyConfiguration.getCurrentConfig(),
+                    dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
+        }
+
+        /**
+         * The same, from a stated configuration, reporting into {@code reports} — the running
+         * server's galaxy in production.
+         *
+         * <p>When the generator describes no sky of its own the reach is derived against the STOCK
+         * star table. A generator with no star table has not said the sky is empty - it has said it
+         * does not place stars, and an authored pack's suns are real light an instrument has to be
+         * able to reach; taking the empty list literally gave the instrument a reach of zero. But the
+         * stock table is not this sky, so the horizon is one this sky's stars may not have: the
+         * tuning says so ({@link #reachAssumesStockSky}) and the galaxy reports it once.</p>
+         */
+        public static Tuning fromConfig(IGalaxyGenerator generator, StellurgyConfiguration config,
+                                        ReportOnce reports) {
+            java.util.Optional<java.util.List<GalaxyGenConfig.StarType>> stated = generator.tuning()
+                    .map(c -> c.starTypes)
+                    .filter(types -> !types.isEmpty());
+            if (!stated.isPresent() && reports.first("surveyStockSky:" + generator.getClass().getName())) {
+                org.apache.logging.log4j.LogManager.getLogger("Stellurgy|Universe").warn(
+                        "The universe generator in force ({}) describes no star table, so a "
+                        + "survey's reach is derived against the STOCK star table. Its horizon is "
+                        + "set by the brightest stock star, which this sky may not contain.",
+                        generator.getClass().getSimpleName());
+            }
             return new Tuning(
                     config.telescopeLimitingMagnitude,
-                    // The STOCK sky when the installed generator describes none of its own. A
-                    // generator with no star table has not said the sky is empty - it has said it
-                    // does not place stars, and an authored pack's suns are real light an instrument
-                    // has to be able to reach. Falling back to the reference table is the same move
-                    // as reading an unstated bulk as one Earth; taking the empty list literally gave
-                    // the instrument a reach of zero and collapsed every pointing to a single shell.
-                    generator.tuning()
-                            .map(c -> c.starTypes)
-                            .filter(types -> !types.isEmpty())
-                            .orElse(GalaxyGenConfig.defaults().starTypes),
+                    stated.isPresent() ? stated.get() : GalaxyGenConfig.defaults().starTypes,
+                    !stated.isPresent(),
                     Math.toRadians(config.telescopeConeHalfAngleDegrees),
                     config.telescopeScanMaxCells,
                     config.telescopeScanBaseTicks,
@@ -481,6 +509,14 @@ public final class RegionScan {
         /** The metric this tuning converts lengths to cells by. */
         public IUniverseLaws laws() {
             return laws;
+        }
+
+        /**
+         * Whether {@link #maxRangeLightYears} was derived against the stock star table because the
+         * surveyed sky stated none — a horizon this sky's own stars were never measured against.
+         */
+        public boolean reachAssumesStockSky() {
+            return stockSky;
         }
 
         /** How faint a star this instrument can still register. Magnitudes: larger is fainter. */

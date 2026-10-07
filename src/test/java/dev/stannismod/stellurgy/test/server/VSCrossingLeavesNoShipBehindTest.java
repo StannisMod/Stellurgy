@@ -169,13 +169,17 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
                             + " " + shipId + " was never collected", WAIT_TICKS);
             events.awaitField(crossMark, "ship_spawned", "stellurgyShip", durableShipId,
                     "the crossed ship was never registered at the destination", WAIT_TICKS);
-            // The instrument that makes the OTHER outcome legible, proven to fire on this one: a queued
-            // spawn the physics mod refuses is reported only by the `ship_spawn_flood` record, which
-            // comes from a redirect declared `require = 0`.
-            String floods = events.since(crossMark, "ship_spawn_flood");
-            assertTrue("ARRANGEMENT: the arrival's spawn flood must be on the record, and accepted — a"
-                            + " missing one means the refusal instrument no longer weaves: " + floods,
-                    Events.anyRecordHasAll(floods, "refused", "false"));
+            // The instrument that makes the OTHER outcome legible, proven to have watched this one: a
+            // queued spawn the physics mod refuses is reported by `ship_spawn_refused`, recorded where VS
+            // decides, and every spawn pass declares the `ship_spawn_pass` instrument, so no refusal of
+            // this ship under a declared instrument is a reading, not silence.
+            String refusalsRaw = events.since(crossMark, "ship_spawn_refused");
+            Reply refusals = Reply.of("events since ship_spawn_refused", refusalsRaw);
+            assertTrue("ARRANGEMENT: the arrival's spawn pass must have been watched — a missing instrument"
+                            + " means the refusal recorder no longer weaves: " + refusals,
+                    java.util.Arrays.asList(refusals.textArray("instruments")).contains("ship_spawn_pass"));
+            assertTrue("ARRANGEMENT: the arrival must not have been refused: " + refusals,
+                    !Events.anyRecordHasAll(refusalsRaw, "stellurgyShip", durableShipId));
 
             int registryAfter = queryableShips();
             int loadedAfter = loadedShips();

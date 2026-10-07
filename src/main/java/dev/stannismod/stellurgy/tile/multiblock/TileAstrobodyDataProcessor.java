@@ -253,11 +253,7 @@ public class TileAstrobodyDataProcessor extends TileWasteHeatPowerConsumer imple
             this.timeAlive = 1;
         }
 
-        if (!this.world.isRemote && this.world.getTotalWorldTime() % 1000L == 0L && !this.isComplete()) {
-            this.attemptCompleteStructure(this.world.getBlockState(this.pos));
-            this.markDirty();
-            this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(this.pos), this.world.getBlockState(this.pos), 3);
-        }
+        this.retryFormationIfDue();
 
         if (this.isRunning()) {
             if ((this.hasEnergy(this.requiredPowerPerTick()) && !this.world.isRemote) || (this.world.isRemote && this.waspoweredlasttick)) {
@@ -282,11 +278,13 @@ public class TileAstrobodyDataProcessor extends TileWasteHeatPowerConsumer imple
 
     }
     
+    /**
+     * One research step. Spends nothing: {@link #update} pays {@link #usedPowerPerTick()} once for the
+     * tick, the amount it admitted the tick on. The base step is not called, because it pays too and
+     * its progress counter has no bar on this machine.
+     */
     @Override
     protected void onRunningPoweredTick() {
-        if (completionTime > 0)
-            super.onRunningPoweredTick();
-
         ItemStack stack = getStackInSlot(0);
 
         if (!stack.isEmpty() && stack.getItem().equals(StellurgyItems.itemAsteroidChip)) {

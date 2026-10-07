@@ -74,6 +74,16 @@ import static org.junit.Assert.fail;
  */
 public class ClusteredGalaxyGeneratorTest {
 
+    /**
+     * A body's orbit is measured against the configuration, whose class initializer touches vanilla's
+     * block registry; without the vanilla bootstrap that throws and poisons the class for every later
+     * test in this JVM.
+     */
+    @org.junit.BeforeClass
+    public static void bootstrap() {
+        dev.stannismod.stellurgy.test.MinecraftBootstrap.ensure();
+    }
+
     private static final long SEED = 0xC0FFEEL;
 
     private static GalacticCoord cell(long sx, long sy, long sz) {

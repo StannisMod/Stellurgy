@@ -167,7 +167,7 @@ public class MaterialRegistry {
 			if(coilAllowed)
 				LibVulpesBlocks.registerBlock(coilBlocks, ItemOre.class, false);
 
-			for(int j = 0; j < 16 && j < 16*i + (len % 16); j++) {
+			for(int j = 0; j < ores.numBlocks; j++) {
 				int index = i*16 + j;
 				dev.stannismod.stellurgy.libvulpes.api.material.Material ore = materialList.get(index);
 

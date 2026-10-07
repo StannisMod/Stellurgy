@@ -156,11 +156,7 @@ public class TileMultiPowerConsumer extends TileMultiBlock implements INetworkMa
 			timeAlive = 0x1;
 		}
 
-		if(!world.isRemote && world.getTotalWorldTime() % 1000L == 0 && !isComplete()) {
-			attemptCompleteStructure(world.getBlockState(pos));
-			markDirty();
-			world.notifyBlockUpdate(pos, world.getBlockState(pos),  world.getBlockState(pos), 3);
-		}
+		retryFormationIfDue();
 
 		if(isRunning()) {
 			if((!world.isRemote && hasEnergy(requiredPowerPerTick())) || (world.isRemote && hadPowerLastTick)) {
@@ -189,6 +185,22 @@ public class TileMultiPowerConsumer extends TileMultiBlock implements INetworkMa
 	}
 
 	/**
+	 * On the server, every {@link #FORMATION_RETRY_PERIOD_TICKS} of world time, re-validates a
+	 * structure that is not complete. A part whose chunk unloads un-completes its controller and is
+	 * not told when it comes back, so without this a machine stays dead until somebody right-clicks it.
+	 */
+	protected void retryFormationIfDue() {
+		if(!world.isRemote && world.getTotalWorldTime() % FORMATION_RETRY_PERIOD_TICKS == 0 && !isComplete()) {
+			attemptCompleteStructure(world.getBlockState(pos));
+			markDirty();
+			world.notifyBlockUpdate(pos, world.getBlockState(pos),  world.getBlockState(pos), 3);
+		}
+	}
+
+	/** How often, in world ticks, an incomplete machine re-validates its structure on its own. */
+	public static final long FORMATION_RETRY_PERIOD_TICKS = 1000L;
+
+	/**
 	 * @return amount of power to allow the machine to run this tick
 	 */
 	protected int requiredPowerPerTick() {
@@ -205,7 +217,7 @@ public class TileMultiPowerConsumer extends TileMultiBlock implements INetworkMa
 	protected void onRunningPoweredTick() {
 
 		if(!world.isRemote)
-			useEnergy(powerPerTick);
+			useEnergy(usedPowerPerTick());
 		//Increment for both client and server
 		currentTime++;
 

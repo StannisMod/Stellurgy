@@ -8,7 +8,13 @@ import net.minecraftforge.energy.IEnergyStorage;
 
 import javax.annotation.Nullable;
 
-public class TileForgePowerOutput extends TilePlugBase implements IEnergyStorage, ITickable {
+/**
+ * A multiblock's power output, pushing its store into every neighbour that takes Forge Energy. Like
+ * {@link TileForgePowerInput} it is reached from the world only through its capability: the generator
+ * fills it through {@code acceptEnergy}, the method an {@code IEnergyStorage} face would have had to
+ * refuse.
+ */
+public class TileForgePowerOutput extends TilePlugBase implements ITickable {
 
 	public TileForgePowerOutput() {
 		super(1);
@@ -26,11 +32,6 @@ public class TileForgePowerOutput extends TilePlugBase implements IEnergyStorage
 	}
 
 	@Override
-	public int receiveEnergy(int amt, boolean simulate) {
-		return acceptEnergy(amt, simulate);
-	}
-
-	@Override
 	public boolean canExtract() {
 		return true;
 	}
@@ -38,11 +39,6 @@ public class TileForgePowerOutput extends TilePlugBase implements IEnergyStorage
 	@Override
 	public boolean canReceive() {
 		return false;
-	}
-	
-	@Override
-	public int getEnergyStored() {
-		return getUniversalEnergyStored();
 	}
 
 	@Override

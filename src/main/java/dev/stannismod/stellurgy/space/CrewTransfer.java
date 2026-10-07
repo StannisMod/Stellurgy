@@ -284,7 +284,8 @@ public final class CrewTransfer {
      * {@code anchor} in {@code dstWorld}: for each rider, find the seat whose AFC-link offset
      * matches its record, transfer the rider into {@code dstWorld} (production player-list path),
      * and mount it on a freshly-bound dummy. Answers not {@link Reseat#seated} if any rider's seat
-     * could not be resolved yet (the caller retries next tick — re-assembly is asynchronous; already-seated
+     * could not be resolved yet, or the world refused his seat a mount (the caller retries next tick —
+     * re-assembly is asynchronous; already-seated
      * riders are not double-mounted thanks to the bound-dummy reuse in the mount recipe).
      *
      * <p>{@code expectedShipId} is the DESTINATION ship's durable id (the flight computer's
@@ -311,7 +312,7 @@ public final class CrewTransfer {
         List<TilePilotSeat> seats = seatsOfShipAt(dstWorld, anchor, vsShipUuid);
         boolean allSeated = true;
         boolean seatLookupBlocked = false;
-        List<String> deckBlocks = new ArrayList<>();
+        List<String> riderBlocks = new ArrayList<>();
         for (Crew rider : crew) {
             if (rider.posture == ShipAboardTag.Posture.STANDING) {
                 // A crew member on his feet has no seat to look for: he is put back at his own deck
@@ -320,7 +321,7 @@ public final class CrewTransfer {
                 String deckBlock = placeOnDeck(dstWorld, anchor, rider, expectedShipId, vsShipUuid);
                 if (deckBlock != null) {
                     allSeated = false;
-                    deckBlocks.add(deckBlock);
+                    riderBlocks.add(deckBlock);
                 }
                 continue;
             }
@@ -373,14 +374,25 @@ public final class CrewTransfer {
             EntityDummy dummy = boundDummyForMount(dstWorld, seat.getPos(),
                     seatWorld[0], seatWorld[1], seatWorld[2]);
             if (dummy == null) {
+                EntityDummy resident = dev.stannismod.stellurgy.block.BlockPilotSeat
+                        .boundDummyAt(dstWorld, seat.getPos());
+                if (resident == null) {
+                    // No mount exists for this seat: the world refused the fresh one. He is NOT
+                    // seated, and the caller must hear that and come back, exactly as for a seat
+                    // that is not up yet — answering "seated" here completed crossings with the
+                    // pilot left standing and nothing but a log line to say so.
+                    allSeated = false;
+                    riderBlocks.add("mountRefused: the world refused the mount for seat "
+                            + seat.getPos() + " in dim " + dstWorld.provider.getDimension()
+                            + " (rider " + player.getName() + ")");
+                    continue;
+                }
                 // The seat's dummy is occupied by someone else — never double-mount. The rider
                 // stays where the transfer above put him: STANDING aboard at his post. A silently
                 // lost chair reads as a broken restore, so tell him who holds it (once).
                 if (!rider.seatLostNotified) {
                     rider.seatLostNotified = true;
-                    EntityDummy resident = dev.stannismod.stellurgy.block.BlockPilotSeat
-                            .boundDummyAt(dstWorld, seat.getPos());
-                    if (resident != null && !resident.getPassengers().isEmpty()) {
+                    if (!resident.getPassengers().isEmpty()) {
                         dev.stannismod.stellurgy.Stellurgy.serverState().actionBar.send(player,
                                 new net.minecraft.util.text.TextComponentTranslation(
                                         "msg.pilotseat.taken",
@@ -396,23 +408,24 @@ public final class CrewTransfer {
                         ? describeReseatBlock(dstWorld, anchor, seats, crew, expectedShipId,
                                 vsShipUuid)
                         : null,
-                deckBlocks));
+                riderBlocks));
     }
 
     /** The blocks of one failed re-seat as one line: the seat lookup's, when a SEATED rider was the
-     *  one held up, then one per standing rider who could not be put down. A posture nobody was in
-     *  contributes nothing — describing a seat search that never ran is how a standing-only crew's
-     *  failure came out as {@code seatsReached=1 wantLink=0,0,0}. */
-    private static String joinBlocks(String seatBlock, List<String> deckBlocks) {
+     *  one held up, then one per rider who could not be put down — a standing one off his deck, a
+     *  seated one whose seat the world would not give a mount. A posture nobody was in contributes
+     *  nothing — describing a seat search that never ran is how a standing-only crew's failure came
+     *  out as {@code seatsReached=1 wantLink=0,0,0}. */
+    private static String joinBlocks(String seatBlock, List<String> riderBlocks) {
         StringBuilder sb = new StringBuilder(400);
         if (seatBlock != null) {
             sb.append(seatBlock);
         }
-        for (String deckBlock : deckBlocks) {
+        for (String riderBlock : riderBlocks) {
             if (sb.length() > 0) {
                 sb.append(" || ");
             }
-            sb.append(deckBlock);
+            sb.append(riderBlock);
         }
         return sb.toString();
     }
@@ -895,9 +908,9 @@ public final class CrewTransfer {
      *
      * <p>Returns {@code null} for two different reasons, and both are "cannot mount him now" — the
      * existing dummy is occupied (never double-mount a seat, never spawn a second dummy beside it),
-     * or the world would not take a fresh one. The callers act the same way on either; the LOG is
-     * where they differ, because a caller telling a pilot who holds his chair must not say that when
-     * the chair was never placed.</p>
+     * or the world would not take a fresh one. A caller tells them apart by asking whether a bound
+     * dummy exists at all: an occupied chair is a verdict, a refused mount is a seating that has not
+     * happened yet.</p>
      */
     private static EntityDummy boundDummyForMount(WorldServer world, BlockPos seatPos,
             double x, double y, double z) {

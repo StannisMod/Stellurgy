@@ -60,7 +60,10 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
     }
 
     /** Bug A: confirming a destination on a rocket with no guidance computer
-     *  must not NPE the server. */
+     *  must not NPE the server.
+     *  <p>red-witnessed: with {@code EntityRocket#useNetworkData} at {@code if (guidance != null)} made
+     *  {@code if (true)}, fails: "a SENDPLANETDATA packet for a guidance-computer-less rocket must not throw
+     *  (Bug A); got NullPointerException" (2026-10-07).</p> */
     @Test
     public void sendPlanetDataWithNullGuidanceDoesNotCrash() throws Exception {
         int rid = buildAndAssembleRocket(9500);
@@ -70,10 +73,24 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         assertTrue("guidance computer must be gone: " + strip,
                 (!Reply.of(strip).bool("hasGuidanceComputer")));
 
+        // The packet must come from somebody the rocket takes it from — a player at its screen — or the
+        // rocket refuses it before the handler under test runs, and "nothing was thrown" would describe
+        // the refusal. He is stood on the rocket itself.
+        RocketList.Entry rocket = null;
+        for (RocketList.Entry e : RocketList.of(ok(client().execute("stellurgytest rocket list 0")))) {
+            if (e.id == rid) {
+                rocket = e;
+            }
+        }
+        ArrangementFailure.requireArranged("the assembled rocket must be listed", rocket != null);
+        arrange("stellurgytest player ensure-fake 0 " + rocket.x + " " + rocket.y + " " + rocket.z);
+
         String resp = ok(client().execute("stellurgytest rocket send-planet-data " + rid + " 0"));
         assertTrue("send-planet-data failed: " + resp, Reply.of(resp).ok());
 
         Reply mReply = Reply.of(resp);
+        ArrangementFailure.requireArranged("the sender must stand at the rocket, where its screen is used from: "
+                + resp, mReply.number("senderDistance") < 2.0);
         assertTrue("thrown field missing: " + resp, mReply.has(THROWN));
         assertTrue("a SENDPLANETDATA packet for a guidance-computer-less rocket "
                         + "must not throw (Bug A); got " + mReply.reported(THROWN) + ": " + resp,

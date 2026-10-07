@@ -353,26 +353,23 @@ public final class ShipEntryController {
     /**
      * Where the launch body actually IS at this tick, as the point the spawn ring is drawn around.
      *
-     * <p><b>The address is a name, not a place.</b> A body's {@link GalacticCoord} is its durable
-     * name and it does not move; where the body stands comes from its own frame and ephemeris. Ringing
-     * the NAME therefore puts a ship beside the place a planet is called after rather than beside the
-     * planet, and the gap is the whole orbital offset — measured at Earth as 5 657 554 blocks, which
-     * is 26 hours of flight at the Flight Assist ceiling. This aims at the body instead.</p>
+     * <p><b>The address is a name, and a place only through the frame that name rides.</b> A body's
+     * cell rides the body, so a coordinate in that cell is a place relative to the body at every tick;
+     * the same numbers read on the static grid are where the cell would be if nothing moved. The aim is
+     * therefore the body's in-frame address — its name plus where it stands inside that cell — and
+     * never its absolute position re-expressed as a galactic coordinate, which names whichever static
+     * cube the body happens to be over and stops naming its own cell once it has drifted out of it.</p>
      *
      * <p><b>Matched on the launch DIMENSION, not on the address.</b> A moon shares its parent's name,
      * so an address can hold several bodies that are in quite different places; the one a ship is
      * leaving is the one whose dimension it launched from.</p>
      *
      * <p><b>When nothing resolves the address is used, and that is REPORTED, never silent.</b> The
-     * fallback IS the defect this method exists to remove: it puts a ship beside a name while the
-     * body may be an orbit away, and a ship placed there reads as a working arrival right up until the
-     * pilot looks out of a window. Two callers reach it legitimately — an unplaced launch and the
-     * config home anchor, where there is no body and so no position to prefer — but a LAUNCH BODY
-     * that failed to resolve is a broken universe, not a configuration, and it says so in the log.</p>
-     *
-     * <p>NOTE: this places a ARRIVAL correctly and nothing more. A ship parked beside a body is not
-     * carried by that body's orbit, so it is left behind the moment it stops thrusting — at Earth,
-     * roughly 119 blocks per second. Making a parking orbit hold is a separate change.</p>
+     * fallback places the ship relative to whatever the address's cell rides, which is not the launch
+     * body, and a ship placed there reads as a working arrival right up until the pilot looks out of a
+     * window. Two callers reach it legitimately — an unplaced launch and the config home anchor, where
+     * there is no body and so no position to prefer — but a LAUNCH BODY that failed to resolve is a
+     * broken universe, not a configuration, and it says so in the log.</p>
      */
     private GalacticCoord aimAt(int launchDimId, GalacticCoord address) {
         return aimPoint(dev.stannismod.stellurgy.universe.UniverseRegistry.bodiesAtOnServer(address),
@@ -397,9 +394,12 @@ public final class ShipEntryController {
             if (b == null || b.dimId() != launchDimId) {
                 continue;
             }
-            AbsolutePos at = b.absoluteAt(tick);
-            return GalacticCoord.ofSectorLocal(at.sectorX(), at.sectorY(), at.sectorZ(),
-                    at.localX(), at.localY(), at.localZ());
+            // The body's own NAMED cell, at the offset it stands at inside that cell's frame. Not its
+            // absolute position re-read on the static grid: that grid is where cells would be if
+            // nothing moved, so once the body has drifted past the face of the static cube its name
+            // occupies, the static reading names a different cell - one no zone body stands in and
+            // whose frame the ship would therefore never ride.
+            return b.addressAt(tick);
         }
         if (atAddress.isEmpty()) {
             // Nothing stands at this address at all: an unplaced launch or the config home anchor.
@@ -407,9 +407,9 @@ public final class ShipEntryController {
             return address;
         }
         LOGGER.warn("[SPACE] launch dimension {} has no body at its own address {} — {} body(ies) "
-                + "are there and none of them is it. Aiming the entry at the NAME, which is where "
-                + "this body would be only if it never moved; if it orbits, the ship is being put "
-                + "beside a place the planet has left.",
+                + "are there and none of them is it. Aiming the entry at the address as given, which "
+                + "is measured from whatever that cell rides and not from the launch body; the ship "
+                + "is being put somewhere other than beside the planet it left.",
                 launchDimId, address.cellKey(), atAddress.size());
         return address;
     }

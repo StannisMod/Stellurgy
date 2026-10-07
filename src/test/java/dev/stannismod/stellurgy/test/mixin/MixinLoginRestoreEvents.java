@@ -38,7 +38,11 @@ public abstract class MixinLoginRestoreEvents {
             payload += ",\"placement\":\"null\"";
         } else {
             payload += ",\"reason\":\"" + p.reason + "\",\"dim\":" + p.dimension + ",\"aboard\":"
-                    + p.aboard + ",\"ship\":\"" + p.shipId + "\",\"y\":" + TestTrace.fmt(p.y);
+                    + p.aboard + ",\"ship\":\"" + p.shipId + "\",\"y\":" + TestTrace.fmt(p.y)
+                    // The cell the decision took an occupant claim on, "none" when it took none:
+                    // absence as a value, so a record that cannot say is not read as "no claim".
+                    + ",\"claimedCell\":\""
+                    + (p.claimedCell == null ? "none" : TestTrace.json(p.claimedCell.cellKey())) + "\"";
         }
         TestTrace.recordServer("login_restored", payload);
     }

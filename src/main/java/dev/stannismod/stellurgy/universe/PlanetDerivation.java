@@ -318,9 +318,11 @@ public final class PlanetDerivation {
      * one a player scanned. Metallicity is the deliberate exception: it is a property of the STAR, so it
      * is keyed on the anchor and shared by every body of the system.</p>
      *
-     * @param variant         disambiguates bodies that legitimately SHARE a cell — a planet is 0 and its
-     *                        moons are 1, 2, … Without it a moon would draw its parent's exact physics,
-     *                        because it draws from its parent's cell by construction
+     * @param bodyCell        the cell the body is NAMED by — a moon's own cell in its parent's zone,
+     *                        whose zone is part of the key ({@link CellHash})
+     * @param variant         disambiguates bodies that legitimately SHARE a cell: the body's index among
+     *                        the landable bodies named by that cell, the same index a realization reads
+     *                        ({@code UniverseRegistry#variantOf})
      * @param moon            a satellite: never a giant, and drawn from a smaller size law
      * @param orbitalDistance where the body sits, in Stellurgy distance units. A moon takes its
      *                        PARENT's, because what a moon's climate depends on is where the parent is
@@ -417,7 +419,7 @@ public final class PlanetDerivation {
      * destination with a dimension and no surface", which is a statement about realization, and a rogue
      * is not realized into a dimension yet. Its bulk is in the profile for anything that wants it.</p>
      *
-     * @param variant disambiguates bodies SHARING a cell — the rogue itself is 0 and its moons follow
+     * @param variant disambiguates bodies SHARING a cell, exactly as in {@link #derive}
      * @param giantFraction how many unbound worlds kept hydrogen; see
      *                      {@code GalaxyGenConfig.RogueTuning.giantFraction}. It is NOT the outer-zone
      *                      chance a bound body past the snow line gets — what unbinds a planet is a

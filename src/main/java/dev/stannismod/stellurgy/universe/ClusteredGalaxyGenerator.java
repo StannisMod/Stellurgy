@@ -77,13 +77,31 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
 
     /** Fraction of systems that hold more than one star. */
     private static final double MULTIPLE_FRACTION = 0.45d;
-    /** How many companions a multiple system holds, by falling probability: 1, then 2, then 3. */
-    private static final double[] COMPANION_COUNT_WEIGHTS = {0.75d, 0.20d, 0.05d};
+    /**
+     * How many companions a multiple system holds, by falling probability: 1, then 2, then 3. An enum
+     * of immutable constants rather than an array, which any holder of the reference could rewrite.
+     */
+    private enum CompanionCount {
+        ONE(0.75d), TWO(0.20d), THREE(0.05d);
+
+        /** Effectively final, process lifetime: set once when the constant is built. */
+        final double weight;
+
+        CompanionCount(double weight) {
+            this.weight = weight;
+        }
+
+        /** How many companions this is. */
+        int companions() {
+            return ordinal() + 1;
+        }
+    }
+
     /**
      * Id slots reserved per system, so a primary and its companions can never collide with each
      * other however the hash falls. A system's stars take consecutive ids inside its own slot.
      */
-    private static final int ID_SLOTS_PER_SYSTEM = 1 + COMPANION_COUNT_WEIGHTS.length;
+    private static final int ID_SLOTS_PER_SYSTEM = 1 + CompanionCount.values().length;
 
     /**
      * Separation band for a companion, in orbital-distance units — one cell's orbit (about 0.05 AU)
@@ -244,6 +262,14 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         this.laws = (laws == null) ? UniverseLawsV0.INSTANCE : laws;
         this.config = (config == null) ? GalaxyGenConfig.defaults() : config;
         this.galaxies = new GalaxyField(this.config, this.laws);
+        if (!galaxies.hostsAuthoredContent() && reports.first("noAuthoredGalaxyType")) {
+            LOGGER.error("No galaxy type in this <galaxyGen> has a smallest radius of at least "
+                    + (long) UniverseScale.MIN_AUTHORED_GALAXY_RADIUS_LY + " light years, so a galaxy holding authored content is drawn from the whole"
+                    + " table and may be its smallest. Authored content is guaranteed to stay inside its"
+                    + " galaxy only within " + (long) galaxies.guaranteedAuthoredReachLy() + " light"
+                    + " years of its declaration origin; beyond that a seed can leave it in"
+                    + " intergalactic space. Add a type that large to keep the shipped guarantee.");
+        }
         this.clusters = new ClusterField(this.config, this.galaxies, this.laws);
         this.nebulae = new NebulaField(this.config, this.clusters, this.laws);
         long w = 0L; // accumulate in long so a few near-Integer.MAX weights cannot overflow the sum
@@ -444,11 +470,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         // that stands for it have to be the same statement, or one system holds a companion in two
         // places at once.
         for (StellarBody companion : star.getSubStars()) {
-            double periodTicks = AstronomicalBodyHelper.TICKS_PER_DAY
-                    * AstronomicalBodyHelper.getOrbitalPeriod(companion.getOrbitalDistance(),
-                            star.getMass());
             Seat seat = claimSeat(cell, lattice, taken, companion.getOrbitalDistance(),
-                    companion.getBaseTheta(), 0d, periodTicks);
+                    companion.getBaseTheta(), 0d, companionPeriodTicks(companion, star));
             if (seat == null) {
                 continue;
             }
@@ -521,15 +544,16 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                             (float) Math.max(0.05d, profile.massEarths()));
             BodyEphemeris law = BodyEphemeris.orbit(moonOrbit, theta, 0d, false, periodTicks,
                     SystemContent.ORBIT_UNIT_BLOCKS);
-            // A moon of a rogue is starless too, so it is derived the same way its parent was, one
-            // variant along — never through the star-lit law with a star that is not there.
-            BodyProfile moonProfile = derivation.deriveRogue(seed, cell, j, giantFraction, reports);
             // A rogue has NO PRIMARY, so it has no Laplace sphere — its zone is bounded by the
             // realized region alone (ZoneScale), which is the same rule with the first term absent.
             // Its moons therefore get their own cells exactly as a star-lit planet's do.
-            bodies.add(new SystemBody(
-                    SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,
-                            Constants.INVALID_PLANET, reports),
+            GalacticCoord moonCell = SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,
+                    Constants.INVALID_PLANET, reports);
+            // A moon of a rogue is starless too, so it is derived the same way its parent was —
+            // never through the star-lit law with a star that is not there.
+            BodyProfile moonProfile = derivation.deriveRogue(seed, moonCell,
+                    variantInCell(bodies, moonCell), giantFraction, reports);
+            bodies.add(new SystemBody(moonCell,
                     CellFrame.within(frame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, systemId, SystemBody.ORBIT_UNKNOWN)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
@@ -751,17 +775,6 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     }
 
     /**
-     * Append this body's moons. They share their parent's CELL by construction — a planet and its moons
-     * are one destination, which is the whole reason the one-real-body-per-cell invariant exempts them —
-     * and each carries its own live offset inside it.
-     *
-     * <p>Their {@code orbitalDistance} is the PARENT's distance from the star, not their own distance
-     * from the parent: that field is what a moon's climate is derived from, and what warms a moon is
-     * where its planet is. How far the moon sits from the planet lives in its ephemeris, which is the
-     * thing that actually positions it.</p>
-     */
-
-    /**
      * How far the INNERMOST of {@code moons} drawn moons sits from its parent, in blocks — the
      * number that decides how finely the parent's zone is divided
      * ({@link dev.stannismod.stellurgy.space.ZoneScale#cellsAcrossZone}).
@@ -813,6 +826,14 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                 CellHash.norm(CellHash.ofBody(seed, parent, index, SALT_MOONRAD)));
     }
 
+    /**
+     * Append this body's moons, each in its own cell of the parent's zone and in a frame nested in the
+     * parent's.
+     *
+     * <p>Their {@code orbitalDistance} is the PARENT's distance from the star, not their own distance
+     * from the parent: that field is what a moon's climate is derived from, and what warms a moon is
+     * where its planet is. How far the moon sits from the planet lives in its frame's law.</p>
+     */
     private void addMoons(List<SystemBody> bodies, long seed, GalacticCoord anchor, SystemBody parentBody,
                           SystemBody primary, long parentOrbit, StellarBody star, int starId,
                           BodyProfile parentProfile) {
@@ -846,13 +867,15 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             // It used to share the parent's name and ride the parent's frame directly, which made a
             // planet-and-its-moons one destination and left a craft parked beside a moon carried by
             // the planet instead of the moon.
-            // A moon's size comes from the SAME derivation a descent will realize it with, so the
-            // moon a pilot sees from orbit is the moon he lands on.
-            BodyProfile moonProfile = derivation.derive(seed, anchor, parent, j, star, true,
-                    parentOrbit, reports);
-            bodies.add(new SystemBody(
-                    SystemContent.moonCellIn(parentBody, primary, law, tightestMoon, starId,
-                            Constants.INVALID_PLANET, reports),
+            GalacticCoord moonCell = SystemContent.moonCellIn(parentBody, primary, law, tightestMoon,
+                    starId, Constants.INVALID_PLANET, reports);
+            // A moon's size comes from the SAME derivation, under the SAME key, that a descent
+            // realizes it with: its own cell and its place among that cell's landable bodies. It was
+            // drawn from the parent's cell and the moon's number instead, while the realizer read the
+            // moon's own cell, so the moon in the sky and the moon landed on were two different draws.
+            BodyProfile moonProfile = derivation.derive(seed, anchor, moonCell,
+                    variantInCell(bodies, moonCell), star, true, parentOrbit, reports);
+            bodies.add(new SystemBody(moonCell,
                     CellFrame.within(parentFrame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, starId, parentOrbit)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
@@ -860,22 +883,21 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     }
 
     /**
-     * The full derived profile of one of this generator's bodies — what realization materializes.
+     * The variant a body named {@code cell} will have once it is appended to {@code bodies}: how many
+     * bodies a descent could land on already stand in that cell.
      *
-     * <p>Answerable for a body nobody has visited, because it is the same pure derivation the kind above
-     * came from. The body carries its own orbit, so this stays correct for a PINNED system whose layout
-     * the live generator would no longer reproduce.</p>
+     * <p>The same count {@link UniverseRegistry#variantOf} answers for a realization, because the family
+     * it reads is this list filtered to one cell, in this order. It is the second half of a body's
+     * derivation key, so a draw keyed on anything else describes some other body.</p>
      */
-    public BodyProfile profileOf(long seed, GalacticCoord anchor, SystemBody body, StellarBody star,
-                                 int variant) {
-        if (star == null) {
-            // Nothing lights this system, so nothing about the body follows from a distance: it is the
-            // starless derivation or it is a body whose physics would be read off a star that is not
-            // there. A moon of a rogue takes the same branch, which is right — it is starless too.
-            return derivation.deriveRogue(seed, body.name(), variant, config.rogue.giantFraction, reports);
+    private static int variantInCell(List<SystemBody> bodies, GalacticCoord cell) {
+        int variant = 0;
+        for (SystemBody b : bodies) {
+            if (UniverseRegistry.isRealizableKind(b) && b.name().sameCell(cell)) {
+                variant++;
+            }
         }
-        return derivation.derive(seed, anchor.cellCentre(), body.name(), variant, star,
-                body.kind() == SystemBodyKind.MOON, body.orbitalDistance(), reports);
+        return variant;
     }
 
     /**
@@ -993,7 +1015,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
 
     @Override
     public double guaranteedAuthoredReachLy() {
-        return UniverseScale.GUARANTEED_AUTHORED_REACH_LY;
+        return galaxies.guaranteedAuthoredReachLy();
     }
 
     /**
@@ -1473,7 +1495,40 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         star.setId(primaryId);
         star.setName("PGS-" + supX + "." + supY + "." + supZ); // procedurally-generated system
         addCompanions(seed, supX, supY, supZ, star, primaryId);
+        seatCompanions(seatIn(seed, lattice), lattice, star);
         return PlanetarySystem.ofStar(star);
+    }
+
+    /**
+     * Give each companion the angle of the seat its body will stand in.
+     *
+     * <p>{@link #bodiesFor} seats a companion by walking its ring from the drawn angle until a free cell
+     * turns up, so a companion whose first cell was taken stands at a NUDGED angle — while every sky,
+     * chart and selector draws the star at {@link StellarBody#getBaseTheta()}. The walk is run here, on
+     * the same anchor, lattice and claim order, and the star is handed the angle it ended at; the walk
+     * in {@code bodiesFor} then lands on its first attempt, so the star object and the body that stands
+     * for it are one statement.</p>
+     *
+     * <p>A companion the walk cannot seat keeps its drawn angle: it has no body to agree with, and
+     * {@code bodiesFor} drops it the same way.</p>
+     */
+    private static void seatCompanions(GalacticCoord anchor, Lattice lattice, StellarBody primary) {
+        Set<String> taken = new HashSet<>();
+        taken.add(anchor.cellKey());
+        for (StellarBody companion : primary.getSubStars()) {
+            Seat seat = claimSeat(anchor, lattice, taken, companion.getOrbitalDistance(),
+                    companion.getBaseTheta(), 0d, companionPeriodTicks(companion, primary));
+            if (seat != null) {
+                companion.setBaseTheta(seat.law.baseTheta());
+            }
+        }
+    }
+
+    /** A companion's orbital period about its primary, in ticks — the one its seat's law carries. */
+    private static double companionPeriodTicks(StellarBody companion, StellarBody primary) {
+        return AstronomicalBodyHelper.TICKS_PER_DAY
+                * AstronomicalBodyHelper.getOrbitalPeriod(companion.getOrbitalDistance(),
+                        primary.getMass());
     }
 
     /**
@@ -1515,16 +1570,16 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         }
     }
 
-    /** How many companions, from a falling distribution over {@link #COMPANION_COUNT_WEIGHTS}. */
+    /** How many companions, from the falling distribution {@link CompanionCount} states. */
     private static int drawCompanionCount(double u) {
         double acc = 0d;
-        for (int i = 0; i < COMPANION_COUNT_WEIGHTS.length; i++) {
-            acc += COMPANION_COUNT_WEIGHTS[i];
+        for (CompanionCount count : CompanionCount.values()) {
+            acc += count.weight;
             if (u < acc) {
-                return i + 1;
+                return count.companions();
             }
         }
-        return COMPANION_COUNT_WEIGHTS.length;
+        return CompanionCount.values().length;
     }
 
     /**

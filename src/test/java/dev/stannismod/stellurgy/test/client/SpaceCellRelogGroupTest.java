@@ -492,6 +492,79 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
     }
 
     /**
+     * This test fails if {@code SpaceEventHandler#onPlayerLoggedOut} stops giving back, at logout, the
+     * occupant claim that {@code LoginRestore#resolve} took for a restored player at login — on the
+     * cell that claim was TAKEN on, whatever has since become of his ship.
+     *
+     * <p><b>Why the ship leaves the ledger between the two.</b> A claim taken on a cell is a claim on
+     * that cell; the player's ship can cross into another, jump, or descend onto a planet while he is
+     * online, and the claim stays where it was taken. Forgetting the ship is the descent's own ledger
+     * effect, and it is the one arrangement that keeps: a ship still in the ledger re-reports its
+     * position from its flight computer every tick, so any other rewrite of its row is undone before
+     * the logout reads it.</p>
+     *
+     * <p>SILENT about: a ship that moved to another cell rather than leaving the ledger. The handler
+     * makes one decision for both — which cell to hand back — and this scenario observes it on the
+     * branch the arrangement can hold.</p>
+     * <p>red-witnessed: with {@code SpaceEventHandler#releaseHeldCell} at {@code stack.manager.dematerialize(claimed);} removed, fails: "the logout must give back exactly the one claim his login took, on the cell it was taken on (19_0_0), although his ship is no longer there" (2026-10-07).</p>
+     */
+    @Test
+    public void aRestoredPlayerGivesBackTheCellHeClaimedAtLoginAfterHisShipHasLeftIt() throws Exception {
+        // `LoginRestore.Reason.ABOARD_SETTLED` - the one restore that materializes a cell for him.
+        final String reasonSettled = "ABOARD_SETTLED";
+
+        seatThePilotAboardHisShip();
+        String ledgerRow = exec("stellurgytest space ledger-get " + arrangedShipId);
+        requireArranged("the ledger must hold his ship before the relog, or the login below claims"
+                + " nothing: " + ledgerRow, Reply.of(ledgerRow).bool("found"));
+        String shipCell = Reply.of(ledgerRow).text("cell");
+
+        // The relog that TAKES the claim. The server's log is read across it: a login restore is
+        // decided while his save file is read, before any world is his.
+        Events events = serverEvents();
+        long loginMark = events.markInstrumented();
+        bot().reconnect();
+        bot().waitForWorld();
+        String restored = events.awaitRecordWithField(loginMark, "login_restored", "reason",
+                reasonSettled, "a pilot who relogs aboard his settled ship must be restored INTO its"
+                        + " cell - that is the restore which claims the cell for him",
+                RESTORE_LINK_BUDGET_TICKS);
+        assertEquals("the restore must claim the cell his ship is settled in: " + restored,
+                shipCell, Events.text(restored, "claimedCell"));
+        String taken = events.since(loginMark, "cell_claim_taken");
+        requireArranged("and the claim must actually have been taken on that cell during the login,"
+                + " or there is nothing for the logout to give back: " + taken,
+                Events.countRecords(taken, "cell", shipCell) >= 1);
+
+        // His ship leaves the subsystem while he is online, as a descent takes it.
+        String forgot = exec("stellurgytest space ledger-forget " + arrangedShipId);
+        requireArranged("the ledger must have known his ship and must not know it afterwards: "
+                + forgot, Reply.of(forgot).bool("wasKnown") && !Reply.of(forgot).bool("found"));
+
+        Events offline = connectionEvents();
+        long logoutMark = offline.markInstrumented();
+        boolean disconnected = false;
+        try {
+            bot().disconnect();
+            disconnected = true;
+            offline.await(logoutMark, "player_logged_out",
+                    "a disconnect must reach the space subsystem's logout handler, which is where"
+                            + " the claim is given back", LOGOUT_TICKS);
+            String released = offline.since(logoutMark, "cell_claim_released");
+            assertEquals("the logout must give back exactly the one claim his login took, on the cell"
+                            + " it was taken on (" + shipCell + "), although his ship is no longer"
+                            + " there: " + released,
+                    1, Events.countRecords(released, "cell", shipCell));
+        } finally {
+            if (disconnected) {
+                // The class's player is shared by every scenario after this one.
+                bot().connect();
+                bot().waitForWorld();
+            }
+        }
+    }
+
+    /**
      * How far the ship's own UP points along world up, from a {@code ship-info} reply: {@code +1}
      * upright, {@code -1} fully inverted. The full expression, {@code 1 - 2(qx^2 + qz^2)} - the
      * single-axis shortcut this leg used to carry read {@code qx} alone and answered a confident

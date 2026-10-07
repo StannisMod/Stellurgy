@@ -219,10 +219,7 @@ public final class PlanetRealizer {
             return Constants.INVALID_PLANET;
         }
 
-        BodyProfile profile = registry.generator().derivation()
-                .derive(registry.worldSeed(), anchor, target.name(), variant,
-                star, target.kind() == SystemBodyKind.MOON, target.orbitalDistance(),
-                dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
+        BodyProfile profile = registry.derivedProfileOf(anchor, target, variant, star);
         DimensionProperties props = materialize(dimId, profile, star, target, parentBody);
 
         if (!DimensionManager.getInstance().registerDim(props, true)) {

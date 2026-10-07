@@ -1093,11 +1093,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * The bodies of {@code bodyCell} that a descent could ever mint a world for, in the order the
      * generator produced them.
      *
-     * <p><b>A cell holds more than one world, and this is the list that says which.</b> A moon is
-     * built in its PARENT's cell so that a planet and its moons travel as one destination, so
-     * "the body at this cell" names a family rather than an object. A body's index in THIS list is
-     * its {@code variant} - the same number the derivation is keyed on - and it is the only identity
-     * a body has inside its cell.</p>
+     * <p><b>A cell can hold more than one world, and this is the list that says which.</b> Two moons
+     * whose orbits land in one cell of their parent's zone share it, and a moon of a parent with no
+     * zone shares the parent's own cell, so "the body at this cell" names a family rather than an
+     * object. A body's index in THIS list is its {@code variant} - the same number the generator keys
+     * the body's derivation on - and it is the only identity a body has inside its cell.</p>
      *
      * <p>Stars, station slots and belts are not in it: nothing descends onto them, and counting them
      * would shift every variant by one and silently materialize the wrong world.</p>
@@ -1112,8 +1112,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return out;
     }
 
-    /** Whether a descent could mint a world for a body of this kind. See {@link #realizableBodiesAt}. */
-    private static boolean isRealizableKind(SystemBody body) {
+    /**
+     * Whether a descent could mint a world for a body of this kind. See {@link #realizableBodiesAt};
+     * the generator counts by it too, when it keys a moon's derivation on its variant.
+     */
+    static boolean isRealizableKind(SystemBody body) {
         return body.kind() != SystemBodyKind.STAR
                 && body.kind() != SystemBodyKind.STATION_SLOT
                 && body.kind() != SystemBodyKind.ASTEROID_BELT;
@@ -1169,6 +1172,21 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             }
         }
         return found < 0 ? OptionalInt.empty() : OptionalInt.of(found);
+    }
+
+    /**
+     * What a descent MATERIALIZES for {@code body}: its derivation under this save's model, keyed on
+     * its own cell and {@code variant} — the key the generator drew its size from, so the world landed
+     * on is the body the sky showed.
+     *
+     * @param anchor  the body's system anchor ({@link #anchorForCell})
+     * @param variant the body's place in its cell's family ({@link #variantOf})
+     * @param star    the star whose light the body's climate is derived from
+     */
+    public BodyProfile derivedProfileOf(GalacticCoord anchor, SystemBody body, int variant,
+                                        StellarBody star) {
+        return generator.derivation().derive(worldSeed, anchor, body.name(), variant, star,
+                body.kind() == SystemBodyKind.MOON, body.orbitalDistance(), reports());
     }
 
     /**

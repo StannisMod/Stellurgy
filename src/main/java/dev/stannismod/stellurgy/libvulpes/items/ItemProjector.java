@@ -18,6 +18,8 @@ import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -37,6 +39,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.INetworkItem;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketItemModifcation;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 import dev.stannismod.stellurgy.libvulpes.tile.TileSchematic;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
@@ -142,10 +145,7 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 
 	private void clearStructure(World world, TileMultiBlock tile, @Nonnull ItemStack stack) {
 
-		int id = getMachineId(stack);
 		EnumFacing direction = EnumFacing.getFront(getDirection(stack));
-
-		TileMultiBlock multiblock = machineList.get(id);
 
 		int prevMachineId = getPrevMachineId(stack);
 		Object[][][] structure;
@@ -161,8 +161,13 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 						int globalX = basepos.x - x*direction.getFrontOffsetZ() + z*direction.getFrontOffsetX();
 						int globalZ = basepos.z + (x* direction.getFrontOffsetX()) + (z*direction.getFrontOffsetZ());
 						BlockPos pos = new BlockPos(globalX, basepos.y + y, globalZ);
-						if(world.getBlockState(pos).getBlock() == LibVulpesBlocks.blockPhantom) 
-							world.setBlockToAir(pos);
+						// The previous projection may be anywhere the holder has been since; a cell
+						// that is not loaded is not loaded for the sake of a ghost, which expires there.
+						if(!world.isBlockLoaded(pos))
+							continue;
+						TileEntity ghost = world.getTileEntity(pos);
+						if(ghost instanceof TileSchematic)
+							((TileSchematic) ghost).vanish();
 					}
 				}
 			}
@@ -211,10 +216,18 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 					int globalY = -y + structure.length + posY - 1;
 					BlockPos pos = new BlockPos(globalX, globalY, globalZ);
 
-					if((world.isAirBlock(pos) || world.getBlockState(pos).getBlock().isReplaceable(world, pos)) && block.get(0).getBlock() != Blocks.AIR) {
+					IBlockState there = world.getBlockState(pos);
+					boolean ghostThere = there.getBlock() == LibVulpesBlocks.blockPhantom;
+					// A replaceable block is remembered and put back when the ghost goes; one that
+					// carries a tile entity could not be, so the ghost does not go there.
+					boolean free = world.isAirBlock(pos) || ghostThere
+							|| (there.getBlock().isReplaceable(world, pos) && !there.getBlock().hasTileEntity(there));
+					if(free && block.get(0).getBlock() != Blocks.AIR) {
 						//block = (Block)structure[y][z][x];
 						world.setBlockState(pos,  LibVulpesBlocks.blockPhantom.getStateFromMeta(block.get(0).getMeta()));
 						TileEntity newTile = world.getTileEntity(pos);
+						if(newTile instanceof TileSchematic && !ghostThere)
+							((TileSchematic) newTile).setDisplacedState(there);
 
 						//TODO: compatibility fixes with the tile entity not reflecting current block
 						if(newTile instanceof TilePlaceholder) {
@@ -662,7 +675,10 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 		list.add(LibVulpes.proxy.getLocalizedString("msg.libvulpes.holoProjector.tooltip.crossSection"));
 
 		int id = getMachineId(stack);
-		if(id != -1) {
+		if(id != -1 && !isMachineId(id)) {
+			list.add(ChatFormatting.RED + "machineId " + id + "?");
+		}
+		else if(id != -1) {
 			list.add("");
 			list.add(ChatFormatting.GREEN + LibVulpes.proxy.getLocalizedString(machineList.get(id).getMachineName()));
 			String str = descriptionList.get(id);
@@ -705,28 +721,121 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 		}
 	}
 
+	/**
+	 * Applies what the holder's client chose. Every value in {@code nbt} is the client's: a machine
+	 * id is taken only when a machine has it, a layer only when the machine has that layer, and a
+	 * projection only where the holder could have pointed — its footprint within his reach of a click
+	 * — and only into loaded chunks. Anything else is refused, logged, and leaves the item as it was.
+	 */
 	@Override
 	public void useNetworkData(EntityPlayer player, Side side, byte id,
 			NBTTagCompound nbt, @Nonnull ItemStack stack) {
 		if(id == 0) {
 			int machineId = nbt.getInteger(IDNAME);
-			setMachineId(stack, nbt.getInteger(IDNAME));
+			if(!isMachineId(machineId)) {
+				PacketSenderCheck.refuse(player, describe(id), "there is no machine " + machineId);
+				return;
+			}
+			setMachineId(stack, machineId);
 			TileMultiBlock tile = machineList.get(machineId);
 			setYLevel(stack, tile.getStructure().length-1);
 		}
 		else if(id == 1) {
-			setYLevel(stack, nbt.getInteger("yLevel"));
+			int machineId = getMachineId(stack);
+			int level = nbt.getInteger("yLevel");
+			if(!isMachineId(machineId)) {
+				PacketSenderCheck.refuse(player, describe(id), "the projector holds no machine (" + machineId + ")");
+				return;
+			}
+			int layers = machineList.get(machineId).getStructure().length;
+			// -1 is "every layer"; setYLevel's own -2 and length are what a scroll wraps through,
+			// and the client has already wrapped them before sending.
+			if(level < -1 || level >= layers) {
+				PacketSenderCheck.refuse(player, describe(id), "machine " + machineId + " has no layer " + level);
+				return;
+			}
+			setYLevel(stack, level);
+			if(!hasBasePosition(stack)) {
+				return;
+			}
 			Vector3F<Integer> vec = getBasePosition(stack);
-			RebuildStructure(player.world, this.machineList.get(getMachineId(stack)), stack, vec.x, vec.y, vec.z, EnumFacing.getFront(getDirection(stack)));
+			project(player, stack, machineId, vec.x, vec.y, vec.z, EnumFacing.getFront(getDirection(stack)), id);
 		}
 		else if(id == 2) {
 			int x = nbt.getInteger("x");
 			int y = nbt.getInteger("y");
 			int z = nbt.getInteger("z");
-			int dir = nbt.getInteger("dir");
+			EnumFacing facing = EnumFacing.getFront(nbt.getInteger("dir"));
+			int machineId = getMachineId(stack);
 
-			if(getMachineId(stack) != -1)
-				RebuildStructure(player.world, this.machineList.get(getMachineId(stack)), stack, x, y, z, EnumFacing.getFront(dir));
+			if(machineId == -1)
+				return;
+			if(!isMachineId(machineId)) {
+				PacketSenderCheck.refuse(player, describe(id), "the projector holds no machine (" + machineId + ")");
+				return;
+			}
+			if(facing.getAxis() == EnumFacing.Axis.Y) {
+				PacketSenderCheck.refuse(player, describe(id), "a structure is laid out along a horizontal facing, not " + facing);
+				return;
+			}
+			project(player, stack, machineId, x, y, z, facing, id);
 		}
+	}
+
+	private boolean isMachineId(int machineId) {
+		return machineId >= 0 && machineId < machineList.size();
+	}
+
+	private static boolean hasBasePosition(@Nonnull ItemStack stack) {
+		return stack.hasTagCompound() && stack.getTagCompound().hasKey("x");
+	}
+
+	/** The projector packet as the log names it. */
+	private static String describe(byte id) {
+		return "holo-projector packet " + id;
+	}
+
+	/**
+	 * Project machine {@code machineId} with its base at {@code (x, y, z)} facing {@code facing},
+	 * provided the holder could have pointed there: some cell of the footprint, or one beside it, is
+	 * within his reach of a click, and the whole footprint is loaded.
+	 */
+	private void project(EntityPlayer player, @Nonnull ItemStack stack, int machineId, int x, int y, int z,
+			EnumFacing facing, byte id) {
+		TileMultiBlock machine = machineList.get(machineId);
+		AxisAlignedBB footprint = footprintOf(machine.getStructure(), x, y, z, facing);
+		if(!PacketSenderCheck.withinItemUseReach(player, footprint.grow(1.0D))) {
+			PacketSenderCheck.refuse(player, describe(id), "the projection at (" + x + "," + y + "," + z
+					+ ") is beyond the holder's reach (he is at " + player.getPosition() + ")");
+			return;
+		}
+		BlockPos from = new BlockPos(footprint.minX, footprint.minY, footprint.minZ);
+		BlockPos to = new BlockPos(footprint.maxX - 1, footprint.maxY - 1, footprint.maxZ - 1);
+		if(!player.world.isAreaLoaded(from, to)) {
+			PacketSenderCheck.refuse(player, describe(id), "the projection reaches into unloaded chunks");
+			return;
+		}
+		RebuildStructure(player.world, machine, stack, x, y, z, facing);
+	}
+
+	/**
+	 * The cells {@link #RebuildStructure} lays {@code structure} into, as a block-aligned box: the
+	 * same mapping from structure indices to world coordinates, taken at its four horizontal corners.
+	 */
+	private static AxisAlignedBB footprintOf(Object[][][] structure, int posX, int posY, int posZ, EnumFacing direction) {
+		int width = structure[0][0].length;
+		int depth = structure[0].length;
+		int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+		for(int x : new int[] {0, width - 1}) {
+			for(int z : new int[] {0, depth - 1}) {
+				int globalX = posX - x*direction.getFrontOffsetZ() + z*direction.getFrontOffsetX();
+				int globalZ = posZ + (x* direction.getFrontOffsetX())  + (z*direction.getFrontOffsetZ());
+				minX = Math.min(minX, globalX);
+				maxX = Math.max(maxX, globalX);
+				minZ = Math.min(minZ, globalZ);
+				maxZ = Math.max(maxZ, globalZ);
+			}
+		}
+		return new AxisAlignedBB(minX, posY, minZ, maxX + 1, posY + structure.length, maxZ + 1);
 	}
 }
