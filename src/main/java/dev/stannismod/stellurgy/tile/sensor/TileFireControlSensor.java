@@ -521,15 +521,8 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
         if (side.isClient()) {
             return;
         }
-        // The GUI's own rule for who may use it; a packet is the same press. Refused out loud: the
-        // address in a machine packet is the client's to write, and a silent refusal reads in the log
-        // like a button nobody pressed.
-        if (!canInteractWithContainer(player)) {
-            dev.stannismod.stellurgy.Stellurgy.logger.warn("Fire-control sensor at {} (dim {}) refused machine"
-                            + " packet {} from {}: the player is not within reach of it", pos,
-                    world.provider.getDimension(), id, player == null ? "nobody" : player.getName());
-            return;
-        }
+        // Who may press it — the sender's world, his reach — is judged for every machine packet before
+        // it gets here (PacketMachine, PacketSenderCheck), and refused there out loud.
         if (id == NET_TOGGLE_MODE) {
             setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);
         }

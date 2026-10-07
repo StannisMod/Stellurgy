@@ -58,8 +58,6 @@
     "MixinTileNavigationComputerEvents",
     "MixinTileTurretEvents",
     "MixinBeamReplicationEvents",
-    "MixinTileWeaponConsolePressEvents",
-    "MixinTileFireControlSensorPressEvents",
     "MixinWeaponOrdersSeedEvents",
     "MixinLinkerDesignationEvents",
     "MixinServerPlayerPoseEvents",

@@ -16,7 +16,6 @@ import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
@@ -624,17 +623,8 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
             }
             return;
         }
-        // Who may press these buttons is the GUI's own rule; a packet is the same press, so it answers
-        // to the same rule rather than to a second one written here.
-        if (!canInteractWithContainer(player)) {
-            // The address in a machine packet is the client's to write, so a press can name a
-            // console its sender is nowhere near. Refused, and said so: a press that silently did
-            // nothing would read, from the server log, exactly like a button nobody pressed.
-            Stellurgy.logger.warn("Weapon console at {} (dim {}) refused machine packet {} from {}: the"
-                            + " player is not within reach of it", pos, world.provider.getDimension(), id,
-                    player == null ? "nobody" : player.getName());
-            return;
-        }
+        // Who may press these buttons — the sender's world, his reach — is judged for every machine
+        // packet before it gets here (PacketMachine, PacketSenderCheck), and refused there out loud.
         if (id == NET_TOGGLE_HOLD_FIRE) {
             setHoldFire(!isHoldFire());
         } else if (id == NET_CLEAR_TARGET) {
