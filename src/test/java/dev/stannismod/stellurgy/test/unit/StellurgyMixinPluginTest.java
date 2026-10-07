@@ -41,8 +41,6 @@ public class StellurgyMixinPluginTest {
             "dev.stannismod.stellurgy.mixin.MixinEntityGravity";
     private static final String BLOCK_PLACE =
             "dev.stannismod.stellurgy.mixin.MixinWorldSetBlockState";
-    private static final String SHIP_MANAGER =
-            "dev.stannismod.stellurgy.mixin.MixinWorldServerShipManager";
 
     @Test
     public void worldInfoMixinsApplyWhenPerDimWorldInfoEnabled() {
@@ -93,16 +91,5 @@ public class StellurgyMixinPluginTest {
         // Its two neighbours are NOT dragged along: they only ever served the per-dim clock.
         assertFalse(StellurgyMixinPlugin.shouldApply(false, false, false, WORLD_SERVER_MULTI));
         assertFalse(StellurgyMixinPlugin.shouldApply(false, false, false, PLAYER_LIST));
-    }
-
-    @Test
-    public void valkyrienSkiesMixinGatingIsIndependentOfPerDimWorldInfoFlag() {
-        // The VS ship-load double-load guard is gated by the VS classpath, NOT by the
-        // perDimWorldInfo master flag. Its decision must therefore be the same whether
-        // that flag is on or off — pinning it can't accidentally ride the WorldInfo gate.
-        // (The absolute value depends on whether VS is on the test classpath, which this
-        // assertion deliberately does not assume.)
-        assertTrue(StellurgyMixinPlugin.shouldApply(true, SHIP_MANAGER)
-                == StellurgyMixinPlugin.shouldApply(false, SHIP_MANAGER));
     }
 }

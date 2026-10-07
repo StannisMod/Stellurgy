@@ -17,7 +17,7 @@ import static org.junit.Assert.assertTrue;
  * and what it refuses instead.
  *
  * <p>NEW-GROUP: VS assembly by EXTENT — a hull's height above its flight computer and its reach to the
- * side, against the shipyard the substrate gives it. No server group holds VS assembly; the server
+ * side, against the shipyard the substrate gives it, and whose shipyard claim it is built in. No server group holds VS assembly; the server
  * tier has no group classes yet, and the existing VS classes each own one crossing or flight path.</p>
  *
  * <p>The subject is {@code WorldServerShipManager#spawnNewShips} and the two decisions inside it: where
@@ -232,6 +232,55 @@ public class VSShipAssemblyExtentTest extends AbstractSharedServerTest {
         assertEquals("nothing may have been pasted at the destination",
                 "minecraft:air",
                 ask("stellurgytest space get-block " + dim + " " + dstX + " " + dstY + " " + dstZ).text("block"));
+    }
+
+    /**
+     * A ship that no longer exists gives its shipyard claim back, and the next ship assembled in that
+     * world is built in it — rather than every assembly taking a fresh claim further along a strip that
+     * runs past the world's edge after a few hundred.
+     *
+     * <p>Contract: this fails if {@code WorldServerShipManager#forgetShip} stops handing the claim of a
+     * collected ship back to {@code ShipChunkAllocator#allocateNextChunkClaim}.</p>
+     *
+     * <p>red-witnessed: with {@code ShipChunkAllocator#releaseChunkClaim} at {@code if (center.x == lastChunkX}
+     * made never to release, this fails with "expected:&lt;51200&gt; but was:&lt;102400&gt;" — the next claim
+     * along the strip (2026-10-07).</p>
+     */
+    @Test
+    public void aCollectedShipsClaimIsTheNextShipsClaim() throws Exception {
+        int dim = emptyWorld();
+        arrange("stellurgytest place " + dim + " 0 " + DECK_Y + " 0 stellurgy:advancedFlightComputer");
+        arrange("stellurgytest fill " + dim + " 1 " + DECK_Y + " 0 2 " + DECK_Y + " 0 minecraft:stone");
+        Assembled first = assemble(dim, 0, DECK_Y, 0, 2, DECK_Y, 0);
+        assertSpawned(first, "the first ship must be built");
+        Reply firstAfc = arrange("stellurgytest space yard-afc " + dim + " " + first.ship);
+        assertTrue("the first ship's computer must stand in its shipyard: " + firstAfc, firstAfc.bool("found"));
+        int ax = firstAfc.integer("x"), ay = firstAfc.integer("y"), az = firstAfc.integer("z");
+
+        // Empty its shipyard: a ship that owns no blocks is collected by the substrate on its next tick.
+        long gone = first.log.markInstrumented();
+        arrange("stellurgytest fill " + dim + " " + ax + " " + ay + " " + az + " " + (ax + 2) + " " + ay + " "
+                + az + " minecraft:air");
+        String removed = first.log.awaitRecordWithFields(gone, "ship_removed",
+                "the emptied first ship must be collected", SPAWN_BUDGET_TICKS, "vsShip", first.ship);
+        assertNotNull("the collection must name the first ship: " + removed, removed);
+
+        int secondZ = 20;
+        arrange("stellurgytest place " + dim + " 0 " + DECK_Y + " " + secondZ
+                + " stellurgy:advancedFlightComputer");
+        arrange("stellurgytest fill " + dim + " 1 " + DECK_Y + " " + secondZ + " 2 " + DECK_Y + " " + secondZ
+                + " minecraft:stone");
+        Assembled second = assemble(dim, 0, DECK_Y, secondZ, 2, DECK_Y, secondZ);
+        assertSpawned(second, "the second ship must be built");
+        Reply secondAfc = arrange("stellurgytest space yard-afc " + dim + " " + second.ship);
+        assertTrue("the second ship's computer must stand in its shipyard: " + secondAfc,
+                secondAfc.bool("found"));
+
+        // A ship's computer stands on its claim's centre, so equal positions are one claim.
+        assertEquals("the second ship must be built in the claim the collected first ship gave back"
+                        + " (first at z=" + az + ")",
+                az, secondAfc.integer("z"));
+        assertEquals("…and at the same X of that claim", ax, secondAfc.integer("x"));
     }
 
     // ---- the chain every scenario shares ---------------------------------------------------------

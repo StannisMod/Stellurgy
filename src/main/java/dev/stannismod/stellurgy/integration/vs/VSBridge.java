@@ -164,7 +164,7 @@ final class VSBridge {
         int blocks = existing == null || existing.getBlockPositions() == null
                 ? -1 : existing.getBlockPositions().size();
         if (blocks == 0) {
-            ValkyrienUtils.getQueryableData(world).removeShip(wanted);
+            ValkyrienUtils.getServerShipManager(world).forgetShip(existing);
             logger.info("[SPACE] adopted this ship's own blockless remnant in dim {} ({} '{}',{} still "
                             + "loaded) - the arriving ship keeps its identity",
                     world.provider.getDimension(), wanted, existing.getName(),
@@ -955,6 +955,10 @@ final class VSBridge {
     /** PARK the ship NAMED by {@code uuid}. The identity-keyed twin of {@link #parkShipAt}. */
     static boolean parkShip(World world, UUID uuid) {
         ShipData ship = shipByUuid(world, uuid);
+        if (ship == null) {
+            // Queued and not built yet — a crossing parks its ship in the tick it queues it.
+            ship = ValkyrienUtils.getServerShipManager(world).queuedSpawn(uuid);
+        }
         if (ship == null) {
             return false;
         }

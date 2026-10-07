@@ -26,11 +26,8 @@ import dev.stannismod.stellurgy.test.trace.SpawnMemory;
  *
  * <h2>Why this class exists separately</h2>
  *
- * <p>These three injections used to sit in the production mixin beside a genuine behaviour fix (the
- * "already loaded" double-load guard), which meant a shipped game ran them and wrote their results
- * into mutable statics nobody there reads. The fix is production's; the observation is the tests'.
- * Splitting them is the whole point: what is left in the production mixin now changes VS's behaviour
- * and nothing else, and this file is absent from a released jar entirely.</p>
+ * <p>An observation, so it lives with the tests and is absent from a released jar. (These injections
+ * once sat in a production mixin; that mixin is gone, its guard now being VS's own code.)</p>
  *
  * <p>Behaviour-preserving by construction. The two {@code @Inject}s only read. The {@code @Redirect}
  * calls the SAME factory VS would have called and returns exactly what it returned — it exists

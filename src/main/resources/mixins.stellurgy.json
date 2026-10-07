@@ -23,7 +23,6 @@
     "MixinWorldProvider",
     "MixinWorldServer",
     "MixinWorldServerMulti",
-    "MixinWorldServerShipManager",
     "MixinWorldSetBlockState"
   ],
   "client": [

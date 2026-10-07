@@ -30,6 +30,7 @@ import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 import org.valkyrienskies.mod.common.ships.physics_data.BasicCenterOfMassProvider;
 import org.valkyrienskies.mod.common.ships.physics_data.IPhysicsObjectCenterOfMassProvider;
 import org.valkyrienskies.mod.common.util.VSMath;
+import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 import org.valkyrienskies.mod.common.util.multithreaded.CalledFromWrongThreadException;
 import org.valkyrienskies.mod.common.util.multithreaded.VSWorldPhysicsLoop;
 import javax.annotation.Nonnull;
@@ -111,7 +112,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 // Copy ship blocks to the world
                 physicsObject.destroyShip();
                 // Then remove the ship from the world, and the ship map.
-                QueryableShipData.get(world).removeShip(physicsObject.getShipData());
+                forgetShip(physicsObject.getShipData());
                 iterator.remove();
             }
         }
@@ -164,7 +165,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         // loop does not need to know what it promises about removal underneath itself.
         if (finished != null) {
             for (ShipData data : finished) {
-                QueryableShipData.get(world).removeShip(data);
+                forgetShip(data);
             }
         }
         // Then execute queued ship spawn operations
@@ -343,8 +344,8 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 while (blocksIterator.hasNext()) {
                     int hashedPos = blocksIterator.next();
                     SpatialDetector.setPosWithRespectTo(hashedPos, detector.firstBlock, srcLocationPos);
-                    int changedChunkX = pasteLocationPos.getX() >> 4;
-                    int changedChunkZ = pasteLocationPos.getZ() >> 4;
+                    int changedChunkX = srcLocationPos.getX() >> 4;
+                    int changedChunkZ = srcLocationPos.getZ() >> 4;
                     long changedChunkPos = ChunkPos.asLong(changedChunkX, changedChunkZ);
                     if (chunksRelit.contains(changedChunkPos)) {
                         continue;
@@ -427,8 +428,35 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         return null;
     }
 
-    /** A queued ship that will not be built: nothing is copied, and its blocks stay where they stand. */
+    /**
+     * The record of a ship queued to spawn under {@code uuid} and not built yet, or {@code null}. A
+     * caller that queued a ship can name it before it is registered — to park it, for one — and a
+     * change made to this record is the one the spawn registers.
+     */
+    public ShipData queuedSpawn(UUID uuid) {
+        for (ImmutableTriple<BlockPos, ShipData, BlockFinder.BlockFinderType> queued : spawnQueue) {
+            if (queued.getMiddle().getUuid().equals(uuid)) {
+                return queued.getMiddle();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Take a ship out of this world for good: out of the registry, and its claim given back so a
+     * later ship can be built there. Every path that ends a ship's record goes through here.
+     */
+    public void forgetShip(ShipData data) {
+        QueryableShipData.get(world).removeShip(data);
+        ValkyrienUtils.getShipChunkAllocator(world).releaseChunkClaim(data.getChunkClaim());
+    }
+
+    /**
+     * A queued ship that will not be built: nothing is copied, its blocks stay where they stand, and
+     * the claim it was given is handed back — it never held anything.
+     */
     private void refuseSpawn(ShipData toSpawn, BlockPos anchor, String reason) {
+        ValkyrienUtils.getShipChunkAllocator(world).releaseChunkClaim(toSpawn.getChunkClaim());
         org.apache.logging.log4j.LogManager.getLogger(WorldServerShipManager.class).warn("Refusing to spawn ship {} anchored at {} in dim {}: the structure {}. Its blocks"
                         + " are left in the world.", toSpawn.getUuid(), anchor, world.provider.getDimension(),
                 reason);
@@ -474,13 +502,19 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         }
         QueryableShipData.get(world).getShip(uuid).ifPresent(remnant -> {
             if (remnant.getBlockPositions() != null && remnant.getBlockPositions().isEmpty()) {
-                QueryableShipData.get(world).removeShip(remnant);
+                forgetShip(remnant);
             }
         });
     }
 
     private void injectChunkIntoWorldServer(@Nonnull Chunk chunk, int x, int z) {
         ChunkProviderServer provider = world.getChunkProvider();
+        // A claim can be handed out again after its ship is gone, and that ship's chunks may still be
+        // loaded: unload the one being replaced, or its tile entities and entities stay in the world.
+        Chunk replaced = provider.id2ChunkMap.get(ChunkPos.asLong(x, z));
+        if (replaced != null && replaced != chunk) {
+            replaced.onUnload();
+        }
         provider.id2ChunkMap.put(ChunkPos.asLong(x, z), chunk);
         chunk.onLoad();
         chunk.checkLight();

@@ -94,8 +94,11 @@ public abstract class VSDefaultCapability<K> {
             value = getMapper().writeValueAsBytes(instance);
             log.debug("VS serialization took {} ms. Writing data of size {} KB. ({} {} inst@{})", System.currentTimeMillis() - time, value.length / Math.pow(2, 10), ownerName(), describe(instance), Integer.toHexString(System.identityHashCode(instance)));
         } catch (Exception ex) {
-            log.fatal("Something just broke horrifically. Be wary of your data. This will crash the game in future releases", ex);
-            value = new byte[0];
+            // Refused, not written empty: an empty payload is read back next start as "this world has no
+            // ships", and the save after that makes the loss permanent. Throwing leaves the file on disk
+            // as the last save that succeeded.
+            throw new IllegalStateException("Could not serialize " + describe(instance) + " for "
+                    + ownerName() + "; refusing to write an empty record over the saved one", ex);
         }
         return new NBTTagByteArray(value);
     }
@@ -107,15 +110,23 @@ public abstract class VSDefaultCapability<K> {
             this.instance = mapper.readValue(value, kClass);
             log.info("VS deserialization took {} ms. Reading data of size {} KB. ({} {} inst@{})", System.currentTimeMillis() - time, value.length / Math.pow(2, 10), ownerName(), describe(this.instance), Integer.toHexString(System.identityHashCode(this.instance)));
         } catch (IOException | ClassCastException ex) {
-            log.fatal("Failed to read your ship data? Ships will probably be missing", ex);
-            this.instance = factory.get();
+            throw unreadable(ex);
         }
-        // Possibly redundant null check. TODO: remove
         if (this.instance == null) {
-            log.fatal("Failed to read your ship data? Ships will probably be missing");
-            this.instance = factory.get();
+            throw unreadable(null);
         }
         return this.instance;
+    }
+
+    /**
+     * A saved record that cannot be read stops the world from loading. Running on with an empty one in
+     * its place would look like a world with no ships, and the next save would write that over the
+     * record that still exists on disk.
+     */
+    private IllegalStateException unreadable(@Nullable Exception cause) {
+        return new IllegalStateException("The saved " + kClass.getSimpleName() + " of " + ownerName()
+                + " cannot be read; refusing to load the world with an empty one in its place, which the"
+                + " next save would make permanent. The save on disk is untouched.", cause);
     }
 
     public K get() {

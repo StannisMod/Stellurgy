@@ -310,12 +310,10 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // logically. BY NAME: the crossing hands back the identity it created, and a lane is not
         // provably empty — the census above exists because it can hold a second registered craft —
         // so parking "the ship at the anchor" can freeze a stranger and leave this one flying.
-        if (res.shipUuid == null || !VSIntegration.parkShip(hyper, res.shipUuid)) {
-            LOGGER.warn("[SPACE] the depart crossing produced no identity for ship {}, so its hull is "
-                    + "parked by position in lane {} - if that lane holds a second craft this parks "
-                    + "the wrong one", shipId, tile.index);
-            VSIntegration.parkShipAt(hyper, res.anchor.getX() + 0.5, res.anchor.getY() + 0.5,
-                    res.anchor.getZ() + 0.5);
+        if (!VSIntegration.parkShip(hyper, res.shipUuid)) {
+            LOGGER.warn("[SPACE] the depart crossing of ship {} could not park {} in lane {}: that name"
+                    + " is neither registered nor queued in hyperspace, so the hull is NOT parked and"
+                    + " nothing else is parked in its place", shipId, res.shipUuid, tile.index);
         }
         // The crossing kept the ship's identity, so this uuid is the one it had in its origin cell and
         // the one it will still have at the far end - one name for the whole jump.
@@ -507,12 +505,10 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     }
 
     /**
-     * A snapshot of the ship NAMED by {@code shipId} in {@code world}, falling back to the craft at
-     * {@code anchor} only when nothing there carries that name — and saying so when it does.
-     *
-     * <p>The fallback is kept because refusing would be worse: a jump with no floor snapshot is one a
-     * restart strands and deletes. But it is a DEGRADATION and it announces itself, because the thing
-     * it can produce silently is this jump's record holding a stranger's blocks.</p>
+     * A snapshot of the ship NAMED by {@code shipId} in {@code world}, or {@code null} when no ship
+     * there carries that name — never the snapshot of whatever craft stands nearest. A null keeps the
+     * snapshot the jump already carries; a stranger's blocks stored against this jump would be pasted
+     * into its destination by the restart the snapshot exists for.
      */
     private static net.minecraft.nbt.NBTTagCompound snapshotOfNamedShip(WorldServer world,
             String shipId, BlockPos anchor, String what) {
@@ -520,12 +516,10 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         if (named != null) {
             return VSIntegration.snapshotShipOf(world, named);
         }
-        LOGGER.warn("[SPACE] {} for ship {} in dim {} could not resolve that ship by name, so it cuts "
-                        + "whatever craft anchor {} reaches - if this world holds a second one, this "
-                        + "snapshot is of the wrong hull",
+        LOGGER.warn("[SPACE] {} for ship {} in dim {} found no ship of that name (anchor {}); no"
+                        + " snapshot is taken this time, and the jump keeps the one it has",
                 what, shipId, world.provider.getDimension(), anchor);
-        return VSIntegration.snapshotShipAt(world,
-                anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5);
+        return null;
     }
 
     @Override
