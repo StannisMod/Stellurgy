@@ -37,6 +37,7 @@ final class CleanAxisScheme implements ControlScheme {
         double[] u = new double[n];
         boolean saturated = false;
         double mass = capability.mass().getTotalMass();
+        double[][] live = momentum.liveRange(capability.actuators(), dt);
         for (ControlAxis axis : ControlAxis.values()) {
             Vector3dc e = capability.frame().axis(axis);
             double want = axis.isRotation() ? angularAcceleration.dot(e) : mass * acceleration.dot(e);
@@ -47,7 +48,7 @@ final class CleanAxisScheme implements ControlScheme {
             double amount = Math.abs(want);
             Recipe recipe = capability.recipe(direction, Endurance.SUSTAINED);
             if (amount > recipe.authority) {
-                recipe = burstIfItCanDeliver(capability, direction, recipe, momentum, dt);
+                recipe = burstIfItCanDeliver(capability, direction, recipe, amount, u, live);
             }
             if (!(recipe.authority > 0.0D)) {
                 saturated = true;
@@ -79,7 +80,6 @@ final class CleanAxisScheme implements ControlScheme {
             }
         }
 
-        double[][] live = momentum.liveRange(capability.actuators(), dt);
         for (int i = 0; i < n; i++) {
             if (u[i] > live[i][1]) {
                 u[i] = live[i][1];
@@ -195,25 +195,37 @@ final class CleanAxisScheme implements ControlScheme {
     }
 
     /**
-     * The burst recipe in {@code direction} — unless a stored-momentum device it leans on is already
-     * full in the sense the recipe needs, in which case the sustained recipe.
+     * The burst recipe in {@code direction} — unless a stored-momentum device it leans on cannot take
+     * its share of this step, in which case the sustained recipe.
      *
      * <p>A burst recipe is balanced only as a whole: its engines fire off-centre BECAUSE a wheel nulls
-     * their moment. Once that wheel is full it is clipped to nothing, the engines keep firing, and the
-     * moment they make is no longer nulled by anything — the craft tumbles under a command that asked
-     * for a straight push. The sustained recipe is clean by construction and delivers less, which is
-     * the honest reading of a spent wheel: authority for N seconds, then the holdable figure.</p>
+     * their moment. A wheel that can take only part of what the recipe asks of it this step is clipped
+     * to that part, the engines keep firing, and the rest of their moment is nulled by nothing — the
+     * craft is kicked under a command that asked for a straight push. So the question is not whether
+     * the wheel has room, but whether it has room for THIS step's share: the amount this axis will
+     * use ({@code amount} against the burst authority), on top of what the axes already composed
+     * ({@code committed}) took from the same wheel. The sustained recipe is clean by construction and
+     * delivers less, which is the honest reading of a spent wheel: authority for N seconds, then the
+     * holdable figure.</p>
      */
     private static Recipe burstIfItCanDeliver(ShipCapability capability, ControlDirection direction,
-                                              Recipe sustained, MomentumStore momentum, double dt) {
+                                              Recipe sustained, double amount, double[] committed,
+                                              double[][] live) {
         Recipe burst = capability.recipe(direction, Endurance.BURST);
-        double[][] live = momentum.liveRange(capability.actuators(), dt);
+        if (!(burst.authority > 0.0D)) {
+            return burst;
+        }
+        double fraction = Math.min(1.0D, amount / burst.authority);
         for (int i = 0; i < burst.throttles.length; i++) {
             if (capability.actuators().get(i).isSustained()) {
                 continue;
             }
-            double t = burst.throttles[i];
-            if ((t > 0.0D && !(live[i][1] > 0.0D)) || (t < 0.0D && !(live[i][0] < 0.0D))) {
+            double t = fraction * burst.throttles[i];
+            if (t == 0.0D) {
+                continue;
+            }
+            double next = committed[i] + t;
+            if (next > live[i][1] || next < live[i][0]) {
                 return sustained;
             }
         }

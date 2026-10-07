@@ -17841,7 +17841,7 @@ public class TestProbeCommand extends CommandBase {
      * sideways against 2.76 MN of weight, and every roll stalled at 90° with the allocation saturated.</p>
      *
      * <p>Measured 2026-09-30 through {@code vs flight-model-by-id}, with the reaction wheel at
-     * {@code BlockReactionWheel.TORQUE} 1.9e6 N·m and {@code MOMENTUM_CAPACITY} 1.7e6 N·m·s (LIVE; SI;
+     * {@code ReactionWheel.TORQUE} 1.9e6 N·m and {@code MOMENTUM_CAPACITY} 1.7e6 N·m·s (LIVE; SI;
      * weight in the overworld's 9.81 m/s²). "Sustained" is the motors alone; "burst" adds the wheel,
      * for the seconds its stored momentum lasts — 0.895 s for every rotation below, and for a
      * translation that uses it:</p>

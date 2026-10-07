@@ -6,7 +6,8 @@ import net.minecraft.world.World;
 
 /**
  * What ONE flight computer's craft did on the PHYSICS clock between a test's {@code open} and its
- * {@code close}: its velocity and angular velocity at the first and the last physics step, how much
+ * {@code close}: its velocity and angular velocity at the first and the last physics step, the largest
+ * angular speed at any step ({@code maxAngularSpeed}, radians per engine second), how much
  * physics time lay between them, and the same two differences taken over only the steps in which the
  * controller was AT the craft's authority.
  *
@@ -55,6 +56,8 @@ public final class PhysicsStepWindow implements TraceWindow {
     private final double[] lastV = new double[3];
     private final double[] firstW = new double[3];
     private final double[] lastW = new double[3];
+    /** The largest angular speed any sample carried — a turn that grew and was then arrested still shows. */
+    private double maxW;
     private double firstMass;
     private double lastMass;
     private int saturatedSteps;
@@ -133,6 +136,7 @@ public final class PhysicsStepWindow implements TraceWindow {
         pendingSaturated = false;
         lastV[0] = vx; lastV[1] = vy; lastV[2] = vz;
         lastW[0] = wx; lastW[1] = wy; lastW[2] = wz;
+        maxW = Math.max(maxW, Math.sqrt(wx * wx + wy * wy + wz * wz));
         lastMass = mass;
         steps++;
     }
@@ -160,7 +164,8 @@ public final class PhysicsStepWindow implements TraceWindow {
                 .append(",\"engineSeconds\":").append(num(seconds))
                 .append(",\"satEngineSeconds\":").append(num(satSeconds))
                 .append(",\"firstMassKg\":").append(num(firstMass))
-                .append(",\"lastMassKg\":").append(num(lastMass));
+                .append(",\"lastMassKg\":").append(num(lastMass))
+                .append(",\"maxAngularSpeed\":").append(steps > 0 ? num(maxW) : "null");
         String[] axes = {"X", "Y", "Z"};
         for (int i = 0; i < 3; i++) {
             p.append(",\"v0").append(axes[i]).append("\":").append(num(firstV[i]))

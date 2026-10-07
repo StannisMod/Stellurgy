@@ -758,7 +758,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             if (survey != null) {
                 tier2Readout = dev.stannismod.stellurgy.ship.control.ShipFlightModel.solve(0L,
                         survey.mass(), survey.design(), survey.live(),
-                        TileAdvancedFlightComputer.HELM_FRAME)
+                        dev.stannismod.stellurgy.ship.control.ControlFrame.HELM)
                         .readout(TileAdvancedFlightComputer.localGravity(world));
                 sendTier2Readout();
             }

@@ -468,7 +468,7 @@ public class ShipCapabilityTest {
      * <p>Found 2026-09-30 by the e2e pass: a laden craft commanded forward past its sustained figure
      * tumbled (ω to 1.7 rad/s) once its wheel had been spent.</p>
      *
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code CleanAxisScheme#allocate} at {@code recipe = burstIfItCanDeliver(capability, direction, recipe, momentum, dt);} taking the burst
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code CleanAxisScheme#allocate} at {@code recipe = burstIfItCanDeliver(capability, direction, recipe, amount, u, live);} (taken on the form that passed {@code momentum, dt}, before the share check of 2026-10-07) taking the burst
      * recipe unconditionally (the form before the fix) fails "a spent wheel leaves the push clean" with
      * a torque of 2e5; {@code CleanAxisScheme#burstIfItCanDeliver} at {@code return sustained;} falling back to no recipe at all fails "delivers the
      * sustained figure"; {@code CleanAxisScheme#allocate} at {@code fraction = 1.0D; saturated = true;} not raising saturation on the per-axis clip fails

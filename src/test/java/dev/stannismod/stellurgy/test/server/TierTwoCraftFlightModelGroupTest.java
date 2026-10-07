@@ -694,8 +694,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * (a model rebuilt only when the computer has none), it fails "with one forward motor gone, the
      * craft's live forward authority must drop below the 4905000.0 N it had, without re-assembly". With
      * {@code TileAdvancedFlightComputer#rebuildFlightModel} at
-     * {@code survey.mass(), survey.design(), survey.live(), HELM_FRAME);} solving every rebuild over the
-     * FIRST survey's live actuators instead of the new survey's, the same verdict fails. Earlier records
+     * {@code survey.mass(), survey.design(), survey.live(),} solving every rebuild over the
+     * FIRST survey's live actuators instead of the new survey's, the same verdict fails (taken on the
+     * form whose line ended {@code HELM_FRAME);}, before the helm frame moved to {@code ControlFrame}). Earlier records
      * (2026-09-30) were taken on a form that waited for the next rebuild and then asserted.</p>
      */
     @Test
@@ -834,6 +835,125 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         assertTrue("an idle craft must give its wheel back: the fullest wheel aboard read " + first
                         + " of its capacity, and " + UNLOAD_WINDOW_TICKS + " ticks later " + second,
                 second < first);
+    }
+
+    // ---- 6b'. a spent wheel does not turn the craft ----------------------------------------------
+
+    /**
+     * Iron blocks stowed for the overloaded drive: sixty-four, 320 tonnes against the 282-tonne decked
+     * craft — the load at which {@link #theSameShipCarryingCargoAcceleratesLessByItsMassRatio} measured,
+     * 2026-09-30, the scheme scaling the whole command down and the craft sinking while it surged, so
+     * that holding height asks for more than the hull can hold.
+     */
+    private static final int OVERLOAD_BLOCKS = 64;
+
+    /**
+     * EXPERIMENT: the ticks the overloaded craft is driven for. Measured 2026-10-07 from the fixture's
+     * open-air height: its wheel reads full by tick 10, and the sinking craft meets the ground after
+     * tick 40 — a drive past that measures the impact, not the allocation.
+     */
+    private static final int OVERLOAD_DOSE_TICKS = 35;
+
+    /** EXPERIMENT: the ticks between two reads of the wheel during the drive. */
+    private static final int WHEEL_SAMPLE_TICKS = 5;
+
+    /**
+     * The angular speed, radians per engine second, under which a craft has not turned. The tumble
+     * this guards against reached 1.7 (measured 2026-09-30); fixed before the first run.
+     */
+    private static final double NOT_TURNING = 0.1;
+
+    /**
+     * How little a wheel's fill may move between the drive's last two reads, of its capacity, for it
+     * to count as spent: it has stopped taking momentum while the command still asks for more. Not a
+     * fill level — a spent wheel stops short of full by up to one step's share of the burst, which
+     * for this craft is about 2% (measured 2026-10-07: 0.979 at every read from tick 15 on).
+     */
+    private static final double SPENT_DRIFT = 1.0e-6;
+
+    /**
+     * A craft asked for more than it can hold, for longer than its wheel can lend, does not turn
+     * under a command that asks for no turn. A burst recipe is balanced only as a whole — its
+     * off-centre engines fire because the wheel nulls their moment — so once the wheel is spent the
+     * allocation must stop using that recipe rather than keep its engines and lose its wheel.
+     *
+     * <p>The overloaded laden craft is driven forward; the wheel is read during the drive, and the
+     * premise is that it was spent at some point. The verdict is the largest angular speed the solver
+     * carried at any physics step of the drive.</p>
+     *
+     * <p>Contract: this fails if production breaks the contract that a spent wheel never leaves a
+     * straight command turning the craft.</p>
+     *
+     * <p>red-witnessed: 2026-10-07 — {@code CleanAxisScheme#allocate} at {@code recipe =
+     * burstIfItCanDeliver(capability, direction, recipe, amount, u, live);} taking the burst recipe
+     * unconditionally fails "a craft whose wheel was spent must not turn … it reached 7.396 rad/s",
+     * the turn growing 0.54 → 6.35 rad/s over ticks 10-30 (taken on the form that passed
+     * {@code momentum, dt}); on the form that refused a burst only for a wheel with NO room the same
+     * verdict failed at 0.29 rad/s — a kick each time the wheel filled.</p>
+     */
+    @Test
+    public void aCraftWhoseWheelIsSpentDoesNotTurnUnderAStraightCommand() throws Exception {
+        standInVacuum();
+        FixtureSite site = site();
+        Reply fixture = lay(site, "with-pilot-deck-and-hold", "an overloaded decked craft");
+        int[] hold = fixture.intArray("holdFromFlightComputer");
+        requireArranged("the fixture must say where its hold stands: " + fixture,
+                hold != null && hold.length == 3);
+        AssembledCraft craft = assembleLaid(site, fixture, "an overloaded decked craft");
+        command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
+        removePad(site, "a craft driven in free air");
+
+        double emptyKg = Reply.of(readout(craft, "the empty craft").object("mass")).number("totalKg");
+        long stowMark = events.mark();
+        Reply stow = Reply.of(exec("stellurgytest vs stow " + DIM + " " + (craft.afcX + hold[0])
+                + " " + (craft.afcY + hold[1]) + " " + (craft.afcZ + hold[2])
+                + " minecraft:iron_block " + OVERLOAD_BLOCKS));
+        requireArranged("the cargo must go into the hold: " + stow,
+                stow.bool("inventory") && stow.integer("stowed") == OVERLOAD_BLOCKS);
+        events.awaitMatching(stowMark, "flight_model_changed",
+                reply -> anyHeavier(reply, craft.durable, emptyKg),
+                "for this craft, solved for more than the empty " + emptyKg + " kg",
+                "the flight computer must weigh the cargo before the drive", LINK_BUDGET_TICKS);
+
+        ServerWindow window = ServerWindow.open(this::exec,
+                "dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", DIM,
+                craft.afcX, craft.afcY, craft.afcZ);
+        command(craft, "force-vel-by-id", 0, 0, SURGE_COMMAND, "the overloaded craft driven forward");
+        double previous = Double.NaN;
+        double fill = Double.NaN;
+        StringBuilder trace = new StringBuilder();
+        // EXPERIMENT: the drive is the dose; the wheel is read along it because "was it spent" is a
+        // question about how its fill moved over the drive, which no single read can answer.
+        for (int t = 0; t < OVERLOAD_DOSE_TICKS; t += WHEEL_SAMPLE_TICKS) {
+            GameTicks.advance(client(), GameTicks.server(), WHEEL_SAMPLE_TICKS);
+            previous = fill;
+            fill = wheelFill(craft);
+            ShipInfo at = ShipInfo.byId(this::exec, DIM, craft.physicsId);
+            trace.append('[').append(t + WHEEL_SAMPLE_TICKS).append(" fill=").append(fill)
+                    .append(" y=").append(at.y).append("] ");
+        }
+        long closeMark = events.mark();
+        window.close();
+        String reply = events.since(closeMark, "physics_step_window");
+        List<String> records = Events.records(reply);
+        requireArranged("closing the window must write exactly its one record: " + reply,
+                records.size() == 1);
+        Events.assertInstrumentRan(reply, "server_flight_controller_physics_step",
+                "the controller's own steps are what the window reads");
+        String record = records.get(0);
+        double turning = Events.number(record, "maxAngularSpeed");
+        measured("spent wheel", "lastFill=" + fill, "maxAngularSpeed=" + turning, trace, record);
+        requireArranged("the drive must spend the wheel, or the allocation was never asked what to do"
+                        + " without it — its fill must stop moving while the command still asks for more"
+                        + " (last two reads " + previous + ", " + fill + "; saturated steps "
+                        + Events.number(record, "saturatedSteps") + " of " + Events.number(record, "steps")
+                        + "): " + trace,
+                fill > 0.0 && Math.abs(fill - previous) <= SPENT_DRIFT
+                        && Events.number(record, "saturatedSteps") > Events.number(record, "steps") / 2);
+        assertTrue("a craft whose wheel was spent must not turn under a command that asks for no turn:"
+                        + " it reached " + turning + " rad/s. Wheel along the drive: " + trace
+                        + " Window: " + record,
+                turning < NOT_TURNING);
     }
 
     // ---- 6c. the drive weighs the hull ----------------------------------------------------------

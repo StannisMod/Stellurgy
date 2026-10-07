@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.ship.control;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+
 /**
  * The pilot's frame, expressed in the ship's own frame: which way is forward, right and up for the
  * person at the helm.
@@ -12,6 +14,24 @@ import org.joml.Vector3dc;
  * north.</p>
  */
 public final class ControlFrame {
+
+    /**
+     * The helm's frame in the ship's own: the one the flight law's body frame is built on
+     * ({@code FreeFlightPhysics.bodyBasisFromQuat} at identity — forward, right, up), asked of it
+     * rather than restated, so "right" means the same thing to the law and to the authority table.
+     * Every flight model is solved in it.
+     *
+     * <p>Effectively final, process lifetime: written only by ControlFrame.helm, at class
+     * initialisation. Approved by the maintainer 2026-10-07; a {@code ControlFrame} copies its axes and
+     * hands them out read-only.</p>
+     */
+    public static final ControlFrame HELM = helm();
+
+    private static ControlFrame helm() {
+        double[] b = FreeFlightPhysics.bodyBasisFromQuat(FreeFlightPhysics.Quat.IDENTITY);
+        return of(new Vector3d(b[0], b[1], b[2]), new Vector3d(b[3], b[4], b[5]),
+                new Vector3d(b[6], b[7], b[8]));
+    }
 
     private final Vector3dc forward;
     private final Vector3dc right;

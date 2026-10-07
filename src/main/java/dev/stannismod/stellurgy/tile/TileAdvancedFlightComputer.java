@@ -1293,22 +1293,6 @@ public class TileAdvancedFlightComputer extends TileEntity
     /** The fewest ticks between two readout pushes to one player when only the live slice changed. `tunable`. */
     private static final int READOUT_PUSH_TICKS = 10;
 
-    /**
-     * The pilot's frame, in the ship's own: the one the flight law's body frame is built on
-     * ({@code FreeFlightPhysics.bodyBasisFromQuat} at identity — forward, right, up), asked of it
-     * rather than restated, so "right" means the same thing to the law and to the authority table.
-     *
-     * <p>Effectively final, process lifetime: built once at class initialisation; a
-     * {@code ControlFrame} is immutable.</p>
-     */
-    static final dev.stannismod.stellurgy.ship.control.ControlFrame HELM_FRAME = helmFrame();
-
-    private static dev.stannismod.stellurgy.ship.control.ControlFrame helmFrame() {
-        double[] b = FreeFlightPhysics.bodyBasisFromQuat(FreeFlightPhysics.Quat.IDENTITY);
-        return dev.stannismod.stellurgy.ship.control.ControlFrame.of(
-                new Vector3d(b[0], b[1], b[2]), new Vector3d(b[3], b[4], b[5]),
-                new Vector3d(b[6], b[7], b[8]));
-    }
 
     /**
      * The derived flight model, rebuilt from the hull; {@code null} until the first survey, and for a
@@ -1398,7 +1382,8 @@ public class TileAdvancedFlightComputer extends TileEntity
         }
         dev.stannismod.stellurgy.ship.control.ShipFlightModel model =
                 dev.stannismod.stellurgy.ship.control.ShipFlightModel.solve(++flightModelRevision,
-                        survey.mass(), survey.design(), survey.live(), HELM_FRAME);
+                        survey.mass(), survey.design(), survey.live(),
+                        dev.stannismod.stellurgy.ship.control.ControlFrame.HELM);
         flightModel = model;
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
                 new dev.stannismod.stellurgy.api.event.ShipEvent.FlightModelChangedEvent(world,

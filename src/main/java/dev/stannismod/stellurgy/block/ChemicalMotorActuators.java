@@ -8,17 +8,16 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.World;
-import org.joml.Vector3d;
 
 import dev.stannismod.stellurgy.api.capability.CapabilityWear;
 import dev.stannismod.stellurgy.api.capability.IPartWear;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import dev.stannismod.stellurgy.ship.control.Actuator;
-import dev.stannismod.stellurgy.ship.control.ActuatorId;
+import dev.stannismod.stellurgy.ship.control.ChemicalMotor;
 
 /**
- * What a chemical rocket motor is to a ship: one force at the centre of its block, pushing away from
- * its nozzle.
+ * What the world tells a chemical motor's {@link ChemicalMotor}: where its nozzle points, and whether
+ * it still works.
  *
  * <p>The nozzle is the facing the motor is DRAWN with — its actual state, which follows the tank it
  * is fed from — so the push a pilot gets is the push the model on screen shows. Two motor families
@@ -34,10 +33,8 @@ final class ChemicalMotorActuators {
         EnumFacing nozzle = state.getBlock().getActualState(state, world, pos)
                 .getValue(BlockFullyRotatable.FACING);
         Vec3i d = nozzle.getDirectionVec();
-        out.add(Actuator.pointForce(new ActuatorId(pos.getX(), pos.getY(), pos.getZ(), 0),
-                new Vector3d(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D),
-                new Vector3d(-d.getX() * thrustNewtons, -d.getY() * thrustNewtons,
-                        -d.getZ() * thrustNewtons)));
+        out.add(ChemicalMotor.at(pos.getX(), pos.getY(), pos.getZ(), d.getX(), d.getY(), d.getZ(),
+                thrustNewtons));
     }
 
     /** A motor worn to its last stage is broken and does not fire; anything short of that does. */
