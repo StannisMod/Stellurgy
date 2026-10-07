@@ -828,7 +828,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * whose chunks are being streamed has no {@link PhysicsObject} yet, so it answers "not loaded" to
      * {@link #getPhysObjectFromUUID(UUID)} while the loader is still holding its id; removing its
      * {@link ShipData} in that window throws {@code IllegalStateException} out of the world tick from
-     * {@link #getBackgroundShipChunks()} on the very next chunk-provider tick, with nothing between
+     * {@link #getHeldShipChunks()} on the very next chunk-provider tick, with nothing between
      * the throw and the server loop. The three queues below are the whole of "in the manager's
      * hands", and each of them dereferences its ids against the registry.</p>
      */
@@ -861,20 +861,34 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     }
 
     /**
-     * Used to prevent the world from unloading the chunks of ships loading in background.
+     * The chunks the world must not unload: the claim of every LOADED ship and of every ship loading
+     * in the background.
+     *
+     * <p>A loaded ship's {@link PhysicsObject} keeps its own references to its claim's {@code Chunk}
+     * objects and simulates from them, so a claim chunk the world drops while the ship lives splits
+     * the ship in two — physics reads the dropped object, the world re-loads a new one from disk at
+     * the next access, and the tiles in it stop ticking. Nothing else holds these chunks: a world
+     * whose provider forbids respawning and which holds no player queues EVERY loaded chunk for
+     * unload on every tick ({@code PlayerChunkMap#tick}), which is exactly a space slot with a
+     * permanently loaded ship and nobody in it. A ship releases its chunks by unloading:
+     * {@link PhysicsObject#unload} queues them, and the ship leaves {@code loadedShips} in the same
+     * pass, so it is no longer named here on the provider's next tick.</p>
      */
-    public Iterable<Long> getBackgroundShipChunks() throws CalledFromWrongThreadException {
+    public Iterable<Long> getHeldShipChunks() throws CalledFromWrongThreadException {
         enforceGameThread();
-        List<Long> backgroundChunks = new ArrayList<>();
+        List<Long> held = new ArrayList<>();
+        for (PhysicsObject ship : loadedShips.values()) {
+            held.addAll(ship.getChunkClaim().getClaimedChunks());
+        }
         QueryableShipData queryableShipData = QueryableShipData.get(world);
         for (UUID shipID : loadingInBackground) {
             Optional<ShipData> shipDataOptional = queryableShipData.getShip(shipID);
             if (!shipDataOptional.isPresent()) {
                 throw new IllegalStateException("Ship data not present for:\n" + shipID);
             }
-            backgroundChunks.addAll(shipDataOptional.get().getChunkClaim().getClaimedChunks());
+            held.addAll(shipDataOptional.get().getChunkClaim().getClaimedChunks());
         }
-        return backgroundChunks;
+        return held;
     }
 
     @java.lang.SuppressWarnings("all")
