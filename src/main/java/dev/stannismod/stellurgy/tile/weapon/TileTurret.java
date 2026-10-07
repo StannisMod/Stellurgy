@@ -78,6 +78,14 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
     private int assemblyReach;
     private boolean assemblyDirty = true;
     private boolean manualControl;
+    /**
+     * Whether this gun has ever been in a network with a weapon console. Such a gun takes its orders
+     * from a console, so with none in its network — the console not loaded yet, or broken — it holds
+     * fire until one joins: it cannot tell a console still loading from one that is gone, and firing
+     * meanwhile would ignore orders it was given (maintainer, 2026-10-06). A gun that never answered
+     * to a console is a standalone gun and fires as one.
+     */
+    private boolean answersToConsole;
     private int fireCooldown;
     private int heat;
     private boolean registered;
@@ -128,6 +136,7 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
             registered = true;
             assemblyDirty = true;
         }
+        noteConsole();
 
         readOwnCondition();
 
@@ -654,7 +663,22 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
 
     private boolean isHoldingFire() {
         WeaponNetworkState state = networkState();
-        return state != null && state.isHoldFire();
+        if (state != null && state.hasConsole()) {
+            return state.isHoldFire();
+        }
+        return answersToConsole || (state != null && state.isHoldFire());
+    }
+
+    /** Remember, once, that this gun is in a network with a console — see {@link #answersToConsole}. */
+    private void noteConsole() {
+        if (answersToConsole) {
+            return;
+        }
+        WeaponNetworkState state = networkState();
+        if (state != null && state.hasConsole()) {
+            answersToConsole = true;
+            markDirty();
+        }
     }
 
     private WeaponNetworkState networkState() {
@@ -1009,6 +1033,7 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
         }
         nbt.setString("accessCode", accessCode);
         nbt.setBoolean("manual", manualControl);
+        nbt.setBoolean("answersToConsole", answersToConsole);
         if (owner != null) {
             nbt.setUniqueId("owner", owner);
         }
@@ -1034,6 +1059,7 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
         localTargetEntity = nbt.hasUniqueId("targetEntity") ? nbt.getUniqueId("targetEntity") : null;
         accessCode = nbt.getString("accessCode");
         manualControl = nbt.getBoolean("manual");
+        answersToConsole = nbt.getBoolean("answersToConsole");
         owner = nbt.hasUniqueId("owner") ? nbt.getUniqueId("owner") : null;
     }
 }

@@ -290,6 +290,81 @@ public class WeaponConsoleE2ETest extends AbstractSharedServerTest {
                 + second, "w636-last", second.text("code"));
     }
 
+    /**
+     * A gun that has answered to a console holds fire while no console is in its network, and fires
+     * again once one joins (ruled 2026-10-06: the gun is silent until its console). It cannot tell a console still loading from one that is gone, so it treats both the
+     * same — and it must remember across its own reload, because the defect is a gun whose chunk
+     * loads before its console's.
+     *
+     * <p>The gun is shown to answer to a console by firing on that console's order; the console is
+     * then removed and the gun's chunk dropped and read back from disk, so the gun that is asked is a
+     * new object knowing only what it saved. Given a target of its own, it is asked to fire: the
+     * answer is its hold decision ({@code turret_hold_decided}, the return of
+     * {@code TileTurret#isHoldingFire}). A console placed back is the positive half on the same gun:
+     * it fires ({@code turret_fired}). What this does not see: the two chunks loading in the opposite
+     * order on a real save, and a console in another chunk — the gun's decision reads only its
+     * network, which is the same either way.</p>
+     *
+     * <p>red-witnessed: with {@code TileTurret#isHoldingFire} at
+     * {@code return answersToConsole || (state != null && state.isHoldFire());} losing its
+     * {@code answersToConsole ||}, this fails at "a gun that answered to a console, reloaded with none
+     * in its network, never decided to hold its fire — no `turret_hold_decided` carrying pos =
+     * 10200,80,9800 and held = true" (2026-10-06).</p>
+     *
+     * <p>red-witnessed: with {@code TileTurret#writeToNBT} at
+     * {@code nbt.setBoolean("answersToConsole", answersToConsole);} removed, the same wait fails the
+     * same way after the reload (2026-10-06).</p>
+     *
+     * <p>red-witnessed: NOT YET for the closing "fired once a console joined again" wait. The break
+     * tried, {@code TileTurret#isHoldingFire} at {@code if (state != null && state.hasConsole())} never
+     * taken, silences a gun that has a console — so it fails earlier, at the arrangement "the gun never
+     * fired on its console's order"; any break that keeps a commanded gun silent does the same.</p>
+     */
+    @Test
+    public void aGunThatAnsweredToAConsoleHoldsFireUntilAConsoleJoinsAgain() throws Exception {
+        int base = X + 400;
+        int cx = base >> 4;
+        int cz = Z >> 4;
+        buildSite(base);
+        long built = events.markInstrumented();
+        buildGun(base);
+        Weapons.awaitAssembled(events, built, base, Y, Z, PARTS, "the gun never assembled");
+        charge(base);
+        assertEquals("the console is not commanding the gun: ", 1,
+                placeConsoleAndAwaitNetwork(base + 1).integer("guns"));
+        long ordered = events.mark();
+        ask("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
+                + (base + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("give the console a target");
+        Weapons.awaitFired(events, ordered, base, Y, Z,
+                "the gun never fired on its console's order, so it never answered to a console");
+
+        long removed = events.mark();
+        ask("stellurgytest fill 0 " + (base + 1) + " " + Y + " " + Z + " " + (base + 1) + " " + Y + " "
+                + Z + " minecraft:air").requireOk("remove the console");
+        events.awaitRecordWithFields(removed, "subsystem_network_rebuilt",
+                "the weapons network never rebuilt without its console",
+                Weapons.ARRANGEMENT_TICKS, "domain", "Weapon", "dim", "0");
+        ask("stellurgytest chunk release 0 " + cx + " " + cz).requireOk("let the gun's chunk go");
+        Reply cycled = ask("stellurgytest chunk cycle 0 " + cx + " " + cz).requireOk("reload the gun's chunk");
+        requireArranged("the gun's chunk must really be dropped and read back from disk: " + cycled,
+                cycled.bool("dropped") && cycled.bool("reloaded"));
+        ask("stellurgytest chunk forceload 0 " + cx + " " + cz).requireOk("hold the chunk again");
+        charge(base);
+
+        long aimed = events.mark();
+        ask("stellurgytest turret target 0 " + base + " " + Y + " " + Z + " " + (base + 40.5D) + " "
+                + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("give the gun a target of its own");
+        events.awaitRecordWithFields(aimed, "turret_hold_decided",
+                "a gun that answered to a console, reloaded with none in its network, never decided to"
+                        + " hold its fire", Weapons.SUBJECT_TICKS,
+                "pos", Weapons.at(base, Y, Z), "held", "true");
+
+        long rejoined = events.mark();
+        place("stellurgy:weaponConsole", base + 1, Y, Z);
+        Weapons.awaitFired(events, rejoined, base, Y, Z,
+                "the gun never fired once a console joined its network again");
+    }
+
     // ---- scenario construction
 
     /** Give the console at this position an access code, refusing unless it is on a network. */

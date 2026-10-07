@@ -47,6 +47,11 @@ public final class WeaponNetworkDomain extends SubsystemNetworkDomain {
             return;
         }
         WeaponNetworkState weapons = (WeaponNetworkState) state;
+        boolean hasConsole = false;
+        for (ISubsystemNetworkController controller : controllers) {
+            hasConsole |= controller instanceof TileWeaponConsole;
+        }
+        weapons.setHasConsole(hasConsole);
         // A network with no console left commands nothing. Keeping the last console's target would
         // leave a battery firing at a point nobody can retract, which is the one failure mode a
         // player cannot fix by breaking something.

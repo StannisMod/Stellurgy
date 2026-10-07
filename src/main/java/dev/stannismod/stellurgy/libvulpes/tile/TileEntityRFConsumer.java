@@ -149,7 +149,7 @@ public abstract class TileEntityRFConsumer extends TileEntity implements IPower,
 
 	@Override
 	public int extractEnergy(int amt, boolean simulate) {
-		return energy.extractEnergy(amt, false);
+		return energy.extractEnergy(amt, simulate);
 	}
 
 	@Override

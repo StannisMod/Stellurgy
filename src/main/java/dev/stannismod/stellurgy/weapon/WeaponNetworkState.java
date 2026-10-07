@@ -52,6 +52,7 @@ public class WeaponNetworkState extends SubsystemNetworkState {
     private HullAllegianceRule hullAllegiance = HullAllegianceRule.CODE_ON_WEAPONS;
     private String accessCode = "";
     private boolean holdFire;
+    private boolean hasConsole;
     private TargetTrack acquiredTrack;
     private long acquiredExpiryTick;
 
@@ -143,6 +144,18 @@ public class WeaponNetworkState extends SubsystemNetworkState {
     public void setAccessCode(String code) {
         this.accessCode = code == null ? "" : code;
         ordersRevision++;
+    }
+
+    /**
+     * Whether a weapon console is in this network right now. A fact about the network's members, set
+     * whenever it is rebuilt, not an order — so it is neither saved nor copied onto consoles.
+     */
+    public boolean hasConsole() {
+        return hasConsole;
+    }
+
+    void setHasConsole(boolean hasConsole) {
+        this.hasConsole = hasConsole;
     }
 
     /** True while the network's guns must track but not shoot. */
@@ -268,6 +281,7 @@ public class WeaponNetworkState extends SubsystemNetworkState {
         copy.hullAllegiance = hullAllegiance;
         copy.accessCode = accessCode;
         copy.holdFire = holdFire;
+        copy.hasConsole = hasConsole;
         copy.acquiredTrack = acquiredTrack;
         copy.acquiredExpiryTick = acquiredExpiryTick;
         copy.ordersRevision = ordersRevision;
