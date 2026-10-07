@@ -1,10 +1,11 @@
 package dev.stannismod.stellurgy.affs.network;
 
+import dev.stannismod.stellurgy.affs.gui.ContainerShieldConsole;
 import dev.stannismod.stellurgy.affs.te.TileEntityShieldConsole;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.tileentity.TileEntity;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
@@ -46,17 +47,25 @@ public class PacketSetShieldResistanceBias implements IMessage {
             if (!ctx.side.isServer()) {
                 return null;
             }
-            ctx.getServerHandler().player.getServerWorld().addScheduledTask(() -> {
-                World world = ctx.getServerHandler().player.world;
-                if (world == null) {
-                    return;
-                }
-                TileEntity te = world.getTileEntity(message.pos);
-                if (te instanceof TileEntityShieldConsole) {
-                    ((TileEntityShieldConsole) te).applyShieldEnergyResistanceBias(message.bias);
-                }
-            });
+            EntityPlayerMP player = ctx.getServerHandler().player;
+            player.getServerWorld().addScheduledTask(() -> apply(player, message));
             return null;
+        }
+
+        /**
+         * Only the console's own screen sends this, so the console is the one that screen shows, and only
+         * while the sender may still use it: the position the client names must match it, and is never
+         * looked up on its own.
+         */
+        private static void apply(EntityPlayerMP player, PacketSetShieldResistanceBias message) {
+            TileEntityShieldConsole console = player.openContainer instanceof ContainerShieldConsole
+                    ? ((ContainerShieldConsole) player.openContainer).consoleAt(message.pos, player) : null;
+            if (console == null) {
+                PacketSenderCheck.refuse(player, "shield resistance bias packet for " + message.pos,
+                        "the sender does not have that console's screen open");
+                return;
+            }
+            console.applyShieldEnergyResistanceBias(message.bias);
         }
     }
 }

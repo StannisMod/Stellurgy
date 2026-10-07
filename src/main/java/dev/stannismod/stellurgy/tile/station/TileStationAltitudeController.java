@@ -22,6 +22,7 @@ import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
@@ -232,7 +233,7 @@ public class TileStationAltitudeController extends TileEntity implements IModula
     public void readDataFromNetwork(ByteBuf in, byte packetId,
                                     NBTTagCompound nbt) {
         if (packetId == 0) {
-            setProgress(0, in.readShort());
+            nbt.setShort("progress", in.readShort());
         } else if (packetId == 2) {
             nbt.setByte("state", in.readByte());
         }
@@ -240,10 +241,42 @@ public class TileStationAltitudeController extends TileEntity implements IModula
 
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
-        if (id == 2) {
+        if (side.isServer()) {
+            String refusal = refusal(player, id, nbt);
+            if (refusal != null) {
+                PacketSenderCheck.refuse(player, "altitude controller packet " + id + " at " + pos, refusal);
+                return;
+            }
+        }
+        if (id == 0) {
+            setProgress(0, nbt.getShort("progress"));
+        } else if (id == 2) {
             state = RedstoneState.values()[nbt.getByte("state")];
             redstoneControl.setRedstoneState(state);
         }
+    }
+
+    /**
+     * Why the server does not take packet {@code id} from {@code player}, or {@code null} when it does.
+     * Both packets come only from this controller's screen — its slider and its redstone button — so
+     * each needs that screen open, and a value the screen cannot produce: the slider runs from 0 to
+     * {@link #getTotalProgress}, the button cycles through the {@link RedstoneState}s.
+     */
+    private String refusal(EntityPlayer player, byte id, NBTTagCompound nbt) {
+        if (!PacketSenderCheck.hasScreenOpen(player, this)) {
+            return "the sender does not have its screen open";
+        }
+        if (id == 0) {
+            int target = nbt.getShort("progress");
+            return target >= 0 && target <= getTotalProgress(0) ? null
+                    : "target " + target + " is outside the slider's 0.." + getTotalProgress(0);
+        }
+        if (id == 2) {
+            int mode = nbt.getByte("state");
+            return mode >= 0 && mode < RedstoneState.values().length ? null
+                    : "redstone mode " + mode + " is not one of the button's " + RedstoneState.values().length;
+        }
+        return "its screen sends no packet " + id;
     }
 
     @Override

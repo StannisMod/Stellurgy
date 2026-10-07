@@ -42,6 +42,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler.guiId;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
@@ -492,6 +493,13 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
+        if (side.isServer()) {
+            String refusal = refusal(player, id, nbt);
+            if (refusal != null) {
+                PacketSenderCheck.refuse(player, "warp controller packet " + id + " at " + pos, refusal);
+                return;
+            }
+        }
         if (id == 0)
             player.openGui(Stellurgy.instance, guiId.MODULARFULLSCREEN.ordinal(), world, this.getPos().getX(), this.getPos().getY(), this.getPos().getZ());
         else if (id == 1 || id == 3) {
@@ -542,6 +550,24 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
                 }
             }
         }
+    }
+
+    /**
+     * Why the server does not take packet {@code id} from {@code player}, or {@code null} when it does.
+     * Every packet this controller takes from a client comes from one of its screens — the monitor, its
+     * planet selector, its data tab — so each needs one of them open, and a tab switch names one of the
+     * monitor's tabs.
+     */
+    private String refusal(EntityPlayer player, byte id, NBTTagCompound nbt) {
+        if (!PacketSenderCheck.hasScreenOpen(player, this)) {
+            return "the sender does not have its screen open";
+        }
+        if (id == TAB_SWITCH) {
+            int tab = nbt.getShort("tab");
+            return tab >= 0 && tab < tabModule.getTabCount() ? null
+                    : "tab " + tab + " is not one of the monitor's " + tabModule.getTabCount();
+        }
+        return null;
     }
 
     @Override

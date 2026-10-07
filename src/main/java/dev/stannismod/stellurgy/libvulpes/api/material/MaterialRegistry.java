@@ -104,7 +104,7 @@ public class MaterialRegistry {
 	//TODO: allow more block types
 	public void registerOres(CreativeTabs tab) {
 		int len = materialList.size();
-		int numberOfOreBlocks = (len/16) + 1;
+		int numberOfOreBlocks = (len + 15) / 16;
 		BlockOre ores;
 		BlockOre metalBlocks;
 		BlockOre coilBlocks;

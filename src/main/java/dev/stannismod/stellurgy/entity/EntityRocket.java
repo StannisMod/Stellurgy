@@ -3354,15 +3354,20 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     }
 
     @Override
-    public void useNetworkData(EntityPlayer player, Side side, byte id,
-                               NBTTagCompound nbt) {
+    public final void useNetworkData(EntityPlayer player, Side side, byte id,
+                                     NBTTagCompound nbt) {
 
         if (!world.isRemote && !acceptsFromClient(player, id)) {
             PacketSenderCheck.refuse(player, "rocket packet " + id + " for rocket " + getEntityId(),
                     "the rocket does not take that packet from this player");
             return;
         }
+        useAcceptedNetworkData(player, side, id, nbt);
+    }
 
+    /** What packet {@code id} does, once the server has decided to take it (or a client receives it). */
+    protected void useAcceptedNetworkData(EntityPlayer player, Side side, byte id,
+                                          NBTTagCompound nbt) {
         if(id==(byte)9987){
             // F*ck you little bug
         }
@@ -3541,8 +3546,9 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      *   <li>A right-click on the rocket: within the player's reach of its hull, with the tolerance the
      *       server gives any click ({@link PacketSenderCheck#withinItemUseReach}). Vanilla's own check
      *       measures to the entity's position, which a large rocket's hull lies far from.</li>
-     *   <li>What its screen sends — dismantle, the destination, a module's screen, a landing pad: a
-     *       passenger, or a player within the range the screen stays open at.</li>
+     *   <li>What its screen sends — dismantle, the destination, a module's screen, a landing pad, the
+     *       gas a station-deployed rocket harvests: a passenger, or a player within the range the screen
+     *       stays open at.</li>
      *   <li>Flying it — launch, abort, turning, RCS, flight mode and input, flight
      *       assist, engine start, its own screen by key: a passenger only.</li>
      *   <li>Everything else — its NBT and blocks, mounting, the world switch, infrastructure, landing,
@@ -3564,6 +3570,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 case DECONSTRUCT:
                 case OPENPLANETSELECTION:
                 case SENDPLANETDATA:
+                case MENU_CHANGE:
                     return isPassenger(player) || withinContainerRange(player);
                 case LAUNCH:
                 case ABORTLAUNCH:

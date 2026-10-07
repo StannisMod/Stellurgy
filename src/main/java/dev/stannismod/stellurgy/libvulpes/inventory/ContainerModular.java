@@ -49,6 +49,11 @@ public class ContainerModular extends Container {
 		}
 	}
 
+	/** Whether this container is the screen of {@code inventory}. */
+	public boolean isScreenOf(IModularInventory inventory) {
+		return modularInventory == inventory;
+	}
+
 	public Slot addSlotToContainer(Slot slot) {
 		return super.addSlotToContainer(slot);
 	}

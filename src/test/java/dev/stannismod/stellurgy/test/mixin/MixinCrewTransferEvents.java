@@ -43,8 +43,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>{@code CrewTransfer.rebindAcrossAssembly} re-expresses a PRE-ASSEMBLY boarding across the
  * assembly relocation: a pilot who sat down while his craft was still loose blocks rides a mount
  * bound to vacated coordinates, and this swaps it for one bound to the relocated seat. Its return is
- * the tri-state the pending queue debounces and retries on ({@code REBOUND}, {@code NOT_READY},
- * {@code NOT_ON_STALE_MOUNT}); the record carries that {@code outcome}, the {@code anchor} the ship
+ * the outcome the pending queue debounces and retries on ({@code REBOUND}, {@code NOT_READY},
+ * {@code MOUNT_REFUSED}, {@code NOT_ON_STALE_MOUNT}); the record carries that {@code outcome}, the {@code anchor} the ship
  * was assembled at, the player ({@code who}) and the dimension.</p>
  *
  * <p>Polled every server tick per pending pilot, so this too records an EDGE: the outcome is kept per

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
@@ -11,6 +12,11 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -18,10 +24,11 @@ import static org.junit.Assert.assertTrue;
  * Which rocket packets the server takes from a player's client: what a rocket accepts from a player
  * the server is showing it to, beyond the channel's own checks.
  *
- * <p>NEW-GROUP: the rocket's own rule for client packets — which of its packet ids a client may send at
- * all, and which only from a passenger or from within the range its screen stays open at. No client
- * group holds it: every other rocket class drives a rocket through its keys and screens and observes
- * the flight, never a packet the rocket must refuse.</p>
+ * <p>NEW-GROUP: a craft's own rule for client packets — which of a rocket's packet ids a client may send
+ * at all, and which only from a passenger or from within the range its screen stays open at; the same
+ * rule reached from a rocket subclass's own packet; and a hovercraft's, whose keys are its driver's. No
+ * client group holds it: every other craft class drives a craft through its keys and screens and
+ * observes the flight, never a packet the craft must refuse.</p>
  *
  * <p><b>Why the client tier, and how a packet is sent.</b> A rocket takes an entity packet only from a
  * player the server's entity tracker is showing it to — the one way a client learns an entity's id —
@@ -73,6 +80,26 @@ public class RocketPacketSenderClientGroupTest extends AbstractSharedClientE2ETe
      */
     private static final int FAR_OFFSET = 50;
 
+    /**
+     * The unmanned-vehicle fixture ({@code stellurgytest fixture uv-rocket}): its builder stands at the
+     * centre of a row five wide and its tower rises six above the builder, so with the builder one block
+     * above the site and two blocks in, it fills the site's footprint and seven blocks up.
+     */
+    private static final int UV_BUILDER_IN = 2;
+    private static final int UV_HEIGHT = 7;
+    /**
+     * Where the far sender stands from the deployed rocket, on both axes: 46 — inside {@link #SHOWN_WITHIN}
+     * on each axis, and about 65 in a straight line, beyond {@link #SCREEN_RANGE}. Measured, not trusted.
+     */
+    private static final int DEPLOYED_FAR = 46;
+    /** Where the near sender stands from the deployed rocket, along Z: well inside {@link #SCREEN_RANGE}. */
+    private static final int DEPLOYED_NEAR = 8;
+    /** The gas a client asks a deployed rocket to harvest: any index; the rocket wraps it into its list. */
+    private static final int SOME_GAS = 1;
+
+    /** The hovercraft's entity name, as its registration lowercases it. */
+    private static final String HOVERCRAFT = "stellurgy:stellurgyhovercraft";
+
     @Override
     protected String subsystem() {
         return "mod-network";
@@ -83,10 +110,15 @@ public class RocketPacketSenderClientGroupTest extends AbstractSharedClientE2ETe
         return new Plot.Lane(Plot.Lane.DEFAULT.originX, Plot.Lane.DEFAULT.originZ, PLOT_SIZE, PLOT_SIZE);
     }
 
-    /** A rocket left standing by a previous scenario moves; each scenario starts with none. */
+    /**
+     * A rocket left standing by a previous scenario moves, and so does a hovercraft; each scenario
+     * starts with neither. The hovercraft goes by vanilla's own command, whose reply is text and is not
+     * read: a scenario that made none has none to remove.
+     */
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
         RocketList.clearFrom(this::exec, OVERWORLD);
+        exec("kill @e[type=" + HOVERCRAFT + "]");
     }
 
     /**
@@ -165,7 +197,145 @@ public class RocketPacketSenderClientGroupTest extends AbstractSharedClientE2ETe
                 + " refusal above says nothing about the range: " + findByUuid(uuid), dismantled(uuid));
     }
 
+    /**
+     * A station-deployed rocket's gas selection, which only its screen sends, is decided by the rocket's
+     * own client rule: refused from a player who neither rides it nor stands within its screen's range,
+     * taken from one who does.
+     *
+     * <p>Contract: fails if {@code EntityStationDeployedRocket} handles {@code MENU_CHANGE} on a path that
+     * does not ask {@code EntityRocket#acceptsFromClient}, or if that rule takes it from beyond the
+     * screen's range.</p>
+     * <p>Why the verdict, not the gas, is read: a deployed rocket changes its gas only above a gas giant,
+     * and the harness's universe has none, so the gas this rocket would harvest reads the same whether a
+     * selection was taken or refused. The verdict is recorded where the rocket gives it
+     * ({@code rocket_client_gate}).</p>
+     * <p>red-witnessed: with {@code EntityRocket#useNetworkData} at {@code if (!world.isRemote && !acceptsFromClient(player, id))} letting {@code MENU_CHANGE} past without asking — the path the subclass took before it handled the packet only after the rule — fails: "a gas selection from a player beyond the screen's range must be weighed by the rocket's client rule, once, and refused (no verdict at all: nobody weighed it): … expected:&lt;[false]&gt; but was:&lt;[]&gt;" (2026-10-07).</p>
+     * <p>red-witnessed: with {@code EntityRocket#acceptsFromClient} at {@code case MENU_CHANGE:} removed, fails: "a gas selection from beside the rocket must be weighed once and taken — or the refusal above says nothing about the range: … expected:&lt;[true]&gt; but was:&lt;[false]&gt;" (2026-10-07).</p>
+     */
+    @Test
+    public void aDeployedRocketsGasSelectionIsWeighedByTheRocketsRule() throws Exception {
+        FixtureSite site = site();
+        site.makeRoom(this::exec, 0, UV_HEIGHT, "the unmanned-vehicle assembler and its rocket stand here");
+        Reply fixture = Reply.of(exec("stellurgytest fixture uv-rocket " + OVERWORLD + " "
+                + (site.x + UV_BUILDER_IN) + " " + (site.y + 1) + " " + site.z));
+        scenario().requireArranged("the unmanned-vehicle fixture must be laid: " + fixture,
+                fixture.ok() && fixture.has("builderPos"));
+        int id = RocketFixture.rocketEntityId(RocketFixture.assembleBuilt(site, this::exec,
+                fixture.requireBlockPos("builderPos")));
+        RocketInfo rocket = RocketInfo.byId(this::exec, id);
+
+        int fx = (int) Math.floor(rocket.posX) + DEPLOYED_FAR, fz = (int) Math.floor(rocket.posZ) + DEPLOYED_FAR;
+        layFloor(fx, fz, fx, fz);
+        standOnFloorTheClientHolds(fx + 0.5, site.y + 1, fz + 0.5, 0, 0,
+                "the sender stands where the rocket is shown to him but its screen out of reach");
+        Reply far = Reply.of(exec("stellurgytest packet sender"));
+        double dx = Math.abs(far.number("x") - rocket.posX), dy = far.number("y") - rocket.posY;
+        double dz = Math.abs(far.number("z") - rocket.posZ);
+        scenario().requireArranged("the sender must stand beyond the rocket's screen range (" + SCREEN_RANGE
+                        + ") and within the distance it is shown at (" + SHOWN_WITHIN + " per axis):"
+                        + " dx=" + dx + " dy=" + dy + " dz=" + dz + " " + far,
+                Math.sqrt(dx * dx + dy * dy + dz * dz) > SCREEN_RANGE && Math.max(dx, dz) <= SHOWN_WITHIN);
+        requireShownTheRocket(id);
+        String sender = String.valueOf(far.integer("entityId"));
+
+        long mark = serverEvents().markInstrumented();
+        sendRaw(id, EntityRocket.PacketType.REQUESTNBT.ordinal());
+        sendRaw(id, EntityRocket.PacketType.MENU_CHANGE.ordinal(), "short:" + SOME_GAS);
+        String gate = serverEvents().since(mark, "rocket_client_gate");
+        Events.assertInstrumentRan(gate, "rocket_client_gate", "which client packets the rocket weighed");
+        scenario().requireArranged("the rocket's own rule must have weighed the request for its data, which"
+                + " every player it is shown to may send — or the gate's silence below means nothing: " + gate,
+                !Events.recordsWhereAll(gate, "e", String.valueOf(id),
+                        "id", String.valueOf(EntityRocket.PacketType.REQUESTNBT.ordinal())).isEmpty());
+        assertEquals("a gas selection from a player beyond the screen's range must be weighed by the rocket's"
+                        + " client rule, once, and refused (no verdict at all: nobody weighed it): " + gate,
+                Collections.singletonList("false"), gasSelectionVerdicts(gate, id, sender));
+
+        int nz = (int) Math.floor(rocket.posZ) + DEPLOYED_NEAR, nx = (int) Math.floor(rocket.posX);
+        layFloor(nx, nz, nx, nz);
+        standOnFloorTheClientHolds(nx + 0.5, site.y + 1, nz + 0.5, 0, 0, "the sender stands beside the rocket");
+        long nearMark = serverEvents().markInstrumented();
+        sendRaw(id, EntityRocket.PacketType.MENU_CHANGE.ordinal(), "short:" + SOME_GAS);
+        String nearGate = serverEvents().since(nearMark, "rocket_client_gate");
+        assertEquals("a gas selection from beside the rocket must be weighed once and taken — or the refusal"
+                        + " above says nothing about the range: " + nearGate,
+                Collections.singletonList("true"), gasSelectionVerdicts(nearGate, id, sender));
+    }
+
+    /** The rocket's verdicts, in order, on gas selections {@code sender} sent rocket {@code id}. */
+    private static List<String> gasSelectionVerdicts(String gate, int id, String sender) {
+        List<String> verdicts = new ArrayList<>();
+        for (String record : Events.recordsWhereAll(gate, "e", String.valueOf(id),
+                "id", String.valueOf(EntityRocket.PacketType.MENU_CHANGE.ordinal()), "sender", sender)) {
+            verdicts.add(Events.text(record, "accepted"));
+        }
+        return verdicts;
+    }
+
+    /**
+     * A hovercraft's climb and descent keys are taken from its driver only: a player beside it, whom the
+     * server shows it to, does not steer it.
+     *
+     * <p>Contract: fails if {@code EntityHoverCraft#useNetworkData} applies {@code TURNUPDATE} from a sender
+     * who is not the craft's controlling passenger.</p>
+     * <p>red-witnessed: with {@code EntityHoverCraft#useNetworkData} at {@code if (!world.isRemote && (player == null || getControllingPassenger() != player))} made {@code if (false)}, fails: "a climb key from a player who is not driving the hovercraft reached it expected:&lt;0.0&gt; but was:&lt;1.0&gt;" (2026-10-07).</p>
+     * <p>red-witnessed: with {@code EntityHoverCraft#useNetworkData} at {@code if (!world.isRemote && (player == null || getControllingPassenger() != player))} made {@code if (!world.isRemote)}, fails: "a climb key from the hovercraft's driver must be taken — or the refusal above says nothing about who drives expected:&lt;1.0&gt; but was:&lt;0.0&gt;" (2026-10-07).</p>
+     */
+    @Test
+    public void aHovercraftTakesItsClimbKeyOnlyFromItsDriver() throws Exception {
+        FixtureSite site = site();
+        site.makeRoom(this::exec, 0, 2, "the hovercraft and the player beside it stand here");
+        layFloor(site.x, site.z, site.x + 5, site.z + 2);
+        Reply spawned = Reply.of(exec("stellurgytest entity spawn " + OVERWORLD + " " + (site.x + 1.5) + " "
+                + (site.y + 1) + " " + (site.z + 1.5) + " " + HOVERCRAFT));
+        scenario().requireArranged("the hovercraft must be spawned: " + spawned,
+                spawned.ok() && spawned.bool("spawned"));
+        int id = spawned.integer("entityId");
+        standOnFloorTheClientHolds(site.x + 4.5, site.y + 1, site.z + 1.5, 0, 0,
+                "the sender stands beside the hovercraft, not riding it");
+        Reply sees = Reply.of(exec("stellurgytest packet sees " + id));
+        scenario().requireArranged("the server must be showing the hovercraft to the sender, and he must not"
+                + " ride it: " + sees, sees.ok() && sees.bool("tracked") && !sees.bool("riding"));
+        scenario().requireArranged("the hovercraft must start with its climb key up, or a refused press could"
+                + " not be told from a taken one", climbKeyDown(id) == 0d);
+
+        sendRaw(id, EntityRocket.PacketType.TURNUPDATE.ordinal(), "bool:true", "bool:false");
+        assertEquals("a climb key from a player who is not driving the hovercraft reached it",
+                0d, climbKeyDown(id), 0d);
+
+        Reply mounted = Reply.of(exec("stellurgytest player mount-entity " + id));
+        scenario().requireArranged("the sender must be put in the driver's seat: " + mounted,
+                mounted.ok() && mounted.integer("ridingEntityId") == id);
+        sendRaw(id, EntityRocket.PacketType.TURNUPDATE.ordinal(), "bool:true", "bool:false");
+        assertEquals("a climb key from the hovercraft's driver must be taken — or the refusal above says"
+                + " nothing about who drives", 1d, climbKeyDown(id), 0d);
+        sendRaw(id, EntityRocket.PacketType.TURNUPDATE.ordinal(), "bool:false", "bool:false");
+        exec("stellurgytest player dismount");
+    }
+
     // ---- instruments --------------------------------------------------------------------------
+
+    /**
+     * One entity packet from the connected player whose payload is exactly {@code words}, with no
+     * compound; refuses unless it was delivered.
+     */
+    private void sendRaw(int id, int packetId, String... words) throws Exception {
+        StringBuilder command = new StringBuilder("stellurgytest client entity " + OVERWORLD + " " + id + " "
+                + packetId);
+        for (String word : words) {
+            command.append(' ').append(word);
+        }
+        Reply sent = Reply.of(exec(command.toString()));
+        scenario().requireArranged("the packet must have been delivered: " + sent, sent.ok());
+    }
+
+    /** The hovercraft's climb key as its own writer reports it to a client: 1 down, 0 up. */
+    private double climbKeyDown(int id) throws Exception {
+        Reply state = Reply.of(exec("stellurgytest client entity-state " + OVERWORLD + " " + id + " "
+                + EntityRocket.PacketType.TURNUPDATE.ordinal()));
+        scenario().requireArranged("the hovercraft's key state must be readable: " + state, state.ok());
+        return Reply.of(state.object("read")).number("up");
+    }
 
     /**
      * Lay a stone floor at the open-air band over the box {@code (x1, z1)..(x2, z2)}, and refuse unless

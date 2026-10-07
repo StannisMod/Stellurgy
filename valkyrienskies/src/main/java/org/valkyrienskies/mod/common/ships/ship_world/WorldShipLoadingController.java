@@ -69,6 +69,7 @@ class WorldShipLoadingController {
         for (PhysicsObject ship : shipManager.getAllLoadedPhysObj()) {
             ship.getWatchingPlayers().clear();
             ship.getWatchingPlayers().addAll(shipToWatchingPlayers.get(ship.getShipData()));
+            ship.publishWatchingPlayers();
         }
     }
 

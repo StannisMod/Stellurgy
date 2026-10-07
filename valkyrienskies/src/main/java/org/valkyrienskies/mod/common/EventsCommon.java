@@ -203,7 +203,7 @@ public class EventsCommon {
                 // zero it was constructed with: the ship index packet updates transform, inertia and
                 // the physics flag, never ShipPhysicsData.
                 final ShipPhysicsData physicsData = physicsObject.getShipData().getPhysicsData();
-                for (final EntityPlayerMP watcher : physicsObject.getWatchingPlayers()) {
+                for (final EntityPlayerMP watcher : physicsObject.getPublishedWatchingPlayers()) {
                     if (watcher == null || watcher.hasDisconnected()) {
                         continue;
                     }

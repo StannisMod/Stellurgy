@@ -261,13 +261,14 @@ public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 		final int hatchIndex;
 		final IInventory hatch;
 		final int slot;
-		final int count;
+		/** The alternative of the ingredient that this slot matched. */
+		final ItemStack matched;
 
-		IngredientClaim(int hatchIndex, IInventory hatch, int slot, int count) {
+		IngredientClaim(int hatchIndex, IInventory hatch, int slot, ItemStack matched) {
 			this.hatchIndex = hatchIndex;
 			this.hatch = hatch;
 			this.slot = slot;
-			this.count = count;
+			this.matched = matched;
 		}
 	}
 
@@ -320,7 +321,7 @@ public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 				for (ItemStack stack : ingredient) {
 					if (stackInSlot.getCount() - takenFromSlot[i] >= stack.getCount() && (stackInSlot.isItemEqual(stack) || (stack.getItemDamage() == OreDictionary.WILDCARD_VALUE && stackInSlot.getItem() == stack.getItem()))) {
 						takenFromSlot[i] += stack.getCount();
-						claims.add(new IngredientClaim(h, hatch, i, stack.getCount()));
+						claims.add(new IngredientClaim(h, hatch, i, stack));
 						if (claimFrom(ingredients, next + 1, hatches, taken, claims))
 							return true;
 						claims.remove(claims.size() - 1);
@@ -348,14 +349,37 @@ public abstract class TileMultiblockMachine extends TileMultiPowerConsumer {
 	 * hatch contents; it consumes exactly the slots that check claimed.
 	 */
 	public void consumeItems(IRecipe recipe) {
+		takeClaimedItems(recipe);
+		drainFluidIngredients(recipe);
+	}
+
+	/**
+	 * Whether starting a recipe uses up the item that paid {@code ingredient}. Every ingredient is
+	 * claimed and must be present either way; a machine whose tool sits among the ingredients — a
+	 * lens, a die — answers false for it, and it stays in its slot.
+	 */
+	protected boolean consumesIngredient(ItemStack ingredient) {
+		return true;
+	}
+
+	/**
+	 * Takes from exactly the slots {@link #canProcessRecipe} claimed for {@code recipe}, skipping
+	 * what {@link #consumesIngredient} keeps, and answers the stacks taken, in claim order.
+	 */
+	protected List<ItemStack> takeClaimedItems(IRecipe recipe) {
+		List<ItemStack> taken = new ArrayList<>();
 		for (IngredientClaim claim : claimIngredientSlots(recipe)) {
-			claim.hatch.decrStackSize(claim.slot, claim.count);
+			if (!consumesIngredient(claim.matched))
+				continue;
+			taken.add(claim.hatch.decrStackSize(claim.slot, claim.matched.getCount()));
 			claim.hatch.markDirty();
 			world.notifyBlockUpdate(pos, world.getBlockState(((TileEntity) claim.hatch).getPos()), world.getBlockState(((TileEntity) claim.hatch).getPos()), 6);
 		}
+		return taken;
+	}
 
-
-		//Consume fluids
+	/** Drains each fluid ingredient of {@code recipe} as what is still owed of it, hatch after hatch. */
+	protected void drainFluidIngredients(IRecipe recipe) {
 		int[] fluidInputCounter = new int[recipe.getFluidIngredients().size()];
 
 		for(int i = 0; i < recipe.getFluidIngredients().size(); i++) {

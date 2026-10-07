@@ -174,9 +174,12 @@ public class ItemAirUtils implements IFillableArmor {
                                     boolean needsSuppliedOxygen, @Nonnull ItemStack stack,
                                     boolean commitProtection) {
             if (!stack.isEmpty() && stack.getItem() instanceof ItemArmor) {
-                // A body that needs no oxygen spends none, and the chest seals as the suit's does.
+                // A body that needs no oxygen spends none, and the chest seals as the suit's does —
+                // unless the question itself says oxygen must be supplied: water is not air, and a
+                // diver breathes from the tank whatever breathingRequiresO2 says about the air.
                 if (((ItemArmor) stack.getItem()).armorType == EntityEquipmentSlot.CHEST
-                        && dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().breathingRequiresO2)
+                        && (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().breathingRequiresO2
+                        || needsSuppliedOxygen))
                     return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;
 
                 return true;

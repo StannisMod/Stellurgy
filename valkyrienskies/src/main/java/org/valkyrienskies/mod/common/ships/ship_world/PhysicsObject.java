@@ -53,6 +53,12 @@ public class PhysicsObject implements IPhysicsEntity {
     public static final int TICKS_SINCE_TELEPORT_TO_START_DRAGGING = 50;
     // region Fields
     private final List<EntityPlayerMP> watchingPlayers;
+    /**
+     * {@link #watchingPlayers} as the game thread last left it, for a reader on another thread: a copy,
+     * replaced whole and never changed in place. The game thread clears and refills the live list every
+     * tick, and the physics thread's pose watchdog iterating it meanwhile throws.
+     */
+    private volatile List<EntityPlayerMP> publishedWatchingPlayers = Collections.emptyList();
     private final Set<IPhysicsBlockController> physicsControllers;
     private final Set<IPhysicsBlockController> physicsControllersImmutable;
     private final PhysObjectRenderManager shipRenderer;
@@ -263,6 +269,7 @@ public class PhysicsObject implements IPhysicsEntity {
             // onPlayerUntracking(wachingPlayer);
         }
         getWatchingPlayers().clear();
+        publishWatchingPlayers();
         // Finally, copy all the blocks from the ship to the world
         //
         // ...unless the ship is DEAD, which means DISCARD and not deconstruct. The two dispositions
@@ -354,6 +361,7 @@ public class PhysicsObject implements IPhysicsEntity {
 
     void unload() {
         watchingPlayers.clear();
+        publishWatchingPlayers();
         if (!getWorld().isRemote) {
             ChunkProviderServer provider = (ChunkProviderServer) getWorld().getChunkProvider();
             for (ChunkPos chunkPos : getChunkClaim()) {
@@ -460,6 +468,16 @@ public class PhysicsObject implements IPhysicsEntity {
     @java.lang.SuppressWarnings("all")
     public List<EntityPlayerMP> getWatchingPlayers() {
         return this.watchingPlayers;
+    }
+
+    /** The watchers as last published by the game thread; safe to iterate from any thread. */
+    public List<EntityPlayerMP> getPublishedWatchingPlayers() {
+        return this.publishedWatchingPlayers;
+    }
+
+    /** Publish {@link #getWatchingPlayers()} as it stands now. Called on the game thread after it changes. */
+    void publishWatchingPlayers() {
+        this.publishedWatchingPlayers = Collections.unmodifiableList(new ArrayList<>(watchingPlayers));
     }
 
     @java.lang.SuppressWarnings("all")

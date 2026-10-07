@@ -26,10 +26,11 @@ import static org.junit.Assert.assertTrue;
  * (its recipe end to end, its structure validating); none of them holds the rules all of them share
  * and none of them owns.</p>
  *
- * <p>Every scenario stands a chemical reactor: it is the one shipped recipe machine with two fluid
- * input hatches, and it has the item hatches the other scenarios need. Its structure is two rows
+ * <p>Every scenario but one stands a chemical reactor: it is the one shipped recipe machine with two
+ * fluid input hatches, and it has the item hatches the other scenarios need. Its structure is two rows
  * deep — controller and power plugs in front, the hatches behind — which is what lets a chunk border
- * run between the controller and its item hatch.</p>
+ * run between the controller and its item hatch. The one exception stands a precision laser etcher,
+ * the machine whose recipes keep one of their ingredients.</p>
  *
  * <p>What this does not see: a player. Formation is asked through the probe's call of the
  * controller's own {@code attemptCompleteStructure}, a teardown is the controller block being
@@ -212,11 +213,12 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
     /**
      * A recipe draws its fluid once, however many fluid input hatches could pay it.
      *
-     * <p>Contract: fails if {@code TileMultiblockMachine#consumeItems} stops deciding that each
+     * <p>Contract: fails if {@code TileMultiblockMachine#drainFluidIngredients} stops deciding that each
      * fluid ingredient is drained as what is STILL OWED of it, hatch after hatch, rather than in full
      * from every hatch that holds it. Each hatch here holds exactly one recipe's worth, so the two
      * answers differ by one whole recipe's worth.</p>
-     * <p>red-witnessed: with {@code TileMultiblockMachine#consumeItems} at {@code FluidStack drainedFluid = fluidInput.drainInternal(stillOwed, true);} draining the whole ingredient from each hatch, its {@code fluidInputCounter[i] <= 0} guard removed, fails: "starting the recipe must draw 10 mB of nitrogen in total from the 2 hatches, which held 10 each — left: ("tileClass":"dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch","hasFluid …" (2026-10-07).</p>
+     * <p>red-witnessed (taken while this loop stood in {@code consumeItems}; moved unchanged into
+     * {@code drainFluidIngredients} 2026-10-07): with {@code TileMultiblockMachine#drainFluidIngredients} at {@code FluidStack drainedFluid = fluidInput.drainInternal(stillOwed, true);} draining the whole ingredient from each hatch, its {@code fluidInputCounter[i] <= 0} guard removed, fails: "starting the recipe must draw 10 mB of nitrogen in total from the 2 hatches, which held 10 each — left: ("tileClass":"dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch","hasFluid …" (2026-10-07).</p>
      */
     @Test
     public void aRecipeDrawsItsFluidOnceAcrossTwoFluidInputHatches() throws Exception {
@@ -287,6 +289,66 @@ public class MachineLibraryGroupTest extends AbstractSharedServerTest {
         Reply items = hatchContents(reactor.dim, reactor.input);
         assertFalse("starting a recipe that lists " + CLAIMED_ITEM + " twice must take both: " + items,
                 items.holdsElement("slots", "item", CLAIMED_ITEM));
+    }
+
+    /** The etching lens, which the precision laser etcher's recipes list and never use up. */
+    private static final String LENS = "stellurgy:lens";
+
+    /**
+     * The precision laser etcher takes exactly the slots its start check claimed, and keeps its lens.
+     *
+     * <p>Contract: fails if the etcher stops starting a recipe through
+     * {@code TileMultiblockMachine#consumeItems} — the claim {@code canProcessRecipe} made — and takes
+     * its ingredients by a first-fit of its own, or if {@code TilePrecisionLaserEtcher#consumesIngredient}
+     * stops deciding that the lens stays. The recipe is handed to the machine by the probe (the
+     * {@code vulpes recipe-take} verb): a lens, one stick, then two sticks, against a hatch holding the
+     * lens, a stack of two sticks and a stack of one. Only one matching exists — the single stick
+     * from the stack of one, the pair from the stack of two — and a first-fit that hands the single
+     * stick the stack of two finds no pair left for the second ingredient, so it starts the recipe
+     * with two sticks still in the hatch.</p>
+     * <p>red-witnessed: with {@code TilePrecisionLaserEtcher#consumesIngredient} at
+     * {@code return !isLensItem(ingredient);} overridden by the etcher's former {@code consumeItems}
+     * (its own first-fit over {@code getItemInPorts()} skipping {@code isLensItem(stack)}) put back,
+     * fails: "starting the recipe must take all three sticks it claimed — hatch now: (… slot 1 stick
+     * count 1, slot 2 stick count 1)" (2026-10-07). With the same {@code return !isLensItem(ingredient);}
+     * answering true, fails: "the etcher must keep its lens, which the recipe needs present and never
+     * uses up — hatch now: ("size":4,"slots":[])" (2026-10-07).</p>
+     */
+    @Test
+    public void theEtcherTakesWhatItsCheckClaimedAndKeepsItsLens() throws Exception {
+        FixtureSite site = clearedSite(1, 3, "the etcher's volume");
+        int cx = site.x + 2;
+        int cy = site.y + 1;
+        int cz = site.z + 1;
+        String controller = site.dim + " " + cx + " " + cy + " " + cz;
+        Reply fixture = arrange("stellurgytest fixture machine precision-laser-etcher " + controller);
+        requireArranged("every cell of the etcher must have resolved to a block: " + fixture,
+                fixture.integer("unresolved") == 0);
+        int[] input = fixture.requireBlockPos("inputPos");
+        Reply formed = arrange("stellurgytest machine try-complete " + controller);
+        requireArranged("the etcher must form before the scenario starts: " + formed, formed.bool("isComplete"));
+
+        arrange("stellurgytest hatch fill " + at(site.dim, input) + " 0 " + LENS + " 1");
+        arrange("stellurgytest hatch fill " + at(site.dim, input) + " 1 " + CLAIMED_ITEM + " 2");
+        arrange("stellurgytest hatch fill " + at(site.dim, input) + " 2 " + CLAIMED_ITEM + " 1");
+        Reply before = hatchContents(site.dim, input);
+        requireArranged("the hatch must hold the lens, two sticks and one stick before the recipe starts: "
+                        + before,
+                before.holdsElementWithAll("slots", "slot", "0", "item", LENS, "count", "1")
+                        && before.holdsElementWithAll("slots", "slot", "1", "item", CLAIMED_ITEM, "count", "2")
+                        && before.holdsElementWithAll("slots", "slot", "2", "item", CLAIMED_ITEM, "count", "1"));
+
+        Reply started = arrange("stellurgytest vulpes recipe-take " + controller + " true "
+                + LENS + " 1 " + CLAIMED_ITEM + " 1 " + CLAIMED_ITEM + " 2");
+        requireArranged("the hatch must satisfy the recipe, or nothing was started: " + started,
+                started.bool("canProcess") && started.bool("consumed"));
+
+        Reply items = hatchContents(site.dim, input);
+        assertFalse("starting the recipe must take all three sticks it claimed — hatch now: " + items,
+                items.holdsElement("slots", "item", CLAIMED_ITEM));
+        assertTrue("the etcher must keep its lens, which the recipe needs present and never uses up —"
+                        + " hatch now: " + items,
+                items.holdsElementWithAll("slots", "slot", "0", "item", LENS, "count", "1"));
     }
 
     // ---- formation across a chunk border -----------------------------------------------------

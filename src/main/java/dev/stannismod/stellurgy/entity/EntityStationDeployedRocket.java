@@ -514,8 +514,8 @@ public class EntityStationDeployedRocket extends EntityRocket {
     }
 
     @Override
-    public void useNetworkData(EntityPlayer player, Side side, byte id,
-                               NBTTagCompound nbt) {
+    protected void useAcceptedNetworkData(EntityPlayer player, Side side, byte id,
+                                          NBTTagCompound nbt) {
 
 
         if (id == PacketType.MENU_CHANGE.ordinal()) {
@@ -530,7 +530,7 @@ public class EntityStationDeployedRocket extends EntityRocket {
                     showSelection(offered);
             }
         } else
-            super.useNetworkData(player, side, id, nbt);
+            super.useAcceptedNetworkData(player, side, id, nbt);
     }
 
 

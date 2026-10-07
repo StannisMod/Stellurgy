@@ -146,13 +146,13 @@ public final class AssemblyCrewRebind {
                 }
                 continue;
             }
-            pending.notOnMountStreak = 0; // still on the stale mount, ship just not up yet
+            pending.notOnMountStreak = 0; // still on the stale mount: no seat yet, or no mount for it
             if (++pending.attempts > MAX_ATTEMPTS) {
                 noteRebindQueue("expired", pending.playerId, pending.staleDummyId,
                         pending.anchor, pending.attempts);
                 LOGGER.warn("gave up rebinding {} onto the ship assembled at {} after {} ticks - "
-                        + "the relocated seat never resolved; he keeps the stale mount",
-                        player.getName(), pending.anchor, MAX_ATTEMPTS);
+                        + "the last attempt answered {}; he keeps the stale mount",
+                        player.getName(), pending.anchor, MAX_ATTEMPTS, outcome);
                 it.remove();
             }
         }

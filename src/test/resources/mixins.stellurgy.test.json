@@ -103,7 +103,9 @@
     "MixinMinecraftServerShipLoadHold",
     "MixinShipLoadingHold",
     "MixinEntityTraceMemory",
-    "MixinArrivalSpawnMountRefusal"
+    "MixinArrivalSpawnMountRefusal",
+    "MixinEntityRocketClientGateEvents",
+    "MixinPacketSenderReachEvents"
   ],
   "client": [
     "MixinClientCursorActs",

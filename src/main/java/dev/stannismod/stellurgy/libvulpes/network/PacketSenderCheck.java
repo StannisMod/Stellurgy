@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.libvulpes.network;
 
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -86,6 +88,17 @@ public final class PacketSenderCheck {
         }
         return sender.world instanceof WorldServer
                 && ((WorldServer) sender.world).getEntityTracker().getTrackingPlayers(entity).contains(sender);
+    }
+
+    /**
+     * Whether {@code sender} has the screen of {@code machine} open: the container the server built
+     * for him when he opened that machine's GUI, and still holds as his open one. A packet that only a
+     * machine's screen sends claims that he is using that screen, and this is the server's own record
+     * of it.
+     */
+    public static boolean hasScreenOpen(EntityPlayer sender, IModularInventory machine) {
+        return sender != null && sender.openContainer instanceof ContainerModular
+                && ((ContainerModular) sender.openContainer).isScreenOf(machine);
     }
 
     /**

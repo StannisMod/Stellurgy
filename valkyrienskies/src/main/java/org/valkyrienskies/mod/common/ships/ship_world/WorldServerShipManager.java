@@ -56,7 +56,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     private final LinkedHashSet<UUID> unloadQueue;
     private final LinkedHashSet<UUID> backgroundLoadQueue;
     private final Set<UUID> loadingInBackground;
-    private ImmutableList<PhysicsObject> threadSafeLoadedShips;
+    private volatile ImmutableList<PhysicsObject> threadSafeLoadedShips;
 
     public WorldServerShipManager(World world) {
         this.world = (WorldServer) world;
@@ -106,6 +106,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     public void tick() {
         // First destroy any ships that want to be destroyed (copy blocks from ship to world, and then unload)
         Iterator<Map.Entry<UUID, PhysicsObject>> iterator = loadedShips.entrySet().iterator();
+        boolean destroyedAny = false;
         while (iterator.hasNext()) {
             PhysicsObject physicsObject = iterator.next().getValue();
             if (physicsObject.shouldShipBeDestroyed()) {
@@ -114,7 +115,14 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 // Then remove the ship from the world, and the ship map.
                 forgetShip(physicsObject.getShipData());
                 iterator.remove();
+                destroyedAny = true;
             }
+        }
+        if (destroyedAny) {
+            // The physics thread takes this list at the start of every step. Left to the end of the
+            // tick, every step that starts in between still simulates a ship whose storage
+            // destroyShip has just released.
+            this.threadSafeLoadedShips = ImmutableList.copyOf(loadedShips.values());
         }
         // ...and the ships nothing has loaded. The sweep above walks `loadedShips`, so a craft that
         // was emptied or declared finished while unloaded was never asked the question and stayed in

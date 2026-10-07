@@ -40,6 +40,7 @@ import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
 import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
 import dev.stannismod.stellurgy.libvulpes.tile.TileEntityRFConsumer;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
@@ -1149,8 +1150,29 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
     }
 
     @Override
-    public void useNetworkData(EntityPlayer player, Side side, byte id,
-                               NBTTagCompound nbt) {
+    public final void useNetworkData(EntityPlayer player, Side side, byte id,
+                                     NBTTagCompound nbt) {
+        if (side.isServer() && !acceptsFromClient(player, id)) {
+            PacketSenderCheck.refuse(player, "assembler packet " + id + " at " + pos,
+                    "only its screen's scan and build buttons are taken from a client, and only while"
+                            + " the sender has that screen open");
+            return;
+        }
+        useAcceptedNetworkData(player, side, id, nbt);
+    }
+
+    /**
+     * Whether the server takes packet {@code id} from {@code player}: the scan (0) and build (1) buttons
+     * of this assembler's screen, while he has that screen open. The stored energy, the build progress
+     * (2) and the rocket to link (3) are the server's to tell the client, never the other way round.
+     */
+    private boolean acceptsFromClient(EntityPlayer player, byte id) {
+        return (id == 0 || id == 1) && PacketSenderCheck.hasScreenOpen(player, this);
+    }
+
+    /** What packet {@code id} does, once the server has decided to take it (or a client receives it). */
+    protected void useAcceptedNetworkData(EntityPlayer player, Side side, byte id,
+                                          NBTTagCompound nbt) {
         if (id == 0) {
 
             bbCache = getRocketPadBounds(world, pos);

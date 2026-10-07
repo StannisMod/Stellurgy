@@ -439,7 +439,7 @@ public class TileAtmosphereTerraformer extends TileWasteHeatPowerConsumer implem
         if (!outOfFluid) {
             /////////from the super method
             if (!world.isRemote)
-                useEnergy(powerPerTick);
+                useEnergy(usedPowerPerTick());
             //Increment for both client and server
             currentTime++;
 

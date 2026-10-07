@@ -33,6 +33,9 @@ public class ModuleTab extends ModuleBase implements IButtonInventory {
 	public void setTab(int tabNum) { tab = tabNum; }
 	
 	public int getTab() { return tab; }
+
+	/** How many tabs this module has; a tab number runs from 0 to one less. */
+	public int getTabCount() { return buttons.length; }
 	
 	@Override
 	public void onMouseClicked(GuiModular gui, int x, int y, int button) {

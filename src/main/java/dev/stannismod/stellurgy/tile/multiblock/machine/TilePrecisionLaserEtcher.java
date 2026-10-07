@@ -5,9 +5,7 @@ import dev.stannismod.stellurgy.tile.heat.TileWasteHeatMachine;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
-import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
@@ -57,27 +55,10 @@ public class TilePrecisionLaserEtcher extends TileWasteHeatMachine implements IM
         return super.getTimeMultiplierForRecipe(recipe);
     }
 
+    /** The etching lens is the machine's tool: a recipe needs one present and keeps it. */
     @Override
-    public void consumeItems(IRecipe recipe) {
-        List<List<ItemStack>> ingredients = recipe.getIngredients();
-
-        label77:
-        for (List<ItemStack> ingredient : ingredients) {
-            for (IInventory hatch : this.getItemInPorts()) {
-                for (int i = 0; i < hatch.getSizeInventory(); ++i) {
-                    ItemStack stackInSlot = hatch.getStackInSlot(i);
-
-                    for (ItemStack stack : ingredient) {
-                        if ((!stackInSlot.isEmpty() && stackInSlot.getCount() >= stack.getCount() && (stackInSlot.isItemEqual(stack) || stack.getItemDamage() == 32767 && stackInSlot.getItem() == stack.getItem())) && !isLensItem(stack)) {
-                            hatch.decrStackSize(i, stack.getCount());
-                            hatch.markDirty();
-                            this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(((TileEntity) hatch).getPos()), this.world.getBlockState(((TileEntity) hatch).getPos()), 6);
-                            continue label77;
-                        }
-                    }
-                }
-            }
-        }
+    protected boolean consumesIngredient(@Nonnull ItemStack ingredient) {
+        return !isLensItem(ingredient);
     }
 
     @Override

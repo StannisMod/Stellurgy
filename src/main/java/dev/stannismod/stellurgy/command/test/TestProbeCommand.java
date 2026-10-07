@@ -308,6 +308,9 @@ public class TestProbeCommand extends CommandBase {
                 case "packet":
                     handlePacket(server, sender, tail(args));
                     break;
+                case "client":
+                    handleClientPackets(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -1800,6 +1803,27 @@ public class TestProbeCommand extends CommandBase {
             }
             int marked = dev.stannismod.stellurgy.integration.vs.VSIntegration.markAllShipsDead(world);
             send(sender, "{\"ok\":" + (marked >= 0) + ",\"marked\":" + marked + "}");
+            return;
+        }
+        // dummies-clear <dim> — remove every loaded seat dummy nobody is riding. A ship marked dead by
+        // destroy-ships is collected without its blocks being broken, so its seats' dummies outlive
+        // it, bound to subspace positions the next ship to take the same shipyard claim reuses; this
+        // is that leftover's disposal. `cleared` is how many went.
+        if (args.length >= 2 && "dummies-clear".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            int cleared = 0;
+            for (net.minecraft.entity.Entity e : new java.util.ArrayList<>(world.loadedEntityList)) {
+                if (e instanceof dev.stannismod.stellurgy.entity.EntityDummy && !e.isDead
+                        && e.getPassengers().isEmpty()) {
+                    e.setDead();
+                    cleared++;
+                }
+            }
+            send(sender, "{\"ok\":true,\"cleared\":" + cleared + "}");
             return;
         }
         // destroy-ship <dim> <shipUuid> — mark ONE registered ship finished, by its substrate id, so the
@@ -14892,6 +14916,35 @@ public class TestProbeCommand extends CommandBase {
     // Terraforming probe -------------------------------------------------
 
     private void handleTerraforming(ICommandSender sender, String[] args) {
+        // terraforming mark <dim> <cx> <cz>: record that chunk as fully terraformed in the world's own
+        // record — progress for a test to watch being kept or retired. Loaded worlds only.
+        if (args.length >= 4 && "mark".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.World world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            dev.stannismod.stellurgy.dimension.TerraformingRecord record =
+                    dev.stannismod.stellurgy.dimension.TerraformingRecord.of(world);
+            record.markTerraformed(new net.minecraft.util.math.ChunkPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0)));
+            send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"chunksFullyTerraformed\":"
+                    + record.terraformedChunks().size() + "}");
+            return;
+        }
+        // terraforming load-helper <dim>: what a terraforming terminal or drill does before it works a
+        // planet — the production `load_terraforming_helper(false)`. Loaded worlds only.
+        if (args.length >= 2 && "load-helper".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null
+                    || !DimensionManager.getInstance().isDimensionCreated(dim)) {
+                send(sender, "{\"error\":\"world not loaded or not a planet\",\"dim\":" + dim + "}");
+                return;
+            }
+            DimensionManager.getInstance().getDimensionProperties(dim).load_terraforming_helper(false);
+            send(sender, "{\"ok\":true,\"dim\":" + dim + "}");
+            return;
+        }
         if (args.length >= 2 && "info".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
@@ -15980,20 +16033,30 @@ public class TestProbeCommand extends CommandBase {
             }
             dev.stannismod.stellurgy.tile.station.TileWarpController controller =
                     (dev.stannismod.stellurgy.tile.station.TileWarpController) tile;
+            // The warp button is pressed by an operator who has the controller's screen open, because
+            // the controller takes its buttons from nobody else. The screen is a bare one of this
+            // controller: building its modules on a station sends the station's details to the
+            // operator, and the fake player has no connection to send them on.
+            net.minecraftforge.common.util.FakePlayer operator =
+                    net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(world);
+            net.minecraft.inventory.Container hadOpen = operator.openContainer;
+            operator.openContainer = new dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular(operator,
+                    new java.util.ArrayList<>(), controller, false, false);
             try {
                 // Production GUI flow: GUI button -> PacketMachine(controller, (byte)2)
-                // -> server's useNetworkData(player=null on dedicated-test path,
-                // Side.SERVER, packetId=2, empty nbt). onInventoryButtonPressed
-                // is the CLIENT-side dispatcher and does NOT contain the warp
-                // gate code — useNetworkData on the server does.
-                controller.useNetworkData(null, net.minecraftforge.fml.relauncher.Side.SERVER,
+                // -> server's useNetworkData(sender, Side.SERVER, packetId=2, empty nbt).
+                // onInventoryButtonPressed is the CLIENT-side dispatcher and does NOT contain the
+                // warp gate code — useNetworkData on the server does.
+                controller.useNetworkData(operator, net.minecraftforge.fml.relauncher.Side.SERVER,
                         (byte) 2, new net.minecraft.nbt.NBTTagCompound());
             } catch (RuntimeException e) {
+                operator.openContainer = hadOpen;
                 send(sender, "{\"error\":\"warp trigger threw: "
                         + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
                         + "\"}");
                 return;
             }
+            operator.openContainer = hadOpen;
             send(sender, "{\"ok\":true}");
             return;
         }
@@ -26577,8 +26640,53 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"canProcess\":" + canProcess + ",\"consumed\":" + consumed + "}");
             return;
         }
+        // recipe-take <dim> <x> <y> <z> <consume> <itemId> <count> [<itemId> <count> ...] — as
+        // recipe-claim, but each ingredient names its own item and count, in the order given: one
+        // single-item ingredient per pair. Built here and registered nowhere; it sees how the
+        // machine matches and takes a recipe's ingredients, not its recipe list.
+        if (args.length >= 8 && args.length % 2 == 0 && "recipe-take".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+            boolean consume = Boolean.parseBoolean(args[5]);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine)) {
+                send(sender, "{\"error\":\"not a recipe machine\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            java.util.List<java.util.List<net.minecraft.item.ItemStack>> ingredients = new java.util.ArrayList<>();
+            for (int i = 6; i < args.length; i += 2) {
+                net.minecraft.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(args[i]));
+                int count = parseIntOr(args[i + 1], -1);
+                if (item == null || count < 1) {
+                    send(sender, "{\"error\":\"bad ingredient\",\"id\":\"" + escapeJson(args[i])
+                            + "\",\"count\":\"" + escapeJson(args[i + 1]) + "\"}");
+                    return;
+                }
+                ingredients.add(java.util.Collections.singletonList(new net.minecraft.item.ItemStack(item, count)));
+            }
+            dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.Recipe recipe =
+                    new dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.Recipe(
+                            java.util.Collections.emptyList(), ingredients, 1, 1, null);
+            dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine machine =
+                    (dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine) tile;
+            boolean canProcess = machine.canProcessRecipe(recipe);
+            boolean consumed = false;
+            if (consume && canProcess) {
+                machine.consumeItems(recipe);
+                consumed = true;
+            }
+            send(sender, "{\"ok\":true,\"canProcess\":" + canProcess + ",\"consumed\":" + consumed + "}");
+            return;
+        }
         send(sender, "{\"error\":\"unknown vulpes subcommand — try chunk-drop <dim> <cx> <cz> | "
-                + "recipe-claim <dim> <x> <y> <z> <itemId> <perIngredient> <ingredients> <consume>\"}");
+                + "recipe-claim <dim> <x> <y> <z> <itemId> <perIngredient> <ingredients> <consume> | "
+                + "recipe-take <dim> <x> <y> <z> <consume> <itemId> <count> [<itemId> <count> ...]\"}");
     }
 
     // Client packets, handed to the server as their sender's -----------------------------------
@@ -26790,5 +26898,323 @@ public class TestProbeCommand extends CommandBase {
                 + ",\"sender\":\"" + escapeJson(from.getName()) + "\""
                 + ",\"senderDim\":" + from.world.provider.getDimension()
                 + extra + "}");
+    }
+
+    // Client packets with a client's own payload, and the screens they come from -----------------
+
+    /**
+     * {@code /stellurgytest client ...} — what judging a client's packet by the SCREEN he has open, and by
+     * the VALUES in it, needs: a screen for the sender, a payload whose every byte is the client's, and
+     * reads of what the addressee kept. The sender is the one {@code packet} uses — the connected player
+     * when there is one, else the headless test player — and delivery is the server half of the channel,
+     * as there: decoded by the packet class and executed for him on the server thread.
+     *
+     * <ul>
+     *   <li>{@code screen <guiId> <dim> <x> <y> <z>} — give the sender the server half of that GUI, built
+     *       by the mod's own GUI handler for him (what {@code openGui} builds), as his open container. No
+     *       packet goes to any client: the headless player has none, and the server half is what a
+     *       server check reads. Replies the container's class.</li>
+     *   <li>{@code close-screen} — the sender closes whatever he has open.</li>
+     *   <li>{@code machine <dim> <x> <y> <z> <packetId> [word ...]} — a machine packet whose payload is
+     *       exactly the words given;</li>
+     *   <li>{@code entity <dim> <entityId> <packetId> [word ...]} — an entity packet with no compound and
+     *       exactly the words given as its payload;</li>
+     *   <li>a word is {@code byte:<n>}, {@code short:<n>}, {@code int:<n>}, {@code bool:<b>} or
+     *       {@code double:<d>}, written in order, big-endian, as a {@code ByteBuf} writes it;</li>
+     *   <li>{@code slider <dim> <x> <y> <z> <id>} — a slider machine's progress on that slider, and its
+     *       total;</li>
+     *   <li>{@code tile-byte <dim> <x> <y> <z> <key>} — the byte the tile's own {@code writeToNBT} writes
+     *       under that key, or {@code present:false};</li>
+     *   <li>{@code entity-state <dim> <entityId> <packetId>} — what the entity's own writer puts in that
+     *       packet, read back by its own reader: the compound entries as numbers;</li>
+     *   <li>{@code machine-state <dim> <x> <y> <z> <packetId>} — the same, for a machine;</li>
+     *   <li>{@code space-dim} — the dimension id stations live in, from the config in force;</li>
+     *   <li>{@code vs-index <dim> load|unload <uuid>} — send the connected player one ship-index packet
+     *       addressed to {@code dim}, telling him to load or unload that ship and nothing else — what
+     *       the server's ship loading sends, with the address the test chooses;</li>
+     *   <li>{@code affs radius <x> <y> <z> <radius>}, {@code affs bias <x> <y> <z> <bias>},
+     *       {@code affs open <guiId> <x> <y> <z>} — the force-field channel's three client packets,
+     *       encoded and decoded by their own classes and handed to their handlers for the sender, in his
+     *       own world. The headless player has no connection, so for the handler's one call he is given
+     *       one that goes nowhere, and it is taken away again.</li>
+     * </ul>
+     */
+    private void handleClientPackets(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length == 0) {
+            send(sender, "{\"error\":\"usage: /stellurgytest client screen|close-screen|machine|entity|slider"
+                    + "|tile-byte|entity-state|machine-state|space-dim|affs ...\"}");
+            return;
+        }
+        String sub = args[0].toLowerCase(java.util.Locale.ROOT);
+        if ("slider".equals(sub) && args.length >= 6) {
+            TileEntity tile = tileAt(server, args, 1);
+            if (!(tile instanceof dev.stannismod.stellurgy.libvulpes.inventory.modules.ISliderBar)) {
+                send(sender, "{\"error\":\"no slider machine there\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.libvulpes.inventory.modules.ISliderBar slider =
+                    (dev.stannismod.stellurgy.libvulpes.inventory.modules.ISliderBar) tile;
+            int id = parseIntOr(args[5], 0);
+            send(sender, "{\"ok\":true,\"progress\":" + slider.getProgress(id)
+                    + ",\"total\":" + slider.getTotalProgress(id) + "}");
+            return;
+        }
+        if ("tile-byte".equals(sub) && args.length >= 6) {
+            TileEntity tile = tileAt(server, args, 1);
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile there\"}");
+                return;
+            }
+            net.minecraft.nbt.NBTTagCompound written = tile.writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+            boolean present = written.hasKey(args[5], net.minecraftforge.common.util.Constants.NBT.TAG_BYTE);
+            send(sender, "{\"ok\":true,\"present\":" + present
+                    + (present ? ",\"value\":" + written.getByte(args[5]) : "") + "}");
+            return;
+        }
+        if ("entity-state".equals(sub) && args.length >= 4) {
+            WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            Entity entity = world == null ? null : world.getEntityByID(parseIntOr(args[2], Integer.MIN_VALUE));
+            if (!(entity instanceof dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity)) {
+                send(sender, "{\"error\":\"no network entity there\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity networked =
+                    (dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity) entity;
+            byte packetId = (byte) parseIntOr(args[3], 0);
+            io.netty.buffer.ByteBuf wire = io.netty.buffer.Unpooled.buffer();
+            networked.writeDataToNetwork(wire, packetId);
+            net.minecraft.nbt.NBTTagCompound read = new net.minecraft.nbt.NBTTagCompound();
+            networked.readDataFromNetwork(wire, packetId, read);
+            send(sender, "{\"ok\":true,\"read\":{" + numbersOf(read) + "}}");
+            return;
+        }
+        if ("machine-state".equals(sub) && args.length >= 6) {
+            TileEntity tile = tileAt(server, args, 1);
+            if (!(tile instanceof dev.stannismod.stellurgy.libvulpes.util.INetworkMachine)) {
+                send(sender, "{\"error\":\"no network machine there\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.libvulpes.util.INetworkMachine machine =
+                    (dev.stannismod.stellurgy.libvulpes.util.INetworkMachine) tile;
+            byte packetId = (byte) parseIntOr(args[5], 0);
+            io.netty.buffer.ByteBuf wire = io.netty.buffer.Unpooled.buffer();
+            machine.writeDataToNetwork(wire, packetId);
+            net.minecraft.nbt.NBTTagCompound read = new net.minecraft.nbt.NBTTagCompound();
+            machine.readDataFromNetwork(wire, packetId, read);
+            send(sender, "{\"ok\":true,\"read\":{" + numbersOf(read) + "}}");
+            return;
+        }
+        if ("space-dim".equals(sub)) {
+            send(sender, "{\"ok\":true,\"spaceDimId\":"
+                    + dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().spaceDimId + "}");
+            return;
+        }
+
+        List<EntityPlayerMP> connected = server.getPlayerList().getPlayers();
+        EntityPlayerMP from = connected.isEmpty() ? fakePlayer : connected.get(0);
+        if (from == null) {
+            send(sender, "{\"error\":\"no sender: no player is connected and there is no headless test"
+                    + " player (player ensure-fake)\"}");
+            return;
+        }
+        if ("screen".equals(sub) && args.length >= 6) {
+            int guiId = parseIntOr(args[1], Integer.MIN_VALUE);
+            WorldServer world = server.getWorld(parseIntOr(args[2], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            net.minecraft.inventory.Container screen = net.minecraftforge.fml.common.network.NetworkRegistry.INSTANCE
+                    .getRemoteGuiContainer(net.minecraftforge.fml.common.FMLCommonHandler.instance()
+                                    .findContainerFor(Stellurgy.instance), from, guiId, world,
+                            parseIntOr(args[3], 0), parseIntOr(args[4], 0), parseIntOr(args[5], 0));
+            if (screen == null) {
+                send(sender, "{\"error\":\"the GUI handler built no screen for that\",\"guiId\":" + guiId + "}");
+                return;
+            }
+            from.openContainer = screen;
+            send(sender, "{\"ok\":true,\"container\":\"" + screen.getClass().getSimpleName() + "\"}");
+            return;
+        }
+        if ("close-screen".equals(sub)) {
+            from.closeContainer();
+            send(sender, "{\"ok\":true}");
+            return;
+        }
+        if ("vs-index".equals(sub) && args.length >= 4) {
+            if (connected.isEmpty()) {
+                send(sender, "{\"error\":\"a ship index goes to a connected player, and none is\"}");
+                return;
+            }
+            java.util.UUID ship;
+            try {
+                ship = java.util.UUID.fromString(args[3]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"not a ship uuid\",\"got\":\"" + escapeJson(args[3]) + "\"}");
+                return;
+            }
+            org.valkyrienskies.mod.common.network.ShipIndexDataMessage index =
+                    new org.valkyrienskies.mod.common.network.ShipIndexDataMessage();
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            index.setDimensionID(dim);
+            if ("load".equalsIgnoreCase(args[2])) {
+                index.addLoadUUID(ship);
+            } else if ("unload".equalsIgnoreCase(args[2])) {
+                index.addUnloadUUID(ship);
+            } else {
+                send(sender, "{\"error\":\"vs-index <dim> load|unload <uuid>\"}");
+                return;
+            }
+            Stellurgy.instance.valkyrienSkies.physWrapperNetwork.sendTo(index, from);
+            send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"to\":\"" + escapeJson(from.getName()) + "\"}");
+            return;
+        }
+        if ("machine".equals(sub) && args.length >= 6) {
+            io.netty.buffer.ByteBuf wire = io.netty.buffer.Unpooled.buffer();
+            for (int i = 1; i <= 4; i++) {
+                wire.writeInt(parseIntOr(args[i], 0));
+            }
+            wire.writeByte(parseIntOr(args[5], 0));
+            String bad = writeWords(wire, args, 6);
+            if (bad != null) {
+                send(sender, "{\"error\":\"a payload word is byte:|short:|int:|bool:|double:\",\"got\":\""
+                        + escapeJson(bad) + "\"}");
+                return;
+            }
+            deliverPacket(sender, new dev.stannismod.stellurgy.libvulpes.network.PacketMachine(), wire, from, "");
+            return;
+        }
+        if ("entity".equals(sub) && args.length >= 4) {
+            io.netty.buffer.ByteBuf wire = io.netty.buffer.Unpooled.buffer();
+            wire.writeInt(parseIntOr(args[1], Integer.MIN_VALUE));
+            wire.writeInt(parseIntOr(args[2], Integer.MIN_VALUE));
+            wire.writeByte(parseIntOr(args[3], 0));
+            wire.writeBoolean(false);
+            String bad = writeWords(wire, args, 4);
+            if (bad != null) {
+                send(sender, "{\"error\":\"a payload word is byte:|short:|int:|bool:|double:\",\"got\":\""
+                        + escapeJson(bad) + "\"}");
+                return;
+            }
+            deliverPacket(sender, new dev.stannismod.stellurgy.libvulpes.network.PacketEntity(), wire, from, "");
+            return;
+        }
+        if ("affs".equals(sub) && args.length >= 6) {
+            String kind = args[1].toLowerCase(java.util.Locale.ROOT);
+            net.minecraftforge.fml.common.network.simpleimpl.IMessage sent;
+            if ("radius".equals(kind)) {
+                sent = new dev.stannismod.stellurgy.affs.network.PacketSetFieldRadius(
+                        new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0)),
+                        parseIntOr(args[5], 0));
+            } else if ("bias".equals(kind)) {
+                sent = dev.stannismod.stellurgy.affs.network.PacketSetShieldResistanceBias.forConsole(
+                        new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0)),
+                        parseDoubleOr(args[5], 0));
+            } else if ("open".equals(kind) && args.length >= 6) {
+                sent = dev.stannismod.stellurgy.affs.network.PacketOpenGui.forBlock(parseIntOr(args[2], 0),
+                        new BlockPos(parseIntOr(args[3], 0), parseIntOr(args[4], 0), parseIntOr(args[5], 0)));
+            } else {
+                send(sender, "{\"error\":\"affs radius|bias|open ...\"}");
+                return;
+            }
+            deliverAffs(server, sender, sent, from);
+            return;
+        }
+        send(sender, "{\"error\":\"unknown client subcommand\",\"sub\":\"" + escapeJson(sub) + "\"}");
+    }
+
+    /** A compound's number entries as JSON members, each by its key; other entries are left out. */
+    private static String numbersOf(net.minecraft.nbt.NBTTagCompound read) {
+        StringBuilder entries = new StringBuilder();
+        for (String key : read.getKeySet()) {
+            net.minecraft.nbt.NBTBase tag = read.getTag(key);
+            if (tag instanceof net.minecraft.nbt.NBTPrimitive) {
+                entries.append(entries.length() == 0 ? "" : ",").append('"').append(escapeJson(key))
+                        .append("\":").append(((net.minecraft.nbt.NBTPrimitive) tag).getDouble());
+            }
+        }
+        return entries.toString();
+    }
+
+    /** The tile at {@code <dim> <x> <y> <z>} starting at {@code args[from]}, or {@code null}. */
+    private static TileEntity tileAt(MinecraftServer server, String[] args, int from) {
+        WorldServer world = server.getWorld(parseIntOr(args[from], Integer.MIN_VALUE));
+        return world == null ? null : world.getTileEntity(new BlockPos(parseIntOr(args[from + 1], 0),
+                parseIntOr(args[from + 2], 0), parseIntOr(args[from + 3], 0)));
+    }
+
+    /** Write {@code args[from..]} as typed payload words; answers the first word it cannot, or null. */
+    private static String writeWords(io.netty.buffer.ByteBuf wire, String[] args, int from) {
+        for (int i = from; i < args.length; i++) {
+            int colon = args[i].indexOf(':');
+            String type = colon < 0 ? "" : args[i].substring(0, colon);
+            String value = colon < 0 ? "" : args[i].substring(colon + 1);
+            if ("byte".equals(type)) {
+                wire.writeByte(parseIntOr(value, 0));
+            } else if ("short".equals(type)) {
+                wire.writeShort(parseIntOr(value, 0));
+            } else if ("int".equals(type)) {
+                wire.writeInt(parseIntOr(value, 0));
+            } else if ("bool".equals(type)) {
+                wire.writeBoolean(Boolean.parseBoolean(value));
+            } else if ("double".equals(type)) {
+                wire.writeDouble(parseDoubleOr(value, 0));
+            } else {
+                return args[i];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Encode {@code message} with its own writer, decode a fresh one with its own reader, and hand that
+     * to the channel's handler for {@code from} on this, the server, thread — where the handler's
+     * scheduled task runs at once.
+     */
+    private static void deliverAffs(MinecraftServer server, ICommandSender sender,
+                                    net.minecraftforge.fml.common.network.simpleimpl.IMessage message,
+                                    EntityPlayerMP from) {
+        io.netty.buffer.ByteBuf wire = io.netty.buffer.Unpooled.buffer();
+        message.toBytes(wire);
+        net.minecraft.network.NetHandlerPlayServer had = from.connection;
+        try {
+            net.minecraft.network.NetHandlerPlayServer handler = had != null ? had
+                    : new net.minecraft.network.NetHandlerPlayServer(server,
+                            new net.minecraft.network.NetworkManager(net.minecraft.network.EnumPacketDirection.SERVERBOUND),
+                            from);
+            // The context FML builds for a server handler; its constructor is FML's alone.
+            java.lang.reflect.Constructor<net.minecraftforge.fml.common.network.simpleimpl.MessageContext> made =
+                    net.minecraftforge.fml.common.network.simpleimpl.MessageContext.class.getDeclaredConstructor(
+                            net.minecraft.network.INetHandler.class, net.minecraftforge.fml.relauncher.Side.class);
+            made.setAccessible(true);
+            net.minecraftforge.fml.common.network.simpleimpl.MessageContext ctx =
+                    made.newInstance(handler, net.minecraftforge.fml.relauncher.Side.SERVER);
+            if (message instanceof dev.stannismod.stellurgy.affs.network.PacketSetFieldRadius) {
+                dev.stannismod.stellurgy.affs.network.PacketSetFieldRadius read =
+                        new dev.stannismod.stellurgy.affs.network.PacketSetFieldRadius();
+                read.fromBytes(wire);
+                new dev.stannismod.stellurgy.affs.network.PacketSetFieldRadius.Handler().onMessage(read, ctx);
+            } else if (message instanceof dev.stannismod.stellurgy.affs.network.PacketSetShieldResistanceBias) {
+                dev.stannismod.stellurgy.affs.network.PacketSetShieldResistanceBias read =
+                        new dev.stannismod.stellurgy.affs.network.PacketSetShieldResistanceBias();
+                read.fromBytes(wire);
+                new dev.stannismod.stellurgy.affs.network.PacketSetShieldResistanceBias.Handler().onMessage(read, ctx);
+            } else {
+                dev.stannismod.stellurgy.affs.network.PacketOpenGui read =
+                        new dev.stannismod.stellurgy.affs.network.PacketOpenGui();
+                read.fromBytes(wire);
+                new dev.stannismod.stellurgy.affs.network.PacketOpenGui.Handler().onMessage(read, ctx);
+            }
+        } catch (ReflectiveOperationException noContext) {
+            send(sender, "{\"error\":\"could not build the handler's context: "
+                    + escapeJson(String.valueOf(noContext)) + "\"}");
+            return;
+        } finally {
+            from.connection = had;
+        }
+        send(sender, "{\"ok\":true,\"packet\":\"" + message.getClass().getSimpleName() + "\""
+                + ",\"sender\":\"" + escapeJson(from.getName()) + "\""
+                + ",\"senderDim\":" + from.world.provider.getDimension() + "}");
     }
 }

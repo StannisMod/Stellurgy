@@ -28,6 +28,12 @@ public final class TerraformingRecord extends WorldSavedData {
     private final Set<ChunkPos> chunksTerraformed = new HashSet<>();
     private final Set<ChunkPos> chunksBiomeChanged = new HashSet<>();
     private final List<BlockPos> protectingBlocks = new ArrayList<>();
+    /**
+     * The planet's climate count ({@code DimensionProperties}' count of air changes) this progress was
+     * made under. The air can change while the world is not loaded, and this record cannot be reached
+     * then; a count that disagrees on the next load is how the progress learns it is stale.
+     */
+    private long climate;
 
     /** Called by the world's storage when it loads the record; {@code name} is always {@link #NAME}. */
     public TerraformingRecord(String name) {
@@ -71,10 +77,19 @@ public final class TerraformingRecord extends WorldSavedData {
         return new HashSet<>(chunksBiomeChanged);
     }
 
-    /** Forgets all progress, so the planet is worked again from the start under its new climate. */
-    public void forgetProgress() {
+    /** The climate count the progress here was made under. */
+    public long climate() {
+        return climate;
+    }
+
+    /**
+     * Forgets all progress, so the planet is worked again from the start under its new climate, and
+     * records {@code climate} as the count that progress will be made under.
+     */
+    public void forgetProgress(long climate) {
         chunksTerraformed.clear();
         chunksBiomeChanged.clear();
+        this.climate = climate;
         markDirty();
     }
 
@@ -106,6 +121,7 @@ public final class TerraformingRecord extends WorldSavedData {
     public void readFromNBT(NBTTagCompound nbt) {
         readChunks(nbt.getTagList("fullyGeneratedChunks", NBT.TAG_COMPOUND), chunksTerraformed);
         readChunks(nbt.getTagList("fullyBiomeChangedChunks", NBT.TAG_COMPOUND), chunksBiomeChanged);
+        climate = nbt.getLong("climate");
         for (NBTBase entry : nbt.getTagList("terraformingProtectedBlocks", NBT.TAG_COMPOUND)) {
             NBTTagCompound tag = (NBTTagCompound) entry;
             BlockPos pos = new BlockPos(tag.getInteger("x"), tag.getInteger("y"), tag.getInteger("z"));
@@ -119,6 +135,7 @@ public final class TerraformingRecord extends WorldSavedData {
     public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
         nbt.setTag("fullyGeneratedChunks", writeChunks(chunksTerraformed));
         nbt.setTag("fullyBiomeChangedChunks", writeChunks(chunksBiomeChanged));
+        nbt.setLong("climate", climate);
         NBTTagList blocks = new NBTTagList();
         for (BlockPos pos : protectingBlocks) {
             NBTTagCompound tag = new NBTTagCompound();

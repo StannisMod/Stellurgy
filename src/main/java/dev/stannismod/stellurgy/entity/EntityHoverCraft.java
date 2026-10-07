@@ -18,6 +18,7 @@ import dev.stannismod.stellurgy.entity.EntityRocket.PacketType;
 import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
@@ -361,6 +362,13 @@ public class EntityHoverCraft extends Entity implements IInventory, INetworkEnti
 
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+        if (!world.isRemote && (player == null || getControllingPassenger() != player)) {
+            // The climb and descent keys are the driver's: his client sends them, and the server flies
+            // the craft by them only while he is aboard.
+            PacketSenderCheck.refuse(player, "hovercraft packet " + id + " for hovercraft " + getEntityId(),
+                    "the sender is not driving it");
+            return;
+        }
         if (id == PacketType.TURNUPDATE.ordinal()) {
             this.turningUp = nbt.getBoolean("up");
             this.turningDownforWhat = nbt.getBoolean("down");

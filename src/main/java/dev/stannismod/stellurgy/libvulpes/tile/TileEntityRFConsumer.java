@@ -170,7 +170,7 @@ public abstract class TileEntityRFConsumer extends TileEntity implements IPower,
 	}
 
 	public void setMaxEnergyStored(int max) {
-		energy.setEnergyStored(max);
+		energy.setMaxEnergyStored(max);
 	}
 
 	@Override

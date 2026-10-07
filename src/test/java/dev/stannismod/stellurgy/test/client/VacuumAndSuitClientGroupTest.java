@@ -1596,13 +1596,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * With {@code breathingRequiresO2} off, a player in a whole enchanted suit in vacuum is judged
      * protected and his chest spends no air; with it back on, the same chest drains.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-10-06. OFF — {@code
-     * ItemAirWrapper#protectsFrom} at {@code
-     * dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().breathingRequiresO2)} read as
+     * <p>red-witnessed: one inversion per verdict, re-taken 2026-10-07 on the form that also asks
+     * whether the question needs oxygen supplied. OFF — {@code ItemAirWrapper#protectsFrom} at {@code
+     * dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().breathingRequiresO2} read as
      * true: "with breathing not needing oxygen a suit in vacuum must spend no air and still keep him
-     * whole: air 1000 -&gt; 990, health 20.0". ON — the same read as false: "the same chest must drain
-     * once breathing needs oxygen — no `suit_air_drained` carrying route = enchanted was recorded
-     * within 200 ticks".</p>
+     * whole: air 1000 -&gt; 991, health 20.0". ON — the whole {@code || needsSuppliedOxygen))}
+     * condition read as false: "the same chest must drain once breathing needs oxygen — no
+     * `suit_air_drained` carrying route = enchanted was recorded within 200 ticks".</p>
      */
     @Test
     public void withBreathingNotNeedingOxygenAnEnchantedSuitInVacuumSpendsNoAir() throws Exception {
@@ -1809,6 +1809,73 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             double health = health(bot().reportState());
             assertTrue("with breathing not needing oxygen an unsuited player must still drown under"
                     + " water: health " + health, health < FULL_HEALTH);
+        } finally {
+            exec("stellurgytest config set breathingRequiresO2 " + found);
+            exec("gamerule naturalRegeneration true");
+        }
+    }
+
+    /**
+     * With {@code breathingRequiresO2} off, a diver in a whole enchanted suit breathes from his chest:
+     * while it holds air he keeps breathing, and once it is empty he drowns. Water is not air, so the
+     * setting that frees a body from needing oxygen in AIR does not empty the question the in-water
+     * top-up asks.
+     *
+     * <p>Contract: fails if {@code ItemAirUtils.ItemAirWrapper#protectsFrom} stops deciding that an
+     * enchanted chest asked to SUPPLY oxygen answers from its tank, and answers yes without reading it
+     * whenever breathing needs no oxygen. The two halves are the same suit in the same basin: the
+     * second, with air in the chest, is what says the chest is read at all — a suit the question
+     * ignored would drown him in both — and the first one's drowning is what says the hurt recorder
+     * sees a drowning in this basin, which lets the second read a silence as an answer.</p>
+     * <p>red-witnessed: with {@code ItemAirWrapper#protectsFrom} at {@code || needsSuppliedOxygen))}
+     * read as false (the flag alone deciding), fails: "with breathing not needing oxygen a diver whose
+     * enchanted chest is EMPTY must still drown — water is not air — no `living_hurt` carrying who =
+     * ForgeTestClient and source = drown was recorded within 400 ticks" (2026-10-07). With the same
+     * method's {@code getAirRemaining(stack) > 0} answering false, fails: "with breathing not needing
+     * oxygen a diver whose enchanted chest holds air must keep breathing — hurts …" (2026-10-07).</p>
+     */
+    @Test
+    public void withBreathingNotNeedingOxygenADiverBreathesFromHisChestAndDrownsWhenItIsEmpty()
+            throws Exception {
+        String found = arrangeProbe("stellurgytest config set breathingRequiresO2 false").reported("oldValue");
+        try {
+            submergeInOwnBasin();
+            Events events = serverEvents();
+            Reply empty = arrangeProbe("stellurgytest player equip-airsuit 0");
+            scenario().requireArranged("the chest must go on empty: " + empty,
+                    empty.integer(CHEST_AIR) == 0);
+            String who = empty.text("player");
+            arrangeProbe("stellurgytest player set-health " + FULL_HEALTH);
+            long drownMark = events.markInstrumented();
+            events.awaitRecordWithFields(drownMark, "living_hurt",
+                    "with breathing not needing oxygen a diver whose enchanted chest is EMPTY must still"
+                            + " drown — water is not air",
+                    UNDER_WATER_TICKS, "who", who,
+                    "source", net.minecraft.util.DamageSource.DROWN.getDamageType());
+
+            Reply full = arrangeProbe("stellurgytest player equip-airsuit " + FULL_TANK);
+            scenario().requireArranged("the chest must go on full: " + full,
+                    full.integer(CHEST_AIR) == FULL_TANK);
+            arrangeProbe("stellurgytest player set-health " + FULL_HEALTH);
+            long keptMark = events.mark();
+            String hurts = "";
+            // WINDOW: the time under water in which an unprotected diver is hurt, closed on his FIRST
+            // hurt — drowning accumulates on the player every scenario here shares, so a chest that
+            // stopped keeping him breathing ends the window at its first hit. No record marks a
+            // breath that was kept; the drowning recorded above, in this basin, is what shows one
+            // would be seen.
+            for (int waited = 0; waited < UNDER_WATER_TICKS; waited += 20) {
+                advanceServerAndClient(20);
+                hurts = events.since(keptMark, "living_hurt");
+                if (!Events.recordsWhere(hurts, "who", who).isEmpty()) {
+                    break;
+                }
+            }
+            Events.assertInstrumentRan(hurts, "server_bus_living_hurt",
+                    "a diver whose chest holds air was not hurt");
+            assertTrue("with breathing not needing oxygen a diver whose enchanted chest holds air must"
+                            + " keep breathing — hurts " + hurts,
+                    Events.recordsWhere(hurts, "who", who).isEmpty());
         } finally {
             exec("stellurgytest config set breathingRequiresO2 " + found);
             exec("gamerule naturalRegeneration true");

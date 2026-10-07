@@ -78,7 +78,8 @@ import static org.junit.Assert.assertTrue;
  * world position, which assembly vacates, so nothing in his control chain resolved and the piloting
  * client never sent a single input packet. It now pins the fixed contract: the assembler queues
  * every seated pilot's binding for re-expression onto the relocated seat, and both cells must stay
- * green.</p>
+ * green. A third method seats the pilot the same way and has the world refuse the rebind's fresh
+ * mount: the queue must come back for him rather than let him go.</p>
  *
  * <p>On the shared VS client base. This file ran its own server + client pair per method until
  * 2026-08-23, justified by a config that "has to be written into the game directory BEFORE the
@@ -254,6 +255,134 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // other's leavings with its pre-clear; splitting them by hand fixed this pair and nothing
         // else, which is why asking for the plot replaced choosing one.
         runPreAssemblyBoardingScenario(site(), Boarding.PROBE);
+    }
+
+    /**
+     * Seat mounts the world is made to refuse the rebind. Two, not one: a rebind that came back for
+     * him exactly once by accident would pass one; two make the queue come back after a refusal it
+     * has already answered.
+     */
+    private static final int REFUSED_REBIND_MOUNTS = 2;
+
+    /**
+     * The longest a queued rebind can still end in a rebound: production's own give-up,
+     * {@code AssemblyCrewRebind#MAX_ATTEMPTS} (1200 retries, one per server tick). After it the
+     * entry is gone and nothing can rebind him, so a longer wait could only spend time.
+     */
+    private static final int REBIND_GIVE_UP_TICKS = 1200;
+
+    /**
+     * A pilot seated before assembly whose rebind the world refuses a mount is still rebound once the
+     * world takes one — the refusal leaves him on his stale mount and the queue asks again.
+     *
+     * <p>Contract: fails if {@code CrewTransfer#rebindAcrossAssembly} stops deciding that a refused
+     * fresh mount is a seating that has not happened YET — answered before the stale mount is
+     * touched, so the queue retries — and answers it as a seat somebody else holds, after which the
+     * queue lets the entry go and he is left standing. The refusal is ARMED
+     * ({@link dev.stannismod.stellurgy.test.trace.MountRefusalArming}, fault injection at the world's
+     * own answer inside the arrival spawn): a world refusing a fresh seat dummy is real and cannot be
+     * provoked on demand. The boarding is the probe's, as in
+     * {@link #aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip()}.</p>
+     *
+     * <p>SILENT about: a refusal that never lifts — the queue then retries to its give-up and the
+     * pilot keeps his stale mount, which this does not exercise — and flying the rebound ship, which
+     * the two scenarios above pin.</p>
+     * <p>red-witnessed: with {@code CrewTransfer#rebindAcrossAssembly} at {@code return
+     * RebindOutcome.MOUNT_REFUSED;} removed (the refusal falling through to the dismount and answered
+     * {@code NOT_ON_STALE_MOUNT}, as before the fix), fails: "a pilot whose rebind the world refused a
+     * mount must be rebound once it takes one - the queue may not let him go on the refusal — no
+     * `crew_rebind_decided` carrying anchor = 2022,155,8023 and outcome = REBOUND was recorded within
+     * 1200 ticks. What DID happen since the mark: … seat_mount_refused, dismount, crew_rebind_decided …"
+     * (2026-10-07). With the same {@code return RebindOutcome.MOUNT_REFUSED;} answering
+     * {@code NOT_READY} (retried, but not named a refusal), fails: "the rebind must have answered the
+     * world's refusal as a refused mount before it rebound him — decisions …" (2026-10-07). With
+     * {@code CrewTransfer#rebindAcrossAssembly} at {@code player.startRiding(dummy, true);} removed
+     * (REBOUND answered, nobody mounted), fails: "the rebound pilot's own client must perform the mount
+     * the rebind gave him — no `mount` a chain that ENDS in a mount … was recorded within 100 ticks"
+     * (2026-10-07).</p>
+     */
+    @Test
+    public void aPilotWhoseRebindIsRefusedAMountIsReboundOnceTheWorldTakesOne() throws Exception {
+        useSite(site());
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
+                        + "config is what opts it in: " + status.raw(),
+                status.registered);
+
+        buildLooseFixture(site, VARIANT);
+        long standMark = clientEvents().mark();
+        exec("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
+        clientEvents().await(standMark, "client_pos_look_applied",
+                "the pilot must stand beside his loose craft before he is seated in it",
+                CLIENT_TERRAIN_BUDGET_TICKS);
+
+        Events events = serverEvents();
+        long boardMark = events.markInstrumented();
+        long boardOnClient = clientEvents().mark();
+        String boarding = boardByProbe();
+        try {
+            ridingOnceTheClientHasMounted(boardOnClient, CLIENT_MOUNT_BUDGET_TICKS,
+                    "the pilot must be seated in his loose craft before it is assembled: " + boarding);
+        } catch (AssertionError notSeated) {
+            scenario().arrangementFailed(notSeated.getMessage());
+        }
+        String armed = exec("stellurgytest invoke-static "
+                + dev.stannismod.stellurgy.test.trace.MountRefusalArming.class.getName() + " open "
+                + REFUSED_REBIND_MOUNTS);
+        scenario().requireArranged("the mount refusals must be armed on the server: " + armed,
+                Reply.of(armed).ok());
+        int armingHandle = Integer.parseInt(Reply.of(armed).text("returned"));
+        boolean armingOpen = true;
+        try {
+            long assemblyMark = events.markInstrumented();
+            long assemblyOnClient = clientEvents().mark();
+            String assemble = assembleFixture();
+            scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
+                    Reply.of(assemble).ok());
+            // The assembler queues the seated pilot inside the assemble command itself, so its record
+            // is already in the log when the command answers.
+            String queue = events.since(assemblyMark, "crew_rebind_queue");
+            Events.assertInstrumentRan(queue, "crew_rebind_queue_events",
+                    "the assembly queued a rebind for its seated pilot");
+            java.util.List<String> queued = Events.recordsWhere(queue, "outcome", "queued");
+            scenario().requireArranged("the assembly must queue exactly this pilot for a rebind: " + queue,
+                    queued.size() == 1);
+            String anchor = Events.text(queued.get(0), "anchor");
+
+            events.awaitRecordWithFields(assemblyMark, "crew_rebind_decided",
+                    "a pilot whose rebind the world refused a mount must be rebound once it takes one -"
+                            + " the queue may not let him go on the refusal",
+                    REBIND_GIVE_UP_TICKS, "anchor", anchor, "outcome", "REBOUND");
+            String decisions = events.since(assemblyMark, "crew_rebind_decided");
+            Events.assertInstrumentRan(decisions, "crew_transfer_events",
+                    "the rebind answered the refusal as a refused mount");
+            int spent = Integer.parseInt(Reply.of(exec("stellurgytest invoke-static "
+                    + dev.stannismod.stellurgy.test.trace.MountRefusalArming.class.getName() + " close "
+                    + armingHandle)).text("returned"));
+            armingOpen = false;
+            if (spent != REFUSED_REBIND_MOUNTS) {
+                scenario().arrangementFailed("the world must have refused the rebind's mount "
+                        + REFUSED_REBIND_MOUNTS + " times before it rebound him, or the rebound says"
+                        + " nothing about a refusal — spent " + spent + ", decisions "
+                        + Events.records(decisions) + " | mounts since the assembly "
+                        + Events.records(events.since(assemblyMark, "mount"))
+                        + " | dummies that joined since the boarding "
+                        + Events.recordsWhere(events.since(boardMark, "entity_joined_world"),
+                                "cls", "EntityDummy"));
+            }
+            assertTrue("the rebind must have answered the world's refusal as a refused mount before it"
+                            + " rebound him — decisions " + decisions,
+                    Events.recordsWhereAll(decisions, "anchor", anchor, "outcome", "MOUNT_REFUSED").size() > 0);
+
+            ridingOnceTheClientHasMounted(assemblyOnClient, CLIENT_MOUNT_BUDGET_TICKS,
+                    "the rebound pilot's own client must perform the mount the rebind gave him");
+        } finally {
+            if (armingOpen) {
+                exec("stellurgytest invoke-static "
+                        + dev.stannismod.stellurgy.test.trace.MountRefusalArming.class.getName() + " close "
+                        + armingHandle);
+            }
+        }
     }
 
     /**

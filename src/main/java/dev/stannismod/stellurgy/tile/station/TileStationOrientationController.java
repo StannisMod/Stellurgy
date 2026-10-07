@@ -21,6 +21,7 @@ import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.network.PacketSenderCheck;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import java.util.LinkedList;
@@ -207,16 +208,49 @@ public class TileStationOrientationController extends TileEntity implements ITic
     public void readDataFromNetwork(ByteBuf in, byte packetId,
                                     NBTTagCompound nbt) {
         if (packetId == 0) {
-            setProgress(0, in.readShort());
-            setProgress(1, in.readShort());
-            setProgress(2, in.readShort());
+            nbt.setIntArray("progress", new int[]{in.readShort(), in.readShort(), in.readShort()});
         }
     }
 
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
+        if (side.isServer()) {
+            String refusal = refusal(player, id, nbt);
+            if (refusal != null) {
+                PacketSenderCheck.refuse(player, "orientation controller packet " + id + " at " + pos, refusal);
+                return;
+            }
+        }
+        if (id == 0) {
+            int[] targets = nbt.getIntArray("progress");
+            for (int axis = 0; axis < targets.length; axis++) {
+                setProgress(axis, targets[axis]);
+            }
+        }
+    }
 
+    /**
+     * Why the server does not take packet {@code id} from {@code player}, or {@code null} when it does.
+     * The one packet comes only from this controller's screen — its sliders and its reset button — so it
+     * needs that screen open, and a target per axis that a slider can produce: 0 to
+     * {@link #getTotalProgress}.
+     */
+    private String refusal(EntityPlayer player, byte id, NBTTagCompound nbt) {
+        if (!PacketSenderCheck.hasScreenOpen(player, this)) {
+            return "the sender does not have its screen open";
+        }
+        if (id != 0) {
+            return "its screen sends no packet " + id;
+        }
+        int[] targets = nbt.getIntArray("progress");
+        for (int axis = 0; axis < targets.length; axis++) {
+            if (targets[axis] < 0 || targets[axis] > getTotalProgress(axis)) {
+                return "axis " + axis + " target " + targets[axis] + " is outside the slider's 0.."
+                        + getTotalProgress(axis);
+            }
+        }
+        return null;
     }
 
     @Override

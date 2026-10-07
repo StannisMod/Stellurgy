@@ -717,6 +717,17 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
                 + " client reports " + riding, isRiding(riding));
         scenario().record("resetRiding", riding);
 
+        // AND ITS SEAT MOUNTS GO, while the previous scenario's plot is still loaded around him. A
+        // ship collected below is collected without its seat being broken, so the seat's dummy would
+        // outlive it, bound to a subspace position the next ship can be handed again with the same
+        // shipyard claim, and be adopted by that ship's seat instead of a mount of its own.
+        // Measured 2026-10-07: a pre-assembly rebind found such a dummy (loaded with its old chunk,
+        // 100 blocks away) and reused it, so the world was never asked for a mount at all.
+        String dummiesCleared = exec("stellurgytest vs dummies-clear 0");
+        assertTrue("riderless seat dummies must be cleared between scenarios; probe replied "
+                + dummiesCleared, Reply.of(dummiesCleared).ok());
+        scenario().record("resetDummiesCleared", Reply.of(dummiesCleared).integer("cleared"));
+
         // AND THE CRAFT ITSELF GOES. A scenario used to be able to walk away from its hull because
         // nobody was near it, so it unloaded, and an unloaded hull does not move. That stopped being
         // true when a test server began holding its ships loaded: measured 2026-09-16 inside one

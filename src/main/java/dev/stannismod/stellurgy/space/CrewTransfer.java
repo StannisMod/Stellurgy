@@ -740,14 +740,16 @@ public final class CrewTransfer {
      * mount for a freshly-bound one - the same mount recipe every other boarding path ends in, so
      * the pilot keeps his seat with no re-click.
      *
-     * <p>The caller owns retry and give-up policy, so the return is a tri-state: the swap
-     * happened; the relocated seat is not resolvable yet (relocation is asynchronous - retry next
-     * tick); or the pilot is not riding the recorded stale mount THIS TICK. The last one is
-     * deliberately not treated as final here: a single such observation can be a transient read
-     * during entity churn, and cancelling on it once left a pilot permanently on his stale mount -
-     * the caller debounces it over consecutive ticks before letting the entry go.</p>
+     * <p>The caller owns retry and give-up policy, so the return says which of four things
+     * happened: the swap; the relocated seat is not resolvable yet (relocation is asynchronous -
+     * retry next tick); the world refused the seat's fresh mount, which leaves the pilot untouched
+     * on his stale mount (retry next tick, exactly as for a seat not up yet); or the pilot is not
+     * riding the recorded stale mount THIS TICK. The last one is deliberately not treated as final
+     * here: a single such observation can be a transient read during entity churn, and cancelling
+     * on it once left a pilot permanently on his stale mount - the caller debounces it over
+     * consecutive ticks before letting the entry go.</p>
      */
-    public enum RebindOutcome { REBOUND, NOT_READY, NOT_ON_STALE_MOUNT }
+    public enum RebindOutcome { REBOUND, NOT_READY, MOUNT_REFUSED, NOT_ON_STALE_MOUNT }
 
     public static RebindOutcome rebindAcrossAssembly(WorldServer world, BlockPos anchor,
             EntityPlayerMP player, int staleDummyId, int afcDx, int afcDy, int afcDz,
@@ -771,6 +773,14 @@ public final class CrewTransfer {
         if (seat == null || seatWorld == null) {
             return RebindOutcome.NOT_READY; // ship not up yet - retry
         }
+        // The new mount is secured before the stale one is touched: a world that refuses it must
+        // find him still on the stale mount, so the queue's next pass can ask again.
+        EntityDummy dummy = boundDummyForMount(world, seat.getPos(),
+                seatWorld[0], seatWorld[1], seatWorld[2]);
+        if (dummy == null && dev.stannismod.stellurgy.block.BlockPilotSeat
+                .boundDummyAt(world, seat.getPos()) == null) {
+            return RebindOutcome.MOUNT_REFUSED;
+        }
         // Atomic swap, one tick: a mechanical dismount (not the player leaving his post - the
         // aboard record must survive it, and does: it is re-derived from state, and the state one
         // tick later is "seated on the relocated seat"), the stale mount retired, then the standard
@@ -778,8 +788,6 @@ public final class CrewTransfer {
         player.dismountRidingEntity();
         riding.setDead();
         player.setPositionAndUpdate(seatWorld[0], seatWorld[1], seatWorld[2]);
-        EntityDummy dummy = boundDummyForMount(world, seat.getPos(),
-                seatWorld[0], seatWorld[1], seatWorld[2]);
         if (dummy == null) {
             return RebindOutcome.NOT_ON_STALE_MOUNT; // seat taken while he rode the stale mount
         }

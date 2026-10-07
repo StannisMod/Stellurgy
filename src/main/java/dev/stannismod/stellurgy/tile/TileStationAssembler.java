@@ -217,9 +217,9 @@ public class TileStationAssembler extends TileRocketAssemblingMachine implements
 
 
     @Override
-    public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+    protected void useAcceptedNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
 
-        super.useNetworkData(player, side, id, nbt);
+        super.useAcceptedNetworkData(player, side, id, nbt);
 
         // recompute AFTER super
         boolean isScanningFlag = !isScanning() && canScan();

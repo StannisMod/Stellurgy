@@ -6,11 +6,9 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.EntityEquipmentSlot;
-import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -157,36 +155,18 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
 
     //Consumes the items for the suit recipe and sets the output
     public void consumeItemsSpecial(IRecipe recipe) {
-        List<List<ItemStack>> ingredients = recipe.getIngredients();
-
-        for (List<ItemStack> ingredient : ingredients) {
-
-            ingredientCheck:
-            for (IInventory hatch : itemInPorts) {
-                for (int i = 0; i < hatch.getSizeInventory(); i++) {
-                    ItemStack stackInSlot = hatch.getStackInSlot(i);
-                    for (ItemStack stack : ingredient) {
-                        if (!stackInSlot.isEmpty() && stackInSlot.getCount() >= stack.getCount() && (stackInSlot.getItem() == stack.getItem() && (stackInSlot.getItemDamage() == stack.getItemDamage() || stack.getItemDamage() == OreDictionary.WILDCARD_VALUE))) {
-                            ItemStack stack2 = hatch.decrStackSize(i, stack.getCount());
-
-                            if (stack2.getItem() instanceof ItemArmor) {
-                                if (EnchantmentHelper.getEnchantmentLevel(StellurgyAPI.enchantmentSpaceProtection, stack2) == 0) {
-                                    stack2.addEnchantment(StellurgyAPI.enchantmentSpaceProtection, 1);
-                                }
-
-                                List<ItemStack> list = new LinkedList<>();
-                                list.add(stack2);
-                                setOutputs(list);
-                            }
-
-                            hatch.markDirty();
-                            world.notifyBlockUpdate(pos, world.getBlockState(((TileEntity) hatch).getPos()), world.getBlockState(((TileEntity) hatch).getPos()), 6);
-                            break ingredientCheck;
-                        }
-                    }
+        for (ItemStack taken : takeClaimedItems(recipe)) {
+            if (taken.getItem() instanceof ItemArmor) {
+                if (EnchantmentHelper.getEnchantmentLevel(StellurgyAPI.enchantmentSpaceProtection, taken) == 0) {
+                    taken.addEnchantment(StellurgyAPI.enchantmentSpaceProtection, 1);
                 }
+
+                List<ItemStack> list = new LinkedList<>();
+                list.add(taken);
+                setOutputs(list);
             }
         }
+        drainFluidIngredients(recipe);
     }
 
     @Override

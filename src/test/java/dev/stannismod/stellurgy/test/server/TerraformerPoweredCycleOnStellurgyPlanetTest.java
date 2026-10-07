@@ -336,6 +336,72 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      * {@code ar planet list}. Nothing here claims anything about that command's output; both read
      * {@code DimensionManager.getInstance().getRegisteredDimensions()}.
      */
+    /**
+     * A planet's air may change while nobody is on it, and the terraforming its world had done under
+     * the old climate is retired when the world is next worked — the same as when the air changes with
+     * the world loaded. The change itself is taken and reported as taken.
+     *
+     * <p>The decision is {@code DimensionProperties#load_terraforming_helper} comparing the climate count
+     * its world's record was made under with the planet's own, which {@code atmosphereChanged} advances.
+     * Arranged: this class's freshly generated planet, one chunk recorded as terraformed
+     * ({@code terraforming mark}), the world saved and unloaded ({@code space unload}). The helper is
+     * loaded the way a terraforming terminal or drill loads it ({@code terraforming load-helper}). First a
+     * reload with the air untouched — the progress must stand, or "retired" below proves nothing — then
+     * the air changed while unloaded, and a reload.</p>
+     *
+     * <p>What it does not see: the terminal and drill that load the helper in play, and a terraforming
+     * cycle run afterwards.</p>
+     *
+     * <p>red-witnessed: with {@code DimensionProperties#load_terraforming_helper} at
+     * {@code if (reset || record.climate() != climateChanges)} reduced to {@code if (reset)}, this fails at
+     * "the terraforming done under the old air must be retired on the next load expected:<0> but
+     * was:<1>"; with it reading {@code climateChanges + 1}, at "a reload with the air untouched must keep
+     * the terraforming done expected:<1> but was:<0>"; with {@code DimensionProperties#atmosphereChanged}
+     * at {@code if (hasSurface() && net.minecraftforge.common.DimensionManager.getWorld(getId()) != null)}
+     * reduced to {@code if (hasSurface())}, at "a change to the air of a planet nobody is on must be
+     * taken: {"error":"IllegalStateException: planet 14 is not loaded; ..."}" (2026-10-07).</p>
+     */
+    @Test
+    public void airChangedWhileThePlanetIsUnloadedRetiresItsTerraformingOnTheNextLoad() throws Exception {
+        int dim = newDim;
+        Reply marked = arrange("stellurgytest terraforming mark " + dim + " 0 0");
+        requireArranged("one chunk must stand terraformed: " + marked,
+                marked.integer("chunksFullyTerraformed") == 1);
+
+        reload(dim);
+        assertEquals("a reload with the air untouched must keep the terraforming done",
+                1, terraformedChunks(dim));
+
+        arrange("stellurgytest space unload " + dim);
+        Reply unloaded = ask("stellurgytest terraforming info " + dim);
+        requireArranged("the planet's world must be unloaded before its air changes: " + unloaded,
+                !unloaded.bool("worldLoaded"));
+        Reply changed = ask("stellurgytest planet add-gas " + dim + " oxygen 1000000000");
+        assertTrue("a change to the air of a planet nobody is on must be taken: " + changed, changed.ok());
+
+        reload(dim);
+        assertEquals("the terraforming done under the old air must be retired on the next load",
+                0, terraformedChunks(dim));
+    }
+
+    /** Save and unload {@code dim}'s world, load it again, and load its terraforming helper. */
+    private void reload(int dim) throws Exception {
+        arrange("stellurgytest space unload " + dim);
+        Reply loaded = ask("stellurgytest dim load " + dim);
+        requireArranged("the planet's world must load again: " + loaded, loaded.bool("loaded"));
+        arrange("stellurgytest terraforming load-helper " + dim);
+    }
+
+    private int terraformedChunks(int dim) throws Exception {
+        Reply info = ask("stellurgytest terraforming info " + dim);
+        requireArranged("the planet's world must be loaded to read its record: " + info, info.bool("worldLoaded"));
+        return info.integer("chunksFullyTerraformed");
+    }
+
+    private static void requireArranged(String message, boolean holds) {
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(message, holds);
+    }
+
     private Set<Integer> stellurgyDims() throws Exception {
         Set<Integer> ids = new HashSet<>();
         for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list")).intArray("stellurgyDimensions")) {

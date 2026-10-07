@@ -64,10 +64,12 @@ import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
  * <p>Both subclasses — {@code TileStationAssembler} and {@code TileUnmannedVehicleAssembler} —
  * override {@code assembleRocket()} WITHOUT calling super, so {@code rocket_assembled} never fires
  * for a station build or an unmanned build; only the rocket assembler's own method is observed.
- * {@code assembler_command_received}, by contrast, fires for ALL THREE: the station assembler
- * overrides {@code useNetworkData} and delegates to super, and the unmanned assembler does not
- * override it at all — so a record's {@code pos} is the only thing that says which assembler it
- * came from, and the event alone cannot be read as "a ROCKET assembler was commanded".
+ * {@code assembler_command_received}, by contrast, fires for ALL THREE: {@code useNetworkData} is
+ * final on the rocket assembler and the subclasses override only what it runs once a packet is taken
+ * — so a record's {@code pos} is the only thing that says which assembler it came from, and the event
+ * alone cannot be read as "a ROCKET assembler was commanded". It is also recorded for a client packet
+ * the assembler then REFUSES (a sync id from a client, a button without the screen open): the record
+ * says the packet arrived, not that it acted.
  * The scan itself ({@code scanRocket}) is not observed — the assembly's verdict is read at the
  * return, not the scan's — and nothing here says WHICH entity or ship the build produced; the
  * registry's {@code ship_spawned} and the server bus's {@code entity_joined_world} say that.

@@ -184,6 +184,12 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     private int planetId;
     private boolean isStation;
     private boolean isGasGiant;
+    /**
+     * How many times this body's air has changed in play. The world's terraforming progress records
+     * the count it was made under ({@link TerraformingRecord#climate}), so a change made while the world
+     * was not loaded — when that record cannot be reached — still retires the progress on its next load.
+     */
+    private long climateChanges;
     private boolean canGenerateCraters;
     private boolean canGenerateGeodes;
     private boolean canGenerateVolcanoes;
@@ -365,8 +371,8 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
             getAverageTemp();
             getViableBiomes(false);
-            if (reset) {
-                record.forgetProgress();
+            if (reset || record.climate() != climateChanges) {
+                record.forgetProgress(climateChanges);
                 terraformingChunksAlreadyAdded.clear();
             }
 
@@ -1197,10 +1203,14 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         // running before its own inputs had all been read.
         recalculateTemperature();
 
-        // A body with no surface never has a world, so it has no terraforming to reset — and the
-        // helper refuses a body whose world is not loaded, AFTER the air above has already changed,
-        // which made every change to a gas giant's air land while being reported as a failure.
-        if (hasSurface()) {
+        // The new climate retires the progress terraforming made under the old one. That progress
+        // lives in the world's own record, so it is retired now only if the world is loaded; otherwise
+        // the count disagrees with the record's and the helper retires it when it next loads. A body
+        // with no surface never has a world at all. The helper refuses a world that is not loaded, and
+        // used to be asked here regardless — after the air above had already changed, so the change
+        // landed while the caller was told it failed.
+        climateChanges++;
+        if (hasSurface() && net.minecraftforge.common.DimensionManager.getWorld(getId()) != null) {
             load_terraforming_helper(true);
         }
 
@@ -2112,6 +2122,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         customIcon = nbt.getString("icon");
         isNativeDimension = !nbt.hasKey("isNative") || nbt.getBoolean("isNative"); //Prevent world breakages when loading from old version
         isGasGiant = nbt.getBoolean("isGasGiant");
+        climateChanges = nbt.getLong("climateChanges");
         hasRings = nbt.getBoolean("hasRings");
         ringAngle = nbt.getInteger("ringAngle");
         seaLevel = nbt.getInteger("sealevel");
@@ -2442,6 +2453,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         nbt.setString("icon", customIcon);
         nbt.setBoolean("isNative", isNativeDimension);
         nbt.setBoolean("isGasGiant", isGasGiant);
+        nbt.setLong("climateChanges", climateChanges);
         nbt.setBoolean("hasRings", hasRings);
         nbt.setInteger("sealevel", seaLevel);
         //nbt.setInteger("target_sea_level", target_sea_level);
