@@ -1,9 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
+
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -708,6 +711,12 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     // seals whatever the seal check makes of a scrubber block: a scrubber it counts as open air is a
     // pocket closed by the layer below, not a hole.
 
+    /**
+     * The vent's scrub interval, in ticks it can pay for: {@code TileOxygenVent#SCRUB_TICKS} at
+     * {@code SCRUB_TICKS = 20} ("once a second"). A dose of twice it holds at least one scrub.
+     */
+    private static final int SCRUB_INTERVAL_TICKS = 20;
+
     /** A position in a T2 room, relative to its site, in the probe's "dim x y z" form. */
     private static String t2At(FixtureSite site, int dx, int dy, int dz) {
         return site.dim + " " + (site.x + dx) + " " + (site.y + dy) + " " + (site.z + dz);
@@ -770,6 +779,76 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
             arrange("stellurgytest energy inject " + vent + " 1000");
             arrange("stellurgytest tile force-tick " + vent + " 20");
         }
+    }
+
+    /**
+     * Tier 2: a vent scrubs only what its store can pay for — every scrub it runs is covered by what the
+     * store held while it ran, so a vent short of power leaves scrubbers idle rather than taking their
+     * work out of the fan's share.
+     *
+     * <p>The decision is {@code TileOxygenVent#scrub} asking the store for each scrubber's price before
+     * it absorbs; read where it is made, through {@code vent_scrubbed} (working scrubbers, the store, the
+     * price the vent then asks). Arranged: a sealed T2 room with CO2 and both cartridges charged, its vent
+     * first run dry. A starved vent drops its seal and keeps nothing, so its store fills from the dose until
+     * the seal is back, and the scrub falls on that tick at the store the dose built — measured 2026-10-07:
+     * 5-6 at one fan's price every other step, 22 at one every step, 61 at two. The LOW dose is the
+     * experiment (below a two-scrubber price of 21); the HIGH dose is the positive half on the same
+     * instrument, that scrubbers do work when the store can pay.</p>
+     *
+     * <p>red-witnessed: with {@code TileOxygenVent#scrub} at {@code if (!hasEnoughEnergy(powerWith(working + 1)))}
+     * never true (the shape before the fix), this fails at "a scrub must be paid for out of what the store
+     * held while it ran: {...working:2,stored:6,price:21}"; always true, at "with the store able to pay,
+     * the scrubbers must work: [{...working:0,stored:65,price:1}, ...]" (2026-10-07).</p>
+     */
+    @Test
+    public void aVentScrubsOnlyWhatItsStoreCanPayFor() throws Exception {
+        FixtureSite site = clearedSite(0, 6, "a sealed T2 room: a vent with a scrubber either side");
+        buildSealedT2Room(site, 1000);
+        String vent = t2Vent(site);
+        String ventPos = vent.substring(vent.indexOf(' ') + 1).replace(' ', ',');
+
+        Reply idle = ask("stellurgytest vent info " + vent);
+        int fan = idle.integer("powerPerOperation");
+        requireArranged("an idle vent must ask a positive price for its fan alone: " + idle, fan > 0);
+        // Run dry with nothing to scrub: no cartridge is in, so the price stays the fan's.
+        arrange("stellurgytest tile force-tick " + vent + " " + (idle.integer("energyStored") / fan + 1));
+        arrange("stellurgytest vent setair " + vent + " " + ppm(785_000) + " " + ppm(210_000) + " " + ppm(5_000));
+        chargeT2Cartridges(site);
+
+        Events events = new Events(this::exec,
+                ticks -> GameTicks.advanceWorld(client(), site.dim, ticks), evictionReports());
+        List<String> low = scrubsUnderDose(events, vent, ventPos, fan, 2);
+        requireArranged("the low dose must have run scrubs to judge: " + low, !low.isEmpty());
+        for (String scrub : low) {
+            assertTrue("a scrub must be paid for out of what the store held while it ran: " + scrub,
+                    Integer.parseInt(Events.text(scrub, "stored")) >= Integer.parseInt(Events.text(scrub, "price")));
+        }
+
+        List<String> high = scrubsUnderDose(events, vent, ventPos, 2 * fan, 1);
+        boolean anyWorked = false;
+        for (String scrub : high) {
+            anyWorked |= Integer.parseInt(Events.text(scrub, "working")) > 0;
+        }
+        assertTrue("with the store able to pay, the scrubbers must work: " + high, anyWorked);
+    }
+
+    /**
+     * The vent's scrubs over a dose of {@code 15} scrub intervals of steps, each step one forced tick and,
+     * every {@code everySteps}-th step, {@code perInjection} of energy into its store.
+     */
+    private List<String> scrubsUnderDose(Events events, String vent, String ventPos, int perInjection,
+                                         int everySteps) throws Exception {
+        long mark = events.markInstrumented();
+        // EXPERIMENT: the dose decides the store each scrub falls on; what it measures is every scrub in it.
+        for (int step = 0; step < 15 * SCRUB_INTERVAL_TICKS; step++) {
+            if (step % everySteps == 0) {
+                arrange("stellurgytest energy inject " + vent + " " + perInjection);
+            }
+            arrange("stellurgytest tile force-tick " + vent + " 1");
+        }
+        String window = events.since(mark, "vent_scrubbed");
+        Events.assertInstrumentRan(window, "vent_scrub_events", "the vent's scrubs");
+        return Events.recordsWhere(window, "pos", ventPos);
     }
 
     /** The cartridge damage of the scrubber at this position: the charges it has spent. */

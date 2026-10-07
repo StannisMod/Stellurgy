@@ -22074,6 +22074,10 @@ public class TestProbeCommand extends CommandBase {
         // Air as a RESERVOIR: what it is at, and how much it takes to move it. The capacity is the
         // half a mixing test needs, because two zones at the same pressure and different volumes mix
         // by their capacities and would otherwise look like they should meet in the middle.
+        // The price the vent asks of its store per tick right now — the fan plus each scrubber that
+        // absorbed at its last scrub. -1 for a port that is not an oxygen vent.
+        out.append(",\"powerPerOperation\":").append(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent
+                ? ((dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile).getPowerPerOperation() : -1);
         out.append(",\"airTempMilliK\":").append(airTempMilliK);
         out.append(",\"airHeatCapacity\":").append(airHeatCapacity);
         // The gases this VENT holds, independent of whether its position resolves to a zone. While

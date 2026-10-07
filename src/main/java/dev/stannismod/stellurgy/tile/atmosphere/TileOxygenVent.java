@@ -177,7 +177,12 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
     /** One for the vent's fan, plus one scrubber's for each scrubber that is absorbing. */
     @Override
     public int getPowerPerOperation() {
-        return (int) ((workingScrubbers * POWER_PER_SCRUBBER + 1)
+        return powerWith(workingScrubbers);
+    }
+
+    /** What a tick costs with {@code scrubbers} of them absorbing. */
+    private int powerWith(int scrubbers) {
+        return (int) ((scrubbers * POWER_PER_SCRUBBER + 1)
                 * StellurgyConfiguration.getCurrentConfig().oxygenVentPowerMultiplier);
     }
 
@@ -308,6 +313,11 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IZo
         int volume = atmhandler.getBlobSize(this);
         int working = 0;
         for (TileCO2Scrubber scrubber : scrubbers) {
+            // Paid before it works: the tick's price rises with every scrubber that absorbs, and the
+            // gate in update() was taken at the price before this scrub. A scrubber the store cannot
+            // also pay for is left idle rather than paid for out of what the fan needed.
+            if (!hasEnoughEnergy(powerWith(working + 1)))
+                break;
             if (scrubber.absorb(air, volume))
                 working++;
         }

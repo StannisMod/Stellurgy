@@ -105,7 +105,8 @@
     "MixinEntityTraceMemory",
     "MixinArrivalSpawnMountRefusal",
     "MixinEntityRocketClientGateEvents",
-    "MixinPacketSenderReachEvents"
+    "MixinPacketSenderReachEvents",
+    "MixinTileOxygenVentScrubEvents"
   ],
   "client": [
     "MixinClientCursorActs",

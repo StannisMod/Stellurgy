@@ -37,7 +37,9 @@ public abstract class MixinQueryableShipDataEvents {
             return;
         }
         TestTrace.recordHere("ship_spawned", "\"vsShip\":\"" + ship.getUuid() + "\",\"name\":\""
-                + TestTrace.json(ship.getName()) + "\",\"stellurgyShip\":\"" + ship.getStellurgyDurableId() + "\"");
+                + TestTrace.json(ship.getName()) + "\",\"stellurgyShip\":\"" + ship.getStellurgyDurableId()
+                + "\",\"claim\":\"" + (ship.getChunkClaim() == null ? "none"
+                : ship.getChunkClaim().getCenterPos().x + "," + ship.getChunkClaim().getCenterPos().z) + "\"");
     }
 
     @Inject(method = "removeShip(Ljava/util/UUID;)V", at = @At("HEAD"), remap = false)

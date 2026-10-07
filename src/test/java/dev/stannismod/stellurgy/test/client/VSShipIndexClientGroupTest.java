@@ -114,6 +114,88 @@ public class VSShipIndexClientGroupTest extends AbstractSharedVsClientTest {
                 + wrongly + " (this world's unload: " + applied + ")", wrongly.isEmpty());
     }
 
+    /**
+     * A ship built on the shipyard claim of a ship that no longer exists can be flown from its seat: the
+     * client's pilot gate opens for the pilot seated on it.
+     *
+     * <p>Contract: fails if {@code ShipIndexDataMessageHandler#onMessage} keeps the record of the ship
+     * that held a claim before. The server never tells a client a ship was forgotten, only which ships it
+     * indexes; once the claim is handed again the client would hold two records on its chunks, its lookup
+     * by position fails on two, and every seat aboard reads as no ship's — the gate stays shut.</p>
+     *
+     * <p>Arranged: a craft the client has loaded, destroyed through the substrate ({@code vs destroy-ship},
+     * which gives its claim back), and a second craft that is then given THAT claim — read off both
+     * {@code ship_spawned} records, so the scenario refuses to run on any other claim. The pilot is seated
+     * by probe ({@code vs seat-mount}, {@code player mount-entity}); the verdict is the client's own gate
+     * record. What it does not see: a pilot's right-click on the seat, and the server's own choice of
+     * which claim to hand out beyond this one case.</p>
+     *
+     * <p>red-witnessed: with {@code ShipIndexDataMessageHandler#onMessage} at
+     * {@code if (holder.isPresent() && !holder.get().getUuid().equals(shipData.getUuid()))} made never
+     * true, this fails at the load verdict: "the client must load the craft built on a claim given back — no
+     * `ship_loaded` carrying vsShip = … was recorded within 200 ticks" (2026-10-07).</p>
+     * <p>red-witnessed: NOT YET for the gate verdict after it, with {@code ShipIndexDataMessageHandler#onMessage}
+     * at {@code worldData.removeShip(holder.get());} — the break above silences the load first, and a
+     * break leaving the craft loaded but the seat unresolved would have to split one position lookup in
+     * two; the gate is the player-visible half, the load the one a break of this handler reaches.</p>
+     */
+    @Test
+    public void aShipBuiltOnADestroyedShipsClaimCanBeFlownFromItsSeat() throws Exception {
+        FixtureSite first = plot().siteAt(Plot.FIXTURE_INSET, Plot.FIXTURE_INSET);
+        FixtureSite second = plot().siteAt(Plot.FIXTURE_INSET + SECOND_CRAFT_DX, Plot.FIXTURE_INSET);
+        int px = plot().x(PLAYER_DX), pz = plot().z(PLAYER_DZ);
+        Reply floor = Reply.of(exec("stellurgytest fill " + OVERWORLD + " " + px + " " + first.y + " " + pz
+                + " " + px + " " + first.y + " " + pz + " minecraft:stone"));
+        scenario().requireArranged("the player's floor must be laid into air: " + floor,
+                floor.ok() && floor.integer("placed") == 1);
+        standOnFloorTheClientHolds(px + 0.5, first.y + 1, pz + 0.5, 0, 0,
+                "the player stands where he watches both craft");
+
+        long clientMark = clientEvents().mark();
+        long serverMark = serverEvents().mark();
+        String gone = assemble(first, "the craft whose claim is given back");
+        String goneClaim = claimOf(serverMark, gone);
+        clientEvents().awaitRecordWithFields(clientMark, "ship_loaded",
+                "the client must hold the first craft's record before it is destroyed", LINK_TICKS,
+                "vsShip", gone, "remote", "true");
+
+        long removedMark = serverEvents().mark();
+        Reply destroyed = Reply.of(exec("stellurgytest vs destroy-ship " + OVERWORLD + " " + gone));
+        scenario().requireArranged("the first craft must be marked for collection: " + destroyed,
+                destroyed.bool("marked"));
+        serverEvents().awaitRecordWithFields(removedMark, "ship_removed",
+                "the substrate must collect the first craft and give its claim back", LINK_TICKS, "vsShip", gone);
+
+        long secondMark = serverEvents().mark();
+        String flown = assemble(second, "the craft built on the claim given back");
+        String flownClaim = claimOf(secondMark, flown);
+        scenario().requireArranged("the second craft must be given the first craft's claim, or nothing here is"
+                + " about a claim handed again: " + flownClaim + " against " + goneClaim, goneClaim.equals(flownClaim));
+        // VERDICT, not arrangement: a client still holding the destroyed craft's record on this claim
+        // cannot take the new craft at all.
+        clientEvents().awaitRecordWithFields(clientMark, "ship_loaded",
+                "the client must load the craft built on a claim given back", LINK_TICKS, "vsShip", flown,
+                "remote", "true");
+
+        Reply seat = Reply.of(exec("stellurgytest vs seat-mount " + OVERWORLD + " id " + flown));
+        scenario().requireArranged("the second craft's seat must give a mount: " + seat, seat.bool("seatFound"));
+        long seatedMark = clientEvents().mark();
+        Reply mounted = Reply.of(exec("stellurgytest player mount-entity " + seat.integer("dummyId")));
+        scenario().requireArranged("the player must be put on the seat's mount: " + mounted, !mounted.refused());
+        awaitClientMount(seatedMark, "the client must seat the pilot on the second craft", LINK_TICKS,
+                "seat " + seat);
+        clientEvents().awaitRecordWithFields(seatedMark, "ship_pilot_gate_decided",
+                "the pilot gate must open for the pilot of a craft built on a claim given back", LINK_TICKS,
+                "open", "true");
+    }
+
+    /** The shipyard claim, as {@code x,z} of its centre chunk, that {@code ship}'s spawn record names. */
+    private String claimOf(long mark, String ship) throws Exception {
+        String spawned = serverEvents().awaitRecordWithFields(mark, "ship_spawned",
+                "the spawn of " + ship + " must be recorded", LINK_TICKS, "vsShip", ship);
+        return Events.text(spawned, "claim");
+    }
+
     /** Lay and assemble one tier-2 craft at {@code site}; answer its ship uuid. */
     private String assemble(FixtureSite site, String what) throws Exception {
         long mark = serverEvents().mark();
