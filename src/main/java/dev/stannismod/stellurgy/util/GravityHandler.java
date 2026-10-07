@@ -13,7 +13,6 @@ import dev.stannismod.stellurgy.api.IGravityManager;
 import dev.stannismod.stellurgy.api.IPlanetaryProvider;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
 
 import java.lang.reflect.InvocationTargetException;
@@ -93,35 +92,18 @@ public class GravityHandler implements IGravityManager {
                 return;
             }
 
-            // A living entity aboard a ship has its whole movement - gravity included - resolved in
-            // the ship's frame by ShipFrameTravel. Applying a world-frame delta here as well would
-            // pull it toward the deck twice, so we hand it over untouched. The two call sites must
-            // agree on WHICH entities: both ask ShipFrameTravel.handles.
+            // A living body on a ship's outer hull has its whole movement - gravity included -
+            // resolved by ShipFrameTravel's hull-stand. The two call sites must agree on WHICH
+            // entities: both ask ShipFrameTravel.handles.
             if (entity instanceof EntityLivingBase
                     && ShipFrameTravel.handles((EntityLivingBase) entity)) {
                 return;
             }
 
-            // Ship-floor gravity for everything else (items, minecarts, TNT, arrows): an entity
-            // aboard a Valkyrien Skies ship is pulled toward the ship's deck (its local down,
-            // rotated by the ship attitude) rather than straight world-down, so the floor is "down"
-            // at any ship orientation. On an upright ship the direction is (0,-1,0) and the delta
-            // below is exactly zero (no change from vanilla). A fixed ~1G deck gravity (the per-type
-            // offset) makes ships walkable even in 0G space. These types are safe to steer from the
-            // world frame: their per-type offset cancels vanilla's own gravity EXACTLY (unlike the
-            // living one), and their drag is isotropic, so no along-deck force survives. Takes
-            // precedence over dimension gravity (the ship supplies its own). Null (no ship / no VS)
-            // falls through to the existing per-dimension handling unchanged.
-            double[] shipDown = VSIntegration.shipDownDirectionFor(
-                    entity.world, entity.posX, entity.posY, entity.posZ);
-            if (shipDown != null) {
-                double[] dv = dev.stannismod.stellurgy.api.FreeFlightPhysics
-                        .shipGravityDelta(shipGravityOffset(entity), shipDown);
-                entity.motionX += dv[0];
-                entity.motionY += dv[1];
-                entity.motionZ += dv[2];
-                return;
-            }
+            // No craft gravity for a body no deck holds. A deck's pull exists only while it holds the
+            // body (above); anything else near a craft falls the dimension's way and is collided by the
+            // physics substrate. Pulling it toward the craft's down by world-box containment instead
+            // lifted an item off the outer hull of an upside-down craft and left it hanging above it.
 
             Double d;
             if (entityMap.containsKey(entity) && (d = entityMap.get(entity)) != null) {
@@ -167,27 +149,6 @@ public class GravityHandler implements IGravityManager {
 
     public static boolean isOtherEntity(Entity entity) {
         return entity instanceof EntityBoat || entity instanceof EntityMinecart || entity instanceof EntityFallingBlock || entity instanceof EntityTNTPrimed;
-    }
-
-    /**
-     * The per-tick gravity magnitude (blocks/tick) used for a ship's ~1G deck gravity, chosen by
-     * entity type. Mirrors the per-type offset selection of the scalar world-Y path, minus the
-     * dimension multiplier - a ship supplies a constant deck gravity independent of the dimension.
-     */
-    private static float shipGravityOffset(Entity entity) {
-        if (entity instanceof EntityItem || isOtherEntity(entity)) {
-            return OTHER_OFFSET;
-        }
-        if (entity instanceof EntityThrowable) {
-            return THROWABLE_OFFSET;
-        }
-        if (entity instanceof EntityArrow) {
-            return ARROW_OFFSET;
-        }
-        if (entity instanceof EntityLivingBase && (entity.isInWater() || entity.isInLava())) {
-            return FLUID_LIVING_OFFSET;
-        }
-        return LIVING_OFFSET;
     }
 
     @Override

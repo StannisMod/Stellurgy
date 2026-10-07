@@ -665,21 +665,6 @@ public final class FreeFlightPhysics {
         return shipThrottleVelocity(in, attitude, maxSpeed); // accelerate toward the command
     }
 
-    /**
-     * The per-tick velocity delta to add so an entity's NET gravity this tick points toward a
-     * ship's floor {@code shipDown} (a unit world vector) at magnitude {@code g}, given the game
-     * will apply {@code (0,-g,0)} world-down later in the same tick. Pure math (no MC state):
-     * {@code delta + (0,-g,0) == g*shipDown}. Key properties:
-     * <ul>
-     *   <li>upright ship {@code (0,-1,0)} -> {@code (0,0,0)}: a byte-for-byte no-op (no regression);</li>
-     *   <li>inverted {@code (0,1,0)} -> {@code (0,2g,0)}: net gravity flips to +Y (the new floor);</li>
-     *   <li>on-its-side {@code (1,0,0)} -> {@code (g,g,0)}: cancels world-down, pulls toward +X.</li>
-     * </ul>
-     */
-    public static double[] shipGravityDelta(double g, double[] shipDown) {
-        return new double[]{g * shipDown[0], g * (shipDown[1] + 1.0), g * shipDown[2]};
-    }
-
     /** The throttle channels mapped to a world-frame velocity via the attitude. */
     private static double[] shipThrottleVelocity(FreeFlightInput in, Quat attitude, double maxSpeed) {
         return bodyToWorldQ(

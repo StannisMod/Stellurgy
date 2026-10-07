@@ -1784,43 +1784,9 @@ final class VSBridge {
     private static final double ABOARD_MARGIN = 1.0;
 
     /**
-     * The unit world-frame direction toward the FLOOR of the loaded ship whose world bounding box
-     * contains {@code (x,y,z)}, or {@code null} if the point is aboard no loaded ship. "Floor-down"
-     * is the ship's local {@code -Y} axis rotated into world space by its attitude; on an upright
-     * ship this is {@code (0,-1,0)} (so gravity is unchanged), and it tilts with the ship. Only
-     * primitive/MC types cross back to Stellurgy core. The ship BB is axis-aligned in world space, so a
-     * tilted ship over-includes its corners slightly - acceptable for a gravity hint.
-     */
-    static double[] shipDownDirection(World world, double x, double y, double z) {
-        // Called per entity per tick; be defensive so a VS-side hiccup (e.g. querying loaded ships
-        // on a side that has none) degrades to "no ship gravity" rather than spamming exceptions.
-        try {
-            Vec3d point = new Vec3d(x, y, z);
-            for (PhysicsObject physo : ValkyrienUtils.getPhysosLoadedInWorld(world)) {
-                AxisAlignedBB bb = physo.getShipBB();
-                if (bb == null || !bb.grow(ABOARD_MARGIN).contains(point)) {
-                    continue;
-                }
-                Quaterniond q = physo.getShipData().getShipTransform()
-                        .rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-                // World-frame image of the ship's local down (-Y), via the Stellurgy-core quaternion helper.
-                double[] d = new FreeFlightPhysics.Quat(q.w, q.x, q.y, q.z).rotate(0.0, -1.0, 0.0);
-                double n = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-                if (n < 1e-9) {
-                    return null;
-                }
-                return new double[]{d[0] / n, d[1] / n, d[2] / n};
-            }
-        } catch (Throwable t) {
-            return null;
-        }
-        return null;
-    }
-
-    /**
      * The body&rarr;world attitude {@code [w,x,y,z]} of the loaded ship whose world bounding box
      * contains {@code (x,y,z)}, or {@code null} if the point is aboard no loaded ship. Located by
-     * CONTAINMENT (the same test the gravity hint uses), not by a block lookup, so it answers for a
+     * CONTAINMENT, not by a block lookup, so it answers for a
      * crew member standing anywhere on the deck as well as for a seated pilot.
      *
      * <p>Works on both sides: the ship transform is replicated, and {@code getPhysosLoadedInWorld}

@@ -1230,17 +1230,6 @@ public final class VSIntegration {
     }
 
     /**
-     * The unit world-frame direction toward the floor of the loaded ship the point {@code (x,y,z)}
-     * is aboard, or {@code null} when the point is aboard no ship. Lets Stellurgy apply
-     * gravity toward a ship's deck (the ship's local down, rotated by its attitude) for entities
-     * standing on it; on an upright ship this is {@code (0,-1,0)}, so gravity is unchanged. Only
-     * Stellurgy-core/MC types cross the gate.
-     */
-    public static double[] shipDownDirectionFor(World world, double x, double y, double z) {
-        return VSBridge.shipDownDirection(world, x, y, z);
-    }
-
-    /**
      * The body&rarr;world attitude of the loaded ship the point {@code (x,y,z)} is aboard, or
      * {@code null} when the point is aboard no ship. Located by containment, so it
      * answers for a crew member standing anywhere on the deck, not only for a block on the ship.
