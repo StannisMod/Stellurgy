@@ -73,9 +73,11 @@ final class VSBridge {
      * runtime behaviour can only be exercised with VS actually installed, not in a
      * headless test.</p>
      */
-    /** How a tier-2 craft's blocks are found — one value, because the refusal question below must ask
-     *  exactly what the queued spawn will do. */
-    private static final BlockFinder.BlockFinderType TIER2_BLOCK_SEARCH = BlockFinder.BlockFinderType.FIND_ALL_BLOCKS;
+    /** How a tier-2 craft's blocks are found — one answer, because the refusal question below must ask
+     *  exactly what the queued spawn will do. A method, not a field: nothing here is state. */
+    private static BlockFinder.BlockFinderType tier2BlockSearch() {
+        return BlockFinder.BlockFinderType.FIND_ALL_BLOCKS;
+    }
 
     /**
      * Would the substrate drop the tier-2 craft whose flight computer is at {@code afcPos}, inside
@@ -85,7 +87,7 @@ final class VSBridge {
     static VSIntegration.AssemblyRefusal assemblyRefusal(World world, BlockPos afcPos,
                                                         net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
         WorldServerShipManager.SpawnRefusal refusal = ValkyrienUtils.getServerShipManager(world)
-                .refusalFor(afcPos, TIER2_BLOCK_SEARCH, footprint);
+                .refusalFor(afcPos, tier2BlockSearch(), footprint);
         if (refusal == null) {
             return null;
         }
@@ -95,14 +97,6 @@ final class VSBridge {
             return VSIntegration.AssemblyRefusal.TOO_LARGE;
         }
         throw new IllegalStateException("a spawn refusal the tier-2 search cannot produce: " + refusal);
-    }
-
-    static int shipSizeLimit() {
-        return org.valkyrienskies.mod.common.config.VSConfig.maxDetectedShipSize;
-    }
-
-    static void setShipSizeLimit(int blocks) {
-        org.valkyrienskies.mod.common.config.VSConfig.maxDetectedShipSize = blocks;
     }
 
     static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name,
@@ -149,7 +143,7 @@ final class VSBridge {
         // flight computer was duplicated, which the facade re-mints for before it gets here.
         ship.setStellurgyDurableIdBeforeRegistration(name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
-        manager.queueShipSpawn(ship, afcPos, TIER2_BLOCK_SEARCH, cause, footprint);
+        manager.queueShipSpawn(ship, afcPos, tier2BlockSearch(), cause, footprint);
         logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
                 ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
         return ship.getUuid();

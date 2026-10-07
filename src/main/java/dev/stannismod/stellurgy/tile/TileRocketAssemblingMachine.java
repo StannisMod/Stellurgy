@@ -847,26 +847,17 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             }
             warnedThrustToWeight = Double.NaN;
             removeReplaceableBlocks(rocketBB);
-            // A COPY, and the world is left as built. The snapshot is what decides the ship: the
-            // assembly below bounds the substrate's block search to its footprint, so nothing on or
-            // beside the pad joins the craft. Until 2026-10-06 the craft was CUT out and pasted a block
-            // higher, because that air gap was then the only separation from the pad; with the bound the
-            // round trip moved nothing, and still killed every item lying near the pad and rebuilt every
-            // tile from NBT. The footprint's origin is the copy's own: the copy fits itself to the
-            // blocks still standing after the clean-up above, which can be tighter than the scan's box.
-            final StorageChunk shipStructure;
-            try {
-                shipStructure = StorageChunk.copyWorldBB(world, rocketBB);
-            } catch (Throwable t) { // cover NegativeArraySizeException & other edge errors
-                status = ErrorCodes.FAIL_CUT;
-                return;
-            }
-            final BlockPos origin = shipStructure.copiedFrom();
+            // The craft is left where it was built and handed over AS IT STANDS: the assembly fits the
+            // scanned region to the blocks still standing after the clean-up above and bounds the
+            // substrate's block search to that, so nothing on or beside the pad joins the craft, and the
+            // substrate relocates the real blocks itself. Until 2026-10-06 the craft was CUT out and
+            // pasted a block higher, because that air gap was then the only separation from the pad; the
+            // round trip killed every item lying near the pad and rebuilt every tile from NBT.
+            //
             // Asked BEFORE the craft is handed over, because after that the substrate decides a tick
             // later and, refusing, drops it silently: the press read "finished" and there was no ship.
-            // Nothing has been moved yet, so a refusal leaves the world exactly as it was.
-            VSIntegration.AssemblyRefusal refusal = VSIntegration.tier2AssemblyRefusal(world, shipStructure,
-                    origin.getX(), origin.getY(), origin.getZ());
+            // Nothing has been moved, so a refusal leaves the world exactly as it was.
+            VSIntegration.AssemblyRefusal refusal = VSIntegration.builtTier2ShipRefusal(world, rocketBB);
             if (refusal != null) {
                 switch (refusal) {
                     case TOO_LARGE:
@@ -934,18 +925,14 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // rather than told — one source of truth, the tile's own NBT, and no call site that can
             // forget. It went unbound here for exactly that reason: the id above was minted and the
             // value dropped, so a craft that had not yet crossed could not be found by its own name.
-            // The FOOTPRINT of the craft that was just pasted, not a point: the assembly finds the
-            // flight computer inside it and takes the ship's identity off that tile. `shipAnchor`
-            // above is still this build's computer and is still what the seat links to; it is no
-            // longer handed to the assembly, because a caller that can pass an anchor can pass the
-            // wrong one.
-            // The footprint is taken from the SNAPSHOT's own sizes, not derived from the scan box:
-            // the snapshot is what was copied, so its extents are the craft's region by definition,
-            // and a width computed off an AABB's min/max is one inclusive-vs-exclusive mistake away
-            // from a scan that misses the layer the flight computer stands in. (Measured: deriving
-            // it from `rocketBB` reded all five ground-flight scenarios — `rocket_assembled` fired
-            // and no ship was ever spawned.) The origin is the copy's own origin.
-            VSIntegration.assembleTier2Ship(world, shipStructure, origin.getX(), origin.getY(), origin.getZ());
+            // The REGION of the craft, not a point: the assembly fits it to the blocks, finds the flight
+            // computer inside and takes the ship's identity off that tile. `shipAnchor` above is still
+            // this build's computer and is still what the seat links to; it is not handed to the
+            // assembly, because a caller that can pass an anchor can pass the wrong one. Nor is an
+            // extent computed here: the fit is the assembly's, so there is no arithmetic of ours for the
+            // flight computer's layer to fall outside of (measured once: a width derived here from
+            // `rocketBB` reded all five ground-flight scenarios — no ship was ever spawned).
+            VSIntegration.assembleBuiltTier2Ship(world, rocketBB);
             // A pilot who took the seat BEFORE assembly is riding a mount bound to the seat's
             // build-time position, which the relocation is about to vacate - once the blocks relocate
             // into the ship's subspace nothing in his control chain resolves and the ship ignores

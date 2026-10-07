@@ -147,6 +147,24 @@ public final class VSIntegration {
                 dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause.PASTED);
     }
 
+    /**
+     * Assemble a craft BUILT where it stands — the assembler's case — into a movable ship. The same as
+     * {@link #assembleTier2Ship}, with the footprint taken from the world instead of from a snapshot:
+     * {@code region} is the box the caller scanned, and it is FITTED here to the non-air blocks inside
+     * it, so the caller does no extent arithmetic of its own and the blocks are never copied — the
+     * substrate relocates the real ones. {@code null} when the region holds no flight computer.
+     */
+    public static java.util.UUID assembleBuiltTier2Ship(World world, net.minecraft.util.math.AxisAlignedBB region) {
+        net.minecraft.world.gen.structure.StructureBoundingBox footprint = fittedToBlocks(world, region);
+        if (footprint == null) {
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship in {} in dim {}: the region holds no"
+                    + " blocks at all.", region, world == null ? "null" : world.provider.getDimension());
+            return null;
+        }
+        return assembleWithin(world, footprint,
+                dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause.ASSEMBLED);
+    }
+
     private static java.util.UUID assembleInFootprint(
             World world, dev.stannismod.stellurgy.util.StorageChunk pasted,
             int x0, int y0, int z0,
@@ -154,10 +172,15 @@ public final class VSIntegration {
         if (pasted == null) {
             return null;
         }
-        net.minecraft.world.gen.structure.StructureBoundingBox footprint = footprintOf(pasted, x0, y0, z0);
+        return assembleWithin(world, footprintOf(pasted, x0, y0, z0), cause);
+    }
+
+    private static java.util.UUID assembleWithin(
+            World world, net.minecraft.world.gen.structure.StructureBoundingBox footprint,
+            dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause) {
         BlockPos afcPos = flightComputerInFootprint(world, footprint);
         if (afcPos == null) {
-            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks pasted at {} in dim {}:"
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks at {} in dim {}:"
                             + " no flight computer stands in that footprint, so the craft would have no"
                             + " name and would take a substrate-minted id that nothing else in the game"
                             + " knows.",
@@ -170,37 +193,26 @@ public final class VSIntegration {
         return assembleTier2ShipAt(world, afcPos, cause, footprint);
     }
 
-    /** The substrate's ship size limit, in blocks: a craft with more is refused ({@link AssemblyRefusal#TOO_LARGE}). */
-    public static int shipSizeLimit() {
-        return VSBridge.shipSizeLimit();
-    }
-
-    /** Set the substrate's ship size limit — the config value a pack sets, for the probe that seeds it. */
-    public static void setShipSizeLimit(int blocks) {
-        VSBridge.setShipSizeLimit(blocks);
-    }
-
-    /** Why the substrate would not make a ship of a pasted craft. */
+    /** Why the substrate would not make a ship of a built craft. */
     public enum AssemblyRefusal {
         /** More blocks than the substrate's ship size limit. */
         TOO_LARGE,
-        /** The pasted footprint holds no flight computer: the snapshot did not capture the craft's own. */
+        /** The region holds no flight computer, so the craft has nothing to be named by. */
         NO_FLIGHT_COMPUTER
     }
 
     /**
-     * Would {@link #assembleTier2Ship} with these arguments make a ship, or would the substrate drop it?
-     * {@code null} when it would make one.
+     * Would {@link #assembleBuiltTier2Ship} with these arguments make a ship, or would the substrate drop
+     * it? {@code null} when it would make one.
      *
      * <p>Asked BEFORE assembling, by the one caller with a player to tell: the substrate decides a spawn a
      * tick after it is queued and, refusing, drops it with nothing anyone sees — the assembler said
      * "assembled" and there was no ship. The question runs the substrate's own search and rule on the same
-     * footprint the assembly would bound itself to, on the world as it stands.</p>
+     * fitted footprint the assembly would bound itself to, on the world as it stands.</p>
      */
-    public static AssemblyRefusal tier2AssemblyRefusal(
-            World world, dev.stannismod.stellurgy.util.StorageChunk pasted, int x0, int y0, int z0) {
-        net.minecraft.world.gen.structure.StructureBoundingBox footprint = footprintOf(pasted, x0, y0, z0);
-        BlockPos afcPos = flightComputerInFootprint(world, footprint);
+    public static AssemblyRefusal builtTier2ShipRefusal(World world, net.minecraft.util.math.AxisAlignedBB region) {
+        net.minecraft.world.gen.structure.StructureBoundingBox footprint = fittedToBlocks(world, region);
+        BlockPos afcPos = footprint == null ? null : flightComputerInFootprint(world, footprint);
         if (afcPos == null) {
             return AssemblyRefusal.NO_FLIGHT_COMPUTER;
         }
@@ -208,12 +220,42 @@ public final class VSIntegration {
     }
 
     /**
-     * The region a snapshot's blocks occupy, inclusive. The EXTENT IS DERIVED, never passed: every
-     * caller holds this snapshot's blocks standing at this origin — pasted there by a crossing, or copied
-     * from there by the assembler — so its own sizes ARE the footprint — and a
+     * The tightest box around the non-air blocks of {@code region}, inclusive, or {@code null} when it
+     * holds none — the same fit a snapshot copy makes, without copying anything. Both block coordinates of
+     * the region are inclusive, as the assembler's scan box is.
+     */
+    private static net.minecraft.world.gen.structure.StructureBoundingBox fittedToBlocks(
+            World world, net.minecraft.util.math.AxisAlignedBB region) {
+        if (world == null || region == null) {
+            return null;
+        }
+        net.minecraft.world.gen.structure.StructureBoundingBox fit = null;
+        for (int x = (int) region.minX; x <= region.maxX; x++) {
+            for (int z = (int) region.minZ; z <= region.maxZ; z++) {
+                for (int y = (int) region.minY; y <= region.maxY; y++) {
+                    BlockPos p = new BlockPos(x, y, z);
+                    net.minecraft.block.state.IBlockState state = world.getBlockState(p);
+                    if (state.getBlock().isAir(state, world, p)) {
+                        continue;
+                    }
+                    if (fit == null) {
+                        fit = new net.minecraft.world.gen.structure.StructureBoundingBox(x, y, z, x, y, z);
+                    } else {
+                        fit.expandTo(new net.minecraft.world.gen.structure.StructureBoundingBox(x, y, z, x, y, z));
+                    }
+                }
+            }
+        }
+        return fit;
+    }
+
+    /**
+     * The region a pasted snapshot's blocks occupy, inclusive. The EXTENT IS DERIVED, never passed: every
+     * caller has just pasted this snapshot at this origin, so its own sizes ARE the footprint — and a
      * caller that computed them could get them wrong, which one promptly did: deriving the width from the
      * assembler's scan box instead of from the snapshot reded all five ground-flight scenarios, because
-     * the scan missed the layer the flight computer stood in.
+     * the scan missed the layer the flight computer stood in. (The assembler no longer comes this way: it
+     * hands its region to {@link #assembleBuiltTier2Ship}, which fits it to the blocks itself.)
      */
     private static net.minecraft.world.gen.structure.StructureBoundingBox footprintOf(
             dev.stannismod.stellurgy.util.StorageChunk pasted, int x0, int y0, int z0) {

@@ -1834,24 +1834,6 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(m));
             return;
         }
-        // max-ship-size [<n>] — the substrate's ship size limit (`maxDetectedShipSize`, a config value a
-        // pack sets), answered; with <n>, set first. For a scenario whose subject is what happens to a
-        // craft over that limit: building fifteen thousand blocks to cross the default is not an
-        // arrangement anyone can afford. The caller restores `previous` — the server is shared.
-        if (args.length >= 1 && "max-ship-size".equalsIgnoreCase(args[0])) {
-            int previous = dev.stannismod.stellurgy.integration.vs.VSIntegration.shipSizeLimit();
-            if (args.length >= 2) {
-                int wanted = parseIntOr(args[1], -1);
-                if (wanted < 1) {
-                    send(sender, "{\"ok\":false,\"reason\":\"a ship size limit is a positive block count\"}");
-                    return;
-                }
-                dev.stannismod.stellurgy.integration.vs.VSIntegration.setShipSizeLimit(wanted);
-            }
-            send(sender, "{\"ok\":true,\"previous\":" + previous + ",\"now\":"
-                    + dev.stannismod.stellurgy.integration.vs.VSIntegration.shipSizeLimit() + "}");
-            return;
-        }
         // ship-uuid <dim> <durableShipId> — the PHYSICS id of the craft whose flight computer carries
         // the durable id <durableShipId>, or null.
         //

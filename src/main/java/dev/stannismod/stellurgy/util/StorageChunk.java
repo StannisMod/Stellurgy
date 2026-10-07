@@ -107,8 +107,6 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
      * as battered as it left. Empty for a pristine capture, which is the ordinary case.
      */
     private DamageLayer damage = new DamageLayer();
-    /** See {@link #copiedFrom()}; set by the copy, not persisted. */
-    private BlockPos copiedFrom;
 
     public Block[][][] getblocks() {
         return blocks;
@@ -383,16 +381,6 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         // (liquidCapacity already set above)
     }
 
-    /**
-     * Where this snapshot's origin stood in the world {@link #copyWorldBB} copied it from: the minimum
-     * corner of the blocks it found, which is NOT the corner of the box it was handed — the copy fits
-     * itself to the non-air blocks inside that box. {@code null} for a snapshot that was not copied from
-     * a world (read back from NBT), where there is no such place.
-     */
-    public BlockPos copiedFrom() {
-        return copiedFrom;
-    }
-
     public void addTileEntity(TileEntity te) {
         pos2te.put(te.getPos(), te);
         tileEntities.add(te);
@@ -486,7 +474,6 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         }
 
         ret.mass = mass;
-        ret.copiedFrom = new BlockPos(actualMinX, actualMinY, actualMinZ);
         // SELECTED over the caller's whole box, because a cut empties all of it and a record left
         // out here is a record destroyed. MEASURED from the tight bounds, because that is the origin
         // the block array and the transformed tile coordinates above already use. The two differ

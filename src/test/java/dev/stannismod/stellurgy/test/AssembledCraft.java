@@ -82,9 +82,9 @@ public final class AssembledCraft {
      * addressable: its naming (which hands over the physics id) and its first flight model (which
      * hands over the flight computer's address aboard).
      *
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleTier2Ship(world, shipStructure,} (the cut build never handed to the
+     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);} (the build never handed to the
      * physics mod) fails "the craft must be named once it is assembled" in every scenario that builds,
-     * 2026-09-30</p>
+     * 2026-09-30 — taken on the pre-2026-10-07 form, which handed over a pasted snapshot at that line.</p>
      * <p>red-witnessed: {@code TileAdvancedFlightComputer#rebuildFlightModel} at {@code net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(} (a rebuilt flight model never announced)
      * fails "the craft's flight computer must build its first flight model" in every scenario that
      * builds, 2026-09-30</p>

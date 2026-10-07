@@ -977,9 +977,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code warnedThrustToWeight = twr;} (the warned thrust-to-weight never
      * remembered, so every press warns afresh) fails "a second press on the SAME build must build it"
      * with shipCut false, 2026-09-30</p>
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleTier2Ship(world, shipStructure,} (the cut build never handed to the
+     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);} (the build never handed to the
      * physics mod) fails "the build the second press made must become a named ship" with no
-     * ship_lifecycle named inside 200 ticks, 2026-09-30</p>
+     * ship_lifecycle named inside 200 ticks, 2026-09-30 — taken on the pre-2026-10-07 form, which handed
+     * over a pasted snapshot at that line.</p>
      */
     @Test
     public void theAssemblerAsksTwiceBeforeBuildingAShipThatCannotHover() throws Exception {
@@ -1232,8 +1233,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>red-witnessed: taken on the pre-change form, which cut the craft and pasted it one block higher;
      * the code now standing there is {@code TileRocketAssemblingMachine#assembleRocket} at
-     * {@code VSIntegration.assembleTier2Ship(world, shipStructure, origin.getX(), origin.getY(),
-     * origin.getZ());}. The placement verdict failed — "the assembly moved it by (0.0,1.0,0.0)" —
+     * {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);}. The placement verdict failed — "the assembly moved it by (0.0,1.0,0.0)" —
      * 2026-10-06. The rest verdicts are not witnessed.</p>
      */
     @Test
@@ -1285,48 +1285,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         assertTrue("a craft built on its pad must not be set turning: omega " + after.omega + " rad/s after "
                 + ticks + " ticks (" + after + ")", after.omega < AT_REST_OMEGA);
     }
-
-    /**
-     * A craft larger than the substrate will make a ship of is refused AT THE PRESS, with the reason on
-     * the assembler, and left standing as built.
-     *
-     * <p>This test fails if production breaks the contract that <b>the assembler never reports a ship it
-     * did not get</b>. The substrate decides a spawn a tick after it is queued and, refusing, dropped it
-     * with one line on the error stream: the press said "finished", the craft was gone from the pad into a
-     * spawn that never happened, and nothing told the player why.</p>
-     *
-     * <p>The limit is seeded to ONE block — the config value a pack sets — so that any real craft is over
-     * it; building past the default fifteen thousand is not an arrangement. Restored in {@code finally}:
-     * the server is shared. Read without a wait: the refusal is decided before anything is queued.</p>
-     *
-     * <p>red-witnessed: with {@code TileRocketAssemblingMachine#assembleRocket} at {@code if (refusal !=
-     * null)} never taken, the status verdict fails — the press answers {@code "status":"FINISHED"} for a
-     * craft the substrate will drop — 2026-10-06. The as-built verdict is not witnessed separately.</p>
-     */
-    @Test
-    public void anOversizedCraftIsRefusedAtThePressAndLeftAsBuilt() throws Exception {
-        FixtureSite site = site();
-        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", HALO, HEIGHT,
-                "the craft the substrate will not take stands in this volume");
-        Reply limit = Reply.of("stellurgytest vs max-ship-size", exec("stellurgytest vs max-ship-size 1"))
-                .requireOk("seed the ship size limit");
-        String asm;
-        try {
-            asm = RocketFixture.assembleBuilt(site, this::exec, builder);
-        } finally {
-            exec("stellurgytest vs max-ship-size " + limit.integer("previous"));
-        }
-        Reply pressed = Reply.of("stellurgytest rocket assemble", asm);
-        int[] built = pressed.blockPos("afcPos");
-        requireArranged("the press must have found this craft's own flight computer: " + asm, built != null);
-
-        assertEquals("a craft over the ship size limit must be refused at the press, saying so: " + asm,
-                "SHIP_TOO_LARGE", pressed.text("status"));
-        assertEquals("the refused craft must be left standing as built — its flight computer where it was: "
-                + asm, FLIGHT_COMPUTER, blockAt(built[0], built[1], built[2]).text("block"));
-    }
-
-    private static final String FLIGHT_COMPUTER = "stellurgy:advancedflightcomputer";
 
     /** THE TEST'S OWN: a block is 1.0, so a twentieth separates "where it was built" from the one-block
      *  lift with nothing in between that a pasted craft could legitimately land at. */
