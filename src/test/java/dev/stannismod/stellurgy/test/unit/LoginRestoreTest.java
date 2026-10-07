@@ -60,7 +60,7 @@ public class LoginRestoreTest {
 
     /** Recording ops over a real ledger; each knob forces one failure mode. */
     private static final class FakeOps implements LoginRestore.Ops {
-        final ShipLedger ledger = new ShipLedger();
+        final ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         final List<GalacticCoord> materialized = new ArrayList<>();
         int materializeDim = SLOT_DIM;
         int transitDim = HYPERSPACE_DIM;

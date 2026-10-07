@@ -65,7 +65,26 @@ public final class ShipLedger {
         }
     }
 
+    /**
+     * Told every time a ship is recorded as settled in a cell — the one moment every way into a cell
+     * (a seam or zone crossing, a jump arrival, an entry from a planet, a restore) passes through.
+     */
+    @FunctionalInterface
+    public interface SettleObserver {
+        void settled(UUID shipId, GalacticCoord coord);
+    }
+
     private final Map<UUID, Entry> ships = new HashMap<>();
+    private final SettleObserver settleObserver;
+
+    /**
+     * @param settleObserver told of every {@link #settle}, after the entry is written; production
+     *                       hangs on it what becoming a place costs a body whose zone a craft has
+     *                       just entered
+     */
+    public ShipLedger(SettleObserver settleObserver) {
+        this.settleObserver = settleObserver;
+    }
 
     /**
      * Record {@code shipId} as settled at {@code coord}. The caller has just materialized that cell
@@ -75,6 +94,7 @@ public final class ShipLedger {
      */
     public void settle(UUID shipId, GalacticCoord coord) {
         ships.put(shipId, new Entry(coord, State.SETTLED));
+        settleObserver.settled(shipId, coord);
     }
 
     /**

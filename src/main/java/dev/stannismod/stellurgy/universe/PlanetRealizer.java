@@ -29,10 +29,13 @@ import dev.stannismod.stellurgy.util.XMLPlanetLoader;
  *
  * <h3>The four rules this class exists to keep</h3>
  * <ol>
- *   <li><b>A DESCENT realizes, and nothing else does.</b> Scanning is cheap, remote and repeatable, and
+ *   <li><b>An ARRIVAL realizes, and nothing else does.</b> Scanning is cheap, remote and repeatable, and
  *       the tier schema answers a scan from the derivation on purpose — so minting on a scan would let
- *       one telescope sweep allocate dimensions by the dozen. Moons obey the same rule on their own
- *       account rather than being realized eagerly with a parent.</li>
+ *       one telescope sweep allocate dimensions by the dozen. For a body a ship can stand on the
+ *       arrival is a DESCENT ({@link #realize}); a gas giant cannot be descended into, so its arrival
+ *       is a craft entering its ZONE ({@link #realizeOnZoneEntry}), and what it gets is properties
+ *       with no Forge world. Moons obey the same rule on their own account rather than being realized
+ *       eagerly with a parent.</li>
  *   <li><b>Realization MATERIALIZES what was already derived; it never rolls fresh values.</b> Mass,
  *       atmosphere, temperature and water are promised to a telescope from across the system, so a
  *       landing that disagreed with the scan would make the whole tier schema a lie. This is why
@@ -63,9 +66,9 @@ public final class PlanetRealizer {
      * {@link Constants#INVALID_PLANET} when that cell holds nothing anyone could land on.
      *
      * <p><b>Idempotent.</b> A cell whose body already has a world answers with that world; a second
-     * descent into the same cell therefore reuses the dimension instead of minting another. This is the
-     * only entry point, so that "one body, one world" cannot be true in one caller and false in
-     * another.</p>
+     * descent into the same cell therefore reuses the dimension instead of minting another. Every
+     * entry point ends in the same {@link #materializeVariant}, so that "one body, one world" cannot
+     * be true in one caller and false in another.</p>
      */
     public static int realize(MinecraftServer server, SystemBody approached) {
         if (server == null || approached == null) {
@@ -183,6 +186,64 @@ public final class PlanetRealizer {
         }
 
         return materializeVariant(registry, anchor, bodyCell, variant, target, parentBody);
+    }
+
+    /**
+     * Give a gas giant its {@link DimensionProperties} — and no Forge world, it has no surface —
+     * because a craft has just been recorded inside its ZONE, returning its dimension id. Answers
+     * {@link Constants#INVALID_PLANET} for every other kind, and that is not a failure: a body that
+     * can be descended into is realized by its descent, and the rest are not places at all.
+     *
+     * <p>A giant needs this entry of its own. Its properties are what an orbital harvester works
+     * against and what a station over it is parented to, and {@link #realize} refuses it on purpose,
+     * so without a second arrival the only way a derived giant ever became a place was a landing on
+     * one of its moons — and a giant with no moons never did.</p>
+     *
+     * <p>Idempotent, like {@code realize}: a giant already realized answers with its dimension, so
+     * the caller may report every recording of a craft in the zone, not only the first.</p>
+     */
+    public static int realizeOnZoneEntry(MinecraftServer server, SystemBody zoneBody) {
+        if (server == null || zoneBody == null || zoneBody.kind() != SystemBodyKind.GAS_GIANT) {
+            return Constants.INVALID_PLANET;
+        }
+        if (zoneBody.dimId() != Constants.INVALID_PLANET) {
+            return zoneBody.dimId();
+        }
+        UniverseRegistry registry = UniverseRegistry.get(server);
+        if (registry == null) {
+            return Constants.INVALID_PLANET;
+        }
+        GalacticCoord bodyCell = zoneBody.name();
+        // Pinned before anything is minted, for the reason realize gives: the giant's surroundings
+        // must not be able to drift away from under the properties it is about to receive.
+        registry.pinSystem(bodyCell);
+
+        OptionalInt variantOpt = registry.variantOf(zoneBody);
+        if (!variantOpt.isPresent()) {
+            LOGGER.error("[UNIVERSE] a craft entered the zone of the gas giant at {} but the giant is "
+                    + "not a body of its cell, so it gets no properties and nothing can harvest it",
+                    bodyCell.cellKey());
+            return Constants.INVALID_PLANET;
+        }
+        int variant = variantOpt.getAsInt();
+        OptionalInt existing = registry.realizedDimAt(bodyCell, variant);
+        if (existing.isPresent()) {
+            return existing.getAsInt();
+        }
+        Optional<GalacticCoord> anchorOpt = registry.anchorForCell(bodyCell);
+        if (!anchorOpt.isPresent()) {
+            LOGGER.error("[UNIVERSE] a craft entered the zone of the gas giant at {} but its cell "
+                    + "belongs to no system, so the giant gets no properties", bodyCell.cellKey());
+            return Constants.INVALID_PLANET;
+        }
+        // Re-read from the pinned family: the body handed in may be a derived instance, and the one
+        // materialize rewrites must be the one the save now holds.
+        List<SystemBody> family = registry.realizableBodiesAt(bodyCell);
+        if (variant >= family.size()) {
+            return Constants.INVALID_PLANET;
+        }
+        return materializeVariant(registry, anchorOpt.get(), bodyCell, variant, family.get(variant),
+                null);
     }
 
     /**

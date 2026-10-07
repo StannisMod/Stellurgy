@@ -1197,7 +1197,12 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         // running before its own inputs had all been read.
         recalculateTemperature();
 
-        load_terraforming_helper(true);
+        // A body with no surface never has a world, so it has no terraforming to reset — and the
+        // helper refuses a body whose world is not loaded, AFTER the air above has already changed,
+        // which made every change to a gas giant's air land while being reported as a failure.
+        if (hasSurface()) {
+            load_terraforming_helper(true);
+        }
 
         PacketHandler.sendToAll(new PacketDimInfo(getId(), this));
     }

@@ -69,7 +69,7 @@ public class SystemBodiesProducerTest {
         GalacticCoord planet = GalacticCoord.ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L);
         SystemBody body = SystemBody.fixedAt(planet, SystemBodyKind.PLANET, 3, 7);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), ship);
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
@@ -99,7 +99,7 @@ public class SystemBodiesProducerTest {
         GalacticCoord body = GalacticCoord.ofSectorLocal(1L, 0L, 0L, 0L, 0L, 0L);
         SystemBody star = SystemBody.fixedAt(body, SystemBodyKind.STAR, Constants.INVALID_PLANET, 7);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), ship);
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
@@ -117,7 +117,7 @@ public class SystemBodiesProducerTest {
         GalacticCoord beltCoord = GalacticCoord.ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L);
         SystemBody belt = SystemBody.fixedAt(beltCoord, SystemBodyKind.ASTEROID_BELT, Constants.INVALID_PLANET, 7);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), ship);
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
@@ -140,7 +140,7 @@ public class SystemBodiesProducerTest {
         SystemBody moon = SystemBody.fixedAt(GalacticCoord.ofSectorLocal(57L, 0L, 5L, 2900L, 0L, 0L),
                 SystemBodyKind.MOON, 4, 7);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.beginTransit(UUID.randomUUID(), shipPos);
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
@@ -158,7 +158,7 @@ public class SystemBodiesProducerTest {
     public void aShipMidJumpKeysNoDimensionOfItsOwn() {
         // The other half of the same rule: hyperspace is not a cell, so a ship parked in it adds no
         // dimension to the feed. Only the cells that are live key anything, and here none is.
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.beginTransit(UUID.randomUUID(), GalacticCoord.ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L));
 
         SystemBody body = SystemBody.fixedAt(GalacticCoord.ORIGIN, SystemBodyKind.PLANET, 3, 7);
@@ -184,7 +184,7 @@ public class SystemBodiesProducerTest {
                 SystemBodyKind.PLANET, 3, 7);
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
-                live(cell, 55), new ShipLedger().snapshot(), lookupIn(cell, planet));
+                live(cell, 55), new ShipLedger((shipId, coord) -> { }).snapshot(), lookupIn(cell, planet));
 
         assertEquals("the cell is keyed with no ship anywhere", 1, byDim.size());
         assertEquals(1, byDim.get(55).size());
@@ -201,7 +201,7 @@ public class SystemBodiesProducerTest {
         GalacticCoord inboundTo = GalacticCoord.ofSectorLocal(0L, 0L, 0L, -900L, 0L, 0L);
         SystemBody planet = SystemBody.fixedAt(cell, SystemBodyKind.PLANET, 3, 7);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.beginTransit(UUID.randomUUID(), inboundTo);
         ledger.settle(UUID.randomUUID(), settledAt);
 
@@ -217,7 +217,7 @@ public class SystemBodiesProducerTest {
         // clears any stale bodies for that dim and draws just the boundary ring.
         GalacticCoord ship = GalacticCoord.ofSectorLocal(0L, 0L, 0L, 12L, 0L, 0L);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), ship);
 
         BodyLookup empty = new BodyLookup() {
@@ -243,7 +243,7 @@ public class SystemBodiesProducerTest {
         final SystemBody planetB = SystemBody.fixedAt(GalacticCoord.ofSectorLocal(5L, 0L, 0L, 0L, 0L, 0L),
                 SystemBodyKind.MOON, 4, 7);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), shipA);
         ledger.settle(UUID.randomUUID(), shipB);
 
@@ -278,7 +278,7 @@ public class SystemBodiesProducerTest {
         GalacticCoord ship = GalacticCoord.ofSectorLocal(4L, 0L, 0L, 0L, 0L, 0L);
         SystemBody planet = SystemBody.fixedAt(ship, SystemBodyKind.PLANET, 3, 7);
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), ship);
 
         // Bound: it is keyed. The same fixture with the binding removed is the control.
@@ -306,7 +306,7 @@ public class SystemBodiesProducerTest {
         hostile.put(null, 77);
 
         assertTrue("neither an unbound nor an absent cell keys anything",
-                SystemBodiesProducer.buildByDim(hostile, new ShipLedger().snapshot(),
+                SystemBodiesProducer.buildByDim(hostile, new ShipLedger((shipId, coord) -> { }).snapshot(),
                         lookupIn(cell, planet)).isEmpty());
     }
 
@@ -337,9 +337,9 @@ public class SystemBodiesProducerTest {
         GalacticCoord elsewhere = GalacticCoord.ofSectorLocal(3L, 0L, 0L, 0L, 0L, 0L);
         SystemBody planet = planetOnAQuarterTurnOrbit(elsewhere);
 
-        RenderBody early = SystemBodiesProducer.buildByDim(live(here, 5), new ShipLedger().snapshot(),
+        RenderBody early = SystemBodiesProducer.buildByDim(live(here, 5), new ShipLedger((shipId, coord) -> { }).snapshot(),
                 lookupIn(here, planet), CellFrames.STATIC, 0L).get(5).get(0);
-        RenderBody late = SystemBodiesProducer.buildByDim(live(here, 5), new ShipLedger().snapshot(),
+        RenderBody late = SystemBodiesProducer.buildByDim(live(here, 5), new ShipLedger((shipId, coord) -> { }).snapshot(),
                 lookupIn(here, planet), CellFrames.STATIC, 100L).get(5).get(0);
 
         assertEquals("at tick 0 the body is one orbit-unit along +X of its cell",
@@ -365,7 +365,7 @@ public class SystemBodiesProducerTest {
             }
         };
 
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), ship);
 
         long early = SystemBodiesProducer.buildByDim(live(cell, 5), ledger.snapshot(),
@@ -399,7 +399,7 @@ public class SystemBodiesProducerTest {
         SystemBody authored = SystemBody.fixedAt(cell, SystemBodyKind.STAR, Constants.INVALID_PLANET, 4);
         SystemBody procedural = SystemBody.fixedAt(cell, SystemBodyKind.STAR, Constants.INVALID_PLANET, -9);
         GalacticCoord ship = GalacticCoord.ofSectorLocal(0L, 0L, 0L, 500L, 0L, 0L);
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ledger.settle(UUID.randomUUID(), ship);
 
         List<RenderBody> fed = SystemBodiesProducer.buildByDim(live(cell, 5), ledger.snapshot(),
@@ -415,10 +415,10 @@ public class SystemBodiesProducerTest {
     public void nullInputsYieldEmptyMap() {
         GalacticCoord cell = GalacticCoord.ORIGIN;
         assertTrue("no bindings at all means no feed",
-                SystemBodiesProducer.buildByDim(null, new ShipLedger().snapshot(),
+                SystemBodiesProducer.buildByDim(null, new ShipLedger((shipId, coord) -> { }).snapshot(),
                         lookupIn(cell)).isEmpty());
         assertTrue("no body source means no feed",
-                SystemBodiesProducer.buildByDim(live(cell, 1), new ShipLedger().snapshot(), null)
+                SystemBodiesProducer.buildByDim(live(cell, 1), new ShipLedger((shipId, coord) -> { }).snapshot(), null)
                         .isEmpty());
         // A missing ledger is NOT a missing feed: the cell is live, so its sky is drawn - from the
         // cell centre, because there is no ship to measure it from.

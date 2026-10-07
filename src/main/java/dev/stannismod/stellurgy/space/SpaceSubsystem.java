@@ -102,7 +102,7 @@ public final class SpaceSubsystem {
                     cellKey, wasDirty ? "flushed to store" : "discarded");
             this.requestPressureGc();
         });
-        this.ledger = new ShipLedger();
+        this.ledger = new ShipLedger(SpaceSubsystem::realizeZoneBodyOf);
         // A cell is protected from garbage collection while a ship is parked in it. That fact already
         // lives in the ledger, so the manager asks it rather than keeping a second flag of its own.
         this.manager.setClaimedCells(cellKey -> this.ledger.holdsShipIn(cellKey));
@@ -470,11 +470,7 @@ public final class SpaceSubsystem {
         // — could never be taken into a moon's zone however close it flew; only one that arrived in
         // a zoned cell by jump could.
         boolean galactic = craftCoord.zone() == null;
-        GalacticCoord zoneCell = galactic ? craftCoord.cellCentre()
-                : GalacticCoord.fromCellKey(craftCoord.zone());
-        if (reg == null || zoneCell == null) {
-            return null;
-        }
+        GalacticCoord zoneCell = zoneCellOf(craftCoord);
         dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
         if (zoneBody == null) {
             return null;
@@ -533,6 +529,34 @@ public final class SpaceSubsystem {
         return addressIn(reg, ZoneScale.addressOnLattice(grandparent.name().cellKey(),
                 latticeOf(reg, grandparent, primaryOf(reg, grandparent.name()), tick),
                 craftAt.minus(grandparent.absoluteAt(tick))), craftAt, tick);
+    }
+
+    /**
+     * The cell whose body's zone a craft addressed at {@code craftCoord} is in: its own galactic cell
+     * when it is named on the galactic lattice, and otherwise the cell its zone key names.
+     */
+    private static GalacticCoord zoneCellOf(GalacticCoord craftCoord) {
+        return craftCoord.zone() == null ? craftCoord.cellCentre()
+                : GalacticCoord.fromCellKey(craftCoord.zone());
+    }
+
+    /**
+     * The ledger's settle observer: a craft has just been recorded at {@code coord}, so the body
+     * whose zone that address names is asked whether being entered makes it a place. Only a gas
+     * giant says yes — see {@code PlanetRealizer.realizeOnZoneEntry}.
+     *
+     * <p>Hung on the ledger rather than on each crossing because the ledger is where membership is
+     * WRITTEN: a seam crossing, a zone-sphere crossing, a hyperspace arrival, a short jump and a
+     * restore all end in one {@code settle}, and a way into a zone added later will too.</p>
+     */
+    private static void realizeZoneBodyOf(java.util.UUID shipId, GalacticCoord coord) {
+        if (coord == null) {
+            return;
+        }
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server), zoneCellOf(coord));
+        dev.stannismod.stellurgy.universe.PlanetRealizer.realizeOnZoneEntry(server, zoneBody);
     }
 
     /**

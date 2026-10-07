@@ -172,7 +172,7 @@ public class ShipEntryControllerTest {
     public void entryCrossesSettlesInLedgerOutsideTheDescentRadius() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);
@@ -214,7 +214,7 @@ public class ShipEntryControllerTest {
         // Pool of ONE, already held by another occupied cell -> materialize must throw.
         SpaceManager space = new SpaceManager(new FakeBinder(10), clock::get, never());
         space.materialize(body(99)); // refcount 1, not evictable
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);
@@ -244,7 +244,7 @@ public class ShipEntryControllerTest {
     public void failedCrossingReleasesTheCellAndArmsTheCooldown() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ops.failCross = true;
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
@@ -271,7 +271,7 @@ public class ShipEntryControllerTest {
     public void settleRetriesWhileTheAsyncReassemblyIsNotUpYet() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ops.teleportFailCount = 2; // re-assembly queryable on the third tick
         ops.reseatFailCount = 1;   // seats resolve one tick after that
@@ -308,7 +308,7 @@ public class ShipEntryControllerTest {
     public void everySettleHalfAddressesTheShipTheCrossingCreated() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);
@@ -332,7 +332,7 @@ public class ShipEntryControllerTest {
     public void duplicateAndLedgeredShipsDoNotReenter() {
         AtomicLong clock = new AtomicLong();
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), clock::get, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         FakeOps ops = new FakeOps();
         ShipEntryController ctl = new ShipEntryController(space, ledger, ops,
                 dim -> body(5), clock::get);

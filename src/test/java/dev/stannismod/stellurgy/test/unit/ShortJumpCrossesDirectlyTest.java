@@ -168,7 +168,7 @@ public class ShortJumpCrossesDirectlyTest {
     @Test
     public void aShortJumpNeverEntersTheInTransitState() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
-        ShipLedger ledger = new ShipLedger();
+        ShipLedger ledger = new ShipLedger((shipId, coord) -> { });
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(),
                 new CountingCrosser(), ledger, () -> 1000L);
         mgr.setDirectCrosser(new CountingDirectCrosser());

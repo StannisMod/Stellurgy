@@ -2,7 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.CellInfo;
+import dev.stannismod.stellurgy.test.CraftInZone;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 
 import org.junit.After;
@@ -367,5 +369,46 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
     private static String jsonString(String json, String key) {
         String value = Reply.of(json).text(key);
         return value;
+    }
+
+    /**
+     * A derived gas giant becomes a PLACE — properties of its own — when a craft is recorded inside
+     * its zone. A giant cannot be descended into, so this is the only arrival it has; before it
+     * existed, a giant with no moons never became a place and nothing could harvest it.
+     *
+     * <p>The decision is {@code SpaceSubsystem}'s ledger observer handing the body whose zone the
+     * address names to {@code PlanetRealizer#realizeOnZoneEntry}. Arranged: a giant of the save's own
+     * procedural galaxy that holds no dimension yet ({@code space find-giant … unrealized}). Stimulus:
+     * a craft recorded at the centre of the giant's galactic cell — a planet's own cell IS its zone —
+     * through the production ledger ({@link CraftInZone}). Read: the dimension the giant's body in its
+     * cell names ({@code space cell-info}) — the registry writes it there only after the properties are
+     * registered ({@code PlanetRealizer#materializeVariant}).</p>
+     *
+     * <p>What it does NOT see: the crossings and arrivals that reach {@code ShipLedger#settle}, and the
+     * giant's having no Forge world (the registration path decides that, not this one).</p>
+     *
+     * <p>red-witnessed: with {@code ShipLedger#settle} at {@code settleObserver.settled(shipId, coord);}
+     * removed, this fails with "a craft recorded in the giant's zone must make the giant a place:
+     * GAS_GIANT dim=-2147483647" (2026-10-07).</p>
+     */
+    @Test
+    public void aGasGiantBecomesAPlaceWhenACraftIsRecordedInItsZone() throws Exception {
+        Reply found = Reply.of(exec("stellurgytest space find-giant 8 unrealized"))
+                .requireOk("a derived gas giant that is not yet a place");
+        String giantCell = found.text("cellKey");
+        CellInfo.Body before = gasGiantAt(giantCell);
+        ArrangementFailure.requireArranged(
+                "the giant must hold no dimension before any craft enters its zone: " + before,
+                before.dim == dev.stannismod.stellurgy.api.Constants.INVALID_PLANET);
+
+        try (CraftInZone craft = CraftInZone.settle(this::exec, giantCell)) {
+            CellInfo.Body after = gasGiantAt(giantCell);
+            assertNotEquals("a craft recorded in the giant's zone must make the giant a place: " + after,
+                    dev.stannismod.stellurgy.api.Constants.INVALID_PLANET, after.dim);
+        }
+    }
+
+    private CellInfo.Body gasGiantAt(String cellKey) throws Exception {
+        return CellInfo.atKey(this::exec, cellKey).requireCellBodyOfKind("GAS_GIANT");
     }
 }

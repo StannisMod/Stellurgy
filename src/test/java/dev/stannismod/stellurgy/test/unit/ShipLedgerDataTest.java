@@ -64,7 +64,7 @@ public class ShipLedgerDataTest {
         GalacticCoord coordB = coord(-7, 2, 0, 0, -40, 0);
         GalacticCoord flyingTo = coord(9, 0, 0, 0, 0, 0);
 
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         live.settle(a, coordA);
         live.settle(b, coordB);
         live.beginTransit(flyer, flyingTo); // in flight: belongs in the transit list, not this one
@@ -99,7 +99,7 @@ public class ShipLedgerDataTest {
         // answer that expires with the process, and the reader has no way to tell an expired one from
         // a live one. The coordinate is what survives a restart; the dimension is re-derived from it.
         UUID a = UUID.randomUUID();
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         live.settle(a, coord(3, 0, -1, 100, 0, 50));
 
         ShipLedgerData data = new ShipLedgerData();
@@ -118,7 +118,7 @@ public class ShipLedgerDataTest {
     public void anInFlightShipIsCarriedByItsTransitRecordAndNotByTheSettledList() {
         UUID flyer = UUID.randomUUID();
         GalacticCoord flyingTo = coord(1, 0, 0, 0, 0, 0);
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         live.beginTransit(flyer, flyingTo);
 
         ShipLedgerData data = new ShipLedgerData();
@@ -153,13 +153,13 @@ public class ShipLedgerDataTest {
         GalacticCoord home = coord(4, 0, 0, 0, 0, 0);
 
         ShipLedgerData data = new ShipLedgerData();
-        ShipLedger before = new ShipLedger();
+        ShipLedger before = new ShipLedger((shipId, coord) -> { });
         before.settle(settled, home);
         before.settle(flyer, home);
         assertTrue("arrangement: a good fleet is stored first", store(data, before).isEmpty());
         NBTTagCompound good = data.writeToNBT(new NBTTagCompound());
 
-        ShipLedger during = new ShipLedger();
+        ShipLedger during = new ShipLedger((shipId, coord) -> { });
         during.settle(settled, home);
         during.beginTransit(flyer, coord(5, 0, 0, 0, 0, 0)); // flying, and nothing carries it
 
@@ -183,7 +183,7 @@ public class ShipLedgerDataTest {
     public void theSpaceClockIsStoredWithTheStateItDatesAndSurvivesTheRoundTrip() {
         UUID a = UUID.randomUUID();
         GalacticCoord home = coord(3, 0, -1, 100, 0, 50);
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         live.settle(a, home);
 
         ShipLedgerData src = new ShipLedgerData();
@@ -245,7 +245,7 @@ public class ShipLedgerDataTest {
         GalacticCoord home = coord(4, 0, 0, 0, 0, 0);
 
         ShipLedgerData data = new ShipLedgerData();
-        ShipLedger before = new ShipLedger();
+        ShipLedger before = new ShipLedger((shipId, coord) -> { });
         before.settle(settled, home);
         before.settle(flyer, home);
         assertTrue("arrangement: a good fleet is stored first", store(data, before).isEmpty());
@@ -255,7 +255,7 @@ public class ShipLedgerDataTest {
         data.setClock(CLOCK + AGE);
 
         // The state a failed gather leaves behind: flying, and nothing carrying it.
-        ShipLedger during = new ShipLedger();
+        ShipLedger during = new ShipLedger((shipId, coord) -> { });
         during.settle(settled, home);
         during.beginTransit(flyer, coord(5, 0, 0, 0, 0, 0));
         assertEquals("arrangement: the fleet write must actually be refused", 1,
@@ -272,7 +272,7 @@ public class ShipLedgerDataTest {
         UUID a = UUID.randomUUID();
         GalacticCoord coordA = coord(2, -3, 4, 10, 20, -30);
 
-        ShipLedger source = new ShipLedger();
+        ShipLedger source = new ShipLedger((shipId, coord) -> { });
         source.settle(a, coordA);
 
         ShipLedgerData data = new ShipLedgerData();
@@ -281,7 +281,7 @@ public class ShipLedgerDataTest {
         ShipLedgerData restored = new ShipLedgerData();
         restored.readFromNBT(data.writeToNBT(new NBTTagCompound()));
 
-        ShipLedger live = new ShipLedger();
+        ShipLedger live = new ShipLedger((shipId, coord) -> { });
         assertEquals("starts empty", 0, live.size());
         restored.loadInto(live);
 

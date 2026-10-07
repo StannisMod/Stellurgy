@@ -5399,18 +5399,29 @@ public class TestProbeCommand extends CommandBase {
         // controller's repair of a binding whose world went away by some other route. It is also the
         // positive control for the opposite assertion - "a held slot keeps its world" measures nothing
         // unless the same sequence is shown to remove an unheld one.
-        if (args.length >= 4 && "release".equalsIgnoreCase(args[0])) {
+        //
+        // release <cellKey>: the same release of a GALACTIC cell named by its key — the counterpart
+        // of `ledger-settle <shipUuid> <cellKey>`, so an arrangement that took a cell by key gives it
+        // back the same way. No drop-hold in this form.
+        boolean releaseByKey = args.length == 2 && "release".equalsIgnoreCase(args[0])
+                && args[1].indexOf('_') >= 0;
+        if (releaseByKey || (args.length >= 4 && "release".equalsIgnoreCase(args[0]))) {
             dev.stannismod.stellurgy.space.SpaceSubsystem spaceStack = liveStack();
             if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
             dev.stannismod.stellurgy.space.SpaceManager mgr = spaceStack.manager;
-            dev.stannismod.stellurgy.space.GalacticCoord coord =
-                    dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+            dev.stannismod.stellurgy.space.GalacticCoord coord = releaseByKey
+                    ? dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[1])
+                    : dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
-            boolean dropHold = args.length >= 5 && "drop-hold".equalsIgnoreCase(args[4]);
+            if (coord == null || coord.zone() != null) {
+                send(sender, "{\"error\":\"not a galactic cell key\"}");
+                return;
+            }
+            boolean dropHold = !releaseByKey && args.length >= 5 && "drop-hold".equalsIgnoreCase(args[4]);
             mgr.dematerialize(coord);
             int dim = mgr.slotDimOf(coord);
             if (dropHold) {
@@ -5518,7 +5529,14 @@ public class TestProbeCommand extends CommandBase {
         // and a transit arrival both materialize and then settle). A settled ship whose cell is bound
         // to no slot is a state production never reaches, and a probe that manufactured one would let
         // a restart test read back a slot binding no real ship could ever have had.
-        if (args.length >= 8 && "ledger-settle".equalsIgnoreCase(args[0])) {
+        //
+        // ledger-settle <shipUuid> <cellKey>: the same, at the centre of the GALACTIC cell a key names
+        // — the form a key from another verb (`find-giant`, `cell-info`) passes through unchanged. A
+        // ZONED key is refused: a key carries no lattice width, so the coordinate it parses to is one
+        // no production settle ever holds.
+        boolean ledgerSettleByKey = args.length == 3 && "ledger-settle".equalsIgnoreCase(args[0])
+                && args[2].indexOf('_') >= 0;
+        if (ledgerSettleByKey || (args.length >= 8 && "ledger-settle".equalsIgnoreCase(args[0]))) {
             dev.stannismod.stellurgy.space.SpaceSubsystem spaceStack = liveStack();
             if (spaceStack == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
@@ -5529,9 +5547,15 @@ public class TestProbeCommand extends CommandBase {
             int settledSlot;
             dev.stannismod.stellurgy.space.GalacticCoord settleCoord;
             try {
-                settleCoord = dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
-                        Long.parseLong(args[2]), Long.parseLong(args[3]), Long.parseLong(args[4]),
-                        Long.parseLong(args[5]), Long.parseLong(args[6]), Long.parseLong(args[7]));
+                settleCoord = ledgerSettleByKey
+                        ? dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[2])
+                        : dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+                                Long.parseLong(args[2]), Long.parseLong(args[3]), Long.parseLong(args[4]),
+                                Long.parseLong(args[5]), Long.parseLong(args[6]), Long.parseLong(args[7]));
+                if (settleCoord == null || settleCoord.zone() != null) {
+                    send(sender, "{\"error\":\"not a galactic cell key\"}");
+                    return;
+                }
                 settledSlot = settleMgr.materialize(settleCoord);
                 led.settle(java.util.UUID.fromString(args[1]), settleCoord);
             } catch (IllegalArgumentException bad) {
@@ -7772,10 +7796,14 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":false,\"reason\":\"no moon in range\"}");
             return;
         }
-        // find-giant <radius>: the first GAS GIANT in a box of `radius` minimum spacings each way,
-        // reported by its cellKey and its `variant` among the cell's realizable bodies — the pair
-        // `realize` takes. A giant has no surface, so realizing it registers properties and no world.
+        // find-giant <radius> [unrealized]: the first GAS GIANT in a box of `radius` minimum spacings
+        // each way, reported by its cellKey, its `variant` among the cell's realizable bodies and the
+        // `dim` it holds (INVALID_PLANET while it is not yet a place). With the literal `unrealized`
+        // a giant that already holds a dim is passed over: on a shared server an earlier scenario may
+        // have made the first one a place, and a test of the moment it BECOMES one needs a giant that
+        // has not.
         if (args.length >= 2 && "find-giant".equalsIgnoreCase(args[0])) {
+            boolean onlyUnrealized = args.length >= 3 && "unrealized".equalsIgnoreCase(args[2]);
             dev.stannismod.stellurgy.universe.UniverseRegistry reg =
                     dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
             if (reg == null) {
@@ -7791,7 +7819,9 @@ public class TestProbeCommand extends CommandBase {
                                 dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                                         x * s, y * s, z * s, 0L, 0L, 0L);
                         for (dev.stannismod.stellurgy.universe.SystemBody b : reg.systemBodiesAt(probe)) {
-                            if (b.kind() != dev.stannismod.stellurgy.universe.SystemBodyKind.GAS_GIANT) {
+                            if (b.kind() != dev.stannismod.stellurgy.universe.SystemBodyKind.GAS_GIANT
+                                    || (onlyUnrealized && b.dimId()
+                                            != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET)) {
                                 continue;
                             }
                             java.util.OptionalInt variant = reg.variantOf(b);
@@ -7800,6 +7830,7 @@ public class TestProbeCommand extends CommandBase {
                             }
                             send(sender, "{\"ok\":true,\"cellKey\":\"" + b.name().cellKey()
                                     + "\",\"variant\":" + variant.getAsInt()
+                                    + ",\"dim\":" + b.dimId()
                                     + ",\"family\":" + reg.realizableBodiesAt(b.name()).size() + "}");
                             return;
                         }

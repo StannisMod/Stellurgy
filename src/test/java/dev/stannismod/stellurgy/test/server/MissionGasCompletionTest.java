@@ -7,6 +7,8 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 
+import dev.stannismod.stellurgy.test.CellInfo;
+import dev.stannismod.stellurgy.test.CraftInZone;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
@@ -228,22 +230,45 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * production keeps the plan: the {@code duration} of the {@code MissionGasCollection} it registers
      * on the giant ({@code mission state}).</p>
      *
-     * <p>The arrangement is a derived gas giant realized ({@code space find-giant}, {@code space
-     * realize}) — properties with air and no world, as a giant has no surface — a station orbiting it, and two unmanned rockets built and
-     * assembled on that station — two, because a rocket that plans a mission is spent by it. Between the
-     * two, the giant's air gains exactly as much of the offered gas as it already held. The rocket
+     * <p>The arrangement is a derived gas giant made a place the way production makes one — a craft
+     * recorded in its zone ({@code space find-giant}, {@link CraftInZone}) — a station orbiting it, and
+     * two unmanned rockets built and assembled on that station — two, because a rocket that plans a
+     * mission is spent by it. The giant's air is first scaled to one atmosphere, so both missions are
+     * long enough for halving to show, and between the two it gains exactly as much of the offered gas
+     * as it already held; its own air is put back afterwards ({@link PlanetAir}). The rocket
      * reaching orbit is ARRANGED ({@code rocket force-orbit-reached}, which calls the production method):
      * the flight up is not the subject, and nothing in it bears on the plan.</p>
      *
      * <p>What it does not see: a player choosing a gas in the rocket's menu (both rockets plan the first
      * gas offered), the mission completing, and the flight to orbit.</p>
+     *
+     * <p>red-witnessed: with {@code EntityStationDeployedRocket#onOrbitReached} at {@code
+     * properties.getAir().partialPressure(targetGas)} replaced by {@code AirState.ONE_ATM}, this fails
+     * with "51200 ticks at 895314058, 51200 ticks at 1790628116 (hydrogen)" (2026-10-07).</p>
      */
     @Test
     public void aHarvestPlannedAtTwiceThePartialPressureTakesHalfAsLong() throws Exception {
-        Reply found = arrange("stellurgytest space find-giant 8");
-        Reply realized = arrange("stellurgytest space realize " + found.text("cellKey") + " "
-                + found.integer("variant"));
-        int giant = realized.integer("dim");
+        String giantCell = arrange("stellurgytest space find-giant 8").text("cellKey");
+        CraftInZone.settle(cmd -> ok(client().execute(cmd)), giantCell).close();
+        int giant = CellInfo.atKey(cmd -> ok(client().execute(cmd)), giantCell)
+                .requireCellBodyOfKind("GAS_GIANT").dim;
+        requireArranged("a craft having been in the giant's zone must have made it a place: dim " + giant,
+                giant != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET);
+        PlanetAir.Probe air = cmd -> ok(client().execute(cmd));
+        PlanetAir giantsOwnAir = PlanetAir.snapshot(air, giant);
+        try {
+            measureHalving(giant);
+        } finally {
+            giantsOwnAir.restore(air);
+        }
+    }
+
+    private void measureHalving(int giant) throws Exception {
+        // The whole mix scaled to ONE atmosphere (`setAtmosphereDensity` counts hundredths of one).
+        // Measured 2026-10-07 at a derived giant's own air: 40 ticks, and 20 at twice the gas — the
+        // second already ON the one-second floor, where halving cannot show. One atmosphere is far
+        // thinner than any giant's, so both missions stand clear of it.
+        arrange("stellurgytest atmosphere set-density " + giant + " 100");
         Reply planet = ask("stellurgytest planet info " + giant);
         String[] offered = planet.textArray("harvestable");
         requireArranged("the giant must offer a gas to harvest: " + planet, offered.length > 0);
@@ -256,7 +281,9 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         int space = new dev.stannismod.stellurgy.api.StellurgyConfiguration().spaceDimId;
         ask("stellurgytest dim time " + space);
         Reply station = arrange("stellurgytest station create " + giant);
-        Reply info = arrange("stellurgytest station info " + station.integer("id"));
+        // A reading verb: it answers the station's fields and carries no `ok`, so refusal is its `error`.
+        Reply info = ask("stellurgytest station info " + station.integer("id"));
+        requireArranged("the station just created must be readable: " + info, !info.refused());
         int x = info.integer("spawnX"), y = info.integer("spawnY"), z = info.integer("spawnZ");
 
         long atHeld = plannedDurationTicks(giant, space, x, y, z);
@@ -278,6 +305,19 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * gas mission that registered on {@code giant} as a result.
      */
     private long plannedDurationTicks(int giant, int space, int x, int y, int z) throws Exception {
+        // The space dimension has no player in it here, and `PlayerChunkMap#tick` queues every chunk of
+        // a world nobody can respawn in for unloading on each tick it has no players — taking the
+        // assembled rocket with it before the next command reaches it. Held for the arrangement only.
+        String chunk = space + " " + (x >> 4) + " " + (z >> 4);
+        arrange("stellurgytest chunk forceload " + chunk);
+        try {
+            return plannedDurationTicksHeld(giant, space, x, y, z);
+        } finally {
+            arrange("stellurgytest chunk release " + chunk);
+        }
+    }
+
+    private long plannedDurationTicksHeld(int giant, int space, int x, int y, int z) throws Exception {
         arrange("stellurgytest fixture uv-rocket " + space + " " + x + " " + y + " " + z);
         Reply rocket = arrange("stellurgytest rocket assemble " + space + " " + x + " " + y + " " + z);
         int id = rocket.integer("entityId");
@@ -301,7 +341,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
 
     private Set<Integer> satelliteIds(int dim) throws Exception {
         Set<Integer> ids = new HashSet<>();
-        for (String satellite : ask("stellurgytest satellite list " + dim).objectArrayOrEmpty("satellites")) {
+        for (String satellite : ask("stellurgytest satellite list " + dim).objectArray("satellites")) {
             ids.add(Reply.of("satellite list", satellite).integer("id"));
         }
         return ids;

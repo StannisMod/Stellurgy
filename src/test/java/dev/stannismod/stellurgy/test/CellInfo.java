@@ -167,6 +167,30 @@ public final class CellInfo {
         return dimCell;
     }
 
+    /**
+     * The one body of {@code kind} standing AT this cell — {@link #cellBodies}, never the system's
+     * list — refusing as an arrangement failure when there is none or more than one. A cell's own
+     * body is what a key names, so two of a kind would mean the caller cannot say which it meant.
+     */
+    public Body requireCellBodyOfKind(String kind) {
+        Body found = null;
+        for (Body body : cellBodies) {
+            if (!kind.equals(body.kind) || !cellKey.equals(body.cell)) {
+                continue;
+            }
+            if (found != null) {
+                ArrangementFailure.arrangementFailed("two bodies of kind " + kind + " stand at "
+                        + cellKey + ", so neither is THE one: " + raw);
+            }
+            found = body;
+        }
+        if (found == null) {
+            ArrangementFailure.arrangementFailed("no body of kind " + kind + " stands at " + cellKey
+                    + ": " + raw);
+        }
+        return found;
+    }
+
     /** The reply exactly as the probe sent it, for a message that has to show the whole answer. */
     public String raw() {
         return raw;
