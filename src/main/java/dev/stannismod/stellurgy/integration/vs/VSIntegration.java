@@ -1209,10 +1209,7 @@ public final class VSIntegration {
 
     /**
      * Whether {@code pos} is inside the shipyard region — the far-off block range VS keeps ship
-     * blocks in. Answered from the allocator's constants, so unlike every other method here it is
-     * NOT gated on {@link #isAvailable()}: a world whose ships exist while VS is switched off still
-     * has those blocks, and a caller that needs to know "are these coordinates really world
-     * coordinates" needs a true answer in exactly that case.
+     * blocks in. Answered from the allocator's constants alone, with no ship registry consulted.
      */
     public static boolean isBlockInShipyard(BlockPos pos) {
         return VSBridge.isBlockInShipyard(pos);

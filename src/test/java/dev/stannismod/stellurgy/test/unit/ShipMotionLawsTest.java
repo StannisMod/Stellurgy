@@ -11,23 +11,37 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.ship.control.Actuator;
 import dev.stannismod.stellurgy.ship.control.ActuatorCommand;
 import dev.stannismod.stellurgy.ship.control.ActuatorId;
+import dev.stannismod.stellurgy.ship.control.ControlAxis;
 import dev.stannismod.stellurgy.ship.control.ControlDirection;
 import dev.stannismod.stellurgy.ship.control.ControlFrame;
 import dev.stannismod.stellurgy.ship.control.ControlScheme;
 import dev.stannismod.stellurgy.ship.control.Endurance;
 import dev.stannismod.stellurgy.ship.control.MomentumStore;
 import dev.stannismod.stellurgy.ship.control.ShipCapability;
+import dev.stannismod.stellurgy.ship.control.ShipFlightModel;
+import dev.stannismod.stellurgy.ship.control.ShipReadout;
 import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import dev.stannismod.stellurgy.test.CleanCommandLaw;
+import dev.stannismod.stellurgy.test.ShipMotionCases;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * What a hull can do is decided by where its devices are, and these pin the promises that follow:
+ * The LAWS of ship-flight-model's kernel, one class for the owner (the contract levels and grouping
+ * of the fast-tier rules): each method pins one contract, however much of the kernel checking it
+ * needs wired. Its JOINTS with the readout and the mass frame are in
+ * {@code integration/ShipMotionJointsTest}.
+ *
+ * <p>The capability solve's laws come first, on hand-placed hulls in this class's own frame; the
+ * scheme's laws after, on {@link ShipMotionCases} hulls built from production's devices.</p>
+ *
+ * <p>What a hull can do is decided by where its devices are, and these pin the promises that follow:
  * a hull is as strong in a direction as it can be CLEANLY, a sign is not a symmetry, a wheel turns
  * but does not push and cannot hold forever, rotation is an acceleration on this hull's inertia, a
  * combined command never asks a device for more than it has, and the same hull gives the same
@@ -36,7 +50,7 @@ import static org.junit.Assert.assertTrue;
  * <p>The frame throughout: the helm faces +Z, up is +Y, so right is -X. Thrust {@code T} is an
  * arbitrary round number; every verdict is a relationship between figures of one hull.</p>
  */
-public class ShipCapabilityTest {
+public class ShipMotionLawsTest {
 
     private static final double T = 100_000.0D;
     /**
@@ -662,5 +676,315 @@ public class ShipCapabilityTest {
         ShipCapability cap = ShipCapability.solve(hull, ShipMassFrame.empty(), HELM);
         assertFalse("no mass, no authority",
                 cap.authority(ControlDirection.SURGE_POSITIVE, Endurance.BURST) > 0.0D);
+    }
+
+    // ---- 1. the law, everywhere -------------------------------------------------------------------
+
+    /** How many generated hulls the sweep solves. */
+    private static final int HULLS = 300;
+
+    /** How many commands each hull is given, each from its own wheel state. */
+    private static final int COMMANDS = 12;
+
+    /** How many physics steps each command is held: long enough to carry a wheel across its range. */
+    private static final int HOLD_STEPS = 90;
+
+    /**
+     * Every hull, every wheel state, every command, every step: the command is delivered cleanly, or
+     * less and said so.
+     *
+     * <p>Generated hulls (seeded) carry 1 to 14 motors anywhere on a 5×3×5 frame, facing any way, and
+     * usually a wheel. Each command asks for one to three axes at once, at a multiple of the axis's
+     * authority from {@link ShipMotionCases#demand}, and is held for {@link #HOLD_STEPS} steps from a wheel state that
+     * is empty, full in either sense, short of full by LESS than one step's worth, or anywhere between —
+     * the in-between is where a burst recipe's wheel runs out mid-step, which is the state an in-world
+     * kick of a laden craft came from (2026-10-07) and the one an endpoint-only test never visits.</p>
+     *
+     * <p>Contract: this fails if the clean-axis scheme ever delivers a component nobody asked for, more
+     * than was asked, the wrong sign, less without saying so, a throttle out of range or a wheel past
+     * its capacity.</p>
+     *
+     * <p>red-witnessed: 2026-10-07, on the form before the share check — {@code
+     * CleanAxisScheme#burstIfItCanDeliver} refusing a burst only for a wheel with NO room — fails
+     * "generated hull #1, command 0 (SURGE_NEGATIVE×4.0 SWAY_POSITIVE×0.3 YAW_NEGATIVE×1.5), step 1:
+     * ROLL was not asked for and moved anyway … 0.0823" (the wheel had 5.5e-4 of a step left).</p>
+     * <p>red-witnessed: 2026-10-07 — {@code CleanAxisScheme#burstIfItCanDeliver} at {@code double next
+     * = committed[i] + t;} reading {@code t} alone (each axis checked against the wheel as if no other
+     * axis had taken from it) fails "generated hull #3, command 3 (YAW_NEGATIVE×1.0 PITCH_NEGATIVE×1.5
+     * HEAVE_POSITIVE×1.0), step 14: PITCH delivered the wrong way — asked -7.935, got 0.0095".</p>
+     */
+    @Test
+    public void everyCommandIsDeliveredCleanlyOrLessAndSaidSo() {
+        Random rng = new Random(0x5EED609L);
+        ControlScheme scheme = ControlScheme.cleanAxes();
+        int steps = 0;
+        int saturatedSteps = 0;
+        int sliverCalls = 0;
+        int sharedWheelCalls = 0;
+        int wheelSteps = 0;
+        for (int h = 0; h < HULLS; h++) {
+            ShipMotionCases.Hull hull = ShipMotionCases.randomHull(rng, "generated hull #" + h);
+            ShipCapability cap = ShipCapability.solve(hull.actuators, hull.mass, ShipMotionCases.HELM);
+            for (int k = 0; k < COMMANDS; k++) {
+                MomentumStore momentum = new MomentumStore();
+                ShipMotionCases.randomWheelState(rng, cap, momentum);
+                Vector3d lin = new Vector3d();
+                Vector3d ang = new Vector3d();
+                String asked = ShipMotionCases.randomCommand(rng, cap, lin, ang);
+                int axesAsked = asked.split(" ").length;
+                for (int s = 0; s < HOLD_STEPS; s++) {
+                    String before = CleanCommandLaw.wheels(cap, momentum);
+                    boolean inLastStep = ShipMotionCases.aWheelIsInsideItsLastStep(cap, momentum);
+                    ActuatorCommand c = scheme.allocate(cap, lin, ang, momentum, ShipMotionCases.DT);
+                    try {
+                        CleanCommandLaw.requireHonest(hull.name + ", command " + k + " (" + asked + "), step " + s,
+                                cap, lin, ang, c, momentum);
+                    } catch (AssertionError broken) {
+                        throw new AssertionError(broken.getMessage() + " | saturated " + c.isSaturated()
+                                + " | wheels before the step: " + before + " | after: " + CleanCommandLaw.wheels(cap, momentum)
+                                + " | wheel throttles: " + CleanCommandLaw.wheelThrottles(cap, c), broken);
+                    }
+                    steps++;
+                    if (c.isSaturated()) {
+                        saturatedSteps++;
+                    }
+                    if (CleanCommandLaw.usesAWheel(cap, c)) {
+                        wheelSteps++;
+                        if (inLastStep) {
+                            sliverCalls++;
+                        }
+                        if (axesAsked > 1) {
+                            sharedWheelCalls++;
+                        }
+                    }
+                }
+            }
+        }
+        System.out.println("[kernel] steps " + steps + ", saturated " + saturatedSteps
+                + ", using a wheel " + wheelSteps + ", of them inside a wheel's last step " + sliverCalls
+                + ", with more than one axis asked " + sharedWheelCalls);
+        // The law above holds trivially on a sweep that never saturated, never used a wheel, never
+        // drew on a wheel inside its last step, or never had two axes sharing one — counted from the
+        // state the scheme was called in, not from what the generator meant to draw.
+        requireArranged("the sweep must visit the states the law is about — saturated " + saturatedSteps
+                        + " of " + steps + ", wheel calls " + wheelSteps + ", of them inside a wheel's last step "
+                        + sliverCalls + " (at least " + MIN_REGION_CALLS + "), sharing a wheel between axes "
+                        + sharedWheelCalls + " (at least " + MIN_REGION_CALLS + ")",
+                saturatedSteps > 0 && saturatedSteps < steps && sliverCalls >= MIN_REGION_CALLS
+                        && sharedWheelCalls >= MIN_REGION_CALLS);
+    }
+
+    /**
+     * The fewest calls the sweep must make in each of its two hard regions — a wheel drawn on inside its
+     * last step, and a wheel shared by several asked axes. One per hull on average: about 70% of hulls
+     * carry a wheel, each gets {@value #COMMANDS} commands, and each wheel axis starts inside its last
+     * step with probability 1/3 ({@link ShipMotionCases#randomWheelState}), so starts alone are expected near
+     * 300 × 0.7 × 12 × (1 − (2/3)³) ≈ 1 770; a floor of {@value #HULLS} is under a fifth of that.
+     */
+    private static final int MIN_REGION_CALLS = HULLS;
+
+    // ---- 1b. the liveness twin ---------------------------------------------------------------------
+
+    /** EXPERIMENT: commands per translation direction in the liveness sweep, each from its own wheel state. */
+    private static final int LIVENESS_COMMANDS = 40;
+
+    /** EXPERIMENT: steps each liveness command is held. */
+    private static final int LIVENESS_HOLD_STEPS = 30;
+
+    /**
+     * What the hull can hold is delivered — exactly, and without a saturation flag — from any wheel
+     * state: the liveness twin of {@link #everyCommandIsDeliveredCleanlyOrLessAndSaidSo}, without which a
+     * scheme that answers "nothing, saturated" to everything would satisfy the law.
+     *
+     * <p>The judge of "can hold" is NOT the scheme's own figure: it is the symmetric hull's geometry
+     * ({@link ShipMotionCases#symmetricAuthority}) — every block mirrored about the deck's centre, so each translation
+     * is pushed by exactly the motors facing that way, through the centre of mass, with nothing to null.
+     * Commands along one translation axis at a quarter, half and all (less the solve's residual) of that
+     * figure, from wheel states drawn as in the sweep, held {@value #LIVENESS_HOLD_STEPS} steps.</p>
+     *
+     * <p>Contract: ship-flight-model INV-SFM-12, its "delivered exactly" half — this fails if the
+     * scheme delivers less than a feasible command, or flags a feasible command saturated.</p>
+     *
+     * <p>red-witnessed: 2026-10-07 — {@code CleanAxisScheme#allocate} at {@code if (!(recipe.authority >
+     * 0.0D))} taken for every axis (each treated as one the hull cannot deliver: nothing is pushed, and
+     * every call says so, so the safety law alone stays satisfied) fails "symmetric hull, SURGE_POSITIVE at
+     * 0.25 of the geometric 4905000.0 N, command 0, step 0: a command the hull can hold was flagged
+     * saturated — force (0, 0, 0)".</p>
+     */
+    @Test
+    public void whatTheHullCanHoldIsDeliveredExactlyFromAnyWheelState() {
+        ShipMotionCases.Hull hull = ShipMotionCases.symmetricHull();
+        ShipCapability cap = ShipCapability.solve(hull.actuators, hull.mass, ShipMotionCases.HELM);
+        ControlScheme scheme = ControlScheme.cleanAxes();
+        Random rng = new Random(0x11FE609L);
+        double mass = cap.mass().getTotalMass();
+        double[] fractions = {0.25D, 0.5D, 1.0D - CleanCommandLaw.RESIDUAL};
+        int exact = 0;
+        for (ControlDirection d : ControlDirection.values()) {
+            if (d.axis().isRotation()) {
+                continue;
+            }
+            double newtons = ShipMotionCases.symmetricAuthority(d);
+            for (int k = 0; k < LIVENESS_COMMANDS; k++) {
+                MomentumStore momentum = new MomentumStore();
+                ShipMotionCases.randomWheelState(rng, cap, momentum);
+                double fraction = fractions[k % fractions.length];
+                Vector3d lin = new Vector3d(ShipMotionCases.HELM.axis(d.axis()))
+                        .mul((d.isPositive() ? 1.0D : -1.0D) * fraction * newtons / mass);
+                Vector3d ang = new Vector3d();
+                for (int s = 0; s < LIVENESS_HOLD_STEPS; s++) {
+                    ActuatorCommand c = scheme.allocate(cap, lin, ang, momentum, ShipMotionCases.DT);
+                    String where = hull.name + ", " + d + " at " + fraction + " of the geometric "
+                            + newtons + " N, command " + k + ", step " + s;
+                    CleanCommandLaw.requireHonest(where, cap, lin, ang, c, momentum);
+                    assertTrue(where + ": a command the hull can hold was flagged saturated — force "
+                            + c.force(), !c.isSaturated());
+                    exact++;
+                }
+            }
+        }
+        requireArranged("the liveness sweep must have delivered something: " + exact, exact > 0);
+    }
+
+    // ---- 2. a burst, in time ----------------------------------------------------------------------
+
+    /**
+     * A burst lasts what the readout says, then the sustained figure holds; and a wheel left idle is
+     * bought back by the thrusters, after which the burst is there again.
+     *
+     * <p>The hull: a centred and an off-centre forward motor, whose moment a small yaw couple can null
+     * only in part — so the sustained surge is a fraction of the two motors and the burst is both,
+     * the wheel nulling the rest. Surge is asked past the burst figure and held; then nothing is asked
+     * until the wheel is empty; then surge is asked again.</p>
+     *
+     * <p>Contract: this fails if the scheme stops delivering the burst for the seconds the readout
+     * promises, delivers less than the sustained figure once it is spent, fails to give an idle wheel
+     * back, or does not offer the burst again once it has.</p>
+     *
+     * <p>red-witnessed: 2026-10-07, on the form before the share check — {@code
+     * CleanAxisScheme#burstIfItCanDeliver} refusing a burst only for a wheel with NO room — fails
+     * "burst hull, the first burst, step 53: YAW was not asked for and moved anyway … -1.152", the step
+     * the wheel fills in.</p>
+     */
+    @Test
+    public void aBurstLastsItsReadoutSecondsThenTheSustainedFigureHoldsAndAnIdleWheelBuysItBack() {
+        ShipMotionCases.Hull hull = ShipMotionCases.burstHull();
+        ShipCapability cap = ShipCapability.solve(hull.actuators, hull.mass, ShipMotionCases.HELM);
+        ControlScheme scheme = ControlScheme.cleanAxes();
+        MomentumStore momentum = new MomentumStore();
+        double mass = cap.mass().getTotalMass();
+        double sustained = cap.authority(ControlDirection.SURGE_POSITIVE, Endurance.SUSTAINED);
+        double burst = cap.authority(ControlDirection.SURGE_POSITIVE, Endurance.BURST);
+        double seconds = cap.burstSeconds(ControlDirection.SURGE_POSITIVE);
+        requireArranged("the hull must hold a burst above its sustained surge for a finite time — "
+                        + "sustained " + sustained + " N, burst " + burst + " N, " + seconds + " s",
+                sustained > 0.0D && burst > sustained * 1.01D && seconds > 10.0D * ShipMotionCases.DT
+                        && !Double.isInfinite(seconds));
+        double tol = CleanCommandLaw.RESIDUAL * CleanCommandLaw.forceScale(cap);
+        Vector3d surge = new Vector3d(ShipMotionCases.HELM.axis(ControlAxis.SURGE)).mul(1.5D * burst / mass);
+        Vector3d none = new Vector3d();
+
+        // The FIRST unbroken run of burst steps: once spent, a wheel the couple partly buys back may
+        // lend a later step again, which is the scheme working and not the burst lasting longer.
+        int burstSteps = 0;
+        boolean running = true;
+        int phase1 = (int) Math.ceil(seconds / ShipMotionCases.DT) + 60;
+        for (int s = 0; s < phase1; s++) {
+            ActuatorCommand c = scheme.allocate(cap, surge, none, momentum, ShipMotionCases.DT);
+            CleanCommandLaw.requireHonest(hull.name + ", the first burst, step " + s, cap, surge, none, c, momentum);
+            double got = c.force().dot(ShipMotionCases.HELM.axis(ControlAxis.SURGE));
+            assertTrue("step " + s + ": an over-demand never gets less than the sustained figure "
+                    + sustained + " N, got " + got, got >= sustained - tol);
+            if (running && Math.abs(got - burst) <= tol) {
+                burstSteps++;
+            } else {
+                running = false;
+            }
+        }
+        assertEquals("the burst lasts the seconds the capability reports for it (" + seconds + " s): "
+                + burstSteps + " steps of " + ShipMotionCases.DT + " s", seconds, burstSteps * ShipMotionCases.DT, ShipMotionCases.DT);
+
+        int phase2 = (int) Math.ceil(30.0D / ShipMotionCases.DT);
+        double held = CleanCommandLaw.wheelMomentum(cap, momentum);
+        requireArranged("the burst must have left the wheel holding momentum: " + held, held > 0.0D);
+        for (int s = 0; s < phase2 && held > 0.0D; s++) {
+            ActuatorCommand c = scheme.allocate(cap, none, none, momentum, ShipMotionCases.DT);
+            CleanCommandLaw.requireHonest(hull.name + ", the idle wheel, step " + s, cap, none, none, c, momentum);
+            double now = CleanCommandLaw.wheelMomentum(cap, momentum);
+            assertTrue("step " + s + ": an idle wheel is only ever given back: " + held + " -> " + now,
+                    now <= held);
+            held = now;
+        }
+        assertEquals("an idle wheel is given back completely within 30 s", 0.0D, held, 0.0D);
+
+        ActuatorCommand again = scheme.allocate(cap, surge, none, momentum, ShipMotionCases.DT);
+        CleanCommandLaw.requireHonest(hull.name + ", the second burst", cap, surge, none, again, momentum);
+        assertEquals("with the wheel bought back the burst is there again", burst,
+                again.force().dot(ShipMotionCases.HELM.axis(ControlAxis.SURGE)), tol);
+    }
+
+    // ---- 5. hulls that cannot ---------------------------------------------------------------------
+
+    /**
+     * A hull with nothing that pushes delivers nothing and says so; a hull whose only device is a wheel
+     * turns for its wheel's seconds and never pushes; and a full wheel still turns the other way.
+     *
+     * <p>Contract: this fails if a hull without the means is credited with motion, a wheel produces a
+     * force, or a wheel full in one sense is refused the sense that unwinds it.</p>
+     */
+    @Test
+    public void aHullWithoutTheMeansDeliversNothingAndSaysSo() {
+        ControlScheme scheme = ControlScheme.cleanAxes();
+
+        ShipMotionCases.Hull bare = ShipMotionCases.bareHull();
+        ShipCapability bareCap = ShipCapability.solve(bare.actuators, bare.mass, ShipMotionCases.HELM);
+        for (ControlDirection d : ControlDirection.values()) {
+            Vector3d lin = new Vector3d();
+            Vector3d ang = new Vector3d();
+            (d.axis().isRotation() ? ang : lin).set(ShipMotionCases.HELM.axis(d.axis())).mul(d.isPositive() ? 1.0D : -1.0D);
+            ActuatorCommand c = scheme.allocate(bareCap, lin, ang, new MomentumStore(), ShipMotionCases.DT);
+            assertEquals(bare.name + ": " + d + " pushes nothing", 0.0D, c.force().length(), 0.0D);
+            assertEquals(bare.name + ": " + d + " turns nothing", 0.0D, c.torque().length(), 0.0D);
+            assertTrue(bare.name + ": " + d + " says it delivered less", c.isSaturated());
+        }
+
+        ShipMotionCases.Hull wheel = ShipMotionCases.wheelOnlyHull();
+        ShipCapability wheelCap = ShipCapability.solve(wheel.actuators, wheel.mass, ShipMotionCases.HELM);
+        ShipReadout readout = ShipFlightModel.solve(1L, wheel.mass, wheel.actuators, wheel.actuators, ShipMotionCases.HELM)
+                .readout(ShipMotionCases.G);
+        for (ControlDirection d : ControlDirection.values()) {
+            if (d.axis().isRotation()) {
+                assertEquals(wheel.name + ": " + d + " is a burst only", ShipReadout.Warning.BURST_ONLY,
+                        readout.warningFor(ShipReadout.View.LIVE, d));
+                assertTrue(wheel.name + ": " + d + " lasts a finite time",
+                        !Double.isInfinite(wheelCap.burstSeconds(d)));
+            } else {
+                assertEquals(wheel.name + ": " + d + " has no authority", ShipReadout.Warning.NO_AUTHORITY,
+                        readout.warningFor(ShipReadout.View.LIVE, d));
+            }
+        }
+
+        // A wheel full in one sense: the other sense still delivers, and the full one delivers nothing.
+        for (ControlAxis axis : ControlAxis.values()) {
+            if (!axis.isRotation()) {
+                continue;
+            }
+            double delivered = 0.0D;
+            for (boolean positive : new boolean[]{true, false}) {
+                MomentumStore full = new MomentumStore();
+                for (Actuator a : wheelCap.actuators()) {
+                    full.restore(a.id(), a.momentumCapacity());
+                }
+                Vector3d ang = new Vector3d(ShipMotionCases.HELM.axis(axis)).mul(positive ? 1.0D : -1.0D)
+                        .mul(wheelCap.authority(ControlDirection.of(axis, positive), Endurance.BURST));
+                Vector3d lin = new Vector3d();
+                ActuatorCommand c = scheme.allocate(wheelCap, lin, ang, full, ShipMotionCases.DT);
+                CleanCommandLaw.requireHonest(wheel.name + ", " + axis + (positive ? "+" : "-") + " from a full wheel",
+                        wheelCap, lin, ang, c, full);
+                delivered = Math.max(delivered, c.torque().length());
+            }
+            assertTrue(wheel.name + ": a wheel full in one sense still turns " + axis + " the other way",
+                    delivered > 0.0D);
+        }
     }
 }
