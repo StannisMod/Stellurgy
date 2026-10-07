@@ -674,9 +674,14 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
      *  assumed — a subject the ship does not actually carry would make this control leg vacuous.</p> */
     private int spawnSubjectOnDeck(int bx, int by, int bz) throws Exception {
         double cx = bx + 3 + 0.5, cz = bz + 3 + 0.5;
+        // Heights over the BUILD SITE, the first being the deck's own surface. The deck stands at
+        // by+4: the assembler places the craft where it was built. Until 2026-10-06 it lifted every
+        // craft a block off its pad and these read by+5 …; left there, the first of them hung the
+        // subject a block over the deck, the support probe (which reaches that far) accepted it,
+        // and the client drew it unrotated (measured: rotated 0/90, then 89/89 with this list).
         int chosen = -1;
         StringBuilder tried = new StringBuilder();
-        for (double y : new double[]{by + 5, by + 5.2, by + 6, by + 4.5, by + 7}) {
+        for (double y : new double[]{by + 4, by + 4.2, by + 5, by + 3.5, by + 6}) {
             exec("kill @e[type=cow]");
             int candidate = spawnSubject(cx, y, cz);
             DeckCapture probe = DeckCapture.byId(this::exec, 0, candidate);

@@ -95,10 +95,9 @@ public abstract class MixinWorldServerShipManagerDiag {
             // The flood's outcome AS A RECORD, beside the statics below: VS drops a spawn whose flood
             // is too big or touched bedrock with one line on System.err and a `continue`, so a queued
             // craft that never registers otherwise leaves a wait expiring on "no ship_spawned" and
-            // nothing to say why. `refused` applies VS's own abort rule to the same two inputs.
-            boolean refused = detector.foundSet.size()
-                    > org.valkyrienskies.mod.common.config.VSConfig.maxDetectedShipSize
-                    || detector.cleanHouse;
+            // nothing to say why. `refused` is the drain's own rule, asked rather than restated.
+            boolean refused = org.valkyrienskies.mod.common.ships.ship_world.WorldServerShipManager
+                    .refusalOf(detector) != null;
             dev.stannismod.stellurgy.test.trace.TestTrace.recordHere("ship_spawn_flood",
                     "\"x\":" + pos.getX() + ",\"y\":" + pos.getY() + ",\"z\":" + pos.getZ()
                             + ",\"dim\":" + floodWorld.provider.getDimension()

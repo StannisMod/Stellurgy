@@ -1450,7 +1450,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         Reply press = Reply.of(exec("stellurgytest rocket assemble " + site.dim + " " + builder[0] + " "
                 + builder[1] + " " + builder[2]));
         requireArranged("the decked craft can hover and must be built on the first press: " + press,
-                press.ok() && press.bool("shipCut"));
+                press.ok() && press.bool("built"));
         String durable = press.text("shipId");
         // ARRANGEMENT links, typed as such: the naming and the first model are the premise that
         // gives this scenario its addresses, not the audience it is about.

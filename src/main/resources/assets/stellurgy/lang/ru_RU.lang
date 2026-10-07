@@ -417,6 +417,7 @@ msg.rocketbuilder.scan=Сканирование
 msg.rocketbuilder.alreadyassembled=Ракета уже собрана
 msg.rocketbuilder.multipleflightcomputers=Только один полётный компьютер на корабль!
 msg.rocketbuilder.multiplepilotseats=Только одно пилотское кресло на корабль!
+msg.rocketbuilder.shiptoolarge=Корабль слишком велик для сборки
 msg.solar.collectingEnergy=Сбор энергии:
 msg.solar.cannotcollectEnergy=Невозможно собрать энергию
 msg.asteroidChip.asteroid=Астероид

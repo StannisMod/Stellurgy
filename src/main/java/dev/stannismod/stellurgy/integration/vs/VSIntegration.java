@@ -154,28 +154,71 @@ public final class VSIntegration {
         if (pasted == null) {
             return null;
         }
-        // The EXTENT IS DERIVED, never passed. Every caller has just pasted this snapshot at this
-        // origin, so its own sizes ARE the footprint — and a caller that computed them could get
-        // them wrong, which one promptly did: deriving the width from the assembler's scan box
-        // instead of from the snapshot reded all five ground-flight scenarios, because the scan
-        // missed the layer the flight computer stood in. There is no arithmetic left to get wrong.
-        int width = pasted.getSizeX(), height = pasted.getSizeY(), depth = pasted.getSizeZ();
-        BlockPos afcPos = flightComputerInFootprint(world, x0, y0, z0, width, height, depth);
+        net.minecraft.world.gen.structure.StructureBoundingBox footprint = footprintOf(pasted, x0, y0, z0);
+        BlockPos afcPos = flightComputerInFootprint(world, footprint);
         if (afcPos == null) {
-            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks pasted at"
-                            + " ({},{},{}) {}x{}x{} in dim {}: no flight computer stands in that"
-                            + " footprint, so the craft would have no name and would take a"
-                            + " substrate-minted id that nothing else in the game knows.",
-                    x0, y0, z0, width, height, depth,
-                    world == null ? "null" : world.provider.getDimension());
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks pasted at {} in dim {}:"
+                            + " no flight computer stands in that footprint, so the craft would have no"
+                            + " name and would take a substrate-minted id that nothing else in the game"
+                            + " knows.",
+                    footprint, world == null ? "null" : world.provider.getDimension());
             return null;
         }
         // The same footprint BOUNDS the ship: the substrate's block search may not leave it. The ship
         // is what was pasted here, and nothing that merely touches it — a launch pad reached through
         // the snow on its rim, a tree — the search used to take until it hit the size cap.
-        return assembleTier2ShipAt(world, afcPos, cause,
-                new net.minecraft.world.gen.structure.StructureBoundingBox(x0, y0, z0,
-                        x0 + width - 1, y0 + height - 1, z0 + depth - 1));
+        return assembleTier2ShipAt(world, afcPos, cause, footprint);
+    }
+
+    /** The substrate's ship size limit, in blocks: a craft with more is refused ({@link AssemblyRefusal#TOO_LARGE}). */
+    public static int shipSizeLimit() {
+        return VSBridge.shipSizeLimit();
+    }
+
+    /** Set the substrate's ship size limit — the config value a pack sets, for the probe that seeds it. */
+    public static void setShipSizeLimit(int blocks) {
+        VSBridge.setShipSizeLimit(blocks);
+    }
+
+    /** Why the substrate would not make a ship of a pasted craft. */
+    public enum AssemblyRefusal {
+        /** More blocks than the substrate's ship size limit. */
+        TOO_LARGE,
+        /** The pasted footprint holds no flight computer: the snapshot did not capture the craft's own. */
+        NO_FLIGHT_COMPUTER
+    }
+
+    /**
+     * Would {@link #assembleTier2Ship} with these arguments make a ship, or would the substrate drop it?
+     * {@code null} when it would make one.
+     *
+     * <p>Asked BEFORE assembling, by the one caller with a player to tell: the substrate decides a spawn a
+     * tick after it is queued and, refusing, drops it with nothing anyone sees — the assembler said
+     * "assembled" and there was no ship. The question runs the substrate's own search and rule on the same
+     * footprint the assembly would bound itself to, on the world as it stands.</p>
+     */
+    public static AssemblyRefusal tier2AssemblyRefusal(
+            World world, dev.stannismod.stellurgy.util.StorageChunk pasted, int x0, int y0, int z0) {
+        net.minecraft.world.gen.structure.StructureBoundingBox footprint = footprintOf(pasted, x0, y0, z0);
+        BlockPos afcPos = flightComputerInFootprint(world, footprint);
+        if (afcPos == null) {
+            return AssemblyRefusal.NO_FLIGHT_COMPUTER;
+        }
+        return VSBridge.assemblyRefusal(world, afcPos, footprint);
+    }
+
+    /**
+     * The region a snapshot's blocks occupy, inclusive. The EXTENT IS DERIVED, never passed: every
+     * caller holds this snapshot's blocks standing at this origin — pasted there by a crossing, or copied
+     * from there by the assembler — so its own sizes ARE the footprint — and a
+     * caller that computed them could get them wrong, which one promptly did: deriving the width from the
+     * assembler's scan box instead of from the snapshot reded all five ground-flight scenarios, because
+     * the scan missed the layer the flight computer stood in.
+     */
+    private static net.minecraft.world.gen.structure.StructureBoundingBox footprintOf(
+            dev.stannismod.stellurgy.util.StorageChunk pasted, int x0, int y0, int z0) {
+        return new net.minecraft.world.gen.structure.StructureBoundingBox(x0, y0, z0,
+                x0 + pasted.getSizeX() - 1, y0 + pasted.getSizeY() - 1, z0 + pasted.getSizeZ() - 1);
     }
 
     /**
@@ -209,15 +252,15 @@ public final class VSIntegration {
      * wrong. Returns {@code null} when the footprint holds no flight computer, which means the blocks
      * are not a tier-2 craft and nothing should be assembled from them.</p>
      */
-    private static BlockPos flightComputerInFootprint(World world, int x0, int y0, int z0,
-                                                     int width, int height, int depth) {
+    private static BlockPos flightComputerInFootprint(World world,
+                                                     net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
         if (world == null) {
             return null;
         }
-        for (int ey = 0; ey < height; ey++) {
-            for (int ex = 0; ex < width; ex++) {
-                for (int ez = 0; ez < depth; ez++) {
-                    BlockPos p = new BlockPos(x0 + ex, y0 + ey, z0 + ez);
+        for (int y = footprint.minY; y <= footprint.maxY; y++) {
+            for (int x = footprint.minX; x <= footprint.maxX; x++) {
+                for (int z = footprint.minZ; z <= footprint.maxZ; z++) {
+                    BlockPos p = new BlockPos(x, y, z);
                     if (world.getTileEntity(p)
                             instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) {
                         return p;

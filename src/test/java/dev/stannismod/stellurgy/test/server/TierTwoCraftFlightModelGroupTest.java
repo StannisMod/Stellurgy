@@ -14,6 +14,8 @@ import dev.stannismod.stellurgy.test.DriveInfo;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.PilotSeat;
+import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ServerWindow;
@@ -953,8 +955,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * weight in the local field is not built on the first press, and IS built by a second press on
      * the same build.
      *
-     * <p>Read off the press itself: the probe answers whether a press cut the craft out of its pad
-     * ({@code shipCut}) beside the scan's own verdict on it ({@code scanReadout.canHoverLIVE}). The
+     * <p>Read off the press itself: the probe answers whether a press built the craft — the
+     * assembler's own FINISHED ({@code built}; until 2026-10-06 {@code shipCut}, read off the pad) —
+     * beside the scan's own verdict on it ({@code scanReadout.canHoverLIVE}). The
      * hover-capable craft is the CONTROL — without it a gate that refused everything would pass the
      * first half. The build the second press made is then named like any craft, which is the record
      * that it became one.</p>
@@ -989,7 +992,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         requireArranged("the control's scan must say it can hover: " + hoverPress,
                 hoverPress.ok() && Reply.of(hoverPress.object("scanReadout")).bool("canHoverLIVE"));
         assertTrue("a craft that can hover must be built on the FIRST press: " + hoverPress,
-                hoverPress.bool("shipCut"));
+                hoverPress.bool("built"));
 
         Reply heavyFixture = lay(heavySite, "hull-without-actuators", "a hull that cannot hover");
         int[] builder = heavyFixture.blockPos("builderPos");
@@ -997,13 +1000,13 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         requireArranged("the heavy build's scan must say it cannot hover: " + first,
                 first.ok() && !Reply.of(first.object("scanReadout")).bool("canHoverLIVE"));
         assertTrue("a ship that cannot hold its weight here must NOT be built on the first press: "
-                + first, !first.bool("shipCut"));
+                + first, !first.bool("built"));
 
         long mark = events.mark();
         Reply second = Reply.of(RocketFixture.assembleBuilt(heavySite, this::exec, builder));
         measured("assembler presses", hoverPress, first, second);
         assertTrue("a second press on the SAME build must build it: " + second,
-                second.ok() && second.bool("shipCut"));
+                second.ok() && second.bool("built"));
         events.awaitRecordWithFields(mark, "ship_lifecycle",
                 "the build the second press made must become a named ship", LINK_BUDGET_TICKS,
                 "durable", second.text("shipId"), "edge", "named");
@@ -1209,6 +1212,131 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         assertEquals("the assembler must still stand where it was built",
                 ROCKET_BUILDER, builderNow);
     }
+
+    /**
+     * An assembled craft becomes a ship where it was built — no jump — and stands still on its pad.
+     *
+     * <p>This test fails if production breaks the contract that <b>assembly does not move the craft</b>:
+     * the flight computer of the new ship is, in the world, at the block it was built on, and the hull
+     * resting on its pad is not pushed off it, sunk into it or set turning by the physics. The assembler
+     * once cut the craft out and pasted it back a block higher, because the one thing then separating a
+     * craft from its pad was an air gap; the ship's block search is bounded to the pasted footprint now,
+     * so the gap separates nothing.</p>
+     *
+     * <p>Read where the decision lands: the computer's own subspace address, mapped into the world through
+     * the hull's own transform, against the address the assembler found it at before it pressed.</p>
+     *
+     * <p>Measured 2026-10-06 with the craft left in place: offset (0.0, 0.0, 0.0), and over 41 ticks the
+     * hull moved 0.0 blocks with omega 1.5e-15 rad/s — the physics does not push a hull resting on its
+     * pad, in open air or on a ground pad.</p>
+     *
+     * <p>red-witnessed: taken on the pre-change form, which cut the craft and pasted it one block higher;
+     * the code now standing there is {@code TileRocketAssemblingMachine#assembleRocket} at
+     * {@code VSIntegration.assembleTier2Ship(world, shipStructure, origin.getX(), origin.getY(),
+     * origin.getZ());}. The placement verdict failed — "the assembly moved it by (0.0,1.0,0.0)" —
+     * 2026-10-06. The rest verdicts are not witnessed.</p>
+     */
+    @Test
+    public void anAssembledShipStaysWhereItWasBuilt() throws Exception {
+        requireItStaysWhereItWasBuilt(site());
+    }
+
+    /**
+     * The same, for a pad laid on the ground — the ordinary case, where terrain meets the hull's sides at
+     * the pad's level instead of open air.
+     */
+    @Test
+    public void anAssembledShipOnAGroundPadStaysWhereItWasBuilt() throws Exception {
+        requireItStaysWhereItWasBuilt(FixtureSite.onGround(DIM, Plot.CLEAN_GROUND_X, Plot.CLEAN_GROUND_Y,
+                Plot.CLEAN_GROUND_Z, "the terrain around the pad is what a hull at rest must not be pushed by"));
+    }
+
+    private void requireItStaysWhereItWasBuilt(FixtureSite site) throws Exception {
+        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", HALO, HEIGHT,
+                "the craft that must stay where it was built stands in this volume");
+        String asm = RocketFixture.assembleBuilt(site, this::exec, builder);
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
+                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        int[] built = Reply.of("stellurgytest rocket assemble", asm).blockPos("afcPos");
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+                DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
+
+        PilotSeat seat = PilotSeat.byId(this::exec, DIM, shipId).requireFound("the new ship's own computer");
+        Reply mapped = Reply.of("stellurgytest vs to-world", exec("stellurgytest vs to-world " + DIM + " id "
+                + shipId + " " + seat.afcX + " " + seat.afcY + " " + seat.afcZ)).requireOk("map the computer");
+        double dx = mapped.number("worldX") - built[0];
+        double dy = mapped.number("worldY") - built[1];
+        double dz = mapped.number("worldZ") - built[2];
+        assertTrue("the ship's flight computer must be where it was built (" + built[0] + "," + built[1] + ","
+                + built[2] + "), and the assembly moved it by (" + dx + "," + dy + "," + dz + "): " + mapped,
+                Math.abs(dx) < BUILT_IN_PLACE_BLOCKS && Math.abs(dy) < BUILT_IN_PLACE_BLOCKS
+                        && Math.abs(dz) < BUILT_IN_PLACE_BLOCKS);
+
+        // WINDOW: a hull at rest is a value that does not converge to anything — it holds, or the physics
+        // pushes it. Two reads with the observed ticks between them, and the verdict names both.
+        ShipInfo before = ShipInfo.byId(this::exec, DIM, shipId);
+        long ticks = GameTicks.advanceObserved(client(), GameTicks.server(), AT_REST_WINDOW_TICKS);
+        ShipInfo after = ShipInfo.byId(this::exec, DIM, shipId);
+        double moved = after.distanceTo(before.x, before.y, before.z);
+        System.out.println("[measure] built-in-place offset (" + dx + "," + dy + "," + dz + "); over " + ticks
+                + " ticks moved " + moved + " blocks, omega " + after.omega + " rad/s, velY " + after.velY);
+        assertTrue("a craft built on its pad must rest there: over " + ticks + " ticks it moved " + moved
+                + " blocks (" + before + " -> " + after + ")", moved < AT_REST_BLOCKS);
+        assertTrue("a craft built on its pad must not be set turning: omega " + after.omega + " rad/s after "
+                + ticks + " ticks (" + after + ")", after.omega < AT_REST_OMEGA);
+    }
+
+    /**
+     * A craft larger than the substrate will make a ship of is refused AT THE PRESS, with the reason on
+     * the assembler, and left standing as built.
+     *
+     * <p>This test fails if production breaks the contract that <b>the assembler never reports a ship it
+     * did not get</b>. The substrate decides a spawn a tick after it is queued and, refusing, dropped it
+     * with one line on the error stream: the press said "finished", the craft was gone from the pad into a
+     * spawn that never happened, and nothing told the player why.</p>
+     *
+     * <p>The limit is seeded to ONE block — the config value a pack sets — so that any real craft is over
+     * it; building past the default fifteen thousand is not an arrangement. Restored in {@code finally}:
+     * the server is shared. Read without a wait: the refusal is decided before anything is queued.</p>
+     *
+     * <p>red-witnessed: with {@code TileRocketAssemblingMachine#assembleRocket} at {@code if (refusal !=
+     * null)} never taken, the status verdict fails — the press answers {@code "status":"FINISHED"} for a
+     * craft the substrate will drop — 2026-10-06. The as-built verdict is not witnessed separately.</p>
+     */
+    @Test
+    public void anOversizedCraftIsRefusedAtThePressAndLeftAsBuilt() throws Exception {
+        FixtureSite site = site();
+        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", HALO, HEIGHT,
+                "the craft the substrate will not take stands in this volume");
+        Reply limit = Reply.of("stellurgytest vs max-ship-size", exec("stellurgytest vs max-ship-size 1"))
+                .requireOk("seed the ship size limit");
+        String asm;
+        try {
+            asm = RocketFixture.assembleBuilt(site, this::exec, builder);
+        } finally {
+            exec("stellurgytest vs max-ship-size " + limit.integer("previous"));
+        }
+        Reply pressed = Reply.of("stellurgytest rocket assemble", asm);
+        int[] built = pressed.blockPos("afcPos");
+        requireArranged("the press must have found this craft's own flight computer: " + asm, built != null);
+
+        assertEquals("a craft over the ship size limit must be refused at the press, saying so: " + asm,
+                "SHIP_TOO_LARGE", pressed.text("status"));
+        assertEquals("the refused craft must be left standing as built — its flight computer where it was: "
+                + asm, FLIGHT_COMPUTER, blockAt(built[0], built[1], built[2]).text("block"));
+    }
+
+    private static final String FLIGHT_COMPUTER = "stellurgy:advancedflightcomputer";
+
+    /** THE TEST'S OWN: a block is 1.0, so a twentieth separates "where it was built" from the one-block
+     *  lift with nothing in between that a pasted craft could legitimately land at. */
+    private static final double BUILT_IN_PLACE_BLOCKS = 0.05;
+    /** Two seconds of a resting hull: long enough for a push off the pad to show as distance. */
+    private static final int AT_REST_WINDOW_TICKS = 40;
+    /** THE TEST'S OWN: a tenth of a block over the window is a hull settling; more is being pushed. */
+    private static final double AT_REST_BLOCKS = 0.1;
+    /** THE TEST'S OWN: a hundredth of a radian per second is a hull at rest, not one set turning. */
+    private static final double AT_REST_OMEGA = 0.01;
 
     private static final String LAUNCHPAD = "stellurgy:launchpad";
     private static final String ROCKET_BUILDER = "stellurgy:rocketbuilder";

@@ -95,11 +95,11 @@ public final class AssembledCraft {
         int[] builder = fixture.blockPos("builderPos");
         Reply press = Reply.of(RocketFixture.assembleBuilt(site, probe, builder));
         requireArranged(what + " — the assemble press must answer whether it built the ship: "
-                + press, press.ok() && press.has("shipCut"));
-        if (!press.bool("shipCut")) {
+                + press, press.ok() && press.has("built"));
+        if (!press.bool("built")) {
             press = Reply.of(RocketFixture.assembleBuilt(site, probe, builder));
             requireArranged(what + " — a second press on the same build must build it: " + press,
-                    press.ok() && press.bool("shipCut"));
+                    press.ok() && press.bool("built"));
         }
         String durable = press.text("shipId");
         String named = events.awaitRecordWithFields(mark, "ship_lifecycle",

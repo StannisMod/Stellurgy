@@ -73,6 +73,38 @@ final class VSBridge {
      * runtime behaviour can only be exercised with VS actually installed, not in a
      * headless test.</p>
      */
+    /** How a tier-2 craft's blocks are found — one value, because the refusal question below must ask
+     *  exactly what the queued spawn will do. */
+    private static final BlockFinder.BlockFinderType TIER2_BLOCK_SEARCH = BlockFinder.BlockFinderType.FIND_ALL_BLOCKS;
+
+    /**
+     * Would the substrate drop the tier-2 craft whose flight computer is at {@code afcPos}, inside
+     * {@code footprint}, if it were queued now? {@code null} when it would build it. The same search and
+     * the same rule as the spawn drain, run on the world as it stands.
+     */
+    static VSIntegration.AssemblyRefusal assemblyRefusal(World world, BlockPos afcPos,
+                                                        net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
+        WorldServerShipManager.SpawnRefusal refusal = ValkyrienUtils.getServerShipManager(world)
+                .refusalFor(afcPos, TIER2_BLOCK_SEARCH, footprint);
+        if (refusal == null) {
+            return null;
+        }
+        // TOO_LARGE is the only refusal this search can produce: the substrate's bedrock refusal is raised
+        // only by its FIND_ALLOWED_BLOCKS detector, and FIND_ALL_BLOCKS takes every block but air and fluid.
+        if (refusal == WorldServerShipManager.SpawnRefusal.TOO_LARGE) {
+            return VSIntegration.AssemblyRefusal.TOO_LARGE;
+        }
+        throw new IllegalStateException("a spawn refusal the tier-2 search cannot produce: " + refusal);
+    }
+
+    static int shipSizeLimit() {
+        return org.valkyrienskies.mod.common.config.VSConfig.maxDetectedShipSize;
+    }
+
+    static void setShipSizeLimit(int blocks) {
+        org.valkyrienskies.mod.common.config.VSConfig.maxDetectedShipSize = blocks;
+    }
+
     static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name,
                                   ShipLifecycleEvent.Cause cause,
                                   net.minecraft.world.gen.structure.StructureBoundingBox footprint) {
@@ -117,7 +149,7 @@ final class VSBridge {
         // flight computer was duplicated, which the facade re-mints for before it gets here.
         ship.setStellurgyDurableIdBeforeRegistration(name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
-        manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS, cause, footprint);
+        manager.queueShipSpawn(ship, afcPos, TIER2_BLOCK_SEARCH, cause, footprint);
         logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
                 ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
         return ship.getUuid();

@@ -827,13 +827,10 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         // EntityRocket. Only when the optional integration is installed; otherwise
         // the computer is inert and the ordinary rocket is built below.
         //
-        // The structure MUST be detached from the pad before the physics mod
-        // assembles it: that mod grows a ship by flood-filling every block connected
-        // to the anchor, so a craft still resting on the pad drags the whole terrain
-        // into the fill and the mod rejects the over-size/bedrock-touching result —
-        // no ship is ever created. So cut the scanned structure out (leaving the pad
-        // and terrain intact, exactly like the rocket path) and paste it back one
-        // block higher: the air gap under it bounds the flood-fill to the craft.
+        // The scanned structure is copied, not moved: the snapshot is the ship, the
+        // physics mod's block search is bounded to its footprint, and the mod relocates
+        // the blocks itself — so a craft resting on its pad takes neither the pad nor
+        // anything touching it.
         if (scannedFlightComputerPos != null) {
             // A ship that cannot hold itself up here is built only when asked twice. Not refused: a
             // ship is finished in place, and an extra engine is one block away. The first press
@@ -850,22 +847,45 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             }
             warnedThrustToWeight = Double.NaN;
             removeReplaceableBlocks(rocketBB);
+            // A COPY, and the world is left as built. The snapshot is what decides the ship: the
+            // assembly below bounds the substrate's block search to its footprint, so nothing on or
+            // beside the pad joins the craft. Until 2026-10-06 the craft was CUT out and pasted a block
+            // higher, because that air gap was then the only separation from the pad; with the bound the
+            // round trip moved nothing, and still killed every item lying near the pad and rebuilt every
+            // tile from NBT. The footprint's origin is the copy's own: the copy fits itself to the
+            // blocks still standing after the clean-up above, which can be tighter than the scan's box.
             final StorageChunk shipStructure;
             try {
-                shipStructure = StorageChunk.cutWorldBB(world, rocketBB);
+                shipStructure = StorageChunk.copyWorldBB(world, rocketBB);
             } catch (Throwable t) { // cover NegativeArraySizeException & other edge errors
                 status = ErrorCodes.FAIL_CUT;
                 return;
             }
-            final int liftGap = 1; // one block of air below the craft severs it from the pad
-            shipStructure.pasteInWorld(world, (int) rocketBB.minX,
-                    (int) rocketBB.minY + liftGap, (int) rocketBB.minZ);
-            BlockPos shipAnchor = scannedFlightComputerPos.add(0, liftGap, 0);
+            final BlockPos origin = shipStructure.copiedFrom();
+            // Asked BEFORE the craft is handed over, because after that the substrate decides a tick
+            // later and, refusing, drops it silently: the press read "finished" and there was no ship.
+            // Nothing has been moved yet, so a refusal leaves the world exactly as it was.
+            VSIntegration.AssemblyRefusal refusal = VSIntegration.tier2AssemblyRefusal(world, shipStructure,
+                    origin.getX(), origin.getY(), origin.getZ());
+            if (refusal != null) {
+                switch (refusal) {
+                    case TOO_LARGE:
+                        status = ErrorCodes.SHIP_TOO_LARGE;
+                        break;
+                    case NO_FLIGHT_COMPUTER:
+                        status = ErrorCodes.FAIL_CUT;
+                        break;
+                    default:
+                        throw new IllegalStateException("an assembly refusal with no status: " + refusal);
+                }
+                return;
+            }
+            BlockPos shipAnchor = scannedFlightComputerPos;
             // Link a pilot seat (if the build has one) to the flight computer, before the
             // physics mod relocates the craft: the seat stores the computer's offset, which the
             // rigid relocation preserves, so the seated pilot's input reaches the computer.
             if (scannedPilotSeatPos != null) {
-                TileEntity seatTe = world.getTileEntity(scannedPilotSeatPos.add(0, liftGap, 0));
+                TileEntity seatTe = world.getTileEntity(scannedPilotSeatPos);
                 if (seatTe instanceof TilePilotSeat) {
                     ((TilePilotSeat) seatTe).linkToFlightComputer(shipAnchor);
                 }
@@ -873,7 +893,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // Same relative-offset link for the navigation computer: the jump gate finds it from the
             // flight computer, and the offset is what survives the ship's relocation into subspace.
             if (scannedNavComputerPos != null) {
-                TileEntity navTe = world.getTileEntity(scannedNavComputerPos.add(0, liftGap, 0));
+                TileEntity navTe = world.getTileEntity(scannedNavComputerPos);
                 if (navTe instanceof TileNavigationComputer) {
                     ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);
                 }
@@ -883,7 +903,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // ship's machines by asking each one which flight computer it answers to, so an
             // unlinked one is invisible to its own ship and available to none.
             for (BlockPos machinePos : scannedShipMachines) {
-                TileEntity machineTe = world.getTileEntity(machinePos.add(0, liftGap, 0));
+                TileEntity machineTe = world.getTileEntity(machinePos);
                 if (machineTe instanceof TileShipComponent) {
                     ((TileShipComponent) machineTe).linkToFlightComputer(shipAnchor);
                 }
@@ -920,26 +940,23 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // longer handed to the assembly, because a caller that can pass an anchor can pass the
             // wrong one.
             // The footprint is taken from the SNAPSHOT's own sizes, not derived from the scan box:
-            // the snapshot is what was pasted, so its extents are the pasted region by definition,
+            // the snapshot is what was copied, so its extents are the craft's region by definition,
             // and a width computed off an AABB's min/max is one inclusive-vs-exclusive mistake away
             // from a scan that misses the layer the flight computer stands in. (Measured: deriving
             // it from `rocketBB` reded all five ground-flight scenarios — `rocket_assembled` fired
-            // and no ship was ever spawned.) The origin is the paste's own origin, lift and all.
-            VSIntegration.assembleTier2Ship(world, shipStructure,
-                    (int) rocketBB.minX, (int) rocketBB.minY + liftGap, (int) rocketBB.minZ);
+            // and no ship was ever spawned.) The origin is the copy's own origin.
+            VSIntegration.assembleTier2Ship(world, shipStructure, origin.getX(), origin.getY(), origin.getZ());
             // A pilot who took the seat BEFORE assembly is riding a mount bound to the seat's
-            // build-time position, which the cut above just vacated - once the blocks relocate
+            // build-time position, which the relocation is about to vacate - once the blocks relocate
             // into the ship's subspace nothing in his control chain resolves and the ship ignores
             // him. Queue the rebind that re-expresses his boarding on the relocated seat; queued,
             // not done inline, because the relocation is asynchronous.
             if (scannedPilotSeatPos != null) {
-                BlockPos postLiftSeat = scannedPilotSeatPos.add(0, liftGap, 0);
                 for (dev.stannismod.stellurgy.entity.EntityDummy mount :
                         world.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityDummy.class,
                                 rocketBB.grow(2.0))) {
                     BlockPos bound = mount.getSeatPos();
-                    if (bound == null
-                            || !(bound.equals(scannedPilotSeatPos) || bound.equals(postLiftSeat))) {
+                    if (bound == null || !bound.equals(scannedPilotSeatPos)) {
                         continue; // an ordinary (passenger) seat mount, or someone else's seat
                     }
                     for (net.minecraft.entity.Entity passenger : mount.getPassengers()) {
@@ -948,9 +965,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                                     (net.minecraft.world.WorldServer) world,
                                     (net.minecraft.entity.player.EntityPlayerMP) passenger,
                                     mount.getEntityId(), shipAnchor,
-                                    shipAnchor.getX() - postLiftSeat.getX(),
-                                    shipAnchor.getY() - postLiftSeat.getY(),
-                                    shipAnchor.getZ() - postLiftSeat.getZ(),
+                                    shipAnchor.getX() - scannedPilotSeatPos.getX(),
+                                    shipAnchor.getY() - scannedPilotSeatPos.getY(),
+                                    shipAnchor.getZ() - scannedPilotSeatPos.getZ(),
                                     durableShipId);
                         }
                     }
@@ -1678,7 +1695,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         NOINTAKE("msg.rocketbuilder.nointake"),
         NOTANK("msg.rocketbuilder.notank"),
         MULTIPLEFLIGHTCOMPUTERS("msg.rocketbuilder.multipleflightcomputers"),
-        MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats");
+        MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats"),
+        // Appended, never inserted: the status travels and saves as its ordinal.
+        SHIP_TOO_LARGE("msg.rocketbuilder.shiptoolarge");
 
         /** Effectively final, process lifetime: set once when the object is built. */
         private final String translationKey;

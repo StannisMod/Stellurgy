@@ -302,22 +302,14 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             if (loadedShips.containsKey(toSpawn.getUuid())) {
                 throw new IllegalStateException("Tried spawning a ShipData that was already loaded?\n" + toSpawn);
             }
-            final SpatialDetector detector = BlockFinder.getBlockFinderFor(blockBlockFinderType, physicsInfuserPos, world, VSConfig.maxDetectedShipSize + 1, true, spawnData.footprint);
+            final SpatialDetector detector = BlockFinder.getBlockFinderFor(blockBlockFinderType, physicsInfuserPos, world, spawnSizeLimit(), SPAWN_CHECKS_CORNERS, spawnData.footprint);
             if (VSConfig.showAnnoyingDebugOutput) {
                 System.out.println("Attempting to spawn " + toSpawn + " on the thread " + Thread.currentThread().getName());
             }
-            if (detector.foundSet.size() > VSConfig.maxDetectedShipSize || detector.cleanHouse) {
-                System.err.println("Ship too big or bedrock detected!");
-                /*
-                if (creator != null) {
-                    creator.sendMessage(new TextComponentString(
-                            "Ship construction canceled because its exceeding the ship size limit; "
-                                    +
-                                    "or because it's attached to bedrock. " +
-                                    "Raise it with /physsettings maxshipsize [number]"));
-                }
-
-                 */
+            final SpawnRefusal refusal = refusalOf(detector);
+            if (refusal != null) {
+                // A caller that cares asks refusalFor BEFORE queueing; this line is for one that did not.
+                System.err.println("Ship spawn refused (" + refusal + ") at " + physicsInfuserPos);
                 continue; // Skip ship construction
             }
             // Fill the chunk claims
@@ -771,6 +763,43 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     @Override
     public ImmutableList<PhysicsObject> getAllLoadedThreadSafe() {
         return threadSafeLoadedShips;
+    }
+
+    /** Why the spawn queue would drop a ship instead of building it. */
+    public enum SpawnRefusal {
+        /** The search found more blocks than {@code VSConfig.maxDetectedShipSize}. */
+        TOO_LARGE,
+        /** The search touched bedrock, which no ship may take out of a world. */
+        BEDROCK
+    }
+
+    /** The drain's detector parameters, in ONE place, because {@link #refusalFor} must ask the same question. */
+    private static final boolean SPAWN_CHECKS_CORNERS = true;
+
+    private static int spawnSizeLimit() {
+        return VSConfig.maxDetectedShipSize + 1;
+    }
+
+    /** The drain's rule for dropping a ship, or {@code null} when it would build it. */
+    @Nullable
+    public static SpawnRefusal refusalOf(@Nonnull SpatialDetector detector) {
+        if (detector.cleanHouse) {
+            return SpawnRefusal.BEDROCK;
+        }
+        return detector.foundSet.size() > VSConfig.maxDetectedShipSize ? SpawnRefusal.TOO_LARGE : null;
+    }
+
+    /**
+     * Would the spawn queue drop a ship queued with these arguments? Answered by running the same search
+     * the drain runs, on the world as it stands now, and applying the same rule — so a caller can refuse
+     * BEFORE queueing, where its player can be told why, instead of the drain dropping the ship a tick
+     * later with a line on the error stream and nothing anyone sees.
+     */
+    @Nullable
+    public SpawnRefusal refusalFor(@Nonnull BlockPos spawnPos, @Nonnull BlockFinder.BlockFinderType blockFinderType,
+                                   @Nonnull StructureBoundingBox footprint) {
+        return refusalOf(BlockFinder.getBlockFinderFor(blockFinderType, spawnPos, world, spawnSizeLimit(),
+                SPAWN_CHECKS_CORNERS, footprint));
     }
 
     /**

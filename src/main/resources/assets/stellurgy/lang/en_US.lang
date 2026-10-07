@@ -718,6 +718,7 @@ msg.rocketbuilder.nointake=Missing Gas Intake!
 msg.rocketbuilder.notank=Missing Fluidtank!
 msg.rocketbuilder.multipleflightcomputers=Only one Flight Computer per ship!
 msg.rocketbuilder.multiplepilotseats=Only one Pilot Seat per ship!
+msg.rocketbuilder.shiptoolarge=Ship too large to assemble
 msg.solar.collectingEnergy=Collecting Energy:
 msg.solar.cannotcollectEnergy=Unable to collect Energy
 msg.asteroidChip.asteroid=Asteroid

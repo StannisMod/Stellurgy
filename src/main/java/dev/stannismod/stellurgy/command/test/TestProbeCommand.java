@@ -1834,6 +1834,24 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(m));
             return;
         }
+        // max-ship-size [<n>] — the substrate's ship size limit (`maxDetectedShipSize`, a config value a
+        // pack sets), answered; with <n>, set first. For a scenario whose subject is what happens to a
+        // craft over that limit: building fifteen thousand blocks to cross the default is not an
+        // arrangement anyone can afford. The caller restores `previous` — the server is shared.
+        if (args.length >= 1 && "max-ship-size".equalsIgnoreCase(args[0])) {
+            int previous = dev.stannismod.stellurgy.integration.vs.VSIntegration.shipSizeLimit();
+            if (args.length >= 2) {
+                int wanted = parseIntOr(args[1], -1);
+                if (wanted < 1) {
+                    send(sender, "{\"ok\":false,\"reason\":\"a ship size limit is a positive block count\"}");
+                    return;
+                }
+                dev.stannismod.stellurgy.integration.vs.VSIntegration.setShipSizeLimit(wanted);
+            }
+            send(sender, "{\"ok\":true,\"previous\":" + previous + ",\"now\":"
+                    + dev.stannismod.stellurgy.integration.vs.VSIntegration.shipSizeLimit() + "}");
+            return;
+        }
         // ship-uuid <dim> <durableShipId> — the PHYSICS id of the craft whose flight computer carries
         // the durable id <durableShipId>, or null.
         //
@@ -11196,15 +11214,14 @@ public class TestProbeCommand extends CommandBase {
             java.util.List<dev.stannismod.stellurgy.entity.EntityRocket> rockets =
                     world.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityRocket.class, bb);
             int entityId = rockets.isEmpty() ? -1 : rockets.get(0).getEntityId();
-            // 7. WHAT THIS PRESS DID to a ship build, as a value. `status` cannot say it: a tier-2 press
-            //    that only WARNED (thrust-to-weight under one here) leaves the scan's SUCCESS standing
-            //    exactly as a press that built. What differs is the pad — a press that builds cuts the
-            //    craft out of it, so the flight computer is no longer where the scan found it. Null when
+            // 7. WHETHER THIS PRESS BUILT a ship, as a value: the assembler's own verdict, FINISHED,
+            //    which only the hand-over writes — a press that only WARNED (thrust-to-weight under one
+            //    here) leaves the scan's SUCCESS, and one the substrate would refuse names its refusal.
+            //    It was read off the pad until 2026-10-06 (the computer gone from where the scan found
+            //    it), which stopped meaning anything once the craft was pasted back in place. Null when
             //    the build has no flight computer (a rocket), where the question does not arise.
             //    Beside it, the scan's own readout verdict the press acted on.
-            String shipCut = padComputer == null ? "null"
-                    : String.valueOf(!(world.getTileEntity(padComputer)
-                            instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer));
+            String shipBuilt = padComputer == null ? "null" : String.valueOf("FINISHED".equals(postStatusName));
             dev.stannismod.stellurgy.ship.control.ShipReadout scanReadout = builder.tier2Readout();
             String tier2 = "null";
             if (scanReadout != null) {
@@ -11220,7 +11237,11 @@ public class TestProbeCommand extends CommandBase {
                     + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size()
                     + ",\"afcCount\":" + afcCount
                     + ",\"shipId\":" + (durableShipId == null ? "null" : "\"" + durableShipId + "\"")
-                    + ",\"shipCut\":" + shipCut
+                    + ",\"built\":" + shipBuilt
+                    // Where the flight computer stood AS BUILT, read before the press moved anything:
+                    // the one world address a scenario can compare the assembled craft against.
+                    + ",\"afcPos\":" + (padComputer == null ? "null" : "[" + padComputer.getX() + ","
+                            + padComputer.getY() + "," + padComputer.getZ() + "]")
                     + ",\"scanReadout\":" + tier2
                     + "}");
         } catch (ReflectiveOperationException e) {
