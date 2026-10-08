@@ -6,21 +6,26 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * Each scrub an oxygen vent runs, recorded as it ends: how many of its scrubbers absorbed, what the vent's
- * store held while they did, and the price the vent will now ask of it. Read by
- * {@code LifeSupportZoneTest#aVentScrubsOnlyWhatItsStoreCanPayFor}.
+ * store held while they did, the price the vent will now ask of it, and the CO2 its room holds after them.
+ * Read by {@code LifeSupportZoneTest#aVentScrubsOnlyWhatItsStoreCanPayFor}.
  *
  * <p>{@code vent_scrubbed} is written at the RETURN of {@code TileOxygenVent#scrub}, and only on the call
  * that ran a scrub (its interval counter is back at zero). The store is read before the tick's payment,
  * which {@code TileOxygenVent#update} takes after the function returns — so {@code stored} is what the
  * scrub had to be paid out of.</p>
  *
- * <p>Fields: {@code pos} as {@code x,y,z}; {@code working}; {@code stored}; {@code price}. SILENT on a tick
- * that is not a scrub, and on a vent whose room is not sealed (it never reaches {@code scrub}).</p>
+ * <p>Fields: {@code pos} as {@code x,y,z}; {@code working}; {@code stored}; {@code price}; {@code co2}, the
+ * zone's carbon dioxide in billionths of an atmosphere after the scrub, {@code -1} when the vent holds no
+ * zone. {@code working:0} beside {@code co2} above zero is a scrub that left CO2 it could have taken; beside
+ * {@code co2:0} it had nothing to take. SILENT on a tick that is not a scrub, and on a vent whose room is not
+ * sealed (it never reaches {@code scrub}).</p>
  */
 @Mixin(value = TileOxygenVent.class, remap = false)
 public abstract class MixinTileOxygenVentScrubEvents {
@@ -40,8 +45,11 @@ public abstract class MixinTileOxygenVentScrubEvents {
         if (ticksSinceScrub != 0) {
             return;
         }
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(self.getWorld());
+        AirState air = handler == null ? null : handler.getAirState(self);
         TestTrace.record(self.getWorld(), "vent_scrubbed", "\"pos\":\"" + self.getPos().getX() + ","
                 + self.getPos().getY() + "," + self.getPos().getZ() + "\",\"working\":" + workingScrubbers
-                + ",\"stored\":" + self.getUniversalEnergyStored() + ",\"price\":" + self.getPowerPerOperation());
+                + ",\"stored\":" + self.getUniversalEnergyStored() + ",\"price\":" + self.getPowerPerOperation()
+                + ",\"co2\":" + (air == null ? -1L : air.getCarbonDioxide()));
     }
 }

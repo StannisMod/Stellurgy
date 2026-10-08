@@ -14504,6 +14504,12 @@ public class TestProbeCommand extends CommandBase {
                     // compute the charges a measured draw is worth instead of restating the defaults.
                     "lifeSupportScrubberRate",
                     "lifeSupportScrubberCo2PerCharge",
+                    // What a vent's tick costs. Set so a scenario can price two scrubbers above what
+                    // the vent's store can hold, which no amount of energy can then pay for.
+                    "oxygenVentPowerMultiplier",
+                    // How fast a breached zone loses its air. Read so a test that must tell a breach
+                    // from a room that keeps its air knows the setting lets a breach show at all.
+                    "lifeSupportBreachVentRate",
                     // What the air's chemistry does to living things. A test turns one off for its own
                     // scenario, puts back what it found, and pins that the effect stops and the
                     // systems do not.

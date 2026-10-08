@@ -38,8 +38,9 @@ final class SealedZone {
 
     private boolean sealed;
     /**
-     * This zone has held a seal at least once since it loaded. It is what tells "the room opened"
-     * apart from "the room is not built yet": both look like no seal, no zone, air in hand.
+     * This zone has held a seal since it loaded or was last dropped. It is what tells "the room opened"
+     * apart from "the room is not built yet" and from "the owner let it go": all three look like no
+     * seal, no zone, air in hand.
      */
     private boolean everSealed;
     /**
@@ -167,10 +168,16 @@ final class SealedZone {
         return ok;
     }
 
-    /** The owner cannot hold the zone (switched off, browning out): the room stops being one. */
+    /**
+     * The owner cannot hold the zone (switched off, browning out): the room stops being one. That is not
+     * a hole in the hull, so the zone this empties must not read as a seal that found its zone gone; the
+     * air waits for the next seal check, which the owner runs once it can hold the zone again and which
+     * answers for a hull that opened meanwhile.
+     */
     void drop(@Nonnull AtmosphereHandler handler) {
         handler.clearBlob(owner);
         sealed = false;
+        everSealed = false;
         awaitingFill = false;
     }
 
