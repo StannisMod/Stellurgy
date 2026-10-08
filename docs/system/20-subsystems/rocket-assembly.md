@@ -152,22 +152,22 @@ reads 0 = SUCCESS; `pwr`, `tik` and `id` are network-only (id 2/3 sync), never p
 - **INV-RASM-01 [V][BEH]** `getRocketPadBounds` returns `null` unless both horizontal sizes
   `≥ MIN_SIZE` and the tower `≥ MIN_SIZE_Y`; all downstream scan/build early-outs on
   `bbCache==null` (`canScan`). `TileRocketAssemblingMachine.java:776`, `:920`.
-- **INV-RASM-02 [T][BEH]** A valid pad structure assembles to a spawned entity with a positive-axis
+- **INV-RASM-02 [A][BEH]** A valid pad structure assembles to a spawned entity with a positive-axis
   storage chunk whose `storageChunkSize == sx*sy*sz`. `RocketAssemblySmokeTest.java:56`. Pinned by `RocketAssemblySmokeTest#fixtureRocketAssemblesToLiveEntity`, `RocketAssemblySmokeTest#rocketStorageChunkMatchesScanFootprint`.
-- **INV-RASM-03 [T][BEH]** `assembleRocket` only proceeds when `status==SUCCESS`; a scan verdict of
+- **INV-RASM-03 [A][BEH]** `assembleRocket` only proceeds when `status==SUCCESS`; a scan verdict of
   anything else aborts the build. `TileRocketAssemblingMachine.java:642`;
   `RocketAssemblySmokeTest.java:33`. Pinned by `RocketAssemblySmokeTest#invalidRocketMissingEngineFailsAssemblyWithReason`.
-- **INV-RASM-04 [T][BEH]** The pad assembler spawns `EntityRocket` (never
+- **INV-RASM-04 [A][BEH]** The pad assembler spawns `EntityRocket` (never
   `EntityStationDeployedRocket`); the UV assembler spawns `EntityStationDeployedRocket`.
   `UvAssemblerOutputEntityClassTest.java:81,106`. Pinned by `UvAssemblerOutputEntityClassTest#rocketAssemblerProducesEntityRocketNotStationDeployed`, `UvAssemblerOutputEntityClassTest#uvAssemblerProducesEntityStationDeployedRocket`.
 - **INV-RASM-05 [V][BEH]** UV size caps are `MAX_SIZE=MAX_SIZE_Y=17` and are strictly smaller than
   the pad assembler's `MAX_SIZE_Y=128`, so the two tiles remain distinct machines.
   `TileUnmannedVehicleAssembler.java:33`; `TileRocketAssemblingMachine.java:70`. Unpinned on
   purpose: a relation between two constants executes no decision.
-- **INV-RASM-06 [T][BEH]** With `rocketRequireFuel=false`, `hasEnoughFuel` returns `true`
+- **INV-RASM-06 [A][BEH]** With `rocketRequireFuel=false`, `hasEnoughFuel` returns `true`
   unconditionally so a valid structure still assembles (never collapses to `NOFUEL`).
   `TileRocketAssemblingMachine.java:237`; `RocketRequireFuelDisableAssemblesTest.java:77`. Pinned by `RocketRequireFuelDisableAssemblesTest#validRocketAssemblesWhenFuelNotRequired`.
-- **INV-RASM-07 [T][BEH]** Wear accrual is single-gated by `partsWearSystem`: system on ⇒
+- **INV-RASM-07 [A][BEH]** Wear accrual is single-gated by `partsWearSystem`: system on ⇒
   `damageParts` raises breaking probability > 0; system off ⇒ probability stays 0.
   `StorageChunk.java:796`; `WearAccrualDisableTest.java:76,81`. Pinned by `WearAccrualDisableTest#wearAccruesOnlyWhenSystemEnabled`.
 - **INV-RASM-08 [V][SYS]** Blob NBT read reallocates `blocks`/`metas` from `xSize·ySize·zSize`

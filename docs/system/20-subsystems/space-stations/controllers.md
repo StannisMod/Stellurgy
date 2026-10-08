@@ -64,15 +64,15 @@ Config: see `C4-config-surface` (controllers only tick when `world.provider inst
 
 ## Invariants
 
-- **INV-STN-10 [T][BEH]** Setting the altitude controller's target moves the station's
+- **INV-STN-10 [A][BEH]** Setting the altitude controller's target moves the station's
   `targetOrbitalDistance`, and the actual `orbitalDistance` then walks toward that target over
   ticks (StationControllersTickContractTest:73-127). Pinned by `StationControllersTickContractTest#altitudeControllerWalksStationOrbitalDistanceTowardTarget`.
-- **INV-STN-11 [T][BEH]** Driving the gravity controller walks the station's actual gravity
+- **INV-STN-11 [A][BEH]** Driving the gravity controller walks the station's actual gravity
   measurably below its start toward the target (StationControllersTickContractTest:165-200). Pinned by `StationControllersTickContractTest#gravityControllerWalksStationGravityTowardTarget`.
-- **INV-STN-12 [T][BEH]** Setting the orientation controller's X target reflects onto the station's
+- **INV-STN-12 [A][BEH]** Setting the orientation controller's X target reflects onto the station's
   `targetRotationsPerHour[0]` and the station's rotation around EAST then changes
   (StationControllersTickContractTest:217-261). Pinned by `StationControllersTickContractTest#orientationControllerWalksStationRotationTowardTarget`.
-- **INV-STN-13 [T][BEH]** All three controllers place and tick without error on a station
+- **INV-STN-13 [A][BEH]** All three controllers place and tick without error on a station
   (StationControllersSmokeTest). Pinned by `StationControllersSmokeTest#orientationControllerPlacesAndTicksWithoutCrash`, `StationControllersSmokeTest#gravityControllerPlacesAndTicksWithoutCrash`, `StationControllersSmokeTest#altitudeControllerPlacesAndTicksWithoutCrash`.
 - **INV-STN-14 [V][BEH]** Convergence steps are bounded per tick (altitude `0.02`, gravity `0.001`,
   orientation `getMaxRotationalAcceleration`) so a target change ramps rather than snaps; the exact

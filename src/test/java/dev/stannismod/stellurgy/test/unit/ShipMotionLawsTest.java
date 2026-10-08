@@ -724,6 +724,7 @@ public class ShipMotionLawsTest {
      * axis had taken from it) fails "generated hull #3, command 3 (YAW_NEGATIVE×1.0 PITCH_NEGATIVE×1.5
      * HEAVE_POSITIVE×1.0), step 14: PITCH delivered the wrong way — asked -7.935, got 0.0095".</p>
      * Pins INV-SFM-12 (a command is delivered exactly, or less and flagged saturated).
+     * Visits INV-SFM-12 regions: delivered whole, saturated, an empty wheel, a full wheel, a wheel inside its last step, two axes sharing a wheel
      */
     @Test
     public void everyCommandIsDeliveredCleanlyOrLessAndSaidSo() {
@@ -733,6 +734,8 @@ public class ShipMotionLawsTest {
         int saturatedSteps = 0;
         int sliverCalls = 0;
         int sharedWheelCalls = 0;
+        int emptyWheelCalls = 0;
+        int fullWheelCalls = 0;
         int wheelSteps = 0;
         for (int h = 0; h < HULLS; h++) {
             ShipMotionCases.Hull hull = ShipMotionCases.randomHull(rng, "generated hull #" + h);
@@ -747,6 +750,12 @@ public class ShipMotionLawsTest {
                 for (int s = 0; s < HOLD_STEPS; s++) {
                     String before = CleanCommandLaw.wheels(cap, momentum);
                     boolean inLastStep = ShipMotionCases.aWheelIsInsideItsLastStep(cap, momentum);
+                    if (ShipMotionCases.aWheelIsEmpty(cap, momentum)) {
+                        emptyWheelCalls++;
+                    }
+                    if (ShipMotionCases.aWheelIsFull(cap, momentum)) {
+                        fullWheelCalls++;
+                    }
                     ActuatorCommand c = scheme.allocate(cap, lin, ang, momentum, ShipMotionCases.DT);
                     try {
                         CleanCommandLaw.requireHonest(hull.name + ", command " + k + " (" + asked + "), step " + s,
@@ -774,24 +783,31 @@ public class ShipMotionLawsTest {
         }
         System.out.println("[kernel] steps " + steps + ", saturated " + saturatedSteps
                 + ", using a wheel " + wheelSteps + ", of them inside a wheel's last step " + sliverCalls
-                + ", with more than one axis asked " + sharedWheelCalls);
+                + ", with more than one axis asked " + sharedWheelCalls + ", from an empty wheel "
+                + emptyWheelCalls + ", from a full wheel " + fullWheelCalls);
         // The law above holds trivially on a sweep that never saturated, never used a wheel, never
         // drew on a wheel inside its last step, or never had two axes sharing one — counted from the
         // state the scheme was called in, not from what the generator meant to draw.
         requireArranged("the sweep must visit the states the law is about — saturated " + saturatedSteps
                         + " of " + steps + ", wheel calls " + wheelSteps + ", of them inside a wheel's last step "
                         + sliverCalls + " (at least " + MIN_REGION_CALLS + "), sharing a wheel between axes "
-                        + sharedWheelCalls + " (at least " + MIN_REGION_CALLS + ")",
+                        + sharedWheelCalls + " (at least " + MIN_REGION_CALLS + "), from an empty wheel "
+                        + emptyWheelCalls + ", from a full wheel " + fullWheelCalls + " (each at least "
+                        + MIN_REGION_CALLS + ")",
                 saturatedSteps > 0 && saturatedSteps < steps && sliverCalls >= MIN_REGION_CALLS
-                        && sharedWheelCalls >= MIN_REGION_CALLS);
+                        && sharedWheelCalls >= MIN_REGION_CALLS && emptyWheelCalls >= MIN_REGION_CALLS
+                        && fullWheelCalls >= MIN_REGION_CALLS);
     }
 
     /**
-     * The fewest calls the sweep must make in each of its two hard regions — a wheel drawn on inside its
-     * last step, and a wheel shared by several asked axes. One per hull on average: about 70% of hulls
-     * carry a wheel, each gets {@value #COMMANDS} commands, and each wheel axis starts inside its last
-     * step with probability 1/3 ({@link ShipMotionCases#randomWheelState}), so starts alone are expected near
-     * 300 × 0.7 × 12 × (1 − (2/3)³) ≈ 1 770; a floor of {@value #HULLS} is under a fifth of that.
+     * The fewest calls the sweep must make in each of its counted regions — a wheel drawn on inside its
+     * last step, a wheel shared by several asked axes, an empty wheel, a full wheel. One per hull on
+     * average: about 70% of hulls carry a wheel, each gets {@value #COMMANDS} commands, and each wheel
+     * axis starts inside its last step with probability 1/3, empty with 1/6 and full with 1/3
+     * ({@link ShipMotionCases#randomWheelState}), so starts alone are expected near
+     * 300 × 0.7 × 12 × (1 − (2/3)³) ≈ 1 770 for the last step and the full wheel and
+     * 300 × 0.7 × 12 × (1 − (5/6)³) ≈ 1 060 for the empty one; a floor of {@value #HULLS} is under a third
+     * of the smallest.
      */
     private static final int MIN_REGION_CALLS = HULLS;
 
@@ -1009,8 +1025,8 @@ public class ShipMotionLawsTest {
      * <p>Silent about the other half of the clause — the one reference and the single read in the
      * controller — which no fast test can reach.</p>
      *
-     * red-witnessed: with {@code FlightCommand#copy} at {@code return part.clone();} returning {@code part}, fails: "INV-SFM-15: the velocity a step flies is the one published: arrays first differed at element [0]; expected:<1.0> but was:<99.0>" (2026-10-08).
-     * red-witnessed: with {@code FlightCommand#velocity} at {@code velocity.clone()} returning {@code velocity}, fails: "INV-SFM-15: the velocity a step flies is the one published: arrays first differed at element [1]; expected:<-2.0> but was:<77.0>" (2026-10-08).
+     * red-witnessed: with {@code FlightCommand#copy} at {@code return part.clone();} replaced by {@code return part;}, fails: "INV-SFM-15: the velocity a step flies is the one published" (2026-10-08; element [0] expected 1.0, was 99.0).
+     * red-witnessed: with {@code FlightCommand#velocity} at {@code velocity.clone()} replaced by {@code velocity}, fails: "INV-SFM-15: the velocity a step flies is the one published" (2026-10-08; element [1] expected -2.0, was 77.0).
      */
     @Test
     public void aPublishedCommandCannotChangeUnderItsReader() {

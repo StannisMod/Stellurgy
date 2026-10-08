@@ -70,7 +70,7 @@ world NBT themselves. `OreGenProperties` keeps a process-wide static
 
 ## Invariants
 
-- **INV-XML-01 [T][BEH]** A malformed planet definition is skipped, not fatal; the rest of the
+- **INV-XML-01 [A][BEH]** A malformed planet definition is skipped, not fatal; the rest of the
   galaxy still loads. `test/server/PlanetDefsFaultToleranceTest.java`,
   `test/integration/XMLPlanetLoaderTest.java`, `test/unit/XMLPlanetLoaderTest.java`. Pinned by `PlanetDefsFaultToleranceTest#serverBootsWithMalformedPlanetSkipped`.
 - **INV-XML-02 [V][SYS]** `readAllPlanets` throws if `<galaxy>` is absent.
@@ -79,7 +79,7 @@ world NBT themselves. `OreGenProperties` keeps a process-wide static
   `XMLOreLoader.java:303-307`. FOR: public API: planetDefs.xml schema read by pack authors.
 - **INV-XML-04 [V][SYS]** Ore heights are clamped into legal world range at parse time, so no
   out-of-range `OreEntry` reaches world-gen. `XMLOreLoader.java:73,89,105,121`. FOR: public API: planetDefs.xml schema read by pack authors.
-- **INV-XML-05 [T][BEH]** Asteroid dimensions actually contain asteroids after config load
+- **INV-XML-05 [A][BEH]** Asteroid dimensions actually contain asteroids after config load
   (end-to-end). `test/server/AsteroidDimensionContainsAsteroidsTest.java`. Pinned by `AsteroidDimensionContainsAsteroidsTest#asteroidDimGeneratesFillBlocks`.
 - **INV-XML-06 [V][SYS]** `XMLAsteroidLoader.getStack` accepts both `;`-delimited (new) and
   space-delimited (legacy) `name;meta` forms. `XMLAsteroidLoader.java:31-56`. FOR: public API: asteroid definition forms read by pack authors.

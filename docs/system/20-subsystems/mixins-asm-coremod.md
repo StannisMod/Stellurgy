@@ -134,7 +134,7 @@ No NBT owned. Reads config flag `Planet.perDimWorldInfo` (default true) directly
 
 ## Invariants
 
-- **INV-MIX-01 [T][BEH]** The 3 WorldInfo mixins weave iff `perDimWorldInfo` is on; all other
+- **INV-MIX-01 [A][BEH]** The 3 WorldInfo mixins weave iff `perDimWorldInfo` is on; all other
   mixins always weave. `StellurgyMixinPluginTest.java:46-69` Pinned by `StellurgyMixinPluginTest#worldInfoMixinsApplyWhenPerDimWorldInfoEnabled`, `StellurgyMixinPluginTest#worldInfoMixinsSkippedWhenPerDimWorldInfoDisabled`, `StellurgyMixinPluginTest#nonWorldInfoMixinsAlwaysApplyRegardlessOfFlag`.
 - **INV-MIX-02 [V]** Coremod never touches `spongepowered.asm.*` (avoids the AppClassLoader
   LinkageError / "no mixin host service" crash). `asm/StellurgyPlugin.java:14-34`

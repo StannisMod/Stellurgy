@@ -28,7 +28,7 @@ tiles, events, GUI, commands). **ship id** = the substrate's ship identity as a 
 
 **Containment — who may name substrate types**
 
-- **PORT-1** `[T][SYS]` Only four roles may import `org.valkyrienskies` in `src/main`: the port package
+- **PORT-1** `[A][SYS]` Only four roles may import `org.valkyrienskies` in `src/main`: the port package
   (`integration/vs/`), the mixins that weave into substrate internals (`mixin/`), the mod entry
   point that gates/registers the integration (`Stellurgy.java`), and the ONE tile the engine calls back
   into (`tile/TileAdvancedFlightComputer`, the force-controller callback). Pinned by

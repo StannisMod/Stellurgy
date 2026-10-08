@@ -77,7 +77,7 @@ Config: see `C4-config-surface`.
 
 ## Invariants
 
-- **INV-MBM-13** [T][BEH] A centrifuge and a crystallizer run a full recipe end-to-end producing the
+- **INV-MBM-13** [A][BEH] A centrifuge and a crystallizer run a full recipe end-to-end producing the
   expected output. `CentrifugeRecipeEndToEndTest`, `CrystallizerRecipeEndToEndTest`. Pinned by `CentrifugeRecipeEndToEndTest#centrifugeRunsFirstRegisteredRecipe`, `CrystallizerRecipeEndToEndTest#crystallizerRunsFirstRegisteredRecipe`.
 - **INV-MBM-14** [V][BEH] `reloadRecipesSpecial` is idempotent: it removes the prior special set before
   regenerating, so repeated reloads never duplicate suit recipes. `TileChemicalReactor.java:49-77`.

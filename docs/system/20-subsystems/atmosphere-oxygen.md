@@ -335,15 +335,15 @@ TE id `ARairRecirculator`. No atmosphere is registered by name any more: there i
   requirement takes every active hazard. `AtmosphereHazards.java`.
 - **INV-ATM-06 [V][SYS]** Tick effects are suppressed when `AtmosphereTickEvent` is cancelled or the
   type is immune to the entity class. `AtmosphereHandler.java:256-262`. FOR: INV-ATM-05.
-- **INV-ATM-07 [T][BEH]** A vent seals only with BOTH oxygen and power; missing either → no seal, zero
+- **INV-ATM-07 [A][BEH]** A vent seals only with BOTH oxygen and power; missing either → no seal, zero
   blob. `OxygenVentRequiresFuelAndPowerTest.java:96-109`. Pinned by `OxygenVentRequiresFuelAndPowerTest#ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere`, `OxygenVentRequiresFuelAndPowerTest#ventWithoutPowerDoesNotSealEvenWhenFueled`.
-- **INV-ATM-08 [T][BEH]** The blob is bounded by `oxygenVentSize`: a sealed volume within the cap
+- **INV-ATM-08 [A][BEH]** The blob is bounded by `oxygenVentSize`: a sealed volume within the cap
   pressurises, one past it voids to the dim baseline (binary, no partial fill).
   `OxygenVentBoundedByBlobCapTest.java:88-109`. Pinned by `OxygenVentBoundedByBlobCapTest#ventSealsWithinCapButNotBeyondIt`.
-- **INV-ATM-09 [T][BEH]** When the tank cannot supply `blobSize × gasUsageMult` O2 the vent flips
+- **INV-ATM-09 [A][BEH]** When the tank cannot supply `blobSize × gasUsageMult` O2 the vent flips
   `hasFluid=false` and sets the blob to the dim default atmosphere. `TileOxygenVent.java:269-287`;
   pinned `OxygenVentRequiresFuelAndPowerTest.java:71-91`. Pinned by `OxygenVentRequiresFuelAndPowerTest#ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere`.
-- **INV-ATM-10 [T][BEH]** Empty scrubber → comparator 0; fresh cartridge → comparator > 0.
+- **INV-ATM-10 [A][BEH]** Empty scrubber → comparator 0; fresh cartridge → comparator > 0.
   `CO2ScrubberComparatorOutputTest.java:41-74`. Pinned by `CO2ScrubberComparatorOutputTest#emptyScrubberReportsZeroComparatorOutput`, `CO2ScrubberComparatorOutputTest#freshCartridgeReportsNonZeroComparatorOutput`.
 - **INV-ATM-11 [V][BEH]** Gas pad transfers O2 only when tank fluid is oxygen and H2 only when it is
   not, never both in one tick. `TileGasChargePad.java:120-168`.

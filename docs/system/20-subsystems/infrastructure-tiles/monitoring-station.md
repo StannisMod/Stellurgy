@@ -56,9 +56,9 @@ unchanged); `masterX/Y/Z` only if `hasMaster()` (the `masterY>-1` gate); `abortR
 
 ## Invariants
 
-- **INV-INFRA-01 [T][BEH]** A freshly-placed, unlinked monitor reports `wasPowered=false` and
+- **INV-INFRA-01 [A][BEH]** A freshly-placed, unlinked monitor reports `wasPowered=false` and
   `getComparatorOverride()==0`. [T MonitoringStationComparatorOverrideTest.java:73-77] Pinned by `MonitoringStationComparatorOverrideTest#unlinkedMonitorReportsZeroComparatorOverride`.
-- **INV-INFRA-02 [T][BEH]** `monitor-info` exposes `wasPowered`/`equivalentPower`, and a
+- **INV-INFRA-02 [A][BEH]** `monitor-info` exposes `wasPowered`/`equivalentPower`, and a
   redstone rising edge on a linked monitor triggers a launch attempt.
   [T RocketMonitoringStationLaunchTriggerTest.java:115-123] Pinned by `RocketMonitoringStationLaunchTriggerTest#risingRedstoneEdgeFiresPrepareLaunchExactlyOnce_andSustainedDoesNotRefire`, `RocketMonitoringStationLaunchTriggerTest#fallingRedstoneEdgeResetsTheGate_andSecondRisingEdgeRefires`.
 - **INV-INFRA-03 [V]** The tile only touches the Forge event bus while a rocket is

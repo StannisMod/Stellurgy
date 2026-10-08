@@ -112,7 +112,7 @@ Config read: `oxygenVentSize` (C4). Constants: `ENGINE_START_HOLD_TICKS=60` (con
 
 - **INV-CLR-07 [V][BEH]** Steering input is suppressed whenever `mc.currentScreen != null` (both the
   edge and per-tick paths). `KeyBindings.java:327,477`.
-- **INV-CLR-08 [T][BEH]** `PILOTING`/`NOT_PILOTING` conflict only with themselves and never with vanilla
+- **INV-CLR-08 [A][BEH]** `PILOTING`/`NOT_PILOTING` conflict only with themselves and never with vanilla
   `KeyConflictContext.IN_GAME`/`GUI`. `StellurgyKeyConflictContextTest.java:27-46`. Pinned by `StellurgyKeyConflictContextTest#eachContextConflictsWithItself`, `StellurgyKeyConflictContextTest#pilotingAndNotPilotingNeverConflict`, `StellurgyKeyConflictContextTest#doesNotClaimConflictWithForgeBuiltInContexts`.
 - **INV-CLR-09 [V]** A `FREE_FLIGHT_INPUT` packet is sent only when the sampled input differs from
   the last sent one (bandwidth guard). `KeyBindings.java:451-457`.

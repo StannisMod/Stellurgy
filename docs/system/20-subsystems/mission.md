@@ -98,20 +98,20 @@ budget cap, MECH-MSN-06) and, for ore missions, `asteroidType` / `asteroidUUID` 
   `loc` array; read repopulates `infrastructureCoords` with matching coords, guard
   `coords.length >= 3`. `MissionResourceCollection.java:212-218,239-245`. (Was `[T]`, same
   deletion.) FOR: save format: mission survives restart (INV-MSN-03).
-- **INV-MSN-03 [T][BEH]** A gas/ore mission survives a full server restart with its type and
+- **INV-MSN-03 [A][BEH]** A gas/ore mission survives a full server restart with its type and
   `duration` intact and not dead. `MissionPersistenceRestartTest.java:107-140,144-...`. Pinned by `MissionPersistenceRestartTest#gasMissionSurvivesServerRestart`, `MissionPersistenceRestartTest#oreMissionSurvivesServerRestart`.
-- **INV-MSN-04 [T][BEH]** `getProgress` is linear in world time and unbounded above 1.0;
+- **INV-MSN-04 [A][BEH]** `getProgress` is linear in world time and unbounded above 1.0;
   completion fires exactly at progress ≥ 1. `MissionLifecyclePyramidTest.java:91-134`;
   code `MissionResourceCollection.java:85-86,144-147`. Pinned by `MissionLifecyclePyramidTest#progressAdvancesLinearlyWithWorldTime`, `MissionLifecyclePyramidTest#progressIsUnboundedAboveOne`, `MissionLifecyclePyramidTest#completionFiresAtProgressOne`.
-- **INV-MSN-05 [T][BEH]** Ore completion always leaves a blank asteroid chip in guidance
+- **INV-MSN-05 [A][BEH]** Ore completion always leaves a blank asteroid chip in guidance
   slot 0 on the respawned rocket. `MissionOreCompletionTest.java:81-95`; code
   `MissionOreMining.java:172-174`. Pinned by `MissionOreCompletionTest#oreCompletionAlwaysRefillsGuidanceWithBlankAsteroidChip`.
-- **INV-MSN-06 [T][BEH]** Ore completion with `drillingPower == 0` performs no harvest (only
+- **INV-MSN-06 [A][BEH]** Ore completion with `drillingPower == 0` performs no harvest (only
   the refill chip). `MissionOreCompletionTest.java:98-123`; code guard
   `MissionOreMining.java:97`. Pinned by `MissionOreCompletionTest#oreCompletionSkipsHarvestWhenDrillingPowerZero`.
-- **INV-MSN-07 [T][BEH]** Gas completion fills fluid tiles only when `intakePower > 0`.
+- **INV-MSN-07 [A][BEH]** Gas completion fills fluid tiles only when `intakePower > 0`.
   `MissionGasCompletionTest.java:105-160`; code `MissionGasCollection.java:44-47`. Pinned by `MissionGasCompletionTest#gasCompletionDoesNotFillFluidWhenIntakePowerZero`, `MissionGasCompletionTest#gasCompletionFillsRocketFluidTilesWithConfiguredFluid`.
-- **INV-MSN-08 [T][BEH]** Completion unlinks all infrastructure from the mission and links it
+- **INV-MSN-08 [A][BEH]** Completion unlinks all infrastructure from the mission and links it
   to the respawned rocket. `MissionInfrastructureLifecycleTest.java:139-197`; code
   `MissionOreMining.java:183-189`, `MissionGasCollection.java:114-120`. Pinned by `MissionInfrastructureLifecycleTest#completionUnlinksInfrastructureFromMission`, `MissionInfrastructureLifecycleTest#completionLinksInfrastructureToRespawnedRocket`, `MissionInfrastructureLifecycleTest#startLinksInfrastructureToMission`.
 - **INV-MSN-09 [V][BEH]** `failureChance` is 0, `canTick` is true, `performAction` false,

@@ -51,7 +51,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
 
 ## Clauses
 
-- **JUMP-1 (the crew travels with the ship)** `[T][BEH]` Every member of the transit crew is in the same
+- **JUMP-1 (the crew travels with the ship)** `[A][BEH]` Every member of the transit crew is in the same
   world as its ship for the whole transit; a jump never leaves one behind in the cell it departed
   from. The departure hands the crew to the same per-tick retry the arrival uses, seating them on
   the parked hull without releasing the capture the far end still needs. Pinned by `VSTransitCrewGroupTest#aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying`.
@@ -77,13 +77,13 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   the interpolated source of the corridor's AXIS for a seated pilot, with a standing crew member's axis
   read off the ship he is on. The HUD's departing/arriving refinement is seat-only on purpose — it is
   a cockpit panel, not a backdrop. Pinned by `VSTransitCrewGroupTest#aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip`.
-- **JUMP-3 (a crossing carries whoever is aboard)** `[T][BEH]` Both crossings — departure and arrival —
+- **JUMP-3 (a crossing carries whoever is aboard)** `[A][BEH]` Both crossings — departure and arrival —
   carry every member of the transit crew in whatever posture he is in; a crew member on his feet is
   never silently dropped. The capture enumerates STANDING crew beside the seated, keyed by
   the deck resolver's own answer rather than by a box (`CrewTransfer.walkStanding`), records each
   one's deck point against the flight computer, and the far side puts him back at that point, held
   there until his ship exists. Pinned by `VSTransitCrewGroupTest#aWalkingCrewMemberTravelsWithHisShipThroughHyperspace`.
-- **JUMP-4 (a seat is returned, a posture is preserved)** `[T][BEH]` On arrival a crew member who is seated
+- **JUMP-4 (a seat is returned, a posture is preserved)** `[A][BEH]` On arrival a crew member who is seated
   is seated again on the same seat — identified by its flight-computer-link offset, PRES-5's durable
   reference, invariant under re-assembly — and one who is on his feet arrives standing aboard, not
   seated late.
@@ -93,7 +93,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   into his chair on arrival. `CrewTransfer.refreshPostures` re-reads postures at the second cut;
   pinned by `VSTransitCrewGroupTest.aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet`,
   red-witnessed. Not yet playtest-accepted.
-- **JUMP-5 (a world is not unbound under an occupant)** `[T][BEH]` While a player is in a cell or in
+- **JUMP-5 (a world is not unbound under an occupant)** `[A][BEH]` While a player is in a cell or in
   hyperspace, that world is not evicted or rebound beneath him. The guarantee is DERIVED, not
   claimed: eviction asks the world who is standing in it (`SlotBinder.hasOccupants`) instead of
   trusting a paired counter — a crew member carried in aboard a ship holds no claim, and a jump
@@ -101,7 +101,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   rule is only as good as the pairing nobody forgot. With every idle cell occupied the pool refuses to
   bind (recoverable, visible) rather than emptying one under someone. Hyperspace needs nothing here:
   it is force-kept-loaded and never evicted. Pinned by `SpaceManagerTest#aCellWithSomebodyStandingInItIsNotEvictedUnderHim`, `SpaceManagerTest#aCellWithNobodyInItIsEvictedByTheSameArrangement`.
-- **JUMP-6 (an aborted jump is a no-op for the crew)** `[T][BEH]` A failed departure leaves every crew
+- **JUMP-6 (an aborted jump is a no-op for the crew)** `[A][BEH]` A failed departure leaves every crew
   member seated where he was — the abort re-seats them onto the still-present origin ship.
   The obligation exists because the capture runs FIRST, and has to: the crossing is about to cut the
   blocks the crew is standing on. So by the time the cut refuses, everyone aboard is already
@@ -147,7 +147,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   lane and how far along its flight is — while the physics mod's per-world data supplies the BODY; a
   disagreement resolves in favour of the record. The block snapshot stays the repair path for a
   record whose ship did not come back, not the normal way a jump resumes.
-- **JUMP-10 (nothing is left in hyperspace unaccounted for)** `[T][BEH]` At boot every ship in hyperspace
+- **JUMP-10 (nothing is left in hyperspace unaccounted for)** `[A][BEH]` At boot every ship in hyperspace
   is matched against the restored records: matched ships resume their flight, an unmatched one is
   disposed of rather than left an untracked, keep-loaded ghost. This is the obligation JUMP-9 takes
   on: a durable hyperspace reconciles instead of wiping.
@@ -157,7 +157,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   Deregistering a ship whose chunks are still queued must not throw out of the world tick in the
   physics chunk provider: "nothing loaded" is one question — `WorldServerShipManager.isShipInUse` —
   covering loaded, queued and streaming. Pinned by `ShipTransitManagerTest#bootDisposesOfEveryParkedShipNoRecordClaims`, `ShipTransitManagerTest#anOrphanIsFoundInALaneNoSurvivingRecordCameNear`.
-- **JUMP-11 (a body aboard is carried by its ship-relative point, at rest)** `[T][BEH]` A crossing carries
+- **JUMP-11 (a body aboard is carried by its ship-relative point, at rest)** `[A][BEH]` A crossing carries
   every body aboard the ship — not only its crew, and not only what sits on a seat: each one's
   position is taken as an offset from the ship's flight computer before the cut and re-established
   from that offset after the re-assembly, with its motion zeroed. The offset is the binding

@@ -101,7 +101,7 @@ written to disk.
 - **INV-NW-03 [V]** `PacketBackToRocketGui` is the only Stellurgy packet with a real `executeServer`;
   it re-validates via `RocketGuiNavigation`, not trusting client-sent coords blindly.
   `PacketBackToRocketGui.java:58`.
-- **INV-NW-04 [T][SYS]** NBT-envelope packets round-trip byte-for-byte through
+- **INV-NW-04 [A][SYS]** NBT-envelope packets round-trip byte-for-byte through
   `writeCompoundTag`/`readCompoundTag` — pinned for Dim/Satellite/Station/Config/Asteroid/
   SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`. Pinned by `PacketSerializationTest#packetSatelliteRoundTrip`, `PacketSerializationTest#packetConfigSyncRoundTrip`, `PacketSerializationTest#packetAsteroidInfoRoundTrip`, `PacketSerializationTest#packetDimInfoNullPropertiesIsDeleteSignal`. FOR: wire format: same build on both sides.
 - **INV-NW-05 [V]** `PacketMoveRocketInSpace` is dead: never `addDiscriminator`'d

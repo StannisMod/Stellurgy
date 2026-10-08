@@ -126,7 +126,7 @@ public class DamageLayerTest {
      * through Forge's defaulted registry turns into air. The registry is bootstrapped so that a carry
      * which did look the name up would answer as it does in a game, not throw.
      *
-     * red-witnessed: with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by a lookup of the name in {@code Block.REGISTRY} handed to {@code recordDestroyed}, fails: "INV-DMG-10: a hole of a block no longer registered must arrive under ITS name … expected:<[removedmod:hull_plate]> but was:<[minecraft:air]>" (2026-10-08).
+     * red-witnessed: with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by {@code data.recordDestroyed(pos, net.minecraft.block.Block.REGISTRY.getObject(new net.minecraft.util.ResourceLocation(entry.originalBlock)), entry.originalMeta);}, fails: "INV-DMG-10: a hole of a block no longer registered must arrive under ITS name" (2026-10-08; expected removedmod:hull_plate, was minecraft:air).
      */
     @Test
     public void aHoleOfABlockNoLongerRegisteredKeepsItsNameAcrossACarry() {

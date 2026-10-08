@@ -130,7 +130,7 @@ persists `destDimId`, `landingx/y/z`, `stationMapping` (list of `pos` int[3] + `
 - **INV-RKT-03 [V][BEH]** An unreachable destination aborts the launch with
   `setError("error.rocket.cannotGetThere")` before flight begins
   `EntityRocket.java:2723`.
-- **INV-RKT-04 [T][SYS]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
+- **INV-RKT-04 [A][SYS]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
   save with no `flightMode` key loads onto this path `RocketFlightMode.java:20`;
   pinned by `RocketFlightModeNbtTest` (missing-key → DEFAULT)
   `RocketFlightModeNbtTest.java:30`. Pinned by `RocketFlightModeNbtTest#defaultIsClassicLaunch`, `RocketFlightModeNbtTest#missingNbtKeyReadsDefault`. FOR: save format: flightMode key.

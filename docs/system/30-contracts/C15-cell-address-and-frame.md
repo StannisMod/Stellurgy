@@ -92,15 +92,15 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   it is built with a static frame. That is correct under ADDR-7's degenerate reading and it is a
   perfectly addressable body, but a generated asteroid does not yet move, which the ruling says it
   should. Authoring generator orbits is the one piece of ADDR-6 still owed. Pinned by `UniverseRegistryTest#aBodyCellRidesItsPrimaryWhileAVoidCellStandsStill`, `SystemBodyTest#aPrimarySitsAtItsOwnFramesOrigin`, `SystemBodyTest#aBodyStillMovesAfterAnNbtRoundTrip`. FOR: ADDR-15.
-- **ADDR-7 (a void cell's frame is static)** `[T][SYS]` A cell is VOID iff it holds no entity whose
+- **ADDR-7 (a void cell's frame is static)** `[A][SYS]` A cell is VOID iff it holds no entity whose
   position is computable in time — i.e. it has no primary. Then
   `frameOriginAt(name, t) = sector·CELL`, at every tick. (Satisfied by construction — that formula
   *is* `GalacticCoord.absoluteX/Y/Z` `[V]` — so its witness is only meaningful as ADDR-6's control.) Pinned by `CellFramesTest#aVoidCellSitsWhereItsNameSaysForever`. FOR: ADDR-11.
-- **ADDR-8 (a cell name never changes as a result of motion)** `[T][SYS]` Membership is decided by name.
+- **ADDR-8 (a cell name never changes as a result of motion)** `[A][SYS]` Membership is decided by name.
   A ship's own flight, and its frame's motion, may not re-derive its name; it keeps its in-cell
   position and is carried by the frame. This is free, not a per-tick write: the slot world's frame
   IS the cell frame. Pinned by `CellWorldMapperTest#aReportedPosePastTheCellEdgeStaysInItsOwnCell`. FOR: ADDR-11.
-- **ADDR-9 (distance exists only at a tick)** `[T][SYS]` Within one cell, distance is the local delta,
+- **ADDR-9 (distance exists only at a tick)** `[A][SYS]` Within one cell, distance is the local delta,
   evaluated at a stated tick whenever either endpoint's in-cell position is itself live (a POI or a
   station standing in a cell it is not the primary of — a moon IS its cell's primary and sits at its
   origin); a tick is redundant only between two settled objects.
@@ -312,14 +312,14 @@ mass has no zone to be the owner of one anyway (ADDR-17).
   `cell_<key>` store folder (`SpaceSlotPool.java`) `[V]` — denotes the same primary at every
   later tick. Pre-0.1.0 saves are not read, so no migration exists; a ship settled where a body no
   longer is stays where it is, in void.
-- **ADDR-12 (no coordinate whose meaning depends on when it was written)** `[T][SYS]` Every stored
+- **ADDR-12 (no coordinate whose meaning depends on when it was written)** `[A][SYS]` Every stored
   coordinate is a cell name plus an in-cell offset. **One exception, stated so it is not smuggled
   in elsewhere:** a mid-transit position, which is stored as (origin name, target name, progress),
   never as a raw absolute. (`navTarget` persisting a FUTURE absolute, `TransitRecord` persisting a raw
   mid-flight `position` and `CrystalEntry.coord` persisting an observation-tick absolute are the
   places to check: `TileNavigationComputer.java`, `TransitRecord.java`,
   `CrystalEntry.java`.) Pinned by `TransitRecordTest#roundTripPreservesLogicalStateAndCrew`, `ShipTransitTest#bothEndsOfTheFlightSurviveIt`. FOR: ADDR-11.
-- **ADDR-13 (the geometry the player feels stays live)** `[T][BEH]` The distance — hence the cost and
+- **ADDR-13 (the geometry the player feels stays live)** `[A][BEH]` The distance — hence the cost and
   duration — between two bodies **whose frames both move** changes with time. A body's distance from
   its own system anchor does NOT: `positionFor` is `(d·cosθ, d·sinφ, d·sinθ)` `[V]`,
   whose norm `d·√(1+sin²φ)` is θ-free, so an orbit is a circle about the anchor and **the star is
@@ -327,7 +327,7 @@ mass has no zone to be the owner of one anyway (ADDR-17).
   carry visibly recedes. The third ratified observable — moons and the star moving on the sky — is
   C14's (CON-C14-14/15/16). Cross-cell distance measured over the static grid is the failure mode:
   check `ShipNavigation.java`, `TargetPrediction.java`, `ShipTransitManager.java`. Pinned by `CellFramesTest#aDistanceBetweenTwoCellsChangesWithTimeWhenOneOfThemMoves`, `SystemBodiesProducerTest#aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays`.
-- **ADDR-14 (an aim resolves to a name)** `[T][BEH]` Aiming at a body resolves to that body's durable
+- **ADDR-14 (an aim resolves to a name)** `[A][BEH]` Aiming at a body resolves to that body's durable
   name, so the arrival CELL equals the aimed cell at every tick and needs no projection. What still
   needs one is the rendezvous POINT and the flight it prices: the primary's frame origin at the
   ARRIVAL tick, plus a moon's in-cell offset at that tick. **`TargetPrediction`'s iteration
@@ -348,7 +348,7 @@ mass has no zone to be the owner of one anyway (ADDR-17).
   This clause is about placement only; **holding station once placed is C19's subject**, not this
   one's.
 
-- **ADDR-15 (nearness does not create co-location, but it DOES reveal)** `[T][BEH]` Two objects with
+- **ADDR-15 (nearness does not create co-location, but it DOES reveal)** `[A][BEH]` Two objects with
   different names never share a world, however close their frames pass — a world is resolved from a
   name and from nothing else. **What nearness does do is inform:** proximity keeps granting
   information regardless of names (maintainer ruling 2026-08-01), so the existing distance-gated

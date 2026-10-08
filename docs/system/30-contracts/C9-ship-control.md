@@ -74,11 +74,11 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   (`TilePilotSeat.java`) is the only legitimate resolution.
 
 **Assembly stage**
-- **SHIPCTL-8** *(R1)* `[T][BEH]` A player who boards BEFORE assembly STAYS SEATED and controls the ship
+- **SHIPCTL-8** *(R1)* `[A][BEH]` A player who boards BEFORE assembly STAYS SEATED and controls the ship
   IMMEDIATELY after a successful assembly — no re-seat. "Immediately" runs from the physics object
   going live. Aboard-ness is CREW-C1/C4's; this clause owns delivery. Falsifier: the red repro
   `VSPreAssemblyBoardingPilotControlTest` (both cells). Pinned by `VSPreAssemblyBoardingPilotControlTest#aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip`, `VSPreAssemblyBoardingPilotControlTest#aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip`.
-- **SHIPCTL-9** *(R2+R8)* `[T][BEH]` (`VSUnassembledCraftTakesNoOrdersTest`, client, both directions in
+- **SHIPCTL-9** *(R2+R8)* `[A][BEH]` (`VSUnassembledCraftTakesNoOrdersTest`, client, both directions in
   one run) An UNASSEMBLED ship does NOT accept pilot input, and the refusal is
   SURFACED **server-side at mount time**: seating on an unassembled craft answers with an action-bar
   message ("ship not assembled — assemble it to fly"). Feedback for a pilot already seated when the

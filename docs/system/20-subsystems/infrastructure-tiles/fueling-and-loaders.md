@@ -57,14 +57,14 @@ are wire-only (loader `readDataFromNetwork`); item/fluid loaders also persist th
 
 ## Invariants
 
-- **INV-INFRA-11 [T][BEH]** With `state=ON`, `setRedstoneState(true)` emits and
+- **INV-INFRA-11 [A][BEH]** With `state=ON`, `setRedstoneState(true)` emits and
   `setRedstoneState(false)` does not; `INVERTED` flips it. [T RocketLoaderRedstonePolarityTest.java:84-98] Pinned by `RocketLoaderRedstonePolarityTest#onStateEmitsRedstoneWhenConditionTrue`, `RocketLoaderRedstonePolarityTest#onStateStaysOffWhenConditionFalse`, `RocketLoaderRedstonePolarityTest#invertedStateFlipsTruthOutput`, `RocketLoaderRedstonePolarityTest#invertedStateFlipsFalseOutput`.
-- **INV-INFRA-12 [T][BEH]** A powered fueling station adjacent to a rocket transfers fuel: the
+- **INV-INFRA-12 [A][BEH]** A powered fueling station adjacent to a rocket transfers fuel: the
   station tank drops and the rocket's fuel rises.
   [T RocketInfrastructureSmokeTest.java:31] Pinned by `RocketInfrastructureSmokeTest#stationDrainsTankAndRocketFuelRisesAfterLinkAndTick`.
-- **INV-INFRA-13 [T][BEH]** The fluid loader actively transfers fluid into a rocket fluid tile
+- **INV-INFRA-13 [A][BEH]** The fluid loader actively transfers fluid into a rocket fluid tile
   when allowed. [T FluidLoaderActiveTransferTest.java] Pinned by `FluidLoaderActiveTransferTest#loaderTransfersOxygenIntoRocketStorageLiquidTanks`.
-- **INV-INFRA-14 [T][BEH]** The item unloader actively pulls items out of a rocket.
+- **INV-INFRA-14 [A][BEH]** The item unloader actively pulls items out of a rocket.
   [T RocketItemUnloaderActiveTransferTest.java] Pinned by `RocketItemUnloaderActiveTransferTest#unloaderPullsItemsFromRocketStorage`.
 - **INV-INFRA-15 [V][BEH]** Item transfer is simulate-then-commit and clamped to `accepted`,
   with a put-back fallback, so items cannot duplicate under a well-behaved handler.

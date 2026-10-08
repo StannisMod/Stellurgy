@@ -126,7 +126,8 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 - **INV-SFM-12** `[T][SYS]` A command is delivered exactly, or less and flagged saturated — never on an
   axis not asked for, never the wrong sign, never more; every throttle in range and every wheel inside
   its capacity, on every step of a held command from any wheel state, a wheel inside its last step
-  included; and a command the hull can hold is delivered exactly, never flagged. FOR: a pilot's
+  included; and a command the hull can hold is delivered exactly, never flagged. REGIONS: delivered
+  whole, saturated, an empty wheel, a full wheel, a wheel inside its last step, two axes sharing a wheel. FOR: a pilot's
   command does what it names and nothing else (C9 ship control) — the craft does not turn under a
   straight push. (`test/unit/ShipMotionLawsTest#everyCommandIsDeliveredCleanlyOrLessAndSaidSo`:
   300 generated hulls × 12 commands × 90 steps, arrival counted at the call;

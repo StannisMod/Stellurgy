@@ -38,7 +38,7 @@ about the physics, which is what makes this law **derived** rather than invented
 
 - **HYPER-5** `[T][BEH]` **A generation buys EFFICIENCY; size buys POWER.** `v_H ∝ η·P/m`; transit ticks go as
   `d·m/(η·P)`. **BUILT** — `JumpSpeed.blocksPerTick(drivePower, mass, tier)`. Pinned by `DriveLadderTest#aFullBuildOfEachGenerationCrossesITSOWNBandInTheSameTime`, `HyperdriveTest#aStrongerDriveIsFasterAndCostsMoreToStart`.
-- **HYPER-6** `[T][BEH]` **A route's total ENERGY does not read drive power at all.** Ticks go as `d·m/(η·P)`
+- **HYPER-6** `[A][BEH]` **A route's total ENERGY does not read drive power at all.** Ticks go as `d·m/(η·P)`
   and the draw as `P`, so power cancels: a bigger drive changes how fast the bill is paid, never its size.
   **BUILT** — `JumpSpeed.routeEnergy`, checked against the flown route. Pinned by `DriveLadderTest#aRoutesENERGYdoesNotDependOnHowBigTheDriveIs`.
 - **HYPER-7** `[A][SYS]` **η is DERIVED, never picked.** A generation's efficiency **is** the ratio of the bands
@@ -117,7 +117,7 @@ per block, and a thrusting craft would accelerate rather than hold a rate.
 - **HYPER-22** `[A][BEH]` **Falling below the floor is a COLLAPSE, not a refusal.** Power lost in flight, or a
   threshold raised by a gravity well (HYPER-13's `strain`), drops the craft out **where it is**, between
   stars. The burst is spent either way: the player may attempt what he cannot sustain and pays for it.
-- **HYPER-31** `[T][BEH]` **A craft LEAVES hyperspace at rest, and keeps its cruise across every other
+- **HYPER-31** `[A][BEH]` **A craft LEAVES hyperspace at rest, and keeps its cruise across every other
   crossing.** The flight computer's cruise setpoint is dumped at the hyperspace boundary — and ONLY
   there. Leaving a planet, landing on one and moving from one cell to the next all retain it
   (`C9` SHIPCTL-18), so this is a carve-out and not an instance of a general

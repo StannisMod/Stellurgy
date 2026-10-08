@@ -15,6 +15,83 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
 
+/**
+ * The harness's hands and eyes on a real client.
+ *
+ * <h2>What each verb IS, for a test that must act as a player would</h2>
+ *
+ * <p>Every public method is classified here, once. A consumer that must know which verbs act through the
+ * client's INPUT PIPELINE — a Stellurgy e2e may act only through those — reads this list, and its census
+ * refuses a public method that is missing from it, so a new verb cannot be used before somebody has said
+ * what it is. The classes:</p>
+ * <ul>
+ *   <li>PIPELINE — the act travels the path a real keyboard, mouse or screen input travels;</li>
+ *   <li>BYPASS — the act names its target or writes the state a player's input would have produced,
+ *       skipping the code that decides what a real input hits;</li>
+ *   <li>READS — observes, changes nothing a player could;</li>
+ *   <li>HARNESS — the client's lifecycle, the bridge, or an option a player sets in the menus.</li>
+ * </ul>
+ * <ul>
+ *   <li>{@code setKey} — PIPELINE: a key-binding press, an {@code isPressed} edge and the input event</li>
+ *   <li>{@code holdKey} — PIPELINE: {@code setKey(code, true)}</li>
+ *   <li>{@code releaseKey} — PIPELINE: {@code setKey(code, false)}</li>
+ *   <li>{@code setLook} — PIPELINE: the head turned; what it then picks is vanilla's own trace</li>
+ *   <li>{@code turnLook} — PIPELINE: {@code Entity.turn}, what the mouse handler feeds</li>
+ *   <li>{@code useMouseOver} — PIPELINE: invokes {@code Minecraft.rightClickMouse}, which decides from its own pick</li>
+ *   <li>{@code clickScreenPoint} — PIPELINE: the screen's own {@code mouseClicked} at a point</li>
+ *   <li>{@code dragScreenPoint} — PIPELINE: the screen's own press, drag and release at points</li>
+ *   <li>{@code typeText} — PIPELINE: the screen's own {@code keyTyped}, character by character</li>
+ *   <li>{@code pressEnterAfterTyping} — PIPELINE: {@code typeText} and the return key</li>
+ *   <li>{@code invokeStaticInt} — PIPELINE: raw input into a named static entry point (a mouse delta); any other use is a read</li>
+ *   <li>{@code invokeStaticChain} — READS: a reflective static call; it may feed raw input, never call a decision</li>
+ *   <li>{@code interactBlock} — BYPASS: {@code processRightClickBlock} on a named block, past {@code rightClickMouse}</li>
+ *   <li>{@code rightClickBlock} — BYPASS: the same as {@code interactBlock}, with a face and a hand</li>
+ *   <li>{@code useItem} — BYPASS: {@code processRightClick} with the held item, past the pick</li>
+ *   <li>{@code sendChat} — BYPASS: a chat packet sent past the chat screen</li>
+ *   <li>{@code clickButton} — PIPELINE: the label only finds a point; the screen's own {@code mouseClicked} decides what is under it</li>
+ *   <li>{@code clickButtonAtRatio} — PIPELINE: as {@code clickButton}, at a chosen point of the button</li>
+ *   <li>{@code clickButtonById} — BYPASS: {@code actionPerformed} called on a button named by its id</li>
+ *   <li>{@code clickSlot} — BYPASS: {@code handleMouseClick} on a slot named by its index, past the slot-under-cursor decision</li>
+ *   <li>{@code focusField} — BYPASS: a text field focused by a direct write</li>
+ *   <li>{@code selectHotbar} — BYPASS: {@code inventory.currentItem} written; a player presses the number key</li>
+ *   <li>{@code closeScreen} — BYPASS: the screen closed directly; a player presses escape</li>
+ *   <li>{@code blockState} — READS</li>
+ *   <li>{@code eventMark} — READS</li>
+ *   <li>{@code eventsSince} — READS</li>
+ *   <li>{@code isAlive} — READS</li>
+ *   <li>{@code readStaticField} — READS</li>
+ *   <li>{@code reportButtons} — READS</li>
+ *   <li>{@code reportChat} — READS</li>
+ *   <li>{@code reportEntities} — READS</li>
+ *   <li>{@code reportMods} — READS</li>
+ *   <li>{@code reportMouseOver} — READS</li>
+ *   <li>{@code reportPlayerItems} — READS</li>
+ *   <li>{@code reportRidingEntity} — READS</li>
+ *   <li>{@code reportSlots} — READS</li>
+ *   <li>{@code reportSounds} — READS</li>
+ *   <li>{@code reportSpawn} — READS</li>
+ *   <li>{@code reportState} — READS</li>
+ *   <li>{@code reportWeather} — READS</li>
+ *   <li>{@code screenshot} — READS</li>
+ *   <li>{@code tileModulesThrows} — READS</li>
+ *   <li>{@code tileNbt} — READS</li>
+ *   <li>{@code clearChat} — HARNESS: the harness's chat buffer</li>
+ *   <li>{@code clearSounds} — HARNESS: the harness's sound buffer</li>
+ *   <li>{@code close} — HARNESS</li>
+ *   <li>{@code connect} — HARNESS</li>
+ *   <li>{@code disconnect} — HARNESS</li>
+ *   <li>{@code reconnect} — HARNESS</li>
+ *   <li>{@code resetClientState} — HARNESS</li>
+ *   <li>{@code shutdown} — HARNESS</li>
+ *   <li>{@code setFrameRate} — HARNESS: a menu option</li>
+ *   <li>{@code setFramebuffer} — HARNESS: the render target</li>
+ *   <li>{@code setHudHidden} — HARNESS: a menu option (F1)</li>
+ *   <li>{@code setRenderDistance} — HARNESS: a menu option</li>
+ *   <li>{@code waitForWorld} — HARNESS</li>
+ *   <li>{@code waitTicks} — HARNESS</li>
+ *   <li>{@code waitWorldTicks} — HARNESS</li>
+ * </ul>
+ */
 public final class ClientBot implements Closeable {
 
     private final Socket socket;

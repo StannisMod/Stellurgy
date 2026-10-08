@@ -65,7 +65,7 @@ Config: see `C4-config-surface`. Full disable: `enableTerraforming=false` (isRun
 
 ## Invariants
 
-- **INV-MBM-06** [T][BEH] On a native Stellurgy planet, with power **and** fuel the density moves; without
+- **INV-MBM-06** [A][BEH] On a native Stellurgy planet, with power **and** fuel the density moves; without
   fuel or without power it does **not** move.
   `TerraformerPoweredCycleOnStellurgyPlanetTest.java:111-213`. Pinned by `TerraformerPoweredCycleOnStellurgyPlanetTest#nativePlanetTerraformerWithFuelAndPowerStepsDensity`, `TerraformerPoweredCycleOnStellurgyPlanetTest#nativePlanetTerraformerWithoutFuelDoesNotStep`, `TerraformerPoweredCycleOnStellurgyPlanetTest#nativePlanetTerraformerWithoutPowerDoesNotStep`.
 - **INV-MBM-07** [V][BEH] Density is bounded: increase never exceeds 1600, decrease never below 0, and

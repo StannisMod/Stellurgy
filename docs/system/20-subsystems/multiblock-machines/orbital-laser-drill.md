@@ -104,7 +104,7 @@ Config: see `C4-config-surface`. Full disable: `enableLaserDrill=false` removes 
   `SINGLE` (coerced on packet-in and NBT-read). `TileOrbitalLaserDrill.java:285-287,633-635`.
 - **INV-MBM-03** [V] `setRunning`, `checkCanRun`, and the whole op loop are server-only guarded
   (`world.isRemote` early-return / `!world.isRemote` block). `TileOrbitalLaserDrill.java:417-420,697,483`.
-- **INV-MBM-04** [T][BEH] Mining mode breaks the target block (→ air) and yields its drop with count
+- **INV-MBM-04** [A][BEH] Mining mode breaks the target block (→ air) and yields its drop with count
   > 0. `OrbitalLaserDrillModeDispatchTest.java:47-58`. Pinned by `OrbitalLaserDrillModeDispatchTest#miningModeBreaksTargetBlockAndYieldsItsDrop`.
 - **INV-MBM-05** [V] A drill ticket is released on every teardown path (deactivate/onDestroy/
   onChunkUnload/invalidate); no ticket outlives the tile. `TileOrbitalLaserDrill.java:566-588,992-1002`.

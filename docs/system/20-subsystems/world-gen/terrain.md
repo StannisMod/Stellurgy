@@ -170,7 +170,7 @@ what consumes the result.
   block and biome (deterministic gen): chunk generation re-seeds its `Random` from the chunk
   coordinates before filling (`ChunkProviderPlanet.java:293`). Distinct chunks are independently addressable: still `[T]`,
   `WorldgenDeterminismAndSamplingTest#differentChunksReturnIndependentlyAddressableData:64-65`.
-- **INV-WGEN-22 [T][BEH]** A planet's published world type is its own, never the save's: a `NATIVE`
+- **INV-WGEN-22 [A][BEH]** A planet's published world type is its own, never the save's: a `NATIVE`
   planet answers `PlanetGen` and a `MOD_WORLDTYPE` planet answers the foreign type it runs, and the
   authored options string is what its generator was built from —
   `server/PlanetTerrainSourceTest#planetPublishesItsOwnWorldTypeThroughWorldInfo`,

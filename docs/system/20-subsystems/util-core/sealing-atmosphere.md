@@ -53,7 +53,7 @@ released (`ServerState.java:121`), so a fill queued at stop never runs against t
 
 ## Invariants
 
-- **INV-SEAL-01 [T][BEH]** Default banned materials load and gate detection; explicit
+- **INV-SEAL-01 [A][BEH]** Default banned materials load and gate detection; explicit
   allow-list overrides detection, ban-list overrides allow; re-adding a block does not
   duplicate. `test/integration/SealableBlockHandlerTest.java:34,53,69,82`. Pinned by `SealableBlockHandlerTest#defaultSealableBlocksLoaded`, `SealableBlockHandlerTest#whitelistOverridesDetection`, `SealableBlockHandlerTest#blacklistOverridesDetection`, `SealableBlockHandlerTest#addingSameBlockTwiceDoesNotDuplicate`.
 - **INV-SEAL-02 [V][SYS]** `addUnsealableBlock`/`addSealableBlock` are mutually exclusive:

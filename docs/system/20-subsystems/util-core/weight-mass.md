@@ -96,12 +96,12 @@ between two patterns that both match.
 
 - **INV-WGT-01 [V][BEH]** Empty stack or null registry name ⇒ weight `0`.
   `WeightEngine.java:86-88`.
-- **INV-WGT-02 [T][SYS]** `individual` override survives a JSON save→load round-trip.
+- **INV-WGT-02 [A][SYS]** `individual` override survives a JSON save→load round-trip.
   `test/unit/WeightEngineUnitTest.java:83-102`. Pinned by `WeightEngineUnitTest#individualOverrideSurvivesSaveLoadRoundTrip`. FOR: save format: weight config file.
-- **INV-WGT-03 [T][BEH]** Fluid weight is strictly positive and linear in amount, and scales
+- **INV-WGT-03 [A][BEH]** Fluid weight is strictly positive and linear in amount, and scales
   with `fuelMassScale`. `test/unit/WeightEngineUnitTest.java:43,61`. (Every test builds its own engine
   from `WeightEngine.fromJson` / a temp file, so none reaches the mod's table.) Pinned by `WeightSystemTest#fluidWeightUsesFallbackAndFuelScale`.
-- **INV-WGT-04 [T][BEH]** `seedDefaults` populates a non-empty material table.
+- **INV-WGT-04 [A][BEH]** `seedDefaults` populates a non-empty material table.
   `test/unit/WeightEngineUnitTest.java:77`; server-side weight system pinned by
   `test/server/WeightSystemTest.java`. Pinned by `WeightEngineUnitTest#seedDefaultsPopulatesMaterialTable`.
 - **INV-WGT-05 [V]** Component masses (tank/motor/pressure/guidance/hatch) are `tunable`
@@ -110,10 +110,10 @@ between two patterns that both match.
   calibrated (C10 STAT-6) — and no test pins that pairing.
 - **INV-WGT-06 [A]** Regex rules that fail `Pattern.compile` are silently skipped and do
   not abort resolution. `WeightEngine.java:149-153` (no test).
-- **INV-WGT-07 [T][SYS]** Every column the file declares survives a save→load cycle carrying its
+- **INV-WGT-07 [A][SYS]** Every column the file declares survives a save→load cycle carrying its
   value, and every regex column comes back in the order it was written.
   `WeightEngineUnitTest#everyColumnAPackCanWriteSurvivesASave` (`:139`), `aRegexColumnKeepsThePackSOrderAcrossASave` (`:185`). Pinned by `WeightEngineUnitTest#aRegexColumnKeepsThePackSOrderAcrossASave`. FOR: save format: weight config file.
-- **INV-WGT-08 [T][SYS]** A config file that cannot be read leaves no column carrying the previous load's rows — a column
+- **INV-WGT-08 [A][SYS]** A config file that cannot be read leaves no column carrying the previous load's rows — a column
   the reset forgot would let a broken file silently inherit half of the file before it.
   `WeightEngineUnitTest#aConfigThatCannotBeReadLeavesNoColumnBehind` (`:217`). FOR: save format: weight config file.
 

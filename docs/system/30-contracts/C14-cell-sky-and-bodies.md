@@ -54,7 +54,7 @@ Layer-1 terms (**cell**, **slot dimension**) keep their C13 meanings and are not
   documented "Use Stellurgy's custom skybox in the overworld" (`StellurgyConfiguration.java`) but its only
   reader applies to EVERY client world load (`PlanetEventHandler.java`). A flag must scope to
   what it names (C4 legend). Harmless in effect only because of CON-C14-04.
-- **CON-C14-18 (hyperspace's backdrop belongs to the WORLD, not to a chair)** `[T][BEH]` One slot world is
+- **CON-C14-18 (hyperspace's backdrop belongs to the WORLD, not to a chair)** `[A][BEH]` One slot world is
   the transit host, and it draws the CORRIDOR in place of everything CON-C14-02 draws — a cell's sky
   would be a false statement there (no cell is loaded, so no body is ever synced, and a starfield alone
   says "parked" to a ship that is in a jump). The branch is taken on the client's OWN dimension,
@@ -71,19 +71,19 @@ Layer-1 terms (**cell**, **slot dimension**) keep their C13 meanings and are not
 These state, as numbered clauses, the rules implemented in `SystemBodiesProducer`, so a later change
 cannot quietly drop them.
 
-- **CON-C14-06 (cell-keyed, not ship-keyed)** `[V][T][SYS]` The feed is built from the cell→slot bindings
+- **CON-C14-06 (cell-keyed, not ship-keyed)** `[V][SYS]` The feed is built from the cell→slot bindings
   (`SpaceManager.loadedCells`), never from a ship's lifecycle state
   (`SystemBodiesProducer.java, 87-92`; pinned by `SystemBodiesFeedFollowsTheCellTest`).
   Everyone in a live cell sees that cell's surroundings: a pilot mid-jump, a passenger, a crew
   member who walked off the hull, someone a departing ship left behind. Pinned by `SystemBodiesFeedFollowsTheCellTest#aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt`, `SystemBodiesFeedFollowsTheCellTest#aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt`, `SystemBodiesProducerTest#aLiveCellWhoseOnlyShipIsMidJumpStillShowsItsBodies`. FOR: CON-C14-14.
-- **CON-C14-07 (only cells are keyed)** `[V][T][SYS]` A dimension that is not a live cell is keyed by
+- **CON-C14-07 (only cells are keyed)** `[V][SYS]` A dimension that is not a live cell is keyed by
   nothing. A cell bound to no slot keys nothing, because there is no world whose sky it would be
   (`SystemBodiesProducer.java`). Pinned by `SystemBodiesProducerTest#aShipWhoseCellIsInNoSlotContributesNothing`, `SystemBodiesProducerTest#anUnboundOrMalformedBindingIsNeverKeyed`. FOR: CON-C14-14.
 - **CON-C14-08 (an empty cell is keyed empty)** `[V][SYS]` A live cell holding no body still gets a
   present-but-empty entry, so the client clears stale bodies and draws bare sky
   (`SystemBodiesProducer.java, 108`). "Present and empty" and "absent" are different states
   and must not be collapsed. FOR: CON-C14-13.
-- **CON-C14-09 (direction, not position)** `[T][SYS]` A body's `localX/Y/Z` is the **observer→body**
+- **CON-C14-09 (direction, not position)** `[A][SYS]` A body's `localX/Y/Z` is the **observer→body**
   vector, sector-aware (`SystemBodiesProducer.java`). A body's own in-cell offset is not that
   vector: a planet sits at its own cell centre, so sending the offset yields a zero vector and
   `BoundarySky.drawBody` bails at `|dir| < 1e-6` (`BoundarySky.java`) — the descend target
@@ -139,7 +139,7 @@ of CON-C14-09's vector.
   empty for an unattributed cell and aggregates POIs of BODY cells only — its own javadoc says a
   void cell's own POIs are readable via `bodiesAt`/`poisAt` (`:344-353`) `[V]` — so a straight
   swap would erase an orbital station standing in the observer's own void cell. Pinned by `UniverseRegistryTest#theSkyFeedUnionsTheSystemWithTheObserversOwnCell`, `UniverseRegistryTest#interstellarVoidIsFedNothing`.
-- **CON-C14-15 (direction AND distance, evaluated live)** `[T][SYS]` The vector is
+- **CON-C14-15 (direction AND distance, evaluated live)** `[A][SYS]` The vector is
   `body.absoluteAt(tick)` minus `frames.absoluteOf(observer, tick)`; pinned by
   `SystemBodiesProducerTest.aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays` and
   `...aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim`. Each fed body
@@ -147,7 +147,7 @@ of CON-C14-09's vector.
   (C15 ADDR-9), so its magnitude is the true distance at that moment. The wire needs no change: the
   payload is three `long`s per body (`PacketSystemBodiesSync`, C2) `[V]`.
   CON-C14-09's vector is therefore never computed over the static grid. Pinned by `SystemBodiesProducerTest#aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays`, `SystemBodiesProducerTest#aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim`. FOR: CON-C14-14.
-- **CON-C14-16 (apparent size falls with distance, clamped both ends)** `[T][BEH]` Built as
+- **CON-C14-16 (apparent size falls with distance, clamped both ends)** `[A][BEH]` Built as
   `client/render/planet/ApparentSize` - a pure, GL-free function, so the RULE is checkable without a
   client; pinned by `ApparentSizeTest` (falls, clamped both ends, and nothing in the fed range
   leaves the clamps) and, in PIXELS off the real client, by

@@ -7,10 +7,14 @@ describes a mechanism and is pinned through its invariants; it is counted, never
 
 Every clause is in exactly one of four states:
 
-  PINNED     tagged [T], names at least one test (`ClassTest#method`, `test/.../ClassTest#method`, a
-             bare `ClassTest`, or `…#method` continuing the previous class), every named test exists
-             under src/test/java (the method too, when one is named), and at least one of them names
-             the clause's anchor back.
+  PINNED     tagged [T], names at least one test METHOD (`ClassTest#method`, `test/.../ClassTest#method`,
+             or `…#method` continuing the previous class — a bare class is not a pin), every named method
+             exists under src/test/java, and at least one of them has its OWN javadoc naming the clause's
+             anchor and carrying a `red-witnessed:` record. A clause that lists `REGIONS: a, b, c` is
+             pinned only when its named methods' javadocs together say `Visits <ANCHOR> regions: …` for
+             every one of them — coverage is counted per (clause, region) (maintainer ruling
+             2026-10-08). Until that day a class that mentioned the anchor anywhere, comments included,
+             was a pin, and 148 of the 259 PINNED clauses rested on no more than that.
   UNPINNED   carries `UNPINNED:` with a reason from the closed list:
                - a dated maintainer ruling: `UNPINNED: maintainer ruling YYYY-MM-DD ...`;
                - `UNPINNED: pinned by <ANCHOR>` -- that anchor exists, is PINNED, and its test names
@@ -62,6 +66,32 @@ RULING_RE = re.compile(r"maintainer ruling\s+\d{4}-\d{2}-\d{2}", re.IGNORECASE)
 PINNED_BY_RE = re.compile(r"pinned by\s+`?(" + ANCHOR + r")`?", re.IGNORECASE)
 CITE_RE = re.compile(r"\b(" + ANCHOR + r")\b")
 FOR_RE = re.compile(r"\bFOR:\s*(.*)", re.DOTALL)
+REGIONS_RE = re.compile(r"\bREGIONS:\s*([^.\n]+(?:\n[ \t]+[^.\n]+)*)")
+VISITS_RE = re.compile(r"\bVisits\s+(" + ANCHOR + r")\s+regions:\s*([^\n*]+)")
+
+
+def regions_of(body):
+    """The regions a clause lists after `REGIONS:`, up to the sentence's end; empty when it lists none."""
+    m = REGIONS_RE.search(body)
+    if not m:
+        return set()
+    return {r.strip() for r in re.sub(r"\s+", " ", m.group(1)).split(",") if r.strip()}
+
+
+def method_javadoc(src, method):
+    """The javadoc directly above `void method(` (annotations allowed between), "" when it has none, or
+    None when the class declares no such method."""
+    m = re.search(r"\bvoid\s+" + re.escape(method) + r"\s*\(", src)
+    if not m:
+        return None
+    head = src[:m.start()]
+    end = head.rfind("*/")
+    if end < 0:
+        return ""
+    start = head.rfind("/**", 0, end)
+    if start < 0 or re.search(r"[;{}]", head[end + 2:]):
+        return ""
+    return head[start:end]
 ADDED_DEF_RE = re.compile(r"^\+[ \t]*-[ \t]*\*\*(" + ANCHOR + r")\b")
 
 
@@ -173,16 +203,26 @@ def classify(sysroot, repo, ages=None):
         refs = test_refs(body)
         if not refs:
             return False, "tagged [T] but names no test"
-        backref = False
+        evidence, visited = False, set()
         for cls, method in refs:
             src = source(cls)
             if src is None:
                 return False, "names %s, which is not under src/test/java" % cls
-            if method and not re.search(r"\b" + re.escape(method) + r"\s*\(", src):
+            if not method:
+                continue  # a class is not a pin; it is no evidence, and no error beside a method that is
+            doc = method_javadoc(src, method)
+            if doc is None:
                 return False, "names %s#%s, which has no such method" % (cls, method)
-            backref = backref or re.search(r"\b" + re.escape(anchor) + r"\b", src) is not None
-        if not backref:
-            return False, "no named test names %s back" % anchor
+            if re.search(r"\b" + re.escape(anchor) + r"\b", doc) and "red-witnessed" in doc:
+                evidence = True
+                for named, regions in VISITS_RE.findall(doc):
+                    if named == anchor:
+                        visited.update(r.strip() for r in regions.split(",") if r.strip())
+        if not evidence:
+            return False, "no named method's own javadoc names %s AND carries a red-witnessed record" % anchor
+        wanted = regions_of(body)
+        if wanted - visited:
+            return False, "regions not visited by its named methods: %s" % ", ".join(sorted(wanted - visited))
         return True, None
 
     state = {}
@@ -230,7 +270,11 @@ def classify(sysroot, repo, ages=None):
                 state[anchor] = ("BROKEN", doc, "pinned by %s, which is not a PINNED clause" % other)
             else:
                 refs = test_refs(defs[other][2])
-                back = any(source(c) and re.search(r"\b" + re.escape(anchor) + r"\b", source(c)) for c, _ in refs)
+                # The test BETWEEN the two is a method of the other clause's pin whose own javadoc names
+                # this clause too — never a comment anywhere in that class.
+                back = any(m and source(c) and re.search(r"\b" + re.escape(anchor) + r"\b",
+                                                         method_javadoc(source(c), m) or "")
+                           for c, m in refs)
                 state[anchor] = ("UNPINNED", doc, None) if back else \
                     ("BROKEN", doc, "pinned by %s, whose test does not name %s back" % (other, anchor))
         else:
@@ -282,10 +326,26 @@ def self_test():
                 "- **INV-A-09** `[PLANNED][BEH]` a mechanic not built yet.\n"
                 "- **INV-A-10** `[A][SYS]` serves an older clause. FOR: INV-A-03.\n"
                 "- **INV-A-11** `[A][SYS]` serves a clause younger than itself. FOR: INV-A-12.\n"
-                "- **INV-A-12** `[A][BEH]` written after INV-A-11.\n",
+                "- **INV-A-12** `[A][BEH]` written after INV-A-11.\n"
+                "- **INV-A-13** `[T]` names only a class (`AlphaTest`).\n"
+                "- **INV-A-14** `[T]` a method whose javadoc lacks a witness (`AlphaTest#unwitnessed`).\n"
+                "- **INV-A-15** `[T]` every state. REGIONS: empty, full, sliver. (`AlphaTest#sweeps`).\n"
+                "- **INV-A-16** `[T]` every state. REGIONS: empty, full. (`AlphaTest#sweepsHalf`).\n",
             "src/test/java/x/AlphaTest.java":
-                "/** Pins INV-A-01, INV-A-08 and stands in for INV-A-05; cites INV-A-99; label C-1. */\n"
-                "class AlphaTest { void pinsIt() {} }\n",
+                "/** The class mentions INV-A-13, which pins nothing; cites INV-A-99; label C-1. */\n"
+                "class AlphaTest {\n"
+                "  /** Pins INV-A-01, INV-A-08 and stands in for INV-A-05.\n"
+                "   * red-witnessed: with {@code X#y} at {@code a} replaced by {@code b}, fails: \"q\". */\n"
+                "  void pinsIt() {}\n"
+                "  /** Pins INV-A-14, never seen red. */\n"
+                "  void unwitnessed() {}\n"
+                "  /** Pins INV-A-15. Visits INV-A-15 regions: empty, full, sliver\n"
+                "   * red-witnessed: with {@code X#y} at {@code a} replaced by {@code b}, fails: \"q\". */\n"
+                "  void sweeps() {}\n"
+                "  /** Pins INV-A-16. Visits INV-A-16 regions: empty\n"
+                "   * red-witnessed: with {@code X#y} at {@code a} replaced by {@code b}, fails: \"q\". */\n"
+                "  void sweepsHalf() {}\n"
+                "}\n",
         }
         for rel, text in files.items():
             path = os.path.join(tmp, rel)
@@ -296,12 +356,13 @@ def self_test():
         # rest later. INV-A-11 (index 2) cites INV-A-12, defined at index 3 -- younger, so BROKEN.
         ages = {"INV-A-01": 0, "INV-A-02": 0, "INV-A-03": 0, "INV-A-04": 0, "INV-A-05": 0, "INV-A-06": 0,
                 "INV-A-07": 0, "MECH-A-01": 0, "INV-A-08": 0, "INV-A-09": 1, "INV-A-10": 1,
-                "INV-A-11": 2, "INV-A-12": 3}
+                "INV-A-11": 2, "INV-A-12": 3, "INV-A-13": 0, "INV-A-14": 0, "INV-A-15": 0, "INV-A-16": 0}
         state, missing = classify(os.path.join(tmp, "docs", "system"), tmp, ages)
         want = {"INV-A-01": "PINNED", "INV-A-02": "BROKEN", "INV-A-03": "OWED", "INV-A-04": "UNPINNED",
                 "INV-A-05": "UNPINNED", "INV-A-06": "BROKEN", "INV-A-07": "RETIRED", "MECH-A-01": "MECH",
                 "INV-A-08": "PINNED", "INV-A-09": "PLANNED", "INV-A-10": "OWED", "INV-A-11": "BROKEN",
-                "INV-A-12": "OWED"}
+                "INV-A-12": "OWED", "INV-A-13": "BROKEN", "INV-A-14": "BROKEN", "INV-A-15": "PINNED",
+                "INV-A-16": "BROKEN"}
         ok = True
         for anchor, kind in want.items():
             if state.get(anchor, ("?",))[0] != kind:

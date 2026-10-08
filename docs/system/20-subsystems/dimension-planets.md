@@ -290,7 +290,7 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
   geode (not volcano) field is `[V]` — `DimensionProperties.java:2781-2783`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-05 [V][SYS]** Ring angle/color and sky/fog/sunrise colors survive the round-trip
   (`DimensionProperties.java:1891-1916,2111` read, `:2275-2298` write). FOR: save format: a dimension survives a world reload.
-- **INV-DIM-06 [T][SYS]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest#realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`. FOR: save format: a dimension survives a world reload.
+- **INV-DIM-06 [A][SYS]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest#realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`. FOR: save format: a dimension survives a world reload.
 - **INV-DIM-07 [V][BEH]** Parent↔child links are bidirectional (`DimensionProperties.java:1313-1320`,
   `addChildPlanet` sets both ends); a moon inherits its parent's solar distance (`:1034-1040`).
 - **INV-DIM-08 [V][SYS]** Empty-NBT round-trip yields post-constructor defaults (no NPE / partial state):
@@ -310,7 +310,7 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
   `ATOMIC_MOVE` (fallback non-atomic). `DimensionManager.java:655`, `:687`. FOR: save format: a crash never loses the galaxy.
 - **INV-DIM-15 [V][SYS]** `saveDimensions` refuses to write when there are no stars or no dims (throws),
   guarding against clobbering a good file with an empty galaxy. `DimensionManager.java:592`. FOR: save format: a crash never loses the galaxy.
-- **INV-DIM-16 [T][BEH]** A registered planet uses `WorldProviderPlanet`:
+- **INV-DIM-16 [A][BEH]** A registered planet uses `WorldProviderPlanet`:
   `PlanetDimensionLoadTest#providerClassIsWorldProviderPlanet`. The "registered planets are preloaded / the overworld reports
   loaded" half is `[A]` (no test pins it); the class also pins
   `saveFolderResolvesToExpectedPath` (`:50`).

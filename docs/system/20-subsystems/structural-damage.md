@@ -435,7 +435,7 @@ destroyed positions as well as damaged ones.
 - **INV-DMG-04** [T][BEH] At equal budget, a tougher wall is not penetrated as far as a flimsy one — the
   ordering the toughness table exists for, pinned as ordering rather than as any number.
   `StructuralDamageContractTest` Pinned by `StructuralDamageContractTest#aTougherWallIsNotPenetratedFurtherThanAFlimsyOneAtEqualBudget`.
-- **INV-DMG-05** [T][BEH] Every `ImpactKind` declares how a shell bills it; a kind with no billing would pass
+- **INV-DMG-05** [A][BEH] Every `ImpactKind` declares how a shell bills it; a kind with no billing would pass
   a raised shield free. `ImpactDeclarationContractTest` Pinned by `ImpactDeclarationContractTest#everyHullImpactKindDeclaresHowAShellBillsIt`.
 
 

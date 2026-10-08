@@ -33,17 +33,17 @@ stands the ship off from where the target was, by the difference between the two
 
 ## Clauses
 
-- **CLOCK-1 (one clock)** `[T][SYS]` Every space-subsystem evaluation of a time-dependent quantity reads
+- **CLOCK-1 (one clock)** `[A][SYS]` Every space-subsystem evaluation of a time-dependent quantity reads
   the space clock and nothing else. A per-dimension world clock, a render clock, and "the total time
   of whatever world I am in" are different quantities that merely look like this one.
   This is structural: the space clock is not derived from any world, so there is no world clock in
   the picture to be accidentally right about.
   **Player form:** two things the game computes about the same moment agree about when that moment is. Pinned by `AimAndArrivalShareOneClockTest#theAimMovesWithTheSpaceClockAndWithNoOtherClock`. FOR: CLOCK-2.
-- **CLOCK-2 (the aim and the arrival agree)** `[T][BEH]` The tick a jump's aim is evaluated at and the
+- **CLOCK-2 (the aim and the arrival agree)** `[A][BEH]` The tick a jump's aim is evaluated at and the
   tick its arrival is priced at come from the same source, so the only difference between them is the
   flight's own predicted duration. **Falsifiable:** drive a non-space clock away from the space clock
   and the aim must not move. **Player form:** a jump aimed at a body arrives beside that body. Pinned by `AimAndArrivalShareOneClockTest#theAimMovesWithTheSpaceClockAndWithNoOtherClock`.
-- **CLOCK-3 (side-agnostic)** `[T][SYS]` The space clock is readable on both logical sides and answers the
+- **CLOCK-3 (side-agnostic)** `[A][SYS]` The space clock is readable on both logical sides and answers the
   same value on each, to within the sync period. No caller needs to know which side it is on. On the
   server it is the subsystem's own counter; on a client it is
   a synced baseline advanced locally (`SpaceClockSync.java`), one copy per connection, owned by the
@@ -55,7 +55,7 @@ stands the ship off from where the target was, by the difference between the two
   and dimension time in Stellurgy is per-dimension **by design** (`perDimWorldInfo`, working beds), so
   "universal" describes nothing about it. Its other consumers (mission timers, satellite gates,
   station transitions) are outside this contract. Planet orbital theta reads the space clock. FOR: CLOCK-2.
-- **CLOCK-5 (the subsystem owns the counter)** `[T][SYS]` The space clock is the subsystem's own state,
+- **CLOCK-5 (the subsystem owns the counter)** `[A][SYS]` The space clock is the subsystem's own state,
   not a reading of anything else. Four consequences, each separately falsifiable:
   1. **It advances by itself**, once per server tick, whether or not the controller was built — it is
      never derived from an object that can be absent, so it cannot answer **tick zero** because a

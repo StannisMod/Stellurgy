@@ -116,9 +116,9 @@ keys). `GravityHandler` keeps an INSTANCE `WeakHashMap<Entity,Double>` of custom
 
 ## Invariants
 
-- **INV-NAV-01 [T][SYS]** SpacePosition survives NBT round-trip (populated and default); a read
+- **INV-NAV-01 [A][SYS]** SpacePosition survives NBT round-trip (populated and default); a read
   with no `spacePosition` tag leaves the object unchanged. `test/unit/SpacePositionTest.java:25,53,68`. Pinned by `SpacePositionTest#spacePositionNbtRoundTrip`, `SpacePositionTest#spacePositionNbtRoundTripDefaults`, `SpacePositionTest#readFromNbtWithoutSpacePositionTagIsNoOp`. FOR: save format: SpacePosition.
-- **INV-NAV-02 [T][SYS]** `distanceToSpacePosition2` equals the Euclidean definition and is
+- **INV-NAV-02 [A][SYS]** `distanceToSpacePosition2` equals the Euclidean definition and is
   symmetric; `getNormalVectorTo` is unit-length and points at the target; `getFromSpherical`
   lands at the requested radius/axis and carries context. `test/unit/SpacePositionTest.java:78,91,101,115,131,144,153`. Pinned by `SpacePositionTest#distanceSquaredMatchesEuclideanDefinition`, `SpacePositionTest#distanceSquaredIsSymmetric`, `SpacePositionTest#normalVectorHasUnitLength`, `SpacePositionTest#normalVectorPointsTowardsTarget`, `SpacePositionTest#getFromSphericalReturnsPointAtRequestedRadius`, `SpacePositionTest#getFromSphericalCarriesContextFields`. FOR: INV-NAV-05.
 - **INV-NAV-03 [T][BEH]** Orbital period grows with distance and matches the baseline at Earth
@@ -132,7 +132,7 @@ keys). `GravityHandler` keeps an INSTANCE `WeakHashMap<Entity,Double>` of custom
   (`0.25·L_hole + L_companion`) — never as though the hole had stopped being one.
   `test/unit/AstronomicalBodyHelperTest.java:everyStarInASystemContributesItsOwnLight,
   aCompanionDoesNotTurnABlackHoleBackIntoAStar`. Pinned by `AstronomicalBodyHelperTest#everyStarInASystemContributesItsOwnLight`, `AstronomicalBodyHelperTest#aCompanionDoesNotTurnABlackHoleBackIntoAStar`.
-- **INV-NAV-08 [T][BEH]** A moon's period follows its parent's mass: four times the parent mass halves
+- **INV-NAV-08 [A][BEH]** A moon's period follows its parent's mass: four times the parent mass halves
   the period and twice the distance multiplies it by 2^1.5. Pinned by
   `AstronomicalBodyHelperTest#moonPeriodScalesWithParentMassAndDistanceExactly`. That the parent's
   MASS and not its surface gravity feeds the law (with a Jupiter parent the two readings are 11×
@@ -144,7 +144,7 @@ keys). `GravityHandler` keeps an INSTANCE `WeakHashMap<Entity,Double>` of custom
 - **INV-NAV-10 [T][BEH]** A darker world runs hotter and a more reflective one colder, and the
   albedo-less call still means Earth's albedo.
   `test/unit/AstronomicalBodyHelperTest#albedoCoolsAWorldAndTheDefaultIsEarths`.
-- **INV-NAV-11 [T][BEH]** A day is drawn, not computed from gravity: two worlds of equal gravity can have
+- **INV-NAV-11 [A][BEH]** A day is drawn, not computed from gravity: two worlds of equal gravity can have
   different days (impossible under any function of gravity alone), the draw stays in band, and the
   same body answers the same day twice.
   `test/unit/PlanetDerivationTest.java:aDayIsDrawnAndIsNotAFunctionOfGravity,aDrawnDayIsStillDeterministic`. Pinned by `PlanetDerivationTest#aDayIsDrawnAndIsNotAFunctionOfGravity`, `PlanetDerivationTest#aDrawnDayIsStillDeterministic`.

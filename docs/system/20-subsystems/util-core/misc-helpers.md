@@ -68,7 +68,7 @@ static weak-ref/weak-map bypass state; `RocketGuiNavigation` holds a static
   amount actually extracted; `increment` clamps at max and reports amount inserted;
   `setAirRemaining` does not clamp; a fresh stack reads as full (`ItemAirUtils.java:29-130`).
   No unit test drives these; the suit client scenarios reach only the drained case of `decrementAir`.
-- **INV-HLP-02 [T][BEH]** A bypass player skips `canInteractWith` regardless of distance. A
+- **INV-HLP-02 [A][BEH]** A bypass player skips `canInteractWith` regardless of distance. A
   non-bypass player delegates to the container, and bypass is scoped to the specific player
   instance and restored on removal `[V]` (`RocketInventoryHelper.java:22,50-53,65-70`); no test
   drives the delegation or the removal. Pinned by `MachineGuiClientGroupTest#mixinRedirectKeepsContainerOpenAcrossDistance`.

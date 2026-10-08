@@ -72,6 +72,26 @@ public final class ShipMotionCases {
     }
 
     /** Whether some wheel axis, as the scheme is about to see it, has room for less than one full step. */
+    /** Whether some wheel axis holds no momentum at all — the EMPTY region, read at the call. */
+    public static boolean aWheelIsEmpty(ShipCapability cap, MomentumStore momentum) {
+        for (Actuator a : cap.actuators()) {
+            if (!a.isSustained() && momentum.given(a.id()) == 0.0D) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether some wheel axis holds its whole capacity in either sense — the FULL region, at the call. */
+    public static boolean aWheelIsFull(ShipCapability cap, MomentumStore momentum) {
+        for (Actuator a : cap.actuators()) {
+            if (!a.isSustained() && Math.abs(momentum.given(a.id())) >= a.momentumCapacity()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean aWheelIsInsideItsLastStep(ShipCapability cap, MomentumStore momentum) {
         for (Actuator a : cap.actuators()) {
             if (a.isSustained()) {

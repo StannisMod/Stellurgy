@@ -118,21 +118,21 @@ new store never reads it again; the legacy source `WorldInfoSavedData` is read-o
 
 ## Invariants
 
-- **INV-WGEN-11 [T][BEH]** `computeSleepWakeTime` always lands on a dawn (multiple of
+- **INV-WGEN-11 [A][BEH]** `computeSleepWakeTime` always lands on a dawn (multiple of
   `rotationalPeriod`), moves strictly forward, and skips <1 full extra day;
   rp=24000 equals vanilla rounding; non-positive rp falls back to 24000 —
   `unit/SleepWakeTimeTest.java:28,38,47,55`. Pinned by `SleepWakeTimeTest#rp24000MatchesVanillaRounding`, `SleepWakeTimeTest#nonVanillaPeriodsLandOnDawn`, `SleepWakeTimeTest#alreadyAtDawnSkipsToNextDay`, `SleepWakeTimeTest#nonPositivePeriodFallsBackTo24000`.
-- **INV-WGEN-12 [T][SYS]** `PlanetWeatherState` NBT round-trips all five weather fields
+- **INV-WGEN-12 [A][SYS]** `PlanetWeatherState` NBT round-trips all five weather fields
   and preserves clean-weather time — `unit/PlanetWeatherStateTest.java:19,41`;
   the fresh-state-defaults-all-zero claim is `[A]` (no test pins it). Pinned by `PlanetWeatherStateTest#planetWeatherStateNbtRoundTrip`, `PlanetWeatherStateTest#planetWeatherStateNbtRoundTripPreservesClearWeather`. FOR: save format: planet weather.
-- **INV-WGEN-13 [V][T][SYS]** `STORAGE_KEY` is the stable string
+- **INV-WGEN-13 [V][SYS]** `STORAGE_KEY` is the stable string
   `stellurgy_planet_weather` — `[V]` `PlanetWeatherSavedData.java:25` (no test pins the string); `getOrCreate` is idempotent and isolates dimensions —
   `[T]` `unit/PlanetWeatherSavedDataTest.java:26,38`. Pinned by `PlanetWeatherSavedDataTest#getOrCreateInsertsFreshStateAndIsIdempotent`, `PlanetWeatherSavedDataTest#getOrCreateIsolatesDimensions`. FOR: save format: planet weather.
-- **INV-WGEN-14 [T][BEH]** With `perDimWorldInfo` on, one dim's weather does not leak to
+- **INV-WGEN-14 [A][BEH]** With `perDimWorldInfo` on, one dim's weather does not leak to
   another / to the overworld — `server/PerDimensionWeatherIsolationTest`,
   `server/PlanetDimensionLoadTest`; master-toggle off ⇒ fully vanilla —
   `server/PerDimWorldInfoMasterToggleTest`. Pinned by `PerDimensionWeatherIsolationTest#rainOnPlanetADoesNotLeakToBOrOverworld`, `PerDimensionWeatherIsolationTest#rainOnPlanetBDoesNotLeakToAOrOverworld`, `PerDimensionWeatherIsolationTest#clearOnPlanetADoesNotClearB`, `PerDimWorldInfoMasterToggleTest#masterOffLeavesPlanetOnVanillaWorldInfo`.
-- **INV-WGEN-15 [T][BEH]** Custom weather disabled ⇒ cycle defers to vanilla even for
+- **INV-WGEN-15 [A][BEH]** Custom weather disabled ⇒ cycle defers to vanilla even for
   planets carrying rain/thunder markers — `server/WeatherCycleDisableTest`,
   `server/PlanetWeatherGateTest`; persistence across restart —
   `server/WeatherPersistenceTest#planetRainSurvivesRestartOnSameWorkDir:84`. Pinned by `WeatherCycleDisableTest#customWeatherCycleRunsOnlyWhenConfigEnabled`, `WeatherPersistenceTest#planetRainSurvivesRestartOnSameWorkDir`.

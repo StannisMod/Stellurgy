@@ -94,7 +94,7 @@ transient wire field in `readDataFromNetwork` (never written to disk).
 - **INV-WDT-04 [V][BEH]** Extract mode ⇒ registered as source only; inject ⇒ sink only; a mode flip
   swaps and clears the prior role. `TileWirelessTransceiver.java:272-281` (`removeFromAll`
   then the one add).
-- **INV-WDT-05 [T][BEH]** `mode`, `enabled`, `networkID` survive an NBT round-trip and the tile
+- **INV-WDT-05 [A][BEH]** `mode`, `enabled`, `networkID` survive an NBT round-trip and the tile
   re-registers its role on `onLoad`. `WirelessTransceiverRestartTest.java:75-109` Pinned by `WirelessTransceiverRestartTest#modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration`.
 - **INV-WDT-06 [V]** Server-authoritative writes: GUI/`useNetworkData` mutations apply only when
   `side.isServer()`. `TileWirelessTransceiver.java:536`

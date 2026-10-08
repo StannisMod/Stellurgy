@@ -107,20 +107,20 @@ re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist o
 
 ## Invariants
 
-- **INV-SAT-01** [T][BEH] Base battery never exceeds `powerStorage`; accrual is ≈`powerPerTick`/tick.
+- **INV-SAT-01** [A][BEH] Base battery never exceeds `powerStorage`; accrual is ≈`powerPerTick`/tick.
   `SatelliteTickBehaviourTest.java:63,88` Pinned by `SatelliteTickBehaviourTest#baseSatelliteTickAccruesAtApproximatelyPowerGenRate`, `SatelliteTickBehaviourTest#baseSatelliteBatteryCapsAtPowerStorage`.
-- **INV-SAT-02** [T][BEH] `DataStorage.addData` is capped at `maxData`; a data satellite fires the
+- **INV-SAT-02** [A][BEH] `DataStorage.addData` is capped at `maxData`; a data satellite fires the
   data gate ~`ticks/collectionTime` times. `SatelliteTickBehaviourTest.java:112,134` Pinned by `SatelliteTickBehaviourTest#dataSatelliteAccumulatesDataOverTime`, `SatelliteTickBehaviourTest#dataSatelliteRespectsMaxDataCap`.
-- **INV-SAT-03** [T][SYS] Weather `mode_id`/`last_mode_id`/`floodlevel` round-trip through NBT; the
+- **INV-SAT-03** [A][SYS] Weather `mode_id`/`last_mode_id`/`floodlevel` round-trip through NBT; the
   `floodlevel==-1` sentinel must survive so the lazy sea-level fallback fires.
   `SatelliteWeatherAndMicrowaveNbtTest.java:51,79` Pinned by `SatelliteWeatherAndMicrowaveNbtTest#weatherControllerNbtRoundTripPreservesModeIdLastModeIdAndFloodlevel`, `SatelliteWeatherAndMicrowaveNbtTest#weatherControllerNbtRoundTripPreservesFreshDefaults`. FOR: save format: satellite survives reload.
-- **INV-SAT-04** [T][SYS] Microwave `teir` byte round-trips through NBT. `SatelliteWeatherAndMicrowaveNbtTest.java:108` Pinned by `SatelliteWeatherAndMicrowaveNbtTest#microwaveEnergyTeirByteRoundTripsAcrossNbt`. FOR: save format: satellite survives reload.
-- **INV-SAT-05** [T][BEH] Builder stamps the *same* fresh `satelliteId` into both the chassis item
+- **INV-SAT-04** [A][SYS] Microwave `teir` byte round-trips through NBT. `SatelliteWeatherAndMicrowaveNbtTest.java:108` Pinned by `SatelliteWeatherAndMicrowaveNbtTest#microwaveEnergyTeirByteRoundTripsAcrossNbt`. FOR: save format: satellite survives reload.
+- **INV-SAT-05** [A][BEH] Builder stamps the *same* fresh `satelliteId` into both the chassis item
   (`satId`) and the id chip (`satelliteId`); chassis slot is consumed, output stays empty until
   `completionTime`. `SatelliteBuilderPressBuildContractTest.java:76` Pinned by `SatelliteBuilderPressBuildContractTest#pressBuildAssemblesOpticalSatellite`.
-- **INV-SAT-06** [T][BEH] A chip-overriding type (weatherController) rejects the default id chip in
+- **INV-SAT-06** [A][BEH] A chip-overriding type (weatherController) rejects the default id chip in
   `canAssembleSatellite`. `SatelliteBuilderPressBuildContractTest.java:133` Pinned by `SatelliteBuilderPressBuildContractTest#pressBuildRejectsDefaultChipForChipOverridingType`.
-- **INV-SAT-07** [T][BEH] Terminal status ladder: no chip→0, chip+no power→1, out of range→2,
+- **INV-SAT-07** [A][BEH] Terminal status ladder: no chip→0, chip+no power→1, out of range→2,
   linked→3; erase removes the satellite from its dim and blanks the chip.
   `SatelliteTerminalChipRecognitionTest.java:87,107,120,133` (the out-of-range rung, status 2, has no test here) Pinned by `SatelliteTerminalChipRecognitionTest#chippedTerminalWithPowerReachesStatus3`, `SatelliteTerminalChipRecognitionTest#unchippedTerminalReportsNoLink`, `SatelliteTerminalChipRecognitionTest#chippedTerminalWithoutPowerReportsNoPower`, `SatelliteTerminalChipRecognitionTest#pressEraseRemovesSatelliteFromDimAndBlanksChip`.
 - **INV-SAT-08** [V][BEH] Terminal download requires the resolved satellite be a `SatelliteData`

@@ -238,27 +238,27 @@ blocks each session, so nothing about topology can rot in a save [V].
 - **INV-SHD-01** [V][BEH] A network with no source or no sink publishes a disconnected state and moves no
   energy. Now the shared solver's rule, not a shield one (`subsystem-network`)
   `SubsystemNetworkManager.java:345-348`
-- **INV-SHD-02** [T][BEH] Two adjacent shield blocks form a network with no cable; a one-block gap forms none.
+- **INV-SHD-02** [A][BEH] Two adjacent shield blocks form a network with no cable; a one-block gap forms none.
   `ShieldTwoBlockFloorTest` Pinned by `ShieldTwoBlockFloorTest#twoBlockShieldPowersWithoutCable`, `ShieldTwoBlockFloorTest#nonAdjacentPairNeverPowers`.
-- **INV-SHD-03** [T][BEH] An emitter never receives more than its recharge throughput in a tick, regardless of
+- **INV-SHD-03** [A][BEH] An emitter never receives more than its recharge throughput in a tick, regardless of
   the size of the supply behind it. `ShieldZoneThroughputTest` Pinned by `ShieldZoneThroughputTest#regenerationIsThroughputCapped`.
-- **INV-SHD-04** [T][BEH] Energy is conserved across the solve: a bulk store is not drained faster than the
+- **INV-SHD-04** [A][BEH] Energy is conserved across the solve: a bulk store is not drained faster than the
   emitters actually intake. `ShieldAccumulatorTest` Pinned by `ShieldAccumulatorTest#accumulatorReserveIsConservedNotBled`.
-- **INV-SHD-05** [T][BEH] A charged coil absorbs a single impact costing more than its per-tick intake.
+- **INV-SHD-05** [A][BEH] A charged coil absorbs a single impact costing more than its per-tick intake.
   `ShieldImpactAbsorptionTest` Pinned by `ShieldImpactAbsorptionTest#chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake`.
-- **INV-SHD-06** [T][BEH] A kinetic projectile is deflected (still alive, outside the shell), not consumed.
+- **INV-SHD-06** [A][BEH] A kinetic projectile is deflected (still alive, outside the shell), not consumed.
   `ShieldImpactAbsorptionTest` Pinned by `ShieldImpactAbsorptionTest#chargedShieldDeflectsAnArrow`.
-- **INV-SHD-07** [T][BEH] A shield with no charge intercepts nothing and spends nothing.
+- **INV-SHD-07** [A][BEH] A shield with no charge intercepts nothing and spends nothing.
   `ShieldStrikeAbsorptionTest` Pinned by `ShieldStrikeAbsorptionTest#chargedShieldFullyAbsorbsACooperativeStrike`.
 - **INV-SHD-08** [T][BEH] A strike the shield cannot fully pay for is partially absorbed and leaves a residual.
   `ShieldStrikeAbsorptionTest` Pinned by `ShieldStrikeAbsorptionTest#strikeGracefullyPenetratesAShieldItOutmatches`.
-- **INV-SHD-09** [T][BEH] Deleting a priority group does not change any member emitter's priority.
+- **INV-SHD-09** [A][BEH] Deleting a priority group does not change any member emitter's priority.
   `ShieldPriorityGroupControlTest` Pinned by `ShieldPriorityGroupControlTest#groupPushesPriorityIntoMemberEmitters`.
-- **INV-SHD-10** [T][BEH] A group created at one console is visible and editable at another, and survives that
+- **INV-SHD-10** [A][BEH] A group created at one console is visible and editable at another, and survives that
   console's destruction. `ShieldPriorityGroupControlTest` Pinned by `ShieldPriorityGroupControlTest#anyConsoleEditsTheSameDomainConfig`.
-- **INV-SHD-11** [T][BEH] Rotating the access code changes the credential on every domain emitter and leaves
+- **INV-SHD-11** [A][BEH] Rotating the access code changes the credential on every domain emitter and leaves
   grouping and priority untouched. `ShieldPriorityGroupControlTest` Pinned by `ShieldPriorityGroupControlTest#rotatingAccessCodeChangesCredentialButNotGrouping`.
-- **INV-SHD-12** [T][BEH] A single cable carries more than a single emitter can absorb, so plumbing is not the
+- **INV-SHD-12** [A][BEH] A single cable carries more than a single emitter can absorb, so plumbing is not the
   ordinary limiter. `ShieldLimiterBalanceTest` Pinned by `ShieldLimiterBalanceTest#cableCarriesMoreThanASingleEmitterAbsorbs`.
 - **INV-SHD-13** [V][SYS] With a single priority value the tiered solve is one augmentation pass, so the
   default configuration behaves exactly as plain max-flow. `SubsystemNetworkManager.java:421-429` FOR: INV-SHD-04.
@@ -280,7 +280,7 @@ blocks each session, so nothing about topology can rot in a save [V].
   leaves it open. `ShieldDamageDegradesTest` Pinned by `ShieldDamageDegradesTest#aNeighbourThatStillReachesClosesTheHoleAndOneThatDoesNotLeavesIt`.
 - **INV-SHD-21** [T][BEH] A generator, a cable and an accumulator each deliver less when damaged, as an
   ordering. `ShieldDamageDegradesTest` Pinned by `ShieldDamageDegradesTest#aDamagedGeneratorCableAndAccumulatorEachDeliverLess`.
-- **INV-SHD-22** [T][BEH] An emitter that is still standing still projects something, and a mended one
+- **INV-SHD-22** [A][BEH] An emitter that is still standing still projects something, and a mended one
   projects its whole declared field again. `ShieldConditionTest` Pinned by `ShieldConditionTest#aStandingEmitterAlwaysProjectsSomething`, `ShieldConditionTest#repairRestoresTheWholeFieldBecauseNothingIsAccumulated`.
 - **INV-SHD-23** [V] "Which emitters are loaded in this world" has one answer and it lives in the
   server's network registry: `TileEntityFieldGenerator.loadedIn(world)` reads

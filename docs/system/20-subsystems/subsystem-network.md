@@ -91,7 +91,7 @@ does not own persistence: a domain saves its own settings through whatever tile 
   expressible, and anything holding a node — a cable deciding whether to draw an arm to its
   neighbour, a readout walking the world — can ask without a per-domain marker interface to test
   against. `SubsystemNetworkRegistry.java:30-46`, `ISubsystemNetworkNode.java:23`. Pinned by `VentilationNetworkTest#aShieldCableIsNotADuctAndCarriesNoAir`. FOR: INV-SHD-02.
-- **INV-NET-02 [T][SYS]** Roles are not exclusive — a store registers as both source and sink and lands in
+- **INV-NET-02 [A][SYS]** Roles are not exclusive — a store registers as both source and sink and lands in
   both maps; a cable is only ever transport. `SubsystemNetworkManager.java:135-155`. Pinned by `ShieldAccumulatorTest#accumulatorBridgesGeneratorToEmitter`. FOR: INV-SHD-02.
 - **INV-NET-03 [V]** `extract`/`receive` are called with the solved flow only, once per tick per
   node, after the whole component is solved — never speculatively during the solve. `:394-410`.

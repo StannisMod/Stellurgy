@@ -129,7 +129,7 @@ No dedicated disable flags; these are gated by block presence and data availabil
 
 ## Invariants
 
-- **INV-MBM-16** [T][BEH] A powered analyser with data on its buses increments the chip's composition
+- **INV-MBM-16** [A][BEH] A powered analyser with data on its buses increments the chip's composition
   data from 0. `PlanetAnalyserResearchContractTest.java:54-127`. Pinned by `PlanetAnalyserResearchContractTest#poweredAnalyserIncrementsChipCompositionFromDataBus`.
 - **INV-MBM-17** [V][BEH] The observatory refuses to print the same selection twice per seed: the
   server `PROCESS_CHIP` path hard-blocks when `printedButtonsThisSeed.contains(lastButton)`.
