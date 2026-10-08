@@ -5,8 +5,14 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 
+import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.PilotSeat;
+import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.ShipIdentity;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -17,8 +23,9 @@ import static org.junit.Assert.assertTrue;
  * leaks an extra dummy whose riderless twin clears the ship's pilot input each server tick and
  * fights the seated pilot's controls.
  *
- * <p>Runs on a bare, unassembled pilot seat block (the rule is about the seat↔dummy binding, not
- * about the ship), so no VS is needed and the pin holds in both suite configurations.</p>
+ * <p>The reuse scenario runs on a bare, unassembled pilot seat block (the rule is about the
+ * seat↔dummy binding, not about the ship). The other builds a ship, because its subject is a mount
+ * whose ship is gone.</p>
  */
 public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
 
@@ -50,6 +57,67 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
                 first.requireDummyId(), second.requireDummyId());
         assertTrue("the second response must say the dummy was reused: " + second.raw(),
                 second.reused);
+    }
+
+    /**
+     * How long the seat's mount is given to go once its ship is marked dead, in server ticks. The
+     * mount reads its ship's record on its own next update; measured 2026-10-07: the mount was removed
+     * in the same server tick as the ship's record ({@code entity_removed} and {@code ship_removed}
+     * both at one tick). The budget only bounds how long the broken case is waited on.
+     */
+    private static final int MOUNT_RETIRED_BUDGET_TICKS = 100;
+
+    /**
+     * A ship's seat mount goes with the ship. A ship is collected without its seat block being
+     * broken, so nothing but the mount itself can notice; one that stayed would be bound to a
+     * shipyard position the next ship handed the same claim is given, and be taken for that ship's
+     * seat.
+     *
+     * <p>Contract: fails if {@code EntityDummy#onUpdate} stops deciding that a riderless mount whose
+     * ship ({@code EntityDummy#outlivedItsShip}, the ship it was bound under) is gone from the registry
+     * retires. The ship is retired by the probe's {@code vs destroy-ship}, which marks it dead exactly
+     * as production does; what the test reads is production's own removal of the mount
+     * ({@code entity_removed}).</p>
+     * <p>red-witnessed: with {@code EntityDummy#onUpdate} at {@code if (getPassengers().isEmpty() &&
+     * outlivedItsShip())} reading false, fails: "the seat's mount must go with its ship, not outlive it
+     * bound to a shipyard position the next ship on the claim is handed — no `entity_removed` carrying
+     * e = 1357 was recorded within 100 ticks. What DID happen since the mark: … ship_removed …"
+     * (2026-10-07).</p>
+     */
+    @Test
+    public void aShipsSeatMountGoesWithTheShip() throws Exception {
+        FixtureSite site = site();
+        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", 1, 8,
+                "the craft this scenario builds and destroys");
+        String asm = RocketFixture.assembleBuilt(site, this::exec, builder);
+        requireArranged("the pilot-seat build must route to a ship: " + asm,
+                Reply.of(asm).integer("rocketCount") == 0);
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+                .requireFound("the assembled ship's pilot seat must be found");
+        String at = seat.seatX + " " + seat.seatY + " " + seat.seatZ;
+
+        Reply mounted = Reply.of(exec("stellurgytest vs seat-mount-at 0 " + at));
+        requireArranged("the seat's mount must spawn: " + mounted, mounted.ok());
+        int dummyId = mounted.integer("dummyId");
+        Reply bound = Reply.of(exec("stellurgytest vs seat-status 0 " + at));
+        requireArranged("the seat must hold exactly that one mount before its ship goes: " + bound,
+                bound.integer("boundCount") == 1);
+
+        Events events = new Events(this::exec,
+                ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+        long mark = events.markInstrumented();
+        Reply destroyed = Reply.of(exec("stellurgytest vs destroy-ship 0 " + shipId));
+        requireArranged("the ship must be marked dead: " + destroyed, destroyed.bool("marked"));
+        String shipGone = events.awaitRecordWithField(mark, "ship_removed", "vsShip", shipId,
+                "the destroyed ship must leave the registry, or its mount has nothing to notice",
+                MOUNT_RETIRED_BUDGET_TICKS);
+
+        String mountGone = events.awaitRecordWithFields(mark, "entity_removed",
+                "the seat's mount must go with its ship, not outlive it bound to a shipyard position the"
+                        + " next ship on the claim is handed", MOUNT_RETIRED_BUDGET_TICKS,
+                "e", String.valueOf(dummyId));
+        System.out.println("[seat-mount] ship " + shipGone + " | mount " + mountGone);
     }
 
 }

@@ -11,6 +11,7 @@ import java.util.Set;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -240,6 +241,69 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
         assertEquals("battery-drained terraformer moved density anyway"
                         + " (before=" + densityBefore + " after=" + densityAfter + ")",
                 densityBefore, densityAfter);
+    }
+
+    /**
+     * How long the window is that the cycle is watched over, in machine ticks. Any positive count
+     * would do — the claim is that the cycle moves at all — and this one is short of the cycle's own
+     * {@code completionTime} (18000 at the shipped {@code terraformSpeed}), so no step completes
+     * and resets the count inside it.
+     */
+    private static final int FLUIDLESS_WINDOW_TICKS = 100;
+
+    /**
+     * With {@code terraformRequiresFluid} off, a powered terraformer with no gas in its hatches still
+     * runs its cycle: the setting skips the gas requirement, not the work.
+     *
+     * <p>Contract: fails if {@code TileAtmosphereTerraformer#onRunningPoweredTick} stops deciding
+     * that a terraformer not required to draw gas goes on counting its cycle, and returns before the
+     * count instead. Read off the controller's own {@code currentTime} and {@code outOfFluid}
+     * ({@code machine controller-state}) before and after a window of ticks. Silent about the power
+     * it pays: the fixture's creative plugs report the same store whatever is drawn.</p>
+     * <p>red-witnessed: with {@code TileAtmosphereTerraformer#onRunningPoweredTick} at
+     * {@code && StellurgyConfiguration.getCurrentConfig().terraformRequiresFluid)} replaced by the
+     * former early {@code return} when the setting is off, fails: "with fluids not required a powered
+     * terraformer with empty hatches must still count its cycle and not stand out of fluid —
+     * currentTime 0 -&gt; 0 over 100 ticks" (2026-10-07).</p>
+     */
+    @Test
+    public void withFluidsNotRequiredAnUnfuelledTerraformerStillRunsItsCycle() throws Exception {
+        FixtureSite site = plot().inDimension(newDim).site();
+        site.requireClear(this::exec, 8, 12, "the terraformer's volume");
+        int cx = site.x + 2;
+        int cy = site.y + 5;
+        int cz = site.z + 2;
+        String controller = newDim + " " + cx + " " + cy + " " + cz;
+        String fixtureJson = exec("stellurgytest fixture multiblock terraformer " + controller);
+        Reply fixture = Reply.of(fixtureJson);
+        requireArranged("the terraformer fixture must build whole: " + fixture,
+                fixture.ok() && fixture.integer("unresolved") == 0);
+        Reply formed = Reply.of(exec("stellurgytest machine try-complete " + controller));
+        requireArranged("the terraformer must form: " + formed, formed.bool("isComplete"));
+
+        String found = Reply.of(exec("stellurgytest config get terraformRequiresFluid")).text("value");
+        try {
+            Reply off = Reply.of(exec("stellurgytest config set terraformRequiresFluid false"));
+            requireArranged("the setting must go off: " + off, off.ok());
+            Reply enabled = Reply.of(exec("stellurgytest machine set-enabled " + controller + " true"));
+            requireArranged("the terraformer must switch on: " + enabled, enabled.bool("enabled"));
+
+            Reply before = Reply.of(exec("stellurgytest machine controller-state " + controller));
+            Reply tick = Reply.of(exec("stellurgytest tile force-tick " + controller + " "
+                    + FLUIDLESS_WINDOW_TICKS));
+            requireArranged("the window must run: " + tick, tick.ok());
+            Reply after = Reply.of(exec("stellurgytest machine controller-state " + controller));
+
+            int countedBefore = before.integer("currentTime");
+            int countedAfter = after.integer("currentTime");
+            assertTrue("with fluids not required a powered terraformer with empty hatches must still"
+                            + " count its cycle and not stand out of fluid — currentTime " + countedBefore
+                            + " -> " + countedAfter + " over " + FLUIDLESS_WINDOW_TICKS + " ticks, after: "
+                            + after,
+                    countedAfter > countedBefore && !after.bool("outOfFluid"));
+        } finally {
+            exec("stellurgytest config set terraformRequiresFluid " + found);
+        }
     }
 
     // ─── helpers ───────────────────────────────────────────────────────

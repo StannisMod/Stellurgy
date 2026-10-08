@@ -1167,6 +1167,12 @@ public final class VSIntegration {
                 ? null : VSBridge.registeredShipIdManagingBlock(world, pos);
     }
 
+    /** Whether the ship {@code shipUuid} still has a live registry record, loaded or not; {@code null}
+     *  when the registry could not be asked. */
+    public static Boolean shipRecordLive(World world, java.util.UUID shipUuid) {
+        return (world == null || shipUuid == null) ? null : VSBridge.shipRecordLive(world, shipUuid);
+    }
+
     /** UUID strings of every loaded ship whose grown world AABB contains {@code (x,y,z)} — the
      *  first-contact candidate list (possibly empty; never null). */
     public static java.util.List<String> shipIdsAt(World world, double x, double y, double z) {

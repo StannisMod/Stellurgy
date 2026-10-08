@@ -184,8 +184,7 @@ public class BlockPilotSeat extends BlockSeat {
      */
     private static EntityDummy boundDummyAnywhere(World world, BlockPos seatPos) {
         for (net.minecraft.entity.Entity e : world.loadedEntityList) {
-            if (e instanceof EntityDummy && !e.isDead
-                    && seatPos.equals(((EntityDummy) e).getSeatPos())) {
+            if (e instanceof EntityDummy && !e.isDead && ((EntityDummy) e).isMountOf(seatPos)) {
                 return (EntityDummy) e;
             }
         }
@@ -195,7 +194,7 @@ public class BlockPilotSeat extends BlockSeat {
     /** The first dummy in {@code box} bound to {@code seatPos}, or {@code null}. */
     private static EntityDummy firstBoundDummy(World world, AxisAlignedBB box, BlockPos seatPos) {
         for (EntityDummy e : world.getEntitiesWithinAABB(EntityDummy.class, box)) {
-            if (seatPos.equals(e.getSeatPos())) {
+            if (e.isMountOf(seatPos)) {
                 return e;
             }
         }

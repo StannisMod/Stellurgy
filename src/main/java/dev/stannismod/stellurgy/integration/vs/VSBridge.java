@@ -1460,6 +1460,22 @@ final class VSBridge {
      * <p>Deliberately a separate method: {@link #shipIdManagingBlock}'s callers use its null as
      * "this ship is not live", and widening that under them would change what they gate on.</p>
      */
+    /**
+     * Whether the registry holds a record for the ship {@code shipUuid} that nobody has declared
+     * finished. A ship keeps its record while unloaded, so {@code false} means the ship is gone, not
+     * merely far away. {@code null} when the registry could not be asked — which says nothing about
+     * the ship.
+     */
+    static Boolean shipRecordLive(World world, UUID shipUuid) {
+        try {
+            Optional<ShipData> data = org.valkyrienskies.mod.common.ships.QueryableShipData.get(world)
+                    .getShip(shipUuid);
+            return data.isPresent() && !data.get().isDead();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     static String registeredShipIdManagingBlock(World world, BlockPos pos) {
         try {
             Optional<ShipData> managing = ValkyrienUtils.getShipManagingBlock(world, pos);

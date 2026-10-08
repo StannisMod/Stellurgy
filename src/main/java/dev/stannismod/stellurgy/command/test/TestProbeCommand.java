@@ -1805,27 +1805,6 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":" + (marked >= 0) + ",\"marked\":" + marked + "}");
             return;
         }
-        // dummies-clear <dim> — remove every loaded seat dummy nobody is riding. A ship marked dead by
-        // destroy-ships is collected without its blocks being broken, so its seats' dummies outlive
-        // it, bound to subspace positions the next ship to take the same shipyard claim reuses; this
-        // is that leftover's disposal. `cleared` is how many went.
-        if (args.length >= 2 && "dummies-clear".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            int cleared = 0;
-            for (net.minecraft.entity.Entity e : new java.util.ArrayList<>(world.loadedEntityList)) {
-                if (e instanceof dev.stannismod.stellurgy.entity.EntityDummy && !e.isDead
-                        && e.getPassengers().isEmpty()) {
-                    e.setDead();
-                    cleared++;
-                }
-            }
-            send(sender, "{\"ok\":true,\"cleared\":" + cleared + "}");
-            return;
-        }
         // destroy-ship <dim> <shipUuid> — mark ONE registered ship finished, by its substrate id, so the
         // substrate collects it on its next tick (its record removed, its shipyard claim given back:
         // `ship_removed` is written on that path). `marked:false` when no live ship has that id.
