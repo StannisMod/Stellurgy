@@ -40,8 +40,11 @@ public final class FixtureSite {
      */
     public static final int OPEN_AIR_Y = 150;
 
-    /** Edge of the launchpad the rocket fixture lays at the site, in blocks. */
-    static final int PAD = 5;
+    /**
+     * Edge of the launchpad the rocket fixture lays at the site, in blocks. Public so a scenario that
+     * stands two fixtures on one plot can say how far apart their working volumes must be.
+     */
+    public static final int PAD = 5;
 
     private static final String PLACED = "placed";
     private static final String VOLUME = "volume";

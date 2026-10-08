@@ -772,9 +772,11 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * below the local ratio 84.25 on a body of g 0.166).</p>
      *
      * red-witnessed: with {@code StatsRocket#getThrustToWeightRatio} at
-     * {@code float localWeight = weight * effectiveGravityMultiplier(gravitationalMultiplier)} made
-     * {@code weight * 1f}, this fails at the verdict, the craft refused at one gee (2026-10-03,
-     * {@code logs/bugs-a-601-red1.log}).
+     * {@code float localWeight = getWeightNewtons(gravitationalMultiplier);} weighing at one gee instead,
+     * this fails at the verdict, the craft refused at one gee (2026-10-03,
+     * {@code logs/bugs-a-601-red1.log}) — taken on the pre-merge form of that line, which multiplied
+     * the craft's weight by the effective gravity itself; it now asks the SI weight of the mass, which
+     * applies the same multiplier.
      * red-witnessed: with {@code EntityRocket#launch} at
      * {@code this.stats.canLaunch(DimensionManager.getInstance()} handed {@code 1f} instead of the
      * world's gravity, this fails at the verdict the same way (2026-10-03,
@@ -825,6 +827,80 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         } finally {
             RocketList.clearFrom(this::exec, luna);
             setConfig("minLaunchTWR", minWas);
+            setConfig("advancedWeightSystem", weightSystemWas);
+        }
+    }
+
+    /**
+     * With {@code gravityAffectsFuel} off, the weight gate judges a craft at ONE gee wherever it
+     * stands: on a low-gravity moon, a threshold its ratio clears at the moon's gravity but not at one
+     * gee refuses it as too heavy.
+     *
+     * <p>This test fails if {@code StatsRocket#effectiveGravityMultiplier} stops deciding that a
+     * disabled flag pins the gate to one gee — the config flag's promise to take local gravity out of
+     * the launch entirely. It is the counterpart of
+     * {@link #aCraftOnALowGravityMoonIsWeighedAtThatMoonsGravity}, which lets the same kind of craft
+     * go under the same placement of the threshold with the flag ON; together they say the flag, and
+     * nothing else, is what moves the verdict.</p>
+     *
+     * <p>The threshold is placed midway between the craft's one-gee ratio and its ratio at the moon's
+     * gravity, both computed from the raw thrust and one-gee weight the gate's own record carries and
+     * the gravity {@code planet info} reports — never from the ratio the gate reports, which is the
+     * decision under test. The refusal is read as {@code error.rocket.tooHeavy}, so a craft held back
+     * for any other reason does not pass.</p>
+     *
+     * <p>What this does NOT see: the flight model's half of the flag ({@code StatsRocket#getAcceleration}
+     * at one gee) — a craft that is let go is gone, and nothing on this tier reads its climb.</p>
+     *
+     * red-witnessed: with {@code StatsRocket#effectiveGravityMultiplier} at
+     * {@code return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;}
+     * answering the multiplier whatever the flag says, this fails at the verdict — the craft let go
+     * with a one-gee ratio of 13.99 under a threshold of 49.12 (local ratio 84.25, g 0.166),
+     * 2026-10-04.
+     */
+    @Test
+    public void turningGravityOffTheLaunchJudgesACraftOnTheMoonAtOneGee() throws Exception {
+        String weightSystemWas = configValue("advancedWeightSystem");
+        String minWas = configValue("minLaunchTWR");
+        String gravityWas = configValue("gravityAffectsFuel");
+        int luna = theOverworldsMoon();
+        Plot onLuna = plot().inDimension(luna);
+        try {
+            double gravity = planetInfo(luna).number("gravity");
+            requireArranged("the moon's gravity must be below one gee and above none, so that the"
+                    + " local ratio exceeds the one-gee ratio: " + gravity, gravity > 0 && gravity < 1);
+            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            requireArranged("the moon's world must be loaded to stand a craft in: " + loaded,
+                    loaded.bool("loaded"));
+            setConfig("advancedWeightSystem", "true");
+            setConfig("gravityAffectsFuel", "false");
+            int rocket = rocketAt(onLuna.site(), "the craft is built on the moon and launched");
+            setConfig("minLaunchTWR", Double.toString(Double.MAX_VALUE));
+            Events log = serverLog();
+
+            LaunchDecision measured = launch(log, rocket, 0);
+            requireArranged("with the threshold at Double.MAX_VALUE the gate must refuse, and its"
+                    + " record is where the craft's thrust and weight are read: " + measured.window,
+                    TOO_HEAVY.equals(measured.refusal) && measured.gate != null);
+            double thrust = measured.gateNumber("thrust");
+            double weight = measured.gateNumber("weight");
+            double oneGeeRatio = thrust / weight;
+            double localRatio = thrust / (weight * gravity);
+            double between = (oneGeeRatio + localRatio) / 2;
+            setConfig("minLaunchTWR", Double.toString(between));
+            LaunchDecision atBetween = launch(log, rocket, 0);
+            System.out.println("[launch-gate] gravity off, on the moon (g=" + gravity + "): one-gee"
+                    + " ratio " + oneGeeRatio + ", local " + localRatio + ", threshold " + between
+                    + "; " + atBetween.window);
+            assertEquals("with gravityAffectsFuel off the gate must judge the craft at one gee wherever"
+                    + " it stands, so a threshold of " + between + " above its one-gee ratio ("
+                    + oneGeeRatio + ") must refuse it as too heavy, though its ratio at the moon's"
+                    + " gravity (" + localRatio + ") would clear it: " + atBetween.window,
+                    TOO_HEAVY, atBetween.refusal);
+        } finally {
+            RocketList.clearFrom(this::exec, luna);
+            setConfig("minLaunchTWR", minWas);
+            setConfig("gravityAffectsFuel", gravityWas);
             setConfig("advancedWeightSystem", weightSystemWas);
         }
     }

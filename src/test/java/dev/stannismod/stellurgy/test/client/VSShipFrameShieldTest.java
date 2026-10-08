@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import dev.stannismod.stellurgy.test.EntityState;
 import dev.stannismod.stellurgy.test.ShieldTile;
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
@@ -90,11 +91,38 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
     /** How far the hull must actually move before its tracking can be judged, in blocks. */
     private static final double HULL_MOVED_BLOCKS = 1.5;
 
+    /**
+     * The world velocity the hull is driven at to move it, blocks per second (the physics' velocity
+     * unit): straight up, away from anything below the open-air site. Ten a second over
+     * {@link #DRIVE_TICKS} — one physics second — is several times {@link #HULL_MOVED_BLOCKS} after
+     * the ramp, on a craft whose own flight model gives it more than twice its weight upward.
+     */
+    private static final int DRIVE_UP_BLOCKS_PER_S = 10;
+
+    /** Ticks of the hull's world the drive stands for — the dose, read back as a displacement. */
+    private static final int DRIVE_TICKS = 20;
+
     /** How far the shell must move WITH it, in blocks — the test's own sensitivity bar on
      *  "it is not frozen". Deliberately under {@link #HULL_MOVED_BLOCKS}: the claim is that it
      *  followed, not that it matched. */
     private static final double SHELL_MOVED_BLOCKS = 0.5;
 
+    /**
+     * A shield emitter on an assembled craft projects its shell on the flying hull, deflects off it,
+     * and keeps riding the hull — with a live surface velocity — when the craft is flown.
+     *
+     * <p>Its stillness before the drive is the craft's own Flight-Assist hold, and the move is a
+     * velocity command the hold obeys; a never-flown craft is simulated, so nothing here relies on
+     * it being inert.</p>
+     *
+     * <p>red-witnessed: with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}
+     * replaced by {@code WorldFieldFrame.INSTANCE}, this fails "the ship's emitter must resolve a SHIP
+     * frame and report it ready … no `field_frame_resolved` carrying shipFramed:true AND ready:true
+     * was recorded within 200 ticks" — 2026-10-06. With {@code ShipFieldFrame#surfaceVelocityAt} at
+     * {@code new Vec3d(v[0], v[1], v[2])} replaced by {@code ZERO}, it passes the hull-moved gate and
+     * fails "the shell's surface velocity stayed zero on a moving ship (speed=0.0)" — 2026-10-06. The
+     * two tracking verdicts between them (shell moved, shell still on the hull) are not witnessed.</p>
+     */
     @Test
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
 
@@ -240,15 +268,20 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
         double[] shell1 = shellCenter();
         assertTrue("precondition: the shell must sit on the hull before it moves (shell=" + str(shell1)
                 + " ship=" + str(ship1) + ")", dist(shell1, ship1) < SHELL_ON_THE_HULL_BLOCKS);
-        // STIMULUS: a loop deliberately left as one — it is not waiting for a link but accumulating a
-        // physical displacement under repeated velocity writes the substrate keeps overwriting, and
-        // "the hull has moved far enough to test tracking" is a measured quantity, not an event.
-        for (int i = 0; i < 25; i++) {
-            String push = exec("stellurgytest vs push-ship-by-id 0 " + shipId + " 0 14 0");
-            scenario().requireArranged("the push must reach THIS ship: " + push,
-                    Reply.of(push).bool("pushed"));
-            advanceServerAndClient(2);
-        }
+        // THE HULL IS DRIVEN THROUGH ITS OWN FLIGHT COMPUTER. A raw velocity write does not move a
+        // ship — the physics recomputes velocity from forces every step and discards it — and an
+        // unmanned craft now holds station with its own actuators, so nothing else drifts it either.
+        // `force-vel-by-id` hands the computer a world velocity that it realizes as force every physics
+        // step, the path production flies; it stands until the force-clear below.
+        String drive = exec("stellurgytest vs force-vel-by-id 0 " + shipId + " 0 " + DRIVE_UP_BLOCKS_PER_S
+                + " 0");
+        scenario().requireArranged("the drive must reach THIS ship's own flight computer: " + drive,
+                Reply.of(drive).bool("afcResolved"));
+        // EXPERIMENT: the dose of drive the hull is given; the displacement it buys is read below and
+        // gated as an arrangement, so a dose that turns out short says so rather than passing.
+        // SERVER-ONLY: a server command drives the hull; the reads are the server's ship pose and shield report.
+        GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);
+        exec("stellurgytest vs force-clear-by-id 0 " + shipId);
         double[] ship2 = shipPos(shipId);
         String moved = exec("stellurgytest shield emitters 0");
         double[] shell2 = new double[]{e(moved, "worldX"), e(moved, "worldY"), e(moved, "worldZ")};

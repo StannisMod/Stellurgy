@@ -52,7 +52,7 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnt
  * <p>Narrowing the probe stack's slot set to its own slots (the binder used to see the whole pool) did
  * NOT fix it, which rules that hypothesis out by control. A server JVM is started per CLASS here
  * (the shared base's class scope), so a class of its own gives this leg a boot in which it is
- * the FIRST consumer — the home the bug ledger asked for rather than a red shipped or an order pinned
+ * the FIRST consumer — the home this leg needs rather than a red shipped or an order pinned
  * to hide which scenario lands third.</p>
  *
  * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>

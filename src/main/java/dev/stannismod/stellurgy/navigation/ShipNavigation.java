@@ -138,10 +138,16 @@ public final class ShipNavigation implements JumpGate.ShipContext {
         return new ShipDrive(world, flightComputerPos);
     }
 
-    /** Blocks per tick this ship would fly at, given its drive and its hull. */
+    /**
+     * Blocks per tick this ship would fly at, given its drive and its hull; zero when the hull cannot
+     * be weighed, which is the same "no flight to forecast" a ship without a drive reads.
+     */
     public long plannedSpeed() {
-        return JumpSpeed.blocksPerTick(drive().stats().drivePower(),
-                ShipMassProvider.massOf(world, flightComputerPos, shipId),
+        java.util.OptionalLong mass = ShipMassProvider.massOf(world, shipId);
+        if (!mass.isPresent()) {
+            return 0L;
+        }
+        return JumpSpeed.blocksPerTick(drive().stats().drivePower(), mass.getAsLong(),
                 drive().stats().tier());
     }
 

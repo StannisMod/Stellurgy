@@ -14,6 +14,8 @@ import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
+
 /**
  * Holds a body on the deck it belongs on while nothing else can: the server pins it every tick and
  * asks its client to capture, so it is never handed to world gravity during a window in which its
@@ -63,10 +65,10 @@ public final class DeckHold {
      *
      * <p>Every real end of a hold is now an event: the capture landing on the hold's own ship, the
      * body entering a state that owns its own movement, or (for a hold that starts without a ship)
-     * {@link ShipEvent.ShipLoadedEvent} for the craft it names. What is left for a clock is the case
-     * where none of those ever happens — and the reason a clock is still the only answer to THAT is
-     * in {@link ShipLoadedAnnouncer}'s own javadoc: there is no disappearance event. A ship in a
-     * world that stops ticking is never reported as gone, so "the craft this body is waiting for will
+     * {@link ShipLifecycleEvent.ShipUsable} for the craft it names. What is left for a clock is the
+     * case where none of those ever happens — and the reason a clock is still the only answer to THAT
+     * is stated on {@link ShipLifecycleEvent} itself: a world that stops ticking announces nothing. A
+     * ship in such a world is never reported destroyed, so "the craft this body is waiting for will
      * never come" is not observable, and a hold with no give-up would pin a player in place for the
      * rest of the session.</p>
      *
@@ -471,13 +473,13 @@ public final class DeckHold {
 
     /**
      * Arm a hold that starts WITHOUT a ship: try once, and if the craft is not up yet, ask for it to
-     * be loaded and then WAIT FOR THE EVENT ({@link #onShipLoaded}).
+     * be loaded and then WAIT FOR THE EVENT ({@link #onShipUsable}).
      *
      * <p>This replaces a five-tick poll, and the distinction worth keeping is that the poll was not
      * only observing — it also CAUSED, calling {@code loadAllShips} on every pass. So the honest
      * event-driven shape is not "subscribe instead": it is <b>cause once, then observe</b>. The
      * one-shot attempt before subscribing is not belt-and-braces either, it closes a real race:
-     * {@code ShipLoadedEvent} is an EDGE, so a hold armed after its craft was already loaded would
+     * {@code ShipUsable} is an EDGE, so a hold armed after its craft was already loaded would
      * wait for a transition that has been and gone.</p>
      */
     private static void armDurable(EntityPlayerMP player, Hold hold) {
@@ -505,8 +507,8 @@ public final class DeckHold {
      * only job would be to disagree with the first one.</p>
      */
     @SubscribeEvent
-    public void onShipLoaded(dev.stannismod.stellurgy.api.event.ShipEvent.ShipLoadedEvent event) {
-        resolveHoldsNaming(event.world, event.shipId);
+    public void onShipUsable(ShipLifecycleEvent.ShipUsable event) {
+        resolveHoldsNaming(event.world, event.durableId == null ? null : event.durableId.toString());
     }
 
     /**
@@ -514,7 +516,7 @@ public final class DeckHold {
      *
      * <p><b>This is the event a durable hold actually waits for, and the reason the sibling above is
      * not enough.</b> Resolving means finding that computer among the world's loaded tiles, so the
-     * fact that matters is the tile's arrival — while {@code ShipLoadedEvent} reports that the
+     * fact that matters is the tile's arrival — while {@code ShipUsable} reports that the
      * craft's PHYSICS became steppable. A craft kept loaded with nobody aboard crossed that line
      * long before the player came back, so his login sees no edge at all: the one-shot resolve at arm
      * time finds no tile yet (the load it asks for is queued, not immediate), and nothing later says
@@ -550,34 +552,39 @@ public final class DeckHold {
      * The craft a hold is waiting for has been DESTROYED: end the hold now, saying so, instead of
      * pinning the body for the rest of the window against a ship that is never coming.
      *
-     * <p>This is the half {@link #onShipLoaded} could not cover and the reason the give-up clock used
+     * <p>This is the half {@link #onShipUsable} could not cover and the reason the give-up clock used
      * to be the only answer for it. It does not remove the clock — a world that stops ticking
-     * announces nothing, which {@link ShipLoadedAnnouncer} states on its own side — but it turns the
-     * common case from "waited ten seconds for no stated reason" into "the ship was destroyed", which
-     * is a sentence the player and the log can both act on.</p>
+     * announces nothing, which {@link ShipLifecycleEvent} states — but it turns the common case from
+     * "waited ten seconds for no stated reason" into "the ship was destroyed", which is a sentence the
+     * player and the log can both act on.</p>
      *
-     * <p><b>A DEPARTURE is deliberately not subscribed to here, and that is the whole point of the
-     * two events being separate.</b> A crossing cuts its source out of the world, which drops it from
-     * the registry exactly as a destruction does — and the crew holding onto that craft's deck are
-     * precisely the people the crossing is carrying. Ending their holds there, with "your ship was
-     * destroyed", would break the mechanic this class exists to serve, on its commonest path. The
-     * hold is SUPPOSED to survive a departure: the arrival re-arms it on the far side.</p>
+     * <p><b>Only {@link ShipLifecycleEvent.Cause#DESTROYED} ends a hold, and the other two causes are
+     * the whole point of reading the field.</b> A crossing cuts its source out of the world, which
+     * drops it from the registry exactly as a destruction does — and the crew holding onto that
+     * craft's deck are precisely the people the crossing is carrying. Ending their holds on that
+     * {@link ShipLifecycleEvent.Cause#DEPARTED}, with "your ship was destroyed", would break the
+     * mechanic this class exists to serve, on its commonest path; the hold is SUPPOSED to survive a
+     * departure, and the arrival re-arms it on the far side. An
+     * {@link ShipLifecycleEvent.Cause#UNLOADED} craft is still registered and will be back, which is
+     * what a hold waits for.</p>
      */
     @SubscribeEvent
-    public void onShipGone(dev.stannismod.stellurgy.api.event.ShipEvent.ShipGoneEvent event) {
-        if (event.world == null || event.world.isRemote || holds().isEmpty()) {
+    public void onShipGone(ShipLifecycleEvent.ShipUnnamed event) {
+        if (event.cause != ShipLifecycleEvent.Cause.DESTROYED
+                || event.world == null || event.world.isRemote || holds().isEmpty()) {
             return;
         }
+        String durable = event.durableId == null ? null : event.durableId.toString();
+        String substrate = event.shipUuid.toString();
         for (Iterator<Map.Entry<UUID, Hold>> it = holds().entrySet().iterator(); it.hasNext();) {
             Map.Entry<UUID, Hold> entry = it.next();
             Hold hold = entry.getValue();
             // Either identity may be the one this hold knows: a hold that never resolved is still
             // holding a DURABLE name, a resolved one is pinned to the substrate's id, and the event
             // carries both. Matching on only one of them would miss exactly half the holds.
-            boolean waitingForIt = event.shipId != null && hold.durableShipId != null
-                    && event.shipId.equals(hold.durableShipId.toString());
-            boolean pinnedToIt = event.substrateId != null
-                    && event.substrateId.equals(hold.shipId);
+            boolean waitingForIt = durable != null && hold.durableShipId != null
+                    && durable.equals(hold.durableShipId.toString());
+            boolean pinnedToIt = substrate.equals(hold.shipId);
             if (!waitingForIt && !pinnedToIt) {
                 continue;
             }
@@ -585,8 +592,7 @@ public final class DeckHold {
             net.minecraft.entity.player.EntityPlayer player =
                     event.world.getPlayerEntityByUUID(entry.getKey());
             if (player instanceof EntityPlayerMP) {
-                announceLostShip((EntityPlayerMP) player,
-                        event.shipId == null ? event.substrateId : event.shipId);
+                announceLostShip((EntityPlayerMP) player, durable == null ? substrate : durable);
             }
         }
     }

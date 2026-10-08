@@ -53,6 +53,8 @@ import java.util.LinkedList;
 import java.util.List;
 import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.block.*;
+import dev.stannismod.stellurgy.util.NuclearEngineLimit;
+import dev.stannismod.stellurgy.util.ShortWireParts;
 
 /**
  * Purpose: validate the rocket structure as well as give feedback to the player as to what needs to be
@@ -62,7 +64,8 @@ import dev.stannismod.stellurgy.block.*;
  *
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
-public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements ITickable, IButtonInventory, INetworkMachine, IDataSync, IModularInventory, IProgressBar, ILinkableTile {
+public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements ITickable, IButtonInventory, INetworkMachine, IDataSync, IModularInventory, IProgressBar, ILinkableTile,
+        dev.stannismod.stellurgy.network.IShipReadoutReceiver {
 
     protected static final ResourceLocation backdrop = new ResourceLocation("stellurgy", "textures/gui/rocketBuilder.png");
     protected static final ProgressBarImage verticalProgressBar = new ProgressBarImage(76, 93, 8, 52, 176, 15, 2, 38, 3, 2, EnumFacing.UP, backdrop);
@@ -103,6 +106,59 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
      * a machine that cannot name its own ship is a machine another ship can borrow.
      */
     private final java.util.List<BlockPos> scannedShipMachines = new java.util.ArrayList<>();
+
+    /**
+     * The readout of the ship on the pad at the last scan, or {@code null} when the build is not a
+     * ship. Server side it gates assembly; client side it is what the Scan shows. Not saved: a scan
+     * is a snapshot, and the next one replaces it.
+     */
+    private dev.stannismod.stellurgy.ship.control.ShipReadout tier2Readout = null;
+
+    /** Who pressed Scan or Build last; the one player a ship readout is sent to. */
+    private java.util.UUID scanRequester = null;
+
+    /**
+     * The thrust-to-weight a pilot was warned about, so the next press on the SAME build assembles
+     * it. A build that changed in between is a different craft and is warned about afresh.
+     */
+    private double warnedThrustToWeight = Double.NaN;
+
+    private void warnRequesterLowThrust(double thrustToWeight) {
+        if (scanRequester == null || world.getMinecraftServer() == null) {
+            return;
+        }
+        net.minecraft.entity.player.EntityPlayerMP player =
+                world.getMinecraftServer().getPlayerList().getPlayerByUUID(scanRequester);
+        if (player != null) {
+            player.sendMessage(new net.minecraft.util.text.TextComponentTranslation(
+                    "msg.rocketbuilder.lowtwr", String.format(java.util.Locale.ROOT, "%.2f", thrustToWeight)));
+        }
+    }
+
+    private void sendTier2Readout() {
+        if (tier2Readout == null || scanRequester == null || world.getMinecraftServer() == null) {
+            return;
+        }
+        net.minecraft.entity.player.EntityPlayerMP player =
+                world.getMinecraftServer().getPlayerList().getPlayerByUUID(scanRequester);
+        if (player != null) {
+            PacketHandler.sendToPlayer(new dev.stannismod.stellurgy.network.PacketShipReadout(
+                    getPos(), tier2Readout, false, 0.0D), player);
+        }
+    }
+
+    /** Client side: the Scan's ship readout arrived. */
+    @Override
+    public void acceptReadout(dev.stannismod.stellurgy.ship.control.ShipReadout readout, boolean saturated,
+                              double wheelFill) {
+        this.tier2Readout = readout;
+        updateText();
+    }
+
+    /** This build's ship readout at the last scan; {@code null} when it is not a ship or was not scanned. */
+    public dev.stannismod.stellurgy.ship.control.ShipReadout tier2Readout() {
+        return tier2Readout;
+    }
     protected ErrorCodes status;
     private ModuleText thrustText, weightText, fuelText, accelerationText;
     private int totalProgress;
@@ -260,11 +316,12 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         return stats.getAcceleration(gravitationalMultiplier);
     }
 
-    public float getWeight() {
-        return stats.getWeight();
+    /** Wet mass of the scanned rocket, kilograms. */
+    public float getMass() {
+        return stats.getMass();
     }
 
-    public int getThrust() {
+    public long getThrust() {
         return stats.getThrust();
     }
 
@@ -395,6 +452,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         scannedPilotSeatPos = null;
         scannedNavComputerPos = null;
         scannedShipMachines.clear();
+        tier2Readout = null;
 
         //if already a rocket exists, output their stats
 
@@ -415,11 +473,11 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
 
 
-            int thrustMonopropellant = 0;
-        int thrustBipropellant = 0;
-        int thrustNuclearNozzleLimit = 0;
-        int thrustNuclearReactorLimit = 0;
-        int thrustNuclearTotalLimit = 0;
+        long thrustMonopropellant = 0;
+        long thrustBipropellant = 0;
+        long thrustNuclearNozzleLimit = 0;
+        long thrustNuclearReactorLimit = 0;
+        int thrustNuclearTotalLimit;
         int monopropellantfuelUse = 0;
         int bipropellantfuelUse = 0;
         int nuclearWorkingFluidUseMax = 0;
@@ -474,7 +532,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         // computer ticks and fights the linked one for the ship, a second seat is silently dead).
         int flightComputerCount = 0;
         int pilotSeatCount = 0;
-        float weight = 0;
+        float mass = 0;
 
         if (verifyScan(bb, world)) {
             for (int yCurr = (int) bb.minY; yCurr <= bb.maxY; yCurr++) {
@@ -499,9 +557,10 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                             }
 
                             if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                                weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
+                                mass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
                             } else {
-                                weight += 1;
+                                // Weight system off: every block counts as one unit of mass.
+                                mass += 1;
                             }
 
                             //If rocketEngine increaseThrust
@@ -551,10 +610,10 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                                 if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
                                     TileSatelliteHatch hatch = (TileSatelliteHatch) tile;
                                     if (hatch.getSatellite() != null) {
-                                        weight += hatch.getSatellite().getProperties().getWeight();
+                                        mass += hatch.getSatellite().getProperties().getWeight();
                                     } else if (hatch.getStackInSlot(0).getItem() instanceof ItemPackedStructure) {
                                         ItemPackedStructure struct = (ItemPackedStructure) hatch.getStackInSlot(0).getItem();
-                                        weight += struct.getStructure(hatch.getStackInSlot(0)).getWeight();
+                                        mass += struct.getStructure(hatch.getStackInSlot(0)).getWeight();
                                     }
                                 }
                             } else if (tile instanceof TileGuidanceComputer) {
@@ -575,13 +634,10 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 }
             }
 
-            int nuclearWorkingFluidUse = 0;
-            if (thrustNuclearNozzleLimit > 0) {
-                //Only run the number of engines our cores can support - we can't throttle these effectively because they're small, so they shut off if they don't get full power
-                thrustNuclearTotalLimit = Math.min(thrustNuclearNozzleLimit, thrustNuclearReactorLimit);
-                nuclearWorkingFluidUse = (int) (nuclearWorkingFluidUseMax * (thrustNuclearTotalLimit / (float) thrustNuclearNozzleLimit));
-                thrustNuclearTotalLimit = (nuclearWorkingFluidUse * thrustNuclearNozzleLimit) / nuclearWorkingFluidUseMax;
-            }
+            NuclearEngineLimit nuclear = NuclearEngineLimit.derive(
+                    thrustNuclearNozzleLimit, thrustNuclearReactorLimit, nuclearWorkingFluidUseMax);
+            int nuclearWorkingFluidUse = nuclear.workingFluidUse;
+            thrustNuclearTotalLimit = nuclear.thrust;
 
             // Set fuel stats
             // Thrust depending on rocket type
@@ -602,7 +658,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             stats.setFuelCapacity(FuelType.NUCLEAR_WORKING_FLUID,      fuelCapacityNuclearWorkingFluid);
 
             //Non-fuel stats
-            stats.setWeight(weight);
+            stats.setMass(mass);
             stats.setThrust(Math.max(Math.max(thrustMonopropellant, thrustBipropellant), thrustNuclearTotalLimit));
             stats.setDrillingPower(drillPower);
 
@@ -614,7 +670,8 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // Biprop requirement: if any bipropellant thrust exists, require both tanks.
             // Skipped entirely when fuel isn't required (rocketRequireFuel=false) — no
             // tanks of any kind are needed to assemble then.
-            if (StellurgyConfiguration.getCurrentConfig().rocketRequireFuel && thrustBipropellant > 0) {
+            if (scannedFlightComputerPos == null
+                    && StellurgyConfiguration.getCurrentConfig().rocketRequireFuel && thrustBipropellant > 0) {
                 if (fuelCapacityBipropellant <= 0 || fuelCapacityOxidizer <= 0) {
                     status = ErrorCodes.NOFUEL;
                     return new AxisAlignedBB(actualMinX, actualMinY, actualMinZ, actualMaxX, actualMaxY, actualMaxZ);
@@ -625,13 +682,14 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             if (invalidBlock) {
                 status = ErrorCodes.INVALIDBLOCK;
 
-            } else if (((fuelCapacityBipropellant > 0 && totalFuel > fuelCapacityBipropellant)
+            } else if (scannedFlightComputerPos == null
+                    && (((fuelCapacityBipropellant > 0 && totalFuel > fuelCapacityBipropellant)
                     || (fuelCapacityMonopropellant > 0 && totalFuel > fuelCapacityMonopropellant)
                     || (fuelCapacityNuclearWorkingFluid > 0 && totalFuel > fuelCapacityNuclearWorkingFluid))
                     ||
                     ((thrustBipropellant > 0 && totalFuelUse > bipropellantfuelUse)
                     || (thrustMonopropellant > 0 && totalFuelUse > monopropellantfuelUse)
-                    || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
+                    || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse)))) {
                 status = ErrorCodes.COMBINEDTHRUST;
 
             } else if (flightComputerCount > 1) {
@@ -645,6 +703,13 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 // a pilot in any other seat would have silently dead controls. Passenger seats
                 // (the plain seat block) are unrestricted — this counts only pilot seats.
                 status = ErrorCodes.MULTIPLEPILOTSEATS;
+
+            } else if (scannedFlightComputerPos != null) {
+                // A SHIP is not gated by a rocket's thrust and fuel checks. Its engines consume
+                // nothing yet, and whether it can lift itself is a soft verdict, not a refusal: a
+                // ship is finished in place, so an under-thrusted one is a craft to build onto. The
+                // readout below says so, and assembly asks for a second press (assembleRocket).
+                status = ErrorCodes.SUCCESS;
 
             } else if (!hasGuidance && !hasSatellite && scannedFlightComputerPos == null) {
                 // An Advanced Flight Computer is the tier-2 ship's own flight computer, so it
@@ -684,6 +749,21 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         int maxXi = Math.max(actualMinX, actualMaxX);
         int maxYi = Math.max(actualMaxY, actualMinY);
         int maxZi = Math.max(actualMinZ, actualMaxZ);
+
+        // A ship's readout: the flight model of the blocks on the pad, exactly as the assembled ship
+        // will be surveyed, in the field of the world it stands in. Sent to whoever asked for the scan.
+        if (scannedFlightComputerPos != null && status == ErrorCodes.SUCCESS && !world.isRemote) {
+            dev.stannismod.stellurgy.integration.vs.HullSurvey survey =
+                    dev.stannismod.stellurgy.integration.vs.HullSurvey.ofBox(world,
+                            new BlockPos(minXi, minYi, minZi), new BlockPos(maxXi, maxYi, maxZi));
+            if (survey != null) {
+                tier2Readout = dev.stannismod.stellurgy.ship.control.ShipFlightModel.solve(0L,
+                        survey.mass(), survey.design(), survey.live(),
+                        dev.stannismod.stellurgy.ship.control.ControlFrame.HELM)
+                        .readout(TileAdvancedFlightComputer.localGravity(world));
+                sendTier2Readout();
+            }
+        }
 
         // use BlockPos ctor so the AABB is [min, max+1) in block space
         return new AxisAlignedBB(
@@ -748,31 +828,56 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         // EntityRocket. Only when the optional integration is installed; otherwise
         // the computer is inert and the ordinary rocket is built below.
         //
-        // The structure MUST be detached from the pad before the physics mod
-        // assembles it: that mod grows a ship by flood-filling every block connected
-        // to the anchor, so a craft still resting on the pad drags the whole terrain
-        // into the fill and the mod rejects the over-size/bedrock-touching result —
-        // no ship is ever created. So cut the scanned structure out (leaving the pad
-        // and terrain intact, exactly like the rocket path) and paste it back one
-        // block higher: the air gap under it bounds the flood-fill to the craft.
+        // The scanned structure is copied, not moved: the snapshot is the ship, the
+        // physics mod's block search is bounded to its footprint, and the mod relocates
+        // the blocks itself — so a craft resting on its pad takes neither the pad nor
+        // anything touching it.
         if (scannedFlightComputerPos != null) {
+            // A ship that cannot hold itself up here is built only when asked twice. Not refused: a
+            // ship is finished in place, and an extra engine is one block away. The first press
+            // warns and remembers what it warned about; a press on the same build assembles it.
+            if (tier2Readout != null && !tier2Readout.canHover(
+                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE)) {
+                double twr = tier2Readout.thrustToWeight(
+                        dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE);
+                if (Double.compare(twr, warnedThrustToWeight) != 0) {
+                    warnedThrustToWeight = twr;
+                    warnRequesterLowThrust(twr);
+                    return;
+                }
+            }
+            warnedThrustToWeight = Double.NaN;
             removeReplaceableBlocks(rocketBB);
-            final StorageChunk shipStructure;
-            try {
-                shipStructure = StorageChunk.cutWorldBB(world, rocketBB);
-            } catch (Throwable t) { // cover NegativeArraySizeException & other edge errors
-                status = ErrorCodes.FAIL_CUT;
+            // The craft is left where it was built and handed over AS IT STANDS: the assembly fits the
+            // scanned region to the blocks still standing after the clean-up above and bounds the
+            // substrate's block search to that, so nothing on or beside the pad joins the craft, and the
+            // substrate relocates the real blocks itself. Until 2026-10-06 the craft was CUT out and
+            // pasted a block higher, because that air gap was then the only separation from the pad; the
+            // round trip killed every item lying near the pad and rebuilt every tile from NBT.
+            //
+            // Asked BEFORE the craft is handed over, because after that the substrate decides a tick
+            // later and, refusing, drops it silently: the press read "finished" and there was no ship.
+            // Nothing has been moved, so a refusal leaves the world exactly as it was.
+            VSIntegration.AssemblyRefusal refusal = VSIntegration.builtTier2ShipRefusal(world, rocketBB);
+            if (refusal != null) {
+                switch (refusal) {
+                    case TOO_LARGE:
+                        status = ErrorCodes.SHIP_TOO_LARGE;
+                        break;
+                    case NO_FLIGHT_COMPUTER:
+                        status = ErrorCodes.FAIL_CUT;
+                        break;
+                    default:
+                        throw new IllegalStateException("an assembly refusal with no status: " + refusal);
+                }
                 return;
             }
-            final int liftGap = 1; // one block of air below the craft severs it from the pad
-            shipStructure.pasteInWorld(world, (int) rocketBB.minX,
-                    (int) rocketBB.minY + liftGap, (int) rocketBB.minZ);
-            BlockPos shipAnchor = scannedFlightComputerPos.add(0, liftGap, 0);
+            BlockPos shipAnchor = scannedFlightComputerPos;
             // Link a pilot seat (if the build has one) to the flight computer, before the
             // physics mod relocates the craft: the seat stores the computer's offset, which the
             // rigid relocation preserves, so the seated pilot's input reaches the computer.
             if (scannedPilotSeatPos != null) {
-                TileEntity seatTe = world.getTileEntity(scannedPilotSeatPos.add(0, liftGap, 0));
+                TileEntity seatTe = world.getTileEntity(scannedPilotSeatPos);
                 if (seatTe instanceof TilePilotSeat) {
                     ((TilePilotSeat) seatTe).linkToFlightComputer(shipAnchor);
                 }
@@ -780,7 +885,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // Same relative-offset link for the navigation computer: the jump gate finds it from the
             // flight computer, and the offset is what survives the ship's relocation into subspace.
             if (scannedNavComputerPos != null) {
-                TileEntity navTe = world.getTileEntity(scannedNavComputerPos.add(0, liftGap, 0));
+                TileEntity navTe = world.getTileEntity(scannedNavComputerPos);
                 if (navTe instanceof TileNavigationComputer) {
                     ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);
                 }
@@ -790,7 +895,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // ship's machines by asking each one which flight computer it answers to, so an
             // unlinked one is invisible to its own ship and available to none.
             for (BlockPos machinePos : scannedShipMachines) {
-                TileEntity machineTe = world.getTileEntity(machinePos.add(0, liftGap, 0));
+                TileEntity machineTe = world.getTileEntity(machinePos);
                 if (machineTe instanceof TileShipComponent) {
                     ((TileShipComponent) machineTe).linkToFlightComputer(shipAnchor);
                 }
@@ -821,32 +926,25 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // rather than told — one source of truth, the tile's own NBT, and no call site that can
             // forget. It went unbound here for exactly that reason: the id above was minted and the
             // value dropped, so a craft that had not yet crossed could not be found by its own name.
-            // The FOOTPRINT of the craft that was just pasted, not a point: the assembly finds the
-            // flight computer inside it and takes the ship's identity off that tile. `shipAnchor`
-            // above is still this build's computer and is still what the seat links to; it is no
-            // longer handed to the assembly, because a caller that can pass an anchor can pass the
-            // wrong one.
-            // The footprint is taken from the SNAPSHOT's own sizes, not derived from the scan box:
-            // the snapshot is what was pasted, so its extents are the pasted region by definition,
-            // and a width computed off an AABB's min/max is one inclusive-vs-exclusive mistake away
-            // from a scan that misses the layer the flight computer stands in. (Measured: deriving
-            // it from `rocketBB` reded all five ground-flight scenarios — `rocket_assembled` fired
-            // and no ship was ever spawned.) The origin is the paste's own origin, lift and all.
-            VSIntegration.assembleTier2Ship(world, shipStructure,
-                    (int) rocketBB.minX, (int) rocketBB.minY + liftGap, (int) rocketBB.minZ);
+            // The REGION of the craft, not a point: the assembly fits it to the blocks, finds the flight
+            // computer inside and takes the ship's identity off that tile. `shipAnchor` above is still
+            // this build's computer and is still what the seat links to; it is not handed to the
+            // assembly, because a caller that can pass an anchor can pass the wrong one. Nor is an
+            // extent computed here: the fit is the assembly's, so there is no arithmetic of ours for the
+            // flight computer's layer to fall outside of (measured once: a width derived here from
+            // `rocketBB` reded all five ground-flight scenarios — no ship was ever spawned).
+            VSIntegration.assembleBuiltTier2Ship(world, rocketBB);
             // A pilot who took the seat BEFORE assembly is riding a mount bound to the seat's
-            // build-time position, which the cut above just vacated - once the blocks relocate
+            // build-time position, which the relocation is about to vacate - once the blocks relocate
             // into the ship's subspace nothing in his control chain resolves and the ship ignores
             // him. Queue the rebind that re-expresses his boarding on the relocated seat; queued,
             // not done inline, because the relocation is asynchronous.
             if (scannedPilotSeatPos != null) {
-                BlockPos postLiftSeat = scannedPilotSeatPos.add(0, liftGap, 0);
                 for (dev.stannismod.stellurgy.entity.EntityDummy mount :
                         world.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityDummy.class,
                                 rocketBB.grow(2.0))) {
                     BlockPos bound = mount.getSeatPos();
-                    if (bound == null
-                            || !(bound.equals(scannedPilotSeatPos) || bound.equals(postLiftSeat))) {
+                    if (bound == null || !bound.equals(scannedPilotSeatPos)) {
                         continue; // an ordinary (passenger) seat mount, or someone else's seat
                     }
                     for (net.minecraft.entity.Entity passenger : mount.getPassengers()) {
@@ -855,9 +953,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                                     (net.minecraft.world.WorldServer) world,
                                     (net.minecraft.entity.player.EntityPlayerMP) passenger,
                                     mount.getEntityId(), shipAnchor,
-                                    shipAnchor.getX() - postLiftSeat.getX(),
-                                    shipAnchor.getY() - postLiftSeat.getY(),
-                                    shipAnchor.getZ() - postLiftSeat.getZ(),
+                                    shipAnchor.getX() - scannedPilotSeatPos.getX(),
+                                    shipAnchor.getY() - scannedPilotSeatPos.getY(),
+                                    shipAnchor.getZ() - scannedPilotSeatPos.getZ(),
                                     durableShipId);
                         }
                     }
@@ -1151,6 +1249,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
+        if ((id == 0 || id == 1) && player != null) {
+            scanRequester = player.getUniqueID();
+        }
         if (id == 0) {
 
             bbCache = getRocketPadBounds(world, pos);
@@ -1190,8 +1291,8 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         if (thrustText == null || weightText == null || fuelText == null || accelerationText == null || errorText == null) {
             return;
         }
-        thrustText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust") + ": ???") : String.format("%s: %dkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust"), getThrust()));
-        weightText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight") + ": ???") : String.format("%s: %.2fkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight"), (getWeight() * getGravityMultiplier())));
+        thrustText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust") + ": ???") : String.format("%s: %.1fkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust"), getThrust() / 1000f));
+        weightText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight") + ": ???") : String.format("%s: %.1fkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight"), stats.getWeightNewtons(getGravityMultiplier()) / 1000f));
         fuelText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fuel") + ": ???") : String.format("%s: %dmb/s", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fuel"), 20* getRocketStats().getFuelRate((stats.getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT) > 0) ? FuelType.LIQUID_MONOPROPELLANT : (stats.getFuelCapacity(FuelType.NUCLEAR_WORKING_FLUID) > 0) ? FuelType.NUCLEAR_WORKING_FLUID : FuelType.LIQUID_BIPROPELLANT)));
         accelerationText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc") + ": ???") : String.format("%s: %.2fm/s\u00b2 (TWR %.2f)", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc"), getAcceleration(getGravityMultiplier()) * 20f, getThrustToWeightRatio()));
         if (!world.isRemote) {
@@ -1202,6 +1303,17 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
 
         errorText.setText(getStatus().getErrorCode());
+        if (tier2Readout != null && !isScanning()) {
+            // A ship's figures are its flight model's, not a rocket's: thrust-to-weight from the
+            // holdable upward authority of the actuators on the pad, in this world's field.
+            dev.stannismod.stellurgy.ship.control.ShipReadout.View live =
+                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE;
+            accelerationText.setText(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.shiptwr")
+                    + String.format(java.util.Locale.ROOT, " %.2f", tier2Readout.thrustToWeight(live)));
+            if (!tier2Readout.canHover(live)) {
+                errorText.setText(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.lowtwr.gui"));
+            }
+        }
     }
 
     @Override
@@ -1246,7 +1358,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
 
         updateText();
 
-        for (int i = 0; i < 15; i++)
+        for (int i = 0; i < SYNC_SLOTS * SYNC_PARTS; i++)
             modules.add(new ModuleSync(i, this));
 
 
@@ -1273,7 +1385,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             case 2:
                 return (float) this.getNormallizedProgress();
             case 3:
-                return this.getWeight() > 0 ? 0.5f : 0f;
+                return this.getMass() > 0 ? 0.5f : 0f;
             case 4:
                 return this.getThrust() > 0 ? 0.9f : 0f;
         }
@@ -1309,14 +1421,15 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
     }
 
-    @Override
-    public void setData(int id, int value) {
-        switch (id) {
+    /** Applies one slot's whole value, as reassembled by {@link #setData}. */
+    private void applySynced(int slot, long whole) {
+        int value = (int) whole;
+        switch (slot) {
             case 0:
-                getRocketStats().setWeight(value/1000f);
+                getRocketStats().setMass(value);
                 break;
             case 1:
-                getRocketStats().setThrust(value);
+                getRocketStats().setThrust(whole);
                 break;
             case 2:
                 setStatus(value);
@@ -1367,12 +1480,32 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         updateText();
     }
 
+    /**
+     * What the screen shows, by slot. A window property is 16 bits on the wire, and thrust in newtons or
+     * mass in kilograms is far wider (one motor is 490 500 N), so each slot travels as
+     * {@link ShortWireParts#PARTS} parts on ids {@code slot + part * SYNC_SLOTS}.
+     */
+    private static final int SYNC_SLOTS = 15, SYNC_PARTS = ShortWireParts.PARTS;
+    /** The client's reassembly of each slot from the parts received so far. */
+    private final long[] syncReceived = new long[SYNC_SLOTS];
+
     @Override
     public int getData(int id) {
-        switch (id) {
+        return ShortWireParts.part(syncedValue(id % SYNC_SLOTS), id / SYNC_SLOTS);
+    }
+
+    @Override
+    public void setData(int id, int value) {
+        int slot = id % SYNC_SLOTS;
+        syncReceived[slot] = ShortWireParts.fold(syncReceived[slot], id / SYNC_SLOTS, value);
+        applySynced(slot, syncReceived[slot]);
+    }
+
+    private long syncedValue(int slot) {
+        switch (slot) {
 
             case 0:
-                return (int)(getRocketStats().getWeight_NoFuel()*1000);
+                return Math.round(getRocketStats().getDryMass());
             case 1:
                 return getRocketStats().getThrust();
             case 2:
@@ -1571,7 +1704,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         NOINTAKE("msg.rocketbuilder.nointake"),
         NOTANK("msg.rocketbuilder.notank"),
         MULTIPLEFLIGHTCOMPUTERS("msg.rocketbuilder.multipleflightcomputers"),
-        MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats");
+        MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats"),
+        // Appended, never inserted: the status travels and saves as its ordinal.
+        SHIP_TOO_LARGE("msg.rocketbuilder.shiptoolarge");
 
         /** Effectively final, process lifetime: set once when the object is built. */
         private final String translationKey;

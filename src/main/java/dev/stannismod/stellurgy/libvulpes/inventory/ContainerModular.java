@@ -21,6 +21,11 @@ public class ContainerModular extends Container {
 	IModularInventory modularInventory;
 
 
+	/** The inventory this container is a view of, so its owner can tell who is looking at it. */
+	public IModularInventory getModularInventory() {
+		return modularInventory;
+	}
+
 	public ContainerModular(EntityPlayer playerInv, List<ModuleBase> modules, IModularInventory modulularInv, boolean includePlayerInv, boolean includeHotBar) {
 		this.modularInventory = modulularInv;
 		this.modules = modules;

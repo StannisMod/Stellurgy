@@ -175,7 +175,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
                         + " ship is what makes the physics mod load it");
 
         Events loadEvents = serverEvents();
-        long spawnMark = loadEvents.markInstrumented();
         String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
         assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
@@ -187,7 +186,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         // answers.
         scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, loadEvents, 0,
                 ShipIdentity.nameFromAssembly(assemble), 200);
-        awaitShipUsable(loadEvents, spawnMark, scenarioShipId);
         String loadedInfo = shipInfoById(scenarioShipId);
         scenario().requireArranged("the ship must LOAD with the client present: " + loadedInfo,
                 ShipInfo.isLoaded(loadedInfo));
@@ -314,6 +312,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
         // EXPERIMENT: a dose of gate evaluations, not a budget — both legs of this test are in dim 0,
         // and `tp` has already moved the server's copy of him by the time the command answers.
+        // SERVER-ONLY: the gate runs on the server's ticks of dim 0; the read is the server's log.
         GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);
         String changes = serverEvents().since(mark, "player_atmosphere_changed");
 

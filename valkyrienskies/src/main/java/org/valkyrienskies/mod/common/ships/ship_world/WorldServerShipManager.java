@@ -16,7 +16,7 @@ import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.ChunkProviderServer;
-import org.apache.commons.lang3.tuple.ImmutableTriple;
+import net.minecraft.world.gen.structure.StructureBoundingBox;
 import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.physics.BlockPhysicsDetails;
 import org.valkyrienskies.mod.common.ships.QueryableShipData;
@@ -28,7 +28,10 @@ import org.valkyrienskies.mod.common.ships.physics_data.BasicCenterOfMassProvide
 import org.valkyrienskies.mod.common.ships.physics_data.IPhysicsObjectCenterOfMassProvider;
 import org.valkyrienskies.mod.common.util.multithreaded.CalledFromWrongThreadException;
 import org.valkyrienskies.mod.common.util.multithreaded.VSWorldPhysicsLoop;
+import net.minecraftforge.common.MinecraftForge;
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.*;
 
 public class WorldServerShipManager implements IPhysObjectWorld {
@@ -46,12 +49,32 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     private final WorldShipLoadingController loadingController;
     private final Map<UUID, PhysicsObject> loadedShips;
     // Use LinkedHashSet as a queue because it preserves order and doesn't allow duplicates
-    private final LinkedHashSet<ImmutableTriple<BlockPos, ShipData, BlockFinder.BlockFinderType>> spawnQueue;
+    private final LinkedHashSet<QueuedSpawn> spawnQueue;
     private final LinkedHashSet<UUID> loadQueue;
     private final LinkedHashSet<UUID> unloadQueue;
     private final LinkedHashSet<UUID> backgroundLoadQueue;
     private final Set<UUID> loadingInBackground;
     private ImmutableList<PhysicsObject> threadSafeLoadedShips;
+    /**
+     * Lifecycle transitions that happened this tick and have not been announced yet.
+     *
+     * <p>Collected rather than posted at the site, and flushed once the queues above have all been
+     * drained. A handler is then free to queue a spawn, a load or an unload of its own — it lands in
+     * a queue nothing is iterating, and is acted on next tick — where posting mid-drain would have
+     * meant a handler mutating the very collection the loop was walking.</p>
+     */
+    private final List<ShipLifecycleEvent> pendingLifecycle;
+    /**
+     * Craft a crossing has DECLARED it is about to cut out of this world, and the dimension each one
+     * is going to — consumed by that craft's removal from the registry, which is then announced as a
+     * departure instead of a destruction.
+     *
+     * <p>A departure and a destruction end the same way here — the record leaves the registry — so
+     * only the code that knows can tell them apart, and it says so BEFORE it cuts. A mark lives until
+     * the removal it predicts (the cut is what causes it) or until the crossing takes it back
+     * ({@link #abandonDeparture}); there is no clock on it.</p>
+     */
+    private final Map<UUID, Integer> departing;
 
     public WorldServerShipManager(World world) {
         this.world = (WorldServer) world;
@@ -63,9 +86,70 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         this.unloadQueue = new LinkedHashSet<>();
         this.backgroundLoadQueue = new LinkedHashSet<>();
         this.loadingInBackground = new HashSet<>();
+        this.pendingLifecycle = new ArrayList<>();
+        this.departing = new HashMap<>();
         this.threadSafeLoadedShips = ImmutableList.of();
         this.physicsThread = new Thread(physicsLoop);
         this.physicsThread.start();
+    }
+
+    /**
+     * One queued spawn: where to look for the blocks, the record to register them under, how to find
+     * them, and WHY the ship is appearing.
+     *
+     * <p>The cause is carried in from the caller rather than worked out at the drain, because the
+     * drain cannot tell a new build from a craft that was cut out of another world and pasted here —
+     * both arrive as the same call with the same blocks. Only the caller knows which it asked for,
+     * and the difference decides whether a consumer mints a durable record or reattaches to one.</p>
+     *
+     * <p>The footprint is the region the block search may not leave — the blocks the caller actually
+     * placed — and it travels with the spawn for the same reason the cause does: only the caller knows
+     * it, and at the drain the world around the craft is indistinguishable from the craft.</p>
+     *
+     * <p>Value equality across every field, so the enclosing {@code LinkedHashSet} keeps refusing
+     * duplicates exactly as it did when this was a triple.</p>
+     */
+    private static final class QueuedSpawn {
+        private final BlockPos spawnPos;
+        private final ShipData toSpawn;
+        private final BlockFinder.BlockFinderType blockFinderType;
+        private final ShipLifecycleEvent.Cause cause;
+        private final StructureBoundingBox footprint;
+
+        private QueuedSpawn(BlockPos spawnPos, ShipData toSpawn,
+                            BlockFinder.BlockFinderType blockFinderType,
+                            ShipLifecycleEvent.Cause cause, StructureBoundingBox footprint) {
+            this.spawnPos = spawnPos;
+            this.toSpawn = toSpawn;
+            this.blockFinderType = blockFinderType;
+            this.cause = cause;
+            this.footprint = footprint;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof QueuedSpawn)) {
+                return false;
+            }
+            QueuedSpawn that = (QueuedSpawn) other;
+            return Objects.equals(spawnPos, that.spawnPos) && toSpawn == that.toSpawn
+                    && blockFinderType == that.blockFinderType && cause == that.cause
+                    // StructureBoundingBox keeps Object's identity equality, so it is compared by value
+                    && Arrays.equals(corners(footprint), corners(that.footprint));
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(spawnPos, System.identityHashCode(toSpawn), blockFinderType, cause,
+                    Arrays.hashCode(corners(footprint)));
+        }
+
+        private static int[] corners(StructureBoundingBox box) {
+            return new int[]{box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ};
+        }
     }
 
     private void enforceGameThread() {
@@ -107,7 +191,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 // Copy ship blocks to the world
                 physicsObject.destroyShip();
                 // Then remove the ship from the world, and the ship map.
-                QueryableShipData.get(world).removeShip(physicsObject.getShipData());
+                removeRecord(physicsObject.getShipData());
                 iterator.remove();
             }
         }
@@ -158,9 +242,12 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         }
         // Removed after the walk rather than during it: the registry's iterator is its own, and this
         // loop does not need to know what it promises about removal underneath itself.
+        // Announced like every other removal: a record collected here leaves the registry exactly as
+        // a destroyed loaded ship does, and a crossing out of an UNLOADED source ends HERE — so this is
+        // where its departure is said, or nobody says it.
         if (finished != null) {
             for (ShipData data : finished) {
-                QueryableShipData.get(world).removeShip(data);
+                removeRecord(data);
             }
         }
         // Then execute queued ship spawn operations
@@ -169,6 +256,8 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         loadingController.determineLoadAndUnload();
         // Then execute queued ship load and unload operations
         loadAndUnloadShips();
+        // Then announce everything that appeared or vanished above, now that no queue is being walked
+        publishLifecycleEvents();
         // Then tick all the loaded ships
         for (PhysicsObject ship : getAllLoadedPhysObj()) {
             ship.onTick();
@@ -177,33 +266,50 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         loadingController.sendUpdatesToPlayers();
         // And then update the thread safe ship list.
         this.threadSafeLoadedShips = ImmutableList.copyOf(loadedShips.values());
+        // ...and announce the ships that became USABLE on this tick. The substrate does not step a
+        // ship until it is past its settling delay and its surrounding-chunk cache is filled, and both
+        // halves are decided inside `onTick` above, so this tick is the one the fact became true on.
+        // LAST, after the thread-safe list: a handler resolves the craft it hears about, and most
+        // lookups read that list — announced before it, a ship loaded this tick would be "usable" and
+        // unfindable at once. Once per ship object, which is once per load.
+        //
+        // NOT `isPhysicsEnabled`, deliberately: that is an operational switch somebody throws, so a
+        // parked craft nobody has commanded is fully loaded with it false. Requiring it made "usable"
+        // mean "is anyone flying this", and a caller waiting to BEGIN flying waited for a state its
+        // own next action causes — 1 red became 42 on the first gate that used it.
+        for (PhysicsObject ship : getAllLoadedPhysObj()) {
+            if (!ship.isUsableAnnounced() && ship.isPhysicsReady()
+                    && ship.getCachedSurroundingChunks() != null) {
+                ship.markUsableAnnounced();
+                ShipData data = ship.getShipData();
+                pendingLifecycle.add(new ShipLifecycleEvent.ShipUsable(world, data.getUuid(),
+                        data.getStellurgyDurableId()));
+            }
+        }
+        publishLifecycleEvents();
     }
 
     private void spawnNewShips() {
-        for (final ImmutableTriple<BlockPos, ShipData, BlockFinder.BlockFinderType> spawnData : spawnQueue) {
-            final BlockPos physicsInfuserPos = spawnData.getLeft();
-            final ShipData toSpawn = spawnData.getMiddle();
-            final BlockFinder.BlockFinderType blockBlockFinderType = spawnData.getRight();
+        // Observed from the test tree, not from here: a test-only mixin records this method's entry
+        // and return and wraps the flood-detector call below, so a queued ship that never appears
+        // can be told apart between "never processed", "dropped before registering" and "registered
+        // then destroyed". It targets THIS method, so the detector call must stay in it.
+        for (final QueuedSpawn spawnData : spawnQueue) {
+            final BlockPos physicsInfuserPos = spawnData.spawnPos;
+            final ShipData toSpawn = spawnData.toSpawn;
+            final BlockFinder.BlockFinderType blockBlockFinderType = spawnData.blockFinderType;
             dropOwnBlocklessRemnant(toSpawn.getUuid());
             if (loadedShips.containsKey(toSpawn.getUuid())) {
                 throw new IllegalStateException("Tried spawning a ShipData that was already loaded?\n" + toSpawn);
             }
-            final SpatialDetector detector = BlockFinder.getBlockFinderFor(blockBlockFinderType, physicsInfuserPos, world, VSConfig.maxDetectedShipSize + 1, true);
+            final SpatialDetector detector = BlockFinder.getBlockFinderFor(blockBlockFinderType, physicsInfuserPos, world, spawnSizeLimit(), SPAWN_CHECKS_CORNERS, spawnData.footprint);
             if (VSConfig.showAnnoyingDebugOutput) {
                 System.out.println("Attempting to spawn " + toSpawn + " on the thread " + Thread.currentThread().getName());
             }
-            if (detector.foundSet.size() > VSConfig.maxDetectedShipSize || detector.cleanHouse) {
-                System.err.println("Ship too big or bedrock detected!");
-                /*
-                if (creator != null) {
-                    creator.sendMessage(new TextComponentString(
-                            "Ship construction canceled because its exceeding the ship size limit; "
-                                    +
-                                    "or because it's attached to bedrock. " +
-                                    "Raise it with /physsettings maxshipsize [number]"));
-                }
-
-                 */
+            final SpawnRefusal refusal = refusalOf(detector);
+            if (refusal != null) {
+                // A caller that cares asks refusalFor BEFORE queueing; this line is for one that did not.
+                System.err.println("Ship spawn refused (" + refusal + ") at " + physicsInfuserPos);
                 continue; // Skip ship construction
             }
             // Fill the chunk claims
@@ -372,6 +478,8 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             // Finally, instantiate the PhysicsObject representation of this ShipData
             PhysicsObject physicsObject = new PhysicsObject(world, toSpawn);
             loadedShips.put(toSpawn.getUuid(), physicsObject);
+            // The ship is now resolvable by id: this is the naming edge for a spawn.
+            noteNamed(toSpawn, spawnData.cause);
         }
         spawnQueue.clear();
     }
@@ -405,12 +513,134 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             // block set, so nothing is resurrected).
             loaded.destroyShip();
             loadedShips.remove(uuid);
+            removeRecord(loaded.getShipData());
         }
-        QueryableShipData.get(world).getShip(uuid).ifPresent(remnant -> {
-            if (remnant.getBlockPositions() != null && remnant.getBlockPositions().isEmpty()) {
-                QueryableShipData.get(world).removeShip(remnant);
-            }
-        });
+        // Announced even though the spawn a few lines below re-registers the same identity: the
+        // registration a consumer was holding really does end here, and a consumer that saw only the
+        // re-registration would keep state built against the remnant.
+        Optional<ShipData> remnant = QueryableShipData.get(world).getShip(uuid);
+        if (remnant.isPresent() && remnant.get().getBlockPositions() != null
+                && remnant.get().getBlockPositions().isEmpty()) {
+            removeRecord(remnant.get());
+        }
+    }
+
+    /**
+     * End {@code ship}'s registration in this world: announce it and remove the record — and do
+     * neither if that record is no longer the one registered under its uuid.
+     *
+     * <p><b>The announcement belongs to the RECORD, not to the physics object.</b> A registration has
+     * two halves — the registry entry and, while loaded, its ship object — and they can be taken down
+     * on different paths: an assembly re-using an identity deregisters the blockless entry first
+     * ({@link #deregisterBlocklessRemnant}), and the spawn drain then destroys the object it left
+     * loaded. Announcing each half said the craft ended twice; measured 2026-10-06 on a same-world
+     * crossing, a {@code DEPARTED} immediately followed, in the same tick, by a {@code DESTROYED} for
+     * the same vessel, because the first consumed the declared departure. So the entry's removal is
+     * the one announcement, and a half whose entry is already gone announces nothing.</p>
+     */
+    private void removeRecord(@Nonnull ShipData ship) {
+        Optional<ShipData> registered = QueryableShipData.get(world).getShip(ship.getUuid());
+        if (!registered.isPresent() || registered.get() != ship) {
+            return;
+        }
+        noteRemoved(ship);
+        QueryableShipData.get(world).removeShip(ship);
+    }
+
+    /**
+     * Deregister {@code uuid}'s record if it is a BLOCKLESS remnant — for an assembly about to re-use
+     * that identity — and announce the removal like any other. Answers whether a record was removed.
+     *
+     * <p>Here and not in the caller because every removal from the registry is a lifecycle edge, and
+     * the manager is the one place that announces them: a remnant deleted from outside would leave
+     * the registration a consumer was holding ended with nothing said.</p>
+     */
+    public boolean deregisterBlocklessRemnant(@Nonnull UUID uuid) {
+        enforceGameThread();
+        Optional<ShipData> remnant = QueryableShipData.get(world).getShip(uuid);
+        if (!remnant.isPresent() || remnant.get().getBlockPositions() == null
+                || !remnant.get().getBlockPositions().isEmpty()) {
+            return false;
+        }
+        removeRecord(remnant.get());
+        return true;
+    }
+
+    /**
+     * A crossing is about to cut {@code uuid} out of this world into {@code destinationDim}. Declared
+     * BEFORE the cut, so the removal it causes is announced as a departure by the code that knows,
+     * rather than as a destruction.
+     */
+    public void declareDeparture(@Nonnull UUID uuid, int destinationDim) {
+        enforceGameThread();
+        departing.put(uuid, destinationDim);
+    }
+
+    /** The declared departure did not happen — nothing was cut — so a later removal of this craft
+     *  would be a real destruction. */
+    public void abandonDeparture(@Nonnull UUID uuid) {
+        enforceGameThread();
+        departing.remove(uuid);
+    }
+
+    /**
+     * Record a naming for announcement at the end of this pass.
+     *
+     * <p>Both identities are read HERE, while the record is in hand.</p>
+     */
+    private void noteNamed(@Nullable ShipData ship, ShipLifecycleEvent.Cause cause) {
+        if (ship == null) {
+            return;
+        }
+        pendingLifecycle.add(new ShipLifecycleEvent.ShipNamed(world, ship.getUuid(),
+                ship.getStellurgyDurableId(), cause));
+    }
+
+    /** Record that the ship object of a still-registered craft was dropped. */
+    private void noteUnloaded(@Nullable ShipData ship) {
+        if (ship == null) {
+            return;
+        }
+        pendingLifecycle.add(new ShipLifecycleEvent.ShipUnnamed(world, ship.getUuid(),
+                ship.getStellurgyDurableId(), ShipLifecycleEvent.Cause.UNLOADED));
+    }
+
+    /**
+     * Record that a craft's registration in this world ENDED — called only by {@link #removeRecord},
+     * which every removal path goes through, and before the removal, while its durable id can still
+     * be read off it.
+     *
+     * <p>A declared departure turns the removal into a {@link ShipLifecycleEvent.ShipDeparted} and is
+     * consumed by it; any other removal is a {@link ShipLifecycleEvent.Cause#DESTROYED}.</p>
+     */
+    private void noteRemoved(@Nullable ShipData ship) {
+        if (ship == null) {
+            return;
+        }
+        Integer destination = departing.remove(ship.getUuid());
+        pendingLifecycle.add(destination != null
+                ? new ShipLifecycleEvent.ShipDeparted(world, ship.getUuid(),
+                        ship.getStellurgyDurableId(), destination)
+                : new ShipLifecycleEvent.ShipUnnamed(world, ship.getUuid(),
+                        ship.getStellurgyDurableId(), ShipLifecycleEvent.Cause.DESTROYED));
+    }
+
+    /**
+     * Announce this tick's lifecycle transitions, in the order they happened.
+     *
+     * <p>Drained into a local copy first: a handler is allowed to queue ship work, and a spawn it
+     * queues could otherwise append to the list being iterated. Anything a handler causes is
+     * announced on the tick it actually happens, not folded into this one.</p>
+     */
+    private void publishLifecycleEvents() {
+        if (pendingLifecycle.isEmpty()) {
+            return;
+        }
+        List<ShipLifecycleEvent> toPublish = new ArrayList<>(pendingLifecycle);
+        pendingLifecycle.clear();
+        for (ShipLifecycleEvent event : toPublish) {
+            MinecraftForge.EVENT_BUS.post(event);
+        }
     }
 
     private void injectChunkIntoWorldServer(@Nonnull Chunk chunk, int x, int z) {
@@ -452,6 +682,9 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             if (old != null) {
                 throw new IllegalStateException("How did we already have a ship loaded for " + toLoad);
             }
+            // The naming edge for a ship that already existed. A background load reaches this same
+            // loop once the controller promotes it, so there is one edge per load however it started.
+            noteNamed(toLoad, ShipLifecycleEvent.Cause.LOADED);
         }
         loadQueue.clear();
         // Load ships that aren't required immediately in the background.
@@ -513,6 +746,8 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             if (!success) {
                 throw new IllegalStateException("How did we fail to unload " + physicsObject.getShipData());
             }
+            // The craft is still registered and still on disk - only the ship object is gone.
+            noteUnloaded(physicsObject.getShipData());
         }
         unloadQueue.clear();
     }
@@ -530,12 +765,59 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         return threadSafeLoadedShips;
     }
 
+    /** Why the spawn queue would drop a ship instead of building it. */
+    public enum SpawnRefusal {
+        /** The search found more blocks than {@code VSConfig.maxDetectedShipSize}. */
+        TOO_LARGE,
+        /** The search touched bedrock, which no ship may take out of a world. */
+        BEDROCK
+    }
+
+    /** The drain's detector parameters, in ONE place, because {@link #refusalFor} must ask the same question. */
+    private static final boolean SPAWN_CHECKS_CORNERS = true;
+
+    private static int spawnSizeLimit() {
+        return VSConfig.maxDetectedShipSize + 1;
+    }
+
+    /** The drain's rule for dropping a ship, or {@code null} when it would build it. */
+    @Nullable
+    public static SpawnRefusal refusalOf(@Nonnull SpatialDetector detector) {
+        if (detector.cleanHouse) {
+            return SpawnRefusal.BEDROCK;
+        }
+        return detector.foundSet.size() > VSConfig.maxDetectedShipSize ? SpawnRefusal.TOO_LARGE : null;
+    }
+
+    /**
+     * Would the spawn queue drop a ship queued with these arguments? Answered by running the same search
+     * the drain runs, on the world as it stands now, and applying the same rule — so a caller can refuse
+     * BEFORE queueing, where its player can be told why, instead of the drain dropping the ship a tick
+     * later with a line on the error stream and nothing anyone sees.
+     */
+    @Nullable
+    public SpawnRefusal refusalFor(@Nonnull BlockPos spawnPos, @Nonnull BlockFinder.BlockFinderType blockFinderType,
+                                   @Nonnull StructureBoundingBox footprint) {
+        return refusalOf(BlockFinder.getBlockFinderFor(blockFinderType, spawnPos, world, spawnSizeLimit(),
+                SPAWN_CHECKS_CORNERS, footprint));
+    }
+
     /**
      * Thread safe way to queue a ship spawn. (Not the same as {@link #queueShipLoad(UUID)}.
+     *
+     * <p>{@code cause} says WHY this ship is appearing — see {@link ShipLifecycleEvent.Cause}; it travels
+     * with the queued spawn and is what the naming event carries when the queue is drained.</p>
+     *
+     * <p>{@code footprint} is the region the block search may not leave, inclusive: the blocks the
+     * caller placed. It is required, with no unbounded form: the search used to stop only at the size
+     * cap, so a craft took whatever touched it — a launch pad, through the snow on its rim, or a tree.</p>
      */
-    public void queueShipSpawn(@Nonnull ShipData data, @Nonnull BlockPos spawnPos, @Nonnull BlockFinder.BlockFinderType blockFinderType) {
+    public void queueShipSpawn(@Nonnull ShipData data, @Nonnull BlockPos spawnPos,
+                               @Nonnull BlockFinder.BlockFinderType blockFinderType,
+                               @Nonnull ShipLifecycleEvent.Cause cause,
+                               @Nonnull StructureBoundingBox footprint) {
         enforceGameThread();
-        this.spawnQueue.add(ImmutableTriple.of(spawnPos, data, blockFinderType));
+        this.spawnQueue.add(new QueuedSpawn(spawnPos, data, blockFinderType, cause, footprint));
     }
 
     /**
@@ -546,7 +828,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
      * whose chunks are being streamed has no {@link PhysicsObject} yet, so it answers "not loaded" to
      * {@link #getPhysObjectFromUUID(UUID)} while the loader is still holding its id; removing its
      * {@link ShipData} in that window throws {@code IllegalStateException} out of the world tick from
-     * {@link #getBackgroundShipChunks()} on the very next chunk-provider tick, with nothing between
+     * {@link #getHeldShipChunks()} on the very next chunk-provider tick, with nothing between
      * the throw and the server loop. The three queues below are the whole of "in the manager's
      * hands", and each of them dereferences its ids against the registry.</p>
      */
@@ -579,20 +861,34 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     }
 
     /**
-     * Used to prevent the world from unloading the chunks of ships loading in background.
+     * The chunks the world must not unload: the claim of every LOADED ship and of every ship loading
+     * in the background.
+     *
+     * <p>A loaded ship's {@link PhysicsObject} keeps its own references to its claim's {@code Chunk}
+     * objects and simulates from them, so a claim chunk the world drops while the ship lives splits
+     * the ship in two — physics reads the dropped object, the world re-loads a new one from disk at
+     * the next access, and the tiles in it stop ticking. Nothing else holds these chunks: a world
+     * whose provider forbids respawning and which holds no player queues EVERY loaded chunk for
+     * unload on every tick ({@code PlayerChunkMap#tick}), which is exactly a space slot with a
+     * permanently loaded ship and nobody in it. A ship releases its chunks by unloading:
+     * {@link PhysicsObject#unload} queues them, and the ship leaves {@code loadedShips} in the same
+     * pass, so it is no longer named here on the provider's next tick.</p>
      */
-    public Iterable<Long> getBackgroundShipChunks() throws CalledFromWrongThreadException {
+    public Iterable<Long> getHeldShipChunks() throws CalledFromWrongThreadException {
         enforceGameThread();
-        List<Long> backgroundChunks = new ArrayList<>();
+        List<Long> held = new ArrayList<>();
+        for (PhysicsObject ship : loadedShips.values()) {
+            held.addAll(ship.getChunkClaim().getClaimedChunks());
+        }
         QueryableShipData queryableShipData = QueryableShipData.get(world);
         for (UUID shipID : loadingInBackground) {
             Optional<ShipData> shipDataOptional = queryableShipData.getShip(shipID);
             if (!shipDataOptional.isPresent()) {
                 throw new IllegalStateException("Ship data not present for:\n" + shipID);
             }
-            backgroundChunks.addAll(shipDataOptional.get().getChunkClaim().getClaimedChunks());
+            held.addAll(shipDataOptional.get().getChunkClaim().getClaimedChunks());
         }
-        return backgroundChunks;
+        return held;
     }
 
     @java.lang.SuppressWarnings("all")

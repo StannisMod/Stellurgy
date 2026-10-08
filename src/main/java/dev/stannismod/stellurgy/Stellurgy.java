@@ -694,6 +694,7 @@ public class Stellurgy {
         GameRegistry.registerTileEntity(TileAstrobodyDataProcessor.class, "ARplanetAnalyser");
         GameRegistry.registerTileEntity(TileGuidanceComputer.class, "ARguidanceComputer");
         GameRegistry.registerTileEntity(TileAdvancedFlightComputer.class, "ARadvancedFlightComputer");
+        GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileReactionWheel.class, "ARreactionWheel");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.TileNavigationComputer.class, "ARnavigationComputer");
         GameRegistry.registerTileEntity(TilePilotSeat.class, "ARpilotSeat");
         GameRegistry.registerTileEntity(dev.stannismod.stellurgy.tile.hyperdrive.TileHyperdriveGenerator.class, "ARhyperdriveGenerator");
@@ -1113,6 +1114,7 @@ public class Stellurgy {
         StellurgyBlocks.blockJumpCapacitor = new dev.stannismod.stellurgy.block.BlockShipMachine(dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor.class).setUnlocalizedName("jumpCapacitor").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockJumpCapacitorCell = new Block(Material.IRON).setUnlocalizedName("jumpCapacitorCell").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockJumpHeatSink = new Block(Material.IRON).setUnlocalizedName("jumpHeatSink").setCreativeTab(tabAdvRocketry).setHardness(3f);
+        StellurgyBlocks.blockReactionWheel = new dev.stannismod.stellurgy.block.BlockReactionWheel(Material.IRON).setUnlocalizedName("reactionWheel").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockGravityDampener = new dev.stannismod.stellurgy.block.BlockShipMachine(dev.stannismod.stellurgy.tile.hyperdrive.TileGravityDampener.class).setUnlocalizedName("gravityDampener").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockIntake = new BlockIntake(Material.IRON).setUnlocalizedName("gasIntake").setCreativeTab(tabAdvRocketry).setHardness(3f);
         StellurgyBlocks.blockDrill = new BlockMiningDrill().setUnlocalizedName("drill").setCreativeTab(tabAdvRocketry).setHardness(3f);
@@ -1328,6 +1330,7 @@ public class Stellurgy {
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJumpCapacitor.setRegistryName("jumpCapacitor"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJumpCapacitorCell.setRegistryName("jumpCapacitorCell"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockJumpHeatSink.setRegistryName("jumpHeatSink"));
+        LibVulpesBlocks.registerBlock(StellurgyBlocks.blockReactionWheel.setRegistryName("reactionWheel"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockGravityDampener.setRegistryName("gravityDampener"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockIntake.setRegistryName("intake"));
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockDrill.setRegistryName("drill"));
@@ -1676,6 +1679,11 @@ public class Stellurgy {
         playerRelease = new dev.stannismod.stellurgy.player.PlayerRelease(
                 spaceEvents, hyperspaceVoid);
         MinecraftForge.EVENT_BUS.register(ServerStateEvents.class);
+        // The authoritative mass recompute, armed on the naming edge rather than on a timer: before
+        // a ship is named its blocks sit at shipyard addresses and a frame computed there is about
+        // nowhere. Writes the record and logs any disagreement with the incremental total.
+        MinecraftForge.EVENT_BUS.register(
+                new dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.Hooks());
 
         GameRegistry.registerWorldGenerator(new OreGenerator(), 100);
 

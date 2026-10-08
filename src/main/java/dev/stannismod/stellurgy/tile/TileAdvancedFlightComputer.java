@@ -8,6 +8,20 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ITickable;
 
+import net.minecraft.util.math.BlockPos;
+
+import org.joml.AxisAngle4d;
+import org.joml.Matrix3dc;
+import org.joml.Quaterniond;
+import org.joml.Vector3d;
+import org.joml.Vector3dc;
+import org.valkyrienskies.mod.common.config.VSConfig;
+import org.valkyrienskies.mod.common.physics.IPhysicsBlockController;
+import org.valkyrienskies.mod.common.physics.PhysicsCalculations;
+import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
+import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
+import valkyrienwarfare.api.TransformType;
+
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
@@ -30,10 +44,18 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
  * velocity setpoint on the ship. That control loop lands in a later phase; the only
  * state persisted here is the pilot's Flight-Assist on/off choice (per the design,
  * the ship remembers only its FA setting — the velocity setpoint is captured live
- * on enable, and the engine-start ritual is not persisted). All physics-mod calls
- * stay behind the optional integration gate, so this class never hard-depends on it.</p>
+ * on enable, and the engine-start ritual is not persisted).</p>
+ *
+ * <p>This class implements the physics engine's force-controller interface DIRECTLY, so it does
+ * hard-depend on the engine. That is deliberate: the engine is vendored into this mod's own jar and
+ * ships inside it, so it cannot be absent, and the alternative - bytecode-weaving the interface onto
+ * a class we compile ourselves - was indirection paying for a case that can no longer occur. Calls
+ * that do NOT need an engine type still go through the integration gate, which keeps them in one
+ * place rather than because they might fail to resolve.</p>
  */
-public class TileAdvancedFlightComputer extends TileEntity implements IModularInventory, ITickable {
+public class TileAdvancedFlightComputer extends TileEntity
+        implements IModularInventory, ITickable, IPhysicsBlockController,
+        dev.stannismod.stellurgy.network.IShipReadoutReceiver {
 
     private static final String NBT_FLIGHT_ASSIST = "faEnabled";
     private static final String NBT_STATION_KEEPING = "stationKeeping";
@@ -116,12 +138,16 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     private transient boolean cellEdgeReported = false;
 
     /**
-     * Bring-up override for the force-mode flight controller, on THIS computer only: while
-     * {@link #probeCommandActive} is set the controller reads the whole command triple below
-     * instead of the pilot channels, so a caller can drive the control law directly (raw force,
-     * raw torque, absolute attitude hold) without a pilot and without the Free Flight layer in
-     * between. Desired world-frame velocity {@code {x,y,z}} (blocks/s), or {@code null} for
-     * "nothing commanded on this channel".
+     * Bring-up override for the force-mode flight controller, on THIS computer only: while it is
+     * non-null the controller flies it instead of {@link #flightCommand}, so a caller can drive the
+     * control law directly (raw velocity, raw angular velocity, absolute attitude hold) without a pilot
+     * and without the Free Flight layer in between.
+     *
+     * <p><b>One reference, so all-or-nothing.</b> Per-part fallback would mix a fresh probe attitude
+     * with a stale probe rate left by an earlier call, and the mixture is a command nobody wrote; four
+     * fields written one by one could be read mid-replacement for the same reason. It outranks the pilot
+     * command rather than yielding to it: a probe that silently lost to a ship's own autopilot would
+     * report the command it never delivered.</p>
      *
      * <p><b>Per tile, and that is the whole point.</b> These began as {@code static volatile}
      * fields, which every flight computer in the JVM read as its fallback: a command meant for one
@@ -129,34 +155,12 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      * issued it reported success either way. Keyed to one computer, a command names one craft, and
      * a caller that cannot resolve that craft gets a miss instead of somebody else's flight.</p>
      *
-     * <p>Written from the GAME thread, read on the Valkyrien Skies PHYSICS thread by the
-     * flight-controller mixin; {@code volatile} for cross-thread visibility. Stellurgy-core only — carries
-     * no physics-mod type, so this class still loads fine without the physics mod installed.</p>
+     * <p>Written on the server GAME thread (the probe command), read once per step on the Valkyrien
+     * Skies PHYSICS thread by {@link #onPhysicsTick}; {@code volatile} for visibility, and the object is
+     * immutable, so the reader sees one command or the next. Carries no physics-mod type, so this class
+     * still loads without the physics mod installed.</p>
      */
-    public volatile double[] probeVelocity = null;
-
-    /** Bring-up override for the controller's ANGULAR channel: desired world-frame angular velocity
-     *  {@code {x,y,z}} (rad/s), or {@code null}. Read only while {@link #probeCommandActive}. */
-    public volatile double[] probeAngVel = null;
-
-    /**
-     * Bring-up override for ATTITUDE HOLD: the target body&rarr;world orientation as a quaternion
-     * {@code {w,x,y,z}}, or {@code null} when not holding an attitude. When set it supersedes
-     * {@link #probeAngVel} — the controller reads the ship's current orientation on the physics
-     * thread and turns the error into the angular velocity it drives toward. This is the interface
-     * Free Flight feeds. Read only while {@link #probeCommandActive}.
-     */
-    public volatile double[] probeAttitude = null;
-
-    /**
-     * Whether the three {@code probe*} channels above own this computer's command this tick.
-     *
-     * <p>All-or-nothing on purpose. Per-channel fallback would mix a fresh probe attitude with a
-     * stale probe rate left by an earlier call, and the mixture is a command nobody wrote. It also
-     * outranks the pilot channels rather than yielding to them: a probe that silently lost to a
-     * ship's own autopilot would report the command it never delivered.</p>
-     */
-    public volatile boolean probeCommandActive = false;
+    public volatile dev.stannismod.stellurgy.ship.control.FlightCommand probeCommand = null;
 
     /**
      * How many times the Valkyrien Skies physics thread has invoked THIS computer's force controller.
@@ -189,20 +193,14 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     }
 
     /**
-     * The pilot's commanded world-frame velocity (blocks/s) that the force controller realizes,
-     * or {@code null} when this computer commands nothing. Written by {@link #update()} from the
-     * pilot's input; read on the physics thread by the flight-controller mixin, which reads the
-     * {@code probe*} channels above instead while one is in force. {@code volatile} for the
-     * game&rarr;physics thread hand-off; carries no physics-mod type (Stellurgy-core safe).
+     * The command this computer's own flight law publishes — from the pilot's input, the unmanned hold
+     * or release, or the auto-takeoff climb — or {@code null} when it commands nothing. Written only on
+     * the server GAME thread by {@link #update()}, read once per step on the PHYSICS thread by
+     * {@link #onPhysicsTick}, which flies {@link #probeCommand} instead while that is set. One immutable
+     * object behind one {@code volatile} reference: a step flies one command or the next, never the
+     * velocity of one with the attitude of another.
      */
-    public volatile double[] commandedVelocity = null;
-
-    /** The pilot's angular-velocity command (rad/s), same hand-off as {@link #commandedVelocity}. */
-    public volatile double[] commandedAngVel = null;
-
-    /** The pilot's attitude-hold target quaternion {@code {w,x,y,z}}. Supersedes
-     *  {@link #commandedAngVel} when set. */
-    public volatile double[] targetAttitude = null;
+    public volatile dev.stannismod.stellurgy.ship.control.FlightCommand flightCommand = null;
 
     /**
      * Ship cruise speed cap (blocks/second) mapped from full throttle. Public because the flight HUD
@@ -304,10 +302,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      * lives on this tile instance, so a tile the chunk re-creates starts without one.</p>
      */
     public void commandProbeVelocity(double[] worldVelocity, double[] worldAngVel) {
-        this.probeVelocity = worldVelocity;
-        this.probeAngVel = worldAngVel;
-        this.probeAttitude = null;
-        this.probeCommandActive = true;
+        this.probeCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(worldVelocity, worldAngVel, null);
     }
 
     /**
@@ -316,20 +311,15 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      * place rather than drifting off while it slews.
      */
     public void commandProbeAttitude(double qw, double qx, double qy, double qz) {
-        this.probeVelocity = new double[]{0.0, 0.0, 0.0};
-        this.probeAngVel = null;
-        this.probeAttitude = new double[]{qw, qx, qy, qz};
-        this.probeCommandActive = true;
+        this.probeCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                new double[]{0.0, 0.0, 0.0}, null, new double[]{qw, qx, qy, qz});
     }
 
     /** Hand this computer back to its own pilot channels. Returns whether a probe command was in
      *  force, so a caller asserts the release rather than trusting it. */
     public boolean clearProbeCommand() {
-        boolean was = probeCommandActive;
-        this.probeCommandActive = false;
-        this.probeVelocity = null;
-        this.probeAngVel = null;
-        this.probeAttitude = null;
+        boolean was = probeCommand != null;
+        this.probeCommand = null;
         return was;
     }
 
@@ -435,9 +425,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     public void invalidate() {
         super.invalidate();
         pilotInput = null;
-        commandedVelocity = null;
-        commandedAngVel = null;
-        targetAttitude = null;
+        flightCommand = null;
         velocitySetpoint = new double[]{0.0, 0.0, 0.0};
     }
 
@@ -469,6 +457,15 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // and every aboard tag resolve a ship BY that id, falling back to "whichever craft is nearest"
         // exactly where the world holds more than one. Costs one claim test per tick until it takes.
         bindDurableIdToThisShip();
+        // The mass this craft is actually carrying, re-measured on a slow round. Content and crew
+        // change with no block ever changing - a tank empties, somebody steps aboard - so no block
+        // event can catch them and there is nothing to subscribe to; a cadence is the only honest
+        // answer. Cheap enough at this period: one pass over the hull every few seconds per ship.
+        tickMassRound();
+        // What this hull can do, re-derived when the hull or its load moved; then told to whoever is
+        // looking. Before the physics gate for the same reason as the mass round: a parked craft is
+        // still a craft whose console someone may open.
+        tickFlightModel();
         announceLiveOnce();
         FreeFlightPhysics.Quat attitude = VSIntegration.getShipAttitude(world, getPos());
         if (attitude == null) {
@@ -484,9 +481,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // ships exist there exactly while parked mid-transit. Deliberate-exit and the exit-warning
         // channel stay OUTSIDE this gate when they land — they are the survival path mid-transit.
         if (dev.stannismod.stellurgy.space.HyperspaceWorld.isHyperspace(world)) {
-            commandedVelocity = null;
-            commandedAngVel = null;
-            targetAttitude = null;
+            flightCommand = null;
             return;
         }
 
@@ -712,40 +707,53 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
             }
         }
         if (in == null) {
-            // Nobody is flying. A ship that has NEVER been flown this load stays inert - its physics is
-            // off, so it just rests and there is nothing to hold. But a ship that WAS being flown keeps
-            // EXECUTING its retained Flight-Assist setting when the pilot stands up: with FA on and a
+            // Nobody is flying. The craft keeps EXECUTING its retained Flight-Assist setting: with FA on and a
             // non-zero cruise setpoint it KEEPS CRUISING at that setpoint (that is what makes it an
-            // autopilot - the pilot dismounts mid-flight and the ship flies on); with a zero setpoint,
-            // or FA off, it degenerates to holding station: hover in place, at the attitude he left it,
-            // until a pilot returns. A hovering craft is not coasting - it needs continuous force to
+            // autopilot - the pilot dismounts mid-flight and the ship flies on); with a zero setpoint
+            // it holds station: hover in place, at the attitude he left it, until a pilot returns.
+            // With FA off it is released (below). A hovering craft is not coasting - it needs continuous force to
             // fight gravity, so the instant the controller stops commanding it falls out of the sky (the
             // playtest: stood up mid-hover, the ship dropped and took the pilot down with it).
-            // The "was flown" witness is the PERSISTED stationKeeping flag, not the live attitudeReference
-            // (which is null after a reload). A never-flown ship (physics off) stays inert; a ship that has
-            // been flown holds its setting, and holds station again after a world reload instead of falling.
             // The setpoint is deliberately NOT zeroed and NOT re-captured here: the dismounted pilot's
             // cruise setting is his to come back to, never a reset-from-live-velocity.
-            if (!stationKeeping) {
-                commandedVelocity = null;
-                commandedAngVel = null;
-                targetAttitude = null;
+            // Physics ON regardless of whether anyone has ever flown this craft. A hull with a flight
+            // computer is a craft that should obey gravity, and until this line ran only after a first
+            // flight, a newly built ship left at altitude did not fall - it simply hung there, because
+            // the solver steps only bodies whose physics has been switched on. That is not
+            // station-keeping; it is a craft that was never being simulated at all.
+            VSIntegration.ensureShipPhysicsEnabled(world, getPos());
+
+            // WITH Flight Assist, an unmanned craft holds: it keeps executing the setting its pilot
+            // left it with. WITHOUT it, it is released and falls. Flight Assist IS the mode switch -
+            // the pilot's own on/off choice, persisted, and the same one that decides whether he gets
+            // cruise control while flying.
+            if (!flightAssistEnabled) {
+                // Released. Not "commanded to zero": commanding zero velocity is a hover, and a hover
+                // is assistance. The earlier revision did exactly that, on the reasoning that a
+                // coasting craft falls - which is the intended behaviour, read as a defect.
+                //
+                // Only the LINEAR command is dropped. The attitude hold stays, so the craft falls
+                // flat instead of tumbling: releasing thrust is what "no assist" means here, and
+                // starting an uncommanded spin is a larger change than the mode switch asks for.
+                if (attitudeReference == null) {
+                    attitudeReference = attitude;
+                }
+                flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(null,
+                        new double[]{0.0, 0.0, 0.0}, new double[]{attitudeReference.w, attitudeReference.x,
+                                attitudeReference.y, attitudeReference.z});
                 return;
             }
             if (attitudeReference == null) {
                 attitudeReference = attitude; // re-seed from the ship's current attitude after a reload
             }
-            VSIntegration.ensureShipPhysicsEnabled(world, getPos());
             // FA on: an idle input over the retained setpoint IS the cruise command (zero setpoint =
-            // hover). FA off: no cruise control exists - hold station at zero velocity explicitly
-            // (shipVelocityCommand would answer "coast", and a coasting hover falls).
-            commandedVelocity = flightAssistEnabled
-                    ? FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,
-                            true, velocitySetpoint, SHIP_MAX_SPEED)
-                    : new double[]{0.0, 0.0, 0.0};
-            commandedAngVel = new double[]{0.0, 0.0, 0.0};
-            targetAttitude = new double[]{attitudeReference.w, attitudeReference.x,
-                    attitudeReference.y, attitudeReference.z};
+            // hover), which is what makes this an autopilot rather than a parking brake - the pilot
+            // stands up mid-flight and the ship flies on at the speed he left it at.
+            flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                    FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference, true,
+                            velocitySetpoint, SHIP_MAX_SPEED),
+                    new double[]{0.0, 0.0, 0.0}, new double[]{attitudeReference.w, attitudeReference.x,
+                            attitudeReference.y, attitudeReference.z});
             return;
         }
         // A pilot is flying: from now on this ship holds station when unmanned - persisted, so the hold
@@ -804,17 +812,17 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
             }
         }
 
-        // Publish to the PER-TILE channels the controller mixin prefers (falls back to the
-        // static probe channels only when these are null). Writing them here means each ship's
-        // own computer drives its own ship, independent of any other computer or the probe. The
-        // command honours the Flight-Assist mode + cut/brake (a null velocity means "coast").
-        commandedVelocity = FreeFlightPhysics.shipVelocityCommand(
-                in, target, flightAssistEnabled, velocitySetpoint, SHIP_MAX_SPEED);
-        // The angular channel is an attitude target PLUS the rate that target is turning at. The rate
-        // is the feed-forward: a proportional law chasing a moving reference settles at a standing
-        // error of rate/gain, so without it the ship visibly lags the pilot's hand.
-        targetAttitude = new double[]{target.w, target.x, target.y, target.z};
-        commandedAngVel = FreeFlightPhysics.bodyRatesToWorldOmega(target, pitchRate, yawRate, rollRate);
+        // Published as ONE object: the controller runs on the physics thread and flies whatever it
+        // last saw, so the velocity, the attitude target and that target's rate must reach it together.
+        // The velocity honours the Flight-Assist mode + cut/brake (null means "coast"). The angular part
+        // is an attitude target PLUS the rate that target is turning at: the rate is the feed-forward,
+        // since a proportional law chasing a moving reference settles at a standing error of rate/gain,
+        // and without it the ship visibly lags the pilot's hand.
+        flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                FreeFlightPhysics.shipVelocityCommand(in, target, flightAssistEnabled, velocitySetpoint,
+                        SHIP_MAX_SPEED),
+                FreeFlightPhysics.bodyRatesToWorldOmega(target, pitchRate, yawRate, rollRate),
+                new double[]{target.w, target.x, target.y, target.z});
     }
 
     /**
@@ -1049,11 +1057,10 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         if (attitudeReference == null) {
             attitudeReference = attitude;
         }
-        commandedVelocity = dev.stannismod.stellurgy.space.AutoTakeoffPlanner
-                .climbVelocity(nose[0], nose[2]);
-        commandedAngVel = new double[]{0.0, 0.0, 0.0};
-        targetAttitude = new double[]{attitudeReference.w, attitudeReference.x,
-                attitudeReference.y, attitudeReference.z};
+        flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                dev.stannismod.stellurgy.space.AutoTakeoffPlanner.climbVelocity(nose[0], nose[2]),
+                new double[]{0.0, 0.0, 0.0}, new double[]{attitudeReference.w, attitudeReference.x,
+                        attitudeReference.y, attitudeReference.z});
         if (!stationKeeping) {
             stationKeeping = true;
             markDirty();
@@ -1203,6 +1210,262 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      * craft to be simulated, so binding through one meant that a ship parked with nobody aboard - the
      * ordinary state of a hull mid-jump - could never be named at all.</p>
      */
+    /**
+     * How many ticks between two full mass measurements of this ship. `tunable`. Slow on purpose: the
+     * per-block delta path keeps structure current between rounds, and this exists for what that path
+     * cannot see.
+     */
+    public static final int MASS_ROUND_TICKS = 100;
+
+    /**
+     * Re-measure this ship's mass on a slow round, on a phase of this ship's OWN.
+     *
+     * <p>The phase comes from the ship's identity rather than from the clock, so a fleet of craft does
+     * not put every hull walk on the same tick and leave the other ninety-nine idle. That is the whole
+     * reason the offset is here and not a bare {@code % 100}.</p>
+     */
+    private void tickMassRound() {
+        String vsShipId = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                .shipIdManagingBlock(world, getPos());
+        if (vsShipId == null) {
+            return; // not on a physics ship, or the mod is absent: nothing to weigh
+        }
+        java.util.UUID uuid;
+        try {
+            uuid = java.util.UUID.fromString(vsShipId);
+        } catch (IllegalArgumentException notAUuid) {
+            return;
+        }
+        long phase = Math.floorMod(uuid.getLeastSignificantBits(), MASS_ROUND_TICKS);
+        if (Math.floorMod(world.getTotalWorldTime() + phase, MASS_ROUND_TICKS) != 0L) {
+            return;
+        }
+        dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.backgroundRound(world, uuid);
+    }
+
+    // ─── The flight model: what this hull can do ───────────────────────────────
+
+    /**
+     * The fewest ticks between two surveys a changing hull can cause. `tunable`. A player building
+     * places a block a tick; surveying after each one would walk the hull twenty times a second for a
+     * figure nobody reads that fast. Coalesced here, so a burst of changes costs one survey.
+     */
+    private static final int SURVEY_MIN_TICKS = 10;
+
+    /** The fewest ticks between two readout pushes to one player when only the live slice changed. `tunable`. */
+    private static final int READOUT_PUSH_TICKS = 10;
+
+
+    /**
+     * The derived flight model, rebuilt from the hull; {@code null} until the first survey, and for a
+     * computer not on a ship. Never saved (a derived stat persisted is a stale stat). Read by the
+     * physics thread, hence volatile, and immutable, so that thread sees one model or the next.
+     */
+    private volatile dev.stannismod.stellurgy.ship.control.ShipFlightModel flightModel = null;
+
+    /** Counts rebuilds of {@link #flightModel}; its revision. */
+    private long flightModelRevision = 0L;
+
+    /** The ship record's construction count the current model was surveyed at. */
+    private int surveyedConstruction = Integer.MIN_VALUE;
+
+    private long lastSurveyTick = Long.MIN_VALUE;
+
+    /**
+     * How much momentum each reaction wheel aboard has already given the hull. Durable state, owned
+     * by the wheels' own tiles: seeded from them the first time a wheel is surveyed, booked here by
+     * the physics step, and written back to them every tick.
+     */
+    private final dev.stannismod.stellurgy.ship.control.MomentumStore momentum =
+            new dev.stannismod.stellurgy.ship.control.MomentumStore();
+
+    /** Stored-momentum actuators already seeded from their tiles. */
+    private final java.util.Set<dev.stannismod.stellurgy.ship.control.ActuatorId> seededWheels =
+            new java.util.HashSet<>();
+
+    private final dev.stannismod.stellurgy.ship.control.ControlScheme scheme =
+            dev.stannismod.stellurgy.ship.control.ControlScheme.cleanAxes();
+
+    /** Whether the last physics step delivered less than it was asked for; the HUD says so. */
+    private volatile boolean lastSaturated = false;
+
+    /** Per player: the model revision and the tick of the last readout pushed to them. */
+    private final java.util.Map<java.util.UUID, long[]> readoutSent = new java.util.HashMap<>();
+
+    /** Client side: the last readout received for this computer, or {@code null}. */
+    private dev.stannismod.stellurgy.ship.control.ShipReadout clientReadout = null;
+    private boolean clientSaturated = false;
+    private double clientWheelFill = 0.0D;
+
+    private void tickFlightModel() {
+        String vsShipId = VSIntegration.shipIdManagingBlock(world, getPos());
+        if (vsShipId == null) {
+            flightModel = null;
+            return;
+        }
+        java.util.UUID uuid;
+        try {
+            uuid = java.util.UUID.fromString(vsShipId);
+        } catch (IllegalArgumentException notAUuid) {
+            return;
+        }
+        long now = world.getTotalWorldTime();
+        int construction = dev.stannismod.stellurgy.integration.vs.HullSurvey
+                .currentConstructionRevision(world, uuid);
+        boolean hullChanged = construction != surveyedConstruction;
+        long phase = Math.floorMod(uuid.getLeastSignificantBits(), MASS_ROUND_TICKS);
+        boolean loadRound = Math.floorMod(now + phase, MASS_ROUND_TICKS) == 0L;
+        boolean due = flightModel == null
+                || loadRound
+                || (hullChanged && now - lastSurveyTick >= SURVEY_MIN_TICKS);
+        if (due) {
+            rebuildFlightModel(uuid, now);
+        }
+        writeWheelsBack();
+        pushReadouts(now);
+    }
+
+    private void rebuildFlightModel(java.util.UUID uuid, long now) {
+        lastSurveyTick = now;
+        dev.stannismod.stellurgy.integration.vs.HullSurvey survey =
+                dev.stannismod.stellurgy.integration.vs.HullSurvey.ofShip(world, uuid);
+        if (survey == null) {
+            flightModel = null;
+            return;
+        }
+        surveyedConstruction = survey.constructionRevision();
+        for (dev.stannismod.stellurgy.ship.control.Actuator a : survey.design()) {
+            if (!a.isSustained() && seededWheels.add(a.id())) {
+                TileEntity te = world.getTileEntity(new BlockPos(a.id().x(), a.id().y(), a.id().z()));
+                if (te instanceof TileReactionWheel) {
+                    momentum.restore(a.id(), ((TileReactionWheel) te).momentum(a.id().index()));
+                }
+            }
+        }
+        dev.stannismod.stellurgy.ship.control.ShipFlightModel model =
+                dev.stannismod.stellurgy.ship.control.ShipFlightModel.solve(++flightModelRevision,
+                        survey.mass(), survey.design(), survey.live(),
+                        dev.stannismod.stellurgy.ship.control.ControlFrame.HELM);
+        flightModel = model;
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new dev.stannismod.stellurgy.api.event.ShipEvent.FlightModelChangedEvent(world,
+                        shipId == null ? null : shipId.toString(), getPos(),
+                        model.readout(localGravity(world))));
+    }
+
+    private void writeWheelsBack() {
+        for (dev.stannismod.stellurgy.ship.control.ActuatorId id : seededWheels) {
+            TileEntity te = world.getTileEntity(new BlockPos(id.x(), id.y(), id.z()));
+            if (te instanceof TileReactionWheel) {
+                ((TileReactionWheel) te).setMomentum(id.index(), momentum.given(id));
+            }
+        }
+    }
+
+    /** Whether the last physics step delivered less than the flight law asked for. */
+    public boolean isDeliveringLessThanAsked() {
+        return lastSaturated;
+    }
+
+    /** How full the fullest reaction wheel aboard is, 0 to 1. */
+    public double wheelFill() {
+        dev.stannismod.stellurgy.ship.control.ShipFlightModel model = flightModel;
+        if (model == null) {
+            return 0.0D;
+        }
+        double fill = 0.0D;
+        for (dev.stannismod.stellurgy.ship.control.Actuator a : model.design().actuators()) {
+            if (!a.isSustained()) {
+                fill = Math.max(fill, Math.abs(momentum.given(a.id())) / a.momentumCapacity());
+            }
+        }
+        return fill;
+    }
+
+    /**
+     * This ship's readout, as the server has it right now; {@code null} before the first survey or off
+     * a ship. What the pilot and the console are sent, for a reader on the server.
+     */
+    public dev.stannismod.stellurgy.ship.control.ShipReadout readout() {
+        dev.stannismod.stellurgy.ship.control.ShipFlightModel model = flightModel;
+        return model == null ? null : model.readout(localGravity(world));
+    }
+
+    /**
+     * The magnitude of {@code world}'s field in m/s², through the same port the physics loop asks, so
+     * a readout's thrust-to-weight is about the gravity the craft will actually feel.
+     */
+    static double localGravity(net.minecraft.world.World world) {
+        if (!VSConfig.doGravity) {
+            return 0.0D;
+        }
+        Vector3dc g = dev.stannismod.stellurgy.integration.vs.StellurgyWorldGravity.of(world);
+        return g.length() / dev.stannismod.stellurgy.integration.vs.PhysicsUnits.ACCELERATION;
+    }
+
+    /**
+     * Send the readout to the two kinds of player who get one: the pilot at this ship's helm, and
+     * anyone with this computer's console open. On a new model at once; on a changed live slice at
+     * most every {@link #READOUT_PUSH_TICKS}. Nobody else is sent a byte.
+     */
+    private void pushReadouts(long now) {
+        dev.stannismod.stellurgy.ship.control.ShipFlightModel model = flightModel;
+        if (model == null || !(world instanceof net.minecraft.world.WorldServer)) {
+            return;
+        }
+        java.util.Set<java.util.UUID> audience = new java.util.HashSet<>();
+        for (EntityPlayer player : world.playerEntities) {
+            if (isReadoutAudience(player)) {
+                audience.add(player.getUniqueID());
+                long[] sent = readoutSent.get(player.getUniqueID());
+                boolean fresh = sent == null || sent[0] != model.revision();
+                boolean liveDue = sent != null && now - sent[1] >= READOUT_PUSH_TICKS;
+                if (fresh || liveDue) {
+                    readoutSent.put(player.getUniqueID(), new long[] {model.revision(), now});
+                    dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(
+                            new dev.stannismod.stellurgy.network.PacketShipReadout(getPos(),
+                                    model.readout(localGravity(world)), lastSaturated, wheelFill()),
+                            player);
+                }
+            }
+        }
+        readoutSent.keySet().retainAll(audience);
+    }
+
+    private boolean isReadoutAudience(EntityPlayer player) {
+        if (player.openContainer instanceof dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular
+                && ((dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular) player.openContainer)
+                        .getModularInventory() == this) {
+            return true;
+        }
+        TilePilotSeat seat = TilePilotSeat.forShipPilot(player.getRidingEntity(), world);
+        return seat != null && seat.getFlightComputer() == this;
+    }
+
+    /** Client side: a readout arrived for this computer. */
+    @Override
+    public void acceptReadout(dev.stannismod.stellurgy.ship.control.ShipReadout readout, boolean saturated,
+                              double wheelFill) {
+        this.clientReadout = readout;
+        this.clientSaturated = saturated;
+        this.clientWheelFill = wheelFill;
+    }
+
+    /** Client side: the last readout received, or {@code null} when none has been. */
+    public dev.stannismod.stellurgy.ship.control.ShipReadout clientReadout() {
+        return clientReadout;
+    }
+
+    /** Client side: whether the ship was delivering less than asked when the readout was sent. */
+    public boolean clientSaturated() {
+        return clientSaturated;
+    }
+
+    /** Client side: how full the fullest reaction wheel was when the readout was sent, 0 to 1. */
+    public double clientWheelFill() {
+        return clientWheelFill;
+    }
+
     private void bindDurableIdToThisShip() {
         bindAttempts++;
         if (durableIdBound) {
@@ -1410,8 +1673,11 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
 
     @Override
     public List<ModuleBase> getModules(int ID, EntityPlayer player) {
-        // Placeholder: flight-control modules are added here in a later phase.
-        return new LinkedList<>();
+        // The ship's readout. Anyone who opens the console reads it, own ship or not: the audience is
+        // the container itself, which the server tick finds and sends to (see pushReadouts).
+        List<ModuleBase> modules = new LinkedList<>();
+        modules.add(new dev.stannismod.stellurgy.inventory.ModuleShipReadout(8, 18, this));
+        return modules;
     }
 
     @Override
@@ -1422,5 +1688,209 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
         return true;
+    }
+
+    // ---- Force controller ------------------------------------------------------------------
+    //
+    // This tile IS the ship's force controller. The physics mod collects a ship's controller tiles
+    // when they are set into the world and calls onPhysicsTick on each one every physics step, ON
+    // THE PHYSICS THREAD - the only place a force actually integrates into ship motion (a velocity
+    // setpoint or a game-thread force are both overwritten by the solver, confirmed at runtime).
+    //
+    // Control law: the flight law says what motion it WANTS — a deadbeat toward the commanded world
+    // velocity plus the gravity feed-forward, and an attitude hold — and the hull's own actuators
+    // decide what it GETS: the wanted accelerations are handed to the control scheme, which delivers
+    // them through this ship's clean recipes up to its authority in each signed direction. A craft
+    // with nothing aboard that can push does not move under command; a heavy one accelerates slowly.
+    // The command is this tile's own FlightCommand (the probe's, or its flight law's), published on the
+    // game thread and read here ONCE per step, so a step flies one command whole.
+
+    /** Below this commanded angular speed (rad/s) a RAW angular-velocity command counts as absent.
+     *  Only the probe channel uses that command; the attitude-hold path below brakes residual spin. */
+    private static final double AR_ANGULAR_CMD_EPSILON = 1.0e-4;
+    /** Attitude-hold P gain: desired angular speed per radian of orientation error (1/s). */
+    private static final double AR_ATTITUDE_GAIN = 2.0;
+    /** Cap on the attitude-hold desired angular speed (rad/s). Also the ceiling on how fast the ship
+     *  slews toward a large commanded change, so a hard flick of the mouse is a sweep, not a snap. Sits
+     *  just above the fastest rate the pilot can command (5 deg/tick of roll = 1.75 rad/s), so a ship at
+     *  full deflection tracks its attitude reference instead of forever lagging it. Two orders of
+     *  magnitude below the physics mod's ~223 rad/s sanity freeze. */
+    private static final double AR_MAX_ANGULAR_SPEED = 2.0;
+
+    private int stellurgyFlightControllerPriority;
+
+    @Override
+    public void onPhysicsTick(PhysicsObject physo, PhysicsCalculations calc, double dt) {
+        if (dt <= 0.0) {
+            return;
+        }
+        // This computer's own command, and nobody else's: a bring-up probe aimed at THIS tile while
+        // one stands, otherwise what this tile's own server tick published. Each reference is read
+        // ONCE, here; everything below flies that one object.
+        //
+        // Counted BEFORE the early-out below: the question this answers is whether the physics
+        // thread reaches this computer at all, which is a different question from whether it had
+        // anything to command.
+        controllerTicks++;
+        dev.stannismod.stellurgy.ship.control.FlightCommand flying = probeCommand;
+        if (flying == null) {
+            flying = flightCommand;
+        }
+        if (flying == null || flying.asksNothing()) {
+            return;
+        }
+        double[] vCmd = flying.velocity();
+        double[] wCmd = flying.angularVelocity();
+        double[] attCmd = flying.attitude();
+
+        // Linear: deadbeat toward the commanded world velocity, PLUS a gravity feed-forward; force =
+        // mass * accel (mass cancels, so the ship accelerates as commanded regardless of how heavy it
+        // is). The solver runs applyGravity() before this controller in the same physics step and
+        // reads the velocity BEFORE the controller's force is integrated, so it adds gravity*dt to the
+        // ship's velocity every tick no matter what we command. A bare deadbeat therefore settles at
+        // vCmd + gravity*dt - a ship told to hover sinks at a steady -g*dt (~0.16 blk/s at 9.8/60, the
+        // -0.01/tick HUD residual). Feeding gravity forward cancels the velocity the solver is about
+        // to add, so vCmd is truly held and a zero command is a real hover.
+        // What the law WANTS, in the engine's units and the world frame. Nothing here is capped: the
+        // cap is this hull's authority, applied per signed direction by the scheme below.
+        ShipTransform physicsPose = physo.getShipTransformationManager().getCurrentPhysicsTransform();
+        dev.stannismod.stellurgy.ship.control.ShipFlightModel model = flightModel;
+        double[] wantLinear = null;
+        if (vCmd != null && vCmd.length >= 3) {
+            Vector3d v = calc.getLinearVelocity();
+            double gx = 0.0, gy = 0.0, gz = 0.0;
+            if (VSConfig.doGravity) {
+                // THIS world's gravity, through the same function the solver uses. The feed-forward
+                // cancels what the solver is about to add, so two answers would leave a craft told to
+                // hover climbing or sinking by their difference - and on a low-gravity body that
+                // difference is most of the field.
+                Vector3dc g = dev.stannismod.stellurgy.integration.vs.StellurgyWorldGravity.of(world);
+                gx = g.x(); gy = g.y(); gz = g.z();
+            }
+            wantLinear = FreeFlightPhysics.shipControlAccel(vCmd[0], vCmd[1], vCmd[2],
+                    v.x, v.y, v.z, dt, gx, gy, gz, Double.POSITIVE_INFINITY);
+        }
+
+        // Angular: a PD law. An attitude-hold target wins - read the ship's current orientation, turn
+        // the shortest-arc error into a desired rate (P, capped), then deadbeat toward that rate. When
+        // the error is already null the desired rate is ZERO and the deadbeat becomes -w/dt: it BRAKES
+        // residual spin. That braking is the point. A rocket's attitude is kinematic state, so a
+        // centred cursor freezes it; a ship is a rigid body carrying angular momentum, so a centred
+        // cursor must actively stop it, or it keeps turning until something else bleeds the spin.
+        //
+        // An earlier revision disengaged inside a 0.03 rad dead-band, believing the brake tripped the
+        // solver's "ship moving too fast" guard. It does not: that guard trips at |w|^2 > 50000
+        // (|w| > ~223 rad/s), some 150x above AR_MAX_ANGULAR_SPEED, or on a non-finite velocity. The
+        // real historical cause was a NaN torque from a scalar inertia, which the MOI tensor below
+        // already fixed.
+        Vector3d w = calc.getAngularVelocity();
+        double[] angAccel = null;
+        if (attCmd != null && attCmd.length >= 4) {
+            Quaterniond current = physo.getShipTransform().rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
+            Quaterniond target = new Quaterniond(attCmd[1], attCmd[2], attCmd[3], attCmd[0]); // JOML x,y,z,w
+            Quaterniond err = new Quaterniond(target).mul(new Quaterniond(current).conjugate()).normalize();
+            AxisAngle4d aa = new AxisAngle4d().set(err);
+            double angle = aa.angle > Math.PI ? aa.angle - 2.0 * Math.PI : aa.angle; // shortest arc
+            // With an attitude target, an angular-velocity command is the rate that target is TURNING
+            // at - the feed-forward, not an independent command.
+            double ffX = 0.0, ffY = 0.0, ffZ = 0.0;
+            if (wCmd != null && wCmd.length >= 3) {
+                ffX = wCmd[0]; ffY = wCmd[1]; ffZ = wCmd[2];
+            }
+            // The slew rate is capped where this hull can still stop it: a craft that approaches its
+            // target at a rate its authority cannot brake from overshoots, and on a weak hull the old
+            // flat cap was exactly such a rate. sqrt(2·α·angle) is the fastest rate from which α stops
+            // the turn in the angle left.
+            // Never below the rate the target itself turns at, or the craft could not follow a pilot's
+            // steady turn at all.
+            double stoppable = Math.max(
+                    stoppableRate(model, physicsPose, aa.x, aa.y, aa.z, Math.abs(angle)),
+                    Math.sqrt(ffX * ffX + ffY * ffY + ffZ * ffZ));
+            angAccel = FreeFlightPhysics.attitudeHoldAngAccel(aa.x, aa.y, aa.z, angle,
+                    ffX, ffY, ffZ, w.x, w.y, w.z, dt,
+                    AR_ATTITUDE_GAIN, Math.min(AR_MAX_ANGULAR_SPEED, stoppable), Double.POSITIVE_INFINITY);
+        } else if (wCmd != null && wCmd.length >= 3
+                && (wCmd[0] * wCmd[0] + wCmd[1] * wCmd[1] + wCmd[2] * wCmd[2])
+                        > AR_ANGULAR_CMD_EPSILON * AR_ANGULAR_CMD_EPSILON) {
+            // Raw rate command (probe channel only): deadbeat toward it, no attitude reference.
+            angAccel = new double[]{(wCmd[0] - w.x) / dt, (wCmd[1] - w.y) / dt, (wCmd[2] - w.z) / dt};
+        }
+
+        // What the hull GETS: the wanted accelerations, in SI and the ship's own frame, allocated over
+        // this ship's working actuators; the resulting wrench, back in the world frame and the
+        // engine's units, is what is applied. The scheme reports when it delivered less than asked.
+        Vector3d force = new Vector3d();
+        Vector3d torque = new Vector3d();
+        boolean asked = wantLinear != null || angAccel != null;
+        boolean saturated = asked && model == null;
+        if (asked && model != null) {
+            double k = dev.stannismod.stellurgy.integration.vs.PhysicsUnits.ACCELERATION;
+            Vector3d a = wantLinear == null ? new Vector3d()
+                    : new Vector3d(wantLinear[0], wantLinear[1], wantLinear[2]).div(k);
+            Vector3d alpha = angAccel == null ? new Vector3d()
+                    : new Vector3d(angAccel[0], angAccel[1], angAccel[2]).div(k);
+            physicsPose.transformDirection(a, TransformType.GLOBAL_TO_SUBSPACE);
+            physicsPose.transformDirection(alpha, TransformType.GLOBAL_TO_SUBSPACE);
+            dev.stannismod.stellurgy.ship.control.ActuatorCommand command = scheme.allocate(model.live(), a,
+                    alpha, momentum, dt * dev.stannismod.stellurgy.integration.vs.PhysicsUnits.SECONDS);
+            force.set(command.force()).mul(k);
+            torque.set(command.torque()).mul(k);
+            physicsPose.transformDirection(force, TransformType.SUBSPACE_TO_GLOBAL);
+            physicsPose.transformDirection(torque, TransformType.SUBSPACE_TO_GLOBAL);
+            saturated = command.isSaturated();
+        }
+        lastSaturated = saturated;
+
+        calc.addForceAndTorque(force, torque);
+    }
+
+    /**
+     * The fastest rate, in the engine's rad/s, from which this hull's authority about {@code axis}
+     * (a world-frame unit vector) still stops a turn within {@code angle} radians. Unbounded when
+     * there is no model to ask — the old cap then stands alone — and zero when the hull has no
+     * authority about any component of that axis.
+     */
+    private static double stoppableRate(dev.stannismod.stellurgy.ship.control.ShipFlightModel model,
+                                        ShipTransform pose, double ax, double ay, double az, double angle) {
+        if (model == null) {
+            return Double.POSITIVE_INFINITY;
+        }
+        Vector3d axis = new Vector3d(ax, ay, az);
+        pose.transformDirection(axis, TransformType.GLOBAL_TO_SUBSPACE);
+        dev.stannismod.stellurgy.ship.control.ShipCapability live = model.live();
+        double alpha = Double.POSITIVE_INFINITY;
+        for (dev.stannismod.stellurgy.ship.control.ControlAxis c
+                : dev.stannismod.stellurgy.ship.control.ControlAxis.values()) {
+            if (!c.isRotation()) {
+                continue;
+            }
+            double part = axis.dot(live.frame().axis(c));
+            if (Math.abs(part) < 1.0e-6) {
+                continue;
+            }
+            double authority = live.authority(
+                    dev.stannismod.stellurgy.ship.control.ControlDirection.of(c, part > 0.0),
+                    dev.stannismod.stellurgy.ship.control.Endurance.BURST);
+            alpha = Math.min(alpha, authority / Math.abs(part));
+        }
+        if (Double.isInfinite(alpha)) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return Math.sqrt(2.0 * alpha * dev.stannismod.stellurgy.integration.vs.PhysicsUnits.ACCELERATION * angle);
+    }
+
+    @Override
+    public BlockPos getNodePos() {
+        return getPos();
+    }
+
+    @Override
+    public int getPriority() {
+        return stellurgyFlightControllerPriority;
+    }
+
+    @Override
+    public void setPriority(int priority) {
+        this.stellurgyFlightControllerPriority = priority;
     }
 }

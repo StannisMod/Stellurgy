@@ -972,7 +972,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * tried here first; measured twice on a settled ship in a CELL, at 4 and at 12 blocks/second, the
      * deck travelled 0.870 and 0.862 blocks in the same window. Tripling the command changed the
      * result by one percent, so the cruise is not being realized here at all and those numbers are
-     * drift. That is a finding about ships in cells, recorded in the ledger, and it is not this
+     * drift. That is a finding about ships in cells, filed separately, and it is not this
      * family's subject.
      *
      * <p>So the deck is driven through the computer's own PROBE command channel: per-tile, addressed

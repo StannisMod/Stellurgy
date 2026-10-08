@@ -18,7 +18,11 @@ import java.lang.Math;
 import java.util.*;
 
 public class PhysicsCalculations {
-    public static final double DRAG_CONSTANT = 0.99;
+    // Per GAME tick, matching vanilla's own `motionY *= 0.98` exactly: paired with a gravity of -32
+    // this puts a ship's terminal velocity at 3.92 blocks/tick, which is a player's. At the upstream
+    // 0.99 a ship kept accelerating to 7.92 blocks/tick and outran anyone standing on it in a long
+    // descent, so matching the acceleration alone would not have been enough.
+    public static final double DRAG_CONSTANT = 0.98;
     public static final double EPSILON = 1.0E-8;
     private final PhysicsObject parent;
     private final WorldPhysicsCollider worldCollision;
@@ -239,7 +243,14 @@ public class PhysicsCalculations {
 
     private void applyGravity() {
         if (VSConfig.doGravity) {
-            addForceAtPoint(new Vector3d(), VSConfig.gravity().mul(physTickMass * getPhysicsTimeDeltaPerPhysTick(), new Vector3d()));
+            // Per WORLD, not one vector for the universe. A body's own gravitational multiplier used
+            // to stop at the mod boundary, so a ship felt Earth gravity on the Moon and in the void
+            // alike; the only reason that was not visible is that the flight controller's
+            // feed-forward cancelled exactly what this line added. The controller asks the same
+            // function, because the two must agree or a hovering craft climbs or sinks by their
+            // difference.
+            Vector3dc gravity = dev.stannismod.stellurgy.integration.vs.StellurgyWorldGravity.of(getParent().getWorld());
+            addForceAtPoint(new Vector3d(), gravity.mul(physTickMass * getPhysicsTimeDeltaPerPhysTick(), new Vector3d()));
         }
     }
 

@@ -100,6 +100,12 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
         assertTrue("the arrival was announced but names no dimension: " + arrivedRecord,
                 targetDim >= 0);
 
+        // Deliberately NOT pre-loading the arrival's chunks. A jump arrives where nobody is standing -
+        // that is the ordinary case, not an edge one - and placing the bodies there is the arrival's
+        // own job. Warming them from the test would hide exactly the defect this test exists to catch:
+        // vanilla refuses an entity whose chunk is not loaded, silently, and the carry used to count
+        // that refusal as a success and drop the body for good.
+        //
         // NOT a converging state after all, and the comment that stood here said it was. The
         // placement IS announced: `AboardBodies.release` is the one place a stowed body re-enters a
         // world, and `aboard_bodies_released` is written at its return — on every attempt, so the
@@ -128,6 +134,11 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
         String census = exec("stellurgytest space loose-body-count " + targetDim + " " + ship.x + " "
                 + ship.y + " " + ship.z + " " + ABOARD_RADIUS);
 
+        // The count alone answers zero for three different failures — never carried, carried and
+        // drifted off, and carried onto a ship that is not where this measurement is taken from — so
+        // the nearest body's own position and distance are carried into the message. A red that says
+        // "the nearest one is 137 blocks below" is a different bug report from one that says there is
+        // no body in this world at all, and the two used to be the same sentence.
         assertTrue("a body lying on the deck must arrive WITH the ship — the crew is not the only "
                 + "thing aboard a jump. Ship report at the destination: " + arrivedInfo
                 + " body census: " + census, extractInt(census, "count") >= 1);

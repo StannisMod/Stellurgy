@@ -227,6 +227,11 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
      * an idle one: "clientY 77.99 -> 77.99 after 20 ticks of thrust". That second inversion first left
      * this GREEN (+51.6 blocks): the cruise ramped on the way up crosses with the craft, and it
      * climbed on that alone. The cruise is now zeroed by probe before the key is judged.</p>
+     *
+     * <p>red-witnessed: {@code ShipEntryController} returning {@code COOLDOWN} before every other
+     * decision (inserted at {@code ShipEntryController#requestEntry} at {@code if (shipId == null)}) fails the entry chain — the window now opened before the control leg's key — "…must be
+     * taken by the entry crossing and SETTLE in a cell … `cell_crossing_begun` is missing from the
+     * chain" within 4000 ticks, 2026-09-30.</p>
      */
     @Test
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
@@ -248,8 +253,15 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // A dose of thrust from the key's arrival, and one reading: the key's ARRIVAL at the computer
         // is the link, and the altitude it bought is read while the key is still down, because the
         // entry leg below goes on climbing on the same held key.
-        long entryMark;
-        long clientMark;
+        // BOTH MARKS GO BEFORE THE KEY, because the key is the climb: it is held from the control leg
+        // straight through the entry, and nothing but the craft's own authority decides how soon it
+        // reaches the line. Measured 2026-09-30: a hull with actuators tracks the cruise ramp
+        // (40/60 blocks per second per tick) and was already cut into its cell when marks taken after
+        // the control reading were placed — `ledger_settled` was the fifth record of the window and
+        // `cell_crossing_begun` preceded it. The control leg itself writes none of the chain's links.
+        Events events = serverEvents();
+        long entryMark = events.markInstrumented();
+        long clientMark = clientEvents().mark();
         try {
             holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS, "control leg: the pilot's held vertical key"
                     + " must reach his flight computer before any climb can be asked of it");
@@ -270,9 +282,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             // plus a re-assert every PilotInputCadence.REPEAT_TICKS), so a loaded box stretches the
             // climb through the client's TICK rate. NOT per rendered frame — that reading was
             // refuted 2026-08-21. 4 000 ticks is the old 800 polls of 5.
-            Events events = serverEvents();
-            entryMark = events.markInstrumented();
-            clientMark = clientEvents().mark();
             int climbBudget = 4000;
             events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
                     + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a cell - the"

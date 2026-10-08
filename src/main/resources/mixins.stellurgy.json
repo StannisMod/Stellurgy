@@ -19,11 +19,9 @@
     "MixinEntityPlayerInventoryAccess",
     "MixinEntityPlayerMPInventoryAccess",
     "MixinPlayerList",
-    "MixinTileAdvancedFlightComputer",
     "MixinWorldProvider",
     "MixinWorldServer",
     "MixinWorldServerMulti",
-    "MixinWorldServerShipManager",
     "MixinWorldSetBlockState"
   ],
   "client": [

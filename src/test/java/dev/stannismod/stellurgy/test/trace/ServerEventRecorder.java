@@ -375,29 +375,182 @@ public final class ServerEventRecorder {
     }
 
     /**
+     * A chunk LEFT the server's memory — {@code chunk_unloaded}.
+     *
+     * <p>Posted from {@code Chunk#onUnload}, which the chunk provider calls for a chunk it is dropping,
+     * immediately before it writes that chunk to disk and forgets it, all inside one tick. So once
+     * this record exists the chunk's tile entities are gone from the world, and whatever is read at
+     * that position afterwards was read back from what was saved. That is what a persistence scenario
+     * needs to know and could not otherwise tell: a reload that found the chunk still in memory reads
+     * the very objects it wrote, and a save that was never exercised looks exactly like one that
+     * worked.</p>
+     *
+     * <p>Server side only, for the same reason as {@link #onWorldUnloaded}. {@code cx}/{@code cz} are
+     * chunk coordinates.</p>
+     */
+    @SubscribeEvent
+    public static void onChunkUnloaded(net.minecraftforge.event.world.ChunkEvent.Unload event) {
+        World world = event.getWorld();
+        instrument(world, "server_bus_chunk_unloaded");
+        if (world == null || world.isRemote || event.getChunk() == null) {
+            return;
+        }
+        record(world, "chunk_unloaded", "\"dim\":" + world.provider.getDimension()
+                + ",\"cx\":" + event.getChunk().x + ",\"cz\":" + event.getChunk().z);
+    }
+
+    /**
      * A ship became USABLE — its physics will be stepped from now on.
      *
      * <p>Production's own event, subscribed to like any other consumer would rather than
      * observed by a test mixin: this fact has a non-test audience and is published for it
-     * ({@code ShipEvent.ShipLoadedEvent}). That is why the recorded type is named for USABILITY
+     * ({@code ShipLifecycleEvent.ShipUsable}). That is why the recorded type is named for USABILITY
      * and not "loaded" — {@code ship_loaded} is already taken by the test mixin on the physics
      * object's CONSTRUCTOR, which is a weaker claim: a ship exists there and does not move yet.
      * A test that means "I can fly this now" wants this one.</p>
      *
-     * <p>Both ids are recorded even though they are the same value (one ship, one identity), so a
-     * reader can match on either spelling without knowing that.</p>
+     * <p>{@code ship} is the DURABLE id and {@code vsShip} the physics id; they are the same value
+     * for a craft that kept its identity (one ship, one identity), and both are recorded so a reader
+     * can match on either spelling without knowing that.</p>
      */
     @SubscribeEvent
-    public static void onShipUsable(dev.stannismod.stellurgy.api.event.ShipEvent.ShipLoadedEvent event) {
+    public static void onShipUsable(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipUsable event) {
         World world = event.world;
         instrument(world, "server_bus_ship_usable");
         if (world == null) {
             return;
         }
         record(world, "ship_usable",
-                "\"ship\":\"" + str(event.shipId) + "\""
-                        + ",\"vsShip\":\"" + str(event.substrateId) + "\""
+                "\"ship\":\"" + str(event.durableId == null ? null : event.durableId.toString()) + "\""
+                        + ",\"vsShip\":\"" + event.shipUuid + "\""
                         + ",\"dim\":" + world.provider.getDimension());
+    }
+
+    /**
+     * A ship was NAMED or UNNAMED, with the transition that did it — {@code ship_lifecycle}.
+     *
+     * <p>Production's own announcement, subscribed to like any consumer rather than counted by a
+     * recorder of its own: the mass trigger arms on it, so it has a non-test audience. One record
+     * per announcement, so "exactly once per transition" is a count over a window rather than a
+     * tally somebody had to reset. {@code edge} is which half ({@code named}/{@code unnamed});
+     * {@code durable} is the vessel's id, which survives a crossing where {@code ship} does not; and
+     * a departure carries {@code destinationDim}, the one cause that has a destination.</p>
+     *
+     * <p>The usable edge is the third member of the family and is NOT recorded here: it carries no
+     * cause, and it has its own type ({@code ship_usable}, above) that more than forty waits already
+     * read.</p>
+     */
+    @SubscribeEvent
+    public static void onShipNamed(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipNamed event) {
+        recordLifecycle(event, "named", event.cause, "");
+    }
+
+    @SubscribeEvent
+    public static void onShipUnnamed(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipUnnamed event) {
+        recordLifecycle(event, "unnamed", event.cause,
+                event instanceof dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipDeparted
+                        ? ",\"destinationDim\":" + ((dev.stannismod.stellurgy.api.event.ShipLifecycleEvent
+                                .ShipDeparted) event).destinationDim
+                        : "");
+    }
+
+    private static void recordLifecycle(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent event,
+                                        String edge,
+                                        dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.Cause cause,
+                                        String extra) {
+        World world = event.world;
+        instrument(world, "server_bus_ship_lifecycle");
+        if (world == null) {
+            return;
+        }
+        record(world, "ship_lifecycle",
+                "\"ship\":\"" + event.shipUuid + "\""
+                        + ",\"durable\":" + (event.durableId == null
+                                ? "null" : "\"" + event.durableId + "\"")
+                        + ",\"cause\":\"" + cause + "\""
+                        + ",\"edge\":\"" + edge + "\""
+                        + extra
+                        + ",\"dim\":" + world.provider.getDimension());
+    }
+
+    /**
+     * A flight computer REBUILT its ship's flight model — {@code flight_model_changed}.
+     *
+     * <p>Production's own announcement ({@code ShipEvent.FlightModelChangedEvent}), posted after
+     * every survey the computer makes: a change to the hull, the load round, or a computer that had
+     * no model yet. One record per announcement, so "the model has caught up with what I did to the
+     * hull" is a link on the first record after a mark, and the readout is then read once.</p>
+     *
+     * <p>{@code ship} is the craft's durable name, {@code afcX/Y/Z} the computer's own address (a
+     * subspace one on an assembled ship), {@code revision} this computer's rebuild count, and
+     * {@code totalKg} the mass the new model was solved for — the one figure a cargo scenario links
+     * on — and {@code liveSurgeN} the sustained forward authority of the actuators working now, the
+     * figure a scenario that changes the hull's motors links on.</p>
+     */
+    @SubscribeEvent
+    public static void onFlightModelChanged(
+            dev.stannismod.stellurgy.api.event.ShipEvent.FlightModelChangedEvent event) {
+        World world = event.world;
+        instrument(world, "server_bus_flight_model_changed");
+        if (world == null || event.readout == null) {
+            return;
+        }
+        BlockPos p = event.pos;
+        record(world, "flight_model_changed",
+                "\"ship\":\"" + str(event.shipId) + "\""
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
+                        + ",\"revision\":" + event.readout.revision()
+                        + ",\"totalKg\":" + num(event.readout.totalMass())
+                        + ",\"liveSurgeN\":" + num(event.readout.authority(
+                                dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE,
+                                dev.stannismod.stellurgy.ship.control.ControlDirection.SURGE_POSITIVE,
+                                dev.stannismod.stellurgy.ship.control.Endurance.SUSTAINED)));
+    }
+
+    /**
+     * A player's break of a block, as it STANDS — {@code block_broken}.
+     *
+     * <p>{@code LOWEST} and not receiving cancelled events, so a record is written only for a
+     * break no handler refused; vanilla removes the block right after this event returns. The
+     * position is whatever the interaction path handed the server, which for a block of an
+     * assembled ship is its SUBSPACE address — the one a test aimed at.</p>
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onBlockBroken(net.minecraftforge.event.world.BlockEvent.BreakEvent event) {
+        World world = event.getWorld();
+        instrument(world, "server_bus_block_broken");
+        if (world == null || world.isRemote) {
+            return;
+        }
+        BlockPos p = event.getPos();
+        record(world, "block_broken",
+                "\"x\":" + p.getX() + ",\"y\":" + p.getY() + ",\"z\":" + p.getZ()
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"block\":\"" + event.getState().getBlock().getRegistryName() + "\""
+                        + ",\"player\":\"" + (event.getPlayer() == null ? "" : event.getPlayer().getName())
+                        + "\"");
+    }
+
+    /**
+     * A player's placement of a block, as it STANDS — {@code block_placed}. Same priority and
+     * the same reason as {@link #onBlockBroken}: a cancelled placement is reverted, so only one
+     * no handler refused is recorded.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onBlockPlaced(net.minecraftforge.event.world.BlockEvent.PlaceEvent event) {
+        World world = event.getWorld();
+        instrument(world, "server_bus_block_placed");
+        if (world == null || world.isRemote) {
+            return;
+        }
+        BlockPos p = event.getPos();
+        record(world, "block_placed",
+                "\"x\":" + p.getX() + ",\"y\":" + p.getY() + ",\"z\":" + p.getZ()
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"block\":\"" + event.getPlacedBlock().getBlock().getRegistryName() + "\""
+                        + ",\"player\":\"" + (event.getPlayer() == null ? "" : event.getPlayer().getName())
+                        + "\"");
     }
 
     /**

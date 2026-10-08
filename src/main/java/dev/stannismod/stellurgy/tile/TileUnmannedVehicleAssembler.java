@@ -26,6 +26,7 @@ import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 import javax.annotation.Nonnull;
 import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.block.*;
+import dev.stannismod.stellurgy.util.NuclearEngineLimit;
 
 public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
 
@@ -199,11 +200,11 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
             this.status = ErrorCodes.ALREADY_ASSEMBLED;
             return null;
         }  
-        int thrustMonopropellant = 0;
-        int thrustBipropellant = 0;
-        int thrustNuclearNozzleLimit = 0;
-        int thrustNuclearReactorLimit = 0;
-        int thrustNuclearTotalLimit = 0;
+        long thrustMonopropellant = 0;
+        long thrustBipropellant = 0;
+        long thrustNuclearNozzleLimit = 0;
+        long thrustNuclearReactorLimit = 0;
+        int thrustNuclearTotalLimit;
         int monopropellantfuelUse = 0;
         int bipropellantfuelUse = 0;
         int nuclearWorkingFluidUseMax = 0;
@@ -211,7 +212,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
         int fuelCapacityBipropellant = 0;
         int fuelCapacityOxidizer = 0;
         int fuelCapacityNuclearWorkingFluid = 0;
-        float weight = 0f;
+        float mass = 0f;
 
         stats.reset();
 
@@ -269,9 +270,9 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                         }
 
                         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currPos);
+                            mass += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currPos);
                         } else {
-                            weight += 1f; // fallback: count blocks
+                            mass += 1f; // fallback: count blocks
                         }
 
                         // Engines + thrust/fuel use
@@ -339,17 +340,10 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
             }
 
             // --- Nuclear working fluid scaling (guarded) ---
-            int nuclearWorkingFluidUse = 0;
-            if (thrustNuclearNozzleLimit > 0) {
-                thrustNuclearTotalLimit = Math.min(thrustNuclearNozzleLimit, thrustNuclearReactorLimit);
-                if (nuclearWorkingFluidUseMax > 0) {
-                    nuclearWorkingFluidUse = (int) (nuclearWorkingFluidUseMax * (thrustNuclearTotalLimit / (float) thrustNuclearNozzleLimit));
-                    thrustNuclearTotalLimit = (nuclearWorkingFluidUse * thrustNuclearNozzleLimit) / nuclearWorkingFluidUseMax;
-                } else {
-                    nuclearWorkingFluidUse = 0;
-                    thrustNuclearTotalLimit = 0;
-                }
-            }
+            NuclearEngineLimit nuclear = NuclearEngineLimit.derive(
+                    thrustNuclearNozzleLimit, thrustNuclearReactorLimit, nuclearWorkingFluidUseMax);
+            int nuclearWorkingFluidUse = nuclear.workingFluidUse;
+            thrustNuclearTotalLimit = nuclear.thrust;
 
             // Write stats
             stats.setBaseFuelRate(FuelType.LIQUID_MONOPROPELLANT, monopropellantfuelUse);
@@ -368,7 +362,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
             stats.setFuelCapacity(FuelType.NUCLEAR_WORKING_FLUID, fuelCapacityNuclearWorkingFluid);
 
             stats.setThrust(Math.max(Math.max(thrustMonopropellant, thrustBipropellant), thrustNuclearTotalLimit));
-            stats.setWeight(weight);
+            stats.setMass(mass);
             stats.setStatTag("liquidCapacity", fluidCapacity);
 
             // Cross-family checks
