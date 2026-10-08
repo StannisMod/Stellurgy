@@ -97,7 +97,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
     }
 
     /** After link-infra the tile's {@code mission} field points back to
-     *  the just-started mission. Pins the link half of the lifecycle. */
+     *  the just-started mission. Pins the link half of the lifecycle.
+     * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
+     */
     @Test
     public void startLinksInfrastructureToMission() throws Exception {
         int baseX = 9000;
@@ -129,7 +131,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  {@code rocket.linkInfrastructure} on the freshly spawned
      *  EntityStationDeployedRocket) is pinned by
      *  {@link #completionLinksInfrastructureToRespawnedRocket} via the
-     *  {@code rocket-relink-state} probe. */
+     *  {@code rocket-relink-state} probe.
+     * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
+     */
     @Test
     public void completionUnlinksInfrastructureFromMission() throws Exception {
         int baseX = 9100;
@@ -176,7 +180,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  the {@code rocket-cargo} bbox around the original launch coords.
      *  The {@code rocket-relink-state} probe is class-filtered (scans
      *  the whole launch dim for EntityStationDeployedRocket instances)
-     *  and finds the rocket regardless of position. */
+     *  and finds the rocket regardless of position.
+     * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
+     */
     @Test
     public void completionLinksInfrastructureToRespawnedRocket() throws Exception {
         int baseX = 9200;

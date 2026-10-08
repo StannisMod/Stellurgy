@@ -94,6 +94,7 @@ public class PacketSerializationTest {
 
     // ---- PacketDimInfo --------------------------------------------------------
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
     @Test
     public void packetDimInfoNullPropertiesIsDeleteSignal() {
         // ctor with null DimensionProperties -> wire format collapses to
@@ -130,6 +131,7 @@ public class PacketSerializationTest {
         @Override public double failureChance() { return 0; }
     }
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
     @Test
     public void packetSatelliteRoundTrip() {
         SatelliteProperties props =
@@ -179,6 +181,7 @@ public class PacketSerializationTest {
 
     // ---- PacketConfigSync -----------------------------------------------------
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
     @Test
     public void packetConfigSyncRoundTrip() {
         // Start from a current-config copy (matches what production StellurgyConfiguration
@@ -250,6 +253,7 @@ public class PacketSerializationTest {
 
     // ---- PacketAsteroidInfo --------------------------------------------------
 
+    /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
     @Test
     public void packetAsteroidInfoRoundTrip() {
         Asteroid original = new Asteroid();

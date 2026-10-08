@@ -62,6 +62,7 @@ public class SystemBodiesProducerTest {
         };
     }
 
+    /** Pins CON-C14-09 (a body's local vector is the observer to body vector, sector-aware). */
     @Test
     public void aBodyAtTheCellCentreIsCarriedAsTheDirectionFromTheShipThatIsThere() {
         // Ship parked OFF the cell centre; a planet sitting AT the cell centre (local 0,0,0).
@@ -91,6 +92,7 @@ public class SystemBodiesProducerTest {
         assertTrue("a planet with a real dim is a descend target", rb.descendTarget);
     }
 
+    /** Pins CON-C14-09 (a body's local vector is the observer to body vector, sector-aware). */
     @Test
     public void crossCellBodyDirectionIncludesTheSectorTerm() {
         // A body one whole cell away in +X: the direction must carry the CELL-sized sector step, not
@@ -128,6 +130,7 @@ public class SystemBodiesProducerTest {
         assertFalse("a belt with no real dim is not a descend target", rb.descendTarget);
     }
 
+    /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpStillShowsItsBodies() {
         // The measured shape of the blank-sky report: a pilot sitting in a live cell world whose ship
@@ -269,6 +272,7 @@ public class SystemBodiesProducerTest {
         assertEquals(4, byDim.get(200).get(0).dimId);
     }
 
+    /** Pins CON-C14-07 (only live cells bound to a slot are keyed). */
     @Test
     public void aShipWhoseCellIsInNoSlotContributesNothing() {
         // A ship can be settled — the server knows exactly where it is — while its cell is bound to no
@@ -291,6 +295,7 @@ public class SystemBodiesProducerTest {
         assertTrue("a ship whose cell is in no slot keys no dimension at all", byDim.isEmpty());
     }
 
+    /** Pins CON-C14-07 (only live cells bound to a slot are keyed). */
     @Test
     public void anUnboundOrMalformedBindingIsNeverKeyed() {
         // The "no world" sentinel must never become a dimension key, and neither must a cell key the
@@ -330,6 +335,8 @@ public class SystemBodiesProducerTest {
      * BOTH frames at the broadcast tick, so its length is the real distance right then — which is
      * what makes "the planet is receding" something the sky can show at all. Over the static grid
      * the same two names are the same distance apart forever.
+     * Pins ADDR-13 (the distance between two moving frames changes with time).
+     * Pins CON-C14-15 (the fed vector is evaluated live through both frames).
      */
     @Test
     public void aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays() {
@@ -350,7 +357,10 @@ public class SystemBodiesProducerTest {
         assertEquals("...and onto +Z", 1_000_000L, late.localZ);
     }
 
-    /** The observer's OWN cell moves too, so a body in it stays exactly where it was relative to him. */
+    /**
+     * The observer's OWN cell moves too, so a body in it stays exactly where it was relative to him.
+     * Pins CON-C14-15 (the fed vector is evaluated live through both frames).
+     */
     @Test
     public void aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim() {
         final GalacticCoord cell = GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L);

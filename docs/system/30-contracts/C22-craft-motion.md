@@ -31,7 +31,7 @@ every state either fights it or adopts it, and two independent mechanisms do the
 
 ## Clauses
 
-- **MOTION-1** *(conservation)* `[A]` Angular and linear momentum a craft did not command PERSIST.
+- **MOTION-1** *(conservation)* `[A][BEH]` Angular and linear momentum a craft did not command PERSIST.
   They decay only by a cause the model NAMES — a commanded hold, an atmosphere (MOTION-7), a
   collision. Ruled: *"крутится, конечно"*.
   **Violated today, once.** The attitude law below drives ω to zero unconditionally. The ambient
@@ -40,7 +40,7 @@ every state either fights it or adopts it, and two independent mechanisms do the
   vacuum (MOTION-7) `[V]`. **Note what "vacuum" covers**: `AtmosphereDensity` answers VACUUM for any
   world Stellurgy does not describe — the Nether, the End, another mod's dimension — so a craft there has no
   drag at all (`api/AtmosphereDensity.java`) `[V]`.
-- **MOTION-2** *(a hold is a MODE, never the law)* `[A]` No controller drives ω or v toward a
+- **MOTION-2** *(a hold is a MODE, never the law)* `[A][BEH]` No controller drives ω or v toward a
   reference unless a mode is engaged that says so. With no mode engaged, centred controls command NO
   torque and NO force — not zero rate, not zero velocity. Ruled: *"режим … поэтому мы не можем
   по-умолчанию это делать"*.
@@ -56,7 +56,7 @@ every state either fights it or adopts it, and two independent mechanisms do the
   будет цены удержания."* The anchor is burned and stays empty. Nothing else moves: MOTION-1 already
   says momentum persists unless a NAMED cause takes it, and "no hold is engaged" is such a cause
   whatever the reason.
-- **MOTION-4** *(mode state belongs to the CRAFT)* `[A]` Engagement is the craft's own state and
+- **MOTION-4** *(mode state belongs to the CRAFT)* `[A][BEH]` Engagement is the craft's own state and
   capability, not the pilot's: it persists across dismount, reload and crossing, applies to a station
   exactly as to a ship, and a pilot taking the seat is SHOWN the craft's current state on his HUD
   before he acts. Ruled: *"состояние (и способности) корабля, переключать может пилот. Когда он
@@ -64,18 +64,18 @@ every state either fights it or adopts it, and two independent mechanisms do the
   Half-held today: FA is already a persisted craft setting (C9 SHIPCTL-18, NBT key `NBT_FLIGHT_ASSIST`) `[V]`
   — but it defaults to `true` (`TileAdvancedFlightComputer.java:1556`) `[V]`, and the angular half is not
   a setting at all.
-- **MOTION-5** *(cause, not magnitude)* `[A]` Rotation a craft did not command is never treated
+- **MOTION-5** *(cause, not magnitude)* `[A][BEH]` Rotation a craft did not command is never treated
   differently by its SIZE alone.
   **Violated today.** `ATTITUDE_REFERENCE_RESEED = π/3` (`TileAdvancedFlightComputer.java:413`)
   `[V]`: below ~60° of uncommanded error the craft is dragged back, above it the rotation is ADOPTED
   and then held. Neither branch is a decision about what happened.
-- **MOTION-6** *(reachability)* `[A]` From any attitude a craft can enter, the pilot's own controls
+- **MOTION-6** *(reachability)* `[A][BEH]` From any attitude a craft can enter, the pilot's own controls
   can reach any other attitude.
   **Violated today**, and this is its player-facing shape: from `up ≈ 0` he cannot
   reach `up ≈ 1`, because the throttle is a BODY-frame command
   (`FreeFlightPhysics.shipVelocityCommand` → `bodyToWorldQ`) `[V]` so "climb" is horizontal thrust,
   and the law re-pins its reference to the tilt on every tick he is not steering.
-- **MOTION-7** *(ambient drag is an ATMOSPHERE)* `[A]` Any velocity decay attributable to a medium is
+- **MOTION-7** *(ambient drag is an ATMOSPHERE)* `[A][BEH]` Any velocity decay attributable to a medium is
   scaled by that medium's density and is ZERO in vacuum — **angular decay included**. Ruled: *"Да,
   должно. И зависеть от плотности атмосферы ещё"*.
   The density concept exists and tier 1 already consumes it: `IDimensionProperties`

@@ -103,13 +103,13 @@ properties** (int lanes) rebuilt every GUI session; a list's scroll position is 
 ## Invariants
 
 - **INV-IVC-01 [V]** Stellurgy `GuiHandler` returns non-null only for `guiId.OreMappingSatellite`; every other id (and a null/desynced satellite) yields null (GuiHandler.java:31-39,55-64).
-- **INV-IVC-02 [V]** `guiId` order is `{RocketBuilder, BlastFurnace, OreMappingSatellite, StationChip}`; `OreMappingSatellite.ordinal()==2` is the wire value both `openGui` sites and the handler agree on (GuiHandler.java:67-72; ItemOreScanner.java:86).
-- **INV-IVC-03 [T]** Clicking a selector button whose id is a planet dim (`0 ≤ id < STAR_ID_OFFSET=10000`) registers a server-side selection (`hasSelection:true`, `selectedDim`) (PlanetSelectorGuiE2ETest.java:50-63).
-- **INV-IVC-04 [V]** `ModuleSatelliteTerminal` transports exactly 4 int lanes `{status,ppt,data,max}` and force-refreshes on each `PERIOD_TICKS=9` bucket edge (ModuleSatelliteTerminal.java:37-39,84,118-133).
-- **INV-IVC-05 [V]** `SlotData` accepts only `IDataItem` stacks and caps both stack limits at 1 (SlotData.java:19-31).
+- **INV-IVC-02 [V][SYS]** `guiId` order is `{RocketBuilder, BlastFurnace, OreMappingSatellite, StationChip}`; `OreMappingSatellite.ordinal()==2` is the wire value both `openGui` sites and the handler agree on (GuiHandler.java:67-72; ItemOreScanner.java:86). FOR: wire format: openGui id agreed by both sites.
+- **INV-IVC-03 [T][BEH]** Clicking a selector button whose id is a planet dim (`0 ≤ id < STAR_ID_OFFSET=10000`) registers a server-side selection (`hasSelection:true`, `selectedDim`). Pinned by `MachineGuiClientGroupTest#selectingPlanetUpdatesServerSelection`.
+- **INV-IVC-04 [V][SYS]** `ModuleSatelliteTerminal` transports exactly 4 int lanes `{status,ppt,data,max}` and force-refreshes on each `PERIOD_TICKS=9` bucket edge (ModuleSatelliteTerminal.java:37-39,84,118-133). FOR: wire format: terminal lanes.
+- **INV-IVC-05 [V][BEH]** `SlotData` accepts only `IDataItem` stacks and caps both stack limits at 1 (SlotData.java:19-31).
 - **INV-IVC-06 [V]** Terminal/data status is computed only under `!world.isRemote`; the client path only rebuilds display text (ModuleSatelliteTerminal.java:92,108,150-153).
-- **INV-IVC-07 [V]** A scroll position belongs to the machine whose list it is: two machines never share one (each holds its own `ScrollMemory`), and it dies with the client copy of that machine (TileOrbitalRegistry.java:66; TileObservatory.java:71). There is no static slot shared by every GUI.
-- **INV-IVC-08 [V]** `Constants.STAR_ID_OFFSET` partitions the selector id space: `currentSystem < STAR_ID_OFFSET` ⇒ planet dim, else star system; star buttons carry `id + STAR_ID_OFFSET` (ModulePlanetSelector.java:103,218,436-440).
+- **INV-IVC-07 [V][BEH]** A scroll position belongs to the machine whose list it is: two machines never share one (each holds its own `ScrollMemory`), and it dies with the client copy of that machine (TileOrbitalRegistry.java:66; TileObservatory.java:71). There is no static slot shared by every GUI.
+- **INV-IVC-08 [V][SYS]** `Constants.STAR_ID_OFFSET` partitions the selector id space: `currentSystem < STAR_ID_OFFSET` ⇒ planet dim, else star system; star buttons carry `id + STAR_ID_OFFSET` (ModulePlanetSelector.java:103,218,436-440). FOR: wire format: selector id space.
 
 ## Failure modes & edge cases
 
@@ -132,7 +132,7 @@ config gate that disables these GUIs; they are reachable whenever their host til
 
 ## Test coverage
 
-- INV-IVC-03 → `src/test/java/.../client/PlanetSelectorGuiE2ETest.java:35-64` (place selector, click a planet button, assert server-side selection).
+- INV-IVC-03 → `MachineGuiClientGroupTest#selectingPlanetUpdatesServerSelection` (place selector, click a planet button, assert server-side selection).
 - INV-IVC-01/02/04/05/07 → no direct unit test found (open question below).
 
 ## Open questions

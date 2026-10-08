@@ -61,10 +61,10 @@ one compound per lane. `WorldDummy`/`MapStorageDummy`/`DummySaveHandler` persist
 - **INV-WGEN-18 [V]** `WorldDummy` never ticks, never loads chunks, and reports a
   constant sky light of 15 (`WorldDummy.java:87-100,127-141`) — a render-only
   world.
-- **INV-WGEN-19 [V]** `TeleporterSeekBlock` returns the base position unchanged if
+- **INV-WGEN-19 [V][BEH]** `TeleporterSeekBlock` returns the base position unchanged if
   no 2-high air gap exists below world height (`TeleporterSeekBlock.java:17-23`).
-- **INV-WGEN-20 [V]** `MultiData` lanes survive an NBT round-trip with their type
-  preserved even at amount 0 (`MultiData.java:112-121`).
+- **INV-WGEN-20 [V][SYS]** `MultiData` lanes survive an NBT round-trip with their type
+  preserved even at amount 0 (`MultiData.java:112-121`). FOR: save format: MultiData.
 - **INV-WGEN-21 [A]** `MultiData.SUPPORTED_TYPES` (`:22-27`) is declared but never
   referenced; assumed dead / documentation-only. Low impact.
 

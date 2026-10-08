@@ -144,6 +144,7 @@ public class FreeFlightPhysicsTest {
         assertEquals((float) -FreeFlightPhysics.PITCH_MAX, s.pitch, DELTA);
     }
 
+    /** Pins INV-RKT-12 (with thrust not permitted the craft is a Newtonian brick that only falls). */
     @Test
     public void cannotThrustDisablesThrustButStillRotatesAndApplyGravity() {
         Step s = FreeFlightPhysics.step(0, 0, 0, 0f, 0f,
@@ -173,6 +174,7 @@ public class FreeFlightPhysicsTest {
      * removed the acceleration ceiling too would pass a "goes very fast" assertion, and a build that
      * kept a speed cap anywhere would fail the total however small the cap was. The craft coasts
      * unaccelerated for the last stretch as a control — a cap would bite there too.</p>
+     * Pins INV-RKT-23 (free flight bounds acceleration and not speed).
      */
     @Test
     public void newtonianFlightBoundsAccelerationAndNotSpeed() {
@@ -209,6 +211,7 @@ public class FreeFlightPhysicsTest {
      * was short of orbital speed by a factor of ~130 — by its own numbers it could not reach orbit.
      *
      * <p>Flown at 0.1 blocks/tick², an ordinary rocket at thrust-to-weight 2, in vacuum.</p>
+     * Pins INV-RKT-23 (free flight bounds acceleration and not speed).
      */
     @Test
     public void aRocketAtOrdinaryThrustReachesFirstCosmicVelocity() {
@@ -230,6 +233,7 @@ public class FreeFlightPhysicsTest {
                 speed >= firstCosmicBlocksPerTick);
     }
 
+    /** Pins INV-RKT-23 (free flight bounds acceleration and not speed). */
     @Test
     public void thrustAccelClampedToMaxThrustAccel() {
         // A wildly over-thrusted rocket (thrustMag far above the arcade ceiling)
@@ -417,6 +421,7 @@ public class FreeFlightPhysicsTest {
      * <p>{@link FreeFlightPhysics#ambientDragFactor} is the decision, factored out so it can be
      * argued with here rather than inside a physics loop. It answers the retention multiplier for
      * ONE step: 1.0 keeps all the momentum, less than 1.0 takes some away.</p>
+     * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
      */
     @Test
     public void vacuumTakesNoMomentumAtAll() {
@@ -430,6 +435,7 @@ public class FreeFlightPhysicsTest {
      * The full-atmosphere end is pinned to the value the substrate used unconditionally, so wiring
      * density in changes VACUUM and nothing else. This is the whole claim of the minimal form: a
      * planet-side craft flies exactly as it did.
+     * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
      */
     @Test
     public void aFullAtmosphereRetainsExactlyWhatTheSubstrateAlwaysDid() {
@@ -438,7 +444,10 @@ public class FreeFlightPhysicsTest {
                 FreeFlightPhysics.AMBIENT_DRAG_AT_ONE_ATMOSPHERE, perGameTick, 1e-12);
     }
 
-    /** Retention falls monotonically as the air thickens — thicker air never takes LESS. */
+    /**
+     * Retention falls monotonically as the air thickens — thicker air never takes LESS.
+     * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
+     */
     @Test
     public void thickerAirNeverTakesLessMomentum() {
         double previous = Double.MAX_VALUE;
@@ -464,7 +473,10 @@ public class FreeFlightPhysicsTest {
         assertEquals("drag composes over time", whole, half * half, 1e-12);
     }
 
-    /** A density outside 0..1 is clamped rather than producing a nonsense multiplier. */
+    /**
+     * A density outside 0..1 is clamped rather than producing a nonsense multiplier.
+     * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
+     */
     @Test
     public void anAbsurdDensityIsClampedNotObeyed() {
         assertEquals("negative density is vacuum",

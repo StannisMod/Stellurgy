@@ -92,35 +92,35 @@ budget cap, MECH-MSN-06) and, for ore missions, `asteroidType` / `asteroidUUID` 
 
 ## Invariants
 
-- **INV-MSN-01 [V]** The gas save key is the literal `"gas"` carrying the fluid registry
-  name and the read resolves the fluid by it. `MissionGasCollection.java:127,138`.
-- **INV-MSN-02 [V]** `infrastructure` is a tag list of compounds each holding a 3-int
+- **INV-MSN-01 [V][SYS]** The gas save key is the literal `"gas"` carrying the fluid registry
+  name and the read resolves the fluid by it. `MissionGasCollection.java:127,138`. FOR: save format: mission survives restart (INV-MSN-03).
+- **INV-MSN-02 [V][SYS]** `infrastructure` is a tag list of compounds each holding a 3-int
   `loc` array; read repopulates `infrastructureCoords` with matching coords, guard
   `coords.length >= 3`. `MissionResourceCollection.java:212-218,239-245`. (Was `[T]`, same
-  deletion.)
-- **INV-MSN-03 [T]** A gas/ore mission survives a full server restart with its type and
-  `duration` intact and not dead. `MissionPersistenceRestartTest.java:107-140,144-...`.
-- **INV-MSN-04 [T]** `getProgress` is linear in world time and unbounded above 1.0;
+  deletion.) FOR: save format: mission survives restart (INV-MSN-03).
+- **INV-MSN-03 [T][BEH]** A gas/ore mission survives a full server restart with its type and
+  `duration` intact and not dead. `MissionPersistenceRestartTest.java:107-140,144-...`. Pinned by `MissionPersistenceRestartTest#gasMissionSurvivesServerRestart`, `MissionPersistenceRestartTest#oreMissionSurvivesServerRestart`.
+- **INV-MSN-04 [T][BEH]** `getProgress` is linear in world time and unbounded above 1.0;
   completion fires exactly at progress ≥ 1. `MissionLifecyclePyramidTest.java:91-134`;
-  code `MissionResourceCollection.java:85-86,144-147`.
-- **INV-MSN-05 [T]** Ore completion always leaves a blank asteroid chip in guidance
+  code `MissionResourceCollection.java:85-86,144-147`. Pinned by `MissionLifecyclePyramidTest#progressAdvancesLinearlyWithWorldTime`, `MissionLifecyclePyramidTest#progressIsUnboundedAboveOne`, `MissionLifecyclePyramidTest#completionFiresAtProgressOne`.
+- **INV-MSN-05 [T][BEH]** Ore completion always leaves a blank asteroid chip in guidance
   slot 0 on the respawned rocket. `MissionOreCompletionTest.java:81-95`; code
-  `MissionOreMining.java:172-174`.
-- **INV-MSN-06 [T]** Ore completion with `drillingPower == 0` performs no harvest (only
+  `MissionOreMining.java:172-174`. Pinned by `MissionOreCompletionTest#oreCompletionAlwaysRefillsGuidanceWithBlankAsteroidChip`.
+- **INV-MSN-06 [T][BEH]** Ore completion with `drillingPower == 0` performs no harvest (only
   the refill chip). `MissionOreCompletionTest.java:98-123`; code guard
-  `MissionOreMining.java:97`.
-- **INV-MSN-07 [T]** Gas completion fills fluid tiles only when `intakePower > 0`.
-  `MissionGasCompletionTest.java:105-160`; code `MissionGasCollection.java:44-47`.
-- **INV-MSN-08 [T]** Completion unlinks all infrastructure from the mission and links it
+  `MissionOreMining.java:97`. Pinned by `MissionOreCompletionTest#oreCompletionSkipsHarvestWhenDrillingPowerZero`.
+- **INV-MSN-07 [T][BEH]** Gas completion fills fluid tiles only when `intakePower > 0`.
+  `MissionGasCompletionTest.java:105-160`; code `MissionGasCollection.java:44-47`. Pinned by `MissionGasCompletionTest#gasCompletionDoesNotFillFluidWhenIntakePowerZero`, `MissionGasCompletionTest#gasCompletionFillsRocketFluidTilesWithConfiguredFluid`.
+- **INV-MSN-08 [T][BEH]** Completion unlinks all infrastructure from the mission and links it
   to the respawned rocket. `MissionInfrastructureLifecycleTest.java:139-197`; code
-  `MissionOreMining.java:183-189`, `MissionGasCollection.java:114-120`.
-- **INV-MSN-09 [V]** `failureChance` is 0, `canTick` is true, `performAction` false,
+  `MissionOreMining.java:183-189`, `MissionGasCollection.java:114-120`. Pinned by `MissionInfrastructureLifecycleTest#completionUnlinksInfrastructureFromMission`, `MissionInfrastructureLifecycleTest#completionLinksInfrastructureToRespawnedRocket`, `MissionInfrastructureLifecycleTest#startLinksInfrastructureToMission`.
+- **INV-MSN-09 [V][BEH]** `failureChance` is 0, `canTick` is true, `performAction` false,
   `getInfo` null — the base is a passive countdown with no player interaction.
   `MissionResourceCollection.java:104-117,94-97`; pinned only as far as
   `defaultMissionSerialisesToNbtWithoutThrowing` (`MissionResourceCollectionContractTest.java:23-32`).
-- **INV-MSN-10 [V]** `duration` is clamped to ≥ 1 tick at construction, so
+- **INV-MSN-10 [V][SYS]** `duration` is clamped to ≥ 1 tick at construction, so
   `getProgress` never divides by zero for live missions.
-  `MissionResourceCollection.java:57-60`.
+  `MissionResourceCollection.java:57-60`. FOR: INV-MSN-04.
 - **INV-MSN-11 [V]** Completion only ever runs server-side and only when the launch world
   is loaded — `tickEntity` returns early on remote/null overworld and null launch world.
   `MissionResourceCollection.java:134-142`.

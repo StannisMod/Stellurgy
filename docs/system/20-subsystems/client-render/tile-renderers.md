@@ -92,13 +92,13 @@ the tile (progress/enabled) or wall-clock; no client-side persistence.
 
 ## Invariants
 
-- **INV-CLR-17 [V]** No machine model renders unless `canRender()` is true (multiblock formed &
+- **INV-CLR-17 [V][BEH]** No machine model renders unless `canRender()` is true (multiblock formed &
   ready) — the universal first guard. `RendererLathe.java:37-38`, `RenderBeacon.java:34-35`.
-- **INV-CLR-18 [V]** Progress animation is normalised `getProgress(0)/getTotalProgress(0)`, so it is
+- **INV-CLR-18 [V][BEH]** Progress animation is normalised `getProgress(0)/getTotalProgress(0)`, so it is
   independent of the (tunable) recipe duration. `RendererLathe.java:52`.
 - **INV-CLR-19 [V]** `RendererLathe` defends against a null `getOutputs()` (open within the first
   tick) before reading the material colour. `RendererLathe.java:74-78`.
-- **INV-CLR-20 [A]** Real-time (`System.currentTimeMillis()`) animations keep spinning while the
+- **INV-CLR-20 [A][BEH]** Real-time (`System.currentTimeMillis()`) animations keep spinning while the
   game is paused and are not tick-synced — assumed cosmetic-only. `RenderBeacon.java:52`.
 
 ## Failure modes & edge cases

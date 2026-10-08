@@ -116,6 +116,7 @@ public class PerDimWorldInfoMasterToggleTest extends AbstractSharedServerTest {
         return reply.text("value");
     }
 
+    /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
     @Test
     public void masterOffLeavesPlanetOnVanillaWorldInfo() throws Exception {
         assertDimRegistered(MASTER_OFF_DIM);

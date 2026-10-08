@@ -25,28 +25,28 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
 ## Clauses
 
 **Derivation & recompute**
-- **STAT-1** `[A]` Every tier-2 flight characteristic (linear authority per axis, angular authority,
+- **STAT-1** `[A][SYS]` Every tier-2 flight characteristic (linear authority per axis, angular authority,
   mass, drivePower, shield capacity-per-direction, energy gen/draw) is DERIVED from the built hull,
   never a compile-time constant; a force that cancels mass exactly (`force = accel·mass`) would make
-  every craft fly identically.
-- **STAT-2** `[A]` The vector is a live-recomputed VIEW — it re-derives on hull change (build, damage,
+  every craft fly identically. FOR: INV-SFM-10.
+- **STAT-2** `[A][SYS]` The vector is a live-recomputed VIEW — it re-derives on hull change (build, damage,
   repair) with no re-assembly. No derived stat is persisted (persisting it re-introduces the
-  staleness this design exists to avoid).
-- **STAT-3** `[A]` Durable, non-derivable state lives in its OWNING tile's NBT and rides the ship via
+  staleness this design exists to avoid). FOR: INV-SFM-10.
+- **STAT-3** `[A][SYS]` Durable, non-derivable state lives in its OWNING tile's NBT and rides the ship via
   `StorageChunk` cut/paste (AFC precedent `TileAdvancedFlightComputer.java`) `[V]`; the
-  recompute READS it. A durable field NOT in its tile's NBT is a violation (lost across a crossing).
+  recompute READS it. A durable field NOT in its tile's NBT is a violation (lost across a crossing). FOR: save format: ship durable state rides the hull.
 
 **Identity & split**
-- **STAT-4** `[A]` Exactly one stat vector per ship, keyed on the AFC `shipId` (single ship marker).
-  A hull with no AFC has no vector.
-- **STAT-5** `[A]` On a craft split, the AFC-bearing fragment keeps its `shipId` and live-recomputes
+- **STAT-4** `[A][SYS]` Exactly one stat vector per ship, keyed on the AFC `shipId` (single ship marker).
+  A hull with no AFC has no vector. FOR: INV-SFM-10.
+- **STAT-5** `[A][BEH]` On a craft split, the AFC-bearing fragment keeps its `shipId` and live-recomputes
   its now-reduced vector; an AFC-less fragment is inert debris (no vector, no jump, no controllable
   flight). Installing an AFC into a debris fragment mints a fresh `shipId`
   (`getOrCreateShipId`) `[V]` and recomputes a vector from its blocks — the ordinary marker path, no
   split-time special logic.
 
 **Mass**
-- **STAT-6** `[A]` **One mass model for EVERY physo, in kilograms, with no calibration factor.** Mass is
+- **STAT-6** `[A][SYS]` **One mass model for EVERY physo, in kilograms, with no calibration factor.** Mass is
   computed by Stellurgy's mass model (`ship/mass`, built on `WeightEngine`, `util/WeightEngine.java`) and
   written into the physics engine's own record by one boundary writer
   (`integration/vs/ShipInertiaWriter`, STAT-20); the engine's incremental accumulator
@@ -62,7 +62,7 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
   `BlockPhysicsDetails.getMassFromState` drop blockstate and tile contents (a full tank would weigh an
   empty one's mass) `[V]`. A VS-built craft that is not a Stellurgy ship weighs what the table says
   rather than a flat 500/block.
-  **Tier-1 half, in kilograms and newtons:**
+  **Tier-1 half, in kilograms and newtons:** FOR: INV-SFM-10.
 
   | what | where | value |
   |---|---|---|
@@ -90,18 +90,18 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
     separate quantity and is not scaled with the mass table: `weight-mass` MECH-WGT-07.
 
 **Authority (couples C9)**
-- **STAT-7** `[A]` Linear translation + braking authority is GEOMETRIC — thrust applied at each
+- **STAT-7** `[A][SYS]` Linear translation + braking authority is GEOMETRIC — thrust applied at each
   engine's own point (`PhysicsCalculations.addForceAtPoint`, public) so torque about the true centre
   of mass is produced for free; it must be BUILT, not granted. Attitude ADDITIONALLY admits
   an ADDITIVE, placement-independent, TORQUE-ONLY reaction wheel: count-additive,
   damage-degrading, with persistent player trim (durable, STAT-3). The thrust allocator
   combines geometric-thruster torque + additive wheel torque against pilot intent. **AMENDS C9
   SHIPCTL-2** ("motion corresponding to the input in axis and sign"): a hull is weak on an axis it
-  cannot cleanly deliver and never forced to yaw when the pilot presses forward (STAT-7b).
-- **STAT-7a** `[A]` A stat-derived authority must never exceed Stellurgy's own solver-stability speed guard
+  cannot cleanly deliver and never forced to yaw when the pilot presses forward (STAT-7b). FOR: INV-SFM-10.
+- **STAT-7a** `[A][SYS]` A stat-derived authority must never exceed Stellurgy's own solver-stability speed guard
   (a force-level ceiling bounding an OUTCOME, not merely a setpoint). In the built flight model the
-  bound is the velocity SETPOINT cap (`SHIP_MAX_SPEED`), not authority.
-- **STAT-7b** `[A]` Realising pilot intent is a **PER-AXIS AUTHORITY** model, signed, inertia-aware and
+  bound is the velocity SETPOINT cap (`SHIP_MAX_SPEED`), not authority. FOR: INV-SFM-10.
+- **STAT-7b** `[A][SYS]` Realising pilot intent is a **PER-AXIS AUTHORITY** model, signed, inertia-aware and
   solved under constraints (STAT-15..18), not a coupled wrench solve: for each of 6 axes the hull
   exposes a max CLEAN force/torque from geometry + the LIVE working-thruster state (fuel/power this
   tick); input is a signed % per axis; the system delivers that % of the axis authority. A degenerate
@@ -111,25 +111,25 @@ whose `ShipData.getUuid()` Stellurgy owns; **foreign ship** = any other physo.
   one; STAT-7a still binds whatever regime is live. The intent→per-thruster mapping is a swappable
   `ControlScheme` seam: the clean per-axis force above is the DEFAULT implementation; alternative
   schemes plug into the same seam over the same substrate, and the player selects the active one via
-  a synced setting (allocation stays server-side).
+  a synced setting (allocation stays server-side). FOR: INV-SFM-10.
 
 **System-projected readouts (the vector is assembled, not authored)**
-- **STAT-8** `[A]` Shield capacity enters the vector as a capacity-per-direction READOUT — a
+- **STAT-8** `[A][SYS]` Shield capacity enters the vector as a capacity-per-direction READOUT — a
   projection of the emitter-Voronoi field onto the hull's principal faces. The
-  field GEOMETRY is owned by the shield subsystem, never duplicated into the vector.
-- **STAT-9** `[A]` Drive stats (`drivePower`, `inFlightDraw`, `burstCost`) are contributed by the
+  field GEOMETRY is owned by the shield subsystem, never duplicated into the vector. FOR: INV-SFM-10.
+- **STAT-9** `[A][SYS]` Drive stats (`drivePower`, `inFlightDraw`, `burstCost`) are contributed by the
   hyperdrive field-generator scan; window coverage by the emitter scan.
-  The vector carries the readouts; the drive machines own the numbers.
-- **STAT-10** `[A]` ONE stat vector, assembled via a REGISTRATION SEAM each designed system
+  The vector carries the readouts; the drive machines own the numbers. FOR: INV-SFM-10.
+- **STAT-10** `[A][SYS]` ONE stat vector, assembled via a REGISTRATION SEAM each designed system
   contributes its readout to. No parallel stat vocabulary exists — capacity /
   recharge / upkeep / coverage are components of THIS vector, with each system specifying behaviour
-  only.
+  only. FOR: INV-SFM-10.
 
 **Survival & feedback**
-- **STAT-11** `[A]` The vector survives the frame-crossing paths — crossing, transit,
+- **STAT-11** `[A][BEH]` The vector survives the frame-crossing paths — crossing, transit,
   relog: durable inputs ride NBT (STAT-3) and derived stats recompute on
   load (STAT-2). Nothing is lost beyond what already rides the NBT.
-- **STAT-12** `[A]` **Tier-2 warns and builds on confirmation; tier-1 refuses.** The vector + per-direction
+- **STAT-12** `[A][BEH]` **Tier-2 warns and builds on confirmation; tier-1 refuses.** The vector + per-direction
   weak-spot flags are readable BEFORE flight on two co-primary surfaces: the AFC ship-info GUI
   (`IModularInventory`, LIVE) and the rocket-assembler GUI (snapshot on the existing Scan button,
   which already runs `scanRocket` `TileRocketAssemblingMachine.java`) `[V]`. Localization is

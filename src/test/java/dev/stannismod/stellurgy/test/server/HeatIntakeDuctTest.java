@@ -54,6 +54,7 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * the air's heat without the work: "the hot loop must receive what left the room PLUS the work
      * (air=6000 work=240 gained=6000)". The two premises at its head and the three before REPORTED
      * are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-20 (A powered chiller breathing a room cools it and heats its loop, and the loop receives exactly what left the air PLUS the work).
      */
     @Test
     public void aChillerBreathingARoomCoolsItAndHeatsItsLoop() throws Exception {
@@ -110,6 +111,7 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * <p>What the loop receives is not asserted here: it is paid only what the room gave up plus paid
      * work, so any fault that feeds it moves the room first, and the conservation between the two is
      * the powered scenario's clause.</p>
+     * Pins INV-HEAT-21 (An unpowered chiller leaves the room exactly where it was, with the same rig powered afterwards as the control).
      */
     @Test
     public void anUnpoweredChillerLeavesTheRoomAlone() throws Exception {

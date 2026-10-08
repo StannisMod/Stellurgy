@@ -872,6 +872,7 @@ public class ShipTransitManagerTest {
                 before, mgr.remainingDistance("s"), 0.0);
     }
 
+    /** Pins JUMP-6 (an aborted jump puts the crew back where they were). */
     @Test
     public void anAbortedDepartureIsANoOpForTheCrew() {
         // A jump that never leaves must leave nobody worse off. The capture runs FIRST — it has to,
@@ -1059,6 +1060,7 @@ public class ShipTransitManagerTest {
                 crosser.departs.contains(originDim + "@0"));
     }
 
+    /** Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of). */
     @Test
     public void bootDisposesOfEveryParkedShipNoRecordClaims() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
@@ -1087,6 +1089,7 @@ public class ShipTransitManagerTest {
      * The reconciliation must find a hull WHEREVER it is standing, and the lanes it has to reach are
      * precisely the ones no surviving record points at. Anything that derives the reach from what the
      * records reclaimed asks the orphans to announce themselves.
+     * Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of).
      */
     @Test
     public void anOrphanIsFoundInALaneNoSurvivingRecordCameNear() {

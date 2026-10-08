@@ -18,6 +18,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
     /** The array of registered command names this reply carries. */
     private static final String COMMANDS = "commands";
 
+    /** Pins INV-CMD-07 (the primary command and its help survive registration). */
     @Test
     public void primaryCommandsAreRegistered() throws Exception {
         String joined = String.join("\n", client().execute("stellurgytest commands list"));
@@ -32,6 +33,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
         assertTrue("Stellurgy's primary command missing from command list: " + joined, hasStellurgy);
     }
 
+    /** Pins INV-CMD-07 (the primary command and its help survive registration). */
     @Test
     public void stellurgyHelpCommandPrintsUsageWithoutCrash() throws Exception {
         // Stellurgy's primary command must surface usage text without crashing

@@ -35,6 +35,7 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
 
     private static final String ANGLE_PATTERN = "angle";
 
+    /** Pins INV-DIM-16 (A registered planet uses WorldProviderPlanet). */
     @Test
     public void providerClassIsWorldProviderPlanet() throws Exception {
         // Stellurgy registers Earth as dim 0 but keeps its vanilla WorldProviderSurface,

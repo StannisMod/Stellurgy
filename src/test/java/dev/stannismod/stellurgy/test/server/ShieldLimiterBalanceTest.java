@@ -27,6 +27,7 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
 
+    /** Pins INV-SHD-12 (a single cable carries more than a single emitter can absorb). */
     @Test
     public void cableCarriesMoreThanASingleEmitterAbsorbs() throws Exception {
         int x = 1070, z = 900;

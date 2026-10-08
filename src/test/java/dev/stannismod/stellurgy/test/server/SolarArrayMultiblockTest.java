@@ -30,6 +30,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7500;
 
+    /** Pins INV-MBM-09 (the solar array validates only with all panels and flanking plugs and a stone wildcard breaks it). */
     @Test
     public void solarArrayMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
         String fixture = join(client().execute(
@@ -50,6 +51,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
                 Reply.of(tryComplete).bool("isComplete"));
     }
 
+    /** Pins INV-MBM-09 (the solar array validates only with all panels and flanking plugs and a stone wildcard breaks it). */
     @Test
     public void solarArrayMultiblockInvalidatesWhenFlankingPlugRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
@@ -72,6 +74,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
                 (!Reply.of(broken).bool("isComplete")));
     }
 
+    /** Pins INV-MBM-09 (the solar array validates only with all panels and flanking plugs and a stone wildcard breaks it). */
     @Test
     public void solarArrayMultiblockInvalidatesWhenWildcardCellFilledWithStone() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;

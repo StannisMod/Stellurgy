@@ -140,6 +140,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         return Integer.parseInt(emReply.text(ENT_ID));
     }
 
+    /** Pins INV-INFRA-02 (a redstone rising edge on a linked monitor triggers one launch attempt). */
     @Test
     public void risingRedstoneEdgeFiresPrepareLaunchExactlyOnce_andSustainedDoesNotRefire()
             throws Exception {
@@ -192,6 +193,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
                 0, afterSustained - afterFirstTick);
     }
 
+    /** Pins INV-INFRA-02 (a redstone rising edge on a linked monitor triggers one launch attempt). */
     @Test
     public void fallingRedstoneEdgeResetsTheGate_andSecondRisingEdgeRefires()
             throws Exception {

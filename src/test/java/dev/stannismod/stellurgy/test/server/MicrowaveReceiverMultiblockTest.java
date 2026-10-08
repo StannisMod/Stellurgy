@@ -27,6 +27,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7000;
 
+    /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
     @Test
     public void microwaveReceiverMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
         String fixture = join(client().execute(
@@ -47,6 +48,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
                 Reply.of(tryComplete).bool("isComplete"));
     }
 
+    /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
     @Test
     public void microwaveReceiverMultiblockInvalidatesWhenCornerPanelRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
@@ -68,6 +70,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
                 (!Reply.of(broken).bool("isComplete")));
     }
 
+    /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
     @Test
     public void microwaveReceiverMultiblockInvalidatesWhenAdjacentPanelRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;

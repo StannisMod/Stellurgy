@@ -46,6 +46,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
     private static final int CX_GRAV    = 9100;
     private static final int CX_ALT     = 9200;
 
+    /** Pins INV-STN-13 (all three controllers place and tick without error). */
     @Test
     public void orientationControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(
@@ -53,6 +54,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
                 "TileStationOrientationController");
     }
 
+    /** Pins INV-STN-13 (all three controllers place and tick without error). */
     @Test
     public void gravityControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(
@@ -60,6 +62,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
                 "TileStationGravityController");
     }
 
+    /** Pins INV-STN-13 (all three controllers place and tick without error). */
     @Test
     public void altitudeControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(

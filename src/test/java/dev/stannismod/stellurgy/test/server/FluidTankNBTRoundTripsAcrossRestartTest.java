@@ -68,6 +68,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         if (secondBoot != null) secondBoot.close();
     }
 
+    /** Pins INV-INFRA-24 (Fluid injected into a pressure tank survives a server restart at the same coords). */
     @Test
     public void liquidTankRetainsOxygenContentAcrossRestart() throws Exception {
         // ─────── Boot 1: place tank, inject oxygen, save & shut down ───────

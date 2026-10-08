@@ -46,7 +46,7 @@ layers **above** and **below** it are missing.
   properties of a relation between bodies.
 - **BODY-6** `[A]` **A black hole is a compact object, not a star** — it sits in the family axis, and
   nothing may read a boolean beside a star to find one.
-- **BODY-7** `[A]` **Speculative objects are not generated.** Black dwarf, quark/strange star, boson star,
+- **BODY-7** `[A][BEH]` **Speculative objects are not generated.** Black dwarf, quark/strange star, boson star,
   gravastar, wormhole, quasi-star may exist as addon extension points and never as normal generated classes.
 
 ## What classification is FOR — and what it is not

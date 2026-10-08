@@ -150,6 +150,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
      * fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and
      * {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},
      * {@code weight:7.049999f} and the seat (2026-10-02).
+     * Pins INV-API-10 (writeToNBT wraps in rocketStats).
      */
     @Test
     public void statsReadThroughTheApiFactoryWriteWhatTheRocketWrote() throws Exception {

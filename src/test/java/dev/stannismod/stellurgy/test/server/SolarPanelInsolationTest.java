@@ -101,6 +101,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
         return after - initial;
     }
 
+    /** Pins INV-INFRA-26 (A solar panel in aStellurgy dimension gains energy on a forced tick, scaled by insolation). */
     @Test
     public void solarPanelGeneratesInNonOverworldStellurgyDim() throws Exception {
         // Most basic non-zero check: a solar panel in a Stellurgy dim that isn't

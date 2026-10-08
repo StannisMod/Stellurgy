@@ -49,6 +49,7 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
      * "and is breathable: … \"breathableAir\":false". The premises (the composition arrived, it is
      * not breathable, the label is {@code lowO2}, the room was refilled) are arrangements and are
      * not witnessed.</p>
+     * Pins INV-ATM-21 (fire and lungs are two different questions about the same gas).
      */
     @Test
     public void aRoomTooThinToBurnRefusesFireWhileItsLabelStillSaysOtherwise() throws Exception {

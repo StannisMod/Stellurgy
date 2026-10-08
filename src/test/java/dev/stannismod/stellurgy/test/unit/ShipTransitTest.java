@@ -89,6 +89,7 @@ public class ShipTransitTest {
         assertTrue(flight(100L).advance(-5).arrived());
     }
 
+    /** Pins ADDR-12 (a mid-transit position is stored as origin name, target name and progress). */
     @Test
     public void bothEndsOfTheFlightSurviveIt() {
         // The names are what the arrival is realized against, so they must be exactly what was set:

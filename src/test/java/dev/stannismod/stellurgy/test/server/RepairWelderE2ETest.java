@@ -42,6 +42,8 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
      * {...materialBefore:64,materialAfter:64...}". The stage and charge verdicts were not separately
      * witnessed. 2026-09-30, taken on the pre-change form {@code RepairCost.consume(player, cost, false);},
      * which is now the instance call named above.
+     * Pins REPAIR-1 (a repair lowers one stage or fills a hole and does nothing else).
+     * Pins REPAIR-3 (material and charge leave on a repair and neither leaves on a refusal).
      */
     @Test
     public void oneUseTakesOneStageAndIsPaidForTwice() throws Exception {
@@ -66,6 +68,8 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
      * NO_MATERIALS return, this fails with "a refused repair spent charge: {...outcome:NO_MATERIALS,
      * energyBefore:100000,energyAfter:98000...}". The later refusals' verdicts were not separately
      * witnessed. 2026-09-30.
+     * Pins REPAIR-3 (material and charge leave on a repair and neither leaves on a refusal).
+     * Pins REPAIR-7 (a bay that cannot work says why: every refusal is its own answer).
      */
     @Test
     public void everyRefusalIsItsOwnAnswerAndCostsNothing() throws Exception {

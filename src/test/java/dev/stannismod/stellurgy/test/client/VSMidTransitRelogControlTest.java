@@ -93,6 +93,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
      * craft is in a world other than the one it was first flown in, this fails with "held input must
      * MOVE THE ARRIVED SHIP", every one of the client's gate readings open and his inputs sent — the
      * fault named as the computer's, not the wire's — 2026-09-28.</p>
+     * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
     @Test
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {

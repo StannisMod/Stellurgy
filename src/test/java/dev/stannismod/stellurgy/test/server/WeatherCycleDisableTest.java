@@ -82,6 +82,7 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
         return DimWeather.forDim(this::cmd, dim).requireDim(dim);
     }
 
+    /** Pins INV-WGEN-15 (with custom weather disabled the cycle defers to vanilla, and planet rain survives a restart). */
     @Test
     public void customWeatherCycleRunsOnlyWhenConfigEnabled() throws Exception {
 

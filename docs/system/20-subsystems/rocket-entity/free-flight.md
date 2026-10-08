@@ -129,35 +129,35 @@ re-seeded per flight.
 
 ## Invariants
 
-- **INV-RKT-07 [V]** Attitude source of truth is the quaternion; Euler is derived
+- **INV-RKT-07 [T][SYS]** Attitude source of truth is the quaternion; Euler is derived
   each tick and never integrated `EntityRocket.java:1104`, `FreeFlightPhysics.java:301`.
   Pinned: `bodyBasis` reproduces the quaternion basis near identity
-  `FreeFlightAttitudeTest.java:49`, orthonormality `:137`.
-- **INV-RKT-08 [T]** Every `FreeFlightInput` channel is clamped to [-1,1] and NaN/Inf
+  `FreeFlightAttitudeTest.java:49`, orthonormality `:137`. Pinned by `FreeFlightAttitudeTest#eulerFromQuatRoundTripsBodyBasis`, `FreeFlightAttitudeTest#identityBasisMatchesEulerZero`, `FreeFlightAttitudeTest#derivedBasisIsOrthonormalRightHanded`. FOR: INV-RKT-23.
+- **INV-RKT-08 [T][SYS]** Every `FreeFlightInput` channel is clamped to [-1,1] and NaN/Inf
   →0 on construct/read `FreeFlightInput.java:79`,`:94`; pinned
-  `FreeFlightInputTest.java:41,52,70`.
-- **INV-RKT-09 [T]** FF entry requires fuel AND TWR>1 via `canStartFreeFlight`; a
+  `FreeFlightInputTest.java:41,52,70`. Pinned by `FreeFlightInputTest#constructorClampsAboveOne`, `FreeFlightInputTest#constructorClampsBelowMinusOne`, `FreeFlightInputTest#constructorCollapsesNanAndInfinityToZero`, `FreeFlightInputTest#clampStaticHelperBehaviour`, `FreeFlightInputTest#readReclampsOutOfRangeWireValues`. FOR: INV-RKT-23.
+- **INV-RKT-09 [T][BEH]** FF entry requires fuel AND TWR>1 via `canStartFreeFlight`; a
   fuelless FF rocket stays grounded after `prepareLaunch`
-  `EntityRocket.java:2575`; pinned `FreeFlightLaunchGateTest.java:82`.
+  `EntityRocket.java:2575`; pinned `FreeFlightLaunchGateTest.java:82`. Pinned by `FreeFlightLaunchGateTest#fuellessFreeFlightRocketStaysGroundedOnPrepareLaunch`.
 - **INV-RKT-10** — retired. Free flight is bounded by ACCELERATION, not by a speed cap; see INV-RKT-23.
-- **INV-RKT-11 [T]** Setpoint ramp: held key adds `SETPOINT_RAMP`/tick, cut zeroes,
+- **INV-RKT-11 [T][SYS]** Setpoint ramp: held key adds `SETPOINT_RAMP`/tick, cut zeroes,
   magnitude clamped to `FA_SETPOINT_MAX_SPEED` `FreeFlightPhysics.java:651`; pinned
-  `FreeFlightAssistsTest.java:41,55,63`.
-- **INV-RKT-12 [T]** Zero input + gravity-only when thrust not permitted →
+  `FreeFlightAssistsTest.java:41,55,63`. Pinned by `FreeFlightAssistsTest#holdingForwardRampsTheSetpoint`, `FreeFlightAssistsTest#releasingTheKeyKeepsTheSetpoint`, `FreeFlightAssistsTest#cutZeroesTheWholeSetpointInstantly`, `FreeFlightAssistsTest#setpointMagnitudeIsClampedToTheAssistCeiling`. FOR: INV-RKT-23.
+- **INV-RKT-12 [T][BEH]** Zero input + gravity-only when thrust not permitted →
   Newtonian brick (`motionY -= gravity`) `FreeFlightPhysics.java:397,526`; pinned
-  `FreeFlightPhysicsTest.java:64`.
+  `FreeFlightPhysicsTest.java:64`. Pinned by `FreeFlightPhysicsTest#cannotThrustDisablesThrustButStillRotatesAndApplyGravity`, `FreeFlightAssistsTest#noFuelMeansNewtonianBrick`.
 - **INV-RKT-13 [V]** FF physics/fuel run server-side only; `tickFreeFlight` early-returns
   on `world.isRemote` and on non-FF/not-in-flight `EntityRocket.java:1022`.
-- **INV-RKT-14 [T]** FF mode selection is passenger-gated and refused in flight
-  `EntityRocket.java:3348`; round-trip pinned `FreeFlightCycleTest.java:108,160`.
-- **INV-RKT-23 [T]** Free flight bounds ACCELERATION and not speed: no step path caps
+- **INV-RKT-14 [V][BEH]** FF mode selection is passenger-gated and refused in flight
+  `EntityRocket.java:3348`. No test selects the mode with and without a passenger.
+- **INV-RKT-23 [T][BEH]** Free flight bounds ACCELERATION and not speed: no step path caps
   velocity, and no tick may add more than `MAX_THRUST_ACCEL`
   `FreeFlightPhysics.java:414,448,683,747`. So burning for `n` ticks buys exactly
   `n × MAX_THRUST_ACCEL`, and a rocket at an ordinary 0.1 b/t² reaches first cosmic
   velocity (395 b/t) in 3 950 ticks; pinned by both legs together
   `FreeFlightPhysicsTest.java:172,208` and, for the assist, by the no-rewrite leg
-  `FreeFlightAssistsTest.java:200`. Replaces the retired INV-RKT-10.
-- **INV-RKT-24 [T]** A craft's speed is bounded by WHERE IT IS, not by the law: every free-flight
+  `FreeFlightAssistsTest.java:200`. Replaces the retired INV-RKT-10. Pinned by `FreeFlightPhysicsTest#newtonianFlightBoundsAccelerationAndNotSpeed`, `FreeFlightPhysicsTest#aRocketAtOrdinaryThrustReachesFirstCosmicVelocity`, `FreeFlightPhysicsTest#thrustAccelClampedToMaxThrustAccel`.
+- **INV-RKT-24 [T][BEH]** A craft's speed is bounded by WHERE IT IS, not by the law: every free-flight
   law's result passes through `FreeFlightPhysics.atmosphericDrag` before it is applied
   `EntityRocket.java` (post-law, one call site), so the bound is the dimension's own atmospheric
   density and in vacuum there is none. Drag is quadratic in speed, linear in density, applied along
@@ -167,7 +167,7 @@ re-seeded per flight.
   (`MAX_THRUST_ACCEL / v_term²`) rather than tuned. This is the half of the removed speed cap that
   had to come back somewhere: INV-RKT-23 lets a craft arrive at a planet arbitrarily fast, and this
   is what charges it — in time, the only currency the acceleration law has.
-  **The number is derived, NOT ratified**; heating/damage on entry is deliberately not implemented.
+  **The number is derived, NOT ratified**; heating/damage on entry is deliberately not implemented. Pinned by `FreeFlightPhysicsTest#vacuumTakesNoMomentumAtAll`, `FreeFlightPhysicsTest#thickerAirNeverTakesLessMomentum`, `FreeFlightPhysicsTest#anAbsurdDensityIsClampedNotObeyed`, `FreeFlightPhysicsTest#aFullAtmosphereRetainsExactlyWhatTheSubstrateAlwaysDid`.
 
 ## Failure modes & edge cases
 

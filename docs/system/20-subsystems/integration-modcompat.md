@@ -74,17 +74,17 @@ seam-*.tsv greps for these files returned empty).
   `Loader.isModLoaded` guard at the caller, so absent mods never trigger classloading of
   MO/GC types. `AtmosphereNeedsSuit.java:33`, `StellurgyConfiguration.java:785`,
   `Stellurgy.java:1149`.
-- **INV-MODC-02** [V] GC suffocation is cancelled for ALL entities passed to
+- **INV-MODC-02** [V][BEH] GC suffocation is cancelled for ALL entities passed to
   `GCSuffocationEvent`, not just players — the `setCanceled(true)` is outside the
   `instanceof EntityPlayer` block; only the stats mutation is player-gated.
   `GalacticCraftHandler.java:19-25`.
-- **INV-MODC-03** [V] GC handlers are inert unless BOTH `galacticraftcore` present and
+- **INV-MODC-03** [V][BEH] GC handlers are inert unless BOTH `galacticraftcore` present and
   `overrideGCAir==true`; disabling the config flag fully removes the behaviour (no
   registration path). `Stellurgy.java:1149-1154`.
 - **INV-MODC-04** [V] `CompatibilityMgr.gregtechLoaded`/`thermalExpansionLoaded` are never
   read anywhere in `src/`; they are set false in the ctor and only updated by
   `getLoadedMods()`, which has no caller. `CompatibilityMgr.java:8-20` (grep: 0 readers).
-- **INV-MODC-05** [A] MO android immunity is intended to be an early short-circuit before
+- **INV-MODC-05** [A][BEH] MO android immunity is intended to be an early short-circuit before
   the armour checks; inferred from ordering, no test pins the MO branch (no `matteroverdrive`
   on the test classpath). `AtmosphereNeedsSuit.java:33-35`.
 

@@ -77,11 +77,11 @@ Config: see `C4-config-surface`.
 
 ## Invariants
 
-- **INV-MBM-13** [T] A centrifuge and a crystallizer run a full recipe end-to-end producing the
-  expected output. `CentrifugeRecipeEndToEndTest`, `CrystallizerRecipeEndToEndTest`.
-- **INV-MBM-14** [V] `reloadRecipesSpecial` is idempotent: it removes the prior special set before
+- **INV-MBM-13** [T][BEH] A centrifuge and a crystallizer run a full recipe end-to-end producing the
+  expected output. `CentrifugeRecipeEndToEndTest`, `CrystallizerRecipeEndToEndTest`. Pinned by `CentrifugeRecipeEndToEndTest#centrifugeRunsFirstRegisteredRecipe`, `CrystallizerRecipeEndToEndTest#crystallizerRunsFirstRegisteredRecipe`.
+- **INV-MBM-14** [V][BEH] `reloadRecipesSpecial` is idempotent: it removes the prior special set before
   regenerating, so repeated reloads never duplicate suit recipes. `TileChemicalReactor.java:49-77`.
-- **INV-MBM-15** [V] The crystallizer's gravity gate blocks *accrual* (`onRunningPoweredTick`),
+- **INV-MBM-15** [V][BEH] The crystallizer's gravity gate blocks *accrual* (`onRunningPoweredTick`),
   not merely the GUI text. `TileCrystallizer.java:62-67`.
 
 ## Test coverage

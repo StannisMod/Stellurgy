@@ -521,6 +521,7 @@ public class SystemRetinueTest {
 
     // ─── E2: moons ─────────────────────────────────────────────────────────────
 
+    /** Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none). */
     @Test
     public void moonsExistAndGetTheirOwnCellsInsideTheirParentsZone() {
         // Without moons the whole outer system is look-only: nothing out there is landable, because the
@@ -560,6 +561,7 @@ public class SystemRetinueTest {
         assertTrue("a sweep of systems must produce moons", moons > MIN_MOONS);
     }
 
+    /** Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none). */
     @Test
     public void aMoonIsSomewhereElseThanItsParentAndKeepsMoving() {
         // A moon that stood exactly where its planet does would be one address with two bodies in it,

@@ -123,7 +123,9 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  terraformSpeed} (default 18000) onRunningPoweredTick() calls, each
      *  consuming {@code terraformliquidRate = 40} mB of both N2 and O2.
      *  The test runs in a fill&rarr;tick refill loop because no fluid hatch
-     *  can hold the full 18000×40 = 720000 mB single-step requirement.</p> */
+     *  can hold the full 18000×40 = 720000 mB single-step requirement.</p>
+     * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
+     */
     @Test
     public void nativePlanetTerraformerWithFuelAndPowerStepsDensity() throws Exception {
         assertDimIsNativeStellurgyPlanet();
@@ -179,7 +181,9 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
     }
 
     /** Counter-test: fuel hatch empty &rarr; setOOF(true) &rarr; no power consumed,
-     *  no progress, no density mutation. Pins the fuel-required branch. */
+     *  no progress, no density mutation. Pins the fuel-required branch.
+     * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
+     */
     @Test
     public void nativePlanetTerraformerWithoutFuelDoesNotStep() throws Exception {
         assertDimIsNativeStellurgyPlanet();
@@ -211,7 +215,9 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  {@code Integer.MAX_VALUE >> 4} unconditionally. Skipping
      *  {@code energy inject} still leaves the controller with effectively
      *  infinite aggregated power, so this counter-test wouldn't actually
-     *  exercise the no-power branch without the explicit clear.</p> */
+     *  exercise the no-power branch without the explicit clear.</p>
+     * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
+     */
     @Test
     public void nativePlanetTerraformerWithoutPowerDoesNotStep() throws Exception {
         assertDimIsNativeStellurgyPlanet();

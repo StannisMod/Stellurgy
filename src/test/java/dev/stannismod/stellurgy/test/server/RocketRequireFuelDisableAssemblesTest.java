@@ -78,6 +78,7 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
      * <p>red-witnessed: 2026-10-05, with {@code TileRocketAssemblingMachine#scanRocket} at {@code scannedFlightComputerPos == null}
      * dropped from the NOFUEL branch (the reach check asked of every build), this fails with "a ship must assemble with
      * fuel required even though its tanks cannot reach orbit".</p>
+     * Pins INV-RASM-13 (The burn-distance NOFUEL ("can its tanks carry it to orbit", hasEnoughFuel) is asked of a ROCKET only).
      */
     @Test
     public void aShipIsNotHeldToTheClimbToOrbitThatARocketIs() throws Exception {
@@ -100,6 +101,7 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
         }
     }
 
+    /** Pins INV-RASM-06 (with rocketRequireFuel off a valid structure still assembles). */
     @Test
     public void validRocketAssemblesWhenFuelNotRequired() throws Exception {
         try (ConfigFlag restored = ConfigFlag.set(this::cmd, "rocketRequireFuel", true)) {

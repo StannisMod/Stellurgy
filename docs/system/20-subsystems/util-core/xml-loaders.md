@@ -70,20 +70,20 @@ world NBT themselves. `OreGenProperties` keeps a process-wide static
 
 ## Invariants
 
-- **INV-XML-01 [T]** A malformed planet definition is skipped, not fatal; the rest of the
+- **INV-XML-01 [T][BEH]** A malformed planet definition is skipped, not fatal; the rest of the
   galaxy still loads. `test/server/PlanetDefsFaultToleranceTest.java`,
-  `test/integration/XMLPlanetLoaderTest.java`, `test/unit/XMLPlanetLoaderTest.java`.
-- **INV-XML-02 [V]** `readAllPlanets` throws if `<galaxy>` is absent.
-  `XMLPlanetLoader.java:1139-1141`.
-- **INV-XML-03 [V]** Ore `<oreGen>` with neither `pressure` nor `temp` is skipped.
-  `XMLOreLoader.java:303-307`.
-- **INV-XML-04 [V]** Ore heights are clamped into legal world range at parse time, so no
-  out-of-range `OreEntry` reaches world-gen. `XMLOreLoader.java:73,89,105,121`.
-- **INV-XML-05 [T]** Asteroid dimensions actually contain asteroids after config load
-  (end-to-end). `test/server/AsteroidDimensionContainsAsteroidsTest.java`.
-- **INV-XML-06 [V]** `XMLAsteroidLoader.getStack` accepts both `;`-delimited (new) and
-  space-delimited (legacy) `name;meta` forms. `XMLAsteroidLoader.java:31-56`.
-- **INV-XML-07 [A]** `Asteroid.getHarvest` output is deterministic for a fixed seed
+  `test/integration/XMLPlanetLoaderTest.java`, `test/unit/XMLPlanetLoaderTest.java`. Pinned by `PlanetDefsFaultToleranceTest#serverBootsWithMalformedPlanetSkipped`.
+- **INV-XML-02 [V][SYS]** `readAllPlanets` throws if `<galaxy>` is absent.
+  `XMLPlanetLoader.java:1139-1141`. FOR: public API: planetDefs.xml schema read by pack authors.
+- **INV-XML-03 [V][SYS]** Ore `<oreGen>` with neither `pressure` nor `temp` is skipped.
+  `XMLOreLoader.java:303-307`. FOR: public API: planetDefs.xml schema read by pack authors.
+- **INV-XML-04 [V][SYS]** Ore heights are clamped into legal world range at parse time, so no
+  out-of-range `OreEntry` reaches world-gen. `XMLOreLoader.java:73,89,105,121`. FOR: public API: planetDefs.xml schema read by pack authors.
+- **INV-XML-05 [T][BEH]** Asteroid dimensions actually contain asteroids after config load
+  (end-to-end). `test/server/AsteroidDimensionContainsAsteroidsTest.java`. Pinned by `AsteroidDimensionContainsAsteroidsTest#asteroidDimGeneratesFillBlocks`.
+- **INV-XML-06 [V][SYS]** `XMLAsteroidLoader.getStack` accepts both `;`-delimited (new) and
+  space-delimited (legacy) `name;meta` forms. `XMLAsteroidLoader.java:31-56`. FOR: public API: asteroid definition forms read by pack authors.
+- **INV-XML-07 [A][BEH]** `Asteroid.getHarvest` output is deterministic for a fixed seed
   (shared static RNG is reseeded each call). `Asteroid.java:64` (not directly unit-tested;
   covered indirectly by mission tests).
 

@@ -41,15 +41,15 @@ what the assist holds against and (b) what a pilot is told.
 
 ## Clauses
 
-- **FRAME-1 (a craft is always in exactly one frame)** `[A]` At every tick a craft has one reference
+- **FRAME-1 (a craft is always in exactly one frame)** `[A][SYS]` At every tick a craft has one reference
   frame, named by a body. There is no "no frame": outside every planetary SOI the frame is the star's,
   and outside a system's it is the system barycentre. "Deep space" is a frame like any other, and a
-  craft may never be in two.
+  craft may never be in two. FOR: FRAME-5.
 
-- **FRAME-2 (the frame is the INNERMOST SOI containing the craft)** `[A]` Frames nest — a moon's
+- **FRAME-2 (the frame is the INNERMOST SOI containing the craft)** `[A][SYS]` Frames nest — a moon's
   inside its planet's inside its star's. Membership is decided by geometry at a tick and by nothing
   else: not by cell membership (`CON-MET-02` forbids that for bodies and it holds here), not
-  by where the craft launched from, not by what it is aimed at.
+  by where the craft launched from, not by what it is aimed at. FOR: FRAME-5.
 
   **Built: the zone-sphere crossing; not built: the craft's own frame.** Frames genuinely nest
   (`CellFrame.within`), a moon's cell rides the moon, and the zone lattice is coarse enough that a
@@ -103,11 +103,11 @@ what the assist holds against and (b) what a pilot is told.
   names the moons apart" do not conflict.
 
 - **FRAME-3 (the boundary is a MASS ratio and an orbital radius — never a radius, never a surface
-  gravity)** `[A]` `r_SOI` depends on `m/M` and on `a`. A body's own radius does not appear in it, and
+  gravity)** `[A][SYS]` `r_SOI` depends on `m/M` and on `a`. A body's own radius does not appear in it, and
   surface gravity `g = GM/R²` conflates the two inputs, so two worlds with equal `g` can have SOIs
   differing by orders of magnitude. Both inputs exist per body: mass from `setBulk`, `a` from
   `orbitalDistance`; a body without bulk has no SOI. Reference values, converted at
-  `METRES_PER_CHART_BLOCK = 250` (`AstronomicalBodyHelper.java:40`) `[V]`:
+  `METRES_PER_CHART_BLOCK = 250` (`AstronomicalBodyHelper.java:40`) `[V]`: FOR: FRAME-5.
 
   | body | `r_SOI` | chart blocks |
   |---|---|---|
@@ -115,20 +115,20 @@ what the assist holds against and (b) what a pilot is told.
   | Earth | 926 000 km | 3 700 000 |
   | Jupiter | 48.2 M km | 193 000 000 |
 
-- **FRAME-4 (the assist's setpoint is IN the current frame)** `[A]` Flight Assist holds the commanded
+- **FRAME-4 (the assist's setpoint is IN the current frame)** `[A][BEH]` Flight Assist holds the commanded
   velocity relative to the craft's frame. A craft that launched from a world and asked for zero is
   asking to be *stationary with respect to that world*, which is what a pilot means and what an orbit
   is.
 
-- **FRAME-5 (zero setpoint means CO-MOVING, and that is what stops the orphaning)** `[A]` Under
+- **FRAME-5 (zero setpoint means CO-MOVING, and that is what stops the orphaning)** `[A][BEH]` Under
   FRAME-4, a parked ship keeps station with its body for as long as it is in that body's frame,
   without anything "carrying" it and without a special parked state.
 
-- **FRAME-6 (the readout names its frame)** `[A]` Any velocity or range shown to a pilot states which
+- **FRAME-6 (the readout names its frame)** `[A][BEH]` Any velocity or range shown to a pilot states which
   body it is measured against. A speed with no named frame is not a speed; neither is a number whose
   unit is wrong.
 
-- **FRAME-7 (a handover changes the DESCRIPTION and never the state)** `[A]` At a handover the
+- **FRAME-7 (a handover changes the DESCRIPTION and never the state)** `[A][BEH]` At a handover the
   craft's position and momentum are continuous. Nothing is re-aimed, nothing is scaled, no impulse is
   applied. What changes is the number on the screen — and that jump is TRUE, being the difference
   between two frames' velocities, not an artefact to be smoothed away.
@@ -139,28 +139,28 @@ what the assist holds against and (b) what a pilot is told.
   offset is measured from the origin the destination cell actually rides — one rule, applied at all
   three destination branches (`SpaceSubsystem.addressIn`).
 
-- **FRAME-8 (Newtonian flight is frame-independent)** `[A]` With the assist off, a handover has no
+- **FRAME-8 (Newtonian flight is frame-independent)** `[A][BEH]` With the assist off, a handover has no
   effect on the trajectory whatever; only FRAME-6's label changes. This is a statement about what the
   contract may NOT do: no clause here is permitted to make raw Newtonian motion depend on which frame
   the craft is in, and nothing clamps inside a law documented as raw Newtonian.
 
-- **FRAME-9 (the assist re-expresses its setpoint at a handover; it does not re-fly the craft)** `[A]`
+- **FRAME-9 (the assist re-expresses its setpoint at a handover; it does not re-fly the craft)** `[A][BEH]`
   When the frame changes with the assist ON, the setpoint is converted into the new frame so the
   craft's motion is unchanged at that instant. It is then held against the NEW frame, which is what
   makes leaving a planet's SOI a real event: the same held command now means something else, and the
   pilot must re-issue it if he wanted the old meaning. **A handover may never be the moment the assist
   silently accelerates a craft.**
 
-- **FRAME-10 (a frame is DERIVED, never stored as truth)** `[A]` The current frame is a function of
+- **FRAME-10 (a frame is DERIVED, never stored as truth)** `[A][SYS]` The current frame is a function of
   position and the body ephemerides at a tick, so it is recomputed and never persisted as an
   independent fact — a stored frame would be a second source of truth for something already
   determined. What may be persisted is the SETPOINT, and it is
-  persisted *with the name of the frame it was expressed in*, or it means nothing after a reload.
+  persisted *with the name of the frame it was expressed in*, or it means nothing after a reload. FOR: FRAME-7.
 
-- **FRAME-11 (a handover is EVALUATED on the space clock)** `[A]` SOI membership depends on where the
+- **FRAME-11 (a handover is EVALUATED on the space clock)** `[A][SYS]` SOI membership depends on where the
   bodies are, which is a question with no answer except at a tick; per C16 CLOCK-1 that tick is the
   space clock. A handover decided on a world clock would fire at different times in different
-  dimensions.
+  dimensions. FOR: CLOCK-2.
 
 ## What exists, and what does not
 

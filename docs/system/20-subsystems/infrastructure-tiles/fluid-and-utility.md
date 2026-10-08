@@ -48,18 +48,18 @@ NBT keys (`TilePump` `tank`, `TileForceFieldProjector` `ext`, `TileFluidTank` vi
 
 ## Invariants
 
-- **INV-INFRA-22 [T]** A pump above an adjacent water source fills its tank (>0 mB) within
-  ~60 ticks. [T TilePumpFillsFromAdjacentWaterSourceTest.java:77-82]
-- **INV-INFRA-23 [V]** The pump only spends 100 RF when a drainable source is confirmed in
+- **INV-INFRA-22 [T][BEH]** A pump above an adjacent water source fills its tank (>0 mB) within
+  ~60 ticks. [T TilePumpFillsFromAdjacentWaterSourceTest.java:77-82] Pinned by `TilePumpFillsFromAdjacentWaterSourceTest#poweredPumpDrainsAdjacentFluidSource`.
+- **INV-INFRA-23 [V][BEH]** The pump only spends 100 RF when a drainable source is confirmed in
   `cache` (`canPerformFunction` returns `!cache.isEmpty()`). [V TilePump.java:287-320]
-- **INV-INFRA-24 [T]** Fluid injected into a pressure tank survives a server restart at the
-  same coords. [T FluidTankNBTRoundTripsAcrossRestartTest.java:93]
-- **INV-INFRA-25 [T]** Stacked pressure tanks distribute a fill correctly (top-down column
-  fill). [T FluidTankStackedFillTest.java]
-- **INV-INFRA-26 [T]** A solar panel in aStellurgy dimension gains energy on a forced tick,
-  scaled by insolation. [T SolarPanelInsolationTest.java:118]
-- **INV-INFRA-27 [T]** The force-field projector projects a block when powered and retracts
-  it to air when unpowered. [T ForceFieldProjectorProjectsAndRetractsTest.java:63-81]
+- **INV-INFRA-24 [T][BEH]** Fluid injected into a pressure tank survives a server restart at the
+  same coords. [T FluidTankNBTRoundTripsAcrossRestartTest.java:93] Pinned by `FluidTankNBTRoundTripsAcrossRestartTest#liquidTankRetainsOxygenContentAcrossRestart`.
+- **INV-INFRA-25 [T][BEH]** Stacked pressure tanks distribute a fill correctly (top-down column
+  fill). [T FluidTankStackedFillTest.java] Pinned by `FluidTankStackedFillTest#smallInjectionFillsBottomTankAndLeavesTopEmpty`, `FluidTankStackedFillTest#overflowingInjectionFillsBottomThenSpillsIntoTop`.
+- **INV-INFRA-26 [T][BEH]** A solar panel in aStellurgy dimension gains energy on a forced tick,
+  scaled by insolation. [T SolarPanelInsolationTest.java:118] Pinned by `SolarPanelInsolationTest#solarPanelGeneratesInNonOverworldStellurgyDim`.
+- **INV-INFRA-27** — retired: the force-field projector tile (`TileForceFieldProjector`) is no longer
+  in the source tree, and its test with it.
 
 ## Failure modes & edge cases
 

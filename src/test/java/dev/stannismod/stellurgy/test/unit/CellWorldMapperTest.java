@@ -109,6 +109,7 @@ public class CellWorldMapperTest {
      * a pose over a cell face. A ship that renames itself by drifting ends up addressed in a cell
      * nobody loaded: its own cell's bodies vanish from its sky, its descent finds nothing to descend
      * to, and its jumps are refused for being somewhere it is not.</p>
+     * Pins ADDR-8 (a reported pose may not rename the cell).
      */
     @Test
     public void aReportedPosePastTheCellEdgeStaysInItsOwnCell() {

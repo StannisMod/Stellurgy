@@ -30,6 +30,7 @@ public class SealableBlockHandlerTest {
         MinecraftBootstrap.ensure();
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
     @Test
     public void defaultSealableBlocksLoaded() throws Exception {
         handler.loadDefaultData();
@@ -49,6 +50,7 @@ public class SealableBlockHandlerTest {
         assertFalse(handler.isMaterialBanned(Material.ROCK));
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
     @Test
     public void whitelistOverridesDetection() throws Exception {
         Block target = Blocks.LEAVES;
@@ -65,6 +67,7 @@ public class SealableBlockHandlerTest {
                 handler.getOverriddenSealableBlocks().contains(target));
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
     @Test
     public void blacklistOverridesDetection() throws Exception {
         Block target = Blocks.STONE;
@@ -78,6 +81,7 @@ public class SealableBlockHandlerTest {
                 handler.getOverriddenSealableBlocks().contains(target));
     }
 
+    /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
     @Test
     public void addingSameBlockTwiceDoesNotDuplicate() throws Exception {
         Block target = Blocks.GRAVEL;

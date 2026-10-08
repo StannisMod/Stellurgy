@@ -98,6 +98,7 @@ public class MissionPersistenceRestartTest {
         return built.get(built.size() - 1).id;
     }
 
+    /** Pins INV-MSN-03 (A gas/ore mission survives a full server restart with its type and duration intact and not dead). */
     @Test
     public void gasMissionSurvivesServerRestart() throws Exception {
         long missionId;
@@ -136,6 +137,7 @@ public class MissionPersistenceRestartTest {
                 (!Reply.of(state).bool("isDead")));
     }
 
+    /** Pins INV-MSN-03 (A gas/ore mission survives a full server restart with its type and duration intact and not dead). */
     @Test
     public void oreMissionSurvivesServerRestart() throws Exception {
         long missionId;

@@ -62,6 +62,7 @@ public class ShipMotionJointsTest {
      * swapped to {@code {live, design}} (the readout handed the wrong view), this fails with "burst hull,
      * SURGE_POSITIVE SUSTAINED: the readout states 23.543976456 and the scheme delivers
      * 11.523999999999997", 2026-10-07.</p>
+     * Pins INV-SFM-13 (a readout figure is delivered whole).
      */
     @Test
     public void aReadoutFigureIsDeliveredWhole() {
@@ -126,6 +127,7 @@ public class ShipMotionJointsTest {
      * views[v].authority(d, e);} handed {@code Endurance.SUSTAINED} for both endurances (the burst figure
      * lost on the way to the readout), this fails with "burst hull: ROLL_POSITIVE is NO_AUTHORITY on the
      * readout, and the scheme delivered 270833.33333333326", 2026-10-07.</p>
+     * Pins INV-SFM-13 (a direction the readout calls unavailable is delivered nothing).
      */
     @Test
     public void aDirectionTheReadoutCallsUnavailableIsDeliveredNothing() {
@@ -168,6 +170,7 @@ public class ShipMotionJointsTest {
      * {@code 0.0D} (the cargo dropped between the frame and the readout), this fails with "SURGE_POSITIVE:
      * the laden readout must divide the hull's force 4905000.0 N by the declared laden mass 485000.0 kg
      * expected:&lt;10.11340206185567&gt; but was:&lt;29.727272727272727&gt;", 2026-10-07.</p>
+     * Pins INV-SFM-13 (the readout divides by the mass the frame weighs).
      */
     @Test
     public void cargoTheFrameWeighsIsTheMassTheReadoutDividesBy() {

@@ -430,6 +430,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
      * numbers. So the server's clock is JUMPED a million ticks and the client is required to follow
      * it. On a build with no sync the client's answer does not move at all, and the two claims below
      * separate by six orders of magnitude rather than by rounding.</p>
+     * Pins CLOCK-3 (the space clock is readable on both sides, and an unsynced client says so).
      */
     @Test
     public void theClientsSpaceClockFollowsTheServers() throws Exception {

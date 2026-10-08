@@ -55,6 +55,7 @@ public class ItemDataCarrierNBTRoundTripTest {
 
     // ────────────────────── ItemSpaceElevatorChip ───────────────────────
 
+    /** Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT). */
     @Test
     public void elevatorChipEmptyStackReturnsEmptyPositionList() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -89,6 +90,7 @@ public class ItemDataCarrierNBTRoundTripTest {
         }
     }
 
+    /** Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT). */
     @Test
     public void elevatorChipSetEmptyOnFreshStackDoesNotAttachNbt() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -103,7 +105,9 @@ public class ItemDataCarrierNBTRoundTripTest {
      *  previously called {@code removeTag("positions")} but the data
      *  lived under {@code "list"} per
      *  {@code NBTStorableListList.writeToNBT}, so the clear was a no-op.
-     *  Now the key matches and the list is actually cleared. */
+     *  Now the key matches and the list is actually cleared.
+     * Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT).
+     */
     @Test
     public void elevatorChipSetEmptyAfterNonEmptyClearsList() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -169,6 +173,7 @@ public class ItemDataCarrierNBTRoundTripTest {
                 7, item.getData(s));
     }
 
+    /** Pins INV-ITM-05 (the data-stick max-data table and a data stick never stacking past one). */
     @Test
     public void dataStickNeverStacksPastOne() {
         // Production contract: ItemData() ctor calls setMaxStackSize(1), so
@@ -188,6 +193,7 @@ public class ItemDataCarrierNBTRoundTripTest {
                 1, item.getItemStackLimit(programmed));
     }
 
+    /** Pins INV-ITM-05 (the data-stick max-data table and a data stick never stacking past one). */
     @Test
     public void dataStickMaxDataIsZeroForNonZeroDamage() {
         // ItemData.getMaxData(damage) returns 1000 only for damage 0;

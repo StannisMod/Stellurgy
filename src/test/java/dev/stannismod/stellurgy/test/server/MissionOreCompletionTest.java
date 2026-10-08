@@ -79,7 +79,9 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
      *  clears guidance-computer slot 0 and refills it with a blank
      *  ItemAsteroidChip (MissionOreMining lines 116-118). The chip
      *  refill is a save-format / inventory contract — players see the
-     *  fresh chip when they open the landed rocket. */
+     *  fresh chip when they open the landed rocket.
+     * Pins INV-MSN-05 (Ore completion always leaves a blank asteroid chip in guidance slot 0 on the respawned rocket).
+     */
     @Test
     public void oreCompletionAlwaysRefillsGuidanceWithBlankAsteroidChip() throws Exception {
         int rid = buildAndAssembleRocket(9000);
@@ -96,7 +98,9 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     /** Production gate: with {@code drillingPower == 0f} the entire
      *  harvest block (MissionOreMining lines 42-114) is skipped — the
      *  rocket inventory has no ore stacks, just the refilled blank
-     *  chip from lines 116-118. Counter-test pinning the gate. */
+     *  chip from lines 116-118. Counter-test pinning the gate.
+     * Pins INV-MSN-06 (ore completion with zero drilling power performs no harvest).
+     */
     @Test
     public void oreCompletionSkipsHarvestWhenDrillingPowerZero() throws Exception {
         int rid = buildAndAssembleRocket(9100);

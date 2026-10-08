@@ -83,6 +83,7 @@ public class ShipReadoutTest {
      * scaled by the mass fails "the same force" with 50000 against 100000; {@code ShipReadout#acceleration} at {@code return m > 0.0D ? f / m : 0.0D;}
      * dividing by the structural mass only fails "the loaded ship accelerates less" with 11.11 against
      * 5.56.</p>
+     * Pins INV-SFM-07 (cargo lowers acceleration, never force, and thrust to weight is about the local field).
      */
     @Test
     public void cargoLowersAccelerationNotForce() {
@@ -107,6 +108,7 @@ public class ShipReadoutTest {
      * of 10 to hover fails "it hovers on the light world"; {@code ShipReadout#thrustToWeight} at {@code double weight = totalMass() * gravity;} weighing against a
      * fixed 9.81 instead of the local field fails "and not on one five times heavier";
      * {@code ShipReadout#thrustToWeight} at {@code return Double.POSITIVE_INFINITY;} answering 0 for no field fails "infinite where there is no field".</p>
+     * Pins INV-SFM-07 (cargo lowers acceleration, never force, and thrust to weight is about the local field).
      */
     @Test
     public void thrustToWeightIsAboutTheLocalField() {

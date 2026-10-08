@@ -121,22 +121,22 @@ persists `destDimId`, `landingx/y/z`, `stationMapping` (list of `pos` int[3] + `
 
 ## Invariants
 
-- **INV-RKT-01 [V]** A countdown launch fires `launch()` exactly once, at
+- **INV-RKT-01 [V][BEH]** A countdown launch fires `launch()` exactly once, at
   `LAUNCH_COUNTER==0` `EntityRocket.java:1929`; `launch()` re-guards
   `if (isInFlight()) return` `:2646`.
 - **INV-RKT-02 [V]** Fuel burn and downward gravity accrual run server-side only
   (`!world.isRemote`) — the client re-integrates `motionY` cosmetically
   `EntityRocket.java:2112`, `:2193`.
-- **INV-RKT-03 [V]** An unreachable destination aborts the launch with
+- **INV-RKT-03 [V][BEH]** An unreachable destination aborts the launch with
   `setError("error.rocket.cannotGetThere")` before flight begins
   `EntityRocket.java:2723`.
-- **INV-RKT-04 [V]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
+- **INV-RKT-04 [T][SYS]** `RocketFlightMode.DEFAULT == CLASSIC_LAUNCH`, so a legacy
   save with no `flightMode` key loads onto this path `RocketFlightMode.java:20`;
   pinned by `RocketFlightModeNbtTest` (missing-key → DEFAULT)
-  `RocketFlightModeNbtTest.java:30`.
-- **INV-RKT-05 [V]** `toggleRCS` never mutates `RCS_MODE` or launch state — it only
+  `RocketFlightModeNbtTest.java:30`. Pinned by `RocketFlightModeNbtTest#defaultIsClassicLaunch`, `RocketFlightModeNbtTest#missingNbtKeyReadsDefault`. FOR: save format: flightMode key.
+- **INV-RKT-05 [V][BEH]** `toggleRCS` never mutates `RCS_MODE` or launch state — it only
   messages `EntityRocket.java:441`; a deprecation notice cannot abort a launch.
-- **INV-RKT-06 [A]** `deltaTime`-scaled acceleration assumes `getAcceleration`
+- **INV-RKT-06 [A][BEH]** `deltaTime`-scaled acceleration assumes `getAcceleration`
   is a per-tick value; after a multi-tick stall the single catch-up step can
   overshoot altitude. Inferred from `:1745`/`:2126`; not test-pinned.
 

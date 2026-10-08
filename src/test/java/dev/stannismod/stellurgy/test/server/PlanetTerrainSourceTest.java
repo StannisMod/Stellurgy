@@ -135,6 +135,7 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
      * delegates and the setter is an empty method, so a planet's own stamp used to be dropped in
      * silence. The overworld's value is reported beside the planet's here to keep the assertion
      * honest — the two must now DIFFER, which is only meaningful because both name a real type.</p>
+     * Pins INV-WGEN-22 (A planet's published world type is its own, never the save's).
      */
     @Test
     public void planetPublishesItsOwnWorldTypeThroughWorldInfo() throws Exception {

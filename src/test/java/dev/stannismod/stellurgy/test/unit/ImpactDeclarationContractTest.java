@@ -27,6 +27,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class ImpactDeclarationContractTest {
 
+    /** Pins INV-DMG-05 (every ImpactKind declares how a shell bills it). */
     @Test
     public void everyHullImpactKindDeclaresHowAShellBillsIt() {
         for (ImpactKind kind : ImpactKind.values()) {

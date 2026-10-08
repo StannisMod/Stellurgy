@@ -78,6 +78,7 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * but was:&lt;[PressurizedAir]&gt;". BACK — {@code AreaBlob#setData} at {@code data = obj;} refusing to publish over a VeryHot
      * zone: "and the room must come BACK when it is cooled … expected:&lt;[PressurizedAir]&gt; but
      * was:&lt;[VeryHot]&gt;". The two premises at its head are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-22 (A compartment past the crew threshold presents a hostile atmosphere, and cooling it gives the room back).
      */
     @Test
     public void anOverheatedCompartmentTurnsHostileAndCoolingItGivesTheRoomBack() throws Exception {
@@ -113,6 +114,7 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * so expected:&lt;Superheated[NoOxygen]&gt; but was:&lt;Superheated[]&gt;". THE PLAIN ONE — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;} always answering the NoO2 variant: "and the same temperature with air to breathe
      * is the plain lethal one expected:&lt;Superheated[]&gt; but was:&lt;Superheated[NoOxygen]&gt;".
      * The premise at its head is an arrangement and is not witnessed.</p>
+     * Pins INV-HEAT-23 (Temperature picks the rung and the gases pick the variant).
      */
     @Test
     public void hotAirWithNothingToBreatheIsBothHazardsAtOnce() throws Exception {
@@ -151,6 +153,7 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      *
      * <p>What the gate read is not asserted beside the message: the overheated refusal is raised only
      * when the same coolant reading is past the threshold, so it would be WHICH REFUSAL again.</p>
+     * Pins INV-HEAT-25 (A drive whose loop is past the refusal threshold does not fire, says which refusal it is, and costs the pilot nothing).
      */
     @Test
     public void anOverheatedDriveRefusesToFireAndTheRefusalIsFree() throws Exception {
@@ -207,6 +210,7 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING TO READ — {@code ShipDrive#coolantKelvin} at {@code double hottest = 0.0D;} starting the reading at ambient: "with nothing bolted to the drive there is
      * nothing to read: … \"driveCoolantMilliK\":293000". ALLOWED — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} refusing an
      * unmeasured drive: "and an unmeasured drive must still be allowed to jump: … \"allowed\":false".</p>
+     * Pins INV-HEAT-26 (A drive with no coolant against it reads zero and is NOT refused).
      */
     @Test
     public void aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused() throws Exception {

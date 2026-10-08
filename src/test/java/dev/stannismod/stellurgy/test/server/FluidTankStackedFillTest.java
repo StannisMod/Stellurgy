@@ -88,6 +88,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         return FluidStored.of(resp).amount(0);
     }
 
+    /** Pins INV-INFRA-25 (stacked pressure tanks fill from the bottom and spill into the top). */
     @Test
     public void smallInjectionFillsBottomTankAndLeavesTopEmpty() throws Exception {
         // A STACK, and the whole subject is that the top sits one block above the bottom. Both Ys
@@ -127,6 +128,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                 0, topAmt);
     }
 
+    /** Pins INV-INFRA-25 (stacked pressure tanks fill from the bottom and spill into the top). */
     @Test
     public void overflowingInjectionFillsBottomThenSpillsIntoTop() throws Exception {
         // Different column from the first test (position isolation).

@@ -273,18 +273,22 @@ Generator`, `ARjumpFieldEmitter`, `ARjumpCapacitor`, `ARgravityDampener`.
 
 ## Invariants
 
-- **INV-HYP-01 [T]** Asking the gate is free and side-effect free; a refusal never costs the pilot
-  charge. `HyperdriveTest.aRefusedJumpNeverSpendsTheCharge`.
-- **INV-HYP-02 [T]** The capacitor burst is the FIRST and ONLY thing spent, and nothing that can refuse
-  runs after it. `JumpTrigger.java` (commit ordering).
-- **INV-HYP-03 [T]** Time away is time charging: elapsed ticks charge a capacitor identically whether
-  or not anything was loaded to observe it. `CapacitorChargeTest`.
-- **INV-HYP-04 [T]** A machine belongs to exactly one ship; a neighbour can never lend one.
-  `HyperdriveTest.anotherShipsMachinesAreNotYours`.
-- **INV-HYP-05 [T]** Re-aiming disarms: a ship is never armed at a destination the pilot has already
-  changed his mind about. `HyperdriveTest.clearingTheTargetDisarmsTheJump`.
+- **INV-HYP-01 [T][BEH]** Asking the gate is free and side-effect free; a refusal never costs the pilot
+  charge. `HyperdriveTest#aRefusedJumpNeverSpendsTheCharge`.
+- **INV-HYP-02 [V][BEH]** The capacitor burst is the FIRST and ONLY thing spent: every check that can
+  refuse a jump sits above the commit line (`JumpTrigger.java:207`). A departure the transit manager
+  refuses after the burst is a paid refusal, answered `FAILED` and logged (`:208-222`).
+- **INV-HYP-03** — retired: the bank holds real energy fed by the ship, so time away is not time
+  charging (see INV-HYP-07).
+- **INV-HYP-04 [T][BEH]** A machine belongs to exactly one ship; a neighbour can never lend one.
+  `HyperdriveTest#anotherShipsMachinesAreNotYours`.
+- **INV-HYP-05 [T][BEH]** Re-aiming disarms: a ship is never armed at a destination the pilot has already
+  changed his mind about. `HyperdriveTest#clearingTheTargetDisarmsTheJump`.
 - **INV-HYP-06 [V]** No balance number in this subsystem is pinned by any test; all of them live in
   `DriveTuning`.
+- **INV-HYP-07 [T]** The jump bank charges only from energy the ship pushes into it: a bank with
+  nothing feeding it never fills however long anybody waits, it accepts no faster than its
+  throughput allows, and it is not the ship's battery. Pinned by `CapacitorChargeTest#aBankWithNoInflowNeverGetsThere`, `CapacitorChargeTest#aBankAcceptsNoFasterThanItsThroughputAllows`, `CapacitorChargeTest#theJumpBankIsNOTtheShipsBattery`, `HyperdriveTest#aFRESHBANKSTAYSEMPTYWHILETIMEPASSES`.
 
 ## Failure modes & edge cases
 

@@ -150,6 +150,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientE2ETest {
      * (the living update, inside the network handler's update) and {@code spaceDimensionGuard}
      * disabled, this fails with "the guard must move a body off a given point ONCE … origin=206,64,154"
      * (2026-09-24, run alone).</p>
+     * Pins INV-EVT-07 (a server-side teleport of a PLAYER is never made from a handler that runs inside NetHandlerPlayServer.update).
      */
     @Test
     public void registeredStationTeleportTargetsStationSpawn() throws Exception {

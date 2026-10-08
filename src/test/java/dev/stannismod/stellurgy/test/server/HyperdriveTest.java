@@ -265,6 +265,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>red-witnessed: {@code ShipDriveStats#ofPower} at {@code (long) Math.ceil(power * DriveTuning.IN_FLIGHT_DRAW_PER_POWER)}
      * (the draw priced at the generator's base power) fails "and draws more while it holds the window
      * open: 50 -> 50", 2026-10-05</p>
+     * Pins HYPER-5 (a generation buys efficiency and size buys power).
      */
     @Test
     public void aStrongerDriveIsFasterAndCostsMoreToStart() throws Exception {
@@ -365,6 +366,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>red-witnessed: {@code ShipDrive#componentsOfType} at {@code component.linkToFlightComputer(flightComputerPos);}
      * (nothing adopted) fails "and the craft they were built onto must have: emitters 1 -> 1, dampeners
      * 0 -> 0", 2026-10-05</p>
+     * Pins INV-HYP-04 (A machine belongs to exactly one ship).
      */
     @Test
     public void anotherShipsMachinesAreNotYours() throws Exception {
@@ -572,6 +574,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>red-witnessed: {@code JumpTrigger#press} at {@code ShipNavigation nav = new ShipNavigation(world, flightComputerPos, shipId);}
      * (the burst fired before anything is decided) fails "a refusal is never a loss expected:&lt;20000&gt;
      * but was:&lt;0&gt;", 2026-10-05</p>
+     * Pins INV-HYP-01 (Asking the gate is free and side-effect free).
      */
     @Test
     public void aRefusedJumpNeverSpendsTheCharge() throws Exception {
@@ -598,6 +601,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>red-witnessed: {@code TileNavigationComputer#aim} at {@code this.armed = false;} (re-aiming left
      * armed) fails "a new destination is a new decision", 2026-10-05</p>
+     * Pins INV-HYP-05 (Re-aiming disarms: a ship is never armed at a destination the pilot has already changed his mind about).
      */
     @Test
     public void clearingTheTargetDisarmsTheJump() throws Exception {
@@ -662,6 +666,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * (the level read as the stored charge plus the world clock mod 1000) fails "a running world must
      * not have put a single unit into a bank nothing is feeding ... expected:&lt;18&gt; but
      * was:&lt;121&gt;", 2026-10-05</p>
+     * Pins INV-HYP-07 (the jump bank charges only from energy the ship pushes into it).
      */
     @Test
     public void aFRESHBANKSTAYSEMPTYWHILETIMEPASSES() throws Exception {

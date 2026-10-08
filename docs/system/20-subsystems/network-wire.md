@@ -93,23 +93,24 @@ written to disk.
 
 ## Invariants
 
-- **INV-NW-01 [V]** Wire discriminator id is determined solely by `addDiscriminator` call
+- **INV-NW-01 [V][SYS]** Wire discriminator id is determined solely by `addDiscriminator` call
   order; client and server must register the identical set in the identical order (same mod
-  build) or ids desync. `Stellurgy.java:334-352`; libVulpes `BasePacket.idMap`.
+  build) or ids desync. `Stellurgy.java:334-352`; libVulpes `BasePacket.idMap`. FOR: wire format: same build on both sides.
 - **INV-NW-02 [V]** Client-bound packets treat `read`/`executeServer` as no-ops, so a spoofed
   inbound copy on the server does nothing (`PacketAtmSync.java:55` "we don't want hackers").
 - **INV-NW-03 [V]** `PacketBackToRocketGui` is the only Stellurgy packet with a real `executeServer`;
   it re-validates via `RocketGuiNavigation`, not trusting client-sent coords blindly.
   `PacketBackToRocketGui.java:58`.
-- **INV-NW-04 [T]** NBT-envelope packets round-trip byte-for-byte through
+- **INV-NW-04 [T][SYS]** NBT-envelope packets round-trip byte-for-byte through
   `writeCompoundTag`/`readCompoundTag` — pinned for Dim/Satellite/Station/Config/Asteroid/
-  SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`.
-- **INV-NW-05 [V][T]** `PacketMoveRocketInSpace` is dead: never `addDiscriminator`'d
-  (absent from `Stellurgy.java:334-352`) and never constructed anywhere in `src/main`.
-  Pinned as known-bug sentinel. `integration/PacketSerializationTest.java:500`.
-- **INV-NW-06 [V]** `PacketStationUpdate.Type` ordinal is the wire value
+  SpaceStationInfo. `integration/PacketSerializationTest.java:100,169,216,264,335,458`. Pinned by `PacketSerializationTest#packetSatelliteRoundTrip`, `PacketSerializationTest#packetConfigSyncRoundTrip`, `PacketSerializationTest#packetAsteroidInfoRoundTrip`, `PacketSerializationTest#packetDimInfoNullPropertiesIsDeleteSignal`. FOR: wire format: same build on both sides.
+- **INV-NW-05 [V]** `PacketMoveRocketInSpace` is dead: never `addDiscriminator`'d
+  (absent from `Stellurgy.java:334-352`) and never constructed anywhere in `src/main`. A sentinel
+  records only that its `read` NPEs (`PacketSerializationTest#packetMoveRocketInSpaceDocumentsKnownBugs`),
+  not that it stays unregistered.
+- **INV-NW-06 [V][SYS]** `PacketStationUpdate.Type` ordinal is the wire value
   (`writeInt(type.ordinal())` / `Type.values()[readInt()]`); reordering the enum is a
-  breaking wire change. `PacketStationUpdate.java:44,88`.
+  breaking wire change. `PacketStationUpdate.java:44,88`. FOR: wire format: same build on both sides.
 - **INV-NW-07 [A]** A hostile out-of-range `Type` ordinal fails bounded (no OOB read past a
   bad buffer) — inferred from the read at `PacketStationUpdate.java:86` (`Type.values()[in.readInt()]`,
   which throws on an out-of-range index rather than reading past anything). No test pins it.

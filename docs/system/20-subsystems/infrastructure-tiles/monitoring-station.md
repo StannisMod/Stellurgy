@@ -56,14 +56,14 @@ unchanged); `masterX/Y/Z` only if `hasMaster()` (the `masterY>-1` gate); `abortR
 
 ## Invariants
 
-- **INV-INFRA-01 [T]** A freshly-placed, unlinked monitor reports `wasPowered=false` and
-  `getComparatorOverride()==0`. [T MonitoringStationComparatorOverrideTest.java:73-77]
-- **INV-INFRA-02 [T]** `monitor-info` exposes `wasPowered`/`equivalentPower`, and a
+- **INV-INFRA-01 [T][BEH]** A freshly-placed, unlinked monitor reports `wasPowered=false` and
+  `getComparatorOverride()==0`. [T MonitoringStationComparatorOverrideTest.java:73-77] Pinned by `MonitoringStationComparatorOverrideTest#unlinkedMonitorReportsZeroComparatorOverride`.
+- **INV-INFRA-02 [T][BEH]** `monitor-info` exposes `wasPowered`/`equivalentPower`, and a
   redstone rising edge on a linked monitor triggers a launch attempt.
-  [T RocketMonitoringStationLaunchTriggerTest.java:115-123]
+  [T RocketMonitoringStationLaunchTriggerTest.java:115-123] Pinned by `RocketMonitoringStationLaunchTriggerTest#risingRedstoneEdgeFiresPrepareLaunchExactlyOnce_andSustainedDoesNotRefire`, `RocketMonitoringStationLaunchTriggerTest#fallingRedstoneEdgeResetsTheGate_andSecondRisingEdgeRefires`.
 - **INV-INFRA-03 [V]** The tile only touches the Forge event bus while a rocket is
   linked; no linked rocket ⇒ no subscription. [V TileRocketMonitoringStation.java:220-224]
-- **INV-INFRA-04 [V]** `linkRocket` never accepts a foreign rocket while the monitor is
+- **INV-INFRA-04 [V][BEH]** `linkRocket` never accepts a foreign rocket while the monitor is
   owned by an assembler without a fresh claim or prior ownership.
   [V TileRocketMonitoringStation.java:335-364]
 - **INV-INFRA-05 [A]** `snapVel` and `snapHeight` are ints; no float reaches persisted

@@ -66,26 +66,26 @@ the server is inert (INV-NW-02).
 
 ## Collisions & risks
 
-- **CON-C2-01 [V] — `PacketMoveRocketInSpace` is unregistered.** Absent from `PacketRegistry#declared`
+- **CON-C2-01 [V][SYS] — `PacketMoveRocketInSpace` is unregistered.** Absent from `PacketRegistry#declared`
   and never constructed in `src/main`. It therefore has no wire id and cannot be sent. Its `write`
   inverts its guard (`hasWorld = position.world == null`, then dereferences `position.world`) and `read`
   dereferences the null `position` from the no-arg ctor → NPE if ever received
-  (`PacketMoveRocketInSpace.java:30-34,51-52`). Pinned by `integration/PacketSerializationTest`.
+  (`PacketMoveRocketInSpace.java:30-34,51-52`). Pinned by `integration/PacketSerializationTest`. FOR: wire format: same build on both sides (INV-NW-01).
 
-- **CON-C2-02 [V] — read without matching write (buffer desync).** `PacketStationUpdate.FUEL_UPDATE`
+- **CON-C2-02 [V][SYS] — read without matching write (buffer desync).** `PacketStationUpdate.FUEL_UPDATE`
   writes the fuel int only `if (spaceObject instanceof SpaceStationObject)` but `readClient` reads it
   **unconditionally** → wire desync when the `ISpaceObject` is a different subtype
-  (`PacketStationUpdate.java:52-54` vs `:94-96`).
+  (`PacketStationUpdate.java:52-54` vs `:94-96`). FOR: wire format: same build on both sides (INV-NW-01).
 
-- **CON-C2-03 [V] — discriminator index instability across builds.** Wire id is pure registration order
+- **CON-C2-03 [V][SYS] — discriminator index instability across builds.** Wire id is pure registration order
   (INV-NW-01). Inserting, removing or reordering **any** entry in `declared()` — including libVulpes
   adding or removing a packet before Stellurgy's block, or the interleaved `PacketItemModifcation`
   (Reg#4) — shifts every subsequent packet's id. Client and server must be the **exact same build** or
-  ids silently map to the wrong class. No version handshake exists in `src/main`.
+  ids silently map to the wrong class. No version handshake exists in `src/main`. FOR: wire format: same build on both sides (INV-NW-01).
 
-- **CON-C2-04 [V] — `PacketStationUpdate.Type` ordinal is the wire value.** `writeInt(type.ordinal())` /
+- **CON-C2-04 [V][SYS] — `PacketStationUpdate.Type` ordinal is the wire value.** `writeInt(type.ordinal())` /
   `Type.values()[readInt()]`; reordering the enum is a breaking wire change. INV-NW-06. A hostile
-  out-of-range ordinal fails bounded (INV-NW-07, `[A]`: no test pins it).
+  out-of-range ordinal fails bounded (INV-NW-07, `[A]`: no test pins it). FOR: wire format: same build on both sides (INV-NW-01).
 
 - **CON-C2-05 [V] — client-trusted input surface.** `PacketBackToRocketGui` (the sole C→S Stellurgy
   packet) carries client-supplied `dimId,x,y,z` straight into `executeServer` →

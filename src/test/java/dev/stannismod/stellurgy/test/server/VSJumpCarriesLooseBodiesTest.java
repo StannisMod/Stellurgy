@@ -49,6 +49,7 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
     private static final int ARRIVAL_TICKS = 400;
     private static final int PLACEMENT_TICKS = 300;
 
+    /** Pins JUMP-11 (every body aboard is carried by its ship-relative point). */
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
 

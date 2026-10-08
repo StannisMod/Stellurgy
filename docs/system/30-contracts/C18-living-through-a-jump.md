@@ -51,11 +51,11 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
 
 ## Clauses
 
-- **JUMP-1 (the crew travels with the ship)** `[T]` Every member of the transit crew is in the same
+- **JUMP-1 (the crew travels with the ship)** `[T][BEH]` Every member of the transit crew is in the same
   world as its ship for the whole transit; a jump never leaves one behind in the cell it departed
   from. The departure hands the crew to the same per-tick retry the arrival uses, seating them on
-  the parked hull without releasing the capture the far end still needs.
-- **JUMP-2 (the interval is livable)** `[T]` (partly) During the transit the ship is an ordinary live
+  the parked hull without releasing the capture the far end still needs. Pinned by `VSTransitCrewGroupTest#aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying`.
+- **JUMP-2 (the interval is livable)** `[T][BEH]` (partly) During the transit the ship is an ordinary live
   world to those aboard: its tile entities tick, its blocks are usable, and a crew member may leave
   his seat and walk the deck. This is what makes a jump a journey rather than a cutscene.
   Pinned for the load-bearing half — a crew member stands up MID-FLIGHT with the real sneak key, is
@@ -76,14 +76,14 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   since a remote client cannot otherwise tell hyperspace from a pool slot. The seat has one job: it is
   the interpolated source of the corridor's AXIS for a seated pilot, with a standing crew member's axis
   read off the ship he is on. The HUD's departing/arriving refinement is seat-only on purpose — it is
-  a cockpit panel, not a backdrop.
-- **JUMP-3 (a crossing carries whoever is aboard)** `[T]` Both crossings — departure and arrival —
+  a cockpit panel, not a backdrop. Pinned by `VSTransitCrewGroupTest#aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip`.
+- **JUMP-3 (a crossing carries whoever is aboard)** `[T][BEH]` Both crossings — departure and arrival —
   carry every member of the transit crew in whatever posture he is in; a crew member on his feet is
   never silently dropped. The capture enumerates STANDING crew beside the seated, keyed by
   the deck resolver's own answer rather than by a box (`CrewTransfer.walkStanding`), records each
   one's deck point against the flight computer, and the far side puts him back at that point, held
-  there until his ship exists.
-- **JUMP-4 (a seat is returned, a posture is preserved)** `[T]` On arrival a crew member who is seated
+  there until his ship exists. Pinned by `VSTransitCrewGroupTest#aWalkingCrewMemberTravelsWithHisShipThroughHyperspace`.
+- **JUMP-4 (a seat is returned, a posture is preserved)** `[T][BEH]` On arrival a crew member who is seated
   is seated again on the same seat — identified by its flight-computer-link offset, PRES-5's durable
   reference, invariant under re-assembly — and one who is on his feet arrives standing aboard, not
   seated late.
@@ -93,15 +93,15 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   into his chair on arrival. `CrewTransfer.refreshPostures` re-reads postures at the second cut;
   pinned by `VSTransitCrewGroupTest.aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet`,
   red-witnessed. Not yet playtest-accepted.
-- **JUMP-5 (a world is not unbound under an occupant)** `[T]` While a player is in a cell or in
+- **JUMP-5 (a world is not unbound under an occupant)** `[T][BEH]` While a player is in a cell or in
   hyperspace, that world is not evicted or rebound beneath him. The guarantee is DERIVED, not
   claimed: eviction asks the world who is standing in it (`SlotBinder.hasOccupants`) instead of
   trusting a paired counter — a crew member carried in aboard a ship holds no claim, and a jump
   releases the origin cell's own count one line after dismounting its crew into it, so a claim-based
   rule is only as good as the pairing nobody forgot. With every idle cell occupied the pool refuses to
   bind (recoverable, visible) rather than emptying one under someone. Hyperspace needs nothing here:
-  it is force-kept-loaded and never evicted.
-- **JUMP-6 (an aborted jump is a no-op for the crew)** `[T]` A failed departure leaves every crew
+  it is force-kept-loaded and never evicted. Pinned by `SpaceManagerTest#aCellWithSomebodyStandingInItIsNotEvictedUnderHim`, `SpaceManagerTest#aCellWithNobodyInItIsEvictedByTheSameArrangement`.
+- **JUMP-6 (an aborted jump is a no-op for the crew)** `[T][BEH]` A failed departure leaves every crew
   member seated where he was — the abort re-seats them onto the still-present origin ship.
   The obligation exists because the capture runs FIRST, and has to: the crossing is about to cut the
   blocks the crew is standing on. So by the time the cut refuses, everyone aboard is already
@@ -109,15 +109,15 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   crew for a jump that did not happen. Pinned in `ShipTransitManagerTest`: the put-back is aimed at
   the ORIGIN anchor rather than at a far end, no flight is created, nobody is left queued for a later
   re-seat, the origin cell stays loaded, and the lane the attempt reserved comes back to the
-  allocator (the crossing seam's `failDepart` switch is what the test flips).
+  allocator (the crossing seam's `failDepart` switch is what the test flips). Pinned by `ShipTransitManagerTest#anAbortedDepartureIsANoOpForTheCrew`.
 - **JUMP-7** — retired. (A restart must not remove a ship from hyperspace: see JUMP-9.)
-- **JUMP-8 (the void is lethal)** `[T]` A crew member who leaves his ship's volume in hyperspace
+- **JUMP-8 (the void is lethal)** `[T][BEH]` A crew member who leaves his ship's volume in hyperspace
   dies. Nothing prevents him from trying: the danger is the mechanic, not an invisible wall.
   Lanes are 2048 blocks apart (`HyperspaceTiles.java:25`) `[V]`, so no neighbour case is needed. The
   kill is a consecutive-tick countdown on the same 200-tick budget the crossing's retries spend, so
   nobody dies for the deck resolver's legitimate silence; it bypasses armour, creative and spectator
-  exempt.
-- **JUMP-9 (hyperspace is durable)** `[A]` A server that stops with ships in transit brings them back
+  exempt. Pinned by `VSTransitCrewGroupTest#aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip`.
+- **JUMP-9 (hyperspace is durable)** `[A][BEH]` A server that stops with ships in transit brings them back
   **into hyperspace** — same lanes, ships physically present, flights resumed from where they were
   persisted — and a crew member who returns mid-jump is placed at his ship there, never at spawn.
   A restart is not an event a jump can be removed by.
@@ -147,7 +147,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   lane and how far along its flight is — while the physics mod's per-world data supplies the BODY; a
   disagreement resolves in favour of the record. The block snapshot stays the repair path for a
   record whose ship did not come back, not the normal way a jump resumes.
-- **JUMP-10 (nothing is left in hyperspace unaccounted for)** `[T]` At boot every ship in hyperspace
+- **JUMP-10 (nothing is left in hyperspace unaccounted for)** `[T][BEH]` At boot every ship in hyperspace
   is matched against the restored records: matched ships resume their flight, an unmatched one is
   disposed of rather than left an untracked, keep-loaded ghost. This is the obligation JUMP-9 takes
   on: a durable hyperspace reconciles instead of wiping.
@@ -156,8 +156,8 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   An unclaimed hull is debris by definition, so a durability test must give production the claim.
   Deregistering a ship whose chunks are still queued must not throw out of the world tick in the
   physics chunk provider: "nothing loaded" is one question — `WorldServerShipManager.isShipInUse` —
-  covering loaded, queued and streaming.
-- **JUMP-11 (a body aboard is carried by its ship-relative point, at rest)** `[T]` A crossing carries
+  covering loaded, queued and streaming. Pinned by `ShipTransitManagerTest#bootDisposesOfEveryParkedShipNoRecordClaims`, `ShipTransitManagerTest#anOrphanIsFoundInALaneNoSurvivingRecordCameNear`.
+- **JUMP-11 (a body aboard is carried by its ship-relative point, at rest)** `[T][BEH]` A crossing carries
   every body aboard the ship — not only its crew, and not only what sits on a seat: each one's
   position is taken as an offset from the ship's flight computer before the cut and re-established
   from that offset after the re-assembly, with its motion zeroed. The offset is the binding
@@ -175,8 +175,8 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   world-down is not the deck — it falls off or through first. A seated rider is immune: the seat dummy
   is the anchor. The hold is server-authoritative and may cost the client a couple of ticks of its own
   movement, and it must HOLD rather than suppress input: the far side is retried for up to 200 ticks,
-  and a rare slow case would otherwise read as a hang.
-- **JUMP-12 (a cut leaves nothing bound to what it removed)** `[V]` A crossing that cuts a ship's
+  and a rare slow case would otherwise read as a hang. Pinned by `VSTransitCrewGroupTest#aWalkingCrewMemberTravelsWithHisShipThroughHyperspace`, `VSJumpCarriesLooseBodiesTest#aJumpCarriesTheBodiesLyingOnItsDeck`.
+- **JUMP-12 (a cut leaves nothing bound to what it removed)** `[V][BEH]` A crossing that cuts a ship's
   blocks also removes the entities bound to those blocks — the seat dummies above all. A rider left
   mounted on a chair whose ship no longer exists is an inconsistent state, and it needs no
   measurement to be a defect. `VSIntegration.crossShip` retires them immediately after the
@@ -186,7 +186,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   cut also serves rocket and station assembly, where the blocks ARE re-pasted and the pilot must stay
   seated — what `BlockPilotSeat.breakBlock`'s `isRelocationInProgress` guard buys
   (`BlockPilotSeat.java:124`) `[V]`. A sweep there would unseat a pilot on every assembly.
-- **JUMP-13 (a jump acts on the ship it NAMES, at every step)** `[V]` Departure, park, arrival cut,
+- **JUMP-13 (a jump acts on the ship it NAMES, at every step)** `[V][BEH]` Departure, park, arrival cut,
   pose settle and crew placement each act on the craft the jump is keyed by — never on "whichever
   ship is nearest" the anchor it happens to hold. The entry/station resolution, the departure and the
   ARRIVAL cut all resolve through one rule, `VSShipCrosser.identifyShipToCut`, and the arrival
@@ -197,7 +197,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   by REFUSING a positively-wrong hull.) Measured: `byDurableId=<uuid> cutting=<same uuid>` with the
   computer's tick counter still at zero. **Its precondition is JUMP-14**: a position is a valid handle
   on a ship only where the position is unambiguous.
-- **JUMP-14 (one lane, one ship)** `[V]` A hyperspace parking lane holds at most one registered
+- **JUMP-14 (one lane, one ship)** `[V][SYS]` A hyperspace parking lane holds at most one registered
   craft. The lane allocator is therefore a property of the hyperspace WORLD
   (`HyperspaceWorld#lanes()` on the server's one `HyperspaceWorld`, held by its `ServerState`)
   rather than of a transit manager: an allocator can only
@@ -205,8 +205,8 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   starts at lane 0 and hands out an occupied one (measured: two registered ships at the identical
   position, with the durable id of a third jump on the computer standing there).
   **A violation is silent** — nothing throws, and the next position-keyed lookup
-  simply answers about the wrong hull.
-- **JUMP-15 (an arrival has NO failure path)** `[A]` A crossing that has departed ARRIVES. There is no
+  simply answers about the wrong hull. FOR: JUMP-13.
+- **JUMP-15 (an arrival has NO failure path)** `[A][BEH]` A crossing that has departed ARRIVES. There is no
   outcome in which it does not — no budget after which it stops trying, and nothing the crew is told
   about an arrival that never happened. An arrival that does not complete is a DEFECT to be found,
   never a case to be handled.

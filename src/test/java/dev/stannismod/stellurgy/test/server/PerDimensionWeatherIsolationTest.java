@@ -77,6 +77,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
                 + "        </planet>\n";
     }
 
+    /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
     @Test
     public void rainOnPlanetADoesNotLeakToBOrOverworld() throws Exception {
 
@@ -107,6 +108,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
                 wB.usesStellurgyWorldInfo());
     }
 
+    /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
     @Test
     public void rainOnPlanetBDoesNotLeakToAOrOverworld() throws Exception {
         // The reverse direction — guards against a one-way leak bug where A
@@ -128,6 +130,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
                 w0.raining);
     }
 
+    /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
     @Test
     public void clearOnPlanetADoesNotClearB() throws Exception {
         // Symmetric to the rain test — clearing one planet must not clear the

@@ -113,26 +113,26 @@ No NBT owned. Command-driven persistence is delegated:
 
 ## Invariants
 
-- **INV-CMD-01 [V]** Root command requires OP permission level 2; every leaf is server-side
+- **INV-CMD-01 [V][BEH]** Root command requires OP permission level 2; every leaf is server-side
   (`CommandBase.execute`), none client-registered. `StellurgyCommandRoot.java:64`. [V]
-- **INV-CMD-02 [T]** Player-requiring leaves obtain the player via `getCommandSenderAsPlayer`,
+- **INV-CMD-02 [T][BEH]** Player-requiring leaves obtain the player via `getCommandSenderAsPlayer`,
   so a console/non-player sender is refused with the vanilla "must be a player" message,
-  not an NPE. Pinned for addTorch/setGravity/fillData/goto/fetch. `WorldCommandGuardContractTest.java:29-62`.
-- **INV-CMD-03 [T]** `weatherRefusalKey` is a pure function of (action, rainMarker, thunderMarker,
+  not an NPE. Pinned for addTorch/setGravity/fillData/goto/fetch. `WorldCommandGuardContractTest.java:29-62`. Pinned by `WorldCommandGuardContractTest#addTorchRefusesConsoleSender`, `WorldCommandGuardContractTest#setGravityRefusesConsoleSenderWithUsage`, `WorldCommandGuardContractTest#fillDataRefusesConsoleSender`, `WorldCommandGuardContractTest#gotoRefusesConsoleSender`, `WorldCommandGuardContractTest#fetchRefusesConsoleSender`.
+- **INV-CMD-03 [T][BEH]** `weatherRefusalKey` is a pure function of (action, rainMarker, thunderMarker,
   canRain) and returns a refusal lang-key (or null) matching what `updateWeather` would
-  revert. `WeatherCommand.java:118-133`, `WeatherCommandRefusalTest.java:26-92`.
-- **INV-CMD-04 [V]** `planet set atmosphereDensity` bypasses reflection and calls
+  revert. `WeatherCommand.java:118-133`, `WeatherCommandRefusalTest.java:26-92`. Pinned by `WeatherCommandRefusalTest#rainAllowedWhenDynamicMarkerAndAtmosphereOk`, `WeatherCommandRefusalTest#rainRefusedByNeverMarker`, `WeatherCommandRefusalTest#rainRefusedByThinAtmosphere`, `WeatherCommandRefusalTest#clearRefusedByAlwaysRainMarker`.
+- **INV-CMD-04 [V][BEH]** `planet set atmosphereDensity` bypasses reflection and calls
   `setAtmosphereDensity` (rescale, refused on an airless world); all other props go through
   `PropLookup` MethodHandles. `PlanetSetCommand.java:64-78`.
 - **INV-CMD-05 [V]** Station creation flips `created=true` (`beginTransition(0)`) BEFORE
   `registerSpaceObject`, so the broadcast `PacketSpaceStationInfo` carries a valid station.
   `CreateStationCommand.java:66-70`.
-- **INV-CMD-06 [V]** `reloadRecipes` deliberately never calls `createAutoGennedRecipes` — those
+- **INV-CMD-06 [V][BEH]** `reloadRecipes` deliberately never calls `createAutoGennedRecipes` — those
   register into Forge's frozen recipe registry and would throw at runtime. `ReloadRecipesCommand.java:41-46`.
-- **INV-CMD-07 [T][A]** `/ar` primary command and its help/usage survive server registration and a
+- **INV-CMD-07 [T][A][BEH]** `/ar` primary command and its help/usage survive server registration and a
   malformed invocation without crashing the server. `[T]` for registration and help only —
-  `CommandsSmokeTest.java:21,36`; the malformed-invocation half is `[A]` (no test pins it).
-- **INV-CMD-08 [A]** Planet/star edit commands assume the target dimension/star is
+  `CommandsSmokeTest.java:21,36`; the malformed-invocation half is `[A]` (no test pins it). Pinned by `CommandsSmokeTest#primaryCommandsAreRegistered`, `CommandsSmokeTest#stellurgyHelpCommandPrintsUsageWithoutCrash`.
+- **INV-CMD-08 [A][BEH]** Planet/star edit commands assume the target dimension/star is
   registered (guarded by `isDimensionCreated`/`getStar != null`); unloaded worlds are not
   re-created by get/set (unlike goto/create which init the dim). Inferred from guards, not
   a dedicated test.

@@ -46,6 +46,7 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
 
     // ── SatelliteWeatherController ──────────────────────────────────────
 
+    /** Pins INV-SAT-03 (Weather mode_id/last_mode_id/floodlevel round-trip through NBT). */
     @Test
     public void weatherControllerNbtRoundTripPreservesModeIdLastModeIdAndFloodlevel() {
         SatelliteWeatherController src = new SatelliteWeatherController();
@@ -74,6 +75,9 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
         assertEquals("floodlevel must round-trip", 80, peer.floodlevel);
     }
 
+    /**
+     * Pins INV-SAT-03 (Weather mode_id/last_mode_id/floodlevel round-trip through NBT).
+     */
     @Test
     public void weatherControllerNbtRoundTripPreservesFreshDefaults() {
         // A fresh satellite has mode_id=0, last_mode_id=0, floodlevel=-1
@@ -103,6 +107,7 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
 
     // ── SatelliteMicrowaveEnergy ────────────────────────────────────────
 
+    /** Pins INV-SAT-04 (Microwave teir byte round-trips through NBT). */
     @Test
     public void microwaveEnergyTeirByteRoundTripsAcrossNbt() throws Exception {
         SatelliteMicrowaveEnergy src = new SatelliteMicrowaveEnergy();

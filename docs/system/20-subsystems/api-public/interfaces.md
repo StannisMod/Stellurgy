@@ -85,14 +85,14 @@ to the root parent (`:120-124`).
 - **INV-API-24 [V]** `AreaBlob.contains` is synchronized on the graph; other mutators are not — reads
   are thread-safe against the atmosphere worker, writes are assumed single-threaded
   (`AreaBlob:102-109`).
-- **INV-API-25 [V]** `StellarBody` stores `posX/posZ` as `short` (`:87-97,:233-234`) — star map
-  coordinates are bounded to signed-16-bit; assigning >32767 wraps.
-- **INV-API-26 [V]** `getColorRGB8` packs bytes as `R | G<<8 | B<<16` (BGR order in the int)
-  (`StellarBody:163`) — a rendering contract, not the usual `0xRRGGBB`.
-- **INV-API-27 [V]** `StellarBody.readFromNBT` reads `diskAngle` with no `hasKey` guard (`:259`),
+- **INV-API-25 [V][SYS]** `StellarBody` stores `posX/posZ` as `short` (`:87-97,:233-234`) — star map
+  coordinates are bounded to signed-16-bit; assigning >32767 wraps. FOR: public API: StellarBody coordinates.
+- **INV-API-26 [V][SYS]** `getColorRGB8` packs bytes as `R | G<<8 | B<<16` (BGR order in the int)
+  (`StellarBody:163`) — a rendering contract, not the usual `0xRRGGBB`. FOR: public API: StellarBody colour packing is a rendering contract.
+- **INV-API-27 [V][SYS]** `StellarBody.readFromNBT` reads `diskAngle` with no `hasKey` guard (`:259`),
   overwriting the constructor default `70` (`:39`) with `0f` for any save written before the field
   existed — `NBTTagCompound.getFloat` returns `0` for an absent key. Legacy-save regression for the
-  accretion-disk render.
+  accretion-disk render. FOR: save format: StellarBody NBT.
 
 ## State & persistence (C1)
 

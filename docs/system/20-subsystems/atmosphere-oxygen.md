@@ -319,73 +319,74 @@ TE id `ARairRecirculator`. No atmosphere is registered by name any more: there i
 
 ## Invariants
 
-- **INV-ATM-01 [V]** A handler exists for a dim only when `enableOxygen && hasSurface() &&
+- **INV-ATM-01 [V][BEH]** A handler exists for a dim only when `enableOxygen && hasSurface() &&
   (overrideGCAir || dimId!=getMoonId() || isNativeDimension)` (the galaxy's Moon id). `AtmosphereHandler.java:65`.
-- **INV-ATM-02 [V]** With `enableOxygen=false`, every type query returns `AtmosphereType.AIR` and
+- **INV-ATM-02 [V][BEH]** With `enableOxygen=false`, every type query returns `AtmosphereType.AIR` and
   entities never take atmosphere damage. `AtmosphereHandler.java:413-457`.
-- **INV-ATM-03 [V]** Breathable types (`AIR`,`PRESSURIZEDAIR`) do not tick; hostile types
+- **INV-ATM-03 [V][SYS]** Breathable types (`AIR`,`PRESSURIZEDAIR`) do not tick; hostile types
   (`VACUUM`,`LOWOXYGEN`,`HIGHPRESSURE`,`VERYHOT`,…) do — by the `canTick` constructor argument of each
-  built-in. `AtmosphereType.java:25-37,69-74`.
-- **INV-ATM-04 [V]** `AIR`/`PRESSURIZEDAIR` breathable; `VACUUM` and all `*NOO2` not breathable —
+  built-in. `AtmosphereType.java:25-37,69-74`. FOR: INV-ATM-05.
+- **INV-ATM-04 [V][SYS]** `AIR`/`PRESSURIZEDAIR` breathable; `VACUUM` and all `*NOO2` not breathable —
   the `isBreathable` constructor argument of each built-in; the constructor keeps the given name.
-  `AtmosphereType.java:25-37,69-74`. (Was `[T]`, same deletion.)
-- **INV-ATM-05 [V]** Unprotected entities are affected; immunity requires creative/spectator, a
+  `AtmosphereType.java:25-37,69-74`. (Was `[T]`, same deletion.) FOR: INV-ATM-05.
+- **INV-ATM-05 [V][BEH]** Unprotected entities are affected; immunity requires creative/spectator, a
   rocket/capsule ride, the grace window, or helm+chest (+legs+feet where a hazard acts on the whole
   body rather than on what is breathed). All of it or none of it: an entity that fails the strictest
   requirement takes every active hazard. `AtmosphereHazards.java`.
-- **INV-ATM-06 [V]** Tick effects are suppressed when `AtmosphereTickEvent` is cancelled or the
-  type is immune to the entity class. `AtmosphereHandler.java:256-262`.
-- **INV-ATM-07 [T]** A vent seals only with BOTH oxygen and power; missing either → no seal, zero
-  blob. `OxygenVentRequiresFuelAndPowerTest.java:96-109`.
-- **INV-ATM-08 [T]** The blob is bounded by `oxygenVentSize`: a sealed volume within the cap
+- **INV-ATM-06 [V][SYS]** Tick effects are suppressed when `AtmosphereTickEvent` is cancelled or the
+  type is immune to the entity class. `AtmosphereHandler.java:256-262`. FOR: INV-ATM-05.
+- **INV-ATM-07 [T][BEH]** A vent seals only with BOTH oxygen and power; missing either → no seal, zero
+  blob. `OxygenVentRequiresFuelAndPowerTest.java:96-109`. Pinned by `OxygenVentRequiresFuelAndPowerTest#ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere`, `OxygenVentRequiresFuelAndPowerTest#ventWithoutPowerDoesNotSealEvenWhenFueled`.
+- **INV-ATM-08 [T][BEH]** The blob is bounded by `oxygenVentSize`: a sealed volume within the cap
   pressurises, one past it voids to the dim baseline (binary, no partial fill).
-  `OxygenVentBoundedByBlobCapTest.java:88-109`.
-- **INV-ATM-09 [V]** When the tank cannot supply `blobSize × gasUsageMult` O2 the vent flips
+  `OxygenVentBoundedByBlobCapTest.java:88-109`. Pinned by `OxygenVentBoundedByBlobCapTest#ventSealsWithinCapButNotBeyondIt`.
+- **INV-ATM-09 [T][BEH]** When the tank cannot supply `blobSize × gasUsageMult` O2 the vent flips
   `hasFluid=false` and sets the blob to the dim default atmosphere. `TileOxygenVent.java:269-287`;
-  pinned `OxygenVentRequiresFuelAndPowerTest.java:71-91`.
-- **INV-ATM-10 [T]** Empty scrubber → comparator 0; fresh cartridge → comparator > 0.
-  `CO2ScrubberComparatorOutputTest.java:41-74`.
-- **INV-ATM-11 [V]** Gas pad transfers O2 only when tank fluid is oxygen and H2 only when it is
+  pinned `OxygenVentRequiresFuelAndPowerTest.java:71-91`. Pinned by `OxygenVentRequiresFuelAndPowerTest#ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere`.
+- **INV-ATM-10 [T][BEH]** Empty scrubber → comparator 0; fresh cartridge → comparator > 0.
+  `CO2ScrubberComparatorOutputTest.java:41-74`. Pinned by `CO2ScrubberComparatorOutputTest#emptyScrubberReportsZeroComparatorOutput`, `CO2ScrubberComparatorOutputTest#freshCartridgeReportsNonZeroComparatorOutput`.
+- **INV-ATM-11 [V][BEH]** Gas pad transfers O2 only when tank fluid is oxygen and H2 only when it is
   not, never both in one tick. `TileGasChargePad.java:120-168`.
-- **INV-ATM-12 [V]** Blob membership excludes cells that are sealed or already owned by another
-  blob. `AtmosphereBlob.java:64-71` (seam).
-- **INV-ATM-13 [V]** Chest protection is free in a combustible (O2-bearing) atmosphere but costs
+- **INV-ATM-12 [V][SYS]** Blob membership excludes cells that are sealed or already owned by another
+  blob. `AtmosphereBlob.java:64-71` (seam). FOR: INV-ATM-08.
+- **INV-ATM-13 [V][BEH]** Chest protection is free in a combustible (O2-bearing) atmosphere but costs
   1 O2 per commit otherwise; zero air → no protection. `ItemSpaceChest.java:273-286`.
 - **INV-ATM-14 [V]** Connectionless player entities (FakePlayer/headless) get cache/sync
   bookkeeping but no packet-bearing effects — prevents a netty NPE crashing the tick loop.
   `AtmosphereHandler.java:251-254`; `Atmosphere.java:33-40`.
 - **INV-ATM-15** — retired.
-- **INV-ATM-16 [T]** Breathing conserves zone pressure: oxygen falls by exactly the amount that
-  appears as CO2, and never below zero. `AirStateTest`.
-- **INV-ATM-17 [T]** An untouched zone reports 100 (= 1.00 atm), the figure the analyser and
-  `PacketAtmSync` carried when zone pressure was a constant. `AirStateTest`.
-- **INV-ATM-18 [T]** Oxygen inside the configured band is breathable; below it `LOWOXYGEN` (or
+- **INV-ATM-16 [T][SYS]** Breathing conserves zone pressure: oxygen falls by exactly the amount that
+  appears as CO2, and never below zero. `AirStateTest`. Pinned by `AirStateTest#breathingConvertsOxygenIntoCarbonDioxideWithoutChangingPressure`, `AirStateTest#breathingCannotTakeOxygenThatIsNotThere`. FOR: INV-ATM-18.
+- **INV-ATM-17 [T][SYS]** An untouched zone reports 100 (= 1.00 atm), the figure the analyser and
+  `PacketAtmSync` carried when zone pressure was a constant. `AirStateTest`. Pinned by `AirStateTest#breathableAirReadsAsOneAtmosphere`. FOR: INV-ATM-18.
+- **INV-ATM-18 [V][BEH]** Oxygen inside the configured band is breathable; below it `LOWOXYGEN` (or
   `NOO2` at exactly zero), above it `HIGHOXYGEN`; no gas at all is `VACUUM` whatever the
-  composition. `AirStateTest`.
-- **INV-ATM-19 [V]** Life support acts on a zone exactly while the MACHINE holding it says it is
+  composition (`AirState.java:506-507`, `oxygenRung` at `:544-557`). Only the vacuum half has a test
+  (`AirStateTest#aZoneWithNoGasInItIsVacuumWhateverItsComposition`); the band bounds are read from code.
+- **INV-ATM-19 [V][SYS]** Life support acts on a zone exactly while the MACHINE holding it says it is
   maintaining the air — `IBlobHandler.isMaintainingAtmosphere()`, which `TileOxygenVent` answers as
   `isSealed && hasFluid` and every other handler leaves at its `false` default. A planet's own
   atmosphere is therefore excluded because nothing is maintaining it, not because of anything about
   its type. `AtmosphereHandler.isLifeSupportManaged`, `TileOxygenVent.java:308-317`.
   The test is deliberately not against the atmosphere the zone PUBLISHES: that agrees with the gases
-  only in the one case a refresh is not for, and would latch the zone on the first hazard it reached.
-- **INV-ATM-21 [T]** Fire and lungs are two different questions about the same gas: in the band
+  only in the one case a refresh is not for, and would latch the zone on the first hazard it reached. FOR: INV-ATM-09.
+- **INV-ATM-21 [T][BEH]** Fire and lungs are two different questions about the same gas: in the band
   BETWEEN the two thresholds a room burns and cannot be breathed, and far below both it does neither.
   `test/server/CombustionFollowsTheOxidiserTest` (no unit pin of the in-between band: it needs a loaded
-  configuration)
-- **INV-ATM-22 [T][A]** A strictly better atmosphere never reads as worse — adding oxidiser never takes
+  configuration) Pinned by `CombustionFollowsTheOxidiserTest#aRoomTooThinToBurnRefusesFireWhileItsLabelStillSaysOtherwise`, `LifeSupportZoneTest#theCombinerRefusesToPushOxygenPastTheSafeCeiling`.
+- **INV-ATM-22 [T][A][SYS]** A strictly better atmosphere never reads as worse — adding oxidiser never takes
   breathability or combustion away, and removing a poison never leaves the room toxic. The poison half
-  `[T]`: `test/unit/AtmospherePredicatesTest.aPoisonMakesAirToxicAndDrawingItOffClearsIt`. The oxidiser
-  half `[A]`, unpinned: no test sweeps the configured bands.
-- **INV-ATM-23 [T]** A poison is judged against ITS OWN limit, so the same amount of two different
+  `[T]`: `test/unit/AtmospherePredicatesTest#aPoisonMakesAirToxicAndDrawingItOffClearsIt`. The oxidiser
+  half `[A]`, unpinned: no test sweeps the configured bands. FOR: INV-ATM-18.
+- **INV-ATM-23 [T][SYS]** A poison is judged against ITS OWN limit, so the same amount of two different
   gases is not the same hazard, and good air is no defence.
-  `test/unit/AtmospherePredicatesTest.aPoisonIsJudgedAgainstItsOwnLimitAndNotAgainstTheAirAroundIt`
-- **INV-ATM-24 [T]** A composition survives a save including a substance the three old keys could not
+  `test/unit/AtmospherePredicatesTest#aPoisonIsJudgedAgainstItsOwnLimitAndNotAgainstTheAirAroundIt` FOR: INV-ATM-18.
+- **INV-ATM-24 [T][SYS]** A composition survives a save including a substance the three old keys could not
   name, and a substance this game no longer knows is dropped rather than guessed at.
-  `test/unit/AtmospherePredicatesTest.aCompositionSurvivesASaveAndAnUnknownGasIsDropped`
-- **INV-ATM-20 [T]** Regeneration is respiration run backwards: CO2 becomes oxygen one for one,
+  `test/unit/AtmospherePredicatesTest#aCompositionSurvivesASaveAndAnUnknownGasIsDropped` FOR: INV-ATM-18.
+- **INV-ATM-20 [T][SYS]** Regeneration is respiration run backwards: CO2 becomes oxygen one for one,
   total pressure is unchanged (the solid carbon never held any), and it cannot process CO2 that is
-  not there. A zone driven out of the band by breathing can be brought back into it. `AirStateTest`.
+  not there. A zone driven out of the band by breathing can be brought back into it. `AirStateTest`. Pinned by `AirStateTest#regenerationIsBreathingRunBackwards`, `AirStateTest#regenerationCannotInventCarbonDioxide`. FOR: INV-ATM-18.
 
 ## Failure modes & edge cases
 

@@ -49,6 +49,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
      * assembled analyser increments the chip's COMPOSITION
      * counter when (1) powered, (2) chip with UUID in slot 0, (3) DataBus
      * pre-loaded with COMPOSITION, (4) researchingAtmosphere flag set.
+     * Pins INV-MBM-16 (a powered analyser with data on its buses increments the chip's composition data).
      */
     @Test
     public void poweredAnalyserIncrementsChipCompositionFromDataBus() throws Exception {

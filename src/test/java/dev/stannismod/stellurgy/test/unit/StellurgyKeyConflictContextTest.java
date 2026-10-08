@@ -20,6 +20,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class StellurgyKeyConflictContextTest {
 
+    /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
     @Test
     public void eachContextConflictsWithItself() {
         // A binding only conflicts with another binding in the SAME context —
@@ -28,6 +29,7 @@ public class StellurgyKeyConflictContextTest {
         assertTrue(StellurgyKeyConflictContext.NOT_PILOTING.conflicts(StellurgyKeyConflictContext.NOT_PILOTING));
     }
 
+    /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
     @Test
     public void pilotingAndNotPilotingNeverConflict() {
         // The whole point: a steering key (PILOTING) and the vanilla key it
@@ -36,6 +38,7 @@ public class StellurgyKeyConflictContextTest {
         assertFalse(StellurgyKeyConflictContext.NOT_PILOTING.conflicts(StellurgyKeyConflictContext.PILOTING));
     }
 
+    /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
     @Test
     public void doesNotClaimConflictWithForgeBuiltInContexts() {
         // Our contexts must not over-claim conflicts against IN_GAME/GUI, or the

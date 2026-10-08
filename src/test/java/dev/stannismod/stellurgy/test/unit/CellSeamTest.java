@@ -44,6 +44,7 @@ public class CellSeamTest {
         assertFalse(CellSeam.shouldCarry(justPast[0], justPast[1], justPast[2]));
     }
 
+    /** Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis). */
     @Test
     public void aShipPastTheMarginIsCarriedIntoTheNeighbourItLeftThrough() {
         double[] out = poseOfLocal(GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN + 1L, 0L, 0L);
@@ -92,6 +93,7 @@ public class CellSeamTest {
      * compared the two constants to each other and asserted about poses computed from them, and it
      * stayed green against a build that landed the ship ON the face — which is the whole defect this
      * test exists to catch, with the return trip cut by a factor of ten.</p>
+     * Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis).
      */
     @Test
     public void aCarriedShipCannotPingPongBackAcrossTheFace() {

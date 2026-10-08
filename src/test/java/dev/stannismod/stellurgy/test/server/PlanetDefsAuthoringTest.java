@@ -359,6 +359,9 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * fails with {@code itsIdTakenByAnother=true}, {@code ownerOf2=Unnumbered} and
      * {@code StatesTheFirstFreeId.dims=[]}. On the shipped tree, before the fix, it failed on
      * production as it stood (2026-10-02, {@code logs/bugs-b-repro3.log}).</p>
+     * Pins DIMID-1 (a dimension id names at most one body in every holder).
+     * Pins DIMID-2 (a stated id is honoured).
+     * Pins DIMID-3 (an allocated id is never a stated one).
      */
     @Test
     public void aPlanetThatStatesNoDimensionIsGivenAFreeOne() throws Exception {
@@ -424,6 +427,8 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * {@code if (!this.registerDimNoUpdate(properties, properties.isNativeDimension))} put back to the
      * shipped unchecked call (its refusal branch and the later {@code refusedBodies.contains(properties)}
      * skip removed), this fails with {@code Sol.bodiesUnder9611=[StatesTheSameId]}.</p>
+     * Pins DIMID-1 (a dimension id names at most one body in every holder).
+     * Pins DIMID-4 (a refused registration is bound to no holder and the load continues).
      */
     @Test
     public void aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar() throws Exception {
@@ -811,6 +816,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * {@code Faraway=… majors=1}; with {@code DimensionManager#createAndLoadDimensions} at
      * {@code int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);} dropping
      * the giants, with {@code Counted=… majors=2}.</p>
+     * Pins ADDR-24 (an authored system holds what its pack declares and nothing else).
      */
     @Test
     public void anAuthoredStarHoldsWhatItsPackDeclaresAndNothingElse() throws Exception {

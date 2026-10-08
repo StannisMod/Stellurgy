@@ -57,6 +57,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      *
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "hotter than it started" is this same verdict read through a division.</p>
+     * Pins INV-HEAT-01 (A machine's waste heat ends up in the loop touching it, and raises its temperature above ambient).
      */
     @Test
     public void aMachineOnACoolantLoopWarmsIt() throws Exception {
@@ -96,6 +97,8 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * capacity instead of the loop's: "a loop with twice the thermal mass must warm markedly less on
      * the same heat (short rose 226500 milliK, long rose 226500)", 2026-09-30. The four premises
      * before it are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-02 (Capacity is a real quantity: the same heat in a loop of twice the mass is a markedly smaller temperature rise).
+     * Pins HEAT-3 (one connected network is one thermodynamic object: the same heat in a longer loop is a lower temperature).
      */
     @Test
     public void theSameHeatInALongerLoopIsALowerTemperature() throws Exception {
@@ -154,6 +157,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * <p>The temperature IS asserted here, unlike the flag-on scenarios: with the flag off the loop's
      * temperature is not derived from stored heat at all, it is written directly, so neither stored
      * verdict implies it.</p>
+     * Pins INV-HEAT-03 (With shipHeat off nothing stores heat, no loop reports capacity, and every loop reads ambient).
      */
     @Test
     public void withTheThermalSystemOffNothingHeats() throws Exception {

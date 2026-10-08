@@ -93,6 +93,7 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
      * {@code WorldClient} the session built: "after the relog the CLIENT's own pilot gate must re-open
      * against the restored mount and put input on the wire". The first wait the wave touched is the control leg's link before the relog, which
      * says the key reached the ship at all.</p>
+     * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
     @Test
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {

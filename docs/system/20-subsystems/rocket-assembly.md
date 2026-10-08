@@ -149,47 +149,47 @@ reads 0 = SUCCESS; `pwr`, `tik` and `id` are network-only (id 2/3 sync), never p
 
 ## Invariants
 
-- **INV-RASM-01 [V]** `getRocketPadBounds` returns `null` unless both horizontal sizes
+- **INV-RASM-01 [V][BEH]** `getRocketPadBounds` returns `null` unless both horizontal sizes
   `≥ MIN_SIZE` and the tower `≥ MIN_SIZE_Y`; all downstream scan/build early-outs on
   `bbCache==null` (`canScan`). `TileRocketAssemblingMachine.java:776`, `:920`.
-- **INV-RASM-02 [T]** A valid pad structure assembles to a spawned entity with a positive-axis
-  storage chunk whose `storageChunkSize == sx*sy*sz`. `RocketAssemblySmokeTest.java:56`.
-- **INV-RASM-03 [T]** `assembleRocket` only proceeds when `status==SUCCESS`; a scan verdict of
+- **INV-RASM-02 [T][BEH]** A valid pad structure assembles to a spawned entity with a positive-axis
+  storage chunk whose `storageChunkSize == sx*sy*sz`. `RocketAssemblySmokeTest.java:56`. Pinned by `RocketAssemblySmokeTest#fixtureRocketAssemblesToLiveEntity`, `RocketAssemblySmokeTest#rocketStorageChunkMatchesScanFootprint`.
+- **INV-RASM-03 [T][BEH]** `assembleRocket` only proceeds when `status==SUCCESS`; a scan verdict of
   anything else aborts the build. `TileRocketAssemblingMachine.java:642`;
-  `RocketAssemblySmokeTest.java:33`.
-- **INV-RASM-04 [T]** The pad assembler spawns `EntityRocket` (never
+  `RocketAssemblySmokeTest.java:33`. Pinned by `RocketAssemblySmokeTest#invalidRocketMissingEngineFailsAssemblyWithReason`.
+- **INV-RASM-04 [T][BEH]** The pad assembler spawns `EntityRocket` (never
   `EntityStationDeployedRocket`); the UV assembler spawns `EntityStationDeployedRocket`.
-  `UvAssemblerOutputEntityClassTest.java:81,106`.
-- **INV-RASM-05 [V]** UV size caps are `MAX_SIZE=MAX_SIZE_Y=17` and are strictly smaller than
+  `UvAssemblerOutputEntityClassTest.java:81,106`. Pinned by `UvAssemblerOutputEntityClassTest#rocketAssemblerProducesEntityRocketNotStationDeployed`, `UvAssemblerOutputEntityClassTest#uvAssemblerProducesEntityStationDeployedRocket`.
+- **INV-RASM-05 [V][BEH]** UV size caps are `MAX_SIZE=MAX_SIZE_Y=17` and are strictly smaller than
   the pad assembler's `MAX_SIZE_Y=128`, so the two tiles remain distinct machines.
   `TileUnmannedVehicleAssembler.java:33`; `TileRocketAssemblingMachine.java:70`. Unpinned on
   purpose: a relation between two constants executes no decision.
-- **INV-RASM-06 [T]** With `rocketRequireFuel=false`, `hasEnoughFuel` returns `true`
+- **INV-RASM-06 [T][BEH]** With `rocketRequireFuel=false`, `hasEnoughFuel` returns `true`
   unconditionally so a valid structure still assembles (never collapses to `NOFUEL`).
-  `TileRocketAssemblingMachine.java:237`; `RocketRequireFuelDisableAssemblesTest.java:77`.
-- **INV-RASM-07 [T]** Wear accrual is single-gated by `partsWearSystem`: system on ⇒
+  `TileRocketAssemblingMachine.java:237`; `RocketRequireFuelDisableAssemblesTest.java:77`. Pinned by `RocketRequireFuelDisableAssemblesTest#validRocketAssemblesWhenFuelNotRequired`.
+- **INV-RASM-07 [T][BEH]** Wear accrual is single-gated by `partsWearSystem`: system on ⇒
   `damageParts` raises breaking probability > 0; system off ⇒ probability stays 0.
-  `StorageChunk.java:796`; `WearAccrualDisableTest.java:76,81`.
-- **INV-RASM-08 [V]** Blob NBT read reallocates `blocks`/`metas` from `xSize·ySize·zSize`
+  `StorageChunk.java:796`; `WearAccrualDisableTest.java:76,81`. Pinned by `WearAccrualDisableTest#wearAccruesOnlyWhenSystemEnabled`.
+- **INV-RASM-08 [V][SYS]** Blob NBT read reallocates `blocks`/`metas` from `xSize·ySize·zSize`
   using index `z + zSize*y + zSize*ySize*x`; write uses the identical formula ⇒ round-trip
-  stable for a well-formed tag. `StorageChunk.java:666`, `:704`.
+  stable for a well-formed tag. `StorageChunk.java:666`, `:704`. FOR: save format: a built rocket reloads whole.
 - **INV-RASM-09 [V]** `writeToNBT`/`writeToNetwork` no-op on the client
   (`world.isRemote` guard) — the blob is authored only server-side. `StorageChunk.java:642`,
   `:1135`.
-- **INV-RASM-10 [V]** `cutWorldBB` empties source inventories and kills dropped items before
+- **INV-RASM-10 [V][BEH]** `cutWorldBB` empties source inventories and kills dropped items before
   clearing blocks, preventing item duplication on capture. `StorageChunk.java:451`, `:464`.
-- **INV-RASM-11 [V]** Biprop engines gate assembly on BOTH bipropellant and oxidizer capacity
+- **INV-RASM-11 [V][BEH]** Biprop engines gate assembly on BOTH bipropellant and oxidizer capacity
   (`NOFUEL` otherwise), but only when `rocketRequireFuel` is on.
   `TileRocketAssemblingMachine.java:544`, `:570`.
 - **INV-RASM-12 [A]** The stat ladder assumes the three scan implementations (pad tile, UV
   tile, `StorageChunk.recalculateStats`) stay numerically consistent; nothing enforces it
  . `StorageChunk.java:169`.
-- **INV-RASM-13 [T]** The burn-distance `NOFUEL` ("can its tanks carry it to orbit",
+- **INV-RASM-13 [T][BEH]** The burn-distance `NOFUEL` ("can its tanks carry it to orbit",
   `hasEnoughFuel`) is asked of a ROCKET only — a build with no Advanced Flight Computer. A ship is
   flown, and is a legitimate craft for flights that never leave the planet (maintainer 2026-10-05;
   the climb is the body's own line: 100 000 blocks on Earth). The biprop-tanks
   check (INV-RASM-11) still applies to both. `TileRocketAssemblingMachine#scanRocket`;
-  `RocketRequireFuelDisableAssemblesTest.aShipIsNotHeldToTheClimbToOrbitThatARocketIs`.
+  `RocketRequireFuelDisableAssemblesTest#aShipIsNotHeldToTheClimbToOrbitThatARocketIs`.
 
 ## Failure modes & edge cases
 

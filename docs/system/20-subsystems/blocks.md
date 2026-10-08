@@ -220,15 +220,15 @@ Config: see `C4-config-surface`.
   bare position, which every dimension would share).
 - **INV-BLK-02 [V]** Fuel-tank meta round-trips only 3 rotations (UP/SOUTH/EAST); DOWN/NORTH/WEST are
   normalized to their opposite at place-time, so no lossy meta exists on disk. `BlockFuelTank.java:150,52`
-- **INV-BLK-03 [V]** Broken-part engines carry their wear stage into the dropped item via the tile, and
+- **INV-BLK-03 [V][BEH]** Broken-part engines carry their wear stage into the dropped item via the tile, and
   suppress the default block drop. `BlockRocketMotor.java:106,126`
 - **INV-BLK-04 [V]** GUI-opening `onBlockActivated` handlers are server-guarded (`!world.isRemote`).
   `BlockLandingPad.java:55` `BlockStationModuleDockingPort.java:48`
 - **INV-BLK-05 [V]** Rocket-fire `AGE` property is registry-named `"level"`; the string is contractual for
   CCL lava-material render. `BlockRocketFire.java:34`
-- **INV-BLK-06 [A]** Data-bus items with no stored data are NBT-free and therefore stack — assumed the intended
+- **INV-BLK-06 [A][BEH]** Data-bus items with no stored data are NBT-free and therefore stack — assumed the intended
   behaviour of the `data>0` guard; not test-pinned. `BlockDataBusBig.java:54`
-- **INV-BLK-07 [V]** Landing pad registers on add and unregisters on break with its station (symmetric); the
+- **INV-BLK-07 [V][BEH]** Landing pad registers on add and unregisters on break with its station (symmetric); the
   docking port's break path is **not** symmetric. `BlockLandingPad.java:46,71`
 
 ## Failure modes & edge cases

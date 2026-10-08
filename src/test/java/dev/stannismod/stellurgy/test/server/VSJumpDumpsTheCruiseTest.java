@@ -62,6 +62,7 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
     /** Tolerance on a cruise read back, in blocks per second. The two outcomes are 20 apart. */
     private static final double CRUISE_EPSILON = 1e-9;
 
+    /** Pins HYPER-31 (a craft leaves hyperspace at rest and keeps its cruise across a direct crossing). */
     @Test
     public void aDirectCrossingKeepsTheCruise() throws Exception {
         Arrived arrived = jumpUnderCruise(DIRECT_JUMP_SPEED, "DIRECT");
@@ -75,6 +76,7 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
                 COMMANDED_CRUISE, extractDouble(cruise, "cruiseUp"), CRUISE_EPSILON);
     }
 
+    /** Pins HYPER-31 (a craft leaves hyperspace at rest and keeps its cruise across a direct crossing). */
     @Test
     public void aHyperspaceJumpLeavesTheCraftAtRest() throws Exception {
         Arrived arrived = jumpUnderCruise(HYPERSPACE_JUMP_SPEED, "HYPERSPACE");

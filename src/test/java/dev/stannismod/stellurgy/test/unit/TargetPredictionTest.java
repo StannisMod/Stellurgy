@@ -74,6 +74,7 @@ public class TargetPredictionTest {
         };
     }
 
+    /** Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time). */
     @Test
     public void theAimIsWhereTheBodyWillBeWhenTheFlightEnds() {
         TargetPrediction.Ephemeris body = slidingInsideItsCell(1_000L);
@@ -93,6 +94,7 @@ public class TargetPredictionTest {
      * An aim resolves to a NAME. The cell is the destination and the cell is durable, so no amount
      * of leading may change which cell the ship is aimed at — the pilot chose a body, not a place
      * the body happens to pass through.
+     * Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time).
      */
     @Test
     public void theAimedCellIsTheBodysDurableNameWhateverTheFlightCosts() {
@@ -143,6 +145,7 @@ public class TargetPredictionTest {
      * The pricing reads the frames. Without this the iteration converges on pass one against a
      * static grid and the ship is aimed at a rendezvous the destination left minutes ago — which is
      * exactly what the old {@code sameCell} convergence test did once names became durable.
+     * Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time).
      */
     @Test
     public void aMovingFrameChangesTheAnswer() {

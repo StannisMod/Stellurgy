@@ -277,25 +277,25 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
 
 ## Invariants
 
-- **INV-DIM-01 [V]** Default props are stable: name `Temp`, gravity 1.0, seaLevel 63, Earth-like air
+- **INV-DIM-01 [V][BEH]** Default props are stable: name `Temp`, gravity 1.0, seaLevel 63, Earth-like air
   (`AirState.earthLike()`), isNative, no rings, not a gas giant, orbital distance one AU
   (`DISTANCE_UNITS_PER_AU`) — `DimensionProperties.java:298-336,544-585`.
-- **INV-DIM-02 [T]** Core identity (id, name, starId, gravity, dist, period, atmosphere) survives
-  the NBT round-trip. `DimensionPropertiesTest.java:79`.
-- **INV-DIM-03 [T]** Weather config (start/prolongation lengths, markers, acidicRain) survives the
-  round-trip. `DimensionPropertiesTest.java:158`.
-- **INV-DIM-04 [T]** Generation flags + crater/volcano multipliers survive the round-trip.
-  `DimensionPropertiesTest.java:183`. That `getGeodeMultiplier` returns the geode (not volcano) field is
-  `[V]` — `DimensionProperties.java:2683-2685`.
-- **INV-DIM-05 [T]** Ring angle/color and sky/fog/sunrise colors survive the round-trip.
-  `DimensionPropertiesTest.java:221`, `:240`.
-- **INV-DIM-06 [T]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest`
-  `realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`.
-- **INV-DIM-07 [T]** Parent↔child links are bidirectional; a moon inherits its parent's solar
-  distance. `DimensionPropertiesTest.java:332`, `:380`.
-- **INV-DIM-08 [T]** Empty-NBT round-trip yields post-constructor defaults (no NPE / partial state).
-  `DimensionPropertiesTest.java:438`.
-- **INV-DIM-09 [V]** A dimension is registered with Forge **iff** `hasSurface()` (gas giants and
+- **INV-DIM-02 [V][SYS]** Core identity (id, name, starId, gravity, dist, period, atmosphere) survives
+  the NBT round-trip (`DimensionProperties.java:1880-2090` reads what `:2258-2420` writes). No test
+  round-trips a populated `DimensionProperties`. FOR: save format: a dimension survives a world reload.
+- **INV-DIM-03 [V][SYS]** Weather config (start/prolongation lengths, markers, acidicRain) survives the
+  round-trip (`DimensionProperties.java:2151-2152` read, `:2473` write). FOR: save format: a dimension survives a world reload.
+- **INV-DIM-04 [V][SYS]** Generation flags + crater/volcano multipliers survive the round-trip
+  (`DimensionProperties.java:1880-2090` read, `:2258-2420` write). That `getGeodeMultiplier` returns the
+  geode (not volcano) field is `[V]` — `DimensionProperties.java:2781-2783`. FOR: save format: a dimension survives a world reload.
+- **INV-DIM-05 [V][SYS]** Ring angle/color and sky/fog/sunrise colors survive the round-trip
+  (`DimensionProperties.java:1891-1916,2111` read, `:2275-2298` write). FOR: save format: a dimension survives a world reload.
+- **INV-DIM-06 [T][SYS]** `realizeAtmosphere` does not corrupt id or hierarchy. `DimensionPropertiesTest#realizingTheAtmosphereDoesNotCorruptIdOrHierarchy`. FOR: save format: a dimension survives a world reload.
+- **INV-DIM-07 [V][BEH]** Parent↔child links are bidirectional (`DimensionProperties.java:1313-1320`,
+  `addChildPlanet` sets both ends); a moon inherits its parent's solar distance (`:1034-1040`).
+- **INV-DIM-08 [V][SYS]** Empty-NBT round-trip yields post-constructor defaults (no NPE / partial state):
+  `readFromNBT` guards every optional key with `hasKey` (`DimensionProperties.java:1880-2090`). FOR: save format: a dimension survives a world reload.
+- **INV-DIM-09 [V][BEH]** A dimension is registered with Forge **iff** `hasSurface()` (gas giants and
   stars never get a Forge dim). `DimensionManager.java:431`, `:493`.
 - **INV-DIM-10 [V]** `getDimensionProperties` never returns null: unknown → this manager's
   `getOverworldProperties()`, space dim / `Integer.MIN_VALUE` → its `getDefaultSpaceProperties()`.
@@ -306,24 +306,25 @@ offers a different list than the pad on the planet below. The shape is `SpaceSta
   writer emits only `biomeNames` for native surface dims. `DimensionProperties.java:1524`, `:1929`.
 - **INV-DIM-13 [V]** Feature-frequency multipliers are always in `[0.01,10]` (clamped on set and on
   load). `DimensionProperties.java:81`, `:1673`.
-- **INV-DIM-14 [V]** `temp.dat`/`planetDefs.xml` writes are crash-atomic: fsync'd tmp file then
-  `ATOMIC_MOVE` (fallback non-atomic). `DimensionManager.java:655`, `:687`.
-- **INV-DIM-15 [V]** `saveDimensions` refuses to write when there are no stars or no dims (throws),
-  guarding against clobbering a good file with an empty galaxy. `DimensionManager.java:592`.
-- **INV-DIM-16 [T]** A registered planet uses `WorldProviderPlanet`:
-  `PlanetDimensionLoadTest.java:38`. The "registered planets are preloaded / the overworld reports
+- **INV-DIM-14 [V][SYS]** `temp.dat`/`planetDefs.xml` writes are crash-atomic: fsync'd tmp file then
+  `ATOMIC_MOVE` (fallback non-atomic). `DimensionManager.java:655`, `:687`. FOR: save format: a crash never loses the galaxy.
+- **INV-DIM-15 [V][SYS]** `saveDimensions` refuses to write when there are no stars or no dims (throws),
+  guarding against clobbering a good file with an empty galaxy. `DimensionManager.java:592`. FOR: save format: a crash never loses the galaxy.
+- **INV-DIM-16 [T][BEH]** A registered planet uses `WorldProviderPlanet`:
+  `PlanetDimensionLoadTest#providerClassIsWorldProviderPlanet`. The "registered planets are preloaded / the overworld reports
   loaded" half is `[A]` (no test pins it); the class also pins
   `saveFolderResolvesToExpectedPath` (`:50`).
-- **INV-DIM-18 [T]** An authored gravity always wins: with `gravityAuthored` set, `setBulk` may change
+- **INV-DIM-18 [V][BEH]** An authored gravity always wins (`DimensionProperties.java:633-639`): with `gravityAuthored` set, `setBulk` may change
   `mass`/`radius` but never `gravitationalMultiplier`. This is the compatibility guarantee of MECH-DIM-19
   — no planet in an existing catalogue changes when bulk properties arrive.
-- **INV-DIM-19 [T]** `mass`, `radius`, `gravityAuthored`, `tidallyLocked` and `metallicity` are written
+- **INV-DIM-19 [V][SYS]** `mass`, `radius`, `gravityAuthored`, `tidallyLocked` and `metallicity` are written
   **only when non-default**, so a planet that states none of them produces byte-identical NBT to the
-  one it produced before these keys existed (the `terrainSource` / `originalAtmosphereDensity` idiom).
+  one it produced before these keys existed (the `terrainSource` / `originalAtmosphereDensity` idiom;
+  `DimensionProperties.java:2402-2420`). FOR: maintainer ruling 2026-09-30 (0.1.0 clean break): no marker, byte-identical NBT when nothing is stated.
 - **INV-DIM-20 [V]** A per-planet ore table is never the shared climate object: `getOreGenProperties`
   returns either the planet's own `oreProperties`, the shared table unchanged (metallicity 1), or a
   **copy** with metals scaled. Nothing mutates a table another world is reading.
-- **INV-DIM-17 [A]** `orbitTheta` is deterministic for a fixed world time (celestial angle stable) —
+- **INV-DIM-17 [A][BEH]** `orbitTheta` is deterministic for a fixed world time (celestial angle stable) —
   asserted at world level by `celestialAngleProgressesAcrossDifferentWorldTimes` (`PlanetDimensionLoadTest.java:58-75`, a soft assertion that three world times do not collapse to one angle — not a determinism check; no test pins stability across the same world time).
 
 ## Failure modes & edge cases
@@ -361,7 +362,7 @@ Config: see `C4-config-surface`. Galaxy regeneration is driven by the presence/`
 
 ## Test coverage
 
-INV-DIM-02…08 → `test/integration/DimensionPropertiesTest.java` (NBT round-trips, hierarchy). INV-DIM-16 → `test/server/PlanetDimensionLoadTest.java` (provider
+INV-DIM-06 → `test/integration/DimensionPropertiesTest.java`. INV-DIM-02..05, 07, 08 and 18, 19 are code-verified `[V]`: no test round-trips a populated `DimensionProperties`. INV-DIM-16 → `test/server/PlanetDimensionLoadTest.java` (provider
 class only). INV-DIM-17 → same (celestial angle, soft).
 Additional oracles: `XMLPlanetLoaderTest`, `PacketSerializationTest`, `PlanetaryTravelHelperTest`,
 `AsteroidDimensionContainsAsteroidsTest`, `TerraformerMultiblockTest`, `BeaconEnableCycleTest`.

@@ -40,6 +40,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
+    /** Pins INV-SHD-05 (a charged coil absorbs a single impact costing more than its per-tick intake). */
     @Test
     public void chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake() throws Exception {
         int gx = 980, gz = 774;
@@ -178,6 +179,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         return (x + 0.5D) + "," + (Y + 1.5D) + "," + (z + 0.5D);
     }
 
+    /** Pins INV-SHD-06 (a kinetic projectile is deflected, not consumed). */
     @Test
     public void chargedShieldDeflectsAnArrow() throws Exception {
         int gx = 992, gz = 786;

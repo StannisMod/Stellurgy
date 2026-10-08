@@ -83,16 +83,16 @@ own private packet ids (0–4) not the `PacketType` enum `EntityElevatorCapsule.
 
 ## Invariants
 
-- **INV-RKT-15 [V]** `PacketType` is append-only; the four FF ids sit at the end so
-  saved/old-client wire ids do not shift `EntityRocket.java:3848`.
+- **INV-RKT-15 [V][SYS]** `PacketType` is append-only; the four FF ids sit at the end so
+  saved/old-client wire ids do not shift `EntityRocket.java:3848`. FOR: wire format: packet type ids.
 - **INV-RKT-16 [V]** Every state-mutating sub-packet re-verifies passenger authority
   server-side before acting `EntityRocket.java:3352,3371,3385,3397`.
-- **INV-RKT-17 [V]** `flightMode` is written unconditionally (even for CLASSIC) so
+- **INV-RKT-17 [V][SYS]** `flightMode` is written unconditionally (even for CLASSIC) so
   the field round-trips without "missing == default" ambiguity `:3094`; missing key
-  still degrades safely to CLASSIC via `readFromNBT` `RocketFlightMode.java:29`.
-- **INV-RKT-18 [V]** `writeNetworkableNBT` omits `data`/`lastDimensionFrom`; a
+  still degrades safely to CLASSIC via `readFromNBT` `RocketFlightMode.java:29`. FOR: save format: flightMode key.
+- **INV-RKT-18 [V][SYS]** `writeNetworkableNBT` omits `data`/`lastDimensionFrom`; a
   `RECIEVENBT` client rebuild pulls `data` separately over the `9987`/`RECIEVENBT`
-  channels `EntityRocket.java:3162`,`:3221`.
+  channels `EntityRocket.java:3162`,`:3221`. FOR: wire format: rocket network NBT.
 
 ## Failure modes & edge cases
 

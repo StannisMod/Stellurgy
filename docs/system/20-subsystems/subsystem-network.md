@@ -85,21 +85,21 @@ does not own persistence: a domain saves its own settings through whatever tile 
 
 ## Invariants
 
-- **INV-NET-01 [T]** Domains are isolated: the registry is keyed by domain, so nodes of two domains
+- **INV-NET-01 [T][SYS]** Domains are isolated: the registry is keyed by domain, so nodes of two domains
   laid through the same wall never join one graph. A node states its own domain
   (`ISubsystemNetworkNode.getNetworkDomain`), so registering one into the wrong graph is not
   expressible, and anything holding a node — a cable deciding whether to draw an arm to its
   neighbour, a readout walking the world — can ask without a per-domain marker interface to test
-  against. `SubsystemNetworkRegistry.java:30-46`, `ISubsystemNetworkNode.java:23`.
-- **INV-NET-02 [T]** Roles are not exclusive — a store registers as both source and sink and lands in
-  both maps; a cable is only ever transport. `SubsystemNetworkManager.java:135-155`.
+  against. `SubsystemNetworkRegistry.java:30-46`, `ISubsystemNetworkNode.java:23`. Pinned by `VentilationNetworkTest#aShieldCableIsNotADuctAndCarriesNoAir`. FOR: INV-SHD-02.
+- **INV-NET-02 [T][SYS]** Roles are not exclusive — a store registers as both source and sink and lands in
+  both maps; a cable is only ever transport. `SubsystemNetworkManager.java:135-155`. Pinned by `ShieldAccumulatorTest#accumulatorBridgesGeneratorToEmitter`. FOR: INV-SHD-02.
 - **INV-NET-03 [V]** `extract`/`receive` are called with the solved flow only, once per tick per
   node, after the whole component is solved — never speculatively during the solve. `:394-410`.
-- **INV-NET-04 [T]** A component with no source or no sink publishes `DISCONNECTED`, moves no
+- **INV-NET-04 [T][SYS]** A component with no source or no sink publishes `DISCONNECTED`, moves no
   commodity, and reports that to controllers AND cables alike — one publish path, both states.
   *A console pulls the state on its own tick, so the push to controllers changes nothing displayed.*
   `SubsystemNetworkManager.java:455-478`,
-  `test/server/ShieldConsoleReportsCollapseTest.java`.
+  `test/server/ShieldConsoleReportsCollapseTest.java`. Pinned by `ShieldConsoleReportsCollapseTest#aConsoleStopsReportingANetworkThatLostItsLastSource`. FOR: INV-SHD-01.
 
 ## Test coverage
 

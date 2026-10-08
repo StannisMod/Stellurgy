@@ -50,6 +50,7 @@ public class ChipNBTRoundTripTest {
 
     // ───────────────────── ItemPlanetIdentificationChip ─────────────────
 
+    /** Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default). */
     @Test
     public void planetChipDimIdReadDefaultsToInvalidPlanetWithoutNbt() {
         // Production contract (getDimensionId, lines 99-103): a stack with
@@ -62,6 +63,7 @@ public class ChipNBTRoundTripTest {
                 Constants.INVALID_PLANET, chip.getDimensionId(s));
     }
 
+    /** Pins INV-ITM-02 (set then get round-trips through NBT). */
     @Test
     public void planetChipDimIdRoundTripsForRegisteredDim() {
         // setDimensionId only persists if the dim is registered (its
@@ -84,7 +86,9 @@ public class ChipNBTRoundTripTest {
      *  {@code setDimensionId} previously built a fresh NBT but never
      *  called {@code stack.setTagCompound(nbt)} before returning — so
      *  the sentinel was silently dropped. Now it attaches the NBT so
-     *  callers can observe the "explicitly invalid" state. */
+     *  callers can observe the "explicitly invalid" state.
+     * Pins INV-ITM-04 (setting the invalid planet still attaches a tag carrying the sentinel).
+     */
     @Test
     public void planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
@@ -111,6 +115,7 @@ public class ChipNBTRoundTripTest {
         assertEquals(0xCAFEBABE_DEADBEEFL, chip.getUUID(s).longValue());
     }
 
+    /** Pins INV-ITM-03 (erase drops the entire compound). */
     @Test
     public void planetChipEraseClearsAllNbt() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
@@ -123,6 +128,7 @@ public class ChipNBTRoundTripTest {
 
     // ───────────────────── ItemStationChip ──────────────────────────────
 
+    /** Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default). */
     @Test
     public void stationChipUuidDefaultsToZero() {
         // Static methods, no instance needed. Production contract: no NBT
@@ -146,6 +152,10 @@ public class ChipNBTRoundTripTest {
 
     // ───────────────────── ItemAsteroidChip ─────────────────────────────
 
+    /**
+     * Pins INV-ITM-01 (a fresh chip with no NBT returns its sentinel default).
+     * Pins INV-ITM-02 (set then get round-trips through NBT).
+     */
     @Test
     public void asteroidChipUuidAndTypeRoundTrip() {
         ItemAsteroidChip chip = new ItemAsteroidChip();

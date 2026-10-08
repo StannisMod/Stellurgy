@@ -59,6 +59,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
      * dereferences a null rocket and either NPEs or returns a junk
      * value — both would break players who place a monitor in advance
      * of building a rocket.
+     * Pins INV-INFRA-01 (a freshly placed unlinked monitor reports an unpowered state and comparator zero).
      */
     @Test
     public void unlinkedMonitorReportsZeroComparatorOverride() throws Exception {

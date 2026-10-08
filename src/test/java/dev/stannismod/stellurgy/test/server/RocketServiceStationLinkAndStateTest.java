@@ -62,7 +62,9 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
 
     /** Service-station tick path with no linked rocket and no power
      *  surfaces — the same path a freshly-placed station traverses
-     *  on world load. Must not throw. */
+     *  on world load. Must not throw.
+     * Pins INV-INFRA-07 (an unlinked service station reports no linked rocket and no parts to repair).
+     */
     @Test
     public void serviceStationTicksWithoutLinkedRocketWithoutCrash() throws Exception {
         // Place service station in isolation (not adjacent to any rocket

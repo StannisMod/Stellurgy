@@ -65,6 +65,8 @@ public class ZoneScaleTest {
      * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} leaving a zone with children
      * undivided (one cell), this fails with "Mars's innermost moon orbits 9376 km out and shares its
      * planet's cell: lattice cell = 4609334 blocks, index = 0 …".</p>
+     * Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none).
+     * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Test
     public void everyRealMoonGetsACellOfItsOwn() {
@@ -94,6 +96,7 @@ public class ZoneScaleTest {
      * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} put back to the flat 1024 it
      * shipped as (for any zone with a child), this fails with "Mars has a descent shell of 13786
      * blocks against a zone cell of 4502 (half 2251) …".</p>
+     * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Test
     public void everyBodysOwnDescentShellFitsInsideItsOwnCell() {
@@ -130,6 +133,7 @@ public class ZoneScaleTest {
      * <p>red-witnessed: 2026-09-29, with the same inversion as the descent-shell test —
      * {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} returning the flat 1024 — this fails with "Mars's innermost moon
      * has a sphere of influence 7843 blocks in radius against a cell of 4502 (half 2251) …".</p>
+     * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Test
     public void everyCellContainsTheSphereOfTheBodyItNames() {
@@ -168,6 +172,7 @@ public class ZoneScaleTest {
      * instead of the sphere, it fails with "...so its one cell spans exactly its sphere
      * expected:&lt;529462.0&gt; but was:&lt;3.2E7&gt;" — which it could NOT do before that day: its moon
      * was built on a frame of its own, its sphere was the cap itself, and the two readings coincided.</p>
+     * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Test
     public void aBodyWithNoChildrenGetsOneCellSpanningItsWholeSphere() {
@@ -211,6 +216,7 @@ public class ZoneScaleTest {
      * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code int count = 1} returning the raw
      * {@code needed} count instead of rounding it up to a power of two, this fails with "Mars has a
      * lattice of 62 cells, which is not a power of two".</p>
+     * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Test
     public void theCountIsAPowerOfTwo() {
@@ -381,6 +387,7 @@ public class ZoneScaleTest {
      * is handed and use the undivided one (7 397 280), this fails with *"a craft standing exactly
      * where the moon stands is named by cell 0_0_0.0_0_0 while the moon itself is named by
      * 0_0_0.1_0_0"* — the defect verbatim.</p>
+     * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Test
     public void aCraftIsReAddressedOnTheLatticeItsZonesBodiesAreNamedIn() {

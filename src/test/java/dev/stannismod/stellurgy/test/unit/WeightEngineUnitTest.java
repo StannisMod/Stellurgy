@@ -50,12 +50,14 @@ public class WeightEngineUnitTest {
     @Rule
     public TemporaryFolder tempFolder = new TemporaryFolder();
 
+    /** Pins INV-WGT-04 (seedDefaults populates a non-empty material table). */
     @Test
     public void seedDefaultsPopulatesMaterialTable() {
         WeightEngine we = WeightEngine.fromJson(CURRENT + "}");
         assertTrue("default material table must be populated", we.materialCount() > MIN_MATERIALS);
     }
 
+    /** Pins INV-WGT-02 (an individual override survives a JSON save and load). */
     @Test
     public void individualOverrideSurvivesSaveLoadRoundTrip() throws Exception {
         File file = new File(tempFolder.getRoot(), "weights.json");
@@ -134,6 +136,7 @@ public class WeightEngineUnitTest {
      *
      * <p>Two ablation columns were lost exactly this way: read by {@code load()}, absent from
      * {@code save()}, invisible until a pack's hand-written rows evaporated.</p>
+     * Pins INV-WGT-07 (Every column the file declares survives a save→load cycle carrying its value, and every regex column comes back in the order it).
      */
     @Test
     public void everyColumnAPackCanWriteSurvivesASave() throws Exception {
@@ -180,6 +183,7 @@ public class WeightEngineUnitTest {
      * Regex columns are first-match-wins, so the order a pack writes its patterns in IS the
      * precedence between two patterns that both match. A column deserialised into an unordered map
      * answers a different question after a reload than the one the pack asked.
+     * Pins INV-WGT-07 (Every column the file declares survives a save and load, and every regex column keeps its written order).
      */
     @Test
     public void aRegexColumnKeepsThePackSOrderAcrossASave() throws Exception {
@@ -212,6 +216,7 @@ public class WeightEngineUnitTest {
      * <p>The file below breaks on its LAST field, {@code toughnessFallback}, which is read after every
      * column this asserts on. {@link #everyColumnAPackCanWriteSurvivesASave} is the control: the same
      * rows in a file that parses are kept.</p>
+     * Pins INV-WGT-08 (A config file that cannot be read leaves no column carrying the previous load's rows).
      */
     @Test
     public void aConfigThatCannotBeReadLeavesNoColumnBehind() throws Exception {

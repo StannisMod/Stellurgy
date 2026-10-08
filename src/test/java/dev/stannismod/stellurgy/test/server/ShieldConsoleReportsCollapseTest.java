@@ -41,6 +41,7 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
      * rather than the previous one (2): … \"networkStatus\":2 … expected:&lt;1&gt; but
      * was:&lt;2&gt;", 2026-09-30. The two premises at its head are arrangements and are not
      * witnessed.</p>
+     * Pins INV-NET-04 (a component with no source reports DISCONNECTED to controllers).
      */
     @Test
     public void aConsoleStopsReportingANetworkThatLostItsLastSource() throws Exception {

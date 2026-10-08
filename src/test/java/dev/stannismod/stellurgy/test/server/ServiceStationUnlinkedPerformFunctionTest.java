@@ -35,6 +35,7 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
     private static final int Y = dev.stannismod.stellurgy.test.FixtureSite.OPEN_AIR_Y;
     private static final int Z = 15900;
 
+    /** Pins INV-INFRA-06 (performFunction on an unlinked powered service station is a safe no-op). */
     @Test
     public void performFunctionOnUnlinkedPoweredStationIsSafeNoOp() throws Exception {
         int cx = X >> 4, cz = Z >> 4;

@@ -80,6 +80,7 @@ public class AuthoredNeighbourhoodTest {
      * {@code return seat.isPresent() && clearOfAuthored(seat.get()) ? seat : Optional.<GalacticCoord>empty();}
      * returning {@code seat}, with "no cell may be attributed to a seat that reaches the authored
      * neighbourhood" — one inversion per run, 2026-10-03.</p>
+     * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
      */
     @Test
     public void noSeatThatReachesAnAuthoredNeighbourhoodIsASystem() {
@@ -148,6 +149,7 @@ public class AuthoredNeighbourhoodTest {
      * <p>red-witnessed: with {@code UniverseRegistry#authoredBySuperIndex} at
      * {@code if (pinnedSystems.containsKey(anchor.cellKey()))} reading {@code if (false)}, this fails
      * with "a pinned system is not authored and must not clear its sibling" — 2026-10-03.</p>
+     * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
      */
     @Test
     public void aPinnedSystemClearsNothingAroundIt() {

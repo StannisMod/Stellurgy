@@ -51,6 +51,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
      * {@code storage.getInventoryTiles()} and inserts items via the
      * ITEM_HANDLER capability or IInventory — same surface the loader writes
      * against, but driven directly from the test).</p>
+     * Pins INV-INFRA-14 (the item unloader pulls items out of a rocket).
      */
     @Test
     public void unloaderPullsItemsFromRocketStorage() throws Exception {

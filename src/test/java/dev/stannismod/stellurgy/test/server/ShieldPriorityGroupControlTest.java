@@ -32,6 +32,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
 
+    /** Pins INV-SHD-09 (deleting a priority group does not change any member emitter's priority). */
     @Test
     public void groupPushesPriorityIntoMemberEmitters() throws Exception {
         int base = 1040, z = 840;
@@ -63,6 +64,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         assertEquals("a deleted group must no longer own the emitter", "", read(e1, z).group());
     }
 
+    /** Pins INV-SHD-10 (a group created at one console is editable at another and survives that console's destruction). */
     @Test
     public void anyConsoleEditsTheSameDomainConfig() throws Exception {
         int base = 1040, z = 852;
@@ -98,6 +100,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
                 2, readPriority(emitter, z));
     }
 
+    /** Pins INV-SHD-11 (rotating the access code changes the credential and leaves grouping and priority untouched). */
     @Test
     public void rotatingAccessCodeChangesCredentialButNotGrouping() throws Exception {
         int base = 1040, z = 864;

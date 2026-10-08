@@ -91,16 +91,16 @@ constants are code-level (`tunable`).
 
 ## Invariants
 
-- **INV-MBM-20** [T] The railgun fires to a linked railgun in the same dimension, drains the
+- **INV-MBM-20** [T][BEH] The railgun fires to a linked railgun in the same dimension, drains the
   source and fills the destination, and sets `FireStatus.FIRED`; firing at a registered-but-
   unloaded dim loads it and reports `TARGET_UNAVAILABLE` when no railgun is there, preserving cargo.
-  `RailgunFiringContractTest.java:75-165`.
-- **INV-MBM-21** [T] A failed shot never destroys cargo (cargo preserved on every non-FIRED path).
-  `RailgunFiringContractTest.java:95,137,165`.
-- **INV-MBM-22** [V] The elevator refuses a same-dimension link and a non-geostationary link, and
+  `RailgunFiringContractTest.java:75-165`. Pinned by `RailgunFiringContractTest#railgunFiresCargoToLinkedRailgunInSameDimension`, `RailgunFiringContractTest#railgunLoadsRegisteredButUnloadedDestinationDimension`, `RailgunFiringContractTest#railgunReportsUnavailableForUnloadableDestination`.
+- **INV-MBM-21** [T][BEH] A failed shot never destroys cargo (cargo preserved on every non-FIRED path).
+  `RailgunFiringContractTest.java:95,137,165`. Pinned by `RailgunFiringContractTest#railgunLoadsRegisteredButUnloadedDestinationDimension`, `RailgunFiringContractTest#railgunReportsUnavailableForUnloadableDestination`.
+- **INV-MBM-22** [V][BEH] The elevator refuses a same-dimension link and a non-geostationary link, and
   keeps at most one live capsule per line. `TileSpaceElevator.java:307-353,204-219,252-268`.
-- **INV-MBM-23** [T] The area gravity controller zeroes entity `fallDistance` while active.
-  `AreaGravityControllerFallDistanceResetTest`.
+- **INV-MBM-23** [T][BEH] The area gravity controller zeroes entity `fallDistance` while active.
+  `AreaGravityControllerFallDistanceResetTest`. Pinned by `AreaGravityControllerFallDistanceResetTest#controllerResetsFallDistanceInsideRadiusOnly`.
 - **INV-MBM-24** [A] `currGravity` is persisted as a float; because it is a display/animation
   speed re-derived toward an integer `gravity/100` target each tick, float drift across save/load
   is self-correcting rather than contract-breaking — assumed, not test-pinned.

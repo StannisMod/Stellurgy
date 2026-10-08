@@ -49,6 +49,7 @@ public class SystemBodyTest {
      * A name is not a place. The whole point of the model: a cell name is an identifier, so no amount
      * of time changes it. The second half is the control — without it a body that never moves would
      * pass.
+     * Pins ADDR-1 (a body's cell name is the same at every tick while its place is not).
      */
     @Test
     public void aNameIsTheSameAtEveryTickWhileThePlaceIsNot() {
@@ -68,7 +69,10 @@ public class SystemBodyTest {
                 planet.absoluteAt(0L), planet.absoluteAt(250L));
     }
 
-    /** A cell's primary body is what its frame is centred on, so its in-cell offset is zero. */
+    /**
+     * A cell's primary body is what its frame is centred on, so its in-cell offset is zero.
+     * Pins ADDR-6 (the cell of a primary rides its body while a void cell stands still).
+     */
     @Test
     public void aPrimarySitsAtItsOwnFramesOrigin() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(1, 2, 3, 0, 0, 0);
@@ -112,6 +116,7 @@ public class SystemBodyTest {
      * LAW rather than a position: a pin freezes the ELEMENTS. Pin-on-touch fires the first time a
      * player builds a station in a system, so a pin that froze positions would stop that system for
      * the rest of the save — and nothing would ever say so.
+     * Pins ADDR-6 (the cell of a primary rides its body while a void cell stands still).
      */
     @Test
     public void aBodyStillMovesAfterAnNbtRoundTrip() {
@@ -153,6 +158,7 @@ public class SystemBodyTest {
      * and that cell rides the moon. While it shared its parent's name
      * it could not define one — two bodies cannot both be the primary of one cell — and that is what
      * left a craft parked beside a moon riding the PLANET and drifting away from the moon.</p>
+     * Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none).
      */
     @Test
     public void onlyBodiesWithMassDefineACellsFrame() {

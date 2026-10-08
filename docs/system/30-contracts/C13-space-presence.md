@@ -30,50 +30,50 @@ Presence is the wider term: every aboard player has presence; not every present 
 
 ## Clauses
 
-- **PRES-1 (presence)** `[A]` A player whose world is a space cell HAS presence in that cell,
+- **PRES-1 (presence)** `[A][SYS]` A player whose world is a space cell HAS presence in that cell,
   aboard a ship or not. Presence names the cell by `GalacticCoord`, never by slot dimension id —
   the id is re-minted every boot
-  (`SpaceEventHandler.java` already reasons this way for the aboard case) `[V]`.
-- **PRES-2 (aboard refines presence)** `[A]` A player who is ABOARD(S) per CREW-C1 additionally
+  (`SpaceEventHandler.java` already reasons this way for the aboard case) `[V]`. FOR: PRES-4.
+- **PRES-2 (aboard refines presence)** `[A][BEH]` A player who is ABOARD(S) per CREW-C1 additionally
   carries a Layer-2 position relative to S. Seated and standing are two SHAPES of that position,
   not two records (R1, R5). Any passenger the ship's transform carries is aboard, not only a pilot
   and not only an occupant of a pilot seat (R5).
-- **PRES-3 (authority)** `[A]` On restore, Layer 2 wins wherever it exists; Layer 1 answers for a
+- **PRES-3 (authority)** `[A][BEH]` On restore, Layer 2 wins wherever it exists; Layer 1 answers for a
   present-but-not-aboard player. A restore may never place a player from his Layer-1 position while
   a Layer-2 one is available — that is precisely what puts a player where his ship used to be.
   (The same precedence the aboard record's own javadoc states for coordinates, `ShipAboardTag` `[V]`,
   honoured by `LoginRestore` `[V]`.)
-- **PRES-4 (same point)** `[A]` An aboard player returns to the point he left (R2). If S was
+- **PRES-4 (same point)** `[A][BEH]` An aboard player returns to the point he left (R2). If S was
   re-assembled while he was offline his stored point no longer denotes, and **every** returning
   crew member — pilot, seated passenger, or someone on his feet — falls back to S's PILOT SEAT
   point (R7). One rule for all roles; simultaneous returners may overlap for an instant, accepted
   explicitly.
-- **PRES-5 (durability of the reference)** `[A]` Every stored reference must survive a
+- **PRES-5 (durability of the reference)** `[A][SYS]` Every stored reference must survive a
   re-assembly: ship identity is the Stellurgy durable ship id
   (`TileAdvancedFlightComputer.shipIdOrNull`) `[V]`, never the VS ship id; and a
   ship-relative point is stored relative to the flight computer, never as a raw subspace
   coordinate. A VS id and a raw subspace point are what a re-assembly invalidates, so the crew system
-  persists neither.
-- **PRES-6 (write cadence, ONE writer)** `[A]` The durable record has exactly ONE writer and is
+  persists neither. FOR: PRES-4.
+- **PRES-6 (write cadence, ONE writer)** `[A][SYS]` The durable record has exactly ONE writer and is
   refreshed at most once a second (20 ticks), plus on the events that precede a read — logout and
   world save. It is NOT maintained per tick (R6). Ruling R9 (2026-07-26): the crew system has no deck
   anchor of its own — `RelogDeckHold` reads the unified record — rather than two records kept in sync.
   CREW-C14's same-dimension relog reads the unified record and is pinned against it
-  (`VSCrewRelogPersistenceTest`). The one writer is `AboardRecord.reconcile`.
-- **PRES-7 (hull)** `[A]` A hull-stander is NOT aboard — CREW-C11 keeps its meaning — but HAS
+  (`VSCrewRelogPersistenceTest`). The one writer is `AboardRecord.reconcile`. FOR: PRES-4.
+- **PRES-7 (hull)** `[A][BEH]` A hull-stander is NOT aboard — CREW-C11 keeps its meaning — but HAS
   presence, and returns where he stood (R4). **No live producer today**: the record is dropped
   exactly on the hull-stand transition (`ShipFrameTravel`) `[V]`.
-- **PRES-8 (dismantle ejects)** `[A]` Dismantling or landing a ship with crew aboard puts each crew
+- **PRES-8 (dismantle ejects)** `[A][BEH]` Dismantling or landing a ship with crew aboard puts each crew
   member out at a safe position beside the site AT THAT MOMENT (R3). No record is expected to
   describe a ship that no longer exists — the problem is solved at write time, not at read time.
-- **PRES-9 (a present player claims his cell)** `[A]` A player restored into a cell that is not
+- **PRES-9 (a present player claims his cell)** `[A][BEH]` A player restored into a cell that is not
   materialized causes it to be materialized and takes an occupant refcount, exactly as a restored
   ship's owner does (R8). The claim MUST be paired with his logout — the existing pairing is
   `SpaceEventHandler.ServerPart.heldCells` (claimed at login, `SpaceEventHandler.java:194`; given back
   at logout) `[V]`, held in the server's `ServerState.spaceEvents` so it dies with the server.
   An unpaired claim pins one of a small fixed pool of slot worlds for the life of the server.
 
-- **PRES-10 (a release lets go of EVERYTHING, and says what it let go)** `[A]` Returning a player to
+- **PRES-10 (a release lets go of EVERYTHING, and says what it let go)** `[A][BEH]` Returning a player to
   the plain world is ONE operation, not a coincidence of subscribers: every subsystem that binds him
   to a ship or a cell releases its own binding, and the operation answers with the list of what was
   released. **A release is the opposite of a logout and the two must never share a path** — a logout
@@ -99,7 +99,7 @@ Presence is the wider term: every aboard player has presence; not every present 
   **Live producer**: `LoginRestore.Reason.SHIP_UNKNOWN` — a player who returns aboard a ship the
   ship registry has no record of (`SpaceEventHandler.java` `[V]`).
 
-- **PRES-11 (the record survives what the PLAYER survives)** `[A]` The aboard record is a fact about
+- **PRES-11 (the record survives what the PLAYER survives)** `[A][BEH]` The aboard record is a fact about
   the player, so it outlives every event he outlives — a logout, a restart and **a death**. It lives
   in his own `IPlayerBindings` capability (`player/`), written by that capability's storage through
   `ShipAboardTag`'s NBT codec so the shape on disk has ONE definition, and copied on

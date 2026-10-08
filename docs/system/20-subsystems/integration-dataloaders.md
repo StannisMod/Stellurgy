@@ -87,7 +87,7 @@ transiently from other subsystems during a single tooltip render.
 - **INV-DL-03 [V]** `translate` is always routed through the context, never
   `net.minecraft.client...I18n` directly, so the loaders stay side-neutral (TOP resolves on
   server via STARTLOC/ENDLOC markers, WAILA on client via I18n). `AbstractDataContext.java:24`.
-- **INV-DL-04 [V]** Station-deployed rockets are handled before the guidance-computer path,
+- **INV-DL-04 [V][BEH]** Station-deployed rockets are handled before the guidance-computer path,
   so they always show harvest-gas info, never a guidance line. `RocketDataLoader.java:51-54`.
 - **INV-DL-05 [A]** Only `*Server` concrete loaders exist; the abstract bases were designed
   for a client/server split that was never realized, so WAILA (client) reads server-shaped

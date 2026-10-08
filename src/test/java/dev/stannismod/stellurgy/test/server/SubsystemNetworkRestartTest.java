@@ -198,6 +198,7 @@ public class SubsystemNetworkRestartTest {
      * the loop re-sums capacity and heat from its member blocks on every solve and derives its
      * temperature from those two, so none of them could differ while the per-block energy and the
      * membership verdicts hold.</p>
+     * Pins INV-HEAT-06 (A loop's energy survives a server restart, and comes back OFF THE BLOCKS).
      */
     @Test
     public void aCoolantLoopsEnergyComesBackFromItsBlocks() throws Exception {

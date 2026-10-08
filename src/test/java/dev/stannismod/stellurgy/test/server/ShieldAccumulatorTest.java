@@ -50,6 +50,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
     private static final int FE_PER_ITERATION = 4000;
     private static final String STORED = "shieldStored";
 
+    /** Pins INV-NET-02 (a store registers as both source and sink). */
     @Test
     public void accumulatorBridgesGeneratorToEmitter() throws Exception {
         // Line: generator - accumulator - emitter, each adjacent along +X. The generator is NOT
@@ -91,6 +92,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
                         + "storing the network's surplus:\n" + acc.raw(), stored > BULK_RESERVE);
     }
 
+    /** Pins INV-SHD-04 (energy is conserved across the solve). */
     @Test
     public void accumulatorReserveIsConservedNotBled() throws Exception {
         // Charge an accumulator to a large reserve from a generator, then let it be the SOLE source of

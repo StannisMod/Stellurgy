@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class PlanetWeatherSavedDataTest {
 
+    /** Pins INV-WGEN-13 (getOrCreate is idempotent and isolates dimensions). */
     @Test
     public void getOrCreateInsertsFreshStateAndIsIdempotent() {
         PlanetWeatherSavedData data = new PlanetWeatherSavedData();
@@ -34,6 +35,7 @@ public class PlanetWeatherSavedDataTest {
         assertTrue("inserting fresh state must mark dirty", data.isDirty());
     }
 
+    /** Pins INV-WGEN-13 (getOrCreate is idempotent and isolates dimensions). */
     @Test
     public void getOrCreateIsolatesDimensions() {
         PlanetWeatherSavedData data = new PlanetWeatherSavedData();

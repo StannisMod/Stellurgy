@@ -86,7 +86,7 @@ panels are placed by `client/HudLayout`, a pure function of the screen size each
 - **INV-CLR-04 [V]** Proxy accessors that read replicated client state swallow `NullPointerException`
   and return a neutral value (angle 0 / time 0) while packets are still arriving — never crash the
   render thread. `ClientProxy.java:446-467`.
-- **INV-CLR-05 [V]** `SoundRocketEngine` stops itself when its rocket dies or changes world, so a
+- **INV-CLR-05 [V][BEH]** `SoundRocketEngine` stops itself when its rocket dies or changes world, so a
   dead entity cannot leak a looping sound. `SoundRocketEngine.java:23-31`.
 - **INV-CLR-06** — retired.
 

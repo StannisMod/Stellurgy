@@ -88,6 +88,7 @@ public class ShipDamageSurvivesRelocationE2ETest extends AbstractSharedServerTes
      * moving stayed GREEN on its own, because {@code StorageChunk#cutWorldBB} at {@code if (!worldObj.isRemote)}'s clear of the cut region
      * still emptied the old yard; with both broken it fails with "the relocation left 4 damage records
      * at the vacated subspace address 19200001,129,51200". 2026-09-30.
+     * Pins INV-DMG-07 (a relocated ship carries the damage it left with and leaves none behind).
      */
     @Test
     public void aRelocatedShipCarriesItsDamageAndLeavesNoneBehind() throws Exception {
@@ -154,6 +155,7 @@ public class ShipDamageSurvivesRelocationE2ETest extends AbstractSharedServerTes
      * the damage map for 64 blocks round the computer when its tile is invalidated (the computer as the
      * hull's custodian), this fails with "replacing the flight computer changed the hull's damage
      * expected:&lt;[0/true/stellurgy:advrocketmotor, ...]&gt; but was:&lt;[]&gt;". 2026-09-30.</p>
+     * Pins INV-DMG-08 (replacing the flight computer changes no other position's record).
      */
     @Test
     public void breakingAndReplacingTheFlightComputerDoesNotRepairTheHull() throws Exception {

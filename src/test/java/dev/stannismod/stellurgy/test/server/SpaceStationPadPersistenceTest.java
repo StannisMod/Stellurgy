@@ -76,6 +76,7 @@ public class SpaceStationPadPersistenceTest {
         if (secondBoot != null) secondBoot.close();
     }
 
+    /** Pins INV-STN-06 (pads survive a save and reload with occupied, name and auto-land intact). */
     @Test
     public void padSetAndPerPadStateSurviveRestart() throws Exception {
         long stationId;
@@ -199,6 +200,7 @@ public class SpaceStationPadPersistenceTest {
      * the read now uses the "autoLand" key
      * that the write side writes. allowAutoLand survives restart even
      * for pads that weren't docked at save time.
+     * Pins INV-STN-06 (pads survive a save and reload with occupied, name and auto-land intact).
      */
     @Test
     public void autoLandFlagWithoutDockSurvivesRestart() throws Exception {

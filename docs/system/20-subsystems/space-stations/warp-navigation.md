@@ -89,16 +89,16 @@ Config: see `C4-config-surface`.
 
 ## Invariants
 
-- **INV-STN-16 [V]** A warp is refused unless station is unanchored **and** has a usable warp core
+- **INV-STN-16 [V][BEH]** A warp is refused unless station is unanchored **and** has a usable warp core
   **and** artifacts are met **and** fuel ≥ travel cost; the fuel is spent atomically before the
   move (`TileWarpController.java:496-497`).
-- **INV-STN-17 [T]** Same-star travel cost is the in-plane separation in AU × 100 (floored at 1),
+- **INV-STN-17 [T][BEH]** Same-star travel cost is the in-plane separation in AU × 100 (floored at 1),
   independent of the unit orbits are stored in; a cross-star hop is a flat constant, and an
   unreachable/default parent is `Integer.MAX_VALUE` (`:96-176`).
-  `test/server/WarpControllerDepthTest.java` (`aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu`).
-- **INV-STN-18 [V]** A data-search discovery run cannot start unless all three data types are
+  `test/server/WarpControllerDepthTest.java` (`aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu`). Pinned by `WarpControllerDepthTest#aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu`.
+- **INV-STN-18 [V][BEH]** A data-search discovery run cannot start unless all three data types are
   ≥ 100, and completing one consumes exactly 100 of each (`:521-525,954-956`).
-- **INV-STN-19 [V]** Destination selection routes through `ISpaceObject.setDestOrbitingBody`,
+- **INV-STN-19 [V][BEH]** Destination selection routes through `ISpaceObject.setDestOrbitingBody`,
   which broadcasts `DEST_ORBIT_UPDATE` server-side, keeping clients' warp preview consistent
   (`TileHolographicPlanetSelector.java:189`; `SpaceStationObject.java:613-619`).
 - **INV-STN-20 [V]** The warp controller drops its cached station on chunk unload / invalidate,

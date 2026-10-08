@@ -103,6 +103,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
     /** The account the client harness plays under; every record is keyed on it. */
     private static final String BOT = "ForgeTestClient";
 
+    /** Pins SHIPCTL-9 (an unassembled craft takes no pilot input and the refusal is surfaced). */
     @Test
     public void aCraftThatNeverBecameAShipTakesNoOrdersFromItsPilot() throws Exception {
 

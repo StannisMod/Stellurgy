@@ -1103,6 +1103,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * source = Heat was recorded within 200 ticks", with the fire's own {@code living_hurt} records
      * in the window, 2026-09-30. The rung, cabin and player-name premises are arrangements and are
      * not witnessed.</p>
+     * Pins INV-HEAT-24 (The rung reaches a real person).
      */
     @Test
     public void overheatedZoneAirHurtsAnUnsuitedCrewman() throws Exception {

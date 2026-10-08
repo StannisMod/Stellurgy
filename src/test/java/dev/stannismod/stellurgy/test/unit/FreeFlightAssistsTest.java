@@ -40,6 +40,7 @@ public class FreeFlightAssistsTest {
 
     // ===== rampSetpoint ====================================================
 
+    /** Pins INV-RKT-11 (the setpoint ramps while the key is held, survives release, is zeroed by the cut and clamped to the assist ceiling). */
     @Test
     public void holdingForwardRampsTheSetpoint() {
         double[] sp = FreeFlightPhysics.rampSetpoint(0, 0, 0, fwd(1f));
@@ -48,6 +49,7 @@ public class FreeFlightAssistsTest {
         assertEquals(0.0, sp[2], DELTA);
     }
 
+    /** Pins INV-RKT-11 (the setpoint ramps while the key is held, survives release, is zeroed by the cut and clamped to the assist ceiling). */
     @Test
     public void releasingTheKeyKeepsTheSetpoint() {
         double[] sp = FreeFlightPhysics.rampSetpoint(1.25, -0.5, 0.75, FreeFlightInput.zero());
@@ -56,6 +58,7 @@ public class FreeFlightAssistsTest {
         assertEquals(0.75, sp[2], DELTA);
     }
 
+    /** Pins INV-RKT-11 (the setpoint ramps while the key is held, survives release, is zeroed by the cut and clamped to the assist ceiling). */
     @Test
     public void cutZeroesTheWholeSetpointInstantly() {
         double[] sp = FreeFlightPhysics.rampSetpoint(2.0, 1.0, -1.0, cut());
@@ -71,6 +74,7 @@ public class FreeFlightAssistsTest {
         assertEquals(FreeFlightPhysics.FA_SETPOINT_MAX_SPEED, sp[0], 1e-9);
     }
 
+    /** Pins INV-RKT-11 (the setpoint ramps while the key is held, survives release, is zeroed by the cut and clamped to the assist ceiling). */
     @Test
     public void setpointMagnitudeIsClampedToTheAssistCeiling() {
         double[] sp = {0, 0, 0};
@@ -167,6 +171,7 @@ public class FreeFlightAssistsTest {
         assertTrue("must sag when budget < gravity, got " + s.motionY, s.motionY < 0);
     }
 
+    /** Pins INV-RKT-12 (with thrust not permitted the craft is a Newtonian brick that only falls). */
     @Test
     public void noFuelMeansNewtonianBrick() {
         Step s = FreeFlightPhysics.faStep(0.5, 0.0, 0.0, 0f, 0f, 0, 0, 1.0, THRUST, GRAV, false);

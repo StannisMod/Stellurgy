@@ -272,6 +272,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
      * from WarpPriceOrigin (11.998453186842863 AU) to WarpPriceTarget (18.432117696839327 AU), priced
      * 643.3664509998781 .. 643.3664510005907 at 100 fuel per AU, slack 1.4125960214058866: … expected:
      * &lt;643.3664510002344&gt; but was:&lt;9624626.0&gt;".</p>
+     * Pins INV-STN-17 (a same-star warp is priced by the in-plane separation in AU).
      */
     @Test
     public void aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu() throws Exception {

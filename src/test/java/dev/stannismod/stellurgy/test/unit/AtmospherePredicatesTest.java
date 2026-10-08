@@ -71,6 +71,7 @@ public class AtmospherePredicatesTest {
      * {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was
      * drawn: "and removing it must take the toxicity with it" (2026-09-30). The clean-air premise is an
      * arrangement and is not witnessed.</p>
+     * Pins INV-ATM-22 (A strictly better atmosphere never reads as worse).
      */
     @Test
     public void aPoisonMakesAirToxicAndDrawingItOffClearsIt() {
@@ -95,6 +96,7 @@ public class AtmospherePredicatesTest {
      * at {@code index += (double) entry.getValue() / gas.hazardThreshold();} judging every poison
      * against ammonia's limit: "the SAME amount of a stricter poison is over ITS limit: ...". The premise
      * is an arrangement and is not witnessed.</p>
+     * Pins INV-ATM-23 (A poison is judged against ITS OWN limit, so the same amount of two different gases is not the same hazard, and good air is no).
      */
     @Test
     public void aPoisonIsJudgedAgainstItsOwnLimitAndNotAgainstTheAirAroundIt() {
@@ -256,6 +258,7 @@ public class AtmospherePredicatesTest {
      * {@code GasRegistry#byName} at {@code return name == null ? null : BY_NAME.get(name);} answering helium for a name it does not know: "a substance this game does
      * not know is not reachable by name expected null, but was:&lt;Gas[helium [INERT]]&gt;". The known-gas line is a premise
      * and is not witnessed.</p>
+     * Pins INV-ATM-24 (A composition survives a save including a substance the three old keys could not name, and a substance this game no longer knows).
      */
     @Test
     public void aCompositionSurvivesASaveAndAnUnknownGasIsDropped() {

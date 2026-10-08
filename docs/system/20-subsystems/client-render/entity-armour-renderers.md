@@ -81,13 +81,13 @@ world-unload). No config owned.
 
 ## Invariants
 
-- **INV-CLR-21 [V]** `RendererRocket` renders nothing until its `StorageChunk` is finalized, so a
+- **INV-CLR-21 [V][BEH]** `RendererRocket` renders nothing until its `StorageChunk` is finalized, so a
   half-built/streaming rocket is not drawn. `RendererRocket.java:58-59`.
 - **INV-CLR-22 [V]** The rocket block mesh is compiled to a display list once
   (`displayListIndex == -1` guard) and reused. `RendererRocket.java:112-116`.
-- **INV-CLR-23 [V]** Infrastructure tether lines draw only while the rocket is not in flight.
+- **INV-CLR-23 [V][BEH]** Infrastructure tether lines draw only while the rocket is not in flight.
   `RendererRocket.java:87`.
-- **INV-CLR-24 [V]** FF attitude interpolates the quaternion (slerp) rather than Euler angles,
+- **INV-CLR-24 [V][BEH]** FF attitude interpolates the quaternion (slerp) rather than Euler angles,
   staying continuous through ±90° pitch. `RendererRocket.java:157-171`.
 - **INV-CLR-25 [V]** `DelayedParticleRenderingEventHandler.onWorldUnload` ignores server worlds
   (`!event.getWorld().isRemote` → return), touching only client particle lists. `:39-45`.

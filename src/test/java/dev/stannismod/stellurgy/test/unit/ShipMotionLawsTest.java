@@ -105,6 +105,7 @@ public class ShipMotionLawsTest {
      * throttle bounded at 0.5 fails "forward is twice" with 100000 against 200000;
      * {@code ShipCapability#solveOne} at {@code if (!direction.isPositive())} with the direction's sign dropped (both senses solve the positive
      * one) fails "braking is the one forward engine" with 200000 against 100000.</p>
+     * Pins INV-SFM-02 (a sign is not a symmetry: two aft and one fore engine give surge 2T to T).
      */
     @Test
     public void aSignIsNotASymmetry() {
@@ -127,6 +128,7 @@ public class ShipMotionLawsTest {
      * <p>red-witnessed: 2026-09-30 — {@code ShipCapability#solveOne} at {@code a[k][j] = w[k] / (k < 3 ? forceScale : torqueScale);} with the torque rows zeroed in the
      * tableau and {@code ShipCapability#solveOne} at {@code if (forceResidual > AllocationTolerances.FORCE_RESIDUAL * forceScale}'s residual check skipped fails with 200000 against 100000 — the
      * off-centre engine counted as if it pushed straight.</p>
+     * Pins INV-SFM-03 (a bad build is weak, never spinny).
      */
     @Test
     public void anOffCentreEngineIsNotCleanThrust() {
@@ -176,6 +178,7 @@ public class ShipMotionLawsTest {
      * forever" on ROLL_POSITIVE with 0.18; {@code ShipCapability#solve} at {@code : solveOne(fixed, mass, frame, d, false);} solving the burst figure over
      * sustained devices only fails "but it turns the hull" on ROLL_POSITIVE; {@code ShipCapability#solveOne} at {@code double rate = Math.abs(throttles[i]) * act.maxTorque().length();}
      * taking the endurance from the throttle alone fails the seconds with 20000 against 4.</p>
+     * Pins INV-SFM-04 (a wheel turns and never pushes, and a full wheel turns no more).
      */
     @Test
     public void aWheelTurnsButDoesNotPush() {
@@ -265,6 +268,7 @@ public class ShipMotionLawsTest {
      * flag not raised fails "reports saturation"; {@code CleanAxisScheme#allocate} at {@code if (lambda < 1.0D)} with the global factor
      * skipped (the live range then clips) fails "the proportions asked for" with 3.2 against 2.0, and
      * so does {@code CleanAxisScheme#allocate} at {@code u[i] *= lambda;} clipping each over-full device instead of scaling the command.</p>
+     * Pins INV-SFM-06 (a combined command never drives a device past full and keeps the requested proportions).
      */
     @Test
     public void aCombinedCommandIsScaledNotClipped() {
@@ -306,6 +310,7 @@ public class ShipMotionLawsTest {
      * with 5000; {@code CleanAxisScheme#allocate} at {@code if (u[i] > live[i][1])} not raising saturation on the live clip fails "says it
      * delivered less"; {@code MomentumStore#liveRange} at {@code range[i][0] = Math.min(0.0D, Math.max(a.minThrottle(), (-cap - now) / rate));} closing the negative sense fails "but it can unwind"
      * with 0.0.</p>
+     * Pins INV-SFM-04 (a wheel turns and never pushes, and a full wheel turns no more).
      */
     @Test
     public void aFullWheelTurnsNothingMore() {
@@ -332,6 +337,7 @@ public class ShipMotionLawsTest {
      *
      * <p>red-witnessed: 2026-09-30 — {@code ShipCapability#solve} at {@code sorted.sort((a, b) -> a.id().compareTo(b.id()));} with the sort removed fails on the
      * first shuffle, SURGE_POSITIVE BURST, with a different set of throttles.</p>
+     * Pins INV-SFM-05 (recipes are bit-identical under any listing order).
      */
     @Test
     public void theAnswerDoesNotDependOnListingOrder() {
@@ -371,6 +377,7 @@ public class ShipMotionLawsTest {
      * treating every hull as massless (zero authority everywhere, so every check above is skipped)
      * fails "must not be an empty sample" with 0 of 6000. Healthy, measured 2026-09-30: 3470 recipes
      * checked.</p>
+     * Pins INV-SFM-01 (every recipe keeps each throttle in range and does only what it names).
      */
     @Test
     public void everyRecipeStaysInRangeAndDoesOnlyWhatItNames() {
@@ -562,6 +569,7 @@ public class ShipMotionLawsTest {
      * {@code CleanAxisScheme#desaturate} at {@code if (holding == null)} unloading with nothing to
      * cancel it fails "a wheel nothing can hold the hull against keeps what it holds" with 495999.99
      * against 505999.99.</p>
+     * Pins INV-SFM-11 (a wheel the command leaves idle is given back its momentum).
      */
     @Test
     public void anIdleWheelIsGivenBackByTheThrustersWithoutTurningTheHull() {
@@ -617,6 +625,7 @@ public class ShipMotionLawsTest {
      * #1 gets the same throttle whatever the wheel already holds" with 1.0 against 0.9; with
      * {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed the
      * positive half fails "with nothing commanded the same wheel is unloaded: 500000.0".</p>
+     * Pins INV-SFM-11 (a wheel the command uses is not unloaded).
      */
     @Test
     public void aWheelInUseIsNotUnloadedUnderTheCommand() {
@@ -712,6 +721,7 @@ public class ShipMotionLawsTest {
      * = committed[i] + t;} reading {@code t} alone (each axis checked against the wheel as if no other
      * axis had taken from it) fails "generated hull #3, command 3 (YAW_NEGATIVE×1.0 PITCH_NEGATIVE×1.5
      * HEAVE_POSITIVE×1.0), step 14: PITCH delivered the wrong way — asked -7.935, got 0.0095".</p>
+     * Pins INV-SFM-12 (a command is delivered exactly, or less and flagged saturated).
      */
     @Test
     public void everyCommandIsDeliveredCleanlyOrLessAndSaidSo() {
@@ -810,6 +820,7 @@ public class ShipMotionLawsTest {
      * every call says so, so the safety law alone stays satisfied) fails "symmetric hull, SURGE_POSITIVE at
      * 0.25 of the geometric 4905000.0 N, command 0, step 0: a command the hull can hold was flagged
      * saturated — force (0, 0, 0)".</p>
+     * Pins INV-SFM-12 (a command the hull can hold is delivered exactly from any wheel state).
      */
     @Test
     public void whatTheHullCanHoldIsDeliveredExactlyFromAnyWheelState() {

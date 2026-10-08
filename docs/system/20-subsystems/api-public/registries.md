@@ -59,16 +59,16 @@ exist: the set would have no reader; what a giant holds is derived by
 
 ## Invariants
 
-- **INV-API-12 [V]** `FuelType` ordinals are a wire/save contract: `getById` indexes
+- **INV-API-12 [V][SYS]** `FuelType` ordinals are a wire/save contract: `getById` indexes
   `values()[id]` with no bounds check (`FuelRegistry:113-115`) — reordering the enum reassigns saved
-  fuel ids.
-- **INV-API-13 [V]** `getSatelliteId` returns `-1` when the stack has no tag or id; all callers treat
-  `-1` as "no satellite" (`SatelliteRegistry:121,:129,:135`).
-- **INV-API-14 [V]** The chip id key is `satelliteId`, the chassis id key is `satId` — divergent by
-  item class (`:115-118`); `SatelliteProperties` persists `satId` (`SatelliteProperties:140`).
+  fuel ids. FOR: public API / save format: FuelType ordinals.
+- **INV-API-13 [V][SYS]** `getSatelliteId` returns `-1` when the stack has no tag or id; all callers treat
+  `-1` as "no satellite" (`SatelliteRegistry:121,:129,:135`). FOR: public API: SatelliteRegistry.
+- **INV-API-14 [V][SYS]** The chip id key is `satelliteId`, the chassis id key is `satId` — divergent by
+  item class (`:115-118`); `SatelliteProperties` persists `satId` (`SatelliteProperties:140`). FOR: save format: satellite id keys.
 - **INV-API-15** — retired.
-- **INV-API-16 [V]** `Constants.INVALID_PLANET = Integer.MIN_VALUE + 1`; `Integer.MIN_VALUE` is
-  reserved for warp; `STAR_ID_OFFSET = 10000` (`Constants:6-8`). These are id-space contracts.
+- **INV-API-16 [V][SYS]** `Constants.INVALID_PLANET = Integer.MIN_VALUE + 1`; `Integer.MIN_VALUE` is
+  reserved for warp; `STAR_ID_OFFSET = 10000` (`Constants:6-8`). These are id-space contracts. FOR: public API: id-space contracts.
 - **INV-API-17 [V]** `getKey(clazz)` returns the literal string `"poo"` for a class not in the
   registry (`SatelliteRegistry:72`); that value is what `SatelliteBase.writeToNBT` would persist as
   the `dataType` discriminator for an unregistered satellite class. .

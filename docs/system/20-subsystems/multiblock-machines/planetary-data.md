@@ -129,12 +129,12 @@ No dedicated disable flags; these are gated by block presence and data availabil
 
 ## Invariants
 
-- **INV-MBM-16** [T] A powered analyser with data on its buses increments the chip's composition
-  data from 0. `PlanetAnalyserResearchContractTest.java:54-127`.
-- **INV-MBM-17** [V] The observatory refuses to print the same selection twice per seed: the
+- **INV-MBM-16** [T][BEH] A powered analyser with data on its buses increments the chip's composition
+  data from 0. `PlanetAnalyserResearchContractTest.java:54-127`. Pinned by `PlanetAnalyserResearchContractTest#poweredAnalyserIncrementsChipCompositionFromDataBus`.
+- **INV-MBM-17** [V][BEH] The observatory refuses to print the same selection twice per seed: the
   server `PROCESS_CHIP` path hard-blocks when `printedButtonsThisSeed.contains(lastButton)`.
   `TileObservatory.java:738-748`.
-- **INV-MBM-18** [V] View distance is a pure function of installed optics computed once at
+- **INV-MBM-18** [V][BEH] View distance is a pure function of installed optics computed once at
   formation; it resets to 0 on deconstruct. `TileObservatory.java:232-251,228`.
 - **INV-MBM-19** [V] Chip printing is server-authoritative (client button press only requests;
   the write, energy cost and dedup are inside `!world.isRemote`). `TileObservatory.java:635-663,700-774`.

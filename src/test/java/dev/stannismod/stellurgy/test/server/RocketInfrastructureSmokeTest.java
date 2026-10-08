@@ -70,6 +70,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      * into the rocket's {@code LIQUID_MONOPROPELLANT} when it ticks — both endpoints of the transfer
      * move. Fails if the {@code addFuelAmount} dispatch, the fuel-fluid matching in
      * {@code TileFuelingStation#performFunction}, or the {@code canPerformFunction} guard breaks.
+     * Pins INV-INFRA-12 (a powered fueling station next to a rocket drains its tank into the rocket).
      */
     @Test
     public void stationDrainsTankAndRocketFuelRisesAfterLinkAndTick() throws Exception {

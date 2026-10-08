@@ -71,7 +71,9 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
     private static final int CX_WEATHER = 10500;
 
     /** Standard happy-path: place builder, press build with "optical"
-     *  primary, observe slot transitions match {@code assembleSatellite}. */
+     *  primary, observe slot transitions match {@code assembleSatellite}.
+     * Pins INV-SAT-05 (Builder stamps the same fresh satelliteId into both the chassis item (satId) and the id chip (satelliteId)).
+     */
     @Test
     public void pressBuildAssemblesOpticalSatellite() throws Exception {
         int x = CX_OPTICAL, y = CY, z = CZ;
@@ -129,7 +131,9 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
      *  {@code canAssembleSatellite()} must return FALSE for
      *  weatherController. Pin protects the per-type-chip contract — a
      *  regression that loses an override would let the wrong chip
-     *  silently accept any type. */
+     *  silently accept any type.
+     * Pins INV-SAT-06 (a chip-overriding type rejects the default id chip).
+     */
     @Test
     public void pressBuildRejectsDefaultChipForChipOverridingType() throws Exception {
         int x = CX_WEATHER, y = CY, z = CZ;

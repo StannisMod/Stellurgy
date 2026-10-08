@@ -65,12 +65,12 @@ Config: see `C4-config-surface`. Full disable: `enableTerraforming=false` (isRun
 
 ## Invariants
 
-- **INV-MBM-06** [T] On a native Stellurgy planet, with power **and** fuel the density moves; without
+- **INV-MBM-06** [T][BEH] On a native Stellurgy planet, with power **and** fuel the density moves; without
   fuel or without power it does **not** move.
-  `TerraformerPoweredCycleOnStellurgyPlanetTest.java:111-213`.
-- **INV-MBM-07** [V] Density is bounded: increase never exceeds 1600, decrease never below 0, and
+  `TerraformerPoweredCycleOnStellurgyPlanetTest.java:111-213`. Pinned by `TerraformerPoweredCycleOnStellurgyPlanetTest#nativePlanetTerraformerWithFuelAndPowerStepsDensity`, `TerraformerPoweredCycleOnStellurgyPlanetTest#nativePlanetTerraformerWithoutFuelDoesNotStep`, `TerraformerPoweredCycleOnStellurgyPlanetTest#nativePlanetTerraformerWithoutPowerDoesNotStep`.
+- **INV-MBM-07** [V][BEH] Density is bounded: increase never exceeds 1600, decrease never below 0, and
   hitting the bound auto-disables the machine. `TileAtmosphereTerraformer.java:499-518`.
-- **INV-MBM-08** [V] `enableTerraforming=false` forces `currentTime=0` and blocks all accrual —
+- **INV-MBM-08** [V][BEH] `enableTerraforming=false` forces `currentTime=0` and blocks all accrual —
   the flag gates the consequence, not just the display. `TileAtmosphereTerraformer.java:456-467`.
 
 ## Test coverage

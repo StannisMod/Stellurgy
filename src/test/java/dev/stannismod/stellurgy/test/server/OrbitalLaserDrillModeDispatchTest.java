@@ -35,6 +35,7 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
     private static final int Y = 150;
     private static final int Z = 6400;
 
+    /** Pins INV-MBM-04 (mining mode breaks the target block and yields its drop). */
     @Test
     public void miningModeBreaksTargetBlockAndYieldsItsDrop() throws Exception {
         String resp = exec("stellurgytest infra laserdrill-mine 0 "

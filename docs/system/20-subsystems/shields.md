@@ -235,53 +235,53 @@ blocks each session, so nothing about topology can rot in a save [V].
 
 ## Invariants
 
-- **INV-SHD-01** [V] A network with no source or no sink publishes a disconnected state and moves no
+- **INV-SHD-01** [V][BEH] A network with no source or no sink publishes a disconnected state and moves no
   energy. Now the shared solver's rule, not a shield one (`subsystem-network`)
   `SubsystemNetworkManager.java:345-348`
-- **INV-SHD-02** [T] Two adjacent shield blocks form a network with no cable; a one-block gap forms none.
-  `ShieldTwoBlockFloorTest`
-- **INV-SHD-03** [T] An emitter never receives more than its recharge throughput in a tick, regardless of
-  the size of the supply behind it. `ShieldZoneThroughputTest`
-- **INV-SHD-04** [T] Energy is conserved across the solve: a bulk store is not drained faster than the
-  emitters actually intake. `ShieldAccumulatorTest`
-- **INV-SHD-05** [T] A charged coil absorbs a single impact costing more than its per-tick intake.
-  `ShieldImpactAbsorptionTest`
-- **INV-SHD-06** [T] A kinetic projectile is deflected (still alive, outside the shell), not consumed.
-  `ShieldImpactAbsorptionTest`
-- **INV-SHD-07** [T] A shield with no charge intercepts nothing and spends nothing.
-  `ShieldStrikeAbsorptionTest`
-- **INV-SHD-08** [T] A strike the shield cannot fully pay for is partially absorbed and leaves a residual.
-  `ShieldStrikeAbsorptionTest`
-- **INV-SHD-09** [T] Deleting a priority group does not change any member emitter's priority.
-  `ShieldPriorityGroupControlTest`
-- **INV-SHD-10** [T] A group created at one console is visible and editable at another, and survives that
-  console's destruction. `ShieldPriorityGroupControlTest`
-- **INV-SHD-11** [T] Rotating the access code changes the credential on every domain emitter and leaves
-  grouping and priority untouched. `ShieldPriorityGroupControlTest`
-- **INV-SHD-12** [T] A single cable carries more than a single emitter can absorb, so plumbing is not the
-  ordinary limiter. `ShieldLimiterBalanceTest`
-- **INV-SHD-13** [V] With a single priority value the tiered solve is one augmentation pass, so the
-  default configuration behaves exactly as plain max-flow. `SubsystemNetworkManager.java:421-429`
+- **INV-SHD-02** [T][BEH] Two adjacent shield blocks form a network with no cable; a one-block gap forms none.
+  `ShieldTwoBlockFloorTest` Pinned by `ShieldTwoBlockFloorTest#twoBlockShieldPowersWithoutCable`, `ShieldTwoBlockFloorTest#nonAdjacentPairNeverPowers`.
+- **INV-SHD-03** [T][BEH] An emitter never receives more than its recharge throughput in a tick, regardless of
+  the size of the supply behind it. `ShieldZoneThroughputTest` Pinned by `ShieldZoneThroughputTest#regenerationIsThroughputCapped`.
+- **INV-SHD-04** [T][BEH] Energy is conserved across the solve: a bulk store is not drained faster than the
+  emitters actually intake. `ShieldAccumulatorTest` Pinned by `ShieldAccumulatorTest#accumulatorReserveIsConservedNotBled`.
+- **INV-SHD-05** [T][BEH] A charged coil absorbs a single impact costing more than its per-tick intake.
+  `ShieldImpactAbsorptionTest` Pinned by `ShieldImpactAbsorptionTest#chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake`.
+- **INV-SHD-06** [T][BEH] A kinetic projectile is deflected (still alive, outside the shell), not consumed.
+  `ShieldImpactAbsorptionTest` Pinned by `ShieldImpactAbsorptionTest#chargedShieldDeflectsAnArrow`.
+- **INV-SHD-07** [T][BEH] A shield with no charge intercepts nothing and spends nothing.
+  `ShieldStrikeAbsorptionTest` Pinned by `ShieldStrikeAbsorptionTest#chargedShieldFullyAbsorbsACooperativeStrike`.
+- **INV-SHD-08** [T][BEH] A strike the shield cannot fully pay for is partially absorbed and leaves a residual.
+  `ShieldStrikeAbsorptionTest` Pinned by `ShieldStrikeAbsorptionTest#strikeGracefullyPenetratesAShieldItOutmatches`.
+- **INV-SHD-09** [T][BEH] Deleting a priority group does not change any member emitter's priority.
+  `ShieldPriorityGroupControlTest` Pinned by `ShieldPriorityGroupControlTest#groupPushesPriorityIntoMemberEmitters`.
+- **INV-SHD-10** [T][BEH] A group created at one console is visible and editable at another, and survives that
+  console's destruction. `ShieldPriorityGroupControlTest` Pinned by `ShieldPriorityGroupControlTest#anyConsoleEditsTheSameDomainConfig`.
+- **INV-SHD-11** [T][BEH] Rotating the access code changes the credential on every domain emitter and leaves
+  grouping and priority untouched. `ShieldPriorityGroupControlTest` Pinned by `ShieldPriorityGroupControlTest#rotatingAccessCodeChangesCredentialButNotGrouping`.
+- **INV-SHD-12** [T][BEH] A single cable carries more than a single emitter can absorb, so plumbing is not the
+  ordinary limiter. `ShieldLimiterBalanceTest` Pinned by `ShieldLimiterBalanceTest#cableCarriesMoreThanASingleEmitterAbsorbs`.
+- **INV-SHD-13** [V][SYS] With a single priority value the tiered solve is one augmentation pass, so the
+  default configuration behaves exactly as plain max-flow. `SubsystemNetworkManager.java:421-429` FOR: INV-SHD-04.
 - **INV-SHD-14** [A] The per-tick network solve cost stays acceptable on large hulls; the solve is run per
   dimension every tick against cached topology, but no load test exists. (unconfirmed)
-- **INV-SHD-15** [T] Two strikes identical but for a declared body diverge only in outcome, never in
+- **INV-SHD-15** [T][BEH] Two strikes identical but for a declared body diverge only in outcome, never in
   price: the one with a body is reflected, the one without is stopped, both billed the same.
-  `ShieldStrikeAbsorptionTest`
-- **INV-SHD-16** [T] A reflected body leaves along the outward normal and never faster than it arrived —
+  `ShieldStrikeAbsorptionTest` Pinned by `ShieldStrikeAbsorptionTest#aDeclaredBodyIsReflectedWhereAnIdenticalBodilessStrikeIsStopped`.
+- **INV-SHD-16** [T][BEH] A reflected body leaves along the outward normal and never faster than it arrived —
   restitution is clamped to `[0, 1]`, so the shell cannot return energy it never absorbed.
-  `ShieldStrikeAbsorptionTest`
-- **INV-SHD-17** [T] A short pay never reflects, whatever it carries: the shield spent everything it had
-  and the body continues downstream. `ShieldStrikeAbsorptionTest`
-- **INV-SHD-18** [T] A damaged emitter covers strictly less ground than the same emitter pristine, and
-  a block on the old shell's edge stops being covered. `ShieldDamageDegradesTest`
-- **INV-SHD-19** [T] Damage never moves the declared radius nor the cycle cost — being shot at cannot
-  make a shield cheaper to hold. `ShieldDamageDegradesTest`
-- **INV-SHD-20** [T] A neighbour that still reaches closes a shrunken emitter's hole; one that does not
-  leaves it open. `ShieldDamageDegradesTest`
-- **INV-SHD-21** [T] A generator, a cable and an accumulator each deliver less when damaged, as an
-  ordering. `ShieldDamageDegradesTest`
-- **INV-SHD-22** [T] An emitter that is still standing still projects something, and a mended one
-  projects its whole declared field again. `ShieldConditionTest`
+  `ShieldStrikeAbsorptionTest` Pinned by `ShieldStrikeAbsorptionTest#aDeclaredBodyIsReflectedWhereAnIdenticalBodilessStrikeIsStopped`.
+- **INV-SHD-17** [T][BEH] A short pay never reflects, whatever it carries: the shield spent everything it had
+  and the body continues downstream. `ShieldStrikeAbsorptionTest` Pinned by `ShieldStrikeAbsorptionTest#aBodyThatOutmatchesTheShieldPenetratesInsteadOfBouncing`.
+- **INV-SHD-18** [T][BEH] A damaged emitter covers strictly less ground than the same emitter pristine, and
+  a block on the old shell's edge stops being covered. `ShieldDamageDegradesTest` Pinned by `ShieldDamageDegradesTest#aDamagedEmitterCoversLessAndIsStillBilledForWhatItDeclared`.
+- **INV-SHD-19** [T][BEH] Damage never moves the declared radius nor the cycle cost — being shot at cannot
+  make a shield cheaper to hold. `ShieldDamageDegradesTest` Pinned by `ShieldDamageDegradesTest#aDamagedEmitterCoversLessAndIsStillBilledForWhatItDeclared`.
+- **INV-SHD-20** [T][BEH] A neighbour that still reaches closes a shrunken emitter's hole; one that does not
+  leaves it open. `ShieldDamageDegradesTest` Pinned by `ShieldDamageDegradesTest#aNeighbourThatStillReachesClosesTheHoleAndOneThatDoesNotLeavesIt`.
+- **INV-SHD-21** [T][BEH] A generator, a cable and an accumulator each deliver less when damaged, as an
+  ordering. `ShieldDamageDegradesTest` Pinned by `ShieldDamageDegradesTest#aDamagedGeneratorCableAndAccumulatorEachDeliverLess`.
+- **INV-SHD-22** [T][BEH] An emitter that is still standing still projects something, and a mended one
+  projects its whole declared field again. `ShieldConditionTest` Pinned by `ShieldConditionTest#aStandingEmitterAlwaysProjectsSomething`, `ShieldConditionTest#repairRestoresTheWholeFieldBecauseNothingIsAccumulated`.
 - **INV-SHD-23** [V] "Which emitters are loaded in this world" has one answer and it lives in the
   server's network registry: `TileEntityFieldGenerator.loadedIn(world)` reads
   `SubsystemNetworkManager.nodesIn`, which an emitter joins on load and leaves on break, chunk unload
@@ -290,11 +290,11 @@ blocks each session, so nothing about topology can rot in a save [V].
   command reads it. No JVM-wide static set duplicates it. `TileEntityFieldGenerator#loadedIn`, `SubsystemNetworkRegistry#nodesIn` [V]
   [T `ShieldTwoBlockFloorTest#aWorldAnswersForTheEmittersLoadedInItAndNoOthers`: one emitter per world
   at the same coordinates, each world answering for its own; a chunk cycle leaves one, not two]
-- **INV-SHD-25** [T] A charged emitter in the shipyard that no ship claims projects no shell and spends
+- **INV-SHD-25** [T][BEH] A charged emitter in the shipyard that no ship claims projects no shell and spends
   nothing from its coil, beside a control at ordinary coordinates that does both (MECH-SHD-24;
   `ShieldTwoBlockFloorTest#anEmitterInTheShipyardThatNoShipClaimsProjectsNothing`, each half
   red-witnessed). Silent about the race itself — a real ship loading in the background.
-- **INV-SHD-24** [T] An emitter holds a player at its membrane on the side of ITS OWN shell he was last
+- **INV-SHD-24** [T][BEH] An emitter holds a player at its membrane on the side of ITS OWN shell he was last
   seen clear of — outside if he came from outside, inside if from inside, held out if it never saw him
   clear. The side is kept per emitter, per player, on the tile (not saved; dies with it), so a player
   inside one shield and outside an overlapping one has a side for each. A single JVM-wide

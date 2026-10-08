@@ -82,7 +82,9 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
 
     /** Mark one rocket motor as worn, link &rarr; scan picks it up exactly
      *  once. Also pins {@code initialPartToRepairCount} = 1 (the
-     *  monotonic baseline counter that drives the GUI progress bar). */
+     *  monotonic baseline counter that drives the GUI progress bar).
+     * Pins INV-INFRA-08 (the broken-part scan collects exactly the worn parts of the linked rocket).
+     */
     @Test
     public void injectedBrokenPartAppearsInPartsToRepairAfterLink() throws Exception {
         AssembledRocket rf = buildAndAssembleRocket(CX_SINGLE);
@@ -108,7 +110,9 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
 
     /** Two injections &rarr; two parts; scan is not a first-match
      *  short-circuit. {@code simple} variant has 2 advRocketmotor blocks
-     *  so this is the maximum the fixture can support. */
+     *  so this is the maximum the fixture can support.
+     * Pins INV-INFRA-08 (the broken-part scan collects exactly the worn parts of the linked rocket).
+     */
     @Test
     public void multipleInjectionsAreAllScanned() throws Exception {
         AssembledRocket rf = buildAndAssembleRocket(CX_MULTI);

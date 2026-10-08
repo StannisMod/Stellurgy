@@ -75,6 +75,7 @@ public class WirelessTransceiverRestartTest {
         if (secondBoot != null) secondBoot.close();
     }
 
+    /** Pins INV-WDT-05 (mode, enabled and networkID survive an NBT round-trip and the tile re-registers its role). */
     @Test
     public void modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration() throws Exception {
         firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);

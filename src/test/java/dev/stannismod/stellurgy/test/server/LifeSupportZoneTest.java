@@ -299,7 +299,9 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  {@code deriveAtmosphere}): "and the room must stay breathable rather than turn oxygen-toxic: …
      *  \"highO2\"". NOT DRY — {@code TileGasSeparator#combine} at {@code if (admitted <= 0L)} emptying the tank once it can admit
      *  nothing: "it must have stopped because of the ceiling, not because the tank ran dry: …
-     *  \"tankAmount\":0".</p> */
+     *  \"tankAmount\":0".</p>
+     * Pins INV-ATM-21 (fire and lungs are two different questions about the same gas).
+     */
     @Test
     public void theCombinerRefusesToPushOxygenPastTheSafeCeiling() throws Exception {
         long ceiling = configValue("lifeSupportMaxPartialO2");

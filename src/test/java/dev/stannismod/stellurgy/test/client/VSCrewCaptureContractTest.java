@@ -967,6 +967,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     // ---- #47: WALKING and JUMPING on a hovering ship must not churn the capture -----------------
 
+    /** Pins DECKSYNC-7 (the server bounds the region a captured body may declare). */
     @Test
     public void walkingAndJumpingOnAHoveringShipDoesNotChurnTheCapture() throws Exception {
         final FixtureSite site = site();
@@ -1238,6 +1239,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * records {@code moved 6.0, accepted:false}. The step is taken from a WALKING body: from a
      * standing one the bound accepted it on healthy production, because a standing client reports only
      * every twenty ticks and the bound licenses up to ten ticks of movement per report.</p>
+     * Pins DECKSYNC-7 (the server bounds the region a captured body may declare).
      */
     @Test
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
@@ -1630,6 +1632,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " what changes with load, which is why it must not be re-enabled on a green re-run."
             + " RE-ENABLE when the transition is taken once as an edge and then owned; the"
             + " acceptance is aboard 0/30 on a full tier, twice.")
+    /** Pins DECKSYNC-6 (a body is never moved by a quantity only its own client derived). */
     public void aHullTopEncounterNeverEntersTheShipFrame() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -2142,6 +2145,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * earlier release had satisfied the wait (fixed in {@code Events.assertChain}, which now waits for
      * the ordered chain). After both: 10 green of 10 across this method and the jump scenario that
      * shares the landing wait.</p>
+     * Pins DECKSYNC-6 (a body is never moved by a quantity only its own client derived).
      */
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {

@@ -1105,6 +1105,8 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * {@code if (!namedSomething)} reading {@code if (false)}, with "must have written both addresses"
      * ("expected:&lt;seated=[true home=tru]e&gt; but was:&lt;seated=[false home=fals]e&gt;") — one
      * inversion per run, 2026-10-03.</p>
+     * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
+     * Pins ADDR-25 (one seat, one system, one answer across attribution, territory and survey).
      */
     @Test
     public void aSurveyWritesASystemOnceAndNoNeighbouringSeatUnderItsName() throws Exception {

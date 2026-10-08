@@ -66,7 +66,10 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
      *  atmosphere type to the dim's default. The player-visible
      *  outcome is "the room reverts to outside air, vent shows red
      *  status" not "the vent disconnects". Pin the observable
-     *  effects, not the {@code isSealed} flag.</p> */
+     *  effects, not the {@code isSealed} flag.</p>
+     * Pins INV-ATM-07 (a vent seals only with both oxygen and power).
+     * Pins INV-ATM-09 (a vent that cannot supply its blob's oxygen loses hasFluid and reverts the atmosphere).
+     */
     @Test
     public void ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere() throws Exception {
         buildSealableRoom(CX_NO_FLUID);
@@ -91,7 +94,9 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
 
     /** Vent + oxygen, NO energy &rarr; {@code hasEnoughEnergy} guard fails at
      *  {@code update:288} &rarr; {@code performFunction} never invoked &rarr;
-     *  vent never seals. */
+     *  vent never seals.
+     * Pins INV-ATM-07 (a vent seals only with both oxygen and power).
+     */
     @Test
     public void ventWithoutPowerDoesNotSealEvenWhenFueled() throws Exception {
         buildSealableRoom(CX_NO_POWER);

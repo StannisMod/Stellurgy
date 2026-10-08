@@ -52,6 +52,7 @@ public class DriveLadderTest {
 
     // ── the ladder ────────────────────────────────────────────────────────────
 
+    /** Pins HYPER-5 (a generation buys efficiency and size buys power). */
     @Test
     public void aFullBuildOfEachGenerationCrossesITSOWNBandInTheSameTime() {
         // THE defining property, and the reason a generation's efficiency is derived rather than
@@ -96,6 +97,7 @@ public class DriveLadderTest {
                 boughtByTier > boughtBySize);
     }
 
+    /** Pins HYPER-6 (a route's total energy does not read drive power). */
     @Test
     public void aRoutesENERGYdoesNotDependOnHowBigTheDriveIs() {
         // The property that makes "size buys power, the tier buys efficiency" literal: ticks go as

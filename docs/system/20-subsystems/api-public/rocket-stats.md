@@ -79,23 +79,23 @@ declarations are owned here (`RocketEvent.java`).
 
 ## Invariants
 
-- **INV-API-06 [V]** `INVALID_SEAT = Integer.MIN_VALUE`; `hasSeat()` ⇔ `pilotSeatPos.x != INVALID_SEAT`
-  (`StatsRocket:23,:583-585`). Seat NBT stores the pilot seat as `playerXPos/Y/Z` (`:694-696`).
-- **INV-API-07 [V]** Fuel rate/base-rate are forced to 0 when `rocketRequireFuel=false` — the only
+- **INV-API-06 [V][SYS]** `INVALID_SEAT = Integer.MIN_VALUE`; `hasSeat()` ⇔ `pilotSeatPos.x != INVALID_SEAT`
+  (`StatsRocket:23,:583-585`). Seat NBT stores the pilot seat as `playerXPos/Y/Z` (`:694-696`). FOR: save format: rocket stats NBT.
+- **INV-API-07 [V][BEH]** Fuel rate/base-rate are forced to 0 when `rocketRequireFuel=false` — the only
   gate (`StatsRocket:359,:388`); amount/capacity are unaffected.
-- **INV-API-08 [V]`[T]`** `canLaunch(g)` returns true whenever `advancedWeightSystem` is disabled
+- **INV-API-08 [V][BEH]`[T]`** `canLaunch(g)` returns true whenever `advancedWeightSystem` is disabled
   (`StatsRocket.java:249-251`; `RocketLaunchDepthTest#turningTheWeightSystemOffLiftsTheWeightGate`),
   and judges the weight at the gravity it is handed
   (`RocketLaunchDepthTest#aCraftOnALowGravityMoonIsWeighedAtThatMoonsGravity`). The
-  `gravityAffectsFuel`-off half (one gee everywhere) is `[V]` only: no test pins it.
-- **INV-API-09 [V]** `readFromNBT` first `reset()`s, so a missing `rocketStats` tag yields a clean
-  zeroed stat rather than stale values (`:728-729`).
-- **INV-API-10 [T]** `writeToNBT` wraps in `rocketStats`; `readFromNBT` unwraps `rocketStats`. The
+  `gravityAffectsFuel`-off half (one gee everywhere) is `[V]` only: no test pins it. Pinned by `RocketLaunchDepthTest#turningTheWeightSystemOffLiftsTheWeightGate`, `RocketLaunchDepthTest#aCraftOnALowGravityMoonIsWeighedAtThatMoonsGravity`.
+- **INV-API-09 [V][SYS]** `readFromNBT` first `reset()`s, so a missing `rocketStats` tag yields a clean
+  zeroed stat rather than stale values (`:728-729`). FOR: save format: rocket stats NBT.
+- **INV-API-10 [T][SYS]** `writeToNBT` wraps in `rocketStats`; `readFromNBT` unwraps `rocketStats`. The
   round-trip pair used by all live callers passes the *outer* nbt (`EntityRocket:3004,:3109`;
   `TileRocketAssemblingMachine:816,:854`). The static API factory `createFromNBT` (`StatsRocket.java:94-103`)
   passes the outer nbt to `readFromNBT` too (unwrapping twice would return an empty stat) — pinned by
   `FreeFlightNbtRoundTripTest#statsReadThroughTheApiFactoryWriteWhatTheRocketWrote`. No live
-  production caller uses it.
+  production caller uses it. FOR: save format: rocket stats NBT.
 - **INV-API-11 [A]** Engine `×2`/`÷2` packing assumes engine offsets are integer or half-integer;
   a quarter-block offset would round. No test pins this; assumed from the assembler placing engines
   on block/half-block grid.

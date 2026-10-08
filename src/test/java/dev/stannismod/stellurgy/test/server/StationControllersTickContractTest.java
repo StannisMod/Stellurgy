@@ -62,6 +62,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * {@code finalVel = angVel ± min(|difference|, acc)} with
      * {@code acc = 0.02}. Pin doesn't assert exact 0.02/tick — that's
      * impl — only that the walk is non-zero in the right direction.</p>
+     * Pins INV-STN-10 (the altitude controller walks the station's orbital distance toward its target).
      */
     @Test
     public void altitudeControllerWalksStationOrbitalDistanceTowardTarget()
@@ -151,6 +152,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * {@code setRedstoneState(OFF)} call), this test still passes
      * because {@code setProgress} writes a fresh {@code targetGravity}
      * and the walk eats it.</p>
+     * Pins INV-STN-11 (the gravity controller walks the station's gravity toward its target).
      */
     @Test
     public void gravityControllerWalksStationGravityTowardTarget() throws Exception {
@@ -203,6 +205,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * {@code targetRotationsPerHour[id] = val - 60} (60 = getTotalProgress/2).
      * The update() loop walks {@code deltaRotation} toward
      * {@code targetRPH/72000}.</p>
+     * Pins INV-STN-12 (the orientation controller walks the station's rotation toward its target).
      */
     @Test
     public void orientationControllerWalksStationRotationTowardTarget()

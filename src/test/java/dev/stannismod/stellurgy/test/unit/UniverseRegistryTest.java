@@ -133,6 +133,7 @@ public class UniverseRegistryTest {
      * measured: with the orbit put back to the literal {@code 120} (12 000 km in today's unit) and
      * production untouched, it fails with "a fresh registry must derive the CHANGED orbit's name, or
      * this test proves nothing" — the degenerate fixture the comment in the body describes.</p>
+     * Pins ADDR-2 (a cell name is derived from the layout and a recorded name beats a later derivation).
      */
     @Test
     public void cellNamesRoundTripThroughNbtAndBeatALaterDerivation() {
@@ -607,6 +608,7 @@ public class UniverseRegistryTest {
      *
      * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#durableName} at {@code else if (!SystemContent.withinBoxOf(recorded.name, anchor, minSpacingCells))} (the box check) answering
      * {@code false}, this fails with "a name outside its own system's box may not be served".</p>
+     * Pins ADDR-3 (every body's name lies inside its own system's box).
      */
     @Test
     public void aRecordedNameThatLeftItsSystemsBoxIsReDerivedRatherThanServed() {
@@ -677,6 +679,7 @@ public class UniverseRegistryTest {
      * distance, measured: with the orbit put back to the literal {@code 150} (15 000 km in today's
      * unit) and production untouched, it fails with that same message — the quarter orbit rounds to
      * nothing, so the frame is compared with itself.</p>
+     * Pins ADDR-6 (the cell of a primary rides its body while a void cell stands still).
      */
     @Test
     public void aBodyCellRidesItsPrimaryWhileAVoidCellStandsStill() {
@@ -710,6 +713,7 @@ public class UniverseRegistryTest {
      *
      * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#skyBodiesAt} at {@code for (SystemBody here : bodiesAt(cell))} iterating nothing instead
      * of the observer's own cell, this fails with "...and whatever is keyed at your own cell".</p>
+     * Pins CON-C14-14 (the sky shows the whole system unioned with the observer's own cell, and interstellar void is fed nothing).
      */
     @Test
     public void theSkyFeedUnionsTheSystemWithTheObserversOwnCell() {
@@ -752,7 +756,10 @@ public class UniverseRegistryTest {
                 systemReadSawStation);
     }
 
-    /** Interstellar void — a cell no anchor attributes — is fed the union's EMPTY case. */
+    /**
+     * Interstellar void — a cell no anchor attributes — is fed the union's EMPTY case.
+     * Pins CON-C14-14 (the sky shows the whole system unioned with the observer's own cell, and interstellar void is fed nothing).
+     */
     @Test
     public void interstellarVoidIsFedNothing() {
         UniverseRegistry reg = testUniverse.newRegistry();

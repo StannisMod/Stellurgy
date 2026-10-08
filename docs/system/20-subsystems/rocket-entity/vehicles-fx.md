@@ -64,16 +64,16 @@ coverage (P1) and not mechanically decomposed.
 
 ## Invariants
 
-- **INV-RKT-19 [V]** `EntityStationDeployedRocket` overrides `onUpdate` without
+- **INV-RKT-19 [V][BEH]** `EntityStationDeployedRocket` overrides `onUpdate` without
   calling `super.onUpdate()`, so none of the classic launch-countdown / orbit branches
   run for it `EntityStationDeployedRocket.java:168`.
-- **INV-RKT-20 [V]** Gas-harvest planned amount is capped by *simulated* free tank
+- **INV-RKT-20 [V][BEH]** Gas-harvest planned amount is capped by *simulated* free tank
   capacity (`fill(...,false)`) before the mission is created, so a full rocket does
   not over-plan `EntityStationDeployedRocket.java:455`.
 - **INV-RKT-21 [V]** `EntityLaserNode.isValid` is a transient flag, deliberately not
   saved (chunk-loading a laser without an emitter would crash)
   `EntityLaserNode.java:23`.
-- **INV-RKT-22 [A]** `EntityHoverCraft` persists only inventory; a save/reload during
+- **INV-RKT-22 [A][BEH]** `EntityHoverCraft` persists only inventory; a save/reload during
   flight drops its velocity and burn timer to defaults. Inferred from `:438`; not
   test-pinned.
 

@@ -85,26 +85,26 @@ transient wire field in `readDataFromNetwork` (never written to disk).
 
 ## Invariants
 
-- **INV-WDT-01 [V]** `-1` is the unlinked sentinel; a tile is a network member iff
-  `networkID != -1`. `TileWirelessTransceiver.java:49,135,241`
-- **INV-WDT-02 [V]** A freshly paired pair shares one non-sentinel id, both registered on that
+- **INV-WDT-01 [V][SYS]** `-1` is the unlinked sentinel; a tile is a network member iff
+  `networkID != -1`. `TileWirelessTransceiver.java:49,135,241` FOR: INV-WDT-02.
+- **INV-WDT-02 [V][BEH]** A freshly paired pair shares one non-sentinel id, both registered on that
   network. `TileWirelessTransceiver.java:366-370,387-388`.
-- **INV-WDT-03 [V]** Merging two already-linked transceivers collapses them to a single shared
+- **INV-WDT-03 [V][BEH]** Merging two already-linked transceivers collapses them to a single shared
   id. `TileWirelessTransceiver.java:382-385`.
-- **INV-WDT-04 [V]** Extract mode ⇒ registered as source only; inject ⇒ sink only; a mode flip
+- **INV-WDT-04 [V][BEH]** Extract mode ⇒ registered as source only; inject ⇒ sink only; a mode flip
   swaps and clears the prior role. `TileWirelessTransceiver.java:272-281` (`removeFromAll`
   then the one add).
-- **INV-WDT-05 [T]** `mode`, `enabled`, `networkID` survive an NBT round-trip and the tile
-  re-registers its role on `onLoad`. `WirelessTransceiverRestartTest.java:75-109`
+- **INV-WDT-05 [T][BEH]** `mode`, `enabled`, `networkID` survive an NBT round-trip and the tile
+  re-registers its role on `onLoad`. `WirelessTransceiverRestartTest.java:75-109` Pinned by `WirelessTransceiverRestartTest#modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration`.
 - **INV-WDT-06 [V]** Server-authoritative writes: GUI/`useNetworkData` mutations apply only when
   `side.isServer()`. `TileWirelessTransceiver.java:536`
-- **INV-WDT-07 [V]** Within a `DataType` tick, committed inserted == committed extracted (paired
+- **INV-WDT-07 [V][BEH]** Within a `DataType` tick, committed inserted == committed extracted (paired
   re-trim). `DataNetwork.java:203-231`
-- **INV-WDT-08 [V]** Redirect resolution terminates even on a corrupt cycle (visited-set guard,
-  returns original id). `HandlerDataNetwork.java:59-92`
-- **INV-WDT-09 [V]** Only the single highest priority band with capacity transfers on each side
+- **INV-WDT-08 [V][SYS]** Redirect resolution terminates even on a corrupt cycle (visited-set guard,
+  returns original id). `HandlerDataNetwork.java:59-92` FOR: INV-WDT-03.
+- **INV-WDT-09 [V][BEH]** Only the single highest priority band with capacity transfers on each side
   per type; lower bands are inert while it is active. `DataNetwork.java:158-166,275-289`
-- **INV-WDT-10 [V]** Disabled tile offers/accepts zero (`addData`/`extractData` early-return),
+- **INV-WDT-10 [V][BEH]** Disabled tile offers/accepts zero (`addData`/`extractData` early-return),
   so a disabled member stays registered but inert. `TileWirelessTransceiver.java:562-583`
 - **INV-WDT-11 [V]** `HandlerDataNetwork` exists only server-side: it is a field of `ServerState`
   (the client has none) and every tile path that reaches it returns early on `world.isRemote`

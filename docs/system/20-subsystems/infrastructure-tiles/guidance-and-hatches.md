@@ -51,16 +51,16 @@ is the same mask over the network (wire only, `readDataFromNetwork`); `TileDataB
 
 ## Invariants
 
-- **INV-INFRA-17 [V]** The guidance hatch owns no chip storage: all slot access proxies
+- **INV-INFRA-17 [V][BEH]** The guidance hatch owns no chip storage: all slot access proxies
   the rocket's guidance computer, returning `EMPTY`/false when unlinked.
   [V TileGuidanceComputerAccessHatch.java:106-170]
-- **INV-INFRA-18 [V]** Auto-eject fires at most once per link (`chipEjected` latch) and
+- **INV-INFRA-18 [V][BEH]** Auto-eject fires at most once per link (`chipEjected` latch) and
   only for chip types whose per-type toggle is enabled.
   [V TileGuidanceComputerAccessHatch.java:236-247]
-- **INV-INFRA-19 [V]** Data transfer moves exactly the accepted amount — chip and bus stay
+- **INV-INFRA-19 [V][BEH]** Data transfer moves exactly the accepted amount — chip and bus stay
   conserved (`addData(...,true)` returns moved, then `removeData(moved)`).
   [V TileDataBus.java:55-64]
-- **INV-INFRA-20 [V]** Big-bus capacity is re-enforced after every load, clamping
+- **INV-INFRA-20 [V][BEH]** Big-bus capacity is re-enforced after every load, clamping
   overfull stored data. [V TileDataBusBig.java:44-46, 55-57]
 - **INV-INFRA-21 [A]** Persisted mask key `statuses` and wire key `status` intentionally
   differ; both encode the same 4 toggles. (Naming split, not a data mismatch.)

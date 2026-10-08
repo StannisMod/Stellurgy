@@ -134,23 +134,23 @@ No NBT owned. Reads config flag `Planet.perDimWorldInfo` (default true) directly
 
 ## Invariants
 
-- **INV-MIX-01 [T]** The 3 WorldInfo mixins weave iff `perDimWorldInfo` is on; all other
-  mixins always weave. `StellurgyMixinPluginTest.java:46-69`
+- **INV-MIX-01 [T][BEH]** The 3 WorldInfo mixins weave iff `perDimWorldInfo` is on; all other
+  mixins always weave. `StellurgyMixinPluginTest.java:46-69` Pinned by `StellurgyMixinPluginTest#worldInfoMixinsApplyWhenPerDimWorldInfoEnabled`, `StellurgyMixinPluginTest#worldInfoMixinsSkippedWhenPerDimWorldInfoDisabled`, `StellurgyMixinPluginTest#nonWorldInfoMixinsAlwaysApplyRegardlessOfFlag`.
 - **INV-MIX-02 [V]** Coremod never touches `spongepowered.asm.*` (avoids the AppClassLoader
   LinkageError / "no mixin host service" crash). `asm/StellurgyPlugin.java:14-34`
 - **INV-MIX-03 [V]** Config is `"required": true` with a `plugin` — a single failed mixin
   aborts the whole config; this makes the silent-no-op mode structurally
   impossible in reobf. `mixins.stellurgy.json`
-- **INV-MIX-04 [V]** Gravity hook is woven on `Entity` and all three non-super-calling
+- **INV-MIX-04 [V][BEH]** Gravity hook is woven on `Entity` and all three non-super-calling
   subclasses (`@Mixin({Entity, EntityFallingBlock, EntityMinecart, EntityTNTPrimed})`, `@Inject onUpdate`
   HEAD). `mixin/MixinEntityGravity.java:26-29`. The per-dimension behaviour (Stellurgy and vanilla dims) is unpinned.
 - **INV-MIX-05 [V]** Atmosphere hook is common-side safe: side/chunk/oxygen guards live in
   `AtmosphereHandler.onBlockChange`, not the mixin. `atmosphere/AtmosphereHandler.java:124`
 - **INV-MIX-06 [V]** `MixinAcidRainRender` and `MixinNetHandlerFFCameraRepin` are in the
   config's `client` array only — never woven server-side. `mixins.stellurgy.json`
-- **INV-MIX-07 [V]** Sleep-wake redirect fires only on `IPlanetaryProvider` dims with
+- **INV-MIX-07 [V][BEH]** Sleep-wake redirect fires only on `IPlanetaryProvider` dims with
   `perDimWorldInfo`; non-Stellurgy worlds keep vanilla rounding. `mixin/MixinWorldServer.java:43-47`
-- **INV-MIX-08 [A]** `MixinPlayerList` initialises the world border from dim 0's border,
+- **INV-MIX-08 [A][BEH]** `MixinPlayerList` initialises the world border from dim 0's border,
   matching vanilla's overworld-border semantics: the mixin does not issue
   the border packet at all — vanilla's own body does, which is the point of redirecting one call
   instead of replacing the method. `mixin/MixinPlayerList.java`

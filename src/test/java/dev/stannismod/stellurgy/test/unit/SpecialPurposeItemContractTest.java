@@ -45,6 +45,7 @@ public class SpecialPurposeItemContractTest {
 
     // ───────────────────── ItemThermite ──────────────────────────────────
 
+    /** Pins INV-ITM-10 (thermite burns for 6000 ticks regardless of count). */
     @Test
     public void thermiteBurnTimeMatchesFurnaceContract() {
         // Thermite's vanilla-Forge furnace fuel value is 6000 ticks. This
@@ -58,6 +59,7 @@ public class SpecialPurposeItemContractTest {
                 6000, item.getItemBurnTime(stack));
     }
 
+    /** Pins INV-ITM-10 (thermite burns for 6000 ticks regardless of count). */
     @Test
     public void thermiteBurnTimeIsStackInsensitive() {
         // Burn time must not depend on stack size or NBT — vanilla furnace
@@ -92,6 +94,7 @@ public class SpecialPurposeItemContractTest {
                 item.canInteractWithContainer(null));
     }
 
+    /** Pins INV-ITM-11 (the biome changer persists packet id 0 as its biome and ignores unknown ids). */
     @Test
     public void biomeChangerReadDataFromNetworkPersistsBiomeIdToNbt() {
         // Wire-format contract: packet id 0 carries a single int payload
@@ -107,6 +110,7 @@ public class SpecialPurposeItemContractTest {
                 7, nbt.getInteger("biome"));
     }
 
+    /** Pins INV-ITM-11 (the biome changer persists packet id 0 as its biome and ignores unknown ids). */
     @Test
     public void biomeChangerReadDataFromNetworkOtherPacketIdIsNoOp() {
         // Production gates on packetId==0; other ids must NOT mutate NBT.
@@ -138,6 +142,7 @@ public class SpecialPurposeItemContractTest {
                 item.canInteractWithContainer(null));
     }
 
+    /** Pins INV-ITM-12 (the weather controller maps its three ints to NBT keys in order). */
     @Test
     public void weatherControllerReadDataFromNetworkPersistsAllThreeFieldsToNbt() {
         // Wire-format contract: every packet carries 3 ints in fixed

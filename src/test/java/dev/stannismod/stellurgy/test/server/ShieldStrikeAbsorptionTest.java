@@ -40,6 +40,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     private static final double RADIUS = 4.0D;
     private static final String STORED = "shieldStored";
 
+    /** Pins INV-SHD-07 (a shield with no charge intercepts nothing). */
     @Test
     public void chargedShieldFullyAbsorbsACooperativeStrike() throws Exception {
         int gx = 1010, gz = 810;
@@ -85,6 +86,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * fails with "an overmatching strike was reported fully absorbed — the shield cannot afford it:
      * {...fullyAbsorbed:true,residual:0...}"; the charged-shield method stayed green on that run.
      * 2026-09-30.
+     * Pins INV-SHD-08 (a strike the shield cannot fully pay for is partially absorbed and leaves a residual).
      */
     @Test
     public void strikeGracefullyPenetratesAShieldItOutmatches() throws Exception {
@@ -136,6 +138,8 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * body was reflected ... {...declaredBody:false...reflected:true...}". A first attempt at the last
      * — dropping only the {@code hasBody()} test — stayed green: the shell mirrors a null velocity to
      * null and the result then reads unreflected.</p>
+     * Pins INV-SHD-15 (two strikes identical but for a declared body diverge only in outcome, never in price).
+     * Pins INV-SHD-16 (a reflected body leaves along the outward normal and never faster than it arrived).
      */
     @Test
     public void aDeclaredBodyIsReflectedWhereAnIdenticalBodilessStrikeIsStopped() throws Exception {
@@ -196,6 +200,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * red-witnessed: with a line inserted before {@code ShieldStrikeService#absorb} at {@code double fractionStopped = (double) spent / (double) cost;} reflecting any
      * body on a SHORT pay, this fails with "an overmatching strike was reported fully absorbed ...
      * {...reflected:true,newVz:2.0...}". 2026-09-30.
+     * Pins INV-SHD-17 (a short pay never reflects).
      */
     @Test
     public void aBodyThatOutmatchesTheShieldPenetratesInsteadOfBouncing() throws Exception {

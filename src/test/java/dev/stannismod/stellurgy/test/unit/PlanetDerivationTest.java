@@ -185,6 +185,7 @@ public class PlanetDerivationTest {
      * has no bearing on rotation, so a half-gravity world got a day eight times longer. The pin that
      * catches a return to it is two bodies with the SAME gravity and DIFFERENT days — impossible under
      * any function of gravity alone, and cheap to find across a spread of seeds.</p>
+     * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
      */
     @Test
     public void aDayIsDrawnAndIsNotAFunctionOfGravity() {
@@ -213,7 +214,10 @@ public class PlanetDerivationTest {
                 sameGravityDifferentDay);
     }
 
-    /** The same body answers the same day twice — a draw, not a random. */
+    /**
+     * The same body answers the same day twice — a draw, not a random.
+     * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
+     */
     @Test
     public void aDrawnDayIsStillDeterministic() {
         GalacticCoord anchor = cell(610, 0, 0);

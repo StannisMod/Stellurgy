@@ -236,6 +236,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * The human's own route: right-click the seat of a craft that is still loose blocks, then
      * assemble, then fly. Changes BOTH the boarding moment and the boarding mechanism relative to
      * the passing post-assembly flight test - which is why the probe variant below exists.
+     * Pins SHIPCTL-8 (a player who boards before assembly stays seated and controls the ship immediately after assembly).
      */
     @Test
     public void aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip() throws Exception {
@@ -246,6 +247,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * The SAME boarding mechanism the passing post-assembly flight test uses, moved to BEFORE
      * assembly. This isolates the boarding MOMENT: everything else - fixture, coordinates, seeded
      * config, control key, thresholds, polling shape - is the passing test's.
+     * Pins SHIPCTL-8 (a player who boards before assembly stays seated and controls the ship immediately after assembly).
      */
     @Test
     public void aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip() throws Exception {

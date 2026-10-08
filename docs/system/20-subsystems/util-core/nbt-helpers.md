@@ -56,17 +56,16 @@ restructure them freely for the 0.1.0 clean break (pre-0.1.0 saves are abandoned
 
 ## Invariants
 
-- **INV-NBT-01 [V]** A null `IBlockState`/`TileEntity` serializes to the `NBT_NULL`
-  sentinel and deserializes back to null. `NBTHelper.java:180-181, 190-191, 224, 238`.
+- **INV-NBT-01 [V][SYS]** A null `IBlockState`/`TileEntity` serializes to the `NBT_NULL`
+  sentinel and deserializes back to null. `NBTHelper.java:180-181, 190-191, 224, 238`. FOR: save format: tile and state NBT helpers.
 - **INV-NBT-02 [V]** `getTagList` throws `IllegalArgumentException` if the named tag is not
   an `NBTTagList` (fail-fast, no silent empty). `NBTHelper.java:155-161`.
-- **INV-NBT-03 [V]** `BlockPos` is stored as a single `long`, so any reader must use the
-  long form (not a 3-int array). `NBTHelper.java:163-177`.
+- **INV-NBT-03 [V][SYS]** `BlockPos` is stored as a single `long`, so any reader must use the
+  long form (not a 3-int array). `NBTHelper.java:163-177`. FOR: save format: BlockPos as one long.
 - **INV-NBT-04 [V]** `NBTStorableListList.readFromNBT` clears its list before repopulating,
   so a re-read is idempotent (no accumulation). `NBTStorableListList.java:38`.
-- **INV-NBT-05 [T]** The AABB double shape round-trips (used by fluid-tank/storage NBT
-  restart tests). `test/server/FluidTankNBTRoundTripsAcrossRestartTest.java`,
-  `test/integration/PacketSerializationTest.java`.
+- **INV-NBT-05 [A][SYS]** The AABB double shape round-trips. No test asserts it directly: the fluid-tank
+  restart scenario reaches it only through tank contents. FOR: save format: tile and state NBT helpers.
 
 ## Failure modes & edge cases
 

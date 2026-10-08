@@ -110,6 +110,8 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * cell: "a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a
      * world and -1129 in space, a difference of 1179.0, against a reported flux difference of
      * 589.965", 2026-09-30. The premises on both legs are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-14 (A warm world and a distant star reach a radiator through the SAME term).
+     * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
     @Test
     public void aWorldsWarmthAndAStarArriveThroughTheSameTerm() throws Exception {
@@ -184,6 +186,8 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * "a loop with no radiating surface must take nothing from the environment … expected:&lt;0&gt;
      * but was:&lt;76800&gt;". The three premises before the star is turned up are arrangements and are
      * not witnessed.</p>
+     * Pins INV-HEAT-15 (Under a star strong enough, the net runs backwards and an empty loop GAINS heat).
+     * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
     @Test
     public void aShipUnderAFierceStarHeatsThroughItsRadiators() throws Exception {
@@ -242,6 +246,8 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * (shielded=76764 unshielded=76764)". NOT ALL — the {@code HeatEnvironment#MAX_SHIELD_ATTENUATION} at {@code 0.995D} constant letting the shield take
      * everything: "and it must NOT take all of it, however much the configuration asks for … (shielded=0)".
      * The emitter premise and the unshielded premise are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-16 (A raised shield takes most of the incident flux and never all of it, with the configuration set to demand a hundred percent).
+     * Pins HEAT-10 (a shield attenuates incident flux and never eliminates it).
      */
     @Test
     public void aShieldThinsTheFluxAndNeverRemovesIt() throws Exception {

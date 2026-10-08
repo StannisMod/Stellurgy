@@ -15,6 +15,7 @@ import static org.junit.Assert.assertFalse;
  */
 public class PlanetWeatherStateTest {
 
+    /** Pins INV-WGEN-12 (PlanetWeatherState NBT round-trips its weather fields). */
     @Test
     public void planetWeatherStateNbtRoundTrip() {
         PlanetWeatherState source = new PlanetWeatherState();
@@ -37,6 +38,7 @@ public class PlanetWeatherStateTest {
         assertEquals(true, round.isThundering());
     }
 
+    /** Pins INV-WGEN-12 (PlanetWeatherState NBT round-trips its weather fields). */
     @Test
     public void planetWeatherStateNbtRoundTripPreservesClearWeather() {
         // Distinct from raining round-trip — guards against the trivial impl

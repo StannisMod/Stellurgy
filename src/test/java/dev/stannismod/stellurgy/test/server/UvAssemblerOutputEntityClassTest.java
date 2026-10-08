@@ -57,6 +57,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     private static final int CX_ROCKET = 5500;
     private static final int CX_UV     = 5700;
 
+    /** Pins INV-RASM-04 (The pad assembler spawns EntityRocket (never EntityStationDeployedRocket)). */
     @Test
     public void rocketAssemblerProducesEntityRocketNotStationDeployed() throws Exception {
         // FIRST link, ASSERTING where the pair it replaces DUG — and the comment that stood here
@@ -82,6 +83,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 entityClass.contains("StationDeployedRocket"));
     }
 
+    /** Pins INV-RASM-04 (The pad assembler spawns EntityRocket (never EntityStationDeployedRocket)). */
     @Test
     public void uvAssemblerProducesEntityStationDeployedRocket() throws Exception {
         String fixture = exec("stellurgytest fixture uv-rocket 0 " + CX_UV + " " + CY + " " + CZ);

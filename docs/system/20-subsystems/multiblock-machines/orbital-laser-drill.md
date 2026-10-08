@@ -100,12 +100,12 @@ Config: see `C4-config-surface`. Full disable: `enableLaserDrill=false` removes 
 
 - **INV-MBM-01** [V] The concrete mining strategy is fixed at construction by `laserDrillPlanet`;
   it is never swapped at runtime — only mining↔terraforming is. `TileOrbitalLaserDrill.java:154-160,321-331`.
-- **INV-MBM-02** [V] In `voidMiningMode`, `mode` can never persist or receive as anything but
+- **INV-MBM-02** [V][BEH] In `voidMiningMode`, `mode` can never persist or receive as anything but
   `SINGLE` (coerced on packet-in and NBT-read). `TileOrbitalLaserDrill.java:285-287,633-635`.
 - **INV-MBM-03** [V] `setRunning`, `checkCanRun`, and the whole op loop are server-only guarded
   (`world.isRemote` early-return / `!world.isRemote` block). `TileOrbitalLaserDrill.java:417-420,697,483`.
-- **INV-MBM-04** [T] Mining mode breaks the target block (→ air) and yields its drop with count
-  > 0. `OrbitalLaserDrillModeDispatchTest.java:47-58`.
+- **INV-MBM-04** [T][BEH] Mining mode breaks the target block (→ air) and yields its drop with count
+  > 0. `OrbitalLaserDrillModeDispatchTest.java:47-58`. Pinned by `OrbitalLaserDrillModeDispatchTest#miningModeBreaksTargetBlockAndYieldsItsDrop`.
 - **INV-MBM-05** [V] A drill ticket is released on every teardown path (deactivate/onDestroy/
   onChunkUnload/invalidate); no ticket outlives the tile. `TileOrbitalLaserDrill.java:566-588,992-1002`.
 

@@ -53,16 +53,16 @@ released (`ServerState.java:121`), so a fill queued at stop never runs against t
 
 ## Invariants
 
-- **INV-SEAL-01 [T]** Default banned materials load and gate detection; explicit
+- **INV-SEAL-01 [T][BEH]** Default banned materials load and gate detection; explicit
   allow-list overrides detection, ban-list overrides allow; re-adding a block does not
-  duplicate. `test/integration/SealableBlockHandlerTest.java:34,53,69,82`.
-- **INV-SEAL-02 [V]** `addUnsealableBlock`/`addSealableBlock` are mutually exclusive:
-  adding to one list removes from the other. `SealableBlockHandler.java:161-174`.
-- **INV-SEAL-03 [V]** A server-side unloaded chunk is treated as unsealed (never
+  duplicate. `test/integration/SealableBlockHandlerTest.java:34,53,69,82`. Pinned by `SealableBlockHandlerTest#defaultSealableBlocksLoaded`, `SealableBlockHandlerTest#whitelistOverridesDetection`, `SealableBlockHandlerTest#blacklistOverridesDetection`, `SealableBlockHandlerTest#addingSameBlockTwiceDoesNotDuplicate`.
+- **INV-SEAL-02 [V][SYS]** `addUnsealableBlock`/`addSealableBlock` are mutually exclusive:
+  adding to one list removes from the other. `SealableBlockHandler.java:161-174`. FOR: INV-SEAL-01.
+- **INV-SEAL-03 [V][BEH]** A server-side unloaded chunk is treated as unsealed (never
   force-loaded for a seal check). `SealableBlockHandler.java:123-125`.
-- **INV-SEAL-04 [V]** Airlock-door seal recursion cannot loop: a position already on the
-  recursion stack short-circuits to sealed. `SealableBlockHandler.java:146-148`.
-- **INV-SEAL-05 [A]** Blob BFS terminates and either seals a bounded volume or voids
+- **INV-SEAL-04 [V][SYS]** Airlock-door seal recursion cannot loop: a position already on the
+  recursion stack short-circuits to sealed. `SealableBlockHandler.java:146-148`. FOR: INV-SEAL-05.
+- **INV-SEAL-05 [A][BEH]** Blob BFS terminates and either seals a bounded volume or voids
   entirely on leak; assumed correct, no direct unit test (covered indirectly by
   `test/server/AtmosphereOxygenSmokeTest.java`). `AtmosphereBlob.java:113-176`.
 

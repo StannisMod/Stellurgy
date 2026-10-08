@@ -45,6 +45,7 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
     private static final int PZ = 6300;
 
 
+    /** Pins INV-INFRA-22 (A pump above an adjacent water source fills its tank ( 0 mB) within ~60 ticks). */
     @Test
     public void poweredPumpDrainsAdjacentFluidSource() throws Exception {
         // Place pump.

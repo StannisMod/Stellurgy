@@ -25,12 +25,14 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     private static final String NO_PLAYER =
             "You must specify which player you wish to perform this action on";
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
     @Test
     public void addTorchRefusesConsoleSender() throws Exception {
         String resp = exec("ar addTorch");
         assertTrue("addTorch must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
     @Test
     public void setGravityRefusesConsoleSenderWithUsage() throws Exception {
         // setGravity resolves the sender via getCommandSenderEntity() (null on
@@ -40,12 +42,14 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
                 resp.contains("sets your gravity"));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
     @Test
     public void fillDataRefusesConsoleSender() throws Exception {
         String resp = exec("ar fillData distance");
         assertTrue("fillData must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
     @Test
     public void gotoRefusesConsoleSender() throws Exception {
         // goto is now a tree; the dimension leaf carries the player guard.
@@ -53,6 +57,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
         assertTrue("goto must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
+    /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
     @Test
     public void fetchRefusesConsoleSender() throws Exception {
         // fetch resolves the destination (the command sender) as a player first,

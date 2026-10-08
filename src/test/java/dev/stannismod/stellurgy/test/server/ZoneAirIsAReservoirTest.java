@@ -59,6 +59,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * <p>Not asserted: that the room is NOT at the plain average, because the second premise puts the
      * expected value more than twice the bound from the average, so any reading the verdict accepts
      * is already more than the bound from it — the check could not go red on its own.</p>
+     * Pins INV-HEAT-17 (Gas arriving at a different temperature mixes by how much of each there is).
      */
     @Test
     public void gasArrivingMixesByHowMuchOfEachThereIs() throws Exception {
@@ -139,6 +140,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * every draw: "what is left is the same gas at the same temperature — removing part of a body
      * does not cool the rest: … \"airTempMilliK\":361749", 2026-09-30. The three premises are
      * arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-18 (Drawing gas out leaves the temperature alone and lowers the capacity).
      */
     @Test
     public void drawingGasOutLeavesTheTemperatureAndLowersTheCapacity() throws Exception {
@@ -180,6 +182,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * heat capacity whatever its pressure: "and must hold no heat at all: … \"airO2\":0 …
      * expected:&lt;0&gt; but was:&lt;760&gt;". The hot-room and empty-room premises are arrangements
      * and are not witnessed.</p>
+     * Pins INV-HEAT-19 (A zone holding no gas reports ambient and no capacity, rather than the temperature it was at when it still had air).
      */
     @Test
     public void airThatIsNotThereHasNoTemperature() throws Exception {

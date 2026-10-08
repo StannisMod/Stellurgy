@@ -45,6 +45,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     private static final String ROCKET_LIST_ID = "id";
     private static final String STATUS = "status";
 
+    /** Pins INV-RASM-02 (a valid pad structure assembles to a spawned entity with a matching storage chunk). */
     @Test
     public void fixtureRocketAssemblesToLiveEntity() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 500, 500), "simple");
@@ -58,6 +59,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * rocket structure is 3 wide × 5 tall × 1 deep relative to the pad
      * centre, so the storage chunk size must be ≥ that volume (the bbCache
      * snaps to the full pad footprint, which is larger).
+     * Pins INV-RASM-02 (a valid pad structure assembles to a spawned entity with a matching storage chunk).
      */
     @Test
     public void rocketStorageChunkMatchesScanFootprint() throws Exception {
@@ -160,6 +162,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * Invalid rocket: no engines. scanRocket must surface
      * {@code NOENGINES} (or any non-SUCCESS status) instead of spawning a
      * rocket entity.
+     * Pins INV-RASM-03 (assembleRocket proceeds only when the scan status is SUCCESS).
      */
     @Test
     public void invalidRocketMissingEngineFailsAssemblyWithReason() throws Exception {

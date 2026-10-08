@@ -55,6 +55,8 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * reported as covered: {...covered:true...}"; with {@code TileEntityFieldGenerator#getShieldCycleCost} at {@code return estimateShieldCost(radius);}
      * pricing the cycle off the effective radius, it fails with "a shrunken emitter was billed less
      * than the field it declared (12060 -> 6780)". 2026-09-30.
+     * Pins INV-SHD-18 (a damaged emitter covers strictly less ground than the same emitter pristine).
+     * Pins INV-SHD-19 (damage never moves the declared radius nor the cycle cost).
      */
     @Test
     public void aDamagedEmitterCoversLessAndIsStillBilledForWhatItDeclared() throws Exception {
@@ -118,6 +120,7 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * damaged emitter ever reached, is still protected from a blast while that emitter is lit and
      * shrunk ... {...destroyed:["1225,64,830"]}" — the emitter at 1230 read powered:true, radius:3 in
      * the same handler call.</p>
+     * Pins INV-SHD-20 (a neighbour that still reaches closes a shrunken emitter's hole).
      */
     @Test
     public void aNeighbourThatStillReachesClosesTheHoleAndOneThatDoesNotLeavesIt() throws Exception {
@@ -250,6 +253,7 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * with "a damaged cable must carry less than an intact one (20000 vs 20000)";
      * {@code TileEntityShieldAccumulator.java:141} returning the full capacity fails it with "a damaged
      * accumulator must hold less than an intact one (500000 vs 500000)". 2026-09-30.
+     * Pins INV-SHD-21 (a generator, a cable and an accumulator each deliver less when damaged).
      */
     @Test
     public void aDamagedGeneratorCableAndAccumulatorEachDeliverLess() throws Exception {

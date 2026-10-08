@@ -817,6 +817,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * {@code <=}; the routing into LIVE — {@code HullSurvey#collect} at {@code if (block.isWorking(world,
      * pos, state))} made always true; the controller — {@code TileAdvancedFlightComputer#onPhysicsTick}
      * at {@code scheme.allocate(model.live(), a,} handed {@code model.design()}.</p>
+     * Pins INV-SFM-14 (a motor worn to its last stage puts no force into the craft).
      */
     @Test
     public void aMotorWornToItsLastStagePutsNoForceIntoTheCraft() throws Exception {
@@ -909,6 +910,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed it
      * fails "an idle craft must give its wheel back: the fullest wheel aboard read 0.058823529411764705
      * of its capacity, and 20 ticks later 0.058823529411764705".</p>
+     * Pins INV-SFM-11 (a wheel the command leaves idle is given back its momentum).
      */
     @Test
     public void anIdleCraftGivesItsWheelBack() throws Exception {
@@ -995,6 +997,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * the turn growing 0.54 → 6.35 rad/s over ticks 10-30 (taken on the form that passed
      * {@code momentum, dt}); on the form that refused a burst only for a wheel with NO room the same
      * verdict failed at 0.29 rad/s — a kick each time the wheel filled.</p>
+     * Pins INV-SFM-12 (the craft does not turn under a straight push).
      */
     @Test
     public void aCraftWhoseWheelIsSpentDoesNotTurnUnderAStraightCommand() throws Exception {

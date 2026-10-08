@@ -135,9 +135,9 @@ rotates a ring by the last planetary sky's angles.
 
 - **INV-CLR-13 [V]** The starfield and sky quads are compiled to GL display lists once in the
   constructor and reused — not rebuilt per frame. `RenderPlanetarySky.java:53-83`.
-- **INV-CLR-14 [V]** Sky rendering never assumes a created dimension: absent
+- **INV-CLR-14 [V][BEH]** Sky rendering never assumes a created dimension: absent
   `DimensionProperties` it falls back to the connection galaxy's `getOverworldProperties()`. `RenderPlanetarySky.java:608-616`.
-- **INV-CLR-15 [V]** Warp visuals are gated on both `spaceDimId` **and** parent == `WARPDIMID`, so
+- **INV-CLR-15 [V][BEH]** Warp visuals are gated on both `spaceDimId` **and** parent == `WARPDIMID`, so
   a normal space station does not render travel motion. `RenderPlanetarySky.java:554-560`.
 - **INV-CLR-16 [A]** `RenderSpaceSky`/`RenderSpaceTravelSky` are chosen by identity in
   `WorldProviderSpace.getSkyRenderer` (`instanceof` swap); this subsystem assumes that provider

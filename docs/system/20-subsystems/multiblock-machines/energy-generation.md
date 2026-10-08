@@ -65,13 +65,13 @@ Config: see `C4-config-surface`. There is no single "disable" flag for these pro
 
 ## Invariants
 
-- **INV-MBM-09** [T] The solar array validates only with all panels + flanking `p` plug present,
+- **INV-MBM-09** [T][BEH] The solar array validates only with all panels + flanking `p` plug present,
   and a stone-filled `*` wildcard cell breaks formation.
-  `SolarArrayMultiblockTest.java:29-88`.
-- **INV-MBM-10** [V] The black-hole generator produces power **iff** it orbits a black-hole star
+  `SolarArrayMultiblockTest.java:29-88`. Pinned by `SolarArrayMultiblockTest#solarArrayMultiblockValidatesWhenFixtureIsBuilt`, `SolarArrayMultiblockTest#solarArrayMultiblockInvalidatesWhenFlankingPlugRemoved`, `SolarArrayMultiblockTest#solarArrayMultiblockInvalidatesWhenWildcardCellFilledWithStone`.
+- **INV-MBM-10** [V][BEH] The black-hole generator produces power **iff** it orbits a black-hole star
   and is enabled; `isAroundBlackHole` returns false off a black hole. `TileBlackHoleGenerator.java:166-208`.
-- **INV-MBM-11** [T] The microwave receiver validates as a multiblock and produces from a
-  connected transmitter satellite. `MicrowaveReceiverMultiblockTest.java`.
+- **INV-MBM-11** [T][BEH] The microwave receiver validates as a multiblock and loses its structure when a
+  corner or adjacent panel is removed. Production from a connected transmitter satellite is not asserted. Pinned by `MicrowaveReceiverMultiblockTest#microwaveReceiverMultiblockValidatesWhenFixtureIsBuilt`, `MicrowaveReceiverMultiblockTest#microwaveReceiverMultiblockInvalidatesWhenCornerPanelRemoved`, `MicrowaveReceiverMultiblockTest#microwaveReceiverMultiblockInvalidatesWhenAdjacentPanelRemoved`.
 - **INV-MBM-12** [A] All power math is recomputed every tick from live inputs, so a server
   restart cannot desync stored "last tick power" — assumed, since no producer persists it to disk
   (only to the description packet). `TileSolarArray.java:126-156`.

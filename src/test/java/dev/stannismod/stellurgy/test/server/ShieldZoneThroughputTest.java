@@ -68,6 +68,7 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
                 + " tier1=" + tp1 + "): the tier progression does not scale throughput", tp1 > tp0);
     }
 
+    /** Pins INV-SHD-03 (an emitter never receives more than its recharge throughput in a tick). */
     @Test
     public void regenerationIsThroughputCapped() throws Exception {
         // Generator + accumulator build a bulk reserve, then an emitter attaches to the accumulator (not

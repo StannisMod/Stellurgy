@@ -84,6 +84,7 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
         exec("stellurgytest config set atmosphereHandleBitMask " + originalBitMask);
     }
 
+    /** Pins INV-ATM-08 (the blob is bounded by the vent size cap). */
     @Test
     public void ventSealsWithinCapButNotBeyondIt() throws Exception {
         // Control: a corridor entirely inside the cap -> must pressurise.

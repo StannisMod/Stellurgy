@@ -37,6 +37,7 @@ public class FreeFlightInputTest {
         assertEquals(0f, z.brakeInput,       EPS);
     }
 
+    /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
     @Test
     public void constructorClampsAboveOne() {
         FreeFlightInput in = new FreeFlightInput(5f, 2.5f, 1.000001f, 100f, 7f);
@@ -47,6 +48,7 @@ public class FreeFlightInputTest {
         assertEquals( 1f, in.brakeInput,       EPS);
     }
 
+    /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
     @Test
     public void constructorClampsBelowMinusOne() {
         FreeFlightInput in = new FreeFlightInput(-5f, -2.5f, -1.000001f, -100f, -7f);
@@ -57,6 +59,7 @@ public class FreeFlightInputTest {
         assertEquals(-1f, in.brakeInput,       EPS);
     }
 
+    /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
     @Test
     public void constructorCollapsesNanAndInfinityToZero() {
         FreeFlightInput in = new FreeFlightInput(
@@ -65,6 +68,7 @@ public class FreeFlightInputTest {
         assertTrue(in.isIdle());
     }
 
+    /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
     @Test
     public void clampStaticHelperBehaviour() {
         assertEquals(  0f, FreeFlightInput.clamp(Float.NaN),               EPS);
@@ -110,6 +114,7 @@ public class FreeFlightInputTest {
         assertEquals(orig, rt);
     }
 
+    /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
     @Test
     public void readReclampsOutOfRangeWireValues() {
         // A malicious / buggy client could write floats > 1.0 directly. Server-side

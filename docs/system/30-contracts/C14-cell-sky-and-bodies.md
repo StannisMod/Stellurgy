@@ -33,28 +33,28 @@ Layer-1 terms (**cell**, **slot dimension**) keep their C13 meanings and are not
 
 ## Clauses — the renderer
 
-- **CON-C14-01 (one owner)** `[V]` A world's sky is chosen by its client-side provider and by
+- **CON-C14-01 (one owner)** `[V][SYS]` A world's sky is chosen by its client-side provider and by
   nothing else. Two mechanisms feed that choice and they are NOT equivalent: a provider that
   overrides `getSkyRenderer()` answers from its own state; one that does not answers from the
   `skyRenderer` FIELD, which `setSkyRenderer` writes. `WorldProviderSpaceSlot.getSkyRenderer():30`
-  overrides and never reads the field; vanilla `WorldProviderSurface` (dim 0) has only the field.
-- **CON-C14-02 (the cell sky is for cells)** `[A]` The cell sky is drawn **iff** the world is a slot
+  overrides and never reads the field; vanilla `WorldProviderSurface` (dim 0) has only the field. FOR: CON-C14-02.
+- **CON-C14-02 (the cell sky is for cells)** `[A][BEH]` The cell sky is drawn **iff** the world is a slot
   world. Everything it draws is a claim about the player's situation — drawing it anywhere else
   states a falsehood. `BoundarySky` is constructed at exactly one site
   (`WorldProviderSpaceSlot.getSkyRenderer():31`) `[V]`, so any other world showing it means the
   world resolved to the wrong provider, not that a renderer leaked.
-- **CON-C14-03 (a planet is never a cell)** `[A]` A world with terrain — the overworld, a Stellurgy
+- **CON-C14-03 (a planet is never a cell)** `[A][BEH]` A world with terrain — the overworld, a Stellurgy
   planet, an asteroid — never draws the cell sky, whatever the space subsystem's state.
-- **CON-C14-04 (no silent field write)** `[V]` `setSkyRenderer` on a provider that overrides
+- **CON-C14-04 (no silent field write)** `[V][SYS]` `setSkyRenderer` on a provider that overrides
   `getSkyRenderer()` is a NO-OP that looks like a change. `PlanetEventHandler.worldLoadEvent`
   writes `RenderPlanetarySky` into every client world at load; for slot and planet providers that
   write is discarded. A change to a world's sky must go through the owner (CON-C14-01), never
-  through a field write whose effect depends on the provider class.
-- **CON-C14-05 (the flag means what it says)** `[V]` **VIOLATED TODAY.** `overworldSkyOverride` is
+  through a field write whose effect depends on the provider class. FOR: CON-C14-02.
+- **CON-C14-05 (the flag means what it says)** `[V][BEH]` **VIOLATED TODAY.** `overworldSkyOverride` is
   documented "Use Stellurgy's custom skybox in the overworld" (`StellurgyConfiguration.java`) but its only
   reader applies to EVERY client world load (`PlanetEventHandler.java`). A flag must scope to
   what it names (C4 legend). Harmless in effect only because of CON-C14-04.
-- **CON-C14-18 (hyperspace's backdrop belongs to the WORLD, not to a chair)** `[T]` One slot world is
+- **CON-C14-18 (hyperspace's backdrop belongs to the WORLD, not to a chair)** `[T][BEH]` One slot world is
   the transit host, and it draws the CORRIDOR in place of everything CON-C14-02 draws — a cell's sky
   would be a false statement there (no cell is loaded, so no body is ever synced, and a starfield alone
   says "parked" to a ship that is in a jump). The branch is taken on the client's OWN dimension,
@@ -64,35 +64,35 @@ Layer-1 terms (**cell**, **slot dimension**) keep their C13 meanings and are not
   `VSTransitCrewGroupTest.aStandingCrewMemberStillSeesTheHyperspaceCorridor`.
   The branch must not read the jump phase published on the SEAT entity: that answers 0 for anybody
   riding nothing, so a crew member who stood up mid-flight would get an empty, motionless sky and
-  read his own jump as having stopped. The phase is derived posture-blind on the server.
+  read his own jump as having stopped. The phase is derived posture-blind on the server. Pinned by `VSTransitCrewGroupTest#aStandingCrewMemberStillSeesTheHyperspaceCorridor`.
 
 ## Clauses — the feed
 
 These state, as numbered clauses, the rules implemented in `SystemBodiesProducer`, so a later change
 cannot quietly drop them.
 
-- **CON-C14-06 (cell-keyed, not ship-keyed)** `[V][T]` The feed is built from the cell→slot bindings
+- **CON-C14-06 (cell-keyed, not ship-keyed)** `[V][T][SYS]` The feed is built from the cell→slot bindings
   (`SpaceManager.loadedCells`), never from a ship's lifecycle state
   (`SystemBodiesProducer.java, 87-92`; pinned by `SystemBodiesFeedFollowsTheCellTest`).
   Everyone in a live cell sees that cell's surroundings: a pilot mid-jump, a passenger, a crew
-  member who walked off the hull, someone a departing ship left behind.
-- **CON-C14-07 (only cells are keyed)** `[V][T]` A dimension that is not a live cell is keyed by
+  member who walked off the hull, someone a departing ship left behind. Pinned by `SystemBodiesFeedFollowsTheCellTest#aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt`, `SystemBodiesFeedFollowsTheCellTest#aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt`, `SystemBodiesProducerTest#aLiveCellWhoseOnlyShipIsMidJumpStillShowsItsBodies`. FOR: CON-C14-14.
+- **CON-C14-07 (only cells are keyed)** `[V][T][SYS]` A dimension that is not a live cell is keyed by
   nothing. A cell bound to no slot keys nothing, because there is no world whose sky it would be
-  (`SystemBodiesProducer.java`).
-- **CON-C14-08 (an empty cell is keyed empty)** `[V]` A live cell holding no body still gets a
+  (`SystemBodiesProducer.java`). Pinned by `SystemBodiesProducerTest#aShipWhoseCellIsInNoSlotContributesNothing`, `SystemBodiesProducerTest#anUnboundOrMalformedBindingIsNeverKeyed`. FOR: CON-C14-14.
+- **CON-C14-08 (an empty cell is keyed empty)** `[V][SYS]` A live cell holding no body still gets a
   present-but-empty entry, so the client clears stale bodies and draws bare sky
   (`SystemBodiesProducer.java, 108`). "Present and empty" and "absent" are different states
-  and must not be collapsed.
-- **CON-C14-09 (direction, not position)** `[V]` A body's `localX/Y/Z` is the **observer→body**
+  and must not be collapsed. FOR: CON-C14-13.
+- **CON-C14-09 (direction, not position)** `[T][SYS]` A body's `localX/Y/Z` is the **observer→body**
   vector, sector-aware (`SystemBodiesProducer.java`). A body's own in-cell offset is not that
   vector: a planet sits at its own cell centre, so sending the offset yields a zero vector and
   `BoundarySky.drawBody` bails at `|dir| < 1e-6` (`BoundarySky.java`) — the descend target
   renders nothing. (A ship block's `BlockPos` is subspace and entities are world-frame: the vector is
-  computed in the universe frame, never from either.)
-- **CON-C14-10 (one observer per cell)** `[V]` The observer point is a ship the ship registry places
+  computed in the universe frame, never from either.) Pinned by `SystemBodiesProducerTest#aBodyAtTheCellCentreIsCarriedAsTheDirectionFromTheShipThatIsThere`, `SystemBodiesProducerTest#crossCellBodyDirectionIncludesTheSectorTerm`. FOR: CON-C14-14.
+- **CON-C14-10 (one observer per cell)** `[V][SYS]` The observer point is a ship the ship registry places
   in the cell, preferring `SETTLED`, else the cell centre (`SystemBodiesProducer.java`). It is
-  one direction set per dimension — the sky is camera-centred, so every viewer in the cell shares it.
-- **CON-C14-11 (the highlight means "you can land here", not "a world already exists")** `[V]`
+  one direction set per dimension — the sky is camera-centred, so every viewer in the cell shares it. FOR: CON-C14-14.
+- **CON-C14-11 (the highlight means "you can land here", not "a world already exists")** `[V][BEH]`
   The feed's `descendTarget` flag is `body.kind().canDescend()` — a render HINT about the KIND of
   body — and not `isDescendTarget()`, which additionally requires a realized dimension
   (`SystemBodiesProducer.java`, the `RenderBody` construction). A procedural planet has no dimension
@@ -105,7 +105,7 @@ cannot quietly drop them.
 Both clauses below are OWNED BY C15 (ADDR-1 "a name, not a place" and ADDR-13 "the geometry the
 player feels stays live"); the anchors are permanent.
 
-- **CON-C14-12 (a body's cell is durable)** `[A]` A body owns ONE cell; orbital motion moves it
+- **CON-C14-12 (a body's cell is durable)** `[A][SYS]` A body owns ONE cell; orbital motion moves it
   WITHIN its cell and never BETWEEN cells. See C15 ADDR-1. Scale, for why this is not a corner case:
   a cell is 32 000 000 blocks (`GalacticCoord.CELL`) and one AU is about 6·10⁸ chart blocks
   (`AstronomicalBodyHelper.BLOCKS_PER_AU`), so a body crosses a cell boundary within a few percent of an
@@ -113,8 +113,8 @@ player feels stays live"); the anchors are permanent.
   an address derived from the LIVE ephemeris (`positionOf(planet, NOW)` →
   `DimensionProperties.getPlanetPosition()` → `positionFor(this.orbitTheta)`, with `orbitTheta`
   rewritten every tick by `updateOrbit():1147-1150`) would make `bodiesAt` (which filters
-  `b.address().sameCell(cell)`, `UniverseRegistry.java`) drop a body out of the cell it was in.
-- **CON-C14-13 (what the sky shows is what the cell holds)** `[A]` A viewer parked in a cell sees a
+  `b.address().sameCell(cell)`, `UniverseRegistry.java`) drop a body out of the cell it was in. FOR: ADDR-11.
+- **CON-C14-13 (what the sky shows is what the cell holds)** `[A][BEH]` A viewer parked in a cell sees a
   body appear or disappear only when something really changed about that body — never because time
   passed while he sat still. This is the player-facing form of CON-C14-12 and C15 ADDR-13.
 
@@ -125,7 +125,7 @@ what the player is shown of them. A sky's content is the SYSTEM's bodies (CON-C1
 cell's own occupants as CON-C14-08/09 describe the empty and vector cases; CON-C14-15 is the live form
 of CON-C14-09's vector.
 
-- **CON-C14-14 (the sky shows the SYSTEM, not the cell)** `[T]`
+- **CON-C14-14 (the sky shows the SYSTEM, not the cell)** `[T][BEH]`
   Built by `UniverseRegistry.skyBodiesAt` + `SystemBodiesProducer.currentByDim`; pinned by
   `UniverseRegistryTest.theSkyFeedUnionsTheSystemWithTheObserversOwnCell` (whose control is that the
   system read ALONE drops the station) and `...interstellarVoidIsFedNothing`. The feed for a
@@ -138,16 +138,16 @@ of CON-C14-09's vector.
   *The union is not decoration.* `systemBodiesAt` (`UniverseRegistry.java`) `[V]` returns
   empty for an unattributed cell and aggregates POIs of BODY cells only — its own javadoc says a
   void cell's own POIs are readable via `bodiesAt`/`poisAt` (`:344-353`) `[V]` — so a straight
-  swap would erase an orbital station standing in the observer's own void cell.
-- **CON-C14-15 (direction AND distance, evaluated live)** `[T]` The vector is
+  swap would erase an orbital station standing in the observer's own void cell. Pinned by `UniverseRegistryTest#theSkyFeedUnionsTheSystemWithTheObserversOwnCell`, `UniverseRegistryTest#interstellarVoidIsFedNothing`.
+- **CON-C14-15 (direction AND distance, evaluated live)** `[T][SYS]` The vector is
   `body.absoluteAt(tick)` minus `frames.absoluteOf(observer, tick)`; pinned by
   `SystemBodiesProducerTest.aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays` and
   `...aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim`. Each fed body
   carries the observer→body vector computed through BOTH frames' origins at the broadcast tick
   (C15 ADDR-9), so its magnitude is the true distance at that moment. The wire needs no change: the
   payload is three `long`s per body (`PacketSystemBodiesSync`, C2) `[V]`.
-  CON-C14-09's vector is therefore never computed over the static grid.
-- **CON-C14-16 (apparent size falls with distance, clamped both ends)** `[T]` Built as
+  CON-C14-09's vector is therefore never computed over the static grid. Pinned by `SystemBodiesProducerTest#aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays`, `SystemBodiesProducerTest#aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim`. FOR: CON-C14-14.
+- **CON-C14-16 (apparent size falls with distance, clamped both ends)** `[T][BEH]` Built as
   `client/render/planet/ApparentSize` - a pure, GL-free function, so the RULE is checkable without a
   client; pinned by `ApparentSizeTest` (falls, clamped both ends, and nothing in the fed range
   leaves the clamps) and, in PIXELS off the real client, by
@@ -164,8 +164,8 @@ of CON-C14-09's vector.
   moon to the neighbourhood bound (10⁹ blocks and more), so an unclamped 1/d law draws the star at a
   fraction of a pixel; and at the near end `BoundarySky.drawBody` already bails at `|dir| < 1e-6`
   (`:141-142`) `[V]`, i.e. a body vanishes exactly when it is closest. Without this clause
-  CON-C14-13 and C15 ADDR-13 have no rendering and "the planet crawls away" is unobservable.
-- **CON-C14-17 (a body says what it is and how far)** `[V]` `BoundarySky` writes
+  CON-C14-13 and C15 ADDR-13 have no rendering and "the planet crawls away" is unobservable. Pinned by `ApparentSizeTest#sizeFallsAsTheSameBodyRecedes`, `ApparentSizeTest#sizeIsClampedAtBothEnds`, `ApparentSizeTest#everyFedPairStaysInsideTheClamps`.
+- **CON-C14-17 (a body says what it is and how far)** `[V][BEH]` `BoundarySky` writes
   the name + `ApparentSize.formatDistance` under each billboard, gated on
   `client/render/planet/SkyLabels` = the `skyBodyLabels` CONFIG flag AND the navigation computer's
   own toggle (default ON, persisted, applied client-side off the console's existing state sync - so
@@ -191,7 +191,7 @@ of CON-C14-09's vector.
   The toggle is held by the CLIENT WORLD the console synced into (`WorldRuntime` part,
   `SkyLabels.enabled(World)` / `setConsoleEnabled(World, boolean)`) `[V]`, so it ends with that
   world — a disconnect, a dimension change or a new server starts from the default.
-- **CON-C14-19 (the sky shows the CLOUDS around the cell, as directions and nothing else)** `[V]`
+- **CON-C14-19 (the sky shows the CLOUDS around the cell, as directions and nothing else)** `[V][BEH]`
   A star cluster is invisible from outside it — it is
   identifiable only by counting stars — so the nebula wrapping it is the one landmark the universe
   layer has, and a cell's sky draws the ones within reach.
@@ -220,7 +220,7 @@ of CON-C14-09's vector.
 
 ## The invariant the sky must keep
 
-- **CON-C14-20 (the sky states the player's situation)** `[A]` Every element the cell sky draws is
+- **CON-C14-20 (the sky states the player's situation)** `[A][BEH]` Every element the cell sky draws is
   an assertion the player is entitled to act on: a highlighted billboard says "this is the body you
   will descend into", a boundary drawn around it says "this is where you cross". A world that draws
   them while they are not true is not a cosmetic defect — it is the sky lying about where the player

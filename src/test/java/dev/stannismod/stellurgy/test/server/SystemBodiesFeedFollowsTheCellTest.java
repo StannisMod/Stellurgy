@@ -84,6 +84,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
         }
     }
 
+    /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
     @Test
     public void aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt() throws Exception {
         authoredOnlySky();
@@ -113,6 +114,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
         assertEquals("no ship was ledgered by any of this; " + after, 0, jsonInt(after, "shipCount"));
     }
 
+    /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt() throws Exception {
         authoredOnlySky();

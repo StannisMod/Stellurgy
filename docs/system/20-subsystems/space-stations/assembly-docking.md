@@ -79,23 +79,23 @@ Config: see `C4-config-surface`.
 
 ## Invariants
 
-- **INV-STN-22 [T]** A new station assembly registers a `SpaceStationObject` and emits a chip
+- **INV-STN-22 [T][BEH]** A new station assembly registers a `SpaceStationObject` and emits a chip
   carrying its id; the id is unique and appears in the manager list
-  (SpaceStationDepthTest; SpaceStationDepthTest:44-58).
-- **INV-STN-23 [T]** A pad added to a station starts `occupied=false` and `allowAutoLand=false`,
-  carries its supplied name, and de-dups on `(x,z)` (SpaceStationDockUndockTest:65-83,167-181).
-- **INV-STN-24 [T]** Dock claims the pad returned by `getNextLandingPad` and marks it occupied; a
+  (SpaceStationDepthTest; SpaceStationDepthTest:44-58). Pinned by `SpaceStationDepthTest#multipleStationsCoexistWithDistinctIds`, `SpaceStationDepthTest#stationCreateRegistersAndPersistsForList`.
+- **INV-STN-23 [T][BEH]** A pad added to a station starts `occupied=false` and `allowAutoLand=false`,
+  carries its supplied name, and de-dups on `(x,z)` (SpaceStationDockUndockTest:65-83,167-181). Pinned by `SpaceStationDockUndockTest#addPadGrowsListWithExpectedDefaults`, `SpaceStationDockUndockTest#addPadIsIdempotentForSamePosition`.
+- **INV-STN-24 [T][BEH]** Dock claims the pad returned by `getNextLandingPad` and marks it occupied; a
   second dock with no other free auto-land pad fails; undock frees the pad and it can be reclaimed
-  (SpaceStationDockUndockTest:100-149; SpaceStationPadPersistenceTest:180-190).
-- **INV-STN-25 [T]** Pad ownership is per-station: station A never reports station B's pad
-  (SpaceStationDockUndockTest:201-221).
-- **INV-STN-26 [V]** Assembly refuses unless loader block + station chip present and outputs empty;
+  (SpaceStationDockUndockTest:100-149; SpaceStationPadPersistenceTest:180-190). Pinned by `SpaceStationDockUndockTest#dockClaimsAutoLandPadAndMarksOccupied`, `SpaceStationDockUndockTest#undockReturnsPadToFreePool`.
+- **INV-STN-25 [T][BEH]** Pad ownership is per-station: station A never reports station B's pad
+  (SpaceStationDockUndockTest:201-221). Pinned by `SpaceStationDockUndockTest#multipleStationsTrackPadsIndependently`.
+- **INV-STN-26 [V][BEH]** Assembly refuses unless loader block + station chip present and outputs empty;
   a `NegativeArraySizeException` on cut sets `FAIL_CUT` rather than crashing
   (`TileStationAssembler.java:40-60,118-125`).
-- **INV-STN-27 [V]** `TileOrbitalRegistry` chip writes only execute server-side and only when
+- **INV-STN-27 [V][BEH]** `TileOrbitalRegistry` chip writes only execute server-side and only when
   `checkWrite()` passes (output empty, exactly one input chip, valid selection, and — for stations
   — the station is launched) (`:583-655,487-575`).
-- **INV-STN-28 [V]** Module docking (`onModuleUnpack`, not first unpack) mates two ports only when
+- **INV-STN-28 [V][BEH]** Module docking (`onModuleUnpack`, not first unpack) mates two ports only when
   a station port's stored id equals a module port's `targetId`, then clears both port blocks
   (`SpaceStationObject.java:646-696`).
 

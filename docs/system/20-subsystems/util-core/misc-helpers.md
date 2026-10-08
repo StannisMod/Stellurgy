@@ -64,19 +64,19 @@ static weak-ref/weak-map bypass state; `RocketGuiNavigation` holds a static
 
 ## Invariants
 
-- **INV-HLP-01 [T]** Air set→get round-trips; `decrementAir` clamps at 0 and reports the
+- **INV-HLP-01 [V][BEH]** Air set→get round-trips; `decrementAir` clamps at 0 and reports the
   amount actually extracted; `increment` clamps at max and reports amount inserted;
-  `setAirRemaining` does not clamp; a fresh stack reads as full.
-  `test/unit/ItemAirUtilsTest.java:55,62,77,98,114`.
-- **INV-HLP-02 [T]** A bypass player skips `canInteractWith` regardless of distance; a
-  non-bypass player delegates to the container; bypass is scoped to the specific player
-  instance and restored on removal. `test/unit/RocketInventoryHelperRedirectTest.java:100,115,126,137,154`;
-  end-to-end `test/client/InventoryBypassRedirectE2ETest.java`.
+  `setAirRemaining` does not clamp; a fresh stack reads as full (`ItemAirUtils.java:29-130`).
+  No unit test drives these; the suit client scenarios reach only the drained case of `decrementAir`.
+- **INV-HLP-02 [T][BEH]** A bypass player skips `canInteractWith` regardless of distance. A
+  non-bypass player delegates to the container, and bypass is scoped to the specific player
+  instance and restored on removal `[V]` (`RocketInventoryHelper.java:22,50-53,65-70`); no test
+  drives the delegation or the removal. Pinned by `MachineGuiClientGroupTest#mixinRedirectKeepsContainerOpenAcrossDistance`.
 - **INV-HLP-03 [V]** `rememberIfRocketGuiReturnTile` is a no-op on the client / null world
   (`world.isRemote` guarded). `RocketGuiNavigation.java:48`.
-- **INV-HLP-04 [V]** Air-container validity requires the space-protection enchant, not just
+- **INV-HLP-04 [V][BEH]** Air-container validity requires the space-protection enchant, not just
   the item type. `ItemAirUtils.java:117-131`.
-- **INV-HLP-05 [A]** Suit-armor protective ticks are pinned by
+- **INV-HLP-05 [A][BEH]** Suit-armor protective ticks are pinned by
   `test/client/ItemSpaceArmorUseFluidE2ETest.java` / `ItemSpaceChestSubInventoryDrainE2ETest.java`
   (chest-slot air spend). Assumed to match MECH-HLP-02.
 

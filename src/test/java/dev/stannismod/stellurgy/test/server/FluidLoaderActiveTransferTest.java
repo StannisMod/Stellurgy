@@ -63,6 +63,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      *
      * <p>Doesn't pin exact mB-per-tick — production's transfer rate is
      * impl (depends on tank capacity, handler fill behaviour, etc.).</p>
+     * Pins INV-INFRA-13 (the fluid loader transfers fluid into a rocket fluid tile).
      */
     @Test
     public void loaderTransfersOxygenIntoRocketStorageLiquidTanks() throws Exception {

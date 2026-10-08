@@ -55,21 +55,21 @@ Copy constructor iterates `@ConfigProperty` fields sorted by name and shallow-co
 
 ## Invariants
 
-- **INV-API-01 [V]** Only `needsSync=true` fields cross the wire; both write and read iterate the
+- **INV-API-01 [V][SYS]** Only `needsSync=true` fields cross the wire; both write and read iterate the
   identical name-sorted filtered list, so order matches by construction (`StellurgyConfiguration:862-867`,
-  `:1028-1033`).
-- **INV-API-02 [V]** The wire key per field is `field.getName().hashCode()` (a 32-bit int), not the
+  `:1028-1033`). FOR: wire format: synced config fields (INV-NW-01).
+- **INV-API-02 [V][SYS]** The wire key per field is `field.getName().hashCode()` (a 32-bit int), not the
   disk option string; renaming a synced field silently changes its wire id (`:872`, `:1037`). Safe
-  only because client and server run the same jar within a session.
-- **INV-API-03 [V]** `spaceDimId` defaults to `-2` and is the contract dimension id for all space
-  stations. (`MoonId` is not config: it is the galaxy's `getMoonId()`.)
-- **INV-API-04 [V]** `stationSize` (build radius, default 1024) is documented as save-breaking if
+  only because client and server run the same jar within a session. FOR: wire format: synced config fields (INV-NW-01).
+- **INV-API-03 [V][SYS]** `spaceDimId` defaults to `-2` and is the contract dimension id for all space
+  stations. (`MoonId` is not config: it is the galaxy's `getMoonId()`.) FOR: public API: the space dimension id is a promise to dependent mods.
+- **INV-API-04 [V][BEH]** `stationSize` (build radius, default 1024) is documented as save-breaking if
   changed after stations exist (`:458`); it is synced so monitors show the server value.
-- **INV-API-05 [V]** `readConfigFromNetwork` returns early (`return this`) on the first field whose
+- **INV-API-05 [V][SYS]** `readConfigFromNetwork` returns early (`return this`) on the first field whose
   hashCode does not match (`:1038-1039`), and the terminator loop
   `while(readByte()!=MAGIC_CODE && readLong()==MAGIC_CODE_PT2)` short-circuits *before* reading the
   long once the magic byte is seen (`:1050`) — so a mismatch leaves the buffer partially consumed and
-  the trailing long unread. Benign only because the config packet is the whole payload.
+  the trailing long unread. Benign only because the config packet is the whole payload. FOR: wire format: synced config fields (INV-NW-01).
 
 ## Owned flag catalogue (all `@ConfigProperty`)
 

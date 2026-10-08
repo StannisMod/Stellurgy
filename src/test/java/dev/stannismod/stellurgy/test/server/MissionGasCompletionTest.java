@@ -104,7 +104,9 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
 
     /** Production gate: if `(int)stats.getStatTag("intakePower") > 0`
      *  is false, the fluid-fill loop is skipped (MissionGasCollection
-     *  line 46). Counter-test pinning the gate. */
+     *  line 46). Counter-test pinning the gate.
+     * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
+     */
     @Test
     public void gasCompletionDoesNotFillFluidWhenIntakePowerZero() throws Exception {
         int rid = buildAndAssembleRocket(8100);
@@ -144,7 +146,9 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      *  {@code fill(new FluidStack(type, 64000), true)}).
      *  Uses the `with-fluid-cargo` fixture variant that swaps 2 of 6
      *  fuel tanks for liquidTank blocks so StorageChunk.liquidTiles is
-     *  non-empty. */
+     *  non-empty.
+     * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
+     */
     @Test
     public void gasCompletionFillsRocketFluidTilesWithConfiguredFluid() throws Exception {
         int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");

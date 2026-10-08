@@ -33,29 +33,29 @@ stands the ship off from where the target was, by the difference between the two
 
 ## Clauses
 
-- **CLOCK-1 (one clock)** `[T]` Every space-subsystem evaluation of a time-dependent quantity reads
+- **CLOCK-1 (one clock)** `[T][SYS]` Every space-subsystem evaluation of a time-dependent quantity reads
   the space clock and nothing else. A per-dimension world clock, a render clock, and "the total time
   of whatever world I am in" are different quantities that merely look like this one.
   This is structural: the space clock is not derived from any world, so there is no world clock in
   the picture to be accidentally right about.
-  **Player form:** two things the game computes about the same moment agree about when that moment is.
-- **CLOCK-2 (the aim and the arrival agree)** `[T]` The tick a jump's aim is evaluated at and the
+  **Player form:** two things the game computes about the same moment agree about when that moment is. Pinned by `AimAndArrivalShareOneClockTest#theAimMovesWithTheSpaceClockAndWithNoOtherClock`. FOR: CLOCK-2.
+- **CLOCK-2 (the aim and the arrival agree)** `[T][BEH]` The tick a jump's aim is evaluated at and the
   tick its arrival is priced at come from the same source, so the only difference between them is the
   flight's own predicted duration. **Falsifiable:** drive a non-space clock away from the space clock
-  and the aim must not move. **Player form:** a jump aimed at a body arrives beside that body.
-- **CLOCK-3 (side-agnostic)** `[T]` The space clock is readable on both logical sides and answers the
+  and the aim must not move. **Player form:** a jump aimed at a body arrives beside that body. Pinned by `AimAndArrivalShareOneClockTest#theAimMovesWithTheSpaceClockAndWithNoOtherClock`.
+- **CLOCK-3 (side-agnostic)** `[T][SYS]` The space clock is readable on both logical sides and answers the
   same value on each, to within the sync period. No caller needs to know which side it is on. On the
   server it is the subsystem's own counter; on a client it is
   a synced baseline advanced locally (`SpaceClockSync.java`), one copy per connection, owned by the
   client's `ServerView` and read through `proxy.clientSpaceClock()` (`ClientProxy.java`) `[V]`. A
   client that has never been synced answers 0 and says so through `hasSync()` `[T]`; a new connection
-  starts unsynced because its view is new.
-- **CLOCK-4 (a proxy accessor is not the space clock)** `[V]` No space-subsystem code may read
+  starts unsynced because its view is new. Pinned by `SpaceClockSyncTest#aClientNobodyHasToldIsDistinguishableFromOneToldItIsTickZero`, `SpaceClockSyncTest#theAnswerIsTheBaselinePlusTheClientTicksSinceIt`, `SpaceClockSyncTest#aLaterBaselineWinsEvenWhenItMovesTheAnswerBackwards`, `SpaceSubsystemClientSyncGroupTest#theClientsSpaceClockFollowsTheServers`. FOR: CLOCK-2.
+- **CLOCK-4 (a proxy accessor is not the space clock)** `[V][SYS]` No space-subsystem code may read
   `proxy.getWorldTimeUniversal`. The accessor's client implementation does not honour its argument,
   and dimension time in Stellurgy is per-dimension **by design** (`perDimWorldInfo`, working beds), so
   "universal" describes nothing about it. Its other consumers (mission timers, satellite gates,
-  station transitions) are outside this contract. Planet orbital theta reads the space clock.
-- **CLOCK-5 (the subsystem owns the counter)** `[T]` The space clock is the subsystem's own state,
+  station transitions) are outside this contract. Planet orbital theta reads the space clock. FOR: CLOCK-2.
+- **CLOCK-5 (the subsystem owns the counter)** `[T][SYS]` The space clock is the subsystem's own state,
   not a reading of anything else. Four consequences, each separately falsifiable:
   1. **It advances by itself**, once per server tick, whether or not the controller was built — it is
      never derived from an object that can be absent, so it cannot answer **tick zero** because a
@@ -73,7 +73,7 @@ stands the ship off from where the target was, by the difference between the two
      own writer (`ShipLedgerData.setClock`), **outside** `replaceAll`'s all-or-nothing fleet write, and
      the write-out happens in a `finally` so a fleet step that refuses or fails cannot take the clock
      with it.
-  **Player form:** restarting the server does not age the fleet, and a jump's ETA survives it.
+  **Player form:** restarting the server does not age the fleet, and a jump's ETA survives it. Pinned by `AimAndArrivalShareOneClockTest#theClockAdvancesWithoutBeingTold`, `SpaceClockIsTheSubsystemsOwnTest#neitherClockMovesTheOther`, `SpaceClockIsTheSubsystemsOwnTest#theClockComesBackWhereItWasAfterAReboot`. FOR: CLOCK-2.
 
 ## Witnesses
 

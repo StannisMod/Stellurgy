@@ -125,13 +125,13 @@ None. All decoration is deterministic from world seed + chunk coords +
 
 ## Invariants
 
-- **INV-WGEN-07 [V]** Crater/volcano/geode ore selection is read from
+- **INV-WGEN-07 [V][BEH]** Crater/volcano/geode ore selection is read from
   `DimensionProperties` + Ore Dictionary at generate time, so a planet with an
   empty `craterOres`/`geodeOres` list still generates the landform, just without
   ore inlays (`MapGenCrater.java:62-67,163-169`; `MapGenGeode.java:53-60`).
-- **INV-WGEN-08 [V]** `MapGenGeode` never generates over ocean/river/beach biomes
+- **INV-WGEN-08 [V][BEH]** `MapGenGeode` never generates over ocean/river/beach biomes
   (`MapGenGeode.java:44-46,62`).
-- **INV-WGEN-09 [V]** `MapGenLander` fires for exactly one column on exactly the
+- **INV-WGEN-09 [V][BEH]** `MapGenLander` fires for exactly one column on exactly the
   dimension literally named `"Luna"` (`MapGenLander.java:20`).
 - **INV-WGEN-10 [V]** `MapGenCraterHuge` bounds-checks every Y write via
   `isValidPrimerY` (`MapGenCraterHuge.java:57-62`) — the small/medium crater

@@ -53,6 +53,7 @@ public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
      * through a Z face (a sampled path's missed diagonal step), this fails with "the bore has 6
      * hole(s) ... (11600,84,11601) -> (11601,84,11602) (2 apart)"; the axis-aligned control stayed
      * green on the same run. 2026-09-30.
+     * Pins INV-DMG-09 (The damaged blocks of one impact form an UNBROKEN chain).
      */
     @Test
     public void anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore() throws Exception {

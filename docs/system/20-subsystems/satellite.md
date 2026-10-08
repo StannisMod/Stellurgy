@@ -107,28 +107,28 @@ re-derived each tick from redstone + chip, and `powergen`/`blockpertick` exist o
 
 ## Invariants
 
-- **INV-SAT-01** [T] Base battery never exceeds `powerStorage`; accrual is ≈`powerPerTick`/tick.
-  `SatelliteTickBehaviourTest.java:63,88`
-- **INV-SAT-02** [T] `DataStorage.addData` is capped at `maxData`; a data satellite fires the
-  data gate ~`ticks/collectionTime` times. `SatelliteTickBehaviourTest.java:112,134`
-- **INV-SAT-03** [T] Weather `mode_id`/`last_mode_id`/`floodlevel` round-trip through NBT; the
+- **INV-SAT-01** [T][BEH] Base battery never exceeds `powerStorage`; accrual is ≈`powerPerTick`/tick.
+  `SatelliteTickBehaviourTest.java:63,88` Pinned by `SatelliteTickBehaviourTest#baseSatelliteTickAccruesAtApproximatelyPowerGenRate`, `SatelliteTickBehaviourTest#baseSatelliteBatteryCapsAtPowerStorage`.
+- **INV-SAT-02** [T][BEH] `DataStorage.addData` is capped at `maxData`; a data satellite fires the
+  data gate ~`ticks/collectionTime` times. `SatelliteTickBehaviourTest.java:112,134` Pinned by `SatelliteTickBehaviourTest#dataSatelliteAccumulatesDataOverTime`, `SatelliteTickBehaviourTest#dataSatelliteRespectsMaxDataCap`.
+- **INV-SAT-03** [T][SYS] Weather `mode_id`/`last_mode_id`/`floodlevel` round-trip through NBT; the
   `floodlevel==-1` sentinel must survive so the lazy sea-level fallback fires.
-  `SatelliteWeatherAndMicrowaveNbtTest.java:51,79`
-- **INV-SAT-04** [T] Microwave `teir` byte round-trips through NBT. `SatelliteWeatherAndMicrowaveNbtTest.java:108`
-- **INV-SAT-05** [T] Builder stamps the *same* fresh `satelliteId` into both the chassis item
+  `SatelliteWeatherAndMicrowaveNbtTest.java:51,79` Pinned by `SatelliteWeatherAndMicrowaveNbtTest#weatherControllerNbtRoundTripPreservesModeIdLastModeIdAndFloodlevel`, `SatelliteWeatherAndMicrowaveNbtTest#weatherControllerNbtRoundTripPreservesFreshDefaults`. FOR: save format: satellite survives reload.
+- **INV-SAT-04** [T][SYS] Microwave `teir` byte round-trips through NBT. `SatelliteWeatherAndMicrowaveNbtTest.java:108` Pinned by `SatelliteWeatherAndMicrowaveNbtTest#microwaveEnergyTeirByteRoundTripsAcrossNbt`. FOR: save format: satellite survives reload.
+- **INV-SAT-05** [T][BEH] Builder stamps the *same* fresh `satelliteId` into both the chassis item
   (`satId`) and the id chip (`satelliteId`); chassis slot is consumed, output stays empty until
-  `completionTime`. `SatelliteBuilderPressBuildContractTest.java:76`
-- **INV-SAT-06** [T] A chip-overriding type (weatherController) rejects the default id chip in
-  `canAssembleSatellite`. `SatelliteBuilderPressBuildContractTest.java:133`
-- **INV-SAT-07** [T] Terminal status ladder: no chip→0, chip+no power→1, out of range→2,
+  `completionTime`. `SatelliteBuilderPressBuildContractTest.java:76` Pinned by `SatelliteBuilderPressBuildContractTest#pressBuildAssemblesOpticalSatellite`.
+- **INV-SAT-06** [T][BEH] A chip-overriding type (weatherController) rejects the default id chip in
+  `canAssembleSatellite`. `SatelliteBuilderPressBuildContractTest.java:133` Pinned by `SatelliteBuilderPressBuildContractTest#pressBuildRejectsDefaultChipForChipOverridingType`.
+- **INV-SAT-07** [T][BEH] Terminal status ladder: no chip→0, chip+no power→1, out of range→2,
   linked→3; erase removes the satellite from its dim and blanks the chip.
-  `SatelliteTerminalChipRecognitionTest.java:87,107,120,133` (the out-of-range rung, status 2, has no test here)
-- **INV-SAT-08** [V] Terminal download requires the resolved satellite be a `SatelliteData`
+  `SatelliteTerminalChipRecognitionTest.java:87,107,120,133` (the out-of-range rung, status 2, has no test here) Pinned by `SatelliteTerminalChipRecognitionTest#chippedTerminalWithPowerReachesStatus3`, `SatelliteTerminalChipRecognitionTest#unchippedTerminalReportsNoLink`, `SatelliteTerminalChipRecognitionTest#chippedTerminalWithoutPowerReportsNoPower`, `SatelliteTerminalChipRecognitionTest#pressEraseRemovesSatelliteFromDimAndBlanksChip`.
+- **INV-SAT-08** [V][BEH] Terminal download requires the resolved satellite be a `SatelliteData`
   subclass, in the same planetary system, with ≥`getPowerPerOperation()` RF.
   `TileSatelliteTerminal.java:83,228`
-- **INV-SAT-09** [V] `TileTerraformingTerminal` hides its Forge-Energy / Tesla capability so
+- **INV-SAT-09** [V][BEH] `TileTerraformingTerminal` hides its Forge-Energy / Tesla capability so
   probes/pipes see no energy handler. `TileTerraformingTerminal.java:327,337`
-- **INV-SAT-10** [A] `maxQueuedBlocks` bounds a biome changer's `toChangeList` PER SATELLITE: 1 024
+- **INV-SAT-10** [A][BEH] `maxQueuedBlocks` bounds a biome changer's `toChangeList` PER SATELLITE: 1 024
   until that satellite's first `performAction`, which raises its own cap to 8 000. The cap is per satellite, never a
   mutable static that one satellite's action would raise for every changer.
   `SatelliteBiomeChanger.java:24,114,125`

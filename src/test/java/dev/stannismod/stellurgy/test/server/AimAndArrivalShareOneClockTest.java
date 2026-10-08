@@ -78,6 +78,10 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
     /** A floor under the fraction, for the numeric noise of two long round-trips. */
     private static final double ALLOWED_DRIFT_FLOOR_BLOCKS = 8.0;
 
+    /**
+     * Pins CLOCK-1 (space-subsystem evaluations read the space clock and no other clock).
+     * Pins CLOCK-2 (the aim and the arrival share one clock, so a non-space clock cannot move the aim).
+     */
     @Test
     public void theAimMovesWithTheSpaceClockAndWithNoOtherClock() throws Exception {
         int moonDim = findAMoon();
@@ -211,6 +215,7 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
      * answering a frozen zero. The RATE is asserted against the overworld's own once-per-tick counter
      * over the same window: a second writer on the server-tick event would double it and leave every
      * "it moved" assertion green. That compares deltas, not values, so the clocks stay decoupled.</p>
+     * Pins CLOCK-5 (the subsystem owns the counter: it advances once per tick, is independent of world clocks, and survives a reboot).
      */
     @Test
     public void theClockAdvancesWithoutBeingTold() throws Exception {

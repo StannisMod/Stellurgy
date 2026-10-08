@@ -135,6 +135,7 @@ public class GalacticCoordZoneTest {
      *
      * <p>Refusing is the whole point: assuming would not fail, it would rename the cell. The
      * coordinate still compares, keys and round-trips — those need the name, not the scale.</p>
+     * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Test
     public void aCoordinateReadFromAKeyRefusesWidthArithmeticRatherThanAssumingOne() {
@@ -182,6 +183,7 @@ public class GalacticCoordZoneTest {
      * <p>A sector index is a count of ITS lattice's cells. Subtracting a zone-local index from a
      * galactic one and scaling the difference by either width produces a number with no referent —
      * and it is the kind of number that gets compared to a threshold and acted on.</p>
+     * Pins ADDR-9 (cross-cell distance is evaluated through both frames at a tick and refuses two lattices).
      */
     @Test
     public void thereIsNoStaticDistanceAcrossTwoLattices() {

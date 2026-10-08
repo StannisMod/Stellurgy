@@ -68,23 +68,24 @@ serialized — they are pure live views over item/tile state.
 
 - **INV-CAP-01 [V]** The attach handler is idempotent: it early-returns if `KEY` is already on the
   stack, so re-fired events never double-register. `CapabilityProtectiveArmor.java:22-24`.
-- **INV-CAP-02 [V]** The capability key string is the contractual literal
-  `stellurgy:ProtectiveArmor`. `CapabilityProtectiveArmor.java:13`.
+- **INV-CAP-02 [V][SYS]** The capability key string is the contractual literal
+  `stellurgy:ProtectiveArmor`. `CapabilityProtectiveArmor.java:13`. FOR: public API / save format: the capability key is a promise to dependent mods (CLAUDE.md: preserve the public API dependent mods import).
 - **INV-CAP-03 [V]** The provider attached for a suit stack is the shared `Item` singleton (not a
   per-stack object); it is safe only because `ItemSpaceArmor`'s cap resolution is stateless and
   takes the `ItemStack` as a parameter (`IProtectiveArmor.protectsFromSubstance(atm, stack, …)`).
   `CapabilityProtectiveArmor.java:26-27`, `IProtectiveArmor.java:15`.
 - **INV-CAP-04 [V]** `TankCapabilityItemStack` advertises exactly one capability,
   `FLUID_HANDLER_ITEM_CAPABILITY`, and returns `null` for all others. `TankCapabilityItemStack.java:23-32`.
-- **INV-CAP-05 [V]** `DimensionCompat.getDefaultSpawnDimension` returns `0` on every failure path
+- **INV-CAP-05 [V][BEH]** `DimensionCompat.getDefaultSpawnDimension` returns `0` on every failure path
   (JED class absent; override disabled; reflection or the cast throws). `DimensionCompat.java:15-32`.
-- **INV-CAP-06 [V]** JED binding is best-effort and no longer a load-time step: nothing is bound at
+- **INV-CAP-06 [V][BEH]** JED binding is best-effort and no longer a load-time step: nothing is bound at
   mod load, so nothing can fail it. A JED that is present but whose two settings cannot be read is a
   DEGRADATION that announces itself — a `warn` on every respawn naming that JED is installed but
   unreadable and that the overworld is used instead — while JED ABSENT is silent, because that is not
   a failure. `DimensionCompat.java:19-21,27-30`.
-- **INV-CAP-07 [T]** All four suit pieces resolve the `IProtectiveArmor` capability at runtime —
-  asserted by the machine-domain smoke suite. `MachineDomainSmokeSuite.java:388-399`.
+- **INV-CAP-07 [V][BEH]** All four suit pieces resolve the `IProtectiveArmor` capability at runtime —
+  asserted by `MachineDomainSmokeSuite#suitItemsAndEnchantAreWiredUp` (`MachineDomainSmokeSuite.java:388-399`),
+  a class whose name does not end in `Test`, so the pin checker cannot count it.
 - **INV-CAP-08 [A]** The `IProtectiveArmor`/`IPartWear` caps are never persisted, so removing this
   mod's items from a save cannot leave dangling capability NBT (follows from the no-op `IStorage`;
   not exercised by a round-trip test).

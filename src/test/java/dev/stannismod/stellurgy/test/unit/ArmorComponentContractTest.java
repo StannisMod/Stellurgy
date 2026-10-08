@@ -49,6 +49,7 @@ public class ArmorComponentContractTest {
         MinecraftBootstrap.ensure();
     }
 
+    /** Pins INV-ITM-09 (the jetpack and the pressure tank fit the chest slot only). */
     @Test
     public void jetpackIsAllowedOnlyInChestSlot() {
         ItemJetpack jetpack = new ItemJetpack();
@@ -61,6 +62,7 @@ public class ArmorComponentContractTest {
         }
     }
 
+    /** Pins INV-ITM-09 (the jetpack and the pressure tank fit the chest slot only). */
     @Test
     public void pressureTankIsAllowedOnlyInChestSlot() {
         ItemPressureTank tank = new ItemPressureTank(1, 8000);
@@ -73,6 +75,7 @@ public class ArmorComponentContractTest {
         }
     }
 
+    /** Pins INV-ITM-07 (the pressure tank capacity is base times two to the damage). */
     @Test
     public void pressureTankCapacityScalesAsPowerOfTwoWithItemDamage() {
         // capacity formula: baseCapacity * 2^itemDamage
@@ -88,6 +91,7 @@ public class ArmorComponentContractTest {
         assertEquals("tier 2 tank capacity = 4× base", 32000, tank.getCapacity(tier2));
     }
 
+    /** Pins INV-ITM-08 (the jetpack enabled flag is written when on and cleared when off). */
     @Test
     public void jetpackEnabledStateToggleStoresAndClearsNbtFlag() {
         // Production toggle stored under NBT key "enabled" via

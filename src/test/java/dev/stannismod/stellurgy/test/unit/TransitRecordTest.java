@@ -26,6 +26,7 @@ public class TransitRecordTest {
         return GalacticCoord.ofSectorLocal(sx, sy, sz, lx, ly, lz);
     }
 
+    /** Pins ADDR-12 (a mid-transit position is stored as origin name, target name and progress). */
     @Test
     public void roundTripPreservesLogicalStateAndCrew() {
         UUID u1 = UUID.randomUUID();

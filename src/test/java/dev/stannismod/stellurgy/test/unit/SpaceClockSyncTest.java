@@ -22,6 +22,7 @@ public class SpaceClockSyncTest {
 
     private final SpaceClockSync clock = new SpaceClockSync();
 
+    /** Pins CLOCK-3 (the space clock is readable on both sides, and an unsynced client says so). */
     @Test
     public void aClientNobodyHasToldIsDistinguishableFromOneToldItIsTickZero() {
         assertFalse("a client that has never been synced must say so", clock.hasSync());
@@ -35,6 +36,7 @@ public class SpaceClockSyncTest {
         assertEquals(0L, clock.now());
     }
 
+    /** Pins CLOCK-3 (the space clock is readable on both sides, and an unsynced client says so). */
     @Test
     public void theAnswerIsTheBaselinePlusTheClientTicksSinceIt() {
         clock.accept(1_000L);
@@ -64,6 +66,7 @@ public class SpaceClockSyncTest {
                 1_000L, clock.now());
     }
 
+    /** Pins CLOCK-3 (the space clock is readable on both sides, and an unsynced client says so). */
     @Test
     public void aLaterBaselineWinsEvenWhenItMovesTheAnswerBackwards() {
         clock.accept(1_000L);

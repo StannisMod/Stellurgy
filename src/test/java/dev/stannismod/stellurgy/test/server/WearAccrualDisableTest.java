@@ -56,6 +56,7 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
         return prob;
     }
 
+    /** Pins INV-RASM-07 (Wear accrual is single-gated by partsWearSystem). */
     @Test
     public void wearAccruesOnlyWhenSystemEnabled() throws Exception {
         try {

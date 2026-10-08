@@ -96,7 +96,7 @@ Waila tag, so there is no persistence-key conflict.
 
 - **INV-IPW-01 [V]** TOP registration is a no-op when `theoneprobe` is not loaded; no TOP
   classes are touched otherwise. `TopIntegration.java:15-17`.
-- **INV-IPW-02 [V]** TOP block/data info only renders in `ProbeMode.EXTENDED`; Waila renders
+- **INV-IPW-02 [V][BEH]** TOP block/data info only renders in `ProbeMode.EXTENDED`; Waila renders
   it unconditionally — an intentional UX asymmetry between the two mods.
   `DataBlockProbeProvider.java:29`, `DataBlockProvider.java:105-119`.
 - **INV-IPW-03 [V]** The Waila sync keys in State & persistence are the sole contract between
@@ -106,7 +106,7 @@ Waila tag, so there is no persistence-key conflict.
   emits `STARTLOC+key+ENDLOC` for client-side resolution (TOP collects on server);
   `WailaDataContext.translate` calls client `I18n.format` directly (Waila collects on client).
   `TOPDataContext.java:65-68`, `WailaDataContext.java:44-48`.
-- **INV-IPW-05 [V]** The data-storage "locked" line is suppressed whenever the same tile is a
+- **INV-IPW-05 [V][BEH]** The data-storage "locked" line is suppressed whenever the same tile is a
   `TileWirelessTransceiver` (`showLockedLine=false`). `DataBlockProbeProvider.java:39-44`,
   `DataBlockProvider.java:108-114`.
 - **INV-IPW-06 [A]** `getWailaHead` assumes `currenttip` has an element 0 to `remove` when

@@ -57,19 +57,19 @@ are wire-only (loader `readDataFromNetwork`); item/fluid loaders also persist th
 
 ## Invariants
 
-- **INV-INFRA-11 [T]** With `state=ON`, `setRedstoneState(true)` emits and
-  `setRedstoneState(false)` does not; `INVERTED` flips it. [T RocketLoaderRedstonePolarityTest.java:84-98]
-- **INV-INFRA-12 [T]** A powered fueling station adjacent to a rocket transfers fuel: the
+- **INV-INFRA-11 [T][BEH]** With `state=ON`, `setRedstoneState(true)` emits and
+  `setRedstoneState(false)` does not; `INVERTED` flips it. [T RocketLoaderRedstonePolarityTest.java:84-98] Pinned by `RocketLoaderRedstonePolarityTest#onStateEmitsRedstoneWhenConditionTrue`, `RocketLoaderRedstonePolarityTest#onStateStaysOffWhenConditionFalse`, `RocketLoaderRedstonePolarityTest#invertedStateFlipsTruthOutput`, `RocketLoaderRedstonePolarityTest#invertedStateFlipsFalseOutput`.
+- **INV-INFRA-12 [T][BEH]** A powered fueling station adjacent to a rocket transfers fuel: the
   station tank drops and the rocket's fuel rises.
-  [T RocketInfrastructureSmokeTest.java:31]
-- **INV-INFRA-13 [T]** The fluid loader actively transfers fluid into a rocket fluid tile
-  when allowed. [T FluidLoaderActiveTransferTest.java]
-- **INV-INFRA-14 [T]** The item unloader actively pulls items out of a rocket.
-  [T RocketItemUnloaderActiveTransferTest.java]
-- **INV-INFRA-15 [V]** Item transfer is simulate-then-commit and clamped to `accepted`,
+  [T RocketInfrastructureSmokeTest.java:31] Pinned by `RocketInfrastructureSmokeTest#stationDrainsTankAndRocketFuelRisesAfterLinkAndTick`.
+- **INV-INFRA-13 [T][BEH]** The fluid loader actively transfers fluid into a rocket fluid tile
+  when allowed. [T FluidLoaderActiveTransferTest.java] Pinned by `FluidLoaderActiveTransferTest#loaderTransfersOxygenIntoRocketStorageLiquidTanks`.
+- **INV-INFRA-14 [T][BEH]** The item unloader actively pulls items out of a rocket.
+  [T RocketItemUnloaderActiveTransferTest.java] Pinned by `RocketItemUnloaderActiveTransferTest#unloaderPullsItemsFromRocketStorage`.
+- **INV-INFRA-15 [V][BEH]** Item transfer is simulate-then-commit and clamped to `accepted`,
   with a put-back fallback, so items cannot duplicate under a well-behaved handler.
   [V TileRocketLoader.java:233-257]
-- **INV-INFRA-16 [V]** Fueling drains exactly the accepted delta
+- **INV-INFRA-16 [V][BEH]** Fueling drains exactly the accepted delta
   (`max(0, ret-before)`, falling back to `min(toOffer, ret)`), never more than the tank
   holds. [V TileFuelingStation.java:302-328]
 

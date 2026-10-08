@@ -127,6 +127,7 @@ public class SpaceClockIsTheSubsystemsOwnTest {
      *
      * <p>Each direction carries its own arrangement assertion. Without them, a probe that quietly
      * failed to move anything would satisfy every "it did not follow" below.</p>
+     * Pins CLOCK-5 (the subsystem owns the counter: it advances once per tick, is independent of world clocks, and survives a reboot).
      */
     @Test
     public void neitherClockMovesTheOther() throws Exception {
@@ -179,6 +180,7 @@ public class SpaceClockIsTheSubsystemsOwnTest {
      * zero fails rather than passing on the ticks it accumulated since. No explicit save follows the
      * set for the same reason the neighbouring restart tests take none: the SHUTDOWN save is the one
      * that has to work, and asking for an extra pass would hide a snapshot marked dirty too late.</p>
+     * Pins CLOCK-5 (the subsystem owns the counter: it advances once per tick, is independent of world clocks, and survives a reboot).
      */
     @Test
     public void theClockComesBackWhereItWasAfterAReboot() throws Exception {

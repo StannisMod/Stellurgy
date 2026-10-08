@@ -32,6 +32,7 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
     private static final String AR_DIMS_ARRAY = "stellurgyDimensions";
     private static final String COUNT = "count";
 
+    /** Pins INV-XML-05 (asteroid dimensions contain asteroids after config load). */
     @Test
     public void asteroidDimGeneratesFillBlocks() throws Exception {
         // Find a registered non-overworld Stellurgy planet to clone as a template.

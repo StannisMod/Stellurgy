@@ -49,6 +49,7 @@ public class AirStateTest {
     /**
      * <p>red-witnessed: with {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));} dividing by a fiftieth of an atmosphere:
      * "expected:&lt;100&gt; but was:&lt;50&gt;", 2026-09-30.</p>
+     * Pins INV-ATM-17 (an untouched zone reports 100 centi-atmospheres).
      */
     @Test
     public void breathableAirReadsAsOneAtmosphere() {
@@ -65,6 +66,7 @@ public class AirStateTest {
      * expected:&lt;10000000&gt; but was:&lt;20000000&gt;". PRESSURE UNCHANGED - {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);}
      * followed by taking the converted amount out of the nitrogen too: "respiration rearranges air, it
      * does not consume it expected:&lt;1000000000&gt; but was:&lt;990000000&gt;".</p>
+     * Pins INV-ATM-16 (breathing converts oxygen into carbon dioxide at constant pressure and never below zero).
      */
     @Test
     public void breathingConvertsOxygenIntoCarbonDioxideWithoutChangingPressure() {
@@ -85,6 +87,7 @@ public class AirStateTest {
      * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;2500000&gt;". AS CO2 -
      * {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);} adding twice the carbon dioxide: "expected:&lt;5000000&gt; but
      * was:&lt;10000000&gt;".</p>
+     * Pins INV-ATM-16 (breathing converts oxygen into carbon dioxide at constant pressure and never below zero).
      */
     @Test
     public void breathingCannotTakeOxygenThatIsNotThere() {
@@ -107,6 +110,7 @@ public class AirStateTest {
      * expected:&lt;30000000&gt; but was:&lt;15000000&gt;". PRESSURE UNCHANGED - {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);}
      * followed by taking the converted amount out of the nitrogen too: "pressure is unchanged: the
      * solid carbon never held any expected:&lt;1000000000&gt; but was:&lt;970000000&gt;".</p>
+     * Pins INV-ATM-20 (regeneration is respiration run backwards and cannot process absent carbon dioxide).
      */
     @Test
     public void regenerationIsBreathingRunBackwards() {
@@ -129,6 +133,7 @@ public class AirStateTest {
      * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;5000000&gt;". AS OXYGEN -
      * {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning half of it: "expected:&lt;210000000&gt; but
      * was:&lt;205000000&gt;".</p>
+     * Pins INV-ATM-20 (regeneration is respiration run backwards and cannot process absent carbon dioxide).
      */
     @Test
     public void regenerationCannotInventCarbonDioxide() {

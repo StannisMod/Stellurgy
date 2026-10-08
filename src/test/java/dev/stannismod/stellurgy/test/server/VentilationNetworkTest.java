@@ -117,6 +117,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * <p>Not asserted: the room's carbon dioxide and oxygen after a solve, because with no source on
      * the vent's network nothing can regenerate the room or draw from it through the network, so
      * neither reading could go red while the verdict above holds.</p>
+     * Pins INV-NET-01 (domains are isolated: a shield cable in a duct run carries no air).
      */
     @Test
     public void aShieldCableIsNotADuctAndCarriesNoAir() throws Exception {

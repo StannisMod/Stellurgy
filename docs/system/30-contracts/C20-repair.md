@@ -30,43 +30,43 @@ designed against a floor price and a working ancestor, and both constrain it.
 
 ## Clauses
 
-- **REPAIR-1 (repair is damage inverted, on one axis)** `[V]` A repair lowers a stage or fills a hole
+- **REPAIR-1 (repair is damage inverted, on one axis)** `[T][BEH]` A repair lowers a stage or fills a hole
   and does nothing else. It writes through the same unified reader damage writes through
   (`DamageState.java` `[V]`), never into one of the two homes directly — a repair that reaches past
   it fixes tile-hosted wear and leaves map-hosted damage standing, or the reverse, and nothing in the
-  game will say so. **Player form:** what a shot did, a repair undoes.
-- **REPAIR-2 (the floor is hand replacement, and it is already the price list)** `[V]` Breaking a
+  game will say so. **Player form:** what a shot did, a repair undoes. Pinned by `RepairWelderE2ETest#oneUseTakesOneStageAndIsPaidForTwice`.
+- **REPAIR-2 (the floor is hand replacement, and it is already the price list)** `[V][BEH]` Breaking a
   damaged block and placing a fresh one repairs that position at the cost of one block, clearing its
   record (`DamageInvalidationHandler.java` `[V]`). Every rung is priced against this: a rung
   that costs MORE than hand replacement for the same result is dead content, and one that costs less
   must say what the player gave up instead — a machine, its energy, or the time it took.
-- **REPAIR-3 (nothing is created from nothing)** Every stage restored and every hole filled is paid
+- **REPAIR-3 (nothing is created from nothing)** `[T][BEH]` Every stage restored and every hole filled is paid
   for with material that leaves an inventory. No rung invents a generic "matter"; T2/T3 consume the
   real items the ship's economy already makes. **Falsifiable:** run a bay with a reserve that
-  cannot fall — its output must be zero.
+  cannot fall — its output must be zero. Pinned by `RepairWelderE2ETest#oneUseTakesOneStageAndIsPaidForTwice`, `RepairWelderE2ETest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
 - **REPAIR-4 (a hole is filled with what stood there, or not at all)** A rebuild reads the provenance
   and places THAT block. It never guesses, never substitutes a similar one, and never fills a hole
   whose provenance is missing. **Player form:** a repaired hull is the hull you built, not a patch of
   whatever the machine had.
 - **REPAIR-5 (provenance is spent exactly once)** Filling a hole clears its record in the same step
-  that places the block (`BlockDamageSavedData.java` `[V]` is the clear). A record that survives
+  that places the block (`BlockDamageSavedData.java` `[V][BEH]` is the clear). A record that survives
   its own rebuild is a second free block on the next pass. **Falsifiable:** rebuild the same position
   twice; the second attempt must find nothing to do and consume nothing.
 - **REPAIR-6 (an unfillable hole is reported, not forgotten)** When provenance names a block the
-  registry no longer has (`blockFromName` returns null, `BlockDamageSavedData.java` `[V]`), the
+  registry no longer has (`blockFromName` returns null, `BlockDamageSavedData.java` `[V][BEH]`), the
   position is refused and its record is KEPT. Dropping it destroys the only evidence of what the hull
   was, and does it silently, at exactly the moment a player has lost a mod.
-- **REPAIR-7 (a bay that cannot work says why)** No silent idling. Out of energy, out of reserve,
+- **REPAIR-7 (a bay that cannot work says why)** `[T][BEH]` No silent idling. Out of energy, out of reserve,
   nothing damaged, and refused-by-REPAIR-6 are four different states and are distinguishable from
   outside the machine. A bay that looks identical while starved and while finished trains players to
-  ignore it.
+  ignore it. Pinned by `RepairWelderE2ETest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
 - **REPAIR-8 (repair is time and energy, and it is resumable)** Progress is a function of elapsed time
   and energy actually delivered — never of how many ticks the bay was loaded for. A bay that spent an
   hour unloaded resumes where it stopped; it does not restart, and it does not bill the player for an
   hour of work it did not do. This is what makes the ladder lazy-catch-up compatible (INV-SPACE-01).
   **Falsifiable:** two bays with identical reserves, one unloaded for half the run, must differ by the
   energy each actually consumed and by nothing else.
-- **REPAIR-9 (a staged block is cheaper to destroy, so repair is mechanical)** `[V]` Damage already
+- **REPAIR-9 (a staged block is cheaper to destroy, so repair is mechanical)** `[V][BEH]` Damage already
   makes a part-way-gone block cheaper to finish (`StructureDamageEngine.java` `[V]`), so leaving
   damage standing is a real disadvantage and repair is not cosmetic. The tile half of the same rule
   (a staged machine works at reduced capacity) is NOT built; until it is, repair's only

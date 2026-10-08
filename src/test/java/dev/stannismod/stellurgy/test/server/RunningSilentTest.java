@@ -84,6 +84,8 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      *
      * <p>Not asserted, because it is another verdict read again: how many cells one order changed
      * (three working cells before and none after make it three).</p>
+     * Pins INV-HEAT-29 (With every sink shut, most of what a ship radiates goes with them and what is left is a FLOOR).
+     * Pins HEAT-16 (silence is never invisibility: a shut ship still radiates its hull).
      */
     @Test
     public void aShipRunningSilentIsFoundCloserAndIsStillFound() throws Exception {
@@ -170,6 +172,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * — {@code ThermalBody#signature} at {@code ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());} dropping the hull term: "so a ship that cooks itself while hiding is
      * found further away the longer it hides: cool=0 hot=0". The three premises are arrangements and
      * are not witnessed.</p>
+     * Pins INV-HEAT-30 (A hotter cabin is a hotter skin and a brighter ship, and two loops threading one sealed room are ONE body).
      */
     @Test
     public void theHullGlowsWithTheAirItEncloses() throws Exception {

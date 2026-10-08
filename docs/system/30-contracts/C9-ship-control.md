@@ -28,13 +28,13 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
 ## Clauses
 
 **Delivery**
-- **SHIPCTL-1** `[A]` On an ASSEMBLED, loaded ship, a seated pilot's input reaches **the computer
+- **SHIPCTL-1** `[A][BEH]` On an ASSEMBLED, loaded ship, a seated pilot's input reaches **the computer
   his seat is LINKED to**, and that computer's next tick consumes it. The linked computer is the
   craft's **sole command authority**, and it coincides with the assembly anchor and the durable
   ship-id bearer (`TileRocketAssemblingMachine.java`) `[V]` — the coincidence is
   contractual. Delivery to any other computer, or to none, is a violation **even when a seat-side
   guard reports success while the linked computer's `pilotInput` stays null**.
-- **SHIPCTL-2** `[A]` On an ASSEMBLED ship a non-zero pilot input produces motion **corresponding
+- **SHIPCTL-2** `[A][BEH]` On an ASSEMBLED ship a non-zero pilot input produces motion **corresponding
   to the input in axis and sign**, within the input-latency window (*tunable*). **Control leg,
   mandatory**: a comparable zero-input window on an otherwise-at-rest ship with no retained FA
   setpoint shows no such motion. The axis +
@@ -45,87 +45,87 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   the signed direction (`ship-flight-model` MECH-SFM-08), and a hull with no actuator for an axis
   answers that axis with NO motion — the "control leg" of this clause is then satisfied trivially,
   which is exactly why the clause's positive leg must be arranged on a hull that has the actuators.
-- **SHIPCTL-3** `[A]` A diagnostic of the named instrument family (`[FF-TRACE/*]`, `/stellurgytest` probe
+- **SHIPCTL-3** `[A][SYS]` A diagnostic of the named instrument family (`[FF-TRACE/*]`, `/stellurgytest` probe
   JSON) reporting the chain "resolved" must compute that report **from the same resolution objects
   the delivery path uses** — never a parallel re-resolution. A resolved-looking report that cannot
-  move the ship is a false instrument, itself a defect.
+  move the ship is a false instrument, itself a defect. FOR: SHIPCTL-2.
 
 **Binding & link**
-- **SHIPCTL-4** `[A]` After any boarding path completes, **exactly one dummy per (world, seat)** is
+- **SHIPCTL-4** `[A][BEH]` After any boarding path completes, **exactly one dummy per (world, seat)** is
   bound — enforced at EVERY dummy spawn site (right-click reuse, probes, crew transfer). On an
   ASSEMBLED ship the chain dummy→seat→link resolves the linked computer of that same ship
   (SHIPCTL-7); on an unassembled craft resolution is legitimately absent (SHIPCTL-9). Seat identity
   = the `TilePilotSeat` tile the binding resolves to in the seat's CURRENT frame; a binding
   resolving no seat tile is itself a violation.
-- **SHIPCTL-5** `[A]` The binding and the link name the seat **at the coordinates and in the frame
+- **SHIPCTL-5** `[A][BEH]` The binding and the link name the seat **at the coordinates and in the frame
   it currently occupies**, across **EVERY craft relocation**: (i) the world→world lift-gap
   translation (`assembleRocket`) `[V]`, (ii) the world→subspace relocation in the same method `[V]`,
   (iii) any future disassembly (SHIPCTL-13). A PRE-lift binding re-expressed for (ii) alone is off
   by the lift — a violation. Re-expression may be achieved by REBINDING (the crossing does,
   `CrewTransfer.java` `[V]`) — the clause pins the OUTCOME, not the mechanism.
-- **SHIPCTL-6** `[A]` At most one dummy is bound to a seat at a time, and a riderless dummy never
+- **SHIPCTL-6** `[A][BEH]` At most one dummy is bound to a seat at a time, and a riderless dummy never
   writes a **non-null** input to a flight computer — the single sanctioned riderless write is the
   **one-shot release** (clearing its own linked computer's input on the dismount edge,
   `EntityDummy.java` `[V]`), and it never overrides input attributable to a currently-seated
   pilot of the same computer.
-- **SHIPCTL-7** `[A]` The control chain never resolves a seat, dummy or computer of a **different
+- **SHIPCTL-7** `[A][BEH]` The control chain never resolves a seat, dummy or computer of a **different
   ship**; ship identity is the **durable ship id**. A proximity reseat is a breach; **ruling
   R12: a world-distance fallback in `isPilotOf` is a breach** — the exact-binding leg
   (`TilePilotSeat.java`) is the only legitimate resolution.
 
 **Assembly stage**
-- **SHIPCTL-8** *(R1)* `[A]` A player who boards BEFORE assembly STAYS SEATED and controls the ship
+- **SHIPCTL-8** *(R1)* `[T][BEH]` A player who boards BEFORE assembly STAYS SEATED and controls the ship
   IMMEDIATELY after a successful assembly — no re-seat. "Immediately" runs from the physics object
   going live. Aboard-ness is CREW-C1/C4's; this clause owns delivery. Falsifier: the red repro
-  `VSPreAssemblyBoardingPilotControlTest` (both cells).
-- **SHIPCTL-9** *(R2+R8)* `[T]` (`VSUnassembledCraftTakesNoOrdersTest`, client, both directions in
+  `VSPreAssemblyBoardingPilotControlTest` (both cells). Pinned by `VSPreAssemblyBoardingPilotControlTest#aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip`, `VSPreAssemblyBoardingPilotControlTest#aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip`.
+- **SHIPCTL-9** *(R2+R8)* `[T][BEH]` (`VSUnassembledCraftTakesNoOrdersTest`, client, both directions in
   one run) An UNASSEMBLED ship does NOT accept pilot input, and the refusal is
   SURFACED **server-side at mount time**: seating on an unassembled craft answers with an action-bar
   message ("ship not assembled — assemble it to fly"). Feedback for a pilot already seated when the
-  craft becomes unassembled is SHIPCTL-13's.
-- **SHIPCTL-10** `[A]` Across any assembly-state transition (assembly, teardown by crossing,
+  craft becomes unassembled is SHIPCTL-13's. Pinned by `VSUnassembledCraftTakesNoOrdersTest#aCraftThatNeverBecameAShipTakesNoOrdersFromItsPilot`.
+- **SHIPCTL-10** `[A][BEH]` Across any assembly-state transition (assembly, teardown by crossing,
   destruction, unload), a pilot INPUT tick is at worst **dropped** — no INPUT survives the
   transition or its rider. A non-zero INPUT still steering after key release + transition
   completion is a violation. Motion under a retained FA SETTING is NOT a violation (SHIPCTL-18).
 
 **Independence axes**
-- **SHIPCTL-11** `[A]` Every clause holds at any attitude the ship can OCCUPY (upright through
+- **SHIPCTL-11** `[A][BEH]` Every clause holds at any attitude the ship can OCCUPY (upright through
   fully inverted; exactly-180° is arranged by free spin — the controller cannot be commanded into
   the axis-angle singularity) and at any velocity within the controllable envelope. Attitude and
   velocity are never legitimate discriminators.
-- **SHIPCTL-12** `[A]` Every clause holds at any world position at which the ship is LOADED and
+- **SHIPCTL-12** `[A][BEH]` Every clause holds at any world position at which the ship is LOADED and
   physics-ticking in a flyable world — in particular **away from its assembly site** (where a bind-time coincidence would mask a defect)
   and **after arbitrary translation/rotation since binding time** (staleness across motion is the
   real second axis). Carve-outs by design: the hyperspace park ignores flight input (transit
   contract's domain); entry/descent trigger bands behave per their own contracts.
 
 **Lifecycle**
-- **SHIPCTL-13** *(R3+R15; PRECONDITIONED — no tier-2 disassembly mechanic exists yet `[V]`)* `[A]`
+- **SHIPCTL-13** *(R3+R15; PRECONDITIONED — no tier-2 disassembly mechanic exists yet `[V][BEH]`)* `[A]`
   WHEN disassembly exists: disassembling with a seated pilot leaves him SEATED on the now-loose
   seat; at the disassembly moment he receives a message ("ship disassembled — controls offline");
   while unassembled his input is refused (SHIPCTL-9 semantics); re-assembly restores control with
   no re-seat. The binding follows the seat into the world frame (SHIPCTL-5 (iii)).
-- **SHIPCTL-14** *(R4+R13+R14)* `[A]` Destroying an occupied pilot seat — or the linked computer —
+- **SHIPCTL-14** *(R4+R13+R14)* `[A][BEH]` Destroying an occupied pilot seat — or the linked computer —
   by any cause outside a crossing's own cut: the rider is dismounted (frame handling is CREW-Cn's),
   the seat's bound dummy is removed, and within a bounded window the computer's INPUT and the FA
   **setpoint** are zeroed — the ship reverts to unmanned station-hold (never a runaway). The FA **mode** is retained. On AFC destruction the pilot receives a
   "flight computer destroyed" message.
-- **SHIPCTL-15** *(R5+R16)* `[A]` Right-clicking a pilot seat whose dummy carries a DIFFERENT
+- **SHIPCTL-15** *(R5+R16)* `[A][BEH]` Right-clicking a pilot seat whose dummy carries a DIFFERENT
   passenger does not mount and answers with an action-bar message naming the occupant. Occupied
   refusal takes precedence over the SHIPCTL-9 message — exactly one message per click. Self-click:
   silent no-op.
-- **SHIPCTL-16** *(R6+R18+R19)* `[T]` A pilot who logs out seated logs back in SEATED (CREW-C14)
+- **SHIPCTL-16** *(R6+R18+R19)* `[T][BEH]` A pilot who logs out seated logs back in SEATED (CREW-C14)
   **with a working control chain** — held input moves the ship within a bounded window, no re-board
   — on planet-side and slot-cell ships ALIKE. If the seat was TAKEN while offline, the occupant
   keeps it; the returner is restored STANDING aboard with a message — never two dummies on one
-  seat. A mid-transit relog restores control ON ARRIVAL.
-- **SHIPCTL-17** *(R7+R17)* `[A]` Across any per-ship crossing with a seated pilot: a GRANTED
+  seat. A mid-transit relog restores control ON ARRIVAL. Pinned by `VSPilotSeatRelogControlTest#aPilotWhoRelogsSeatedKeepsControlOfHisShip`, `VSPilotSeatTakenWhileOfflineTest#aSeatTakenWhileThePilotWasOfflineStaysWithTheOccupant`, `VSMidTransitRelogControlTest#aPilotWhoRelogsMidTransitRegainsControlOnArrival`.
+- **SHIPCTL-17** *(R7+R17)* `[A][BEH]` Across any per-ship crossing with a seated pilot: a GRANTED
   crossing ends, after settle, with **exactly one** binding for that player to the SAME seat
   (re-identified by its AFC-link offset), expressed in the seat's current frame, and his still-held
   or next input reaches the arrived ship's linked computer. The pre-crossing binding OBJECT need
   not survive (outcome-pinned). A REFUSED crossing leaves the pilot SEATED with a message — capture
   only after the grant. The only permitted non-seated end state is the surfaced abandoned-settle.
-- **SHIPCTL-18** *(R9 STRONG + R14 boundary)* `[V]` **FA state is a SETTING, not an INPUT, and it is
+- **SHIPCTL-18** *(R9 STRONG + R14 boundary)* `[V][BEH]` **FA state is a SETTING, not an INPUT, and it is
   the unmanned MODE SWITCH.** On a VOLUNTARY dismount the INPUT is released (the SHIPCTL-6 one-shot)
   and the SETTING is retained **and keeps EXECUTING**:
   - **FA ON** — an unmanned ship with a non-zero retained setpoint KEEPS CRUISING at it; a zero
@@ -146,7 +146,7 @@ bind. **INPUT** = the momentary per-tick command (the AFC's `pilotInput`). **FA 
   > pins BOTH directions in one run — held with FA on (the control, asserted first), released with
   > FA off.
 - **SHIPCTL-19** *(R20+R21; the placement door R10/R11 does not guard — repair when the slot is
-  empty, refusal when it is filled)* `[A]` Control blocks placed on an ASSEMBLED ship: **(a)** an
+  empty, refusal when it is filled)* `[A][BEH]` Control blocks placed on an ASSEMBLED ship: **(a)** an
   AFC placed on a ship with no live linked AFC is a REPAIR — connected, restoring the SHIPCTL-1
   coincidence invariant; placed while a live linked AFC exists — **refused with a message**. A
   second AFC aboard is an UNCONSTRUCTIBLE state. **(b)** a pilot seat

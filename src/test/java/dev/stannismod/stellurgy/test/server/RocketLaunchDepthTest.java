@@ -455,6 +455,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * {@code isPlanetMoonSystem = (destinationDimensionID == launchworldProperties.getParentPlanet())}
      * made false, this fails at the own-moon verdict, the launch refused with
      * error.rocket.outsidePlanetarySystem (2026-10-02).
+     * Pins INV-NAV-05 (a planet and its own moon are within-system, another planet and its moon are not).
      */
     @Test
     public void aRocketOnAPlanetMayGoToItsOwnMoonButNotToAnotherPlanetOrItsMoon() throws Exception {
@@ -658,6 +659,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)} never taken, this
      * fails at the system-off verdict, "with the weight system off the same craft, under the same
      * threshold, must be let go" (re-taken 2026-10-03).
+     * Pins INV-API-08 (canLaunch is true whenever the weight system is off and judges weight at the gravity it is handed).
      */
     @Test
     public void turningTheWeightSystemOffLiftsTheWeightGate() throws Exception {
@@ -781,6 +783,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * {@code this.stats.canLaunch(DimensionManager.getInstance()} handed {@code 1f} instead of the
      * world's gravity, this fails at the verdict the same way (2026-10-03,
      * {@code logs/bugs-a-601-red2.log}).
+     * Pins INV-API-08 (canLaunch is true whenever the weight system is off and judges weight at the gravity it is handed).
      */
     @Test
     public void aCraftOnALowGravityMoonIsWeighedAtThatMoonsGravity() throws Exception {

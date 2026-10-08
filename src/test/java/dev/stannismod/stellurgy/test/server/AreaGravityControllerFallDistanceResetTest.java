@@ -57,6 +57,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 5560;
 
+    /** Pins INV-MBM-23 (the area gravity controller zeroes fallDistance inside its radius only). */
     @Test
     public void controllerResetsFallDistanceInsideRadiusOnly() throws Exception {
         // 0) Hold the controller + out-of-radius chunks hot so spawned

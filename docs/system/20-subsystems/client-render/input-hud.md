@@ -110,17 +110,17 @@ Config read: `oxygenVentSize` (C4). Constants: `ENGINE_START_HOLD_TICKS=60` (con
 
 ## Invariants
 
-- **INV-CLR-07 [V]** Steering input is suppressed whenever `mc.currentScreen != null` (both the
+- **INV-CLR-07 [V][BEH]** Steering input is suppressed whenever `mc.currentScreen != null` (both the
   edge and per-tick paths). `KeyBindings.java:327,477`.
-- **INV-CLR-08 [T]** `PILOTING`/`NOT_PILOTING` conflict only with themselves and never with vanilla
-  `KeyConflictContext.IN_GAME`/`GUI`. `StellurgyKeyConflictContextTest.java:27-46`.
+- **INV-CLR-08 [T][BEH]** `PILOTING`/`NOT_PILOTING` conflict only with themselves and never with vanilla
+  `KeyConflictContext.IN_GAME`/`GUI`. `StellurgyKeyConflictContextTest.java:27-46`. Pinned by `StellurgyKeyConflictContextTest#eachContextConflictsWithItself`, `StellurgyKeyConflictContextTest#pilotingAndNotPilotingNeverConflict`, `StellurgyKeyConflictContextTest#doesNotClaimConflictWithForgeBuiltInContexts`.
 - **INV-CLR-09 [V]** A `FREE_FLIGHT_INPUT` packet is sent only when the sampled input differs from
   the last sent one (bandwidth guard). `KeyBindings.java:451-457`.
-- **INV-CLR-10 [V]** Exactly one binding is active per shared key: each steering key and its
+- **INV-CLR-10 [V][BEH]** Exactly one binding is active per shared key: each steering key and its
   overridden partner carry complementary contexts. `KeyBindings.java:206-235`.
-- **INV-CLR-11 [V]** `ENGINE_START_HOLD_TICKS` (60) is the sole gate for the one-shot engine-start
+- **INV-CLR-11 [V][BEH]** `ENGINE_START_HOLD_TICKS` (60) is the sole gate for the one-shot engine-start
   send (`engineStartSent` guards the single dispatch). `KeyBindings.java:100,367-372`.
-- **INV-CLR-12 [V]** HUD lines read the player's live bound keys, so a rebind reflows the legend.
+- **INV-CLR-12 [V][BEH]** HUD lines read the player's live bound keys, so a rebind reflows the legend.
   `KeyBindings.java:242-243,280-287`.
 
 ## Failure modes & edge cases

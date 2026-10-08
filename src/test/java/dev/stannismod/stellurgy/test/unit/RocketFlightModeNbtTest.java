@@ -20,11 +20,13 @@ import static org.junit.Assert.assertSame;
  */
 public class RocketFlightModeNbtTest {
 
+    /** Pins INV-RKT-04 (RocketFlightMode DEFAULT is CLASSIC_LAUNCH so a legacy save with no flightMode key loads onto the classic path). */
     @Test
     public void defaultIsClassicLaunch() {
         assertSame(RocketFlightMode.CLASSIC_LAUNCH, RocketFlightMode.DEFAULT);
     }
 
+    /** Pins INV-RKT-04 (RocketFlightMode DEFAULT is CLASSIC_LAUNCH so a legacy save with no flightMode key loads onto the classic path). */
     @Test
     public void missingNbtKeyReadsDefault() {
         NBTTagCompound nbt = new NBTTagCompound();

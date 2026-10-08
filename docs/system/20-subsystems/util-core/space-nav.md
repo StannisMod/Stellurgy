@@ -116,42 +116,46 @@ keys). `GravityHandler` keeps an INSTANCE `WeakHashMap<Entity,Double>` of custom
 
 ## Invariants
 
-- **INV-NAV-01 [T]** SpacePosition survives NBT round-trip (populated and default); a read
-  with no `spacePosition` tag leaves the object unchanged. `test/unit/SpacePositionTest.java:25,53,68`.
-- **INV-NAV-02 [T]** `distanceToSpacePosition2` equals the Euclidean definition and is
+- **INV-NAV-01 [T][SYS]** SpacePosition survives NBT round-trip (populated and default); a read
+  with no `spacePosition` tag leaves the object unchanged. `test/unit/SpacePositionTest.java:25,53,68`. Pinned by `SpacePositionTest#spacePositionNbtRoundTrip`, `SpacePositionTest#spacePositionNbtRoundTripDefaults`, `SpacePositionTest#readFromNbtWithoutSpacePositionTagIsNoOp`. FOR: save format: SpacePosition.
+- **INV-NAV-02 [T][SYS]** `distanceToSpacePosition2` equals the Euclidean definition and is
   symmetric; `getNormalVectorTo` is unit-length and points at the target; `getFromSpherical`
-  lands at the requested radius/axis and carries context. `test/unit/SpacePositionTest.java:78,91,101,115,131,144,153`.
-- **INV-NAV-03 [T]** Orbital period grows with distance and matches the baseline at Earth
+  lands at the requested radius/axis and carries context. `test/unit/SpacePositionTest.java:78,91,101,115,131,144,153`. Pinned by `SpacePositionTest#distanceSquaredMatchesEuclideanDefinition`, `SpacePositionTest#distanceSquaredIsSymmetric`, `SpacePositionTest#normalVectorHasUnitLength`, `SpacePositionTest#normalVectorPointsTowardsTarget`, `SpacePositionTest#getFromSphericalReturnsPointAtRequestedRadius`, `SpacePositionTest#getFromSphericalCarriesContextFields`. FOR: INV-NAV-05.
+- **INV-NAV-03 [T][BEH]** Orbital period grows with distance and matches the baseline at Earth
   distance; brightness is monotone in distance, equals 1 at Earth baseline, and is reduced
   for black holes. `test/unit/AstronomicalBodyHelperTest.java:41,47,63,74,81`; orbital
-  theta pinned by `test/integration/AstronomicalBodyHelperOrbitalThetaTest.java`.
-- **INV-NAV-04 [V]** `getStellarBrightness` never returns 0, NaN or ∞ (floored to `1e-9`).
-  `AstronomicalBodyHelper.java:120,149-153`.
-- **INV-NAV-07 [T]** Every star lights the world: two identical stars give exactly twice one star's
+  theta pinned by `test/integration/AstronomicalBodyHelperOrbitalThetaTest.java`. Pinned by `AstronomicalBodyHelperTest#orbitalPeriodGrowsWithDistance`, `AstronomicalBodyHelperTest#orbitalPeriodAtEarthDistanceIsBaseline`, `AstronomicalBodyHelperTest#stellarBrightnessMonotonicWithDistance`, `AstronomicalBodyHelperTest#stellarBrightnessAtEarthBaselineEqualsOne`, `AstronomicalBodyHelperTest#blackHoleStarReducesBrightness`.
+- **INV-NAV-04 [V][SYS]** `getStellarBrightness` never returns 0, NaN or ∞ (floored to `1e-9`).
+  `AstronomicalBodyHelper.java:120,149-153`. FOR: INV-NAV-03.
+- **INV-NAV-07 [T][BEH]** Every star lights the world: two identical stars give exactly twice one star's
   brightness, and a black hole with an ordinary companion is lit by both on their own terms
   (`0.25·L_hole + L_companion`) — never as though the hole had stopped being one.
   `test/unit/AstronomicalBodyHelperTest.java:everyStarInASystemContributesItsOwnLight,
-  aCompanionDoesNotTurnABlackHoleBackIntoAStar`.
-- **INV-NAV-08 [T]** A moon's period follows its parent's mass, not its surface gravity: with a
-  Jupiter parent the two readings are 11× apart, and the moon returns to its start after one
-  mass-derived period and is on the far side after half of one.
-  `test/integration/SystemContentTest.java:aMoonsPeriodFollowsItsParentsMassNotItsSurfaceGravity`.
-- **INV-NAV-09 [T]** A planet's year follows its star's mass: a star of 2 R☉ masses more than 2 M☉,
+  aCompanionDoesNotTurnABlackHoleBackIntoAStar`. Pinned by `AstronomicalBodyHelperTest#everyStarInASystemContributesItsOwnLight`, `AstronomicalBodyHelperTest#aCompanionDoesNotTurnABlackHoleBackIntoAStar`.
+- **INV-NAV-08 [T][BEH]** A moon's period follows its parent's mass: four times the parent mass halves
+  the period and twice the distance multiplies it by 2^1.5. Pinned by
+  `AstronomicalBodyHelperTest#moonPeriodScalesWithParentMassAndDistanceExactly`. That the parent's
+  MASS and not its surface gravity feeds the law (with a Jupiter parent the two readings are 11×
+  apart) is `[V]` (`SystemContent.java:288-289`), and no test asserts that a moon returns to its start after
+  one mass-derived period.
+- **INV-NAV-09 [T][BEH]** A planet's year follows its star's mass: a star of 2 R☉ masses more than 2 M☉,
   so keying the year on mass gives a shorter year than substituting the radius; a stated mass beats
-  the derivation. `test/unit/AstronomicalBodyHelperTest.java:aYearIsKeyedOnStellarMassAndAStarWithoutOneDerivesItFromItsRadius`.
-- **INV-NAV-10 [T]** A darker world runs hotter and a more reflective one colder, and the
+  the derivation. `test/unit/AstronomicalBodyHelperTest#aYearIsKeyedOnStellarMassAndAStarWithoutOneDerivesItFromItsRadius`.
+- **INV-NAV-10 [T][BEH]** A darker world runs hotter and a more reflective one colder, and the
   albedo-less call still means Earth's albedo.
-  `test/unit/AstronomicalBodyHelperTest.java:albedoCoolsAWorldAndTheDefaultIsEarths`.
-- **INV-NAV-11 [T]** A day is drawn, not computed from gravity: two worlds of equal gravity can have
+  `test/unit/AstronomicalBodyHelperTest#albedoCoolsAWorldAndTheDefaultIsEarths`.
+- **INV-NAV-11 [T][BEH]** A day is drawn, not computed from gravity: two worlds of equal gravity can have
   different days (impossible under any function of gravity alone), the draw stays in band, and the
   same body answers the same day twice.
-  `test/unit/PlanetDerivationTest.java:aDayIsDrawnAndIsNotAFunctionOfGravity,aDrawnDayIsStillDeterministic`.
-- **INV-NAV-05 [T]** Travel predicates: planet↔own-moon, moon↔parent, moon↔sibling are
-  within-system; unrelated planets are not; same-dim is within-orbit; the "anywhere" form
-  is the union. `test/unit/PlanetaryTravelHelperTest.java:138,147,156,166,178,188`.
-- **INV-NAV-06 [T]** Injection burn is positive for intra-system travel and falls back to
-  the warp multiplier for cross-system. `test/unit/PlanetaryTravelHelperTest.java:206,223`.
-- **INV-NAV-07 [V]** The mod installs one `GravityHandler` as the `StellurgyAPI.gravityManager`
+  `test/unit/PlanetDerivationTest.java:aDayIsDrawnAndIsNotAFunctionOfGravity,aDrawnDayIsStillDeterministic`. Pinned by `PlanetDerivationTest#aDayIsDrawnAndIsNotAFunctionOfGravity`, `PlanetDerivationTest#aDrawnDayIsStillDeterministic`.
+- **INV-NAV-05 [T][BEH]** Travel predicate: a planet and its own moon are within-system; another
+  planet of the same star, and that planet's moon, are not (the planetary system, not the star
+  system, is the bound). Pinned by `RocketLaunchDepthTest#aRocketOnAPlanetMayGoToItsOwnMoonButNotToAnotherPlanetOrItsMoon`.
+  Moon↔parent and moon↔sibling are within-system, same-dim is within-orbit, and the "anywhere" form
+  is the union of the two `[V]` (`PlanetaryTravelHelper.java:14-35,98-109`); no test starts from a moon.
+- **INV-NAV-06 [V][BEH]** Injection burn is positive for intra-system travel and falls back to
+  the warp multiplier for cross-system (`PlanetaryTravelHelper.java:47-52`).
+- **INV-NAV-12 [V]** The mod installs one `GravityHandler` as the `StellurgyAPI.gravityManager`
   service (`Stellurgy.java:1440`); each handler's overrides are its own — **[T]**
   `test/unit/GravityHandlerApiTest.java:44` (`twoHandlersDoNotShareTheirOverrides`). The set/clear
   round-trip is not separately pinned.

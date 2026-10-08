@@ -17,34 +17,34 @@ response without moving a single emitter.
 
 ## The coupling law
 
-- **WALL-1** `[A]` The wall's response is a function of the **incident physical state alone**:
+- **WALL-1** `[A][SYS]` The wall's response is a function of the **incident physical state alone**:
   `Γ = Γ(ω, k, polarisation, coherence, spectral brightness, modulation, particle mass, charge,
   kinetic energy, momentum, velocity relative to the wall)`. A program selects among physically
-  distinguishable states; it never selects among *identities*.
-- **WALL-2** `[A]` **The law may not read UUID, faction, "enemy", "friendly", "valuable plasma", or any
+  distinguishable states; it never selects among *identities*. FOR: WALL-3.
+- **WALL-2** `[A][SYS]` **The law may not read UUID, faction, "enemy", "friendly", "valuable plasma", or any
   gameplay intent.** A response that consults one of these is not a strict program — it is a permission
   check wearing a physics costume, and it fails the moment a neutral party reproduces the same physical
-  state.
-- **WALL-3** `[A]` **Similar states get similar coupling, necessarily.** A program tuned to admit one
+  state. FOR: WALL-3.
+- **WALL-3** `[A][BEH]` **Similar states get similar coupling, necessarily.** A program tuned to admit one
   plasma will admit a physically similar plasma someone else brought. That is not a leak to be patched;
   it is what makes WALL-2 true, and any "fix" for it re-introduces intent.
 
 ## Matter and radiation
 
-- **WALL-4** `[A]` **Kinetic matter primarily REFLECTS** from a supported wall; **radiant energy
+- **WALL-4** `[A][BEH]` **Kinetic matter primarily REFLECTS** from a supported wall; **radiant energy
   primarily undergoes absorption, scattering, polarisation change or mode conversion**
  . The clause's content is that the split is **physical** — a property of what
   arrived — rather than a lookup on which of two code paths delivered it, which is how
   `MECH-SHD-09` reaches the same answer today.
-- **WALL-5** `[A]` **Incoming energy does not disappear.** Shield loss represents **decoherence and its
+- **WALL-5** `[A][BEH]` **Incoming energy does not disappear.** Shield loss represents **decoherence and its
   recovery cost**, and the rest of the incident energy leaves as heat, scattered radiation, mechanical
   work or residual coherence. A program that makes energy vanish is a defect.
-- **WALL-6** `[A]` **The heat lands in the EXISTING model.** Absorbed energy is a source term for
-  `C12`'s ship-heat, never a second thermal accounting private to shields.
-- **WALL-7** `[A]` **Reflected momentum is real and it goes somewhere**: incident flow → wall → emitters
+- **WALL-6** `[A][SYS]` **The heat lands in the EXISTING model.** Absorbed energy is a source term for
+  `C12`'s ship-heat, never a second thermal accounting private to shields. FOR: WALL-5.
+- **WALL-7** `[A][BEH]` **Reflected momentum is real and it goes somewhere**: incident flow → wall → emitters
   → structure → rigid body. It is an **actuator contribution** and never propulsion (`C26` ENERGY-12) —
   the reaction medium is the external flow, so with no external flux there is no force.
-- **WALL-17** `[A]` **What the wall absorbs is what DRIVES it; the rest is scattered**. The wall is the emitter-supported resonance of `φ` (`C27` FIELD-2), so its response to
+- **WALL-17** `[A][BEH]` **What the wall absorbs is what DRIVES it; the rest is scattered**. The wall is the emitter-supported resonance of `φ` (`C27` FIELD-2), so its response to
   radiation is a driven resonator's (coupled-mode theory). A mode decays two ways — re-radiation `γ_r`
   (scattering) and internal loss `γ_d` (decoherence, WALL-5) — and the **absorbed share is
   `γ_d / (γ_r + γ_d)`**. The drive is the **spectral brightness at the resonance**, within its linewidth,
@@ -56,7 +56,7 @@ response without moving a single emitter.
   properties**: the absorbed share never decreases as the drive grows; no thermal source at temperature
   `T` drives the wall harder than a blackbody of `T` filling the sky; a source off the resonance couples
   more weakly than the same power on it.
-- **WALL-18** `[A]` **A neutron is matter and REFLECTS**. WALL-4 needs no charge: a wall
+- **WALL-18** `[A][BEH]` **A neutron is matter and REFLECTS**. WALL-4 needs no charge: a wall
   stops a neutral projectile, and a neutron is one. The consequence a walled reactor cannot escape: every
   reflection costs the wall decoherence (WALL-5), and reflected neutrons do not vanish — they accumulate
   until something absorbs them (free decay is slow, a mean life of about fifteen minutes). A design that
@@ -64,39 +64,39 @@ response without moving a single emitter.
 
 ## The thermal problem, and why wavelength alone cannot solve it
 
-- **WALL-8** `[A]` **A shield must not make a craft a thermos.** An ordinary operating program couples
+- **WALL-8** `[A][BEH]` **A shield must not make a craft a thermos.** An ordinary operating program couples
   weakly to a radiator's thermal output, so a shielded station can still reject heat; a shielded station that cannot
   reject heat is this clause's falsifier.
-- **WALL-9** `[A]` **"Infrared passes" is FORBIDDEN as the rule.** A hostile coherent infrared laser
+- **WALL-9** `[A][BEH]` **"Infrared passes" is FORBIDDEN as the rule.** A hostile coherent infrared laser
   exists, and a wavelength-keyed exemption admits it. The discrimination is **coherence, spectral
   brightness, polarisation, modulation and mode** — a broadband, incoherent, low-brightness thermal
   emission is physically unlike a beam, and *that* difference is what the program reads.
-- **WALL-10** `[A]` **An outgoing friendly weapon uses a coordinated transparent MODE**, phase-tagged by
+- **WALL-10** `[A][BEH]` **An outgoing friendly weapon uses a coordinated transparent MODE**, phase-tagged by
   the same network that holds the wall — not an origin test. Today's code exempts any ray whose origin
   is already inside (`MECH-SHD-15`); that is a position check standing in for a physical mode, and this
   clause is what replaces it.
 
 ## Authorisation is not a law of nature
 
-- **WALL-11** `[A]` **Authorisation changes an object's COUPLING to the wall; it does not disable the
+- **WALL-11** `[A][BEH]` **Authorisation changes an object's COUPLING to the wall; it does not disable the
   wall**. The physics has no concept of permission — a transponder synchronises with
   the field and makes its carrier locally transparent.
-- **WALL-12** `[A]` **There is no global hole.** Authorised transit is local to the carrier and **must
+- **WALL-12** `[A][BEH]` **There is no global hole.** Authorised transit is local to the carrier and **must
   not vent the surrounding atmosphere** — which is exactly why it is a coupling change
   and not an aperture. `C27` FIELD-15's aperture is the other thing, and it *is* a universal hole.
-- **WALL-13** `[V]` **The credential is a rotatable carried code, not an identity.** Already realised as
+- **WALL-13** `[V][BEH]` **The credential is a rotatable carried code, not an identity.** Already realised as
   `MECH-SHD-19`, and in the right shape: the wall asks what is carried, never who carries it. **A
   dynamic key waits on the weapon implementation** and **transit is not charged**.
 
 ## Programs are a capability, and they are learned
 
-- **WALL-14** `[A]` **A program is a built and researched capability, not a config toggle.** What a
+- **WALL-14** `[A][BEH]` **A program is a built and researched capability, not a config toggle.** What a
   network can discriminate is bounded by its control bandwidth and by what its owner has learned to
   measure — the same knowledge ladder the rest of the physics uses (`C25` HYPER-14).
-- **WALL-15** `[A]` **Selective plasma coupling and active decoupling are PROGRAMS, not station
+- **WALL-15** `[A][BEH]` **Selective plasma coupling and active decoupling are PROGRAMS, not station
   shapes.** External collector, local `V0` throat, toroidal domain, selective coupling and active
   decoupling are five architectures that must all remain viable; declaring any one mandatory is a defect.
-- **WALL-16** `[A]` **A program's failure is legible.** When a wall cannot discriminate what is arriving
+- **WALL-16** `[A][BEH]` **A program's failure is legible.** When a wall cannot discriminate what is arriving
   it says so and couples strongly — the safe direction — rather than guessing and admitting. A
   degradation that resembles success is a silent fallback, which is forbidden: a fallback announces itself.
 

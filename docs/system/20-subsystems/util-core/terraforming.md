@@ -63,16 +63,16 @@ protecting blocks, under the keys `fullyGeneratedChunks`, `fullyBiomeChangedChun
 
 ## Invariants
 
-- **INV-TERRA-01 [V]** A `PROTECTED` chunk is never re-added to the terraform queue;
+- **INV-TERRA-01 [V][BEH]** A `PROTECTED` chunk is never re-added to the terraform queue;
   `add_position_to_queue` on a protected chunk instead marks the position generated.
   `TerraformingHelper.java:262-270`.
 - **INV-TERRA-02 [V]** A chunk becomes decoration-eligible only when it and its three
   positive-diagonal neighbours are terrain-complete. `TerraformingHelper.java:95-109`.
 - **INV-TERRA-03 [V]** Target-terrain `blockStates` are freed (set null) the moment a
   chunk is fully generated. `chunkdata.java:75`, `TerraformingHelper.java:173`.
-- **INV-TERRA-04 [V]** Terraforming a position broadcasts `PacketBiomeIDChange` to
+- **INV-TERRA-04 [V][BEH]** Terraforming a position broadcasts `PacketBiomeIDChange` to
   clients within 1024 blocks. `BiomeHandler.java:295, 310` (C2).
-- **INV-TERRA-05 [A]** The generate→decorate→biome-change cascade eventually marks every
+- **INV-TERRA-05 [A][BEH]** The generate→decorate→biome-change cascade eventually marks every
   in-range chunk fully generated (progress monotone per position). No terraform
   integration test found — behavioural, unverified.
 

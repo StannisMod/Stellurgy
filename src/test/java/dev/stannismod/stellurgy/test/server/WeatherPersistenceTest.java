@@ -88,6 +88,7 @@ public class WeatherPersistenceTest {
         if (secondBoot != null) secondBoot.close();
     }
 
+    /** Pins INV-WGEN-15 (with custom weather disabled the cycle defers to vanilla, and planet rain survives a restart). */
     @Test
     public void planetRainSurvivesRestartOnSameWorkDir() throws Exception {
         // First boot: set rain on the planet, verify the wrapper is in place.

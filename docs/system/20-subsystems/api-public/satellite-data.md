@@ -44,15 +44,15 @@ two-phase contract is the `IDataHandler` protocol (`extractData`/`addData` both 
 
 ## Invariants
 
-- **INV-API-18 [V]** `SatelliteProperties.id` is write-once (`setId` guarded on `== -1`)
-  (`SatelliteProperties:59-66`); a satellite keeps its first assigned id for life.
-- **INV-API-19 [V]** `DataType` ordinals 0..6 (`UNDEFINED..MASS`) are a save contract: NBT stores
+- **INV-API-18 [V][SYS]** `SatelliteProperties.id` is write-once (`setId` guarded on `== -1`)
+  (`SatelliteProperties:59-66`); a satellite keeps its first assigned id for life. FOR: public API: satellite identity is for life.
+- **INV-API-19 [V][SYS]** `DataType` ordinals 0..6 (`UNDEFINED..MASS`) are a save contract: NBT stores
   `dataType.ordinal()` and read indexes `values()[...]`, guarded by a catch that falls back to
-  `UNDEFINED` on out-of-range (`DataStorage:144-158,:171-193`).
-- **INV-API-20 [V]** An empty unlocked `DataStorage` always normalises its type to `UNDEFINED` on
-  write, read, and drain (`:32-34,:138-139,:166-168`) — no stale type survives an empty buffer.
-- **INV-API-21 [V]** `DataType.toString()` returns a lang key `data.<name>.name`, not the enum name
-  (`:190-192`) — it is a display contract, do not use as an id.
+  `UNDEFINED` on out-of-range (`DataStorage:144-158,:171-193`). FOR: save format: DataType ordinals.
+- **INV-API-20 [V][SYS]** An empty unlocked `DataStorage` always normalises its type to `UNDEFINED` on
+  write, read, and drain (`:32-34,:138-139,:166-168`) — no stale type survives an empty buffer. FOR: save format: DataStorage.
+- **INV-API-21 [V][SYS]** `DataType.toString()` returns a lang key `data.<name>.name`, not the enum name
+  (`:190-192`) — it is a display contract, do not use as an id. FOR: public API: DataType display key.
 - **INV-API-22 [V]** `SatelliteBase.acceptsItemInConstruction` dereferences
   `getSatelliteProperty(item)` with no null guard (`SatelliteBase:41`), while `getSatelliteProperty`
   is documented to return `null` for an unregistered stack (`SatelliteRegistry:48`) — NPE on an

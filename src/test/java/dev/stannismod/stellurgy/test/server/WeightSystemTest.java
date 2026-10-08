@@ -105,6 +105,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
                 50.0, itemWeight("minecraft:glass", 1), 1e-4);
     }
 
+    /** Pins INV-WGT-03 (fluid weight is positive and scales with fuelMassScale). */
     @Test
     public void fluidWeightUsesFallbackAndFuelScale() throws Exception {
         reset();

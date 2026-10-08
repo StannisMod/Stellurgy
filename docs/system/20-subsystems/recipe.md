@@ -89,7 +89,7 @@ but that logic lives in util-core, not here.)
 
 ## Invariants
 
-- **INV-RCP-01 [V]** Each `Recipe*.getMachine()` returns exactly its matching `Tile*` class and
+- **INV-RCP-01 [V][BEH]** Each `Recipe*.getMachine()` returns exactly its matching `Tile*` class and
   never null — one literal per class (`recipe/RecipeCentrifuge.java:9`, `RecipeLathe.java:9`, …, ten
   files). No test catches a wrong-tile typo.
 - **INV-RCP-02 [V]** Every `Recipe*` remains a direct subclass of `RecipeMachineFactory`, so the

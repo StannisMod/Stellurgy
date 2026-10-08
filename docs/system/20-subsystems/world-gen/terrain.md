@@ -158,19 +158,19 @@ what consumes the result.
 - **INV-WGEN-01 [V]** genType 1 ⇒ cave generator, else the standard planet
   generator; no other value produces a distinct generator
   (`WorldProviderPlanet.java:59-65`).
-- **INV-WGEN-02 [V]** Terraforming a chunk (biome-provider overload) never runs
+- **INV-WGEN-02 [V][BEH]** Terraforming a chunk (biome-provider overload) never runs
   crater or vanilla-structure generation (`ChunkProviderPlanet.java:319-337`,
   `is_terraforming` guard).
-- **INV-WGEN-03 [V]** Crater tier is a total function of atmosphere density:
+- **INV-WGEN-03 [V][BEH]** Crater tier is a total function of atmosphere density:
   none>0.05 huge, ==0 huge-enabled, <0.05 small, <2 medium
   (`ChunkProviderPlanet.java:161-178`).
-- **INV-WGEN-04 [V]** An empty planet biome list yields all-ocean, never a crash
+- **INV-WGEN-04 [V][BEH]** An empty planet biome list yields all-ocean, never a crash
   (`GenLayerBiomePlanet.java:59-60`).
-- **INV-WGEN-05 [V]** Sampling the same chunk twice on a dim returns the same top
+- **INV-WGEN-05 [V][BEH]** Sampling the same chunk twice on a dim returns the same top
   block and biome (deterministic gen): chunk generation re-seeds its `Random` from the chunk
   coordinates before filling (`ChunkProviderPlanet.java:293`). Distinct chunks are independently addressable: still `[T]`,
   `WorldgenDeterminismAndSamplingTest#differentChunksReturnIndependentlyAddressableData:64-65`.
-- **INV-WGEN-22 [T]** A planet's published world type is its own, never the save's: a `NATIVE`
+- **INV-WGEN-22 [T][BEH]** A planet's published world type is its own, never the save's: a `NATIVE`
   planet answers `PlanetGen` and a `MOD_WORLDTYPE` planet answers the foreign type it runs, and the
   authored options string is what its generator was built from —
   `server/PlanetTerrainSourceTest#planetPublishesItsOwnWorldTypeThroughWorldInfo`,

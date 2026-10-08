@@ -33,7 +33,7 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
 
 ## Clauses
 
-- **DECKSYNC-1** *(the client is entitled to what it must compute)* `[A]` Player movement is
+- **DECKSYNC-1** *(the client is entitled to what it must compute)* `[A][SYS]` Player movement is
   client-authoritative; therefore **100% of the information needed to compute the correct player
   position is present on the client**. A quantity the client must use and is not told is a defect in
   this contract, not a client-side problem to be worked around. Ruled: *"движение игрока
@@ -41,9 +41,9 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   позицию игрока, должно быть на клиенте"*.
   **Held for the deck carry** `[V]`: the craft's 6DOF motion crosses with its pose (DECKSYNC-3) and
   there is no client reconstruction. The entitlement is a general one, so this clause is never "done"
-  — it is the test every future quantity a client must compute has to pass.
+  — it is the test every future quantity a client must compute has to pass. FOR: DECKSYNC-5.
 
-- **DECKSYNC-2** *(scope is what the client SEES)* `[A]` The entitlement covers the craft a client can
+- **DECKSYNC-2** *(scope is what the client SEES)* `[A][SYS]` The entitlement covers the craft a client can
   see — its own and the ones it renders — and no more. Shipping every craft in the world to every
   client is not reasonable and is not asked for. Ruled: *"клиент должен знать только о тех кораблях,
   которые видит — не только свой, чтобы рисовать их правильно. Грузить его всеми кораблями
@@ -52,9 +52,9 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   player watches (`EventsCommon.sendShipTransformUpdates` over `PhysicsObject.getWatchingPlayers`),
   not every loaded craft to every client in the dimension (which would make DECKSYNC-3's six extra
   numbers per craft a cost every client paid for craft it cannot see). No new machinery: the watcher
-  set is the one the ship INDEX packet maintains from the watch/unwatch distance.
+  set is the one the ship INDEX packet maintains from the watch/unwatch distance. FOR: DECKSYNC-5.
 
-- **DECKSYNC-3** *(what crosses, and in what units)* `[A]` Periodically — every N — the craft sends its
+- **DECKSYNC-3** *(what crosses, and in what units)* `[A][SYS]` Periodically — every N — the craft sends its
   **deck motion in 6DOF** together with the **current transform**. The two travel together because a
   velocity without the pose it belongs to cannot be applied to a point.
   **Built** `[V]`: `ShipTransformUpdateMessage` carries six doubles per craft beside
@@ -64,9 +64,9 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   **`N = 1`**: the sender is the game tick (`EventsCommon.sendShipTransformUpdates`).
   The ship INDEX packet updates transform, inertia and the physics flag and skips `ShipPhysicsData`,
   so a client copy of a craft's velocity that only that packet fed would sit at the zero it was
-  constructed with — which is why the client would otherwise reconstruct a rate at all.
+  constructed with — which is why the client would otherwise reconstruct a rate at all. FOR: DECKSYNC-5.
 
-- **DECKSYNC-4** *(what the client does between packets)* `[A]` Until the next packet the client
+- **DECKSYNC-4** *(what the client does between packets)* `[A][BEH]` Until the next packet the client
   APPLIES the motion it was given and interpolates from it; on arrival the client's state and the
   packet RE-SYNC. The client extrapolates from a told value — it never derives a new one.
   **Built** `[V]`: `PhysicsObject` builds `DeclaredMotionTransformInterpolator` on the
@@ -83,7 +83,7 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   arrives, and a residual cap stated in RADIANS (which becomes a 1.6-block step at whatever arm it
   acts through).
 
-- **DECKSYNC-5** *(the re-sync is not felt)* `[A]` A body must not JERK when a packet lands. The
+- **DECKSYNC-5** *(the re-sync is not felt)* `[A][BEH]` A body must not JERK when a packet lands. The
   maintainer named this as the hard part of the design and it is an acceptance criterion, not a
   nicety: *"главное, чтобы это не вызывало рывков"*.
 
@@ -128,7 +128,7 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   discontinuity, and fading across one would sweep the deck — and anything standing on it — through
   the space between. The bound scales with what the craft itself declares it can cover, plus a floor.
 
-- **DECKSYNC-6** *(no self-invented numbers)* `[A]` A body is never moved by a quantity only its own
+- **DECKSYNC-6** *(no self-invented numbers)* `[T][SYS]` A body is never moved by a quantity only its own
   client derived. Differencing a sequence of observations is not a substitute for being told: the
   first member of such a sequence is whatever the client last happened to look at, and the interval
   between them is whatever the code happened to ask.
@@ -146,9 +146,9 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   - *The bound is measured, not chosen* `[V]`: 2275 derivations on a real client running the
     crew-capture suite split into two populations with nothing between them — 2266 at one or two
     ticks (the steady state) and 9 at 26–237 ticks (a body meeting a deck again after an interval
-    nobody queried through).
+    nobody queried through). Pinned by `VSCrewCaptureContractTest#aHullTopEncounterNeverEntersTheShipFrame`, `VSCrewCaptureContractTest#aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt`. FOR: DECKSYNC-5.
 
-- **DECKSYNC-7** *(the server bounds what it accepts)* `[A]` The server does not simply ratify a
+- **DECKSYNC-7** `[T][BEH]` *(the server bounds what it accepts)* `[A]` The server does not simply ratify a
   client-declared position. Knowing the player's own movement vector — slightly lagging, which is
   enough — and the craft's motion in full, it computes the REGION the player could occupy had he moved
   at his maximum allowed speed, and that region caps the accepted movement. Ruled: *"может вычислить
@@ -177,7 +177,7 @@ angular). *Carry* is the part of a body's velocity that comes from the deck rath
   **Nothing fires ahead of the bound**: there is no tighter external-move guard, so the refusal path
   is reachable. Gated on the deck CAPTURE alone (`ShipFrameTravel.aboardShipId`): riding and elytra
   end a capture, but a creative flyer the deck already holds stays captured and is bounded too
-  (`ShipFrameTravel.java`) `[V]`.
+  (`ShipFrameTravel.java`) `[V]`. Pinned by `VSCrewCaptureContractTest#walkingAndJumpingOnAHoveringShipDoesNotChurnTheCapture`, `VSCrewCaptureContractTest#aWildClientSideStepOnADeckNeverBecomesADeclaredPosition`.
 
 ## What this contract does NOT decide
 

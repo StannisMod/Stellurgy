@@ -22,15 +22,15 @@ detectable emission a ship cannot avoid. **slug** = a chargeable, ejectable heat
 
 **Quantity and reservoirs**
 
-- **HEAT-1** `[A]` Heat is ENERGY, carried internally in the same unit as electrical energy (RF/FE), so
+- **HEAT-1** `[A][BEH]` Heat is ENERGY, carried internally in the same unit as electrical energy (RF/FE), so
   a machine's draw, the chiller's work and stored heat are one currency. **Every player-facing surface
   labels it a heat unit and never RF/FE** — naming a familiar energy unit asserts the heat is
   harvestable, which it is not.
-- **HEAT-2** `[A]` Temperature exists at exactly two places: a **network** and a **radiator**. There is
+- **HEAT-2** `[A][BEH]` Temperature exists at exactly two places: a **network** and a **radiator**. There is
   no global ship temperature scalar. Introducing one is a violation.
-- **HEAT-3** `[A]` Three reservoir kinds only: **zone air**, **network**, **radiator**. A whole
+- **HEAT-3** `[T][SYS]` Three reservoir kinds only: **zone air**, **network**, **radiator**. A whole
   connected network is ONE thermodynamic object — one `Q`, one `C`, one `T = T₀ + Q/C`. Per-pipe
-  temperature is a violation (explicitly rejected as unaffordable).
+  temperature is a violation (explicitly rejected as unaffordable). Pinned by `HeatLoopTest#theSameHeatInALongerLoopIsALowerTemperature`. FOR: HEAT-2.
 
   > **Why a PLANET is not on that list.** Not an
   > omission: **a reservoir is something whose `T` rises when `Q` is added to it, and a planet's does
@@ -40,7 +40,7 @@ detectable emission a ship cannot avoid. **slug** = a chargeable, ejectable heat
   > lets one place outside be hotter than another**; a single planetary reservoir at one `T` would
   > make a ship beside a lava lake and one on an ice cap read identically. This is the same property
   > C21 leaves unstated about an atmosphere's extent: an environmental medium is a FIELD, not a body.
-- **HEAT-4** `[A]` **Conservation.** Heat energy leaves a ship through exactly **four**
+- **HEAT-4** `[A][BEH]` **Conservation.** Heat energy leaves a ship through exactly **four**
   channels: a radiator's net rejection, an ejected slug, convection into an external atmosphere, **and
   the propellant feed of a burning engine (below)**. Energy that
   disappears by any other route — including being *dropped* because a container is full — is a
@@ -60,44 +60,44 @@ detectable emission a ship cannot avoid. **slug** = a chargeable, ejectable heat
 
 **Sources**
 
-- **HEAT-5** `[A]` Generation is DERIVED, never an authored per-ship constant: machines through the
+- **HEAT-5** `[A][BEH]` Generation is DERIVED, never an authored per-ship constant: machines through the
   tile-heat registry, blocks through the material table. The registry must actually be populated —
   the upstream `HeatHandler.heatHandlers` map has no registration path and therefore always answers
   zero `[V]`.
-- **HEAT-6** `[A]` The chiller is a **heat pump**: it consumes work `W` to move heat `Q` to a higher
+- **HEAT-6** `[T][BEH]` The chiller is a **heat pump**: it consumes work `W` to move heat `Q` to a higher
   temperature, and the hot side receives `Q + W`. A chiller whose own work does not enter the loop is
-  a violation.
+  a violation. Pinned by `HeatChillerTest#theHotLoopReceivesTheHeatPlusTheWork`.
 
 **Rejection and environment**
 
-- **HEAT-7** `[A]` `netReject = k · A · (T_rad⁴ − T_amb⁴)`, in Kelvin, evaluated in floating point.
-  Area scales rejection linearly, temperature to the fourth power.
-- **HEAT-8** `[A]` The environment couples through a **single incident-flux term** accumulating every
+- **HEAT-7** `[T][BEH]` `netReject = k · A · (T_rad⁴ − T_amb⁴)`, in Kelvin, evaluated in floating point.
+  Area scales rejection linearly, temperature to the fourth power. Pinned by `HeatRejectionTest#rejectionScalesWithTheAreaBuilt`, `HeatRejectionTest#rejectionFollowsTheFourthPowerOfTemperature`.
+- **HEAT-8** `[T][BEH]` The environment couples through a **single incident-flux term** accumulating every
   source — star, planet, and other ships' radiators — never through per-source mechanisms. Where
-  incident flux exceeds rejection the net is negative and the ship heats regardless of its own state.
-- **HEAT-9** `[A]` A radiator radiates one way and requires N empty blocks in front of it (default 10,
+  incident flux exceeds rejection the net is negative and the ship heats regardless of its own state. Pinned by `HeatEnvironmentTest#aWorldsWarmthAndAStarArriveThroughTheSameTerm`, `HeatEnvironmentTest#aShipUnderAFierceStarHeatsThroughItsRadiators`.
+- **HEAT-9** `[T][BEH]` A radiator radiates one way and requires N empty blocks in front of it (default 10,
   `tunable`), checked **against the ship's own blocks in the ship frame**, never against the world.
-  Blocked ⇒ zero rejection from that radiator, and the blocked state is reported to the player.
-- **HEAT-10** `[A]` A shield ATTENUATES incident flux, never eliminates it:
+  Blocked ⇒ zero rejection from that radiator, and the blocked state is reported to the player. Pinned by `HeatRejectionTest#anObstructedCellShedsNothingAndSaysWhereTheBlockIs`.
+- **HEAT-10** `[T][BEH]` A shield ATTENUATES incident flux, never eliminates it:
   `flux_eff = flux · (1 − a)` with `a` strictly less than 1, hard-capped in code. No configuration may
   produce total thermal immunity.
   > The attenuated `a·flux` splits into SCATTERED (it leaves)
   > and ABSORBED (a source term in this contract, plus the shield's own decoherence loss), by `C28`
   > WALL-17: diffuse starlight is mostly scattered, a coherent or very bright source mostly absorbed. The
-  > cap `a < 1` stands. *Stress-test*: see WALL-17's row in C28.
+  > cap `a < 1` stands. *Stress-test*: see WALL-17's row in C28. Pinned by `HeatEnvironmentTest#aShieldThinsTheFluxAndNeverRemovesIt`.
 
 **Failure ladder**
 
-- **HEAT-11** `[A]` When generation exceeds rejection the consequences fire in this ORDER, each keyed
+- **HEAT-11** `[A][BEH]` When generation exceeds rejection the consequences fire in this ORDER, each keyed
   to this SUBJECT: **crew damage** (zone air) → **block damage** (the reservoir the block touches;
   spent through the block-damage budget, never ad-hoc block replacement) → **fire** (zone air) →
   **hyperdrive refusal** (the network the drive is attached to) → **hull melting** (the maximum of
   zone air, network and incident flux, against the block's material melting point). Thresholds are
   `tunable`; the order and the subjects are the contract.
-- **HEAT-12** `[A]` Machine throttling is NOT a consequence of overheating. Block damage carries that
+- **HEAT-12** `[A][BEH]` Machine throttling is NOT a consequence of overheating. Block damage carries that
   role.
-- **HEAT-13** `[A]` Fire requires an atmosphere: no heat-driven ignition in vacuum.
-- **HEAT-14** `[A]` Crew heat damage REUSES the existing hostile-atmosphere types and their suit
+- **HEAT-13** `[A][BEH]` Fire requires an atmosphere: no heat-driven ignition in vacuum.
+- **HEAT-14** `[A][BEH]` Crew heat damage REUSES the existing hostile-atmosphere types and their suit
   immunity chain (the `Atmosphere.VERYHOT` / `SUPERHEATED` values and their suit-immunity chain, C21) `[V]` rather than
   introducing a parallel damage path. This makes the first rung depend on per-entity atmosphere resolving
   in the ship frame — which it does not: `AtmosphereHandler.getAtmosphereType(Entity)`
@@ -106,22 +106,22 @@ detectable emission a ship cannot avoid. **slug** = a chargeable, ejectable heat
 
 **Signature**
 
-- **HEAT-15** `[A]` The signature is two distinct terms with distinct consumers: **detection range
+- **HEAT-15** `[A][BEH]` The signature is two distinct terms with distinct consumers: **detection range
   scales with the square root of total radiated power**, and **lock/track quality scales with radiance
   `σT⁴`, a function of temperature alone**. Collapsing them into one number is a violation — the whole
   build trade (compact hot array vs large cool array) lives in their difference.
-- **HEAT-16** `[A]` Silence is never invisibility. With every sink closed the hull still radiates far
+- **HEAT-16** `[T][BEH]` Silence is never invisibility. With every sink closed the hull still radiates far
   above the cosmic background, so running silent reduces detection RANGE and never drives the
-  signature to zero.
+  signature to zero. Pinned by `RunningSilentTest#aShipRunningSilentIsFoundCloserAndIsStillFound`.
 
 **Emergency dump**
 
-- **HEAT-17** `[A]` `E_slug / t_charge < P_radiator(cheapest continuous tier)`. Sustained throughput
+- **HEAT-17** `[A][BEH]` `E_slug / t_charge < P_radiator(cheapest continuous tier)`. Sustained throughput
   from ejected slugs must stay below the cheapest continuous radiator tier, so no quantity of carried
   slugs can substitute for radiators. **The cheapest continuous tier is ONE radiating cell** (ruling
   2026-09-29). This is a RELATION, not a value: it survives rebalancing,
   including by a modpack author, and is the clause that keeps the dump an emergency.
-- **HEAT-18** `[A]` A slug's capacity is derived from its MATERIAL (`ρ · c · (T_melt − margin − T₀)`),
+- **HEAT-18** `[A][BEH]` A slug's capacity is derived from its MATERIAL (`ρ · c · (T_melt − margin − T₀)`),
   never authored per item, and the same material table drives HEAT-11's melting rung. An ejected slug
   remains a physical object on the same physics: it melts and ignites what it lands on by spending its
   own remaining energy (hence self-limiting), injures whoever picks it up hot, cools by HEAT-7's law,

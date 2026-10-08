@@ -184,6 +184,7 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * … THIS ship must be carried into and settle in the neighbouring cell" with no
      * {@code ship_entered_cell} in 600 ticks, 2026-09-30. That break reddens the link only; the
      * neighbour, arrival-depth and stays-there verdicts after it are not witnessed by it.</p>
+     * Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis).
      */
     @Test
     public void aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere() throws Exception {

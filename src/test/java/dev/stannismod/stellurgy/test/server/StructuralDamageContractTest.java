@@ -45,6 +45,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
      * <p>red-witnessed: with {@code ShipDamageService#toReport} at {@code return new DamageReport(walk.outcome, walk.stopReason, walk.budgetSpent, walk.budgetLeft,} reporting every walk's outcome as
      * NOTHING_STRUCK, this fails at "an impact into a solid wall reported striking nothing:
      * {...outcome:NOTHING_STRUCK...spent:3000...destroyed:3...}" (2026-09-30).</p>
+     * Pins INV-DMG-01 (an impact that meets structure spends into it and reports a depth and an entry point).
      */
     @Test
     public void anImpactIntoAWallSpendsIntoItAndReportsWhereItReached() throws Exception {
@@ -73,6 +74,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
      * single pane did not report exiting: {...outcome:ABSORBED...left:399624...}". 2026-09-30, taken on
      * the pre-fix form, where that decision was made inline in {@code Walk#visit}; the fix that same day
      * moved it into its own method without changing it.
+     * Pins INV-DMG-02 (an impact whose budget outlasts what it struck exits carrying the remainder).
      */
     @Test
     public void anImpactThatOutlastsTheWallExitsCarryingTheRest() throws Exception {
@@ -160,6 +162,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
      * ...}"; with the same check widened to also refuse {@code impactId - 1}, the fresh-identity verdict
      * fails with "a fresh impact identity was refused as a duplicate: {...DUPLICATE_IMPACT...}".
      * 2026-09-30.
+     * Pins INV-DMG-03 (the same impact identity applied twice damages once).
      */
     @Test
     public void theSameImpactIdentityAppliedTwiceDamagesOnce() throws Exception {
@@ -193,6 +196,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
      * red-witnessed: with {@code StructureDamageEngine#spendInto} at {@code int stageCost = stageCost(world, pos, areaFactor, kind);}'s per-stage price overwritten to 1 in
      * the spend (the probe's quoted price untouched), this fails with "the same budget went as far into
      * iron as into glass (glass destroyed 8, iron destroyed 8)". 2026-09-30.
+     * Pins INV-DMG-04 (at equal budget a tougher wall is not penetrated as far as a flimsy one).
      */
     @Test
     public void aTougherWallIsNotPenetratedFurtherThanAFlimsyOneAtEqualBudget() throws Exception {

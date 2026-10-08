@@ -83,6 +83,7 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
                 + "        </planet>\n";
     }
 
+    /** Pins INV-XML-01 (a malformed planet definition is skipped, not fatal). */
     @Test
     public void serverBootsWithMalformedPlanetSkipped() throws Exception {
         // The assertion that matters most is implicit in this line: before the

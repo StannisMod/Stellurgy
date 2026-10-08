@@ -84,6 +84,7 @@ public class RocketLoaderRedstonePolarityTest {
         }
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
     @Test
     public void onStateEmitsRedstoneWhenConditionTrue() {
         assertTrue("state=ON + condition=true must emit redstone "
@@ -91,6 +92,7 @@ public class RocketLoaderRedstonePolarityTest {
                 invoke(RedstoneState.ON, true));
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
     @Test
     public void onStateStaysOffWhenConditionFalse() {
         assertFalse("state=ON + condition=false must NOT emit "
@@ -98,6 +100,7 @@ public class RocketLoaderRedstonePolarityTest {
                 invoke(RedstoneState.ON, false));
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
     @Test
     public void invertedStateFlipsTruthOutput() {
         assertFalse("state=INVERTED + condition=true must NOT emit "
@@ -105,6 +108,7 @@ public class RocketLoaderRedstonePolarityTest {
                 invoke(RedstoneState.INVERTED, true));
     }
 
+    /** Pins INV-INFRA-11 (with state ON a true condition emits and a false one does not, and INVERTED flips it). */
     @Test
     public void invertedStateFlipsFalseOutput() {
         assertTrue("state=INVERTED + condition=false MUST emit "

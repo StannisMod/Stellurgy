@@ -81,6 +81,7 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code Vec3d targetCenter = fieldCenter.add(} replaced by the field's own centre — B holds him, but
      * puts him INSIDE — this fails at "shield B held the player but did not keep him OUT: after the hold
      * he stands 1.0584229873233446 from B's centre, inside its inner surface at 3.5" (2026-10-03).</p>
+     * Pins INV-SHD-24 (An emitter holds a player at its membrane on the side of ITS OWN shell he was last seen clear of).
      */
     @Test
     public void aShieldHoldsOutAPlayerWhoCameFromOutsideEvenFromInsideAnother() throws Exception {

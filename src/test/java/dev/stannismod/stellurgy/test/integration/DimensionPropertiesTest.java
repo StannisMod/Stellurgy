@@ -74,6 +74,7 @@ public class DimensionPropertiesTest {
         assertFalse("empty template must not be written", nbt.hasKey("terrainTemplate"));
     }
 
+    /** Pins INV-DIM-06 (realizeAtmosphere does not corrupt id or hierarchy). */
     @Test
     public void realizingTheAtmosphereDoesNotCorruptIdOrHierarchy() {
         DimensionProperties props = new DimensionProperties(123, "Mars");

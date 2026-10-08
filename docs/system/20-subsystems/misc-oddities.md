@@ -96,22 +96,23 @@ sit in the raw `stellurgy.cfg`, not in world NBT.
 - **INV-MISC-01 [V]** All object construction + `setRegistryName` happens inside Forge
   `RegistryEvent` handlers; blocks/items are built in `registerBlocks`/`registerItems` before
   being named `Stellurgy.java:640,509`.
-- **INV-MISC-02 [V]** With `ResetOnlyOnce=true`, `resetPlanetsFromXML` is forced back to
+- **INV-MISC-02 [V][BEH]** With `ResetOnlyOnce=true`, `resetPlanetsFromXML` is forced back to
   false on the boot that consumes it `Stellurgy.java:322-324`.
-- **INV-MISC-03 [V]** `serverStopped` clears wirelessdata `NetworkRegistry`, `AtmosphereHandler`,
+- **INV-MISC-03 [V][BEH]** `serverStopped` clears wirelessdata `NetworkRegistry`, `AtmosphereHandler`,
   the pipe-seal map, saves `WeightEngine`, and last RELEASES the server's `DimensionManager` and
   `SpaceObjectManager` (`endServerLifetime`) `Stellurgy.java:1634`.
-- **INV-MISC-04 [V]** The terraformer / gravity-machine / orbital-laser / orbital-registry
+- **INV-MISC-04 [V][BEH]** The terraformer / gravity-machine / orbital-laser / orbital-registry
   block+TE pairs exist in the registries only when their feature flag is enabled
   `Stellurgy.java:457,691-699`.
 - **INV-MISC-05** — retired.
-- **INV-MISC-06 [V]** `EnchantmentSpaceBreathing`: max level 1, `canApplyAtEnchantingTable`
+- **INV-MISC-06 [V][BEH]** `EnchantmentSpaceBreathing`: max level 1, `canApplyAtEnchantingTable`
   false, `isAllowedOnBooks` false, applies only to `ItemArmor`
   `EnchantmentSpaceBreathing.java:19-36`.
 - **INV-MISC-07 [V]** Every `markDirty` on a `TileEntitySyncable` triggers a full-NBT block
   update packet `TileEntitySyncable.java:11-24`.
-- **INV-MISC-08 [T]** A rocket built on-pad, fueled and launched reaches a space station and
-  returns to its takeoff `BlockPos` `BuildRocketTest.java:78-104` (asserts in Phase3/Phase4).
+- **INV-MISC-08 [V][BEH]** A rocket built on-pad, fueled and launched reaches a space station and
+  returns to its takeoff `BlockPos`: the in-game harness `unit/BuildRocketTest.java:78-104` asserts it
+  in Phase3/Phase4. It lives in `src/main`, is run by hand and is not a JUnit test.
 - **INV-MISC-09** — retired.
 
 ## Failure modes & edge cases

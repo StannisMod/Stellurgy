@@ -848,6 +848,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * "clicking planet button 0 did not register a selection server-side: … hasSelection:false",
      * 2026-09-28. The link before it records at the handler's RETURN and stays green by design —
      * it says the packet arrived, not that it was applied.</p>
+     * Pins INV-IVC-03 (clicking a planet button on the selector registers a server-side selection).
      */
     @Test
     public void selectingPlanetUpdatesServerSelection() throws Exception {
@@ -1538,6 +1539,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>Two phases: bypass ON — teleport far past vanilla's 8-block reach, GUI must stay open;
      * bypass OFF — the GUI must close on the next tick. A vanilla chest is the container so the
      * redirect target is the exact vanilla signature the mixin pins.</p>
+     * Pins INV-HLP-02 (a bypass player keeps a container open regardless of distance).
      */
     @Test
     public void mixinRedirectKeepsContainerOpenAcrossDistance() throws Exception {

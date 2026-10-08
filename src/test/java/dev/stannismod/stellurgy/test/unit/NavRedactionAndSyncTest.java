@@ -92,6 +92,7 @@ public class NavRedactionAndSyncTest {
      * A moon shares its parent's cell and can sit tens of thousands of blocks away inside it, and a
      * neighbouring cell's body can be closer than one in your own; the rule has to read the metre,
      * or a pilot alongside a moon is told less about it than the planet he is nowhere near.
+     * Pins ADDR-15 (proximity reveals information whatever the cell names say).
      */
     @Test
     public void theOrbitTierFollowsTheMeasuredDistanceNotTheCellName() {

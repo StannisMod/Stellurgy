@@ -122,6 +122,7 @@ public class AstronomicalBodyHelperTest {
      * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
      * distance unit ({@code a / 100}), this fails with "expected:&lt;48.0&gt; but
      * was:&lt;8.782729013584356E7&gt;".</p>
+     * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Test
     public void orbitalPeriodAtEarthDistanceIsBaseline() {
@@ -133,6 +134,7 @@ public class AstronomicalBodyHelperTest {
      * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} raising the
      * distance to the power -3 instead of 3, this fails with "inner planet must orbit faster than
      * Earth". (A distance-unit inversion leaves it green: it asserts an order.)
+     * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Test
     public void orbitalPeriodGrowsWithDistance() {
@@ -161,6 +163,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
      * to the power -2 instead of 2, this fails with "brightness must drop with distance".
+     * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Test
     public void stellarBrightnessMonotonicWithDistance() {
@@ -179,6 +182,7 @@ public class AstronomicalBodyHelperTest {
      * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
      * old distance unit ({@code d / 100}), this fails with "expected:&lt;1.0&gt; but
      * was:&lt;4.468368725849103E-9&gt;".</p>
+     * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Test
     public void stellarBrightnessAtEarthBaselineEqualsOne() {
@@ -190,6 +194,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's
      * luminosity by 1 instead of 0.25, this fails with "expected:&lt;0.25&gt; but was:&lt;1.0&gt;".
+     * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Test
     public void blackHoleStarReducesBrightness() {
@@ -212,6 +217,7 @@ public class AstronomicalBodyHelperTest {
      * the star the planet is bound to instead of its whole system, this fails with "two identical
      * stars in the same place light a world twice as brightly expected:&lt;2.0&gt; but
      * was:&lt;1.0&gt;". (A distance-unit inversion leaves it green: it asserts a ratio.)</p>
+     * Pins INV-NAV-07 (every star lights the world and a black hole is never treated as though it had stopped being one).
      */
     @Test
     public void everyStarInASystemContributesItsOwnLight() {
@@ -300,6 +306,7 @@ public class AstronomicalBodyHelperTest {
      * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's
      * luminosity by 1 instead of 0.25, this fails with "the hole stays dimmed: the pair is never as
      * bright as two ordinary stars".</p>
+     * Pins INV-NAV-07 (every star lights the world and a black hole is never treated as though it had stopped being one).
      */
     @Test
     public void aCompanionDoesNotTurnABlackHoleBackIntoAStar() {
@@ -417,6 +424,7 @@ public class AstronomicalBodyHelperTest {
      * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
      * old distance unit, this fails with "a darker surface absorbs more and runs hotter" — every
      * temperature collapses to a couple of kelvin and the albedo stops making a difference.</p>
+     * Pins INV-NAV-10 (A darker world runs hotter and a more reflective one colder, and the albedo-less call still means Earth's albedo).
      */
     @Test
     public void albedoCoolsAWorldAndTheDefaultIsEarths() {
@@ -457,6 +465,7 @@ public class AstronomicalBodyHelperTest {
      *
      * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
      * distance unit, this fails with "expected:&lt;48.0&gt; but was:&lt;8.782729013584356E7&gt;".</p>
+     * Pins INV-NAV-09 (A planet's year follows its star's mass).
      */
     @Test
     public void aYearIsKeyedOnStellarMassAndAStarWithoutOneDerivesItFromItsRadius() {
@@ -484,6 +493,7 @@ public class AstronomicalBodyHelperTest {
         assertEquals("a stated mass wins over the derivation", 4.0, stated.getMass(), 1e-6);
     }
 
+    /** Pins INV-NAV-08 (a moon's period follows its parent's mass). */
     @Test
     public void moonPeriodScalesWithParentMassAndDistanceExactly() {
         // The SCALING is what this pins, and it is unchanged by the reference the law is anchored on:

@@ -426,33 +426,33 @@ destroyed positions as well as damaged ones.
 
 ## Invariants
 
-- **INV-DMG-01** [T] An impact that meets structure spends into it and reports a depth and an entry
-  point. `StructuralDamageContractTest`
-- **INV-DMG-02** [T] An impact whose budget outlasts what it struck exits carrying the remainder, with
-  an exit point. `StructuralDamageContractTest`
-- **INV-DMG-03** [T] The same impact identity applied twice damages once; a different identity at the
-  same place still lands. `StructuralDamageContractTest`
-- **INV-DMG-04** [T] At equal budget, a tougher wall is not penetrated as far as a flimsy one — the
+- **INV-DMG-01** [T][BEH] An impact that meets structure spends into it and reports a depth and an entry
+  point. `StructuralDamageContractTest` Pinned by `StructuralDamageContractTest#anImpactIntoAWallSpendsIntoItAndReportsWhereItReached`.
+- **INV-DMG-02** [T][BEH] An impact whose budget outlasts what it struck exits carrying the remainder, with
+  an exit point. `StructuralDamageContractTest` Pinned by `StructuralDamageContractTest#anImpactThatOutlastsTheWallExitsCarryingTheRest`.
+- **INV-DMG-03** [T][BEH] The same impact identity applied twice damages once; a different identity at the
+  same place still lands. `StructuralDamageContractTest` Pinned by `StructuralDamageContractTest#theSameImpactIdentityAppliedTwiceDamagesOnce`.
+- **INV-DMG-04** [T][BEH] At equal budget, a tougher wall is not penetrated as far as a flimsy one — the
   ordering the toughness table exists for, pinned as ordering rather than as any number.
-  `StructuralDamageContractTest`
-- **INV-DMG-05** [T] Every `ImpactKind` declares how a shell bills it; a kind with no billing would pass
-  a raised shield free. `ImpactDeclarationContractTest`
+  `StructuralDamageContractTest` Pinned by `StructuralDamageContractTest#aTougherWallIsNotPenetratedFurtherThanAFlimsyOneAtEqualBudget`.
+- **INV-DMG-05** [T][BEH] Every `ImpactKind` declares how a shell bills it; a kind with no billing would pass
+  a raised shield free. `ImpactDeclarationContractTest` Pinned by `ImpactDeclarationContractTest#everyHullImpactKindDeclaresHowAShellBillsIt`.
 
 
-- **INV-DMG-09** [T] The damaged blocks of one impact form an UNBROKEN chain: no block the ray
+- **INV-DMG-09** [T][BEH] The damaged blocks of one impact form an UNBROKEN chain: no block the ray
   passed through is left untouched between two that were damaged. Stated as a property of the
   result rather than of the traversal, so it holds at every angle and pins no particular walk.
   `DiagonalBoreE2ETest#anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore`
 - **INV-DMG-06** [V] Damage is applied on the logical server only.
-- **INV-DMG-07** [T] A relocated ship carries the damage it left with, and leaves none at the
+- **INV-DMG-07** [T][BEH] A relocated ship carries the damage it left with, and leaves none at the
   coordinates it vacated. `ShipDamageSurvivesRelocationE2ETest`. *Bounded*:
   assembly carries holes only within `HOLE_SWEEP_MARGIN` (8) of the surviving blocks
   (`WorldServerShipManager.java:35-42`), and deconstruction carries block records but not holes
   (`MoveBlocks.java:51-55` calls `blockMoved` only) — see "A deconstructed ship's holes lose their
-  provenance" below. The invariant holds for staged blocks; for holes it is the assembly direction only.
-- **INV-DMG-08** [T] Removing and replacing the flight computer changes no other position's record —
+  provenance" below. The invariant holds for staged blocks; for holes it is the assembly direction only. Pinned by `ShipDamageSurvivesRelocationE2ETest#aRelocatedShipCarriesItsDamageAndLeavesNoneBehind`.
+- **INV-DMG-08** [T][BEH] Removing and replacing the flight computer changes no other position's record —
   no single block is the custodian of a hull's condition.
-  `ShipDamageSurvivesRelocationE2ETest`
+  `ShipDamageSurvivesRelocationE2ETest` Pinned by `ShipDamageSurvivesRelocationE2ETest#breakingAndReplacingTheFlightComputerDoesNotRepairTheHull`.
 
 ## Failure modes & edge cases
 

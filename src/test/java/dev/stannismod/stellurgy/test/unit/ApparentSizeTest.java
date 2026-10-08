@@ -28,6 +28,7 @@ public class ApparentSizeTest {
     private static final double EARTH_R = 25_512d;
     private static final double GIANT_R = 280_000d;
 
+    /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
     @Test
     public void sizeFallsAsTheSameBodyRecedes() {
         double[] distances = {200_000d, 1_000_000d, 10_000_000d, 100_000_000d, 1_000_000_000d};
@@ -69,6 +70,7 @@ public class ApparentSizeTest {
                 ApparentSize.halfSizeFor(MOON_R / 10d, 90_000d), 1e-4);
     }
 
+    /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
     @Test
     public void sizeIsClampedAtBothEnds() {
         assertEquals("a body on top of you does not fill the sky", ApparentSize.MAX_HALF_SIZE,
@@ -78,6 +80,7 @@ public class ApparentSizeTest {
         assertTrue("nothing is ever drawn at zero size", ApparentSize.MIN_HALF_SIZE > 0f);
     }
 
+    /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
     @Test
     public void everyFedPairStaysInsideTheClamps() {
         for (double r : new double[] {1d, MOON_R, EARTH_R, GIANT_R, 2.8e6}) {

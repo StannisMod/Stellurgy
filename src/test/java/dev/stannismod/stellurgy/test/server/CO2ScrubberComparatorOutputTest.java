@@ -37,6 +37,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
 
     private static final String VALUE_PAT = "value";
 
+    /** Pins INV-ATM-10 (an empty scrubber reads comparator 0 and a fresh cartridge reads above 0). */
     @Test
     public void emptyScrubberReportsZeroComparatorOutput() throws Exception {
         int x = PX, y = PY, z = PZ;
@@ -52,6 +53,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
                 value == 0);
     }
 
+    /** Pins INV-ATM-10 (an empty scrubber reads comparator 0 and a fresh cartridge reads above 0). */
     @Test
     public void freshCartridgeReportsNonZeroComparatorOutput() throws Exception {
         int x = PX + 30, y = PY, z = PZ;

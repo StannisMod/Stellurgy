@@ -84,7 +84,10 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
     private static final int CX_NO_POWER = 14500;
     private static final int CX_ERASE = 15000;
 
-    /** Happy path — chip in slot + energy injected &rarr; status 3. */
+    /**
+     * Happy path — chip in slot + energy injected &rarr; status 3.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
     @Test
     public void chippedTerminalWithPowerReachesStatus3() throws Exception {
         int x = CX_STATUS3, y = CY, z = CZ;
@@ -104,7 +107,10 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
                 ppt > 0);
     }
 
-    /** Empty slot &rarr; status 0 even with power present. */
+    /**
+     * Empty slot &rarr; status 0 even with power present.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
     @Test
     public void unchippedTerminalReportsNoLink() throws Exception {
         int x = CX_NO_CHIP, y = CY, z = CZ;
@@ -117,7 +123,10 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
                 "0", extract(info, STATUS));
     }
 
-    /** Chip loaded but zero energy &rarr; status 1. */
+    /**
+     * Chip loaded but zero energy &rarr; status 1.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
     @Test
     public void chippedTerminalWithoutPowerReportsNoPower() throws Exception {
         int x = CX_NO_POWER, y = CY, z = CZ;
@@ -130,7 +139,9 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
     }
 
     /** Erase button — destructive contract: removes linked satellite from
-     *  its dim's DimensionProperties AND blanks the chip NBT. */
+     *  its dim's DimensionProperties AND blanks the chip NBT.
+     * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
+     */
     @Test
     public void pressEraseRemovesSatelliteFromDimAndBlanksChip() throws Exception {
         int x = CX_ERASE, y = CY, z = CZ;

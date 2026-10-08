@@ -373,112 +373,112 @@ free because each half keeps what its own blocks held.
 
 ## Invariants
 
-- **INV-HEAT-01 [T]** A machine's waste heat ends up in the loop touching it, and raises its
-  temperature above ambient. `test/server/HeatLoopTest.aMachineOnACoolantLoopWarmsIt`
-- **INV-HEAT-02 [T]** Capacity is a real quantity: the same heat in a loop of twice the mass is a
+- **INV-HEAT-01 [T][BEH]** A machine's waste heat ends up in the loop touching it, and raises its
+  temperature above ambient. `test/server/HeatLoopTest#aMachineOnACoolantLoopWarmsIt`
+- **INV-HEAT-02 [T][BEH]** Capacity is a real quantity: the same heat in a loop of twice the mass is a
   markedly smaller temperature rise. The test asserts the heat each loop RECEIVED as a premise, so
   a loop that is merely starved cannot pass as a loop that is large.
-  `test/server/HeatLoopTest.theSameHeatInALongerLoopIsALowerTemperature`
-- **INV-HEAT-03 [T]** With `shipHeat` off nothing stores heat, no loop reports capacity, and every
+  `test/server/HeatLoopTest#theSameHeatInALongerLoopIsALowerTemperature`
+- **INV-HEAT-03 [T][BEH]** With `shipHeat` off nothing stores heat, no loop reports capacity, and every
   loop reads ambient — with the same rig driven again, flag on, as the control.
-  `test/server/HeatLoopTest.withTheThermalSystemOffNothingHeats`
-- **INV-HEAT-04 [V]** Nothing is dropped on distribution: the last member takes the remainder, so
-  what is written back sums to exactly what was there. `HeatNetwork.java:571-585`
-- **INV-HEAT-05 [V]** A loop with no thermal mass collects no heat at all — taking energy it has
-  nowhere to put is the one thing conservation forbids. `HeatNetwork.java:233-240`
-- **INV-HEAT-06 [T]** A loop's energy survives a server restart, and comes back OFF THE BLOCKS: the
+  `test/server/HeatLoopTest#withTheThermalSystemOffNothingHeats`
+- **INV-HEAT-04 [V][SYS]** Nothing is dropped on distribution: the last member takes the remainder, so
+  what is written back sums to exactly what was there. `HeatNetwork.java:571-585` FOR: INV-HEAT-01.
+- **INV-HEAT-05 [V][SYS]** A loop with no thermal mass collects no heat at all — taking energy it has
+  nowhere to put is the one thing conservation forbids. `HeatNetwork.java:233-240` FOR: INV-HEAT-01.
+- **INV-HEAT-06 [T][BEH]** A loop's energy survives a server restart, and comes back OFF THE BLOCKS: the
   loop itself is rebuilt from the world with the same membership and capacity, while every heat unit
   is read back from the members that were holding it. This is the pin under MECH-HEAT-05 — without
   it, storing energy per block rather than in the network state was only an argument.
-  `test/server/SubsystemNetworkRestartTest.aCoolantLoopsEnergyComesBackFromItsBlocks`
+  `test/server/SubsystemNetworkRestartTest#aCoolantLoopsEnergyComesBackFromItsBlocks`
 
-- **INV-HEAT-07 [T]** Rejection scales linearly with the number of radiating cells, at equal loop
-  capacity and equal stored energy. `test/server/HeatRejectionTest.rejectionScalesWithTheAreaBuilt`
-- **INV-HEAT-08 [T]** Rejection follows the fourth power of temperature: doubling a loop's rise above
+- **INV-HEAT-07 [T][BEH]** Rejection scales linearly with the number of radiating cells, at equal loop
+  capacity and equal stored energy. `test/server/HeatRejectionTest#rejectionScalesWithTheAreaBuilt`
+- **INV-HEAT-08 [T][BEH]** Rejection follows the fourth power of temperature: doubling a loop's rise above
   ambient more than doubles what it sheds, by the ratio the law predicts.
-  `test/server/HeatRejectionTest.rejectionFollowsTheFourthPowerOfTemperature`
-- **INV-HEAT-09 [T]** An obstructed cell sheds NOTHING and reports the obstruction's distance, and the
+  `test/server/HeatRejectionTest#rejectionFollowsTheFourthPowerOfTemperature`
+- **INV-HEAT-09 [T][BEH]** An obstructed cell sheds NOTHING and reports the obstruction's distance, and the
   loop keeps its energy — asserted from the loop's side, because a cell reporting zero while the heat
   left anyway would pass a test that only read the cell.
-  `test/server/HeatRejectionTest.anObstructedCellShedsNothingAndSaysWhereTheBlockIs`
+  `test/server/HeatRejectionTest#anObstructedCellShedsNothingAndSaysWhereTheBlockIs`
 
-- **INV-HEAT-10 [T]** The hot loop receives what came off the cold loop PLUS the work that was paid —
+- **INV-HEAT-10 [T][BEH]** The hot loop receives what came off the cold loop PLUS the work that was paid —
   all three read from one tick of the COLD loop, so the clause does not depend on which of two
   components the solver visited first.
-  `test/server/HeatChillerTest.theHotLoopReceivesTheHeatPlusTheWork`
-- **INV-HEAT-11 [T]** A chiller between two runs leaves them TWO loops: neither absorbs the other, and
+  `test/server/HeatChillerTest#theHotLoopReceivesTheHeatPlusTheWork`
+- **INV-HEAT-11 [T][BEH]** A chiller between two runs leaves them TWO loops: neither absorbs the other, and
   both see the pump beside them. Same test's premises — and it is the assertion that would fail if the
-  chiller were ever made a network member.
-- **INV-HEAT-12 [T]** The hot loop ends up hotter than the cold one it is fed from, because the energy
+  chiller were ever made a network member. Pinned by `HeatChillerTest#theHotLoopReceivesTheHeatPlusTheWork`.
+- **INV-HEAT-12 [T][BEH]** The hot loop ends up hotter than the cold one it is fed from, because the energy
   accumulates in it against its own capacity — nobody assigns it a temperature. With an unpowered
   chiller shifting nothing as the control.
-  `test/server/HeatChillerTest.theHotLoopIsHotterBecauseEnergyAccumulatesInIt`
-- **INV-HEAT-13 [T]** A bolted chiller's own thermal mass counts toward its HOT loop and toward no
+  `test/server/HeatChillerTest#theHotLoopIsHotterBecauseEnergyAccumulatesInIt`
+- **INV-HEAT-13 [T][BEH]** A bolted chiller's own thermal mass counts toward its HOT loop and toward no
   other: two runs of equal length come out with unequal capacity, and the cold one carries exactly its
-  own pipes. `test/server/HeatChillerTest.theHotLoopReceivesTheHeatPlusTheWork`
+  own pipes. `test/server/HeatChillerTest#theHotLoopReceivesTheHeatPlusTheWork`
 
-- **INV-HEAT-14 [T]** A warm world and a distant star reach a radiator through the SAME term: the same
+- **INV-HEAT-14 [T][BEH]** A warm world and a distant star reach a radiator through the SAME term: the same
   loop at the same temperature, built once on a world and once in a live space cell, nets a difference
   exactly equal to the difference between the two reported fluxes. Stated as a difference so what the
   cell radiates cancels and no config number is restated.
-  `test/server/HeatEnvironmentTest.aWorldsWarmthAndAStarArriveThroughTheSameTerm`
-- **INV-HEAT-15 [T]** Under a star strong enough, the net runs backwards and an empty loop GAINS heat —
+  `test/server/HeatEnvironmentTest#aWorldsWarmthAndAStarArriveThroughTheSameTerm`
+- **INV-HEAT-15 [T][BEH]** Under a star strong enough, the net runs backwards and an empty loop GAINS heat —
   with a loop of the same size that built no radiators as the control, which must gain nothing, and an
   ordinary star as the second control, under which the same rig still sheds.
-  `test/server/HeatEnvironmentTest.aShipUnderAFierceStarHeatsThroughItsRadiators`
-- **INV-HEAT-20 [T]** A powered chiller breathing a room cools it and heats its loop, and the loop
+  `test/server/HeatEnvironmentTest#aShipUnderAFierceStarHeatsThroughItsRadiators`
+- **INV-HEAT-20 [T][BEH]** A powered chiller breathing a room cools it and heats its loop, and the loop
   receives exactly what left the air PLUS the work — all three read from ONE tick of the hot loop,
   because across probe calls the room's temperature carries the natural ticks in the gap and the
-  loop's energy does not. `test/server/HeatIntakeDuctTest.aChillerBreathingARoomCoolsItAndHeatsItsLoop`
-- **INV-HEAT-21 [T]** An unpowered chiller leaves the room exactly where it was, with the same rig
+  loop's energy does not. `test/server/HeatIntakeDuctTest#aChillerBreathingARoomCoolsItAndHeatsItsLoop`
+- **INV-HEAT-21 [T][BEH]** An unpowered chiller leaves the room exactly where it was, with the same rig
   powered afterwards as the control.
-  `test/server/HeatIntakeDuctTest.anUnpoweredChillerLeavesTheRoomAlone`
-- **INV-HEAT-17 [T]** Gas arriving at a different temperature mixes by how much of each there is —
+  `test/server/HeatIntakeDuctTest#anUnpoweredChillerLeavesTheRoomAlone`
+- **INV-HEAT-17 [T][SYS]** Gas arriving at a different temperature mixes by how much of each there is —
   the enthalpy-weighted mean, deliberately arranged with unequal sides, since a plain average agrees
   with the rule exactly when they are equal.
-  `test/server/ZoneAirIsAReservoirTest.gasArrivingMixesByHowMuchOfEachThereIs`
-- **INV-HEAT-18 [T]** Drawing gas out leaves the temperature alone and lowers the capacity. The
+  `test/server/ZoneAirIsAReservoirTest#gasArrivingMixesByHowMuchOfEachThereIs` FOR: INV-HEAT-22.
+- **INV-HEAT-18 [T][SYS]** Drawing gas out leaves the temperature alone and lowers the capacity. The
   capacity half is what stops the assertion also passing on a rig where nothing happened.
-  `test/server/ZoneAirIsAReservoirTest.drawingGasOutLeavesTheTemperatureAndLowersTheCapacity`
-- **INV-HEAT-19 [T]** A zone holding no gas reports ambient and no capacity, rather than the
+  `test/server/ZoneAirIsAReservoirTest#drawingGasOutLeavesTheTemperatureAndLowersTheCapacity` FOR: INV-HEAT-22.
+- **INV-HEAT-19 [T][SYS]** A zone holding no gas reports ambient and no capacity, rather than the
   temperature it was at when it still had air.
-  `test/server/ZoneAirIsAReservoirTest.airThatIsNotThereHasNoTemperature`
+  `test/server/ZoneAirIsAReservoirTest#airThatIsNotThereHasNoTemperature` FOR: INV-HEAT-22.
 
-- **INV-HEAT-16 [T]** A raised shield takes most of the incident flux and never all of it, with the
+- **INV-HEAT-16 [T][BEH]** A raised shield takes most of the incident flux and never all of it, with the
   configuration set to demand a hundred percent: the shielded loop gains under a tenth of what an
   identical unshielded one does, and strictly more than zero.
-  `test/server/HeatEnvironmentTest.aShieldThinsTheFluxAndNeverRemovesIt`
+  `test/server/HeatEnvironmentTest#aShieldThinsTheFluxAndNeverRemovesIt`
 
-- **INV-HEAT-22 [T]** A compartment past the crew threshold presents a hostile atmosphere, and
+- **INV-HEAT-22 [T][BEH]** A compartment past the crew threshold presents a hostile atmosphere, and
   cooling it gives the room back — a rung that latched would leave a repaired ship still killing its
-  crew. `test/server/HeatFailureLadderTest.anOverheatedCompartmentTurnsHostileAndCoolingItGivesTheRoomBack`
-- **INV-HEAT-23 [T]** Temperature picks the rung and the gases pick the variant: hot with nothing to
+  crew. `test/server/HeatFailureLadderTest#anOverheatedCompartmentTurnsHostileAndCoolingItGivesTheRoomBack`
+- **INV-HEAT-23 [T][BEH]** Temperature picks the rung and the gases pick the variant: hot with nothing to
   breathe is the `NoO2` type, and the same temperature with air is the plain one. The pair is what
   stops a build that always answers `NoO2` from passing.
-  `test/server/HeatFailureLadderTest.hotAirWithNothingToBreatheIsBothHazardsAtOnce`
-- **INV-HEAT-24 [T]** The rung reaches a real person: on the client, a player in an overheated
+  `test/server/HeatFailureLadderTest#hotAirWithNothingToBreatheIsBothHazardsAtOnce`
+- **INV-HEAT-24 [T][BEH]** The rung reaches a real person: on the client, a player in an overheated
   compartment loses health, while the same sealed room at cabin temperature leaves him untouched.
-  `test/client/VacuumAndSuitClientGroupTest.overheatedZoneAirHurtsAnUnsuitedCrewman`
-- **INV-HEAT-25 [T]** A drive whose loop is past the refusal threshold does not fire, says which
+  `test/client/VacuumAndSuitClientGroupTest#overheatedZoneAirHurtsAnUnsuitedCrewman`
+- **INV-HEAT-25 [T][BEH]** A drive whose loop is past the refusal threshold does not fire, says which
   refusal it is, and costs the pilot nothing — his bank still holds the burst afterwards. Cooling the
   loop restores the jump, so the gate remembers nothing.
-  `test/server/HeatFailureLadderTest.anOverheatedDriveRefusesToFireAndTheRefusalIsFree`
-- **INV-HEAT-26 [T]** A drive with no coolant against it reads zero and is NOT refused: an unmeasured
+  `test/server/HeatFailureLadderTest#anOverheatedDriveRefusesToFireAndTheRefusalIsFree`
+- **INV-HEAT-26 [T][BEH]** A drive with no coolant against it reads zero and is NOT refused: an unmeasured
   drive is not a hot one.
-  `test/server/HeatFailureLadderTest.aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused`
-- **INV-HEAT-27 [A]** The same total power arranged two ways is ONE detection range and TWO different
+  `test/server/HeatFailureLadderTest#aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused`
+- **INV-HEAT-27 [A][BEH]** The same total power arranged two ways is ONE detection range and TWO different
   locks: an array four times the size and a quarter as bright is found at the same distance and is a
   quarter of the target. Unpinned: a pin needs a loaded
   configuration.
-- **INV-HEAT-28 [A]** Range goes as the square root of power, exactly - twice the shedding buys 1.41x
+- **INV-HEAT-28 [A][BEH]** Range goes as the square root of power, exactly - twice the shedding buys 1.41x
   the distance and no more. Unpinned.
-- **INV-HEAT-29 [T]** With every sink shut, most of what a ship radiates goes with them and what is
+- **INV-HEAT-29 [T][BEH]** With every sink shut, most of what a ship radiates goes with them and what is
   left is a FLOOR: it is above zero, it is still lockable, and it does not change when the loop is
   emptied - so it is the hull and not leakage.
-  `test/server/RunningSilentTest.aShipRunningSilentIsFoundCloserAndIsStillFound`
-- **INV-HEAT-30 [T]** A hotter cabin is a hotter skin and a brighter ship, and two loops threading one
-  sealed room are ONE body. `test/server/RunningSilentTest.theHullGlowsWithTheAirItEncloses`
-- **INV-HEAT-31 [A]** A config asking for a perfectly cold skin is refused, so no configuration makes
+  `test/server/RunningSilentTest#aShipRunningSilentIsFoundCloserAndIsStillFound`
+- **INV-HEAT-30 [T][BEH]** A hotter cabin is a hotter skin and a brighter ship, and two loops threading one
+  sealed room are ONE body. `test/server/RunningSilentTest#theHullGlowsWithTheAirItEncloses`
+- **INV-HEAT-31 [A][BEH]** A config asking for a perfectly cold skin is refused, so no configuration makes
   a ship invisible. Unpinned: a pin would have to write the configuration.
 
 ## Integration seams

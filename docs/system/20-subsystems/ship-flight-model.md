@@ -100,29 +100,29 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
 
 ## Invariants
 
-- **INV-SFM-01** `[T]` Every recipe keeps each throttle in its device's range and leaves off-axis
+- **INV-SFM-01** `[T][SYS]` Every recipe keeps each throttle in its device's range and leaves off-axis
   force/torque ≤ `AllocationTolerances` (1e-6 of the largest column; measured worst 1.9e-15)
-  (`ShipMotionLawsTest#everyRecipeStaysInRangeAndDoesOnlyWhatItNames`).
-- **INV-SFM-02** `[T]` A sign is not a symmetry: 2 aft + 1 fore engines give surge 2T : T.
-- **INV-SFM-03** `[T]` A bad build is weak, never spinny: an off-centre engine is not clean thrust.
-- **INV-SFM-04** `[T]` A wheel turns, never pushes, and only for `capacity/torque` seconds; a full
-  wheel turns no more in that sense and can unwind.
-- **INV-SFM-05** `[T]` Recipes are bit-identical under any listing order (`ActuatorId` sort + Bland).
-- **INV-SFM-06** `[T]` A combined command never drives a device past full and keeps the requested
-  proportions (λ); the live momentum clip is a SECOND defence of the range, not of the proportions.
-- **INV-SFM-07** `[T]` Cargo lowers acceleration, never force; TWR is about the local field and is
-  infinite where there is none (`ShipReadoutTest`).
-- **INV-SFM-08** `[V]` Mass is planet-independent; gravity enters only the field and TWR.
-- **INV-SFM-09** `[A]` A hull with no actuators does not move under command — no e2e pins this yet.
-- **INV-SFM-10** `[A]` A built ship accelerates as its readout predicts — no e2e pins this yet.
-- **INV-SFM-11** `[T][V]` A wheel the command leaves idle is given back its momentum: run
+  (`ShipMotionLawsTest#everyRecipeStaysInRangeAndDoesOnlyWhatItNames`). FOR: INV-SFM-10.
+- **INV-SFM-02** `[T][SYS]` A sign is not a symmetry: 2 aft + 1 fore engines give surge 2T : T. Pinned by `ShipMotionLawsTest#aSignIsNotASymmetry`. FOR: INV-SFM-10.
+- **INV-SFM-03** `[T][SYS]` A bad build is weak, never spinny: an off-centre engine is not clean thrust. Pinned by `ShipMotionLawsTest#anOffCentreEngineIsNotCleanThrust`. FOR: INV-SFM-10.
+- **INV-SFM-04** `[T][SYS]` A wheel turns, never pushes, and only for `capacity/torque` seconds; a full
+  wheel turns no more in that sense and can unwind. Pinned by `ShipMotionLawsTest#aWheelTurnsButDoesNotPush`, `ShipMotionLawsTest#aFullWheelTurnsNothingMore`. FOR: INV-SFM-10.
+- **INV-SFM-05** `[T][SYS]` Recipes are bit-identical under any listing order (`ActuatorId` sort + Bland). Pinned by `ShipMotionLawsTest#theAnswerDoesNotDependOnListingOrder`. FOR: INV-SFM-10.
+- **INV-SFM-06** `[T][SYS]` A combined command never drives a device past full and keeps the requested
+  proportions (λ); the live momentum clip is a SECOND defence of the range, not of the proportions. Pinned by `ShipMotionLawsTest#aCombinedCommandIsScaledNotClipped`. FOR: INV-SFM-10.
+- **INV-SFM-07** `[T][BEH]` Cargo lowers acceleration, never force; TWR is about the local field and is
+  infinite where there is none (`ShipReadoutTest`). Pinned by `ShipReadoutTest#cargoLowersAccelerationNotForce`, `ShipReadoutTest#thrustToWeightIsAboutTheLocalField`.
+- **INV-SFM-08** `[V][BEH]` Mass is planet-independent; gravity enters only the field and TWR.
+- **INV-SFM-09** `[A][BEH]` A hull with no actuators does not move under command — no e2e pins this yet.
+- **INV-SFM-10** `[A][BEH]` A built ship accelerates as its readout predicts — no e2e pins this yet.
+- **INV-SFM-11** `[T][V][SYS]` A wheel the command leaves idle is given back its momentum: run
   toward empty, never past, while the sustained rotation recipes cancel its moment, in the room the
   command left (one common factor, the command never scaled for it); a wheel the command uses is not
   touched, and one whose moment nothing sustained can cancel keeps what it holds
   (`CleanAxisScheme#desaturate`; `ShipMotionLawsTest#anIdleWheelIsGivenBackByTheThrustersWithoutTurningTheHull`,
   `…#aWheelInUseIsNotUnloadedUnderTheCommand`; in-world `TierTwoCraftFlightModelGroupTest#anIdleCraftGivesItsWheelBack`,
   a wound fixture wheel 0.0588 → 0 of capacity in 20 ticks). Propellant is not charged for it until
-  STAT-22 lands.
+  STAT-22 lands. FOR: INV-SFM-10.
 - **INV-SFM-12** `[T][SYS]` A command is delivered exactly, or less and flagged saturated — never on an
   axis not asked for, never the wrong sign, never more; every throttle in range and every wheel inside
   its capacity, on every step of a held command from any wheel state, a wheel inside its last step

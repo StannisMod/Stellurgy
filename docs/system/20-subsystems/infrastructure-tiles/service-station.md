@@ -46,14 +46,14 @@ the rising-edge detector for assembler rescan (shared key name with the monitori
 
 ## Invariants
 
-- **INV-INFRA-06 [T]** `performFunction` on an unlinked, powered service station is a
+- **INV-INFRA-06 [T][BEH]** `performFunction` on an unlinked, powered service station is a
   safe no-op: repair queue stays empty, no crash.
-  [T ServiceStationUnlinkedPerformFunctionTest.java:60-66]
-- **INV-INFRA-07 [T]** An unlinked service station reports `linkedRocketId==-1` and 0
-  parts-to-repair. [T RocketServiceStationLinkAndStateTest.java:83-85]
-- **INV-INFRA-08 [T]** The broken-part scan collects exactly the worn parts of the linked
-  rocket. [T ServiceStationBrokenPartScanContractTest.java]
-- **INV-INFRA-09 [V]** Standalone repair simulates material consumption before committing;
+  [T ServiceStationUnlinkedPerformFunctionTest.java:60-66] Pinned by `ServiceStationUnlinkedPerformFunctionTest#performFunctionOnUnlinkedPoweredStationIsSafeNoOp`.
+- **INV-INFRA-07 [T][BEH]** An unlinked service station reports `linkedRocketId==-1` and 0
+  parts-to-repair. [T RocketServiceStationLinkAndStateTest.java:83-85] Pinned by `RocketServiceStationLinkAndStateTest#serviceStationTicksWithoutLinkedRocketWithoutCrash`.
+- **INV-INFRA-08 [T][BEH]** The broken-part scan collects exactly the worn parts of the linked
+  rocket. [T ServiceStationBrokenPartScanContractTest.java] Pinned by `ServiceStationBrokenPartScanContractTest#injectedBrokenPartAppearsInPartsToRepairAfterLink`, `ServiceStationBrokenPartScanContractTest#multipleInjectionsAreAllScanned`.
+- **INV-INFRA-09 [V][BEH]** Standalone repair simulates material consumption before committing;
   insufficient materials leave the part queued and consume nothing.
   [V TileRocketServiceStation.java:376-379]
 - **INV-INFRA-10 [V]** A part whose block is not `IBrokenPartBlock` is logged and dropped

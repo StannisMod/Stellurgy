@@ -64,6 +64,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     /**
      * Same-dimension shot fires: cargo leaves the source input and arrives at
      * the destination output, and the status reads FIRED.
+     * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
      */
     @Test
     public void railgunFiresCargoToLinkedRailgunInSameDimension() throws Exception {
@@ -99,6 +100,8 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * the shot still doesn't deliver and reports TARGET_UNAVAILABLE — but the
      * dimension-load branch is proven, which (composed with the same-dimension
      * delivery test) is the cross-planet firing the bug was about.
+     * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
+     * Pins INV-MBM-21 (a failed shot never destroys cargo).
      */
     @Test
     public void railgunLoadsRegisteredButUnloadedDestinationDimension() throws Exception {
@@ -137,6 +140,8 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * A genuinely unavailable destination (an unregistered dim that cannot be
      * loaded) does NOT fire and now REPORTS it (TARGET_UNAVAILABLE) instead of
      * the old silent no-op — and the cargo is preserved.
+     * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
+     * Pins INV-MBM-21 (a failed shot never destroys cargo).
      */
     @Test
     public void railgunReportsUnavailableForUnloadableDestination() throws Exception {

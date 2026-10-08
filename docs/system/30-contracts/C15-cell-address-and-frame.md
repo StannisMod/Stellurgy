@@ -39,11 +39,11 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
 
 ## Clauses — the name
 
-- **ADDR-1 (a name, not a place)** `[T]` The cell name of a body **with a durable identity** (a
+- **ADDR-1 (a name, not a place)** `[T][SYS]` The cell name of a body **with a durable identity** (a
   dimension id; a star id for the star proxy; its own stored name for a POI) is fixed for the life
   of the save. No tick changes it. **Player form:** a coordinate the player wrote down still names
-  what he wrote it down for.
-- **ADDR-2 (derived from the layout, never from the clock)** `[T]` A cell name is derived by
+  what he wrote it down for. Pinned by `SystemBodyTest#aNameIsTheSameAtEveryTickWhileThePlaceIsNot`, `SystemContentTest#aBodysCellIsTheSameCellHalfAnOrbitLater`. FOR: ADDR-11.
+- **ADDR-2 (derived from the layout, never from the clock)** `[T][SYS]` A cell name is derived by
   evaluating the ephemeris at the reference angle `θ_time = 0` — `positionFor(orbitThetaAt(0))` —
   from time-INVARIANT inputs only: the system anchor, `orbitalDist`, `baseOrbitTheta`,
   `orbitalPhi`, `isRetrograde` (`DimensionProperties.java`) `[V]`. Note the sign
@@ -55,26 +55,26 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   (read and write) `[V]` — and `orbitalPhi` truncates on the first save; one degree is `d/57.3`
   orbit-units against a 4-unit cell, so `orbitalDist ≥ 229` flips a cell on a save round-trip).
   The XML carries fractional angles (authority for a NEW world) and the derived name is persisted
-  in `UniverseRegistry` on first derivation (authority for an EXISTING one), as star anchors are.
-- **ADDR-3 (names are CONTAINED, and a sector delta is not a distance)** `[T]` Every body's name
+  in `UniverseRegistry` on first derivation (authority for an EXISTING one), as star anchors are. Pinned by `SystemContentTest#aDifferentAuthoredOrbitIsADifferentCell`, `UniverseRegistryTest#cellNamesRoundTripThroughNbtAndBeatALaterDerivation`. FOR: ADDR-11.
+- **ADDR-3 (names are CONTAINED, and a sector delta is not a distance)** `[T][SYS]` Every body's name
   lies within `minSpacing/2 − BOX_MARGIN_CELLS` sectors of its system's anchor on every axis, and
   no two systems' neighbourhoods overlap. That containment is what member→anchor attribution reads
   (`UniverseRegistry.withinNeighbourhood`, `SystemContent.clampIntoBox`) `[V]`, and
   attribution may order candidate anchors by sector delta `[V]`. Nothing else may read a
-  sector delta as a physical distance (ADDR-9).
-- **ADDR-4 (one real body per name)** `[V]` INV-UNI-01 over names: at most one REAL body per cell
+  sector delta as a physical distance (ADDR-9). Pinned by `SystemContentTest#authoredPlanetsGetTheirOwnCellsInsideTheSuperCellBox`, `UniverseRegistryTest#aRecordedNameThatLeftItsSystemsBoxIsReDerivedRatherThanServed`. FOR: ADDR-15.
+- **ADDR-4 (one real body per name)** `[V][SYS]` INV-UNI-01 over names: at most one REAL body per cell
   name. A moon has its own cell, and a zone-qualified key can never equal a galactic one, so the
   audit compares a moon only against its siblings in the same zone. Station slots stay exempt (no
   mass, no zone: ADDR-17). Under ADDR-1/2 this is a STATIC property, decidable at load — though
   nothing evaluates it at load (the audit runs inside `bodiesOf` on every query,
   `SystemContent.auditOneRealBodyPerCell`) `[V]`. Violated structurally in one place:
   `HALF_CELL/ORBIT_UNIT = 2`, so any orbit radius < 2 is permanently inside its star's cell (one
-  permanent collision in the shipped save); POIs are never audited.
+  permanent collision in the shipped save); POIs are never audited. FOR: ADDR-15.
 - **ADDR-5** — retired. (Superseded by ADDR-17: a moon has a name of its own.)
 
 ## Clauses — the frame
 
-- **ADDR-6 (every cell of a zone rides its body)** `[T]` Every cell of a zone rides the zone's body,
+- **ADDR-6 (every cell of a zone rides its body)** `[T][SYS]` Every cell of a zone rides the zone's body,
   because a zone is a SET of cells (ADDR-18) and a body's influence can span many.
   **Ruling, maintainer 2026-08-01: every cell
   moves except a void one.** `frameOriginAt(name, t)` is the primary's position at `t`, whatever
@@ -91,16 +91,16 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   carries no orbital elements (`ClusteredGalaxyGenerator` derives from `hash(seed, cell)` alone), so
   it is built with a static frame. That is correct under ADDR-7's degenerate reading and it is a
   perfectly addressable body, but a generated asteroid does not yet move, which the ruling says it
-  should. Authoring generator orbits is the one piece of ADDR-6 still owed.
-- **ADDR-7 (a void cell's frame is static)** `[T]` A cell is VOID iff it holds no entity whose
+  should. Authoring generator orbits is the one piece of ADDR-6 still owed. Pinned by `UniverseRegistryTest#aBodyCellRidesItsPrimaryWhileAVoidCellStandsStill`, `SystemBodyTest#aPrimarySitsAtItsOwnFramesOrigin`, `SystemBodyTest#aBodyStillMovesAfterAnNbtRoundTrip`. FOR: ADDR-15.
+- **ADDR-7 (a void cell's frame is static)** `[T][SYS]` A cell is VOID iff it holds no entity whose
   position is computable in time — i.e. it has no primary. Then
   `frameOriginAt(name, t) = sector·CELL`, at every tick. (Satisfied by construction — that formula
-  *is* `GalacticCoord.absoluteX/Y/Z` `[V]` — so its witness is only meaningful as ADDR-6's control.)
-- **ADDR-8 (a cell name never changes as a result of motion)** `[T]` Membership is decided by name.
+  *is* `GalacticCoord.absoluteX/Y/Z` `[V]` — so its witness is only meaningful as ADDR-6's control.) Pinned by `CellFramesTest#aVoidCellSitsWhereItsNameSaysForever`. FOR: ADDR-11.
+- **ADDR-8 (a cell name never changes as a result of motion)** `[T][SYS]` Membership is decided by name.
   A ship's own flight, and its frame's motion, may not re-derive its name; it keeps its in-cell
   position and is carried by the frame. This is free, not a per-tick write: the slot world's frame
-  IS the cell frame.
-- **ADDR-9 (distance exists only at a tick)** `[T]` Within one cell, distance is the local delta,
+  IS the cell frame. Pinned by `CellWorldMapperTest#aReportedPosePastTheCellEdgeStaysInItsOwnCell`. FOR: ADDR-11.
+- **ADDR-9 (distance exists only at a tick)** `[T][SYS]` Within one cell, distance is the local delta,
   evaluated at a stated tick whenever either endpoint's in-cell position is itself live (a POI or a
   station standing in a cell it is not the primary of — a moon IS its cell's primary and sits at its
   origin); a tick is redundant only between two settled objects.
@@ -108,8 +108,8 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   `GalacticCoord.staticFrameDistanceSqTo` `[V]` is a valid cross-cell distance ONLY between two
   static frames, and it **REFUSES** two names in different lattices outright: a
   sector index counts ITS lattice's cells, and the two in play differ by four orders of magnitude,
-  so any number it could return would describe nothing (`GalacticCoordZoneTest`).
-- **ADDR-10 (a cell is a neighbourhood with faces, and flight CARRIES a ship through one)** `[T]` A
+  so any number it could return would describe nothing (`GalacticCoordZoneTest`). Pinned by `CellFramesTest#aDistanceBetweenTwoCellsChangesWithTimeWhenOneOfThemMoves`, `CellFramesTest#twoCellsInOneMovingSystemKeepTheirDistanceIfBothRide`, `GalacticCoordZoneTest#thereIsNoStaticDistanceAcrossTwoLattices`. FOR: ADDR-13.
+- **ADDR-10 (a cell is a neighbourhood with faces, and flight CARRIES a ship through one)** `[T][BEH]` A
   cell's contents stay within ±`HALF_CELL` of its frame origin; a ship that flies past that bound is
   **carried into the neighbour it left through** (`CellSeamController.requestCarry`, arithmetic in
   `CellSeam`), not stopped and not left named in a cell it is no longer in
@@ -122,7 +122,7 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   opposite face, so a return costs the sum and a ship loitering on a face cannot ping-pong.
   *No invariant rests on ship speed: `REENTRY_DEPTH > CARRY_MARGIN`, which is the whole of the
   hysteresis, is a relation between two cell fractions. The flight-time figures in `CellSeam`'s
-  javadoc are a sanity check on the ratified ratio, not a dependency of it.*
+  javadoc are a sanity check on the ratified ratio, not a dependency of it.* Pinned by `CellSeamTest#aShipPastTheMarginIsCarriedIntoTheNeighbourItLeftThrough`, `CellSeamTest#aCarriedShipCannotPingPongBackAcrossTheFace`, `VSShipCellSeamTest#aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere`.
 
   **The SPHERE form** `[V]`. Inside a ZONE the boundary is not a cube face:
   a body's influence ends at a radius, so `CellSeam.hasLeftZone` fires at
@@ -142,7 +142,7 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
 
 ## Clauses — zones
 
-- **ADDR-17 (a body with mass has a ZONE, and its name is its cell in its parent's zone)** `[A]`
+- **ADDR-17 (a body with mass has a ZONE, and its name is its cell in its parent's zone)** `[T][SYS]`
   A body that has mass and orbits a heavier primary defines a zone; its
   NAME is the cell it occupies in its parent's zone, derived once at `NAME_TICK` (ADDR-2) and frozen.
   The recursion bottoms out at the galactic lattice, which names the system anchor. **No separate
@@ -154,13 +154,13 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   own right: *"Да."*): a moon sharing its parent's name is ADDRESSLESS, and a craft parked beside one
   would be carried by the PARENT and left behind by the moon — measured over 20 000 ticks as
   **7 066 blocks becoming 294 996**, against a descent shell of 7 066
-  (`ParkedCraftKeepsStationTest`). Carrying such a craft is not an option: the game's Luna moves
+  (a one-off measurement, not kept as a test). Carrying such a craft is not an option: the game's Luna moves
   14.75 blocks/tick and the physics substrate freezes a ship above 223.6 blocks/s
   (`PhysicsCalculations.isPhysicsBroken`, `lengthSquared > 50000`), i.e. 11.18 blocks/tick. The
   speed is not a modelling error — the period is right (27.29 game days against a real 27.32); a game
   day is 24 000 ticks, so time runs 72× and every honest period is 72× faster in blocks per tick than
-  physical intuition suggests.
-- **ADDR-18 (a zone is a SET of cells, all of which ride the body)** `[A]` A zone's EXTENT is the
+  physical intuition suggests. Pinned by `SystemRetinueTest#moonsExistAndGetTheirOwnCellsInsideTheirParentsZone`, `SystemRetinueTest#aMoonIsSomewhereElseThanItsParentAndKeepsMoving`, `SystemBodyTest#onlyBodiesWithMassDefineACellsFrame`, `ZoneScaleTest#everyRealMoonGetsACellOfItsOwn`. FOR: ADDR-11.
+- **ADDR-18 (a zone is a SET of cells, all of which ride the body)** `[A][SYS]` A zone's EXTENT is the
   body's sphere of influence (C19 FRAME-3), which is live at a tick; the cell is the granularity of
   REALIZATION, not the extent. Every cell of the zone rides the body (ADDR-6). **Measured**, at
   `CELL = 32·10⁶` chart blocks: Luna 0.02 cells across, Earth 0.23, Jupiter 12.05 (~916 cells),
@@ -177,12 +177,12 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   sphere. `[T]` for the EXIT; the ENTRY half is `[V]` only — no shipped child has a sphere past
   HALF_CELL (largest measured ~253 000 blocks), so no test can tell the two forms apart without an
   authored heavy wide-orbit moon; maintainer 2026-10-06: *"Ладно, а."* (accept the written reason,
-  no fixture).
+  no fixture). FOR: ADDR-15.
 
-- **ADDR-19 (a zone's cell size is a property of the zone)** `[V]` A single global `CELL` collapses
+- **ADDR-19 (a zone's cell size is a property of the zone)** `[T][SYS]` A single global `CELL` collapses
   the ADDR-17 recursion at the first step: Earth's whole zone is 0.23 of a 32·10⁶-block cell, so its
   local lattice would hold ONE cell and Luna would be named by that same cell. The lattice inside a
-  zone is therefore sized to the zone (`ZoneScale.cellBlocks`) `[V]`:
+  zone is therefore sized to the zone (`ZoneScale.cellBlocks`) `[V]`: Pinned by `ZoneScaleTest#everyRealMoonGetsACellOfItsOwn`, `ZoneScaleTest#everyBodysOwnDescentShellFitsInsideItsOwnCell`, `ZoneScaleTest#everyCellContainsTheSphereOfTheBodyItNames`, `ZoneScaleTest#aBodyWithNoChildrenGetsOneCellSpanningItsWholeSphere`, `ZoneScaleTest#theCountIsAPowerOfTwo`, `ZoneScaleTest#aCraftIsReAddressedOnTheLatticeItsZonesBodiesAreNamedIn`, `GalacticCoordZoneTest#aCoordinateReadFromAKeyRefusesWidthArithmeticRatherThanAssumingOne`. FOR: ADDR-10.
 
   ```
   span  = 2 · min(r_SOI, HALF_CELL)
@@ -246,13 +246,13 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   it renames the cell. NBT does carry it (`"zone"` + `"cw"`), and a galactic coordinate writes
   neither tag. `inLattice(long)` re-attaches it from the zone's own body.
 
-- **ADDR-21 (a seam carries the COORDINATE, never its key, wherever arithmetic follows)** `[V]`
+- **ADDR-21 (a seam carries the COORDINATE, never its key, wherever arithmetic follows)** `[V][SYS]`
   ADDR-19 says a key cannot carry the width. The consequence for every boundary the address crosses:
   **a seam that hands on a cell hands on the `GalacticCoord`.** Handing on `cellKey()` and rebuilding
   with `fromCellKey` at the far side is not a shortcut, it is a silent downgrade to `WIDTH_UNKNOWN` —
   and it cannot be undone downstream, because `ZoneScale.cellBlocks(body, primary, tick)` is a
   function of the zone AT A TICK: re-attaching later attaches a DIFFERENT moment's width, which
-  `inLattice`'s own contract calls a way to say something false.
+  `inLattice`'s own contract calls a way to say something false. FOR: ADDR-10.
 
   Carried by `[V]`: `SlotBinder.load(int, GalacticCoord)`; `SpaceSlotPool`'s per-slot binding
   (`cellCoordFor(dim)` answers the cell, `cellKeyFor(dim)` the store folder, derived — the bindings
@@ -265,7 +265,7 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   `IllegalStateException` inside `World.updateEntities`, i.e. a crash report and a stopped dedicated
   server.*
 
-- **ADDR-22 (an unanswerable coordinate refuses; a caller in a TICK asks first)** `[V]`
+- **ADDR-22 (an unanswerable coordinate refuses; a caller in a TICK asks first)** `[V][SYS]`
   Every operation needing the width refuses a `WIDTH_UNKNOWN` coordinate rather than assuming one
   (ADDR-19) — correct, and it makes the refusal a THROW. Where that throw lands inside a tile
   entity's tick, vanilla turns it into a crash report and stops the server, so the honest refusal of
@@ -275,9 +275,9 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   close enough" and "nothing was measured". The mechanic degrades to unavailable for that craft; the
   server keeps running and the pilot keeps control.
   *Applied at `TileAdvancedFlightComputer`'s descent proximity scan; it is the only tick-path caller
-  of a coordinate that can arrive width-less.*
+  of a coordinate that can arrive width-less.* FOR: ADDR-10.
 
-- **ADDR-20 (one distance unit, derived from the metric)** `[V]` One quantity, one unit: **100 km**,
+- **ADDR-20 (one distance unit, derived from the metric)** `[V][SYS]` One quantity, one unit: **100 km**,
   with `BLOCKS_PER_DISTANCE_UNIT = 100 000 / METRES_PER_CHART_BLOCK` (400 at `D = 250`). The unit is
   stated as a LENGTH and the block count follows from the metric, so changing `D` moves everything
   together. There is no second (moon) unit: two units for one quantity (an orbit unit of 1 495 979 km
@@ -288,7 +288,7 @@ splits **cell** in three; a clause that conflates the three is a bug in the clau
   getters, NBT and the planet file), so the named reach of 5 000 AU and the 2 000 AU companion band
   are representable (`UniverseScale`, `ClusteredGalaxyGenerator`) `[V]`. Every authored value is
   in this unit (Earth 1 495 979, Luna 3 844); a half-converted catalogue would be a field meaning
-  different things on different rows.
+  different things on different rows. FOR: ADDR-13.
 
   **A bound on a physical quantity is written as that quantity**, or a change of unit moves it
   without moving a character of it. `PlanetDerivation.orbitalDistanceOf` clamps at
@@ -306,36 +306,36 @@ mass has no zone to be the owner of one anyway (ADDR-17).
 
 ## Clauses — what persists, what stays live
 
-- **ADDR-11 (a stored address keeps its meaning)** `[V]` Because names are layout-derived (ADDR-2),
+- **ADDR-11 (a stored address keeps its meaning)** `[V][BEH]` Because names are layout-derived (ADDR-2),
   every persisted `GalacticCoord` — ship ledger rows (`ShipLedgerData.java`), the nav target
   (`TileNavigationComputer.java`), a navigation crystal (`CrystalEntry.java`), a POI, a
   `cell_<key>` store folder (`SpaceSlotPool.java`) `[V]` — denotes the same primary at every
   later tick. Pre-0.1.0 saves are not read, so no migration exists; a ship settled where a body no
   longer is stays where it is, in void.
-- **ADDR-12 (no coordinate whose meaning depends on when it was written)** `[T]` Every stored
+- **ADDR-12 (no coordinate whose meaning depends on when it was written)** `[T][SYS]` Every stored
   coordinate is a cell name plus an in-cell offset. **One exception, stated so it is not smuggled
   in elsewhere:** a mid-transit position, which is stored as (origin name, target name, progress),
   never as a raw absolute. (`navTarget` persisting a FUTURE absolute, `TransitRecord` persisting a raw
   mid-flight `position` and `CrystalEntry.coord` persisting an observation-tick absolute are the
   places to check: `TileNavigationComputer.java`, `TransitRecord.java`,
-  `CrystalEntry.java`.)
-- **ADDR-13 (the geometry the player feels stays live)** `[T]` The distance — hence the cost and
+  `CrystalEntry.java`.) Pinned by `TransitRecordTest#roundTripPreservesLogicalStateAndCrew`, `ShipTransitTest#bothEndsOfTheFlightSurviveIt`. FOR: ADDR-11.
+- **ADDR-13 (the geometry the player feels stays live)** `[T][BEH]` The distance — hence the cost and
   duration — between two bodies **whose frames both move** changes with time. A body's distance from
   its own system anchor does NOT: `positionFor` is `(d·cosθ, d·sinφ, d·sinθ)` `[V]`,
   whose norm `d·√(1+sin²φ)` is θ-free, so an orbit is a circle about the anchor and **the star is
   never one endpoint of this observable.** A body seen from a cell the observer's frame does not
   carry visibly recedes. The third ratified observable — moons and the star moving on the sky — is
   C14's (CON-C14-14/15/16). Cross-cell distance measured over the static grid is the failure mode:
-  check `ShipNavigation.java`, `TargetPrediction.java`, `ShipTransitManager.java`.
-- **ADDR-14 (an aim resolves to a name)** `[T]` Aiming at a body resolves to that body's durable
+  check `ShipNavigation.java`, `TargetPrediction.java`, `ShipTransitManager.java`. Pinned by `CellFramesTest#aDistanceBetweenTwoCellsChangesWithTimeWhenOneOfThemMoves`, `SystemBodiesProducerTest#aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays`.
+- **ADDR-14 (an aim resolves to a name)** `[T][BEH]` Aiming at a body resolves to that body's durable
   name, so the arrival CELL equals the aimed cell at every tick and needs no projection. What still
   needs one is the rendezvous POINT and the flight it prices: the primary's frame origin at the
   ARRIVAL tick, plus a moon's in-cell offset at that tick. **`TargetPrediction`'s iteration
   survives; its convergence test moves from the cell to the point.** (Measured: over a ≤300-tick
   jump a destination planet's frame moves ~1.2×10⁵ blocks = 226 descent radii, while a moon's own
   offset moves ~225 — the frame term dominates, and a test `next.sameCell(aim)`
-  (`TargetPrediction.java`) `[V]` would be satisfied on pass 1.) ADDR-14 is void without ADDR-6.
-- **ADDR-16 (a PLACEMENT is measured against a position, never against a name)** `[V]` Aiming
+  (`TargetPrediction.java`) `[V]` would be satisfied on pass 1.) ADDR-14 is void without ADDR-6. Pinned by `TargetPredictionTest#theAimedCellIsTheBodysDurableNameWhateverTheFlightCosts`, `TargetPredictionTest#theAimIsWhereTheBodyWillBeWhenTheFlightEnds`, `TargetPredictionTest#aMovingFrameChangesTheAnswer`.
+- **ADDR-16 (a PLACEMENT is measured against a position, never against a name)** `[V][BEH]` Aiming
   resolves to a name (ADDR-14) because the arrival CELL is what a jump needs. **Putting a craft
   somewhere is the other question**, and it takes the body's position at that tick: a standoff ring
   drawn around a name stands where the body would be only if it never moved (a ship entering space from
@@ -348,13 +348,13 @@ mass has no zone to be the owner of one anyway (ADDR-17).
   This clause is about placement only; **holding station once placed is C19's subject**, not this
   one's.
 
-- **ADDR-15 (nearness does not create co-location, but it DOES reveal)** `[T]` Two objects with
+- **ADDR-15 (nearness does not create co-location, but it DOES reveal)** `[T][BEH]` Two objects with
   different names never share a world, however close their frames pass — a world is resolved from a
   name and from nothing else. **What nearness does do is inform:** proximity keeps granting
   information regardless of names (maintainer ruling 2026-08-01), so the existing distance-gated
   survey tier stays as it is (`NavInfoRedaction.java` `[V]`), and the sky may name a body the
   observer cannot reach (C14 CON-C14-17). A pilot who can read a world he cannot land on is not a bug
-  report. (C13's PRESENCE is a different subject and is not used here.)
+  report. (C13's PRESENCE is a different subject and is not used here.) Pinned by `NavRedactionAndSyncTest#theOrbitTierFollowsTheMeasuredDistanceNotTheCellName`.
 
   > **Not settled — a body's frame sweeping through an occupied void cell.** The maintainer wants the
   > event "a planet flew into a standing ship" kept ("такая система позволит сохранить и «планета
@@ -381,7 +381,7 @@ neighbourhood** is ADDR-3's box, `minSpacing/2` sectors to each side of the anch
 is what the generator says the seat owns (`IGalaxyGenerator#neighbourhoodOf`; for
 `ClusteredGalaxyGenerator` its whole lattice cell) `[V]`.
 
-- **ADDR-23 (nothing procedural in an authored neighbourhood)** `[T]` No procedural seat whose OWN
+- **ADDR-23 (nothing procedural in an authored neighbourhood)** `[T][BEH]` No procedural seat whose OWN
   neighbourhood intersects an authored neighbourhood is a system. The NEIGHBOURHOOD and not only the
   seat (maintainer ruling): a seat outside the box whose cells cross into it would otherwise hand the
   authored system its bodies. It is so for every answer the registry gives —
@@ -397,8 +397,8 @@ is what the generator says the seat owns (`IGalaxyGenerator#neighbourhoodOf`; fo
   the box and 9 more whose lattice cells cross into it (`AuthoredNeighbourhoodTest`'s own
   measurement). Those seats are unreachable (every cell inside the box already attributes to the
   authored system); the mask is what stops a survey writing them down as phantom addresses under the
-  authored star's name.
-- **ADDR-24 (an authored system holds what its pack declares)** `[T]` (that the N derived worlds bring
+  authored star's name. Pinned by `AuthoredNeighbourhoodTest#noSeatThatReachesAnAuthoredNeighbourhoodIsASystem`, `AuthoredNeighbourhoodTest#aPinnedSystemClearsNothingAroundIt`, `TelescopeRegionScanServerTest#aSurveyWritesASystemOnceAndNoNeighbouringSeatUnderItsName`.
+- **ADDR-24 (an authored system holds what its pack declares)** `[T][BEH]` (that the N derived worlds bring
   their own moons and belts was ratified 2026-10-03, *"всё утверждаю"*) Its bodies are exactly its
   declared `<planet>` entries, its companion stars, and — when the pack states `numPlanets` +
   `numGasGiants` = N > 0 — N major worlds derived from `(seed, anchor)` with the moons and belts that
@@ -411,8 +411,8 @@ is what the generator says the seat owns (`IGalaxyGenerator#neighbourhoodOf`; fo
   pack's declaration. The no-XML stock universe keeps its code-declared counts, set in
   `DimensionManager.createAndLoadDimensions` `[V]`. Nothing else is attributed to an
   authored system — ADDR-23 is what keeps the procedural field out of its box. *Measured*:
-  a count of 3 derived 2 planets, 1 giant, 2 moons, 2 belts.
-- **ADDR-25 (one seat, one system, one answer)** `[T]` Every query that names a system for a cell
+  a count of 3 derived 2 planets, 1 giant, 2 moons, 2 belts. Pinned by `PlanetDefsAuthoringTest#anAuthoredStarHoldsWhatItsPackDeclaresAndNothingElse`.
+- **ADDR-25 (one seat, one system, one answer)** `[T][BEH]` Every query that names a system for a cell
   names the same one: attribution, a survey's territory, and the photometry a survey reads
   (`TelescopeScan#detect` asks `starAt`, which attributes) `[V]`. Were a seat inside an authored
   box a system of its own to `anchorsInTerritory` and the authored system to `anchorForCell`, a
@@ -420,7 +420,7 @@ is what the generator says the seat owns (`IGalaxyGenerator#neighbourhoodOf`; fo
   that star.
   **Known open against this clause**: a PINNED procedural system keeps the
   stored box `minSpacing/2` wide, not its own lattice cell, so pinning a seat attributes its lattice
-  siblings to it — measured, 20 pins absorbed 65 of the 67 seats inside their boxes.
+  siblings to it — measured, 20 pins absorbed 65 of the 67 seats inside their boxes. Pinned by `TelescopeRegionScanServerTest#aSurveyWritesASystemOnceAndNoNeighbouringSeatUnderItsName`.
 
 ## Rulings
 

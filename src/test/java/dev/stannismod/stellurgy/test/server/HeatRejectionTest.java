@@ -56,6 +56,8 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * root of the loop's cell count: "three cells must shed three times what one does (one=82
      * three=99) expected:&lt;246&gt; but was:&lt;99&gt;", 2026-09-30. The four premises before it
      * are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-07 (Rejection scales linearly with the number of radiating cells, at equal loop capacity and equal stored energy).
+     * Pins HEAT-7 (rejection scales linearly with area and with the fourth power of temperature).
      */
     @Test
     public void rejectionScalesWithTheAreaBuilt() throws Exception {
@@ -106,6 +108,8 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * of its temperature: expected 2.4763785142736783..2.476383626828728 … measured
      * 1.5640392037839332..1.5779011582219171", 2026-09-30. The three premises before it are
      * arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-08 (Rejection follows the fourth power of temperature).
+     * Pins HEAT-7 (rejection scales linearly with area and with the fourth power of temperature).
      */
     @Test
     public void rejectionFollowsTheFourthPowerOfTemperature() throws Exception {
@@ -172,6 +176,8 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * counting every exchanger as a cell: "with no working surface between them: …
      * expected:&lt;0&gt; but was:&lt;1&gt;". The three premises before the obstruction is placed are
      * arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-09 (An obstructed cell sheds NOTHING and reports the obstruction's distance, and the loop keeps its energy).
+     * Pins HEAT-9 (an obstructed radiator sheds nothing and reports where the block is).
      */
     @Test
     public void anObstructedCellShedsNothingAndSaysWhereTheBlockIs() throws Exception {

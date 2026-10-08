@@ -135,21 +135,21 @@ seam-registry, seam-packets, seam-mixin.
 
 ## Invariants
 
-- **INV-JEI-01 [V]** Each `RecipeHandler.getRecipeCategoryUid` returns the same
+- **INV-JEI-01 [V][BEH]** Each `RecipeHandler.getRecipeCategoryUid` returns the same
   `StellurgyJeiPlugin.*UUID` constant used to register that category's recipes; mismatch = empty
   tab. [LatheRecipeHandler.java:16, StellurgyJeiPlugin.java:251]
-- **INV-JEI-02 [V]** Gas-giant UID is defined once (`GasGiantCategory.UID`) and reused
+- **INV-JEI-02 [V][BEH]** Gas-giant UID is defined once (`GasGiantCategory.UID`) and reused
   via `StellurgyJeiPlugin.gasGiantsUUID`; runtime add/remove must use that same UID. [GasGiantCategory.java:22, StellurgyJeiPlugin.java:101,135,144]
 - **INV-JEI-03 [V]** All wrappers copy incoming `ItemStack`/`FluidStack` and detach
   `subList` views before storing, so JEI cannot mutate source recipe/config data.
   [GasGiantWrapper.java:40-45, AsteroidWrapper.java:43]
-- **INV-JEI-04 [V]** Paged wrappers page-size is contract-fixed per tab: asteroids 12
+- **INV-JEI-04 [V][BEH]** Paged wrappers page-size is contract-fixed per tab: asteroids 12
   (6×2), laser drill 36 (6×6). [AsteroidWrapper.java:18-20, OrbitalLaserDrillWrapper.java:21-22]
 - **INV-JEI-05 [V]** The plugin is a leaf: no Stellurgy class outside `integration/jei` depends
   on it except `ClientProxy` (registers the tick handler under an `isModLoaded("jei")`
   guard). `PacketDimInfo` does not name it: it marks the client's `ServerView` stale and the JEI
   tick handler reads the mark. [ClientProxy.java:477, PacketDimInfo.java:147]
-- **INV-JEI-06 [V]** Laser-drill tab visibility is decided solely by
+- **INV-JEI-06 [V][BEH]** Laser-drill tab visibility is decided solely by
   `enableLaserDrill && !laserDrillPlanet`; the same predicate gates category, handler,
   recipes and catalyst. [StellurgyJeiPlugin.java:159-162,191-194,308-313]
 - **INV-JEI-07 [A]** `MachineCategoryTemplate.setRecipe` assumes ≤10 inputs and ≤10

@@ -90,7 +90,9 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
 
     /** Progress fraction matches the (now - start) / duration ratio at
      *  the moment of the probe call. Window allowed for natural tick
-     *  drift between commands (~ few ms / 50ms per tick). */
+     *  drift between commands (~ few ms / 50ms per tick).
+     * Pins INV-MSN-04 (progress is linear in world time, unbounded above one, and completion fires at one).
+     */
     @Test
     public void progressAdvancesLinearlyWithWorldTime() throws Exception {
         long mid = buildRocketAndStartGasMission(7000, 1000);
@@ -107,7 +109,9 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
      *  cap surfaces here intentionally rather than silently. Use the
      *  advance response's progress field (atomic snapshot) so the
      *  natural-tick prune of the dead mission doesn't race the
-     *  assertion. */
+     *  assertion.
+     * Pins INV-MSN-04 (progress is linear in world time, unbounded above one, and completion fires at one).
+     */
     @Test
     public void progressIsUnboundedAboveOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7100, 1000);
@@ -128,7 +132,9 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     /** complete-now backdates + drives tickEntity once &rarr; the probe's
      *  atomic post-state report must show isDeadAfter=true AND
      *  completed=true (transition from alive&rarr;dead happened in this
-     *  call). */
+     *  call).
+     * Pins INV-MSN-04 (progress is linear in world time, unbounded above one, and completion fires at one).
+     */
     @Test
     public void completionFiresAtProgressOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7300, 1000);

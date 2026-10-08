@@ -27,24 +27,24 @@ restores. The failure modes known to violate it are listed under **Failure modes
 
 ## Clauses
 
-- **DIMID-1 (one id, one body, one answer)** A dimension id names at most one body, and every holder
+- **DIMID-1 (one id, one body, one answer)** `[T][SYS]` A dimension id names at most one body, and every holder
   that keys bodies by id names the SAME body under it. Two holders disagreeing is not a lesser
   failure than a duplicate: it is two bodies under one id, each visible to a different reader.
   **Falsifiable:** for any id, the registry's body and the star's body under that id are one object
-  (by name, from outside).
-- **DIMID-2 (a stated id is honoured)** A body whose element states a `DIMID` is registered under
+  (by name, from outside). Pinned by `PlanetDefsAuthoringTest#aPlanetThatStatesNoDimensionIsGivenAFreeOne`, `PlanetDefsAuthoringTest#aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar`. FOR: DIMID-5.
+- **DIMID-2 (a stated id is honoured)** `[T][SYS]` A body whose element states a `DIMID` is registered under
   that id — wherever in the file it is written, and whatever any other body states or is given —
-  unless an EARLIER body of the same file stated the same id (then DIMID-4 decides).
-- **DIMID-3 (an allocated id is never a stated one)** The loader gives an id only to a body that
+  unless an EARLIER body of the same file stated the same id (then DIMID-4 decides). Pinned by `PlanetDefsAuthoringTest#aPlanetThatStatesNoDimensionIsGivenAFreeOne`. FOR: DIMID-5.
+- **DIMID-3 (an allocated id is never a stated one)** `[T][SYS]` The loader gives an id only to a body that
   states none, and never one that any body of the same file states, one it has already given in the
   same parse, or one Forge or the registry already holds. The whole file is known before any id is
-  chosen; the ORDER of elements cannot change which ids are free.
-- **DIMID-4 (a refusal is loud and leaves nothing behind)** When a registration is refused because its
+  chosen; the ORDER of elements cannot change which ids are free. Pinned by `PlanetDefsAuthoringTest#aPlanetThatStatesNoDimensionIsGivenAFreeOne`. FOR: DIMID-5.
+- **DIMID-4 (a refusal is loud and leaves nothing behind)** `[T][SYS]` When a registration is refused because its
   id is held, the refused body is bound to NO holder — not to its star, and its state is not poured
   into the body that holds the id — and the refusal is logged at WARN naming the id and BOTH bodies.
   The world goes on loading. **Ruling 2026-10-02:** two equal stated `DIMID`s — the earlier in the
   file holds the id, the later is refused under this clause; failing the whole load was rejected
-  (an unreasonable file stays loadable: what is merely absurd stays possible and costs what it costs).
+  (an unreasonable file stays loadable: what is merely absurd stays possible and costs what it costs). Pinned by `PlanetDefsAuthoringTest#aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar`. FOR: DIMID-5.
 - **DIMID-5 (an id outlives the server)** Once a world has been saved, every body it holds keeps its id
   across a restart. **Ruling 2026-10-02:** no promise is made about the id of a body that states none
   when the PACK's file is edited before the world's first save; the promise starts at the save.

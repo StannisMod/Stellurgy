@@ -72,6 +72,10 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * depositing a tenth of heat plus work: "THE CLAUSE: the hot loop gains what the cold loop lost
      * PLUS the work … (cold lost 6000, battery paid 240, hot gained 624) expected:&lt;6240&gt; but
      * was:&lt;624&gt;". The premises are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-10 (The hot loop receives what came off the cold loop PLUS the work that was paid).
+     * Pins INV-HEAT-13 (A bolted chiller's own thermal mass counts toward its HOT loop and toward no other).
+     * Pins INV-HEAT-11 (a chiller between two runs leaves them two loops).
+     * Pins HEAT-6 (the chiller is a heat pump and the hot side receives the heat plus the work).
      */
     @Test
     public void theHotLoopReceivesTheHeatPlusTheWork() throws Exception {
@@ -149,6 +153,7 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      *
      * <p>What the unpowered chiller PAYS is not asserted: it moves heat exactly when work is paid, so
      * a payment is a transfer and TAKES NOTHING already reads it.</p>
+     * Pins INV-HEAT-12 (The hot loop ends up hotter than the cold one it is fed from, because the energy accumulates in it against its own capacity).
      */
     @Test
     public void theHotLoopIsHotterBecauseEnergyAccumulatesInIt() throws Exception {

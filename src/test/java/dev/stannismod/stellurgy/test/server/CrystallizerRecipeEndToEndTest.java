@@ -10,6 +10,7 @@ public class CrystallizerRecipeEndToEndTest extends AbstractSharedServerTest {
     private static final String FIXTURE_KEY = "crystallizer";
     private static final String TILE_SHORT  = "TileCrystallizer";
 
+    /** Pins INV-MBM-13 (a centrifuge and a crystallizer run a full recipe end to end). */
     @Test
     public void crystallizerRunsFirstRegisteredRecipe() throws Exception {
         MachineRecipeEndToEndKit.runFirstRecipeEndToEnd(client(),

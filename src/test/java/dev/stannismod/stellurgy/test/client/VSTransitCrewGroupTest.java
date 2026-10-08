@@ -414,6 +414,7 @@ private int waitForLoadedShip(int dim) throws Exception {
 
     // ---- migrated: VSCrewRidesItsShipThroughHyperspaceE2ETest ----
 
+    /** Pins JUMP-1 (the crew is in the same world as its ship for the whole transit). */
     @Test
     public void aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying() throws Exception {
 
@@ -1091,6 +1092,8 @@ private String hud() throws Exception {
      * his client on the death screen. THE VOID KILLS — {@code HyperspaceVoid#onServerTick} at
      * {@code player.attackEntityFrom(VOID_OF_HYPERSPACE, Float.MAX_VALUE)} never called: "no
      * `player_died` carrying source = stellurgyHyperspaceVoid was recorded within 260 ticks".</p>
+     * Pins JUMP-2 (the transit interval is livable: a crew member may stand up and stay alive aboard).
+     * Pins JUMP-8 (a crew member who leaves his ship's volume in hyperspace dies).
      */
     @Test
     public void aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip() throws Exception {
@@ -1413,6 +1416,10 @@ private String hud() throws Exception {
             + " earlier scenario stays parked in the shared destination cell, the between-scenario reset"
             + " leaves the player standing on it, and his aboard record is re-stamped, so the reset's"
             + " 'bound to nothing' check fails. Lift once finished scenarios dispose of their ships.")
+    /**
+     * Pins JUMP-3 (both crossings carry the crew in whatever posture each is in).
+     * Pins JUMP-11 (every body aboard is carried by its ship-relative point).
+     */
     @Test
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
 
@@ -1576,6 +1583,7 @@ private String hud() throws Exception {
             + " earlier scenario stays parked in the shared destination cell, the between-scenario reset"
             + " leaves the player standing on it, and his aboard record is re-stamped, so the reset's"
             + " 'bound to nothing' check fails. Lift once finished scenarios dispose of their ships.")
+    /** Pins CON-C14-18 (hyperspace's backdrop belongs to the world, so a standing crew member still sees the corridor). */
     @Test
     public void aStandingCrewMemberStillSeesTheHyperspaceCorridor() throws Exception {
 

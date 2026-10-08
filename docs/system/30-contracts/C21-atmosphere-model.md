@@ -20,9 +20,9 @@ Ruled by the maintainer on 2026-08-19. The clause numbers here are permanent ide
 
 ## The state
 
-- **CON-C21-01** `[A]` An atmosphere is a **composition** — a partial pressure per gas — plus a
+- **CON-C21-01** `[A][SYS]` An atmosphere is a **composition** — a partial pressure per gas — plus a
   temperature. There is exactly ONE representation of what air is; nothing else may store a second
-  answer to any question this one can answer.
+  answer to any question this one can answer. FOR: INV-ATM-18.
 
   > **Extent.** The composition is **intensive** and says nothing about how much there is; extent
   > belongs to the HOLDER. A sealed zone and a tank know their volume, so amounts and mass derive from
@@ -34,76 +34,76 @@ Ruled by the maintainer on 2026-08-19. The clause numbers here are permanent ide
   > The code reflects the compartment half: `AtmosphereBlob` is a flood-filled sealed volume, while
   > `AtmosphereHandler` over a planet's `DimensionProperties` density answers a field-style readout
   > with no amount.
-- **CON-C21-02** `[A]` **Presence is availability.** A gas present in an atmosphere is a gas that can
+- **CON-C21-02** `[A][BEH]` **Presence is availability.** A gas present in an atmosphere is a gas that can
   be extracted from it, and what is extracted follows its partial pressure. A gas that is present and
   unextractable, or extractable and absent, is a violation — there is no second list of "what is
   harvestable here".
-- **CON-C21-03** `[A]` A gas is in the model only when a mechanic READS it: every registry row
+- **CON-C21-03** `[A][SYS]` A gas is in the model only when a mechanic READS it: every registry row
   declares its roles, and every declared role is read by at least one predicate. Storage without a
-  consumer is what keeps a model from growing to chemistry's size.
-- **CON-C21-04** `[A]` Resolution and range are stated, and the FLOOR is honest: what falls below the
+  consumer is what keeps a model from growing to chemistry's size. FOR: INV-ATM-18.
+- **CON-C21-04** `[A][SYS]` Resolution and range are stated, and the FLOOR is honest: what falls below the
   smallest representable partial pressure is zero, never secretly retained. A model that rounds a
-  trace to zero must answer "there is none" consistently everywhere.
+  trace to zero must answer "there is none" consistently everywhere. FOR: INV-ATM-18.
 
 ## Derivation — everything else is a predicate
 
-- **CON-C21-05** `[A]` Breathability, combustion, toxicity, corrosivity, the need for a suit and the
+- **CON-C21-05** `[A][SYS]` Breathability, combustion, toxicity, corrosivity, the need for a suit and the
   set of active hazards are **predicates over composition and temperature**. No flag, field or
-  registry row may assert any of them independently of the state.
-- **CON-C21-06** `[A]` **Monotonicity.** A strictly better atmosphere never reads as more hazardous:
+  registry row may assert any of them independently of the state. FOR: INV-ATM-18.
+- **CON-C21-06** `[A][BEH]` **Monotonicity.** A strictly better atmosphere never reads as more hazardous:
   adding oxygen never makes a room less breathable, removing a toxin never makes it more toxic, and
   the same holds in reverse. This is the clause that survives every rebalance, and it is the one a
   property test can falsify without naming a number.
-- **CON-C21-07** `[A]` Combustion is decided by the **oxidiser**, never by breathability. The two
+- **CON-C21-07** `[A][BEH]` Combustion is decided by the **oxidiser**, never by breathability. The two
   bands are independent facts about the same gas and may not be collapsed into one.
-- **CON-C21-08** `[A]` Immunity is a property of an ENTITY against a HAZARD, never of an atmosphere.
+- **CON-C21-08** `[A][BEH]` Immunity is a property of an ENTITY against a HAZARD, never of an atmosphere.
   What a suit protects against is a statement about the suit.
-- **CON-C21-09** `[A]` The NAME of an atmosphere is DERIVED — the ordered set of assertions that are
+- **CON-C21-09** `[A][SYS]` The NAME of an atmosphere is DERIVED — the ordered set of assertions that are
   true of it — and nothing may key behaviour on a name. A name is what a player reads, never what the
-  game branches on.
+  game branches on. FOR: INV-ATM-18.
 
 ## One model, planets included
 
-- **CON-C21-10** `[A]` A planet's atmosphere is the **same object** as a compartment's. There is one
+- **CON-C21-10** `[A][SYS]` A planet's atmosphere is the **same object** as a compartment's. There is one
   atmosphere model in the mod, and the boundary between indoors and outdoors is a boundary between two
-  instances of it, not between two vocabularies.
-- **CON-C21-11** `[A]` Where a composition is not authored it is **derived**, from the body's own
+  instances of it, not between two vocabularies. FOR: INV-ATM-18.
+- **CON-C21-11** `[A][BEH]` Where a composition is not authored it is **derived**, from the body's own
   properties (gravity and temperature — thermal escape), by the same rule everywhere. Authoring
   overrides derivation; derivation never overrides authoring.
-- **CON-C21-11b** `[A]` Authoring happens ONCE, at creation, and the body's own saved state is the
+- **CON-C21-11b** `[A][SYS]` Authoring happens ONCE, at creation, and the body's own saved state is the
   authority ever after. An authored body either states a composition or **names another body of the
   same definition file**, which is resolved by COPY — never by alias, so nothing that changes the
   exemplar later reaches through the reference. A cycle, a dangling name and an ambiguous name are
   load errors, never a silent default. There is no partial override: a composition is stated whole,
-  because a total pressure is the SUM of its parts and "change one gas" has no single meaning.
+  because a total pressure is the SUM of its parts and "change one gas" has no single meaning. FOR: INV-ATM-18.
 
 ## The client
 
-- **CON-C21-12** `[A]` The client **decides nothing** about an atmosphere. Every threshold, damage,
+- **CON-C21-12** `[A][SYS]` The client **decides nothing** about an atmosphere. Every threshold, damage,
   consumption and gate is resolved server-side; what crosses to the client exists to be displayed, and
-  its staleness may never change an outcome.
-- **CON-C21-13** `[A]` Because of CON-C21-12 the routine sync is **cheap and per-player phased** — no
+  its staleness may never change an outcome. FOR: INV-ATM-18.
+- **CON-C21-13** `[A][SYS]` Because of CON-C21-12 the routine sync is **cheap and per-player phased** — no
   shared clock may stack every player's update onto one tick — and the full composition crosses only
-  when something that displays numbers asks for it.
+  when something that displays numbers asks for it. FOR: INV-ATM-18.
 
 ## Hazards
 
-- **CON-C21-14** `[A]` A toxic gas harms by its OWN limit, independently of total pressure and of
+- **CON-C21-14** `[A][BEH]` A toxic gas harms by its OWN limit, independently of total pressure and of
   oxygen. "Enough air to breathe" is not a defence against a poison in it.
-- **CON-C21-15** `[A]` Corrosion acts on EXPOSED blocks and is spent through the block-damage budget,
+- **CON-C21-15** `[A][BEH]` Corrosion acts on EXPOSED blocks and is spent through the block-damage budget,
   never as ad-hoc block replacement. A raised shield removes the EXPOSURE; it does not acquire a
   corrosion mechanic of its own.
-- **CON-C21-16** `[A]` The ground inherits the world's chemistry. Burial escapes weather and radiation
+- **CON-C21-16** `[A][BEH]` The ground inherits the world's chemistry. Burial escapes weather and radiation
   and never contamination, so the counter to a poisonous world is decontamination at the boundary
   rather than depth.
 
 ## Configuration and extension
 
-- **CON-C21-17** `[A]` Thresholds are config; the RELATIONS are not. **No configuration may make an
+- **CON-C21-17** `[A][BEH]` Thresholds are config; the RELATIONS are not. **No configuration may make an
   atmosphere lie about its composition** — a zone with no oxygen may not be configured breathable, and
   a vacuum may not be configured combustible.
-- **CON-C21-18** `[A]` Adding a gas is a **registry row plus thresholds** — never a class, never a
-  per-type lang key, never a name on the wire. The cost of a new substance is data.
+- **CON-C21-18** `[A][SYS]` Adding a gas is a **registry row plus thresholds** — never a class, never a
+  per-type lang key, never a name on the wire. The cost of a new substance is data. FOR: INV-ATM-18.
 
 ## Status
 

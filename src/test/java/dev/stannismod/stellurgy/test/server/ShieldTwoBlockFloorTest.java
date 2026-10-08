@@ -42,6 +42,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private static final int CHARGE_ITERATIONS = 60;
     private static final int FE_PER_ITERATION = 4000;
 
+    /** Pins INV-SHD-02 (two adjacent shield blocks form a network with no cable and a one-block gap forms none). */
     @Test
     public void twoBlockShieldPowersWithoutCable() throws Exception {
         // Generator at G, emitter directly adjacent along +X. No cable, console or accumulator.
@@ -58,6 +59,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
                 emitter.powered());
     }
 
+    /** Pins INV-SHD-02 (two adjacent shield blocks form a network with no cable and a one-block gap forms none). */
     @Test
     public void nonAdjacentPairNeverPowers() throws Exception {
         // Same two blocks, but a one-block gap and no cable: two disconnected components.
@@ -183,6 +185,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at "an emitter in the
      * shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but
      * was:&lt;10453&gt;".</p>
+     * Pins INV-SHD-25 (A charged emitter in the shipyard that no ship claims projects no shell and spends nothing from its coil, beside a control at).
      */
     @Test
     public void anEmitterInTheShipyardThatNoShipClaimsProjectsNothing() throws Exception {

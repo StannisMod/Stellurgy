@@ -52,6 +52,7 @@ public class FreeFlightLaunchGateTest extends AbstractSharedServerTest {
         return built.get(built.size() - 1).id;
     }
 
+    /** Pins INV-RKT-09 (a fuelless free-flight rocket stays grounded after prepareLaunch). */
     @Test
     public void fuellessFreeFlightRocketStaysGroundedOnPrepareLaunch() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3380, 700));

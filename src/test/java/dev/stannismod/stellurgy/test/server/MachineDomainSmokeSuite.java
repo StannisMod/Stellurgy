@@ -402,6 +402,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     // No world placement. Atmosphere density mutation restored in finally.
     // ─────────────────────────────────────────────────────────────────────
 
+    /** Pins INV-CAP-07 (all four suit pieces expose the IProtectiveArmor capability). */
     @Test
     public void suitItemsAndEnchantAreWiredUp() throws Exception {
         // 1. All four suit pieces registered + expose IProtectiveArmor capability.

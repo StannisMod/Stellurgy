@@ -104,6 +104,7 @@ public class SystemContentTest {
      * red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the authored law at
      * {@code ORBIT_UNIT_BLOCKS / 1000} (zero in long arithmetic — an orbit with no length), this fails
      * with "a planet sits in its OWN cell, not in the star's anchor cell".
+     * Pins ADDR-3 (every body's name lies inside its own system's box).
      */
     @Test
     public void authoredPlanetsGetTheirOwnCellsInsideTheSuperCellBox() {
@@ -317,6 +318,7 @@ public class SystemContentTest {
      * the body's LIVE position instead of its name — the defect this test used to assert as the
      * model — this fails with "half an orbit later the body is still addressed by the same cell
      * expected:&lt;19_0_0&gt; but was:&lt;-19_0_0&gt;".</p>
+     * Pins ADDR-1 (a body's cell name is the same at every tick while its place is not).
      */
     @Test
     public void aBodysCellIsTheSameCellHalfAnOrbitLater() {
@@ -356,6 +358,7 @@ public class SystemContentTest {
      * <p>red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at
      * {@code ORBIT_UNIT_BLOCKS / 1000} (zero — every orbit collapses onto the anchor), this fails with
      * "two bodies authored on opposite sides of one star are not one address".</p>
+     * Pins ADDR-2 (a cell name is derived from the layout and a recorded name beats a later derivation).
      */
     @Test
     public void aDifferentAuthoredOrbitIsADifferentCell() {

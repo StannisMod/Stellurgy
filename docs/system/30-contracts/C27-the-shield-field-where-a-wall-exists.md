@@ -24,15 +24,15 @@ meant to follow from**, rather than a second description of the code.
   This is the same metastable degree of freedom the hyperdrive drives (`C25` HYPER-1) in its other
   regime; **one law, two modes**, and that identity is the reason neither subsystem may grow a field of
   its own (HYPER-3).
-- **FIELD-2** `[A]` **The wall is sustained by COHERENT SUPPORT from several emitters, and a lone emitter
+- **FIELD-2** `[A][BEH]` **The wall is sustained by COHERENT SUPPORT from several emitters, and a lone emitter
   cannot hold a macroscopic domain.** An emitter contributes amplitude, phase and mode to a shared
   resonance; it does not project a private bubble that happens to overlap its neighbours'.
-- **FIELD-3** `[A]` **The signed-distance field is a REPRESENTATION, not the law.** The shipped
+- **FIELD-3** `[A][SYS]` **The signed-distance field is a REPRESENTATION, not the law.** The shipped
   smooth-union of per-emitter spheres (`MECH-SHD-04`) is a perfectly good numerical stand-in for a
   support value and stays legal. What this clause settles is that it is not the physics, so nobody
   reasons from spheres where the model has a resonance. **The law is a conceptual support `Q(x)` with a
-  threshold `Q_c`, and the wall is the level set `Q(x) = Q_c`.**
-- **FIELD-4** `[A]` **A lone emitter is not a defect in the OTHER regime.** Sustaining a *small* window
+  threshold `Q_c`, and the wall is the level set `Q(x) = Q_c`.** FOR: FIELD-2.
+- **FIELD-4** `[A][BEH]` **A lone emitter is not a defect in the OTHER regime.** Sustaining a *small* window
   is the graded rule at its floor (`C25` HYPER-4). Only a *macroscopic wall* from one emitter is
   forbidden, and that is a statement about this contract's mode alone.
 - **FIELD-5** `[REAL→FICTION]` **The phenomenon is natural first and engineered second.** The effect is
@@ -41,50 +41,50 @@ meant to follow from**, rather than a second description of the code.
 
 ## Energy, roles and support
 
-- **FIELD-6** `[A]` **Shield energy is COHERENT EXCITATION energy, not a second electricity.** It is not
+- **FIELD-6** `[A][SYS]` **Shield energy is COHERENT EXCITATION energy, not a second electricity.** It is not
   interchangeable with the ordinary energy network's units by fiat, and the conversion has a place and a
-  cost.
-- **FIELD-7** `[V]` **Generator, accumulator and emitter stay physically distinct roles**, and their
+  cost. FOR: FIELD-7.
+- **FIELD-7** `[V][BEH]` **Generator, accumulator and emitter stay physically distinct roles**, and their
   three limits — production, storage, projection — remain independently binding. Built: the routing
   (`subsystem-network` MECH-NET-02/03) and `MECH-SHD-05/06`.
-- **FIELD-8** `[A]` **Coverage is DERIVED from construction and emitter geometry**, never authored as a
+- **FIELD-8** `[A][BEH]` **Coverage is DERIVED from construction and emitter geometry**, never authored as a
   radius on the network. What a craft protects is a consequence of what was built.
-- **FIELD-9** `[A]` **Damage reduces physical SUPPORT; it never applies abstract sectional hit points.**
+- **FIELD-9** `[A][BEH]` **Damage reduces physical SUPPORT; it never applies abstract sectional hit points.**
   A weakened emitter holds less of the boundary, and the boundary responds locally
  . Built in the direction of this clause as `MECH-SHD-21/22/23`.
-- **FIELD-10** `[A]` **Priority redistribution moves SUPPORT AVAILABILITY, not sectional durability.** A
+- **FIELD-10** `[A][BEH]` **Priority redistribution moves SUPPORT AVAILABILITY, not sectional durability.** A
   group setting changes what an emitter can hold, and the geometry follows.
 
 ## Geometry — a freedom bounded by support, never a menu
 
-- **FIELD-11** `[A]` **Any geometry the support can hold is legal**: a sphere, a stretched or asymmetric
+- **FIELD-11** `[A][BEH]` **Any geometry the support can hold is legal**: a sphere, a stretched or asymmetric
   bubble, concave regions, a throat, a tunnel of ordinary `V0`, a torus, several handles. **No shape is
   mandatory and none is forbidden by name** — in particular a toroidal station with a plasma channel is
   an *emergent engineering answer*, never the required form.
-- **FIELD-12** `[A]` **Complex geometry costs what it costs, and the costs are engineering ones**:
+- **FIELD-12** `[A][BEH]` **Complex geometry costs what it costs, and the costs are engineering ones**:
   emitter placement and count, phase-control bandwidth, support margin, surface area, curvature,
   stability, control burden, failure modes. A topology that is cheaper than a sphere for no stated
   reason is a defect.
-- **FIELD-13** `[A]` **One resonant network, one frame**. A network's emitters must share a frame
+- **FIELD-13** `[A][BEH]` **One resonant network, one frame**. A network's emitters must share a frame
   for the resonance to be defined at all, so the failure of an unresolvable ship frame is *"no place for
   the field"*, not *"no field"*. Today's code fails **open** (`MECH-SHD-13`); this clause is what the
   rewrite implements.
 
 ## The aperture — a channel, and the one thing that is a hole
 
-- **FIELD-14** `[A]` **Losing emitters cannot PUNCTURE a shield**: the region is a union of supported neighbourhoods, so withdrawing one shrinks the set, it does
+- **FIELD-14** `[A][BEH]` **Losing emitters cannot PUNCTURE a shield**: the region is a union of supported neighbourhoods, so withdrawing one shrinks the set, it does
   not perforate it. Whatever a degraded shield is, it is closed.
-- **FIELD-15** `[A]` **An aperture is a declared CHANNEL, anchored by a face**, not a gate block and
+- **FIELD-15** `[A][BEH]` **An aperture is a declared CHANNEL, anchored by a face**, not a gate block and
   not a global disabling of the wall. It is the only construct that makes a genuine hole, and it is
   therefore **universal**: it admits what is hostile as readily as what is welcome, and it exposes
   whatever the region contained.
-- **FIELD-16** `[A]` **The bubble is a SET, not a container** — its extent is the region satisfying the
+- **FIELD-16** `[A][SYS]` **The bubble is a SET, not a container** — its extent is the region satisfying the
   support predicate, and its price is the size of that set. An aperture **removes points from a set**;
   it does not breach a vessel. Three retractions in one session came from importing container
   vocabulary here, and the vocabulary is what did the damage: *molecules*, *venting a
   stored volume*, *an opening*. **A connectivity question about the interior is not answerable in this
-  model at all**, because connectivity is a flood fill and the model has none.
-- **FIELD-17** `[A]` **The shield may be an atmospheric containment boundary**, and what
+  model at all**, because connectivity is a flood fill and the model has none. FOR: FIELD-15.
+- **FIELD-17** `[A][BEH]` **The shield may be an atmospheric containment boundary**, and what
   that containment means belongs to `C21` and the life-support design, not here. This contract states
   only that the boundary exists and where; it never states what the enclosed air does.
 
@@ -97,7 +97,7 @@ meant to follow from**, rather than a second description of the code.
 
 ## Containment — the same law in a compact device
 
-- **FIELD-19** `[A]` **An ENERGY-CONTAINMENT SYSTEM is a wall-mode instrument of the same law**. It is a compact, specialised version of the shield system — its own emitters,
+- **FIELD-19** `[A][BEH]` **An ENERGY-CONTAINMENT SYSTEM is a wall-mode instrument of the same law**. It is a compact, specialised version of the shield system — its own emitters,
   generator and accumulator in one machine — that holds a wall around a working volume INSIDE the ship:
   a torch's chamber and nozzle, a field-walled reactor. It is **not a second field** (HYPER-3): it drives
   `φ`'s wall mode like any shield, so everything here and in `C28` binds it — what its wall absorbs is
