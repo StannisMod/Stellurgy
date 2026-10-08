@@ -120,6 +120,22 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      */
     private static final int DRIVE_DOSE_TICKS = 30;
 
+    /**
+     * EXPERIMENT dose of a drive whose craft FALLS — nothing holds it up — so the dose also sets how far
+     * it falls inside the window. Derived from the one measured rate: 30 game ticks gave 127 physics steps
+     * and 2.10 engine seconds (measured 2026-10-08: logs/require-server.log, the motorless hull's
+     * window), so 10 ticks is about 0.7 engine s, a fall from rest of ½·32·0.7² ≈ 8 blocks — and still
+     * dozens of steps, every one of them saturated for a hull with nothing aboard. The fall's freedom is
+     * not trusted to this number: the window's contact count says whether the hull touched anything.
+     */
+    private static final int FREE_FALL_DOSE_TICKS = 10;
+
+    /**
+     * EXPERIMENT dose of the contact counter's control: enough game ticks for several physics steps
+     * of a hull resting on its pad (the drive refuses a window of fewer than two).
+     */
+    private static final int PAD_CONTACT_TICKS = 5;
+
     /** STIMULUS: ticks of a zero-velocity command after a drive, so the next drive starts near rest. */
     private static final int BRAKE_TICKS = 40;
 
@@ -458,7 +474,13 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * accelerate at its readout's figure; without it "did not move" could be a command that reached
      * nobody.
      * That the command did reach the motorless hull's computer is read too: its controller ran every
-     * step of the window and reported, every step, that it could not deliver.</p>
+     * step of the window and reported, every step, that it could not deliver. And that it FELL FREELY is
+     * measured, not assumed: the window counts the physics mod's collision impulses on this hull, the
+     * counter is seen to count on the pad first, and a window with any contact is refused as an
+     * arrangement (a hull that struck the ground inside its window once read as a broken mechanic,
+     * 2026-10-08). The premise was seen to refuse: with the pad left under the hull, the window counted
+     * 46 collider ticks and 259 contacts and the test stopped on "must have been in free air"
+     * (2026-10-08, logs/contacts-witness.log).</p>
      *
      * <p>Contract: this fails if production breaks the contract that a hull with no actuators has no
      * authority and does not move under command (no transition mode).</p>
@@ -504,15 +526,27 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 1.0, Events.number(controlDrive, "satEngineAccelZ") / PhysicsUnits.ACCELERATION
                         / controlPredictedSi, ACCELERATION_BAND);
 
+        // The contact counter is an instrument, so it is seen to count before its zero is believed:
+        // standing on its pad, the hull is touched on every step.
+        String onPad = drive(bare, "force-vel-by-id", 0, 0, 0, PAD_CONTACT_TICKS,
+                "the motorless hull still standing on its pad");
+        requireArranged("standing on its pad, the motorless hull must be counted as touched, or a zero"
+                + " contact count below would say nothing: " + onPad,
+                Events.number(onPad, "colliderTicks") > 0 && Events.number(onPad, "contacts") > 0);
+
         // Only now: nothing holds this hull up, so from here it falls, and the drive below must
-        // happen while it is still in free air.
+        // happen while it is still in free air — which is measured, not assumed.
         removePad(bareSite, "the motorless hull measured in free air");
-        String bareDrive = drive(bare, "force-vel-by-id", 0, 0, SURGE_COMMAND, DRIVE_DOSE_TICKS,
+        String bareDrive = drive(bare, "force-vel-by-id", 0, 0, SURGE_COMMAND, FREE_FALL_DOSE_TICKS,
                 "the motorless hull driven forward");
         requireArranged("the motorless hull's controller must have been asked every step and have"
                 + " reported every step that it delivered less than asked: " + bareDrive,
                 Events.number(bareDrive, "saturatedSteps") == Events.number(bareDrive, "returnedSteps")
                         && Events.number(bareDrive, "returnedSteps") > 0);
+        requireArranged("the motorless hull must have been in free air for the whole window — the"
+                + " collider listened and touched it nowhere — or its fall is not gravity's alone: "
+                + bareDrive,
+                Events.number(bareDrive, "colliderTicks") > 0 && Events.number(bareDrive, "contacts") == 0);
         measured("no actuators", controlDrive, bareDrive);
         double seconds = Events.number(bareDrive, "engineSeconds");
         double gravity = bareModel.number("gravity") * PhysicsUnits.ACCELERATION;

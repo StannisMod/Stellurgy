@@ -38,6 +38,15 @@ import net.minecraft.world.World;
  * the step that produced it reported saturation, and {@code satEngineAccel*} is the craft's
  * acceleration while at its authority — the quantity a readout's authority predicts.</p>
  *
+ * <h2>Contacts — whether the craft was in free air</h2>
+ *
+ * <p>A verdict about how a craft moves under its own authority, or falls under gravity alone, holds
+ * only if nothing else touched it. So the window also counts, for the ship it is watching, the physics
+ * mod's collider ticks ({@code colliderTicks} — the instrument was listening) and the collision impulses
+ * that collider applied ({@code contacts}), both fed by a test mixin at the collider's own decision. A
+ * zero {@code contacts} means "free air" only beside a non-zero {@code colliderTicks}. The ship is bound
+ * at the window's first sample, so a contact before that sample is not counted.</p>
+ *
  * <p>Test source set: absent from a released jar. The physics thread writes, the server thread
  * closes, so every accumulator is read and written under the window's own monitor.</p>
  */
@@ -48,6 +57,10 @@ public final class PhysicsStepWindow implements TraceWindow {
     private final int y;
     private final int z;
 
+    /** The physics object this window's computer steps with, bound at the first sample. */
+    private Object ship;
+    private int colliderTicks;
+    private int contacts;
     private int steps;
     private double seconds;
     private double pendingDt;
@@ -91,7 +104,7 @@ public final class PhysicsStepWindow implements TraceWindow {
     }
 
     /** Feed every open window watching this computer — called by the controller mixin at entry. */
-    public static void enter(World world, int x, int y, int z, double dt,
+    public static void enter(World world, Object ship, int x, int y, int z, double dt,
                              double vx, double vy, double vz, double wx, double wy, double wz,
                              double mass) {
         List<PhysicsStepWindow> open = SideTrace.of(world).windows(PhysicsStepWindow.class);
@@ -99,8 +112,35 @@ public final class PhysicsStepWindow implements TraceWindow {
         for (int i = 0; i < open.size(); i++) {
             PhysicsStepWindow w = open.get(i);
             if (w.dim == dim && w.x == x && w.y == y && w.z == z) {
-                w.sample(dt, vx, vy, vz, wx, wy, wz, mass);
+                w.sample(ship, dt, vx, vy, vz, wx, wy, wz, mass);
             }
+        }
+    }
+
+    /** The collider ran a step for {@code ship} — called by the collider mixin. */
+    public static void colliderTick(World world, Object ship) {
+        List<PhysicsStepWindow> open = SideTrace.of(world).windows(PhysicsStepWindow.class);
+        for (int i = 0; i < open.size(); i++) {
+            open.get(i).collider(ship, false);
+        }
+    }
+
+    /** The collider applied a collision impulse to {@code ship} — called by the collider mixin. */
+    public static void contact(World world, Object ship) {
+        List<PhysicsStepWindow> open = SideTrace.of(world).windows(PhysicsStepWindow.class);
+        for (int i = 0; i < open.size(); i++) {
+            open.get(i).collider(ship, true);
+        }
+    }
+
+    private synchronized void collider(Object of, boolean impulse) {
+        if (ship == null || ship != of) {
+            return;
+        }
+        if (impulse) {
+            contacts++;
+        } else {
+            colliderTicks++;
         }
     }
 
@@ -116,9 +156,10 @@ public final class PhysicsStepWindow implements TraceWindow {
         }
     }
 
-    private synchronized void sample(double dt, double vx, double vy, double vz,
+    private synchronized void sample(Object of, double dt, double vx, double vy, double vz,
                                      double wx, double wy, double wz, double mass) {
         if (steps == 0) {
+            ship = of;
             firstV[0] = vx; firstV[1] = vy; firstV[2] = vz;
             firstW[0] = wx; firstW[1] = wy; firstW[2] = wz;
             firstMass = mass;
@@ -165,7 +206,9 @@ public final class PhysicsStepWindow implements TraceWindow {
                 .append(",\"satEngineSeconds\":").append(num(satSeconds))
                 .append(",\"firstMassKg\":").append(num(firstMass))
                 .append(",\"lastMassKg\":").append(num(lastMass))
-                .append(",\"maxAngularSpeed\":").append(steps > 0 ? num(maxW) : "null");
+                .append(",\"maxAngularSpeed\":").append(steps > 0 ? num(maxW) : "null")
+                .append(",\"colliderTicks\":").append(colliderTicks)
+                .append(",\"contacts\":").append(contacts);
         String[] axes = {"X", "Y", "Z"};
         for (int i = 0; i < 3; i++) {
             p.append(",\"v0").append(axes[i]).append("\":").append(num(firstV[i]))

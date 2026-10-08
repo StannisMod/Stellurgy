@@ -51,6 +51,7 @@
     "MixinQueryableShipDataEvents",
     "MixinTileAdvancedFlightComputerEvents",
     "MixinFlightComputerPhysicsStepWindow",
+    "MixinWorldPhysicsColliderContacts",
     "MixinPhysicsObjectEvents",
     "MixinPhysicsObjectTeleportAdoption",
     "MixinSpaceEventHandlerEvents",

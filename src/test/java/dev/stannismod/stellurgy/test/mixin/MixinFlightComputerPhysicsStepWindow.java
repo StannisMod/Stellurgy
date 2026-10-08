@@ -43,7 +43,7 @@ public abstract class MixinFlightComputerPhysicsStepWindow {
         BlockPos p = self.getPos();
         Vector3d v = calc.getLinearVelocity();
         Vector3d w = calc.getAngularVelocity();
-        PhysicsStepWindow.enter(self.getWorld(), p.getX(), p.getY(), p.getZ(), dt,
+        PhysicsStepWindow.enter(self.getWorld(), physo, p.getX(), p.getY(), p.getZ(), dt,
                 v.x, v.y, v.z, w.x, w.y, w.z, calc.getMass());
     }
 
