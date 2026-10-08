@@ -73,7 +73,12 @@ public abstract class MixinPhysicsCalculationsMotionSample {
         // instrument alone. Measured on the first calibration run: median step 0.0, p95 2.0.
         ShipTransform pose = physo.getShipTransformationManager().getCurrentPhysicsTransform();
         Vector3d vNow = calc.getLinearVelocity();
-        double[] vCmd = self.probeCommandActive ? self.probeVelocity : self.commandedVelocity;
+        // Each reference read once, as the controller reads them.
+        dev.stannismod.stellurgy.ship.control.FlightCommand command = self.probeCommand;
+        if (command == null) {
+            command = self.flightCommand;
+        }
+        double[] vCmd = command == null ? null : command.velocity();
         double cmdSpeed = vCmd == null || vCmd.length < 3 ? 0.0
                 : Math.sqrt(vCmd[0] * vCmd[0] + vCmd[1] * vCmd[1] + vCmd[2] * vCmd[2]);
         double mass = calc.getMass();

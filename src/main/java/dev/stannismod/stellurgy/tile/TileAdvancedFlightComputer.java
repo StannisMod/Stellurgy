@@ -138,12 +138,16 @@ public class TileAdvancedFlightComputer extends TileEntity
     private transient boolean cellEdgeReported = false;
 
     /**
-     * Bring-up override for the force-mode flight controller, on THIS computer only: while
-     * {@link #probeCommandActive} is set the controller reads the whole command triple below
-     * instead of the pilot channels, so a caller can drive the control law directly (raw force,
-     * raw torque, absolute attitude hold) without a pilot and without the Free Flight layer in
-     * between. Desired world-frame velocity {@code {x,y,z}} (blocks/s), or {@code null} for
-     * "nothing commanded on this channel".
+     * Bring-up override for the force-mode flight controller, on THIS computer only: while it is
+     * non-null the controller flies it instead of {@link #flightCommand}, so a caller can drive the
+     * control law directly (raw velocity, raw angular velocity, absolute attitude hold) without a pilot
+     * and without the Free Flight layer in between.
+     *
+     * <p><b>One reference, so all-or-nothing.</b> Per-part fallback would mix a fresh probe attitude
+     * with a stale probe rate left by an earlier call, and the mixture is a command nobody wrote; four
+     * fields written one by one could be read mid-replacement for the same reason. It outranks the pilot
+     * command rather than yielding to it: a probe that silently lost to a ship's own autopilot would
+     * report the command it never delivered.</p>
      *
      * <p><b>Per tile, and that is the whole point.</b> These began as {@code static volatile}
      * fields, which every flight computer in the JVM read as its fallback: a command meant for one
@@ -151,34 +155,12 @@ public class TileAdvancedFlightComputer extends TileEntity
      * issued it reported success either way. Keyed to one computer, a command names one craft, and
      * a caller that cannot resolve that craft gets a miss instead of somebody else's flight.</p>
      *
-     * <p>Written from the GAME thread, read on the Valkyrien Skies PHYSICS thread by the
-     * flight-controller mixin; {@code volatile} for cross-thread visibility. Stellurgy-core only — carries
-     * no physics-mod type, so this class still loads fine without the physics mod installed.</p>
+     * <p>Written on the server GAME thread (the probe command), read once per step on the Valkyrien
+     * Skies PHYSICS thread by {@link #onPhysicsTick}; {@code volatile} for visibility, and the object is
+     * immutable, so the reader sees one command or the next. Carries no physics-mod type, so this class
+     * still loads without the physics mod installed.</p>
      */
-    public volatile double[] probeVelocity = null;
-
-    /** Bring-up override for the controller's ANGULAR channel: desired world-frame angular velocity
-     *  {@code {x,y,z}} (rad/s), or {@code null}. Read only while {@link #probeCommandActive}. */
-    public volatile double[] probeAngVel = null;
-
-    /**
-     * Bring-up override for ATTITUDE HOLD: the target body&rarr;world orientation as a quaternion
-     * {@code {w,x,y,z}}, or {@code null} when not holding an attitude. When set it supersedes
-     * {@link #probeAngVel} — the controller reads the ship's current orientation on the physics
-     * thread and turns the error into the angular velocity it drives toward. This is the interface
-     * Free Flight feeds. Read only while {@link #probeCommandActive}.
-     */
-    public volatile double[] probeAttitude = null;
-
-    /**
-     * Whether the three {@code probe*} channels above own this computer's command this tick.
-     *
-     * <p>All-or-nothing on purpose. Per-channel fallback would mix a fresh probe attitude with a
-     * stale probe rate left by an earlier call, and the mixture is a command nobody wrote. It also
-     * outranks the pilot channels rather than yielding to them: a probe that silently lost to a
-     * ship's own autopilot would report the command it never delivered.</p>
-     */
-    public volatile boolean probeCommandActive = false;
+    public volatile dev.stannismod.stellurgy.ship.control.FlightCommand probeCommand = null;
 
     /**
      * How many times the Valkyrien Skies physics thread has invoked THIS computer's force controller.
@@ -211,20 +193,14 @@ public class TileAdvancedFlightComputer extends TileEntity
     }
 
     /**
-     * The pilot's commanded world-frame velocity (blocks/s) that the force controller realizes,
-     * or {@code null} when this computer commands nothing. Written by {@link #update()} from the
-     * pilot's input; read on the physics thread by the flight-controller mixin, which reads the
-     * {@code probe*} channels above instead while one is in force. {@code volatile} for the
-     * game&rarr;physics thread hand-off; carries no physics-mod type (Stellurgy-core safe).
+     * The command this computer's own flight law publishes — from the pilot's input, the unmanned hold
+     * or release, or the auto-takeoff climb — or {@code null} when it commands nothing. Written only on
+     * the server GAME thread by {@link #update()}, read once per step on the PHYSICS thread by
+     * {@link #onPhysicsTick}, which flies {@link #probeCommand} instead while that is set. One immutable
+     * object behind one {@code volatile} reference: a step flies one command or the next, never the
+     * velocity of one with the attitude of another.
      */
-    public volatile double[] commandedVelocity = null;
-
-    /** The pilot's angular-velocity command (rad/s), same hand-off as {@link #commandedVelocity}. */
-    public volatile double[] commandedAngVel = null;
-
-    /** The pilot's attitude-hold target quaternion {@code {w,x,y,z}}. Supersedes
-     *  {@link #commandedAngVel} when set. */
-    public volatile double[] targetAttitude = null;
+    public volatile dev.stannismod.stellurgy.ship.control.FlightCommand flightCommand = null;
 
     /**
      * Ship cruise speed cap (blocks/second) mapped from full throttle. Public because the flight HUD
@@ -326,10 +302,7 @@ public class TileAdvancedFlightComputer extends TileEntity
      * lives on this tile instance, so a tile the chunk re-creates starts without one.</p>
      */
     public void commandProbeVelocity(double[] worldVelocity, double[] worldAngVel) {
-        this.probeVelocity = worldVelocity;
-        this.probeAngVel = worldAngVel;
-        this.probeAttitude = null;
-        this.probeCommandActive = true;
+        this.probeCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(worldVelocity, worldAngVel, null);
     }
 
     /**
@@ -338,20 +311,15 @@ public class TileAdvancedFlightComputer extends TileEntity
      * place rather than drifting off while it slews.
      */
     public void commandProbeAttitude(double qw, double qx, double qy, double qz) {
-        this.probeVelocity = new double[]{0.0, 0.0, 0.0};
-        this.probeAngVel = null;
-        this.probeAttitude = new double[]{qw, qx, qy, qz};
-        this.probeCommandActive = true;
+        this.probeCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                new double[]{0.0, 0.0, 0.0}, null, new double[]{qw, qx, qy, qz});
     }
 
     /** Hand this computer back to its own pilot channels. Returns whether a probe command was in
      *  force, so a caller asserts the release rather than trusting it. */
     public boolean clearProbeCommand() {
-        boolean was = probeCommandActive;
-        this.probeCommandActive = false;
-        this.probeVelocity = null;
-        this.probeAngVel = null;
-        this.probeAttitude = null;
+        boolean was = probeCommand != null;
+        this.probeCommand = null;
         return was;
     }
 
@@ -457,9 +425,7 @@ public class TileAdvancedFlightComputer extends TileEntity
     public void invalidate() {
         super.invalidate();
         pilotInput = null;
-        commandedVelocity = null;
-        commandedAngVel = null;
-        targetAttitude = null;
+        flightCommand = null;
         velocitySetpoint = new double[]{0.0, 0.0, 0.0};
     }
 
@@ -515,9 +481,7 @@ public class TileAdvancedFlightComputer extends TileEntity
         // ships exist there exactly while parked mid-transit. Deliberate-exit and the exit-warning
         // channel stay OUTSIDE this gate when they land — they are the survival path mid-transit.
         if (dev.stannismod.stellurgy.space.HyperspaceWorld.isHyperspace(world)) {
-            commandedVelocity = null;
-            commandedAngVel = null;
-            targetAttitude = null;
+            flightCommand = null;
             return;
         }
 
@@ -771,13 +735,12 @@ public class TileAdvancedFlightComputer extends TileEntity
                 // Only the LINEAR command is dropped. The attitude hold stays, so the craft falls
                 // flat instead of tumbling: releasing thrust is what "no assist" means here, and
                 // starting an uncommanded spin is a larger change than the mode switch asks for.
-                commandedVelocity = null;
                 if (attitudeReference == null) {
                     attitudeReference = attitude;
                 }
-                commandedAngVel = new double[]{0.0, 0.0, 0.0};
-                targetAttitude = new double[]{attitudeReference.w, attitudeReference.x,
-                        attitudeReference.y, attitudeReference.z};
+                flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(null,
+                        new double[]{0.0, 0.0, 0.0}, new double[]{attitudeReference.w, attitudeReference.x,
+                                attitudeReference.y, attitudeReference.z});
                 return;
             }
             if (attitudeReference == null) {
@@ -786,11 +749,11 @@ public class TileAdvancedFlightComputer extends TileEntity
             // FA on: an idle input over the retained setpoint IS the cruise command (zero setpoint =
             // hover), which is what makes this an autopilot rather than a parking brake - the pilot
             // stands up mid-flight and the ship flies on at the speed he left it at.
-            commandedVelocity = FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(),
-                    attitudeReference, true, velocitySetpoint, SHIP_MAX_SPEED);
-            commandedAngVel = new double[]{0.0, 0.0, 0.0};
-            targetAttitude = new double[]{attitudeReference.w, attitudeReference.x,
-                    attitudeReference.y, attitudeReference.z};
+            flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                    FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference, true,
+                            velocitySetpoint, SHIP_MAX_SPEED),
+                    new double[]{0.0, 0.0, 0.0}, new double[]{attitudeReference.w, attitudeReference.x,
+                            attitudeReference.y, attitudeReference.z});
             return;
         }
         // A pilot is flying: from now on this ship holds station when unmanned - persisted, so the hold
@@ -849,17 +812,17 @@ public class TileAdvancedFlightComputer extends TileEntity
             }
         }
 
-        // Publish to the PER-TILE channels the controller mixin prefers (falls back to the
-        // static probe channels only when these are null). Writing them here means each ship's
-        // own computer drives its own ship, independent of any other computer or the probe. The
-        // command honours the Flight-Assist mode + cut/brake (a null velocity means "coast").
-        commandedVelocity = FreeFlightPhysics.shipVelocityCommand(
-                in, target, flightAssistEnabled, velocitySetpoint, SHIP_MAX_SPEED);
-        // The angular channel is an attitude target PLUS the rate that target is turning at. The rate
-        // is the feed-forward: a proportional law chasing a moving reference settles at a standing
-        // error of rate/gain, so without it the ship visibly lags the pilot's hand.
-        targetAttitude = new double[]{target.w, target.x, target.y, target.z};
-        commandedAngVel = FreeFlightPhysics.bodyRatesToWorldOmega(target, pitchRate, yawRate, rollRate);
+        // Published as ONE object: the controller runs on the physics thread and flies whatever it
+        // last saw, so the velocity, the attitude target and that target's rate must reach it together.
+        // The velocity honours the Flight-Assist mode + cut/brake (null means "coast"). The angular part
+        // is an attitude target PLUS the rate that target is turning at: the rate is the feed-forward,
+        // since a proportional law chasing a moving reference settles at a standing error of rate/gain,
+        // and without it the ship visibly lags the pilot's hand.
+        flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                FreeFlightPhysics.shipVelocityCommand(in, target, flightAssistEnabled, velocitySetpoint,
+                        SHIP_MAX_SPEED),
+                FreeFlightPhysics.bodyRatesToWorldOmega(target, pitchRate, yawRate, rollRate),
+                new double[]{target.w, target.x, target.y, target.z});
     }
 
     /**
@@ -1094,11 +1057,10 @@ public class TileAdvancedFlightComputer extends TileEntity
         if (attitudeReference == null) {
             attitudeReference = attitude;
         }
-        commandedVelocity = dev.stannismod.stellurgy.space.AutoTakeoffPlanner
-                .climbVelocity(nose[0], nose[2]);
-        commandedAngVel = new double[]{0.0, 0.0, 0.0};
-        targetAttitude = new double[]{attitudeReference.w, attitudeReference.x,
-                attitudeReference.y, attitudeReference.z};
+        flightCommand = dev.stannismod.stellurgy.ship.control.FlightCommand.of(
+                dev.stannismod.stellurgy.space.AutoTakeoffPlanner.climbVelocity(nose[0], nose[2]),
+                new double[]{0.0, 0.0, 0.0}, new double[]{attitudeReference.w, attitudeReference.x,
+                        attitudeReference.y, attitudeReference.z});
         if (!stationKeeping) {
             stationKeeping = true;
             markDirty();
@@ -1740,7 +1702,8 @@ public class TileAdvancedFlightComputer extends TileEntity
     // decide what it GETS: the wanted accelerations are handed to the control scheme, which delivers
     // them through this ship's clean recipes up to its authority in each signed direction. A craft
     // with nothing aboard that can push does not move under command; a heavy one accelerates slowly.
-    // The command is this tile's own commandedVelocity, written on the game thread and read here.
+    // The command is this tile's own FlightCommand (the probe's, or its flight law's), published on the
+    // game thread and read here ONCE per step, so a step flies one command whole.
 
     /** Below this commanded angular speed (rad/s) a RAW angular-velocity command counts as absent.
      *  Only the probe channel uses that command; the attitude-hold path below brakes residual spin. */
@@ -1761,22 +1724,24 @@ public class TileAdvancedFlightComputer extends TileEntity
         if (dt <= 0.0) {
             return;
         }
-        // This computer's own command, and nobody else's. A bring-up probe aimed at THIS tile takes
-        // the whole triple (all-or-nothing: a per-channel mix would blend a fresh probe pose with a
-        // stale probe rate); otherwise the seated pilot's, published by this tile's own server tick.
+        // This computer's own command, and nobody else's: a bring-up probe aimed at THIS tile while
+        // one stands, otherwise what this tile's own server tick published. Each reference is read
+        // ONCE, here; everything below flies that one object.
         //
         // Counted BEFORE the early-out below: the question this answers is whether the physics
         // thread reaches this computer at all, which is a different question from whether it had
         // anything to command.
         controllerTicks++;
-        boolean probe = probeCommandActive;
-        double[] vCmd = probe ? probeVelocity : commandedVelocity;
-        double[] wCmd = probe ? probeAngVel : commandedAngVel;
-        double[] attCmd = probe ? probeAttitude : targetAttitude;
-        if ((vCmd == null || vCmd.length < 3) && (wCmd == null || wCmd.length < 3)
-                && (attCmd == null || attCmd.length < 4)) {
+        dev.stannismod.stellurgy.ship.control.FlightCommand flying = probeCommand;
+        if (flying == null) {
+            flying = flightCommand;
+        }
+        if (flying == null || flying.asksNothing()) {
             return;
         }
+        double[] vCmd = flying.velocity();
+        double[] wCmd = flying.angularVelocity();
+        double[] attCmd = flying.attitude();
 
         // Linear: deadbeat toward the commanded world velocity, PLUS a gravity feed-forward; force =
         // mass * accel (mass cancels, so the ship accelerates as commanded regardless of how heavy it
