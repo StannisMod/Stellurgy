@@ -444,6 +444,15 @@ destroyed positions as well as damaged ones.
   result rather than of the traversal, so it holds at every angle and pins no particular walk.
   `DiagonalBoreE2ETest#anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore`
 - **INV-DMG-06** [V] Damage is applied on the logical server only.
+- **INV-DMG-10** [T][SYS] A hole's provenance crosses a carry unchanged: the layer that harvests a
+  structure's records and applies them at the new origin writes back the very NAME and meta it read,
+  a name the block registry no longer holds included — a removed mod's block stays that block's name,
+  never `minecraft:air` and never dropped. The carry never resolves the name through the registry
+  (`DamageLayer#applyTo` → `BlockDamageSavedData#recordDestroyedName`) `[V]`. Whoever does resolve one
+  asks `containsKey` first: Forge's block registry is DEFAULTED and its lookup answers air, not null, for
+  a name it does not hold. FOR: INV-DMG-07 (a relocated
+  ship carries the damage it left with) and C20 REPAIR-6 (an unfillable hole keeps its record). Pinned by
+  `test/unit/DamageLayerTest#aHoleOfABlockNoLongerRegisteredKeepsItsNameAcrossACarry`.
 - **INV-DMG-07** [T][BEH] A relocated ship carries the damage it left with, and leaves none at the
   coordinates it vacated. `ShipDamageSurvivesRelocationE2ETest`. *Bounded*:
   assembly carries holes only within `HOLE_SWEEP_MARGIN` (8) of the surviving blocks

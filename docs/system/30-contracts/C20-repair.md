@@ -54,8 +54,8 @@ designed against a floor price and a working ancestor, and both constrain it.
   twice; the second attempt must find nothing to do and consume nothing.
 - **REPAIR-6 (an unfillable hole is reported, not forgotten)** `[A][BEH]` When provenance names a block the
   registry no longer has, the position is refused and its record is KEPT. A lost name is detected by
-  asking the registry whether it holds the name, never by a null: `BlockDamageSavedData.blockFromName`
-  reads Forge's DEFAULTED block registry, which answers air for an absent name `[V]`. Dropping it destroys the only evidence of what the hull
+  asking the registry whether it holds the name, never by a null: Forge's block registry is DEFAULTED and
+  answers air for an absent name. The record already survives a carry under its own name (INV-DMG-10). Dropping it destroys the only evidence of what the hull
   was, and does it silently, at exactly the moment a player has lost a mod.
 - **REPAIR-7 (a bay that cannot work says why)** `[T][BEH]` No silent idling. Out of energy, out of reserve,
   nothing damaged, and refused-by-REPAIR-6 are four different states and are distinguishable from
