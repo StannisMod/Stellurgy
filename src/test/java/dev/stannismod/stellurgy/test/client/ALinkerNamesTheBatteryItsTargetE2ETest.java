@@ -23,10 +23,11 @@ import static org.junit.Assert.assertTrue;
  * a block twenty blocks off and right-clicks, and the gun on the console's network turns onto it and
  * fires; then he looks at a creature and right-clicks, and it turns onto that instead.
  *
- * <p>The player's path, end to end, every act his client's: the bind is a sneaking right-click on the
- * console through vanilla's own block-use path (a plain one opens the console's screen, as on every
- * machine with a screen), the aim is his look, and the designation is a right-click with the item
- * through vanilla's own item-use path. Probes ARRANGE only what no interface lets a player do — the
+ * <p>The player's path, end to end, every act his client's and every click a press of the right mouse
+ * button through the input pipeline, never a verb naming its target: the bind is a sneaking right-click
+ * with his crosshair on the console (a plain one opens the console's screen, as on every machine with a
+ * screen), the aim is his look, and the designation is a right-click with nothing in reach under the
+ * crosshair, which vanilla turns into a use of the held item. Each pick is read before the press. Probes ARRANGE only what no interface lets a player do — the
  * blocks, the gun's charge (power delivery is not this path's subject; a generator beside the gun is
  * the player's way), the linker in his inventory, a creature that stands still — and otherwise only
  * READ.</p>
@@ -52,6 +53,9 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
 
     /** Vanilla's default sneak binding, left shift. */
     private static final int SNEAK_KEY = 42;
+
+    /** Vanilla's default use-item binding, the right mouse button ({@code GameSettings.keyBindUseItem}). */
+    private static final int USE_ITEM_BUTTON = -99;
 
     /**
      * Deadline for a link that is one network round trip plus a tick of server work: his pose
@@ -93,8 +97,8 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
     private static final String ZOMBIE_UUID = new java.util.UUID(ZOMBIE_UUID_MOST, ZOMBIE_UUID_LEAST).toString();
 
     /**
-     * red-witnessed: with {@code LinkerDesignation#bind} at {@code ItemLinker.setMasterCoords(linker, tile.getPos());} removed, fails at the bind: "the linker must carry the CONSOLE's position once he has clicked it … expected:<[x,y,z]> but was:<[0,0,0]>" (2026-10-04).
-     * red-witnessed: with {@code TileWeaponConsole#onLinkAimed} at {@code state.clearTarget();} removed, legs 1 and 2 pass and leg 3 fails: "the gun must turn off the zombie and back onto the block — no `turret_aim` … onTarget true later than" the designation, the gun still firing on the zombie (2026-10-04).
+     * red-witnessed: with {@code LinkerDesignation#bind} at {@code ItemLinker.setMasterCoords(linker, tile.getPos());} removed, fails at the bind: "the linker must carry the CONSOLE's position once he has clicked it … expected:<[x,y,z]> but was:<[0,0,0]>" (2026-10-04; again 2026-10-08 with every click a right-button press through the input pipeline).
+     * red-witnessed: with {@code TileWeaponConsole#onLinkAimed} at {@code state.clearTarget();} removed, legs 1 and 2 pass and leg 3 fails: "the gun must turn off the zombie and back onto the block — no `turret_aim` … onTarget true later than" the designation, the gun still firing on the zombie (2026-10-04; again 2026-10-08 through the input pipeline: "no `turret_aim` carrying [pos, …, onTarget, true] later than seq 1930 was recorded within 600 ticks").
      */
     @Test
     public void aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker() throws Exception {
@@ -154,10 +158,17 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
         ArrangementFailure.requireArranged("the linker must be in his main hand: " + state,
                 state.get("heldItem").getAsString().contains("linker"));
 
-        // ---- the bind: a sneaking right-click on the console, the way he would
+        // ---- the bind: a sneaking right-click on the console, the way he would — he looks at the
+        // face turned toward him, and the click goes wherever vanilla's own pick says it goes
         setSneaking(server, true);
+        lookAt(server, new double[]{cx + 0.5D, cy + 0.5D, cz + 1.0D});
+        JsonObject onConsole = bot().reportMouseOver();
+        ArrangementFailure.requireArranged("his crosshair must rest on the console before he clicks: " + onConsole,
+                "BLOCK".equals(onConsole.get("typeOfHit").getAsString())
+                        && onConsole.get("blockX").getAsInt() == cx && onConsole.get("blockY").getAsInt() == cy
+                        && onConsole.get("blockZ").getAsInt() == cz);
         long binding = server.mark();
-        bot().interactBlock(cx, cy, cz);
+        rightClick();
         String bound = server.awaitRecordWithFields(binding, "weapon_linker_bound",
                 "his sneaking right-click on the console must bind the linker to it", ROUND_TRIP_TICKS,
                 "pos", Weapons.at(cx, cy, cz));
@@ -174,8 +185,9 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
                 + BLOCK_CLICK_REACH + "), or this proves nothing a click could not do; it stands "
                 + range, range > BLOCK_CLICK_REACH);
 
+        requireNothingInReach("the block twenty blocks off");
         long namingBlock = server.mark();
-        bot().useItem();
+        rightClick();
         String designated = server.awaitRecordWithFields(namingBlock, "weapon_designated",
                 "his right-click must hand the console what he was looking at", ROUND_TRIP_TICKS,
                 "pos", Weapons.at(cx, cy, cz));
@@ -222,8 +234,9 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
                 zombie.number("z")};
         lookAt(server, zombieCentre);
 
+        requireNothingInReach("the zombie");
         long namingZombie = server.mark();
-        bot().useItem();
+        rightClick();
         String designatedZombie = server.awaitRecordWithFields(namingZombie, "weapon_designated",
                 "his right-click on the zombie must hand the console the zombie", ROUND_TRIP_TICKS,
                 "pos", Weapons.at(cx, cy, cz));
@@ -247,8 +260,9 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
         // ---- leg 3: back to the block. A followed creature outranks a point, so this is the leg
         // that fails if naming a point leaves the creature order standing.
         lookAt(server, faceCentre);
+        requireNothingInReach("the block again");
         long renamingBlock = server.mark();
-        bot().useItem();
+        rightClick();
         String designatedAgain = server.awaitRecordWithFields(renamingBlock, "weapon_designated",
                 "his right-click on the block must hand the console the block again", ROUND_TRIP_TICKS,
                 "pos", Weapons.at(cx, cy, cz));
@@ -274,6 +288,29 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
                 seen -> !laterThan(Events.recordsWhereAll(seen, pairs), afterSeq).isEmpty(),
                 "carrying " + Arrays.toString(pairs) + " later than seq " + afterSeq, what,
                 Weapons.SUBJECT_TICKS);
+    }
+
+    /**
+     * One press of the right mouse button through the client's input pipeline: the key edge vanilla's
+     * keybind poll turns into {@code rightClickMouse()}, which then decides from its own pick whether
+     * this is a click on a block, on a creature, or a use of the held item. Released at once, so the
+     * held-button repeat never adds a second click.
+     */
+    private void rightClick() throws Exception {
+        bot().setKey(USE_ITEM_BUTTON, true);
+        bot().setKey(USE_ITEM_BUTTON, false);
+    }
+
+    /**
+     * His crosshair rests on nothing within reach, which is what sends vanilla's right-click down the
+     * item's own use path rather than onto a block or a creature: the target is named by the linker's
+     * long trace, never by the click's pick.
+     */
+    private void requireNothingInReach(String target) throws Exception {
+        JsonObject pick = bot().reportMouseOver();
+        ArrangementFailure.requireArranged("looking at " + target + ", nothing within reach may be under"
+                + " his crosshair, or the click is not a use of the linker: " + pick,
+                "MISS".equals(pick.get("typeOfHit").getAsString()));
     }
 
     /**

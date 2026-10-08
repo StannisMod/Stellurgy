@@ -45,7 +45,7 @@ restores. The failure modes known to violate it are listed under **Failure modes
   The world goes on loading. **Ruling 2026-10-02:** two equal stated `DIMID`s — the earlier in the
   file holds the id, the later is refused under this clause; failing the whole load was rejected
   (an unreasonable file stays loadable: what is merely absurd stays possible and costs what it costs). Pinned by `PlanetDefsAuthoringTest#aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar`. FOR: DIMID-5.
-- **DIMID-5 (an id outlives the server)** Once a world has been saved, every body it holds keeps its id
+- **DIMID-5 (an id outlives the server)** `[V][BEH]` Once a world has been saved, every body it holds keeps its id
   across a restart. **Ruling 2026-10-02:** no promise is made about the id of a body that states none
   when the PACK's file is edited before the world's first save; the promise starts at the save.
 
