@@ -134,19 +134,27 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   in-world
   `TierTwoCraftFlightModelGroupTest#aCraftWhoseWheelIsSpentDoesNotTurnUnderAStraightCommand`, max
   |ω| 3e-13 rad/s against 7.4 with the burst taken unconditionally).
-- **INV-SFM-13** `[A][SYS]` What the readout states for a LIVE direction and endurance is what the
+- **INV-SFM-13** `[T][SYS]` What the readout states for a LIVE direction and endurance is what the
   scheme delivers: a command in that direction at the readout's figure is delivered whole — for a
   translation the figure is the force over the hull's whole mass, for a rotation the angular
   acceleration itself — and a direction the readout calls `NO_AUTHORITY` is delivered nothing. FOR:
   INV-SFM-10 (a built ship accelerates as its readout predicts). The joint readout ↔ scheme; each side's
-  own law is INV-SFM-07 and INV-SFM-12. No test pins the joint yet.
-- **INV-SFM-14** `[A][BEH]` A motor worn to its last stage puts no force into the craft: it stays in
+  own law is INV-SFM-07 and INV-SFM-12. Pinned at the handoff, each witnessed by breaking the handover
+  in `ShipReadout#of` (`test/integration/ShipMotionJointsTest#aReadoutFigureIsDeliveredWhole`,
+  `…#aDirectionTheReadoutCallsUnavailableIsDeliveredNothing`); the cargo joint MECH-SFM-01 ↔ INV-SFM-07
+  by `…#cargoTheFrameWeighsIsTheMassTheReadoutDividesBy`.
+- **INV-SFM-14** `[T][BEH]` A motor worn to its last stage puts no force into the craft: it stays in
   DESIGN, so the readout shows what was lost, and is absent from LIVE, the only set the flight computer
   allocates over. The kernel knows no wear — it takes each device as a force interval from zero to its
   maximum — so the decision is the world side's, in three places: the wear threshold
   (`block/ChemicalMotorActuators.java`, `working`), the routing into LIVE (`integration/vs/HullSurvey.java`,
   `collect`) and the controller allocating over `model.live()` (`TileAdvancedFlightComputer.java:1869`).
-  No mechanics test pins it yet (maintainer 2026-10-07: *"Ядро не знает про износы, в том числе про
+  Wear is not a hull change, so a motor worn in flight is dropped at the next load round of the survey
+  (`MASS_ROUND_TICKS`, 100 ticks, `TileAdvancedFlightComputer.java:1355`) and pushes until then `[V]` —
+  a divergence from this clause, open: either the latency becomes part of it, or a wear change marks the
+  model stale.
+  Pinned by `test/server/TierTwoCraftFlightModelGroupTest#aMotorWornToItsLastStagePutsNoForceIntoTheCraft`,
+  witnessed at each of the three places (maintainer 2026-10-07: *"Ядро не знает про износы, в том числе про
   полностью сломанное. Оно оперирует силами, точнее, промежутками от нуля до максимума силы. Переход из
   мотора в силу делает Minecraft"*).
 

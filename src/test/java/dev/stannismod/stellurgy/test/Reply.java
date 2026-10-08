@@ -375,6 +375,21 @@ public final class Reply {
     }
 
     /**
+     * EVERY element of the ARRAY {@code field}, each as its own reply — for a caller that must act on
+     * all of them (wear every motor a survey lists) rather than address one. {@link #element} is the
+     * reader when one element is meant; this one has no identity to check, so it refuses only when
+     * the field is not an array of objects.
+     */
+    public Reply[] elements(String field) {
+        String[] each = objectArray(field);
+        Reply[] out = new Reply[each.length];
+        for (int i = 0; i < each.length; i++) {
+            out[i] = Reply.of(command + " [" + field + "]", each[i]);
+        }
+        return out;
+    }
+
+    /**
      * The ONE element of the ARRAY {@code field} carrying EVERY one of {@code memberValues},
      * given as {@code member, value, member, value, …} — for a subject whose ADDRESS takes more
      * than one field.

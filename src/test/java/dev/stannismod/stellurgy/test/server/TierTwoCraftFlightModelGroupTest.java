@@ -770,6 +770,111 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         return false;
     }
 
+    // ---- 6a. a worn-out motor puts no force into the craft ----------------------------------------
+
+    /**
+     * STIMULUS: the climb this scenario commands, in blocks per engine second. Its only job is to ask
+     * for more than one physics step at the motors' authority delivers, so the controller works at
+     * that authority for several steps (the window reports how many); small, because the craft must
+     * be braked back to rest before its motors are worn, and a motorless craft keeps any speed it has.
+     */
+    private static final double WEAR_CLIMB_COMMAND = 4.0;
+
+    /** EXPERIMENT dose of each climb in this scenario, game ticks: long enough to hold saturated steps. */
+    private static final int WEAR_CLIMB_TICKS = 10;
+
+    /** STIMULUS: ticks of a zero-velocity command after the first climb, so the craft is near rest. */
+    private static final int WEAR_BRAKE_TICKS = 20;
+
+    /**
+     * A motor worn to its last stage puts no force into the craft (ship-flight-model INV-SFM-14): a
+     * craft whose every motor is worn out does not accelerate when commanded to climb, where the same
+     * craft, unworn, does.
+     *
+     * <p>The decision lives in three places of the world side — the wear threshold, the survey that
+     * keeps a broken device out of LIVE, and the flight computer allocating over LIVE alone — and the
+     * kernel never sees wear, so this is a mechanics test: a probe ARRANGES the wear (the stage a
+     * motor reaches by use), production does everything after it. EVERY motor is worn, not one: with
+     * one of the fixture's two motors left, the remaining motor is off-centre and its clean authority
+     * is zero by the solver's own law, so "no force" would be the solver's answer, not this contract's.
+     * Here no working motor remains, so zero is what the contract alone predicts.</p>
+     *
+     * <p>The model is rebuilt on a cadence, not on wear: the verdict waits for this craft's next
+     * {@code flight_model_changed} after the wear, and a motor worn mid-flight pushes until then (at most
+     * one load round).</p>
+     *
+     * <p>Run in VACUUM and ZERO gravity, a configuration no player's overworld has, on purpose: the
+     * contract is about the motors' force, which neither air nor the field changes, and a craft with no
+     * working motor would otherwise fall out of its plot into the terrain between the reads.</p>
+     *
+     * <p>What it does NOT see: a pilot's key (the climb enters on the computer's probe channel), and what
+     * the pilot is shown about the worn motors.</p>
+     *
+     * <p>red-witnessed, one break per place the decision lives, each failing the verdict with "with every
+     * motor worn out, nothing may push the craft in any direction … expected:&lt;0.0&gt; but
+     * was:&lt;86.36976495536865&gt;", 2026-10-07: the wear threshold — {@code
+     * ChemicalMotorActuators#working} at {@code wear.getStage() < wear.getMaxStage()} turned to
+     * {@code <=}; the routing into LIVE — {@code HullSurvey#collect} at {@code if (block.isWorking(world,
+     * pos, state))} made always true; the controller — {@code TileAdvancedFlightComputer#onPhysicsTick}
+     * at {@code scheme.allocate(model.live(), a,} handed {@code model.design()}.</p>
+     */
+    @Test
+    public void aMotorWornToItsLastStagePutsNoForceIntoTheCraft() throws Exception {
+        FixtureSite site = site();
+        standInVacuum();
+        exec("ar planet set " + DIM + " gravitationalMultiplier 0");
+        Reply planet = Reply.of(exec("stellurgytest planet info " + DIM));
+        requireArranged("the overworld's field must be off for a motorless craft to stay in its plot: "
+                + planet, planet.number("gravity") == 0.0);
+
+        AssembledCraft craft = assemble(site, "with-advanced-flight-computer",
+                "a craft whose motors will be worn out");
+        removePad(site, "the worn-motor craft");
+
+        String unworn = drive(craft, "force-vel-by-id", 0.0, WEAR_CLIMB_COMMAND, 0.0, WEAR_CLIMB_TICKS,
+                "the unworn craft commanded to climb");
+        requireArranged("the controller must work at the motors' authority for several steps: " + unworn,
+                Events.number(unworn, "saturatedSteps") > 1);
+        assertTrue("unworn, the craft's motors must push it up when it is commanded to climb: " + unworn,
+                Events.number(unworn, "satEngineAccelY") > NO_MOTION_BAND);
+
+        command(craft, "force-vel-by-id", 0.0, 0.0, 0.0, "brake the worn-motor craft to rest");
+        // STIMULUS: the brake's duration; the verdict reads acceleration, never position or speed.
+        GameTicks.advance(client(), GameTicks.server(), WEAR_BRAKE_TICKS);
+
+        Reply survey = Reply.of(exec("stellurgytest vs actuators " + DIM + " " + craft.physicsId));
+        requireArranged("the craft's devices must be surveyable: " + survey, survey.bool("survey"));
+        int motors = 0;
+        for (Reply device : survey.elements("actuators")) {
+            if (!device.bool("sustained")) {
+                continue;
+            }
+            String at = DIM + " " + device.integer("x") + " " + device.integer("y") + " " + device.integer("z");
+            Reply wear = Reply.of(exec("stellurgytest wear get " + at));
+            requireArranged("a motor must carry wear: " + wear, wear.bool("registered"));
+            Reply worn = Reply.of(exec("stellurgytest wear set " + at + " " + wear.integer("maxStage")));
+            requireArranged("the motor must be worn to its last stage: " + worn,
+                    worn.integer("stage") == worn.integer("maxStage"));
+            motors++;
+        }
+        requireArranged("the fixture must carry motors to wear: " + survey, motors > 0);
+
+        long wornMark = events.mark();
+        events.awaitRecordWithFields(wornMark, "flight_model_changed",
+                "the craft's model must be rebuilt after its motors wore out", AssembledCraft.LINK_BUDGET_TICKS,
+                "ship", craft.durable);
+
+        String worn = drive(craft, "force-vel-by-id", 0.0, WEAR_CLIMB_COMMAND, 0.0, WEAR_CLIMB_TICKS,
+                "the worn-out craft commanded to climb");
+        requireArranged("the controller must report it could not deliver the climb for several steps: "
+                + worn, Events.number(worn, "saturatedSteps") > 1);
+        double ax = Events.number(worn, "satEngineAccelX");
+        double ay = Events.number(worn, "satEngineAccelY");
+        double az = Events.number(worn, "satEngineAccelZ");
+        assertEquals("with every motor worn out, nothing may push the craft in any direction — " + worn,
+                0.0, Math.sqrt(ax * ax + ay * ay + az * az), NO_MOTION_BAND);
+    }
+
     // ---- 6b. an idle craft gives its wheel back ---------------------------------------------------
 
     /**

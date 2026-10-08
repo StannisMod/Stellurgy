@@ -738,7 +738,7 @@ public class ShipMotionLawsTest {
                     ActuatorCommand c = scheme.allocate(cap, lin, ang, momentum, ShipMotionCases.DT);
                     try {
                         CleanCommandLaw.requireHonest(hull.name + ", command " + k + " (" + asked + "), step " + s,
-                                cap, lin, ang, c, momentum);
+                                hull, cap, lin, ang, c, momentum);
                     } catch (AssertionError broken) {
                         throw new AssertionError(broken.getMessage() + " | saturated " + c.isSaturated()
                                 + " | wheels before the step: " + before + " | after: " + CleanCommandLaw.wheels(cap, momentum)
@@ -836,7 +836,7 @@ public class ShipMotionLawsTest {
                     ActuatorCommand c = scheme.allocate(cap, lin, ang, momentum, ShipMotionCases.DT);
                     String where = hull.name + ", " + d + " at " + fraction + " of the geometric "
                             + newtons + " N, command " + k + ", step " + s;
-                    CleanCommandLaw.requireHonest(where, cap, lin, ang, c, momentum);
+                    CleanCommandLaw.requireHonest(where, hull, cap, lin, ang, c, momentum);
                     assertTrue(where + ": a command the hull can hold was flagged saturated — force "
                             + c.force(), !c.isSaturated());
                     exact++;
@@ -891,7 +891,7 @@ public class ShipMotionLawsTest {
         int phase1 = (int) Math.ceil(seconds / ShipMotionCases.DT) + 60;
         for (int s = 0; s < phase1; s++) {
             ActuatorCommand c = scheme.allocate(cap, surge, none, momentum, ShipMotionCases.DT);
-            CleanCommandLaw.requireHonest(hull.name + ", the first burst, step " + s, cap, surge, none, c, momentum);
+            CleanCommandLaw.requireHonest(hull.name + ", the first burst, step " + s, hull, cap, surge, none, c, momentum);
             double got = c.force().dot(ShipMotionCases.HELM.axis(ControlAxis.SURGE));
             assertTrue("step " + s + ": an over-demand never gets less than the sustained figure "
                     + sustained + " N, got " + got, got >= sustained - tol);
@@ -909,7 +909,7 @@ public class ShipMotionLawsTest {
         requireArranged("the burst must have left the wheel holding momentum: " + held, held > 0.0D);
         for (int s = 0; s < phase2 && held > 0.0D; s++) {
             ActuatorCommand c = scheme.allocate(cap, none, none, momentum, ShipMotionCases.DT);
-            CleanCommandLaw.requireHonest(hull.name + ", the idle wheel, step " + s, cap, none, none, c, momentum);
+            CleanCommandLaw.requireHonest(hull.name + ", the idle wheel, step " + s, hull, cap, none, none, c, momentum);
             double now = CleanCommandLaw.wheelMomentum(cap, momentum);
             assertTrue("step " + s + ": an idle wheel is only ever given back: " + held + " -> " + now,
                     now <= held);
@@ -918,7 +918,7 @@ public class ShipMotionLawsTest {
         assertEquals("an idle wheel is given back completely within 30 s", 0.0D, held, 0.0D);
 
         ActuatorCommand again = scheme.allocate(cap, surge, none, momentum, ShipMotionCases.DT);
-        CleanCommandLaw.requireHonest(hull.name + ", the second burst", cap, surge, none, again, momentum);
+        CleanCommandLaw.requireHonest(hull.name + ", the second burst", hull, cap, surge, none, again, momentum);
         assertEquals("with the wheel bought back the burst is there again", burst,
                 again.force().dot(ShipMotionCases.HELM.axis(ControlAxis.SURGE)), tol);
     }
@@ -980,7 +980,7 @@ public class ShipMotionLawsTest {
                 Vector3d lin = new Vector3d();
                 ActuatorCommand c = scheme.allocate(wheelCap, lin, ang, full, ShipMotionCases.DT);
                 CleanCommandLaw.requireHonest(wheel.name + ", " + axis + (positive ? "+" : "-") + " from a full wheel",
-                        wheelCap, lin, ang, c, full);
+                        wheel, wheelCap, lin, ang, c, full);
                 delivered = Math.max(delivered, c.torque().length());
             }
             assertTrue(wheel.name + ": a wheel full in one sense still turns " + axis + " the other way",

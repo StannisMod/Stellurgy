@@ -40,9 +40,17 @@ public final class CleanCommandLaw {
      * an axis not asked for gets nothing; an axis asked for gets its own sign and no more than asked;
      * an unsaturated command gets exactly what it asked. Every throttle is in its device's range and
      * every wheel inside its capacity.
+     *
+     * <p>The mass a translation is judged by is the hull's DECLARED mass ({@link
+     * ShipMotionCases.Hull#declaredMass}), never the capability's own frame: judged by {@code
+     * cap.mass()}, a scheme that multiplied by a wrong mass the capability also carried would be divided
+     * back by the same wrong mass and pass. What this verifier does NOT see: a defect in the inertia
+     * tensor the mass builder computes, which a rotation is judged by (MECH-SFM-01, pinned in {@code
+     * ShipMassFrameTest}), and whether the law it checks is sensitive at all — that is witnessed by the
+     * red records of the laws that call it, not here.</p>
      */
-    public static void requireHonest(String where, ShipCapability cap, Vector3dc lin, Vector3dc ang,
-                                      ActuatorCommand c, MomentumStore momentum) {
+    public static void requireHonest(String where, ShipMotionCases.Hull hull, ShipCapability cap,
+                                      Vector3dc lin, Vector3dc ang, ActuatorCommand c, MomentumStore momentum) {
         List<Actuator> actuators = cap.actuators();
         for (int i = 0; i < actuators.size(); i++) {
             Actuator a = actuators.get(i);
@@ -55,7 +63,7 @@ public final class CleanCommandLaw {
                         + a.momentumCapacity(), Math.abs(held) <= a.momentumCapacity() * (1.0D + 1.0e-12D));
             }
         }
-        double mass = cap.mass().getTotalMass();
+        double mass = hull.declaredMass();
         double forceTol = RESIDUAL * forceScale(cap);
         double torqueTol = RESIDUAL * torqueScale(cap);
         if (mass > 0.0D) {
@@ -66,7 +74,7 @@ public final class CleanCommandLaw {
                     axisVerdict(where, axis, lin.dot(e), a.dot(e), forceTol / mass, c.isSaturated());
                 }
             }
-            Matrix3d inverse = new Matrix3d(cap.mass().getInertia()).invert();
+            Matrix3d inverse = new Matrix3d(hull.mass.getInertia()).invert();
             Vector3d alpha = inverse.transform(new Vector3d(c.torque()));
             double alphaTol = torqueTol * frobenius(inverse);
             for (ControlAxis axis : ControlAxis.values()) {

@@ -188,6 +188,19 @@ public final class ShipMotionCases {
             b.addAll(contributors);
             this.mass = contributors.isEmpty() ? ShipMassFrame.empty() : b.build();
         }
+
+        /**
+         * The hull's mass as the experiment declares it, kg: the sum of its contributors, read off the
+         * inputs rather than off the frame the mass builder made of them — so a verdict that divides by
+         * it does not share a computation with the code under test.
+         */
+        public double declaredMass() {
+            double total = 0.0D;
+            for (MassContributor c : contributors) {
+                total += Math.max(0.0D, c.getMass());
+            }
+            return total;
+        }
     }
 
     /** A motor at block (x,y,z) that pushes along the unit block direction (px,py,pz). */
