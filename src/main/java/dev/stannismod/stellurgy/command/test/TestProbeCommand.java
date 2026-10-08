@@ -9411,18 +9411,26 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(out));
             return;
         }
-        // orbit-line <dim> [<blocks>|unset]: a world's atmosphere<->orbit line as production reads it,
-        // and - with a second argument - the planet file's own <orbitHeight> for it, stated or cleared,
-        // which is how a test arranges a low line without writing a whole galaxy. Absence is a value:
+        // orbit-line <dim>: a world's atmosphere<->orbit line as production reads it. Absence is a value:
         // `line` and `entryCeiling` are null for a world that has no line.
-        if (args.length >= 2 && "orbit-line".equalsIgnoreCase(args[0])) {
+        // state-orbit-line <dim> <blocks>|unset: the planet file's own <orbitHeight> for it, stated or
+        // cleared, then the same reading - how a mechanics test arranges a low line without writing a
+        // whole galaxy. Two verbs, so that a read and a write differ by NAME: the e2e census admits the
+        // first and refuses the second, and it cannot read arguments.
+        boolean stating = "state-orbit-line".equalsIgnoreCase(args.length > 0 ? args[0] : "");
+        if (args.length >= 2 && ("orbit-line".equalsIgnoreCase(args[0]) || stating)) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
             if (props == null) {
                 send(sender, "{\"error\":\"unknown planet\",\"dim\":" + dim + "}");
                 return;
             }
-            if (args.length >= 3) {
+            if (stating != (args.length >= 3)) {
+                send(sender, "{\"error\":\"orbit-line <dim> reads; state-orbit-line <dim> <blocks>|unset"
+                        + " states\",\"dim\":" + dim + "}");
+                return;
+            }
+            if (stating) {
                 int stated = "unset".equalsIgnoreCase(args[2]) ? DimensionProperties.ORBIT_HEIGHT_UNSET
                         : parseIntOr(args[2], Integer.MIN_VALUE);
                 if (stated == Integer.MIN_VALUE) {

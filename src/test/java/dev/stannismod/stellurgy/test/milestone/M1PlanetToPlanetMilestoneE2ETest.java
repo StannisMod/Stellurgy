@@ -35,7 +35,6 @@ import dev.stannismod.stellurgy.test.DriveInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.TelescopeReading;
-import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.client.ClientEvents;
 import dev.stannismod.stellurgy.test.client.SeatDelivery;
 
@@ -198,30 +197,26 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final String VARIANT = "with-powered-jump-drive";
 
     /**
-     * This milestone's own patch of world.
+     * Where the player's own build stands: at the place he enters the world, on its ground.
      *
-     * <p><b>The lane keeps the coordinates this test's green runs were taken on</b> — 8400/8400,
-     * chosen to be far from every other fixture site so a stray ship from another run can never be
-     * read here — while the SITE inside it is allocated rather than typed. What that buys is the
-     * pair of refusals the plot carries: the volume this fixture clears is asserted to lie inside
-     * the plot, and a second structure on it could not reach into the first. This class boots its
-     * own server and runs one scenario, so index 0 is the whole allocation it will ever need.</p>
+     * <p><b>He walks to everything he uses.</b> An e2e never teleports the player (maintainer,
+     * 2026-10-08: "tp действительно надо запретить"), so the build has to stand where he already is:
+     * the observatory and the craft's pad are laid a few blocks from the spot the server spawns him
+     * on, on one flat floor at the height of the ground he stands on. Laying that floor and those
+     * structures is a FIXTURE — a fast-forward of blocks he would have placed one by one, the named
+     * exception — and nothing a fixture lays acts on its own: he presses every button.</p>
      *
-     * <p>Not static: a plot records the ground its scenario has cleared, and that record belongs to
-     * the test instance that made it, not to the JVM.</p>
-     *
-     * <p><b>The lane origin is the proven coordinate MINUS the inset, and the subtraction is the
-     * point.</b> A lane names a plot's corner; a site stands {@link Plot#FIXTURE_INSET} blocks
-     * inside it, so writing the proven number as the ORIGIN would build the craft twenty blocks
-     * away from where every green run put it, silently.</p>
+     * <p>The ground is the subject of nothing here but it is real terrain, so the site is a GROUND
+     * site and the volume above it is cleared and reported, never asserted empty. Assigned once, at
+     * leg 0, from the client's own reading of where he stands.</p>
      */
-    private static final int PROVEN_X = 8400, PROVEN_Z = 8400;
-    /** @see #plot */
-    private final Plot plot = Plot.forScenario(0, "the milestone's craft", 0,
-            new Plot.Lane(PROVEN_X - Plot.FIXTURE_INSET, PROVEN_Z - Plot.FIXTURE_INSET, Plot.SIZE));
-    private final FixtureSite site = plot.site();
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private final int bx = site.x, by = site.y, bz = site.z;
+    private FixtureSite site;
+    /** The craft site's corner and floor: the pad is laid at {@code by}, its top surface is {@code by + 1}. */
+    private int bx, by, bz;
+    /** The observatory's controller, laid on the same floor. */
+    private int[] observatoryAt;
+    /** The block he spawned standing on: x, floor y, z. */
+    private int[] spawnFloor;
 
     /**
      * The HOME world's atmosphere ceiling, stated in leg 0 as its planet file would state it: the lowest
@@ -308,6 +303,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 + "    B:rocketsRequireFuel=false\n"
                 + "}\n";
         Files.write(stellurgyConfigDir.resolve("stellurgy.cfg"), cfg.getBytes(StandardCharsets.UTF_8));
+        seedTheHomeSystemWithItsOrbitLine(stellurgyConfigDir);
 
         serverHarness = RealDedicatedServerHarness.startWith(root, false);
         try {
@@ -321,6 +317,58 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // window opened with the pair, so its counts are this run's.
         seatDelivery = SeatDelivery.open(this::exec, bot(),
                 serverEvents(), clientEvents());
+    }
+
+    /**
+     * The home world's orbit line, STATED the one way a world states it: {@code <orbitHeight>} in the
+     * planet file (Earth's own line is 100 000 world blocks, a climb of minutes).
+     *
+     * <p>A planet file replaces the whole built-in universe, so the file this world loads must be that
+     * universe and nothing else. It is not written by hand: a throwaway server boots the built-in
+     * universe on the same seed and saves it, the game writes its own {@code planetDefs.xml} (a writer
+     * made to round-trip), and that file — with one {@code <orbitHeight>} added to Earth — is what this
+     * world is created from. So the copy cannot drift from what the mod ships: it is taken afresh
+     * every run. Refused loudly if Earth is not there exactly once, already carries a line, or the
+     * file holds no Luna.</p>
+     */
+    private static void seedTheHomeSystemWithItsOrbitLine(Path configDir) throws Exception {
+        Path harvestRoot = Files.createTempDirectory("forge-m1-universe-");
+        try {
+            RealDedicatedServerHarness.startWith(harvestRoot, false).close();
+            Path written = harvestRoot.resolve("world").resolve("advRocketry").resolve("planetDefs.xml");
+            requireArranged("the built-in universe's server must have written its planet file at "
+                    + written, Files.isRegularFile(written));
+            org.w3c.dom.Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                    .newDocumentBuilder().parse(written.toFile());
+            org.w3c.dom.NodeList planets = doc.getElementsByTagName("planet");
+            org.w3c.dom.Element earth = null;
+            boolean luna = false;
+            for (int i = 0; i < planets.getLength(); i++) {
+                org.w3c.dom.Element planet = (org.w3c.dom.Element) planets.item(i);
+                if ("0".equals(planet.getAttribute("DIMID"))) {
+                    requireArranged("the planet file must hold Earth (DIMID 0) exactly once", earth == null);
+                    earth = planet;
+                }
+                luna |= "Luna".equals(planet.getAttribute("name"));
+            }
+            requireArranged("the planet file must hold Earth (DIMID 0): " + written, earth != null);
+            requireArranged("the planet file must hold Luna, or it is not the built-in home system: "
+                    + written, luna);
+            requireArranged("Earth must carry no line of its own before this one is stated",
+                    earth.getElementsByTagName("orbitHeight").getLength() == 0);
+            org.w3c.dom.Element line = doc.createElement("orbitHeight");
+            line.setTextContent(Integer.toString(ORBIT_LINE));
+            earth.appendChild(line);
+            javax.xml.transform.TransformerFactory.newInstance().newTransformer().transform(
+                    new javax.xml.transform.dom.DOMSource(doc),
+                    new javax.xml.transform.stream.StreamResult(configDir.resolve("planetDefs.xml").toFile()));
+            System.out.println("[M1] home system: the built-in universe's own planet file, Earth's"
+                    + " <orbitHeight> stated at " + ORBIT_LINE);
+        } finally {
+            try (java.util.stream.Stream<Path> walk = Files.walk(harvestRoot)) {
+                walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            }
+        }
     }
 
     /** This run's pilot-input delivery windows — see {@link SeatDelivery}. */
@@ -430,11 +478,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "`true` here means the file was written in a syntax the config reader "
                         + "skipped and every later leg would be running against defaults: " + fuelCfg,
                 (!Reply.of(fuelCfg).bool("value")));
-        // The home world's line, STATED as its planet file would state it — Earth's own is 100 000
-        // world blocks, a climb of minutes — and read back as production reads it.
-        OrbitLine homeLine = OrbitLine.state(this::exec, 0, ORBIT_LINE);
-        requireArranged("the home world's orbit line must be the one this loop states: " + homeLine,
-                homeLine.line() == ORBIT_LINE);
+        // The home world's line, stated in the planet file this world was created from (see
+        // seedTheHomeSystemWithItsOrbitLine) and read back as production reads it. `stated` says the
+        // file's <orbitHeight> is what production holds, not a line derived from Earth's radius.
+        OrbitLine homeLine = OrbitLine.of(this::exec, 0);
+        requireArranged("the home world's orbit line must be the one its planet file states — a"
+                        + " line that is not `stated` means the seeded file was never loaded: " + homeLine,
+                homeLine.stated && homeLine.line() == ORBIT_LINE);
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         requireArranged("the production space subsystem must be REGISTERED — it owns the "
@@ -453,6 +503,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + " status=" + status.raw(),
                 collided.length == 0);
         System.out.println("[M1] leg 0 (config + subsystem) " + elapsed(tLeg) + " status=" + status.raw());
+        layTheHomeSite();
 
         // ---- LEG T: at home, he looks at the sky and writes the Moon down. --------------------------
         // The rule this link walks (maintainer ruling 2026-09-30): a moon has a cell of its own inside
@@ -492,9 +543,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // ---- LEG 1: stand the craft up on a pad. Blocks only — no interaction happens here. -----
         tLeg = System.currentTimeMillis();
-        // No settle: the server moved him before `tp` answered, and the fixture is placed server-side.
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         int[] builderPos = placeFixture();
+        layTheStepsToTheDeck();
         System.out.println("[M1] leg 1 (fixture placed) " + elapsed(tLeg)
                 + " builder=" + describe(builderPos));
 
@@ -1516,19 +1566,12 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * act any interface lets a test perform. Returns the controller's position.
      */
     private int[] placeHomeObservatory() throws Exception {
-        Plot observatoryPlot = Plot.forScenario(1, "the home observatory", 0,
-                new Plot.Lane(PROVEN_X - Plot.FIXTURE_INSET, PROVEN_Z - Plot.FIXTURE_INSET, Plot.SIZE));
-        FixtureSite obsSite = observatoryPlot.site();
-        // The multiblock spans x±2, y from the controller's -1 to +3, z from the controller to +4;
-        // the platform adds three rows on its north side, so the halo reaches four each way.
-        obsSite.requireClear(this::exec, 4, 6, "the home observatory and its operator's platform");
-        int cx = obsSite.x, cy = obsSite.y + 1, cz = obsSite.z;
+        // On the home floor laid at leg 0: the multiblock spans x±2, y from the controller's -1 to
+        // +3, z from the controller to +4, and he operates it from the floor north of it.
+        int cx = observatoryAt[0], cy = observatoryAt[1], cz = observatoryAt[2];
         String built = exec("stellurgytest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz);
         requireArranged("the observatory multiblock must stand: " + built, Reply.of(built).ok());
-        String floor = exec("fill " + (cx - 1) + " " + (cy - 1) + " " + (cz - 3) + " " + (cx + 1)
-                + " " + (cy - 1) + " " + (cz - 1) + " minecraft:iron_block");
-        System.out.println("[M1] observatory at (" + cx + "," + cy + "," + cz + "): " + built
-                + " platform: " + floor);
+        System.out.println("[M1] observatory at (" + cx + "," + cy + "," + cz + "): " + built);
         return new int[]{cx, cy, cz};
     }
 
@@ -1825,18 +1868,33 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     }
 
     /**
-     * An empty main hand, without wiping the inventory the pilot is carrying his crystal in.
+     * An empty main hand, without wiping the inventory the pilot is carrying his crystal in: he
+     * presses the number key of the first EMPTY hotbar slot, as his own client shows the hotbar.
      *
      * <p><b>One read after the key's tick, because there is nothing else to wait for.</b> Once
-     * {@link #pressHotbarKey} returns, the hand holds slot 1's contents. Those change only when the
-     * SERVER sets the slot ({@code client_slot_set}), and nothing between here and the use press
-     * does — so a slot 1 that is not empty now stays not empty however long anyone waits.</p>
+     * {@link #pressHotbarKey} returns, the hand holds that slot's contents. Those change only when
+     * the SERVER sets the slot ({@code client_slot_set}), and nothing between here and the use press
+     * does — so a slot that is not empty now stays not empty however long anyone waits. Whatever he
+     * picked up on the way (seeds, on a grassy spawn) stays in his inventory: it is his.</p>
      *
      * <p>A world that is not ready here is a failure of whatever link brought the pilot here, not a
      * state to sit through: the key's one world tick refuses it with its own diagnosis.</p>
      */
     private void holdNothing() throws Exception {
-        JsonObject items = pressHotbarKey(1);
+        JsonObject carried = bot().reportPlayerItems();
+        requireArranged("the client must report the player's inventory before he picks a slot: "
+                + carried, isWorldReady(carried) && carried.has("main"));
+        com.google.gson.JsonArray main = carried.getAsJsonArray("main");
+        int empty = -1;
+        for (int slot = 0; slot < 9 && empty < 0; slot++) {
+            JsonObject stack = main.get(slot).getAsJsonObject();
+            if (!stack.has("id") || stack.get("id").getAsString().isEmpty()) {
+                empty = slot;
+            }
+        }
+        requireArranged("the pilot's hotbar must hold an empty slot for an empty hand: " + carried,
+                empty >= 0);
+        JsonObject items = pressHotbarKey(empty);
         boolean ready = isWorldReady(items);
         String heldId = ready && items.has("held")
                 ? items.getAsJsonObject("held").get("id").getAsString() : null;
@@ -2300,17 +2358,22 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             requireArranged("the ship's stand and target points must map to world coordinates off"
                     + " its reported pose " + java.util.Arrays.toString(shipAnchor),
                     standWorld != null && targetWorld != null);
-            // The stand REACHING the client is a link: the reading below is of where he was put, and
-            // twenty ticks stood here as a guess at the trip.
-            long standMark = clientEvents().mark();
-            exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
-            ClientEvents.awaitPlacedNear(clientEvents(), standMark, standWorld[0], standWorld[2],
-                    "the stand on the deck square must reach the client before he aims from it",
-                    CLIENT_FLOOR_BUDGET_TICKS);
+            // He WALKS to the stand square. Below the deck — the first boarding, at home — he climbs
+            // the steps onto it first; aboard, he walks across the deck from wherever he stood up.
+            JsonObject before = bot().reportState();
+            requireArranged("the client's world must be ready before he walks: " + before,
+                    isWorldReady(before));
+            if (before.get("playerY").getAsDouble() < standWorld[1] - 1.0D) {
+                climbOntoTheDeck(dim, shipAnchor, afcSub);
+            }
+            walkTo(standWorld[0], standWorld[2], STAND_WITHIN_BLOCKS, WALK_TICKS,
+                    "the deck square he works the " + describe(targetSub) + " from");
 
             JsonObject state = bot().reportState();
-            requireArranged("a same-world teleport must leave the client's world ready: " + state,
-                    isWorldReady(state));
+            requireArranged("he must be standing ON the deck after the walk, not beside or under it:"
+                            + " the deck's top is y=" + standWorld[1] + ", the client reports " + state,
+                    isWorldReady(state)
+                            && Math.abs(state.get("playerY").getAsDouble() - standWorld[1]) < 0.6D);
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
@@ -2336,6 +2399,31 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 + " toWorldProbe=" + lastToWorldProbe
                 + " anchorHint=" + java.util.Arrays.toString(shipAnchorHint);
         return aim;
+    }
+
+    /**
+     * From the home floor up onto the deck: off the pad to its north, east along the floor and south
+     * down the craft's east side well clear of the deck's overhang, west to the foot of the steps, up
+     * them, and onto the deck's south edge beside the flight computer. The floor and the steps are
+     * world blocks at the home site's coordinates; the deck is the ship, so its two squares are read
+     * off the ship's live pose. (The first route walked under the deck's east column and stopped
+     * against the ship at x = bx+5.)
+     */
+    private void climbOntoTheDeck(int dim, double[] shipAnchor, int[] afcSub) throws Exception {
+        requireArranged("he can only be below the deck at home, where the steps stand; in dim " + dim
+                + " he must have stood up ON it", dim == 0);
+        double stepsX = bx + 2.5D;
+        walkTo(bx + 4.5D, bz - 2.5D, STAND_WITHIN_BLOCKS, WALK_TICKS, "the floor north of the pad");
+        walkTo(bx + 7.5D, bz - 2.5D, STAND_WITHIN_BLOCKS, WALK_TICKS, "the floor north-east of the craft");
+        walkTo(bx + 7.5D, bz + 15.5D, STAND_WITHIN_BLOCKS, WALK_TICKS, "the floor south-east of the steps");
+        walkTo(stepsX, bz + 15.5D, STAND_WITHIN_BLOCKS, WALK_TICKS, "the foot of the steps");
+        walkTo(stepsX, bz + 6.5D, STAND_WITHIN_BLOCKS, WALK_TICKS, "the top of the steps");
+        double[] entry = toWorld(dim, shipAnchor, add(afcSub, new int[]{0, 0, 2}), 0.5, 0.05, 0.5);
+        double[] aisle = toWorld(dim, shipAnchor, add(afcSub, new int[]{0, 0, 1}), 0.5, 0.05, 0.5);
+        requireArranged("the deck's south edge must map to world coordinates off the ship's pose "
+                + java.util.Arrays.toString(shipAnchor), entry != null && aisle != null);
+        walkTo(entry[0], entry[2], STAND_WITHIN_BLOCKS, WALK_TICKS, "the deck's south edge");
+        walkTo(aisle[0], aisle[2], STAND_WITHIN_BLOCKS, WALK_TICKS, "the deck beside the flight computer");
     }
 
     /** Point the client's head at a world point from an observed stance; returns the squared reach. */
@@ -2389,51 +2477,144 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** Warm the chunks, clear the site and stand the craft up; returns the assembler's position. */
     private int[] placeFixture() throws Exception {
-        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
-        // pre-clear it replaces was throwing away. The site stands in the open-air band, so the
-        // craft rests on the launchpad the fixture lays at its own Y and this ASSERTS rather than
-        // digging a shaft. The height covers the tallest variant in the catalogue plus the deck the
-        // player walks to reach its console; the climb to the orbit line is production's business
-        // and no pre-clear could cover it.
+        // A GROUND site on the home floor: the volume above it is cleared and its count reported.
+        // The height covers the craft plus the deck the player walks to reach its console; the climb
+        // to the orbit line is production's business and no pre-clear could cover it.
         int[] bp = RocketFixture.placeAt(site, this::exec, VARIANT, 2, 20,
                 "the jump-capable craft, and the deck the player boards and works it from");
         return new int[]{bp[0], bp[1],
                 bp[2]};
     }
 
+    /** How far the home floor reaches from the spawn block, and how much air is cleared above it. */
+    private static final int HOME_WEST = 3, HOME_EAST = 19, HOME_NORTH = 6, HOME_SOUTH = 15, HOME_AIR = 32;
+
     /**
-     * How long the client is given to receive the pad it is standing on, in ticks.
+     * Read where the client stands and lay the home floor around it: one flat level the observatory,
+     * the craft's pad and the steps up to its deck all stand on, with the air above it cleared.
      *
-     * <p>A bounded poll and not a link, because what is being waited for is not a decision this game
-     * publishes: it is a chunk arriving over a socket. The blind spot is named at the failure — a
-     * budget that runs out cannot tell a slow client from a client that will never be sent the
-     * chunk, and the reply printed there is what distinguishes them.</p>
+     * <p>The layout, from the spawn block (fx, fz), x east and z south: the observatory's controller
+     * at (fx+4, fz+6), operated from the floor north of it; the craft's pad at fx+10..fx+15 ×
+     * fz-2..fz+3, its assembler on the north side, its tower on the west; the steps up to the deck
+     * on the pad's south side, outside the assembler's scan. Every structure is reached on foot.</p>
      */
-    private static final int CLIENT_FLOOR_BUDGET_TICKS = 200;
+    private void layTheHomeSite() throws Exception {
+        JsonObject state = bot().reportState();
+        requireArranged("the client must report where the player stands before anything is built"
+                        + " around him: " + state,
+                state.has("playerX") && state.has("playerY") && state.has("playerZ"));
+        int fx = (int) Math.floor(state.get("playerX").getAsDouble());
+        int fy = (int) Math.floor(state.get("playerY").getAsDouble() + 1e-3) - 1;
+        int fz = (int) Math.floor(state.get("playerZ").getAsDouble());
+        spawnFloor = new int[]{fx, fy, fz};
+        observatoryAt = new int[]{fx + 4, fy + 1, fz + 6};
+        bx = fx + 10;
+        by = fy;
+        bz = fz - 2;
+        site = FixtureSite.onGround(0, bx, by, bz, "the craft stands on the floor laid where the player"
+                + " spawned, because he walks to it");
+        int x1 = fx - HOME_WEST, x2 = fx + HOME_EAST, z1 = fz - HOME_NORTH, z2 = fz + HOME_SOUTH;
+        String air = exec("stellurgytest fill 0 " + x1 + " " + (fy + 1) + " " + z1 + " " + x2 + " "
+                + (fy + HOME_AIR) + " " + z2 + " minecraft:air");
+        requireArranged("the air above the home floor must be cleared: " + air, Reply.of(air).ok());
+        String floor = exec("stellurgytest fill 0 " + x1 + " " + fy + " " + z1 + " " + x2 + " " + fy
+                + " " + z2 + " minecraft:iron_block");
+        requireArranged("the home floor must be laid: " + floor, Reply.of(floor).ok());
+        System.out.println("[M1] home site: spawned on " + describe(spawnFloor) + "; cleared "
+                + Reply.of(air).integer("placed") + " blocks above the floor (" + x1 + ".." + x2 + ", "
+                + z1 + ".." + z2 + ") and laid it: " + floor);
+    }
+
+    /**
+     * Steps from the floor up to the deck's south edge, a half block each, so he climbs them by
+     * walking. They stand south of the pad, outside the assembler's scan: they are world blocks, not
+     * part of the ship, and the ship's mass does not move.
+     *
+     * <p>Column k (k = 0 next to the deck) stands at z = bz+6+k and its walking surface is
+     * 0.5·k below the deck's top (by+5); k = 7 is a single slab on the floor.</p>
+     */
+    private void layTheStepsToTheDeck() throws Exception {
+        int deckTop = by + 5;
+        for (int k = 0; k < 8; k++) {
+            int z = bz + 6 + k;
+            double surface = deckTop - 0.5 * k;
+            int fullTop = (int) Math.floor(surface) - 1;
+            if (fullTop >= by + 1) {
+                exec("fill " + (bx + 1) + " " + (by + 1) + " " + z + " " + (bx + 2) + " " + fullTop + " "
+                        + z + " minecraft:stone");
+            }
+            if (surface != Math.floor(surface)) {
+                exec("fill " + (bx + 1) + " " + (fullTop + 1) + " " + z + " " + (bx + 2) + " "
+                        + (fullTop + 1) + " " + z + " minecraft:stone_slab 0");
+            }
+        }
+    }
+
+    /**
+     * He walks to a point the way a player does: faces it and holds forward, reading where his own
+     * client puts him, until he stands within {@code within} blocks of it. Within a block of it he
+     * sneaks, which is how a player closes the last step without running past it — and on a deck,
+     * how he keeps from walking off its edge.
+     */
+    private double[] walkTo(double x, double z, double within, int maxTicks, String what) throws Exception {
+        double px = Double.NaN, pz = Double.NaN;
+        boolean sneaking = false;
+        try {
+            // STIMULUS: the iterations ARE the input — each pass turns his head toward the point and
+            // holds the forward key for one world tick, against his own client-read position, the
+            // same closed loop a player's hands run. No record could answer "has he arrived": the
+            // arrival is this loop's own doing, and it ends on the goal state or refuses below.
+            for (int tick = 0; tick < maxTicks; tick++) {
+                JsonObject state = bot().reportState();
+                px = state.get("playerX").getAsDouble();
+                pz = state.get("playerZ").getAsDouble();
+                double dx = x - px, dz = z - pz, distance = Math.sqrt(dx * dx + dz * dz);
+                if (distance <= within) {
+                    bot().releaseKey(Keyboard.KEY_W);
+                    return new double[]{px, state.get("playerY").getAsDouble(), pz};
+                }
+                if (distance < 1.0D && !sneaking) {
+                    bot().holdKey(Keyboard.KEY_LSHIFT);
+                    sneaking = true;
+                }
+                bot().setLook((float) Math.toDegrees(Math.atan2(-dx, dz)), 0.0F);
+                bot().holdKey(Keyboard.KEY_W);
+                bot().waitWorldTicks(1);
+            }
+        } finally {
+            bot().releaseKey(Keyboard.KEY_W);
+            if (sneaking) {
+                bot().releaseKey(Keyboard.KEY_LSHIFT);
+            }
+        }
+        // What stopped him, as his own client holds it: the cell just ahead, at his feet and his head.
+        double dx = x - px, dz = z - pz, d = Math.max(1e-9, Math.sqrt(dx * dx + dz * dz));
+        int aheadX = (int) Math.floor(px + 0.6D * dx / d), aheadZ = (int) Math.floor(pz + 0.6D * dz / d);
+        JsonObject at = bot().reportState();
+        int feetY = at.has("playerY") ? (int) Math.floor(at.get("playerY").getAsDouble()) : 0;
+        requireArranged("he must be able to walk to " + what + " (" + x + ", " + z + ") within "
+                + maxTicks + " ticks; he stopped at (" + px + ", " + pz + ") state=" + at
+                + " | ahead at feet " + bot().blockState(aheadX, feetY, aheadZ)
+                + " | ahead at head " + bot().blockState(aheadX, feetY + 1, aheadZ), false);
+        return null;
+    }
+
 
     /** The aim controllers' step between an aim and the read of the pick — measured, see its use. */
     private static final int AIM_STEP_TICKS = 5;
 
+    /** How close to a stand point counts as standing on it, in blocks: well inside one block cell. */
+    private static final double STAND_WITHIN_BLOCKS = 0.35D;
     /**
-     * Put the player on the launchpad AND ESTABLISH THAT HE IS ON IT — measured through the CLIENT,
-     * which is the side that decides whether he falls.
-     *
-     * <p><b>Why this is not a teleport and a wait.</b> Vanilla player movement is client
-     * authoritative: the server takes the position the client sends. After a long teleport the
-     * client has no blocks at the destination for some number of ticks, and a client with no blocks
-     * under it is falling — so the server is handed a fall and accepts it. The pad's chunk is
-     * force-loaded on the SERVER by {@code requireClear}; nothing in that says the client has it.</p>
-     *
-     * <p><b>This was invisible until the fixtures left the landscape.</b> At the old {@code y = 64}
-     * the pad rested ON the terrain, so a player who never received the pad came to rest at the same
-     * height anyway and every assertion downstream was satisfied. Lifting the site into the open-air
-     * band removed the floor that was doing the work, and the leg failed with the player 87 blocks
-     * below a machine the test's own prints show standing there with full energy. The arrangement
-     * was never right; it was being propped up by ground nobody had named.</p>
-     *
-     * <p>The FIRST read is taken before the teleport and is a control: the client is 600 blocks away
-     * at that point, so it must NOT have the pad. Without it, a green here could mean "the wait
-     * works" or "the client had the chunk all along", and those are different worlds.</p>
+     * The most world ticks one walk may take. The longest walk on the home floor is ~20 blocks, under
+     * 100 ticks at a walk; a sneaked last block is ~15. The bound only ends a walk that cannot arrive.
+     */
+    private static final int WALK_TICKS = 600;
+
+    /**
+     * Walk the player onto the launchpad AND ESTABLISH THAT HE IS ON IT — measured through the CLIENT,
+     * which is the side that decides whether he falls. Vanilla movement is client authoritative, so
+     * the client's own position and the block it holds under him are what is read.
      */
     private void standOnThePad(double standX, double standZ, int[] builderPos) throws Exception {
         standOnFloor(standX, standZ, new int[]{builderPos[0], by, builderPos[2] + 2}, "launchpad");
@@ -2448,53 +2629,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             throws Exception {
         final int floorX = floorPos[0], floorY = floorPos[1], floorZ = floorPos[2];
 
-        JsonObject before = bot().blockState(floorX, floorY, floorZ);
-        System.out.println("[M1] client's view of the pad BEFORE the teleport (600 blocks away): "
-                + before);
-
-        long floorMark = clientEvents().mark();
-        exec("tp @a " + standX + " " + (floorY + 1) + " " + standZ + " 0 0");
-
-        // The client receiving the pad's CHUNK is a record — `chunk_data_applied`, carrying the
-        // chunk it applied — so this waits for that instead of asking the block how it looks. The
-        // poll it replaces could not tell "the chunk has not arrived" from "it arrived and the
-        // block is something else", and both were reported as the pad never coming.
+        // He walks there over the home floor; the client has every chunk of it, since he spawned on
+        // it. What the CLIENT holds under the spot is read, because that block is what he stands on.
+        walkTo(standX, standZ, STAND_WITHIN_BLOCKS, WALK_TICKS, "the " + floorNeedle + " he works from");
         JsonObject floor = bot().blockState(floorX, floorY, floorZ);
-        boolean alreadyThere = floor.has("block")
-                && floor.get("block").getAsString().contains(floorNeedle);
-        if (!alreadyThere) {
-            try {
-                clientEvents().awaitRecordWithFields(floorMark, "chunk_data_applied",
-                        "the client must be sent the chunk holding the pad it is stood on",
-                        CLIENT_FLOOR_BUDGET_TICKS,
-                        "cx", String.valueOf(floorX >> 4), "cz", String.valueOf(floorZ >> 4));
-            } catch (AssertionError neverApplied) {
-                // Not a verdict here: the arrangement check below owns the failure and prints what
-                // the client actually holds, which is the part that says WHICH fault this is.
-                System.out.println("[M1] no chunk_data_applied for the pad's chunk: "
-                        + neverApplied.getMessage());
-            }
-            floor = bot().blockState(floorX, floorY, floorZ);
-        }
-        requireArranged("the CLIENT must receive the " + floorNeedle + " floor it is being stood on before anything"
-                        + " is measured at the machine. Until it arrives the client sees air under"
-                        + " itself, falls, and the server takes the fall — the pad being present on"
-                        + " the SERVER is not the question. Asked at (" + floorX + "," + floorY + ","
-                        + floorZ + ") for " + CLIENT_FLOOR_BUDGET_TICKS + " ticks; last reply "
-                        + floor + ". A reply with \"loaded\":false is a chunk that never arrived,"
-                        + " which is a different failure from a block that arrived as something else",
+        requireArranged("the CLIENT must hold the " + floorNeedle + " he is standing on at (" + floorX
+                        + "," + floorY + "," + floorZ + "): " + floor,
                 floor != null && floor.has("block")
                         && floor.get("block").getAsString().contains(floorNeedle));
-        System.out.println("[M1] client has the pad: " + floor);
-
-        // Put him back on it. The first teleport happened while the client had nothing to stand on,
-        // so wherever he has fallen to is where he is; this is the one that lands on a floor both
-        // sides agree exists.
-        long backOnThePad = clientEvents().mark();
-        exec("tp @a " + standX + " " + (floorY + 1) + " " + standZ + " 0 0");
-        ClientEvents.awaitPlacedNear(clientEvents(), backOnThePad, standX, standZ,
-                "the client must apply the teleport back onto the pad it now has",
-                CLIENT_FLOOR_BUDGET_TICKS);
 
         JsonObject state = bot().reportState();
         // `playerY`, checked against the harness rather than assumed: a `y` that is absent reads as
@@ -2507,39 +2649,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 Math.abs(y - (floorY + 1)) < STANDING_ON_THE_PAD_BLOCKS);
     }
 
-    /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */
+    /**
+     * An empty main hand (a held stack eats the use press), the way a player gets one: he selects an
+     * EMPTY hotbar slot. Nothing is cleared — a server {@code clear} used to stand here, and on a run
+     * whose spawn lay in grass he had picked up seeds into slot 0, so the clear took his crystal with
+     * them and the console leg found nothing to insert (2026-10-08).
+     */
     private void emptyTheHand() throws Exception {
-        // The clear is recorded: handleSetSlot writes `client_slot_set` with item = "empty". The
-        // link says the clear REACHED the client; the read below says the HAND is the slot meant,
-        // which the record does not distinguish in the burst `clear` produces. Neither is a poll.
-        // (This class cannot use the shared base's emptyTheHandOnClient — it extends the harness's
-        // own AbstractClientE2ETest, not the tier's shared base.)
-        // SELECT FIRST, then READ, and only then clear — a `clear` on an already-empty hand changes
-        // no slot, so the change-gated recorder writes nothing and a link on it would wait out its
-        // budget for a record that was never owed. (Measured 2026-09-21 on the tier's own copy of
-        // this helper, which reddened six classes before the read was put first.)
-        JsonObject beforeClear = pressHotbarKey(0);
-        if (beforeClear.has("held") && beforeClear.getAsJsonObject("held").has("id")
-                && beforeClear.getAsJsonObject("held").get("id").getAsString().isEmpty()) {
-            return;
-        }
-        long clearMark = clientEvents().mark();
-        exec("clear @a");
-        try {
-            clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
-                    "the clear must reach the client before the hand can be read as empty", 200);
-        } catch (AssertionError never) {
-            Events.assertInstrumentRan(clientEvents().since(clearMark, "client_slot_set"),
-                    "client_slot_set", "the client's own slot writes must be observed at all before"
-                            + " an absent one can be read as a clear that never landed");
-            requireArranged("the clear never reached the client: " + never.getMessage(), false);
-        }
-        JsonObject items = bot().reportPlayerItems();
-        String heldId = isWorldReady(items) && items.has("held")
-                ? items.getAsJsonObject("held").get("id").getAsString() : null;
-        requireArranged("the bot's main hand must be EMPTY so the use press reaches the "
-                + "block rather than being consumed by a held item; held=" + heldId,
-                heldId != null && heldId.isEmpty());
+        holdNothing();
     }
 
     // ---- helpers --------------------------------------------------------------------------------

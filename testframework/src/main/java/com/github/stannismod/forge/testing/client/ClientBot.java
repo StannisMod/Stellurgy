@@ -42,8 +42,8 @@ import java.util.Objects;
  *   <li>{@code dragScreenPoint} — PIPELINE: the screen's own press, drag and release at points</li>
  *   <li>{@code typeText} — PIPELINE: the screen's own {@code keyTyped}, character by character</li>
  *   <li>{@code pressEnterAfterTyping} — PIPELINE: {@code typeText} and the return key</li>
- *   <li>{@code invokeStaticInt} — PIPELINE: raw input into a named static entry point (a mouse delta); any other use is a read</li>
- *   <li>{@code invokeStaticChain} — READS: a reflective static call; it may feed raw input, never call a decision</li>
+ *   <li>{@code invokeStaticInt} — PIPELINE: raw input into a named static entry point (a mouse delta), or a test recorder; it calls ANY static it is handed, so a consumer must restrict the target (Stellurgy's e2e census admits only its test package and named raw-input entries)</li>
+ *   <li>{@code invokeStaticChain} — READS: a reflective static call and a chain of no-arg calls; it calls ANY public chain it is handed, so a consumer must restrict the target as above</li>
  *   <li>{@code interactBlock} — BYPASS: {@code processRightClickBlock} on a named block, past {@code rightClickMouse}</li>
  *   <li>{@code rightClickBlock} — BYPASS: the same as {@code interactBlock}, with a face and a hand</li>
  *   <li>{@code useItem} — BYPASS: {@code processRightClick} with the held item, past the pick</li>

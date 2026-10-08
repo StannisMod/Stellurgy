@@ -28,8 +28,21 @@ public final class ClientWindow {
         this.handle = handle;
     }
 
-    /** Open a window of {@code windowClass} on the client, passing its factory's own arguments. */
+    /** The only package a window may come from: the test source set's own recorders. */
+    private static final String TRACE_PACKAGE = "dev.stannismod.stellurgy.test.trace.";
+
+    /**
+     * Open a window of {@code windowClass} on the client, passing its factory's own arguments.
+     *
+     * <p>Refuses a class outside {@link #TRACE_PACKAGE}: {@code invokeStaticInt} calls whatever it is
+     * handed, so a window handle is how an e2e could otherwise reach a decision of the mod by
+     * reflection. The e2e census admits this method on that guard.</p>
+     */
     public static ClientWindow open(ClientBot bot, String windowClass, int... args) throws Exception {
+        if (!windowClass.startsWith(TRACE_PACKAGE)) {
+            throw new IllegalArgumentException("a client window must be a test recorder under "
+                    + TRACE_PACKAGE + ", not " + windowClass);
+        }
         String returned = bot.invokeStaticInt(windowClass, "open", args).get("returned").getAsString();
         return new ClientWindow(bot, windowClass, Integer.parseInt(returned));
     }
