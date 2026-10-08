@@ -1218,7 +1218,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      * @param thrustAppliedLastTick whether the final physics step actually applied thrust
      */
     private void logFreeFlightLandReason(boolean thrustAppliedLastTick) {
-        int thrust = stats.getThrust();
+        long thrust = stats.getThrust();
         float massKg = stats.getMass();
         float gravMult = DimensionManager.getInstance()
                 .getDimensionProperties(this.world.provider.getDimension())

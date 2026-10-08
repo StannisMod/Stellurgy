@@ -54,6 +54,7 @@ import java.util.List;
 import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.block.*;
 import dev.stannismod.stellurgy.util.NuclearEngineLimit;
+import dev.stannismod.stellurgy.util.ShortWireParts;
 
 /**
  * Purpose: validate the rocket structure as well as give feedback to the player as to what needs to be
@@ -320,7 +321,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         return stats.getMass();
     }
 
-    public int getThrust() {
+    public long getThrust() {
         return stats.getThrust();
     }
 
@@ -1357,7 +1358,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
 
         updateText();
 
-        for (int i = 0; i < 15; i++)
+        for (int i = 0; i < SYNC_SLOTS * SYNC_PARTS; i++)
             modules.add(new ModuleSync(i, this));
 
 
@@ -1420,14 +1421,15 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
     }
 
-    @Override
-    public void setData(int id, int value) {
-        switch (id) {
+    /** Applies one slot's whole value, as reassembled by {@link #setData}. */
+    private void applySynced(int slot, long whole) {
+        int value = (int) whole;
+        switch (slot) {
             case 0:
                 getRocketStats().setMass(value);
                 break;
             case 1:
-                getRocketStats().setThrust(value);
+                getRocketStats().setThrust(whole);
                 break;
             case 2:
                 setStatus(value);
@@ -1478,9 +1480,29 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         updateText();
     }
 
+    /**
+     * What the screen shows, by slot. A window property is 16 bits on the wire, and thrust in newtons or
+     * mass in kilograms is far wider (one motor is 490 500 N), so each slot travels as
+     * {@link ShortWireParts#PARTS} parts on ids {@code slot + part * SYNC_SLOTS}.
+     */
+    private static final int SYNC_SLOTS = 15, SYNC_PARTS = ShortWireParts.PARTS;
+    /** The client's reassembly of each slot from the parts received so far. */
+    private final long[] syncReceived = new long[SYNC_SLOTS];
+
     @Override
     public int getData(int id) {
-        switch (id) {
+        return ShortWireParts.part(syncedValue(id % SYNC_SLOTS), id / SYNC_SLOTS);
+    }
+
+    @Override
+    public void setData(int id, int value) {
+        int slot = id % SYNC_SLOTS;
+        syncReceived[slot] = ShortWireParts.fold(syncReceived[slot], id / SYNC_SLOTS, value);
+        applySynced(slot, syncReceived[slot]);
+    }
+
+    private long syncedValue(int slot) {
+        switch (slot) {
 
             case 0:
                 return Math.round(getRocketStats().getDryMass());

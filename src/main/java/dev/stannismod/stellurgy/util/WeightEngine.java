@@ -311,9 +311,14 @@ public final class WeightEngine {
         return getWeight(stack.getFluid(), stack.amount);
     }
 
+    /** The mass of a rocket's own FUEL, kilograms: the table's mass times {@code fuelMassScale}. */
     public float getWeight(Fluid fluid, float amount) {
-        double perMb = fluids.getOrDefault(fluid.getName(), fluidFallback);
-        return (float) (perMb * amount * StellurgyConfiguration.getCurrentConfig().fuelMassScale);
+        return (float) (fluidMass(fluid, amount) * StellurgyConfiguration.getCurrentConfig().fuelMassScale);
+    }
+
+    /** A fluid's mass by the table alone, kilograms. Each knob scales its own set: fuel, or content. */
+    private double fluidMass(Fluid fluid, float amount) {
+        return fluids.getOrDefault(fluid.getName(), fluidFallback) * amount;
     }
 
     /**
@@ -342,7 +347,9 @@ public final class WeightEngine {
         if (fluidHandler != null) {
             for (IFluidTankProperties info : fluidHandler.getTankProperties()) {
                 if (info != null && info.getContents() != null) {
-                    weight += getWeight(info.getContents());
+                    // CONTENT, so contentMassScale alone (in getTEWeight): fuelMassScale is the rocket's
+                    // own fuel, and applying both made a tank's fluid answer to two knobs at once.
+                    weight += (float) fluidMass(info.getContents().getFluid(), info.getContents().amount);
                 }
             }
         }
