@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.ship.control.ControlDirection;
 import dev.stannismod.stellurgy.ship.control.ControlFrame;
 import dev.stannismod.stellurgy.ship.control.ControlScheme;
 import dev.stannismod.stellurgy.ship.control.Endurance;
+import dev.stannismod.stellurgy.ship.control.FlightCommand;
 import dev.stannismod.stellurgy.ship.control.MomentumStore;
 import dev.stannismod.stellurgy.ship.control.ShipCapability;
 import dev.stannismod.stellurgy.ship.control.ShipFlightModel;
@@ -28,6 +29,7 @@ import dev.stannismod.stellurgy.test.CleanCommandLaw;
 import dev.stannismod.stellurgy.test.ShipMotionCases;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -997,5 +999,38 @@ public class ShipMotionLawsTest {
             assertTrue(wheel.name + ": a wheel full in one sense still turns " + axis + " the other way",
                     delivered > 0.0D);
         }
+    }
+
+    /**
+     * Pins INV-SFM-15's tested half: a command, once published, cannot change under the physics thread
+     * that flies it — neither through the arrays its publisher built it from and goes on holding, nor
+     * through the arrays a reader is handed. Every part present, so each of the three can be reached.
+     *
+     * <p>Silent about the other half of the clause — the one reference and the single read in the
+     * controller — which no fast test can reach.</p>
+     *
+     * red-witnessed: with {@code FlightCommand#copy} at {@code return part.clone();} returning {@code part}, fails: "INV-SFM-15: the velocity a step flies is the one published: arrays first differed at element [0]; expected:<1.0> but was:<99.0>" (2026-10-08).
+     * red-witnessed: with {@code FlightCommand#velocity} at {@code velocity.clone()} returning {@code velocity}, fails: "INV-SFM-15: the velocity a step flies is the one published: arrays first differed at element [1]; expected:<-2.0> but was:<77.0>" (2026-10-08).
+     */
+    @Test
+    public void aPublishedCommandCannotChangeUnderItsReader() {
+        double[] velocity = {1.0D, -2.0D, 3.0D};
+        double[] rate = {0.25D, 0.0D, -0.5D};
+        double[] attitude = {0.5D, 0.5D, -0.5D, 0.5D};
+        FlightCommand published = FlightCommand.of(velocity, rate, attitude);
+
+        velocity[0] = 99.0D;
+        rate[1] = 99.0D;
+        attitude[3] = 99.0D;
+        published.velocity()[1] = 77.0D;
+        published.angularVelocity()[2] = 77.0D;
+        published.attitude()[0] = 77.0D;
+
+        assertArrayEquals("INV-SFM-15: the velocity a step flies is the one published",
+                new double[]{1.0D, -2.0D, 3.0D}, published.velocity(), 0.0D);
+        assertArrayEquals("INV-SFM-15: the angular velocity a step flies is the one published",
+                new double[]{0.25D, 0.0D, -0.5D}, published.angularVelocity(), 0.0D);
+        assertArrayEquals("INV-SFM-15: the attitude a step flies is the one published",
+                new double[]{0.5D, 0.5D, -0.5D, 0.5D}, published.attitude(), 0.0D);
     }
 }

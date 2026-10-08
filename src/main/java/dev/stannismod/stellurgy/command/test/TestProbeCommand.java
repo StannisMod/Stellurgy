@@ -2704,25 +2704,26 @@ public class TestProbeCommand extends CommandBase {
                 // same position are equal in every way that matters except the one that matters here.
                 m.put("afcIdentity", System.identityHashCode(diagAfc));
                 m.put("controllerTicks", diagAfc.controllerTicks);
-                m.put("probeActive", diagAfc.probeCommandActive);
-                m.put("probeVel", diagAfc.probeVelocity == null ? "null"
-                        : diagAfc.probeVelocity[0] + "," + diagAfc.probeVelocity[1] + ","
-                                + diagAfc.probeVelocity[2]);
-                m.put("pilotCmdVel", diagAfc.commandedVelocity == null ? "null"
-                        : diagAfc.commandedVelocity[0] + "," + diagAfc.commandedVelocity[1] + ","
-                                + diagAfc.commandedVelocity[2]);
+                // Each command read once: the parts reported beside each other are one command's.
+                dev.stannismod.stellurgy.ship.control.FlightCommand probeCmd = diagAfc.probeCommand;
+                dev.stannismod.stellurgy.ship.control.FlightCommand flightCmd = diagAfc.flightCommand;
+                double[] probeVel = probeCmd == null ? null : probeCmd.velocity();
+                double[] pilotVel = flightCmd == null ? null : flightCmd.velocity();
+                double[] pilotAtt = flightCmd == null ? null : flightCmd.attitude();
+                double[] pilotAngVel = flightCmd == null ? null : flightCmd.angularVelocity();
+                m.put("probeActive", probeCmd != null);
+                m.put("probeVel", probeVel == null ? "null" : probeVel[0] + "," + probeVel[1] + "," + probeVel[2]);
+                m.put("pilotCmdVel", pilotVel == null ? "null" : pilotVel[0] + "," + pilotVel[1] + "," + pilotVel[2]);
                 // The ANGULAR channel, beside the linear one it has always been reported without.
                 // MOTION-2: a hold is a mode and not the law, so "is an attitude target published at
                 // all?" is a question about the craft's behaviour and not an implementation detail —
                 // and until this line it could not be asked from a test at any tier. A `null` here is
                 // the contract-conforming answer for a craft with no hold engaged; a quaternion means
                 // something is steering it.
-                m.put("pilotCmdAtt", diagAfc.targetAttitude == null ? "null"
-                        : diagAfc.targetAttitude[0] + "," + diagAfc.targetAttitude[1] + ","
-                                + diagAfc.targetAttitude[2] + "," + diagAfc.targetAttitude[3]);
-                m.put("pilotCmdAngVel", diagAfc.commandedAngVel == null ? "null"
-                        : diagAfc.commandedAngVel[0] + "," + diagAfc.commandedAngVel[1] + ","
-                                + diagAfc.commandedAngVel[2]);
+                m.put("pilotCmdAtt", pilotAtt == null ? "null"
+                        : pilotAtt[0] + "," + pilotAtt[1] + "," + pilotAtt[2] + "," + pilotAtt[3]);
+                m.put("pilotCmdAngVel", pilotAngVel == null ? "null"
+                        : pilotAngVel[0] + "," + pilotAngVel[1] + "," + pilotAngVel[2]);
             }
             send(sender, jsonMap(m));
             return;

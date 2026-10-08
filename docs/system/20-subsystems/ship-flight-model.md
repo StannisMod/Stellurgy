@@ -157,6 +157,29 @@ channels; the controller's allocation step. Does NOT own: the flight LAW (veloci
   witnessed at each of the three places (maintainer 2026-10-07: *"Ядро не знает про износы, в том числе про
   полностью сломанное. Оно оперирует силами, точнее, промежутками от нуля до максимума силы. Переход из
   мотора в силу делает Minecraft"*).
+- **INV-SFM-15** `[T][V][SYS]` A physics step flies ONE command whole — never the velocity of one with the
+  attitude or rate of another. The flight computer's command is written on the server game thread and
+  flown on the physics thread on every step until the next, so its parts (velocity to hold, angular
+  velocity, attitude target) cross as one value: an immutable `ship/control/FlightCommand`, published
+  through one `volatile` reference per channel (`TileAdvancedFlightComputer#flightCommand`, and
+  `#probeCommand`, which outranks it while set), and read once per step at the top of
+  `TileAdvancedFlightComputer#onPhysicsTick`, which flies that object alone. The flight model crosses the
+  same way (`#flightModel`). FOR: a pilot's command does what it names and nothing else (C9 ship
+  control) — a half-updated command is one nobody gave. **Pinned half**: the value cannot change after it
+  is published — nothing its publisher still holds and nothing a reader is handed reaches inside it
+  (`test/unit/ShipMotionLawsTest#aPublishedCommandCannotChangeUnderItsReader`). **Read, not tested** `[V]`:
+  the one reference and the single read — no tier stages a publication between two reads of the
+  controller today; that needs a seam into it (or a test mixin between the reads).
+- **INV-SFM-16** `[V][SYS]` No physics step books a wheel while its momentum is being seeded. The physics
+  step books what each wheel gives (`MomentumStore#absorb`, a read-modify-write) on the physics thread,
+  and the game thread seeds a newly surveyed wheel from its tile (`MomentumStore#restore`); the map is
+  concurrent, which makes each read and write safe but not the pair. The two never meet on one wheel
+  because of an ORDER: the survey seeds every new wheel BEFORE it publishes the model that lists it
+  (`TileAdvancedFlightComputer#rebuildFlightModel`: the seeding loop, then `ShipFlightModel.solve`, then
+  `flightModel = model`), and a step books only the wheels of the model it read. A change that seeds
+  after publishing, or books a wheel absent from its model, breaks it. FOR: INV-SFM-11 (a wheel's
+  momentum is conserved — given back, never invented or lost). Not pinned: no tier can play the seed
+  against a step today; it needs a seam into the survey.
 
 ## Failure modes & edge cases
 

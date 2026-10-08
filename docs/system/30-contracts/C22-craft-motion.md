@@ -49,7 +49,8 @@ every state either fights it or adopts it, and two independent mechanisms do the
   (`FreeFlightPhysics.java`) `[V]`, pinned by
   `unit/ShipVelocityCommandTest.faOffIdleCoastsWithNoForce` `[T]`. The angular channel has no such
   branch: attitude handling sits BEFORE and OUTSIDE `if (flightAssistEnabled)`
-  (`TileAdvancedFlightComputer.java:766` against the assist branch at `:829`) and `targetAttitude` is
+  (`TileAdvancedFlightComputer#update`: the unmanned release still publishes a `FlightCommand` with an
+  attitude, and the piloted branch publishes one whatever the assist mode) — the attitude part is
   published unconditionally `[V]`.
 - ~~**MOTION-3**~~ — **RETIRED BEFORE RATIFICATION, 2026-08-22.** It priced the hold. Ruled out of
   scope: *"затрачиваемый ресурс — это не предмет контракта, это обоснование. В этом контракте не
