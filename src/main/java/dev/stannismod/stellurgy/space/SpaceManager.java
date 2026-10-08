@@ -189,6 +189,18 @@ public final class SpaceManager {
     }
 
     /**
+     * Whether {@link #materialize} would succeed for {@code coord} right now — the cell is already
+     * live, a slot is free, or an idle cell could be evicted for it. Binds, evicts and counts nothing.
+     *
+     * <p>A snapshot, not a reservation: the pool can fill between this answer and the materialize it
+     * forecasts, so a caller still handles {@link PoolExhaustedException}.</p>
+     */
+    public boolean canMaterialize(GalacticCoord coord) {
+        return loadedCellToSlot.containsKey(coord.cellKey()) || firstFreeSlot() >= 0
+                || lruEvictableCell() != null;
+    }
+
+    /**
      * Remove one occupant from {@code coord}'s cell. At zero occupants the cell stays loaded but
      * becomes eligible for LRU eviction the next time a slot is needed.
      */

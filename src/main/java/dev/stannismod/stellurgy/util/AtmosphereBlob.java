@@ -19,6 +19,7 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -36,7 +37,15 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
         return new ThreadPoolExecutor(2, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(32));
     }
 
-    private boolean executing;
+    /** A flood fill is in flight. Set on the server thread, cleared by the fill pool's thread. */
+    private volatile boolean executing;
+    /**
+     * What the last finished fill found: closed, open, or {@code null} when there is no answer —
+     * none has run since the zone was last cleared from outside, or one is still running. Written
+     * before {@link #executing} is cleared, so a reader that sees the fill done sees its answer.
+     */
+    @Nullable
+    private volatile Boolean lastFillClosed;
     private HashedBlockPosition blockPos;
     private List<AreaBlob> nearbyBlobs;
     /** The gases filling this zone. Starts sea-level breathable, which is the pressure this
@@ -51,6 +60,20 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
     @Nonnull
     public AirState getAirState() {
         return airState;
+    }
+
+    /**
+     * Whether a flood fill started for this zone has not finished. While it runs, an empty zone means
+     * "not measured yet", not "open".
+     */
+    public boolean isFilling() {
+        return executing;
+    }
+
+    /** What the last finished fill found, or {@code null} while one runs or since the zone was cleared. */
+    @Nullable
+    public Boolean lastFillClosed() {
+        return executing ? null : lastFillClosed;
     }
 
     public void setAirState(@Nonnull AirState airState) {
@@ -101,11 +124,15 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
                 if (!executing) {
                     this.nearbyBlobs = nearbyBlobs;
                     this.blockPos = blockPos;
+                    lastFillClosed = null;
                     executing = true;
                     if ((StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1)
                         try {
                             Stellurgy.serverState().atmosphereFillPool.execute(this);
                         } catch (RejectedExecutionException e) {
+                            // Nothing will run, so nothing is in flight: left set, this zone could
+                            // never be measured again. No answer either — lastFillClosed stays null.
+                            executing = false;
                             Stellurgy.logger.warn("Atmosphere calculation at " + this.getRootPosition() + " aborted due to oversize queue!");
                         }
                     else
@@ -161,6 +188,7 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
                             } else {
                                 //Failed to seal, void
                                 clearBlob();
+                                lastFillClosed = Boolean.FALSE;
                                 executing = false;
                                 return;
                             }
@@ -171,6 +199,7 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
                         e.printStackTrace();
                         //Failed to seal, void
                         clearBlob();
+                        lastFillClosed = Boolean.FALSE;
                         executing = false;
                         return;
                     }
@@ -185,6 +214,7 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
             }
         }
 
+        lastFillClosed = Boolean.TRUE;
         executing = false;
     }
 
@@ -224,6 +254,8 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
 
         runEffectOnWorldBlocks(world, getLocations());
 
+        // Whatever an earlier fill found is about a zone that is no longer there.
+        lastFillClosed = null;
         super.clearBlob();
     }
 }

@@ -26,10 +26,10 @@ import dev.stannismod.stellurgy.util.ItemAirUtils;
 /**
  * What each atmosphere does to the people in it, in one table, plus the one question a suit is asked.
  * <p>
- * <b>This replaces fourteen classes that each carried a copy of the same method.</b> Every one of them
+ * <b>This replaces eleven classes that each carried a copy of the same method.</b> Every one of them
  * was the same shape — a period, a damage source, an amount, a handful of potions — and because each
- * was a method rather than a row they drifted apart in ways nobody chose. The rows below are the
- * fourteen cells decomposed into the five things that were actually varying, and where the old cells
+ * was a method rather than a row they drifted apart in ways nobody chose. The rows below are those
+ * eleven cells decomposed into the five things that were actually varying, and where the old cells
  * disagreed with what that decomposition produces, the disagreement is a NAMED row rather than a
  * silent one. Each such row says which behaviour it is preserving and is a candidate for deletion on
  * its own merits.
@@ -155,10 +155,28 @@ public final class AtmosphereHazards {
         table.put(atmosphere, new HazardExposure(Arrays.asList(rows)));
     }
 
-    /** What this air is doing to the people in it. Never null: unknown air does nothing. */
+    /**
+     * What this air can do to the people in it — a description of the AIR, which a detector reads:
+     * air with no oxygen lacks it whatever the configuration says. What it actually does to somebody
+     * is {@link #effectOn}. Never null: unknown air does nothing.
+     */
     public static HazardExposure exposureOf(Atmosphere atmosphere) {
         HazardExposure found = atmosphere == null ? null : BY_ATMOSPHERE.get(atmosphere);
         return found == null ? HazardExposure.NONE : found;
+    }
+
+    /**
+     * What this air DOES to a living thing as the server is configured: with {@code breathingRequiresO2}
+     * off, a body needs no oxygen, so the air's oxygen hazards fall away and no suit spends its tank.
+     */
+    public static HazardExposure effectOn(Atmosphere atmosphere) {
+        return asConfigured(exposureOf(atmosphere));
+    }
+
+    /** {@code exposure} as it acts on a body under the current {@code breathingRequiresO2}. */
+    static HazardExposure asConfigured(HazardExposure exposure) {
+        return StellurgyConfiguration.getCurrentConfig().breathingRequiresO2
+                ? exposure : exposure.withoutOxygenNeed();
     }
 
     // ─── who is exposed ────────────────────────────────────────────────────────────────────────
@@ -174,6 +192,19 @@ public final class AtmosphereHazards {
      * effects into a table.
      */
     public static boolean isImmune(HazardExposure exposure, EntityLivingBase entity) {
+        return immune(exposure, entity, true);
+    }
+
+    /**
+     * The same question, asked for nothing: no suit spends anything to answer it. For a caller that
+     * wants to KNOW whether somebody is protected rather than protect him — the air is not acting on
+     * him, so nothing is owed. A tank with air left answers yes.
+     */
+    public static boolean wouldBeImmune(HazardExposure exposure, EntityLivingBase entity) {
+        return immune(exposure, entity, false);
+    }
+
+    private static boolean immune(HazardExposure exposure, EntityLivingBase entity, boolean commit) {
         if (exposure.isEmpty()) {
             return true;
         }
@@ -200,28 +231,28 @@ public final class AtmosphereHazards {
         // air, so a check that ran it before a cheaper one had failed would drain the tank for a
         // verdict already decided.
         if (exposure.needsFullSuit()
-                && !(protects(exposure, entity, EntityEquipmentSlot.LEGS)
-                && protects(exposure, entity, EntityEquipmentSlot.FEET))) {
+                && !(protects(exposure, entity, EntityEquipmentSlot.LEGS, commit)
+                && protects(exposure, entity, EntityEquipmentSlot.FEET, commit))) {
             return false;
         }
-        return protects(exposure, entity, EntityEquipmentSlot.HEAD)
-                && protects(exposure, entity, EntityEquipmentSlot.CHEST);
+        return protects(exposure, entity, EntityEquipmentSlot.HEAD, commit)
+                && protects(exposure, entity, EntityEquipmentSlot.CHEST, commit);
     }
 
     private static boolean protects(HazardExposure exposure, EntityLivingBase entity,
-                                    EntityEquipmentSlot slot) {
-        return protects(exposure, entity.getItemStackFromSlot(slot));
+                                    EntityEquipmentSlot slot, boolean commit) {
+        return protects(exposure, entity.getItemStackFromSlot(slot), commit);
     }
 
-    private static boolean protects(HazardExposure exposure, @Nonnull ItemStack stack) {
+    private static boolean protects(HazardExposure exposure, @Nonnull ItemStack stack, boolean commit) {
         if (ItemAirUtils.INSTANCE.isStackValidAirContainer(stack)
                 && new ItemAirUtils.ItemAirWrapper(stack)
-                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, true)) {
+                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, commit)) {
             return true;
         }
         return !stack.isEmpty()
                 && stack.hasCapability(CapabilitySpaceArmor.PROTECTIVEARMOR, null)
                 && stack.getCapability(CapabilitySpaceArmor.PROTECTIVEARMOR, null)
-                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, true);
+                .protectsFrom(exposure.hazards(), exposure.needsSuppliedOxygen(), stack, commit);
     }
 }

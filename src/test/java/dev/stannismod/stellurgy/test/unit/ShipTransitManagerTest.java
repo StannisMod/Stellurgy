@@ -112,6 +112,12 @@ public class ShipTransitManagerTest {
         final List<Integer> disposedLanes = new ArrayList<>();
         boolean disposeSucceeds = true;
         final List<String> order = new ArrayList<>();       // shared call order: pins capture-before-depart
+        final List<String> crewMessages = new ArrayList<>(); // every key said to the crew, in order
+
+        @Override
+        public void messageCrew(List<UUID> crew, String translationKey) {
+            crewMessages.add(translationKey);
+        }
 
         @Override
         public boolean parkedShipPresent(BlockPos hyperAnchor) {
@@ -285,6 +291,90 @@ public class ShipTransitManagerTest {
         assertEquals("arrival crossing invoked once", 1, crosser.arrivals.size());
         assertTrue("target cell now live", space.isLoaded(cell(2)));
         assertFalse("origin cell released (evicted for the target under a pool of 1)", space.isLoaded(cell(1)));
+    }
+
+    /**
+     * An arrival whose target cell finds no slot WAITS in its lane: the jump stays open, the crew is
+     * told once, and the ship lands on the first tick a slot frees. Before this the throw left the
+     * world tick and stopped the server.
+     *
+     * <p>red-witnessed: with {@code ShipTransitManager#tickTransits} at {@code t.targetSlotDim = space.materialize(t.target);}
+     * outside its {@code try}: the first tick threw {@code SpaceManager$PoolExhaustedException: no free
+     * slot and no evict-eligible cell}, 2026-10-06. With the {@code if (!t.arrivalDelayed)} guard
+     * removed: "the crew is told once, not once per tick expected:&lt;1&gt; but was:&lt;3&gt;", 2026-10-06.</p>
+     */
+    @Test
+    public void anArrivalIntoAFullPoolWaitsInItsLaneAndLandsOnceASlotFrees() {
+        SpaceManager space = new SpaceManager(new FakeBinder(10), () -> 0L, never());
+        HyperspaceTiles tiles = new HyperspaceTiles();
+        FakeCrosser crosser = new FakeCrosser();
+        crosser.crewToCapture.add(UUID.fromString("00000000-0000-0000-0000-0000000000c1"));
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser);
+
+        int originDim = space.materialize(cell(1));
+        mgr.beginTransit("s", cell(1), originDim, new BlockPos(0, 64, 0), cell(2), ARRIVE_IN_ONE_TICK);
+        // The departure released the origin; another claim now takes the pool's only slot.
+        space.materialize(cell(3));
+        assertFalse("premise: the pool can give the target cell no slot", space.canMaterialize(cell(2)));
+
+        mgr.tick();
+        mgr.tick();
+        mgr.tick();
+
+        assertTrue("a full pool keeps the jump open", mgr.isInTransit("s"));
+        assertEquals("its lane stays held while it waits", 1, tiles.inUseCount());
+        assertEquals("no arrival is attempted without a target world", 0, crosser.arrivals.size());
+        assertEquals("the crew is told once, not once per tick", 1,
+                java.util.Collections.frequency(crosser.crewMessages, "msg.shiptransit.arrivaldelayed"));
+
+        space.dematerialize(cell(3)); // the other claim lets go: its cell is idle and evictable
+        mgr.tick();
+
+        assertFalse("it lands the tick a slot frees", mgr.isInTransit("s"));
+        assertTrue("the target cell is live", space.isLoaded(cell(2)));
+        assertEquals("and the crew is told it arrived", 1,
+                java.util.Collections.frequency(crosser.crewMessages, "msg.shiptransit.arrived"));
+    }
+
+    /**
+     * A jump short enough to cross directly, whose target cell can get no slot, is flown through
+     * hyperspace instead: the direct crossing would load the destination while the origin is still
+     * held and could only refuse after the burst was paid; the hyperspace path releases the origin
+     * first, and the arrival then takes that slot.
+     *
+     * <p>red-witnessed: with {@code ShipTransitManager#jumpsDirect} at {@code && space.canMaterialize(target)}
+     * removed: "a short jump into a full pool is not handed to the direct crosser expected:&lt;0&gt; but
+     * was:&lt;1&gt;", 2026-10-06.</p>
+     */
+    @Test
+    public void aShortJumpIntoAFullPoolFliesThroughHyperspaceAndLands() {
+        SpaceManager space = new SpaceManager(new FakeBinder(10), () -> 0L, never());
+        HyperspaceTiles tiles = new HyperspaceTiles();
+        FakeCrosser crosser = new FakeCrosser();
+        ShipTransitManager mgr = new ShipTransitManager(space, tiles, crosser);
+        List<String> directCrossings = new ArrayList<>();
+        mgr.setDirectCrosser((shipId, origin, originSlotDim, originAnchor, target) -> {
+            directCrossings.add(shipId);
+            return true;
+        });
+
+        int originDim = space.materialize(cell(1)); // the ship's own claim holds the only slot
+        assertTrue("premise: the leg is short enough to cross directly",
+                ShipTransitManager.isDirectCrossing(GalacticCoord.CELL, ARRIVE_IN_ONE_TICK));
+        assertFalse("premise: the target cell can get no slot now", space.canMaterialize(cell(2)));
+
+        boolean began = mgr.beginTransit("s", cell(1), originDim, new BlockPos(0, 64, 0), cell(2),
+                ARRIVE_IN_ONE_TICK);
+
+        assertTrue("the jump still departs", began);
+        assertEquals("a short jump into a full pool is not handed to the direct crosser", 0,
+                directCrossings.size());
+        assertTrue("it flies through hyperspace instead", mgr.isInTransit("s"));
+
+        mgr.tick();
+
+        assertFalse("and lands in the slot its own departure freed", mgr.isInTransit("s"));
+        assertTrue(space.isLoaded(cell(2)));
     }
 
     @Test

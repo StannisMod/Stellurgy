@@ -40,6 +40,14 @@ public final class HazardExposure {
     private final boolean needsSuppliedOxygen;
 
     HazardExposure(List<HazardEffect> rows) {
+        this(rows, true);
+    }
+
+    /**
+     * @param oxygenMayBeNeeded false when breathing needs no oxygen: then no row can make a suit
+     *                          supply it, whatever the row says
+     */
+    private HazardExposure(List<HazardEffect> rows, boolean oxygenMayBeNeeded) {
         this.rows = Collections.unmodifiableList(new ArrayList<>(rows));
         Set<AtmosphereHazard> found = EnumSet.noneOf(AtmosphereHazard.class);
         boolean full = false;
@@ -51,7 +59,22 @@ public final class HazardExposure {
         }
         this.hazards = Collections.unmodifiableSet(found);
         this.needsFullSuit = full;
-        this.needsSuppliedOxygen = supplied;
+        this.needsSuppliedOxygen = supplied && oxygenMayBeNeeded;
+    }
+
+    /**
+     * This exposure for a body that does not need oxygen: no suffocation, no oxygen toxicity, and
+     * nothing a suit has to supply. What is left — vacuum, pressure, heat, poison — still acts, and a
+     * suit still has to be whole to keep it out.
+     */
+    HazardExposure withoutOxygenNeed() {
+        List<HazardEffect> kept = new ArrayList<>(rows.size());
+        for (HazardEffect row : rows) {
+            if (row.hazard() != AtmosphereHazard.SUFFOCATION && row.hazard() != AtmosphereHazard.OXYGEN_TOXICITY) {
+                kept.add(row);
+            }
+        }
+        return new HazardExposure(kept, false);
     }
 
     public boolean isEmpty() {

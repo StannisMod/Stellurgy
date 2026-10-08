@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.subsystem.heat;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import net.minecraft.block.Block;
@@ -353,8 +354,12 @@ public final class ThermalMaterials {
 
     /**
      * The table in {@code file}: every row the file holds, plus every shipped row it lacks, written
-     * back when rows were added. An absent file is created with the shipped table; an unreadable or
-     * empty one is read as the shipped table.
+     * back when rows were added. An absent file is created with the shipped table.
+     *
+     * @throws IllegalStateException when the file exists and is not a table — unparsable, without a
+     *         {@code materials} object, or with a row that is not an object of three whole numbers.
+     *         The shipped table is never put in its place: a pack would then run on values it did not
+     *         choose while believing its own were in force.
      */
     public static ThermalMaterials load(String file) {
         return new ThermalMaterials(read(file));
@@ -367,49 +372,62 @@ public final class ThermalMaterials {
             save(file, shipped);
             return shipped;
         }
+        JsonObject root;
         try (Reader r = new FileReader(file)) {
-            Gson gson = new GsonBuilder().disableHtmlEscaping().create();
-            JsonObject root = gson.fromJson(r, JsonObject.class);
-            Map<String, ThermalMaterial> parsed = new LinkedHashMap<>();
-            if (root != null && root.has("materials") && root.get("materials").isJsonObject()) {
-                JsonObject table = root.getAsJsonObject("materials");
-                for (Map.Entry<String, com.google.gson.JsonElement> entry : table.entrySet()) {
-                    if (!entry.getValue().isJsonObject()) {
-                        continue;
-                    }
-                    JsonObject row = entry.getValue().getAsJsonObject();
-                    ThermalMaterial material = new ThermalMaterial(
-                            entry.getKey(),
-                            row.has("density") ? row.get("density").getAsInt() : 0,
-                            row.has("specificHeat") ? row.get("specificHeat").getAsInt() : 0,
-                            row.has("ceilingKelvin") ? row.get("ceilingKelvin").getAsInt() : 0);
-                    parsed.put(entry.getKey().toLowerCase(Locale.ROOT), material);
-                }
+            root = new GsonBuilder().disableHtmlEscaping().create().fromJson(r, JsonObject.class);
+        } catch (Exception unreadable) {
+            throw refusal(file, String.valueOf(unreadable.getMessage()));
+        }
+        if (root == null || !root.has("materials") || !root.get("materials").isJsonObject()) {
+            throw refusal(file, "it has no \"materials\" object");
+        }
+        Map<String, ThermalMaterial> parsed = new LinkedHashMap<>();
+        for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject("materials").entrySet()) {
+            String name = entry.getKey();
+            if (!entry.getValue().isJsonObject()) {
+                throw refusal(file, "material \"" + name + "\" is not an object");
             }
-            if (parsed.isEmpty()) {
-                return defaults();
+            JsonObject row = entry.getValue().getAsJsonObject();
+            parsed.put(name.toLowerCase(Locale.ROOT), new ThermalMaterial(name,
+                    wholeNumber(file, name, row, "density"),
+                    wholeNumber(file, name, row, "specificHeat"),
+                    wholeNumber(file, name, row, "ceilingKelvin")));
+        }
+        // A row the player wrote wins; a row the file has never heard of comes from the shipped
+        // table. Without this merge a file written by an older version shadows every material
+        // added since, and a wooden hull reads as a substance nobody knows - with nothing to say
+        // so, because the table it did load looks healthy.
+        List<String> added = new ArrayList<>();
+        for (Map.Entry<String, ThermalMaterial> shipped : defaults().entrySet()) {
+            if (!parsed.containsKey(shipped.getKey())) {
+                parsed.put(shipped.getKey(), shipped.getValue());
+                added.add(shipped.getKey());
             }
-            // A row the player wrote wins; a row the file has never heard of comes from the shipped
-            // table. Without this merge a file written by an older version shadows every material
-            // added since, and a wooden hull reads as a substance nobody knows - with nothing to say
-            // so, because the table it did load looks healthy.
-            List<String> added = new ArrayList<>();
-            for (Map.Entry<String, ThermalMaterial> shipped : defaults().entrySet()) {
-                if (!parsed.containsKey(shipped.getKey())) {
-                    parsed.put(shipped.getKey(), shipped.getValue());
-                    added.add(shipped.getKey());
-                }
-            }
-            if (!added.isEmpty()) {
-                LogManager.getLogger(Constants.modId).info(
-                        "{} predates the shipped materials {}; added them with their shipped values",
-                        file, added);
-                save(file, parsed);
-            }
-            return parsed;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return defaults();
+        }
+        if (!added.isEmpty()) {
+            LogManager.getLogger(Constants.modId).info(
+                    "{} predates the shipped materials {}; added them with their shipped values",
+                    file, added);
+            save(file, parsed);
+        }
+        return parsed;
+    }
+
+    private static IllegalStateException refusal(String file, String why) {
+        return new IllegalStateException(file + " is not a thermal materials table: " + why
+                + ". Fix it, or delete it to have the shipped table written in its place.");
+    }
+
+    private static int wholeNumber(String file, String material, JsonObject row, String field) {
+        JsonElement value = row.get(field);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw refusal(file, "material \"" + material + "\" has no number \"" + field + "\"");
+        }
+        try {
+            return value.getAsBigDecimal().intValueExact();
+        } catch (ArithmeticException notWhole) {
+            throw refusal(file, "material \"" + material + "\" has \"" + field + "\" = " + value
+                    + ", which is not a whole number");
         }
     }
 
@@ -432,7 +450,10 @@ public final class ThermalMaterials {
             root.add("materials", table);
             w.write(gson.toJson(root));
         } catch (Exception e) {
-            e.printStackTrace();
+            // The table in memory is complete either way; what failed is the copy a player edits.
+            LogManager.getLogger(Constants.modId).warn(
+                    "Could not write the thermal materials table to {}; the game runs on the table it"
+                            + " read, but the file does not show it", file, e);
         }
     }
 

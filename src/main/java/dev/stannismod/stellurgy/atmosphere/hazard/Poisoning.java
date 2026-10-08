@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.DamageSource;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 
@@ -78,7 +79,10 @@ public final class Poisoning {
         }
         NBTTagCompound data = entity.getEntityData();
         double dose = data.getDouble(DOSE_KEY);
-        AirState air = breathed.get();
+        // With toxicity off nothing is taken in and nothing harms; a dose already carried clears as
+        // it would in clean air, so turning the setting back on does not land a stored dose at once.
+        boolean toxic = StellurgyConfiguration.getCurrentConfig().enableToxicity;
+        AirState air = toxic ? breathed.get() : null;
         double index = air == null ? 0.0D : air.toxicIndex();
         // The suit is asked only when there is something to keep out: asking spends its air.
         if (index >= 1.0D && AtmosphereHazards.isImmune(exposure(), entity)) {
@@ -94,7 +98,7 @@ public final class Poisoning {
         }
         data.setDouble(DOSE_KEY, dose);
         float damage = damageFor(dose);
-        if (damage > 0.0F) {
+        if (toxic && damage > 0.0F) {
             entity.attackEntityFrom(
                     new DamageSource(DAMAGE_TYPE).setDamageBypassesArmor().setDamageIsAbsolute(), damage);
         }
@@ -105,11 +109,14 @@ public final class Poisoning {
         return AtmosphereHazard.POISON;
     }
 
-    /** What a suit is asked to keep out: poison, which needs the whole suit and its own supply. */
+    /**
+     * What a suit is asked to keep out: poison, which needs the whole suit and — where breathing needs
+     * oxygen — its own supply.
+     */
     private static HazardExposure exposure() {
-        return new HazardExposure(Collections.singletonList(new HazardEffect(
+        return AtmosphereHazards.asConfigured(new HazardExposure(Collections.singletonList(new HazardEffect(
                 hazard(), TICKS_PER_SECOND, null, null,
                 HazardEffect.NONE, HazardEffect.NONE, HazardEffect.NONE,
-                false, false, false, true, MESSAGE_KEY)));
+                false, false, false, true, MESSAGE_KEY))));
     }
 }

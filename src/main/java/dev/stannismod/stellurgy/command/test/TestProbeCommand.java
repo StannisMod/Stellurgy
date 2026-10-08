@@ -14865,6 +14865,19 @@ public class TestProbeCommand extends CommandBase {
                     "terraformRequiresFluid",
                     "oxygenVentSize",
                     "atmosphereHandleBitMask",
+                    // How much oxygen one breath turns into CO2, per block of the zone. Read so a
+                    // respiration test can state one breath in the units the zone reports, rather
+                    // than carry its own copy of the shipped number.
+                    "lifeSupportRespirationRate",
+                    // A scrubber's draw and what one cartridge charge pays for. Read so a test can
+                    // compute the charges a measured draw is worth instead of restating the defaults.
+                    "lifeSupportScrubberRate",
+                    "lifeSupportScrubberCo2PerCharge",
+                    // What the air's chemistry does to living things. A test turns one off for its own
+                    // scenario, puts back what it found, and pins that the effect stops and the
+                    // systems do not.
+                    "breathingRequiresO2",
+                    "enableToxicity",
                     // Disableability-contract tests: toggle each opt-in
                     // mechanic and its tuning knobs from the test JVM.
                     "advancedWeightSystem",
@@ -22360,15 +22373,14 @@ public class TestProbeCommand extends CommandBase {
     // Oxygen vent state probe -----------------------------------------
 
     /**
-     * {@code /stellurgytest vent info <dim> <x> <y> <z>} — exposes the oxygen vent's
-     * internal seal state, blob size, and the atmosphere it has imposed on its
-     * blob. Used by the sealed-room scenario to verify the seal-detect cycle.
+     * {@code /stellurgytest vent info <dim> <x> <y> <z>} — a zone port's seal state, zone size, and
+     * the atmosphere its zone publishes; the port is an oxygen vent or a ventilation port.
      *
      * Returns:
      * <pre>
      * {
-     *   "isVent": true,
-     *   "isSealed": true|false,        // private TileOxygenVent.isSealed
+     *   "isVent": true,                // the block anchors a zone (either kind)
+     *   "isSealed": true|false,        // IZonePort.isSealed()
      *   "blobSize": &lt;int&gt;,             // AtmosphereHandler.getBlobSize(vent)
      *   "blobAtmosphere": "...",       // current AreaBlob atmosphere unlocalized name
      *   "airN2": &lt;long&gt;,              // zone gas partial pressures, BILLIONTHS of an atm;
@@ -22377,8 +22389,9 @@ public class TestProbeCommand extends CommandBase {
      *   "airPressure": &lt;int&gt;,          // their sum in hundredths of an atm (100 = 1.00 atm)
      *   "airTempMilliK": &lt;int&gt;,        // the zone air's temperature, thousandths of a kelvin
      *   "airHeatCapacity": &lt;long&gt;,     // heat units per kelvin: pressure x volume, the mixing weight
-     *   "hasFluid": true|false,        // private TileOxygenVent.hasFluid
-     *   "fluidAmount": &lt;int&gt;,          // tank contents
+     *   "hasFluid": true|false,        // vent only: TileOxygenVent.hasFluid()
+     *   "fluidAmount": &lt;int&gt;,          // vent only: tank contents
+     *   "powered": true|false,         // port only: its network paid its running cost
      *   "energyStored": &lt;int&gt;
      * }
      * </pre>
@@ -22408,8 +22421,8 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
-                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.IZonePort)) {
+                send(sender, "{\"error\":\"not a zone port (oxygen vent or ventilation port)\"}");
                 return;
             }
             dev.stannismod.stellurgy.atmosphere.AtmosphereHandler handler = atmosphereOfLoaded(dim);
@@ -22468,12 +22481,12 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
-                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort)) {
+                send(sender, "{\"error\":\"not a TileVentilationPort\"}");
                 return;
             }
-            dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent vent =
-                    (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile;
+            dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort vent =
+                    (dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort) tile;
             if (write) {
                 net.minecraft.nbt.NBTTagCompound payload = new net.minecraft.nbt.NBTTagCompound();
                 payload.setInteger("zonePriority", value);
@@ -22501,51 +22514,47 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
-                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+            if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.IZonePort)) {
+                send(sender, "{\"error\":\"not a zone port (oxygen vent or ventilation port)\"}");
                 return;
             }
-            dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent vent =
-                    (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile;
+            dev.stannismod.stellurgy.tile.atmosphere.IZonePort vent =
+                    (dev.stannismod.stellurgy.tile.atmosphere.IZonePort) tile;
             AtmosphereHandler handler = atmosphereOfLoaded(dim);
             if (handler == null) {
                 send(sender, "{\"error\":\"no atmosphere handler for dim\"}");
                 return;
             }
-            // First-tick parity: ensure blob is registered before the seal
-            // check. addBlock NPEs if the vent isn't a registered blob.
-            try {
-                handler.getBlobSize(vent);
-            } catch (NullPointerException notRegistered) {
-                handler.registerBlob(vent, vent.getPos());
+            // The zone is registered on the block's own first tick; a reseal before it is a test
+            // that has not ticked its block, and saying so beats registering it from here.
+            if (handler.getAirState(vent) == null) {
+                send(sender, "{\"error\":\"zone not registered — tick the block first\"}");
+                return;
             }
 
-            // Vent's canFormBlob() returns isTurnedOn(); default redstone
-            // state is ON which means the vent only runs when getting a
-            // redstone signal — useless for headless tests. Force state to OFF
-            // (the "always running, suppressed by redstone" mode in production).
-            try {
-                java.lang.reflect.Field stateF = dev.stannismod.stellurgy.tile.atmosphere
-                        .TileOxygenVent.class.getDeclaredField("state");
-                stateF.setAccessible(true);
-                stateF.set(vent, dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState.OFF);
-            } catch (ReflectiveOperationException ignore) {
-                // Not fatal — addBlock will simply be a no-op when the vent
-                // can't form a blob, and the test will see sealed=false.
+            // A vent's canFormBlob() returns isTurnedOn(); its default redstone state is ON, which
+            // runs it only on a redstone signal — useless for headless tests. Force state to OFF
+            // (the "always running, suppressed by redstone" mode in production). A port has no
+            // redstone control.
+            if (tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) {
+                try {
+                    java.lang.reflect.Field stateF = dev.stannismod.stellurgy.tile.atmosphere
+                            .TileOxygenVent.class.getDeclaredField("state");
+                    stateF.setAccessible(true);
+                    stateF.set(tile, dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState.OFF);
+                } catch (ReflectiveOperationException ignore) {
+                    // Not fatal — the check will simply not seal, and the reply says sealed=false.
+                }
             }
-            // AtmosphereBlob.addBlock is a no-op when the seed position is
-            // already in the graph (production re-evaluates the seal only when
-            // the blob is explicitly cleared). Clear the blob first so the
-            // flood-fill re-evaluates against current world state — critical
-            // for "wall just got broken, recheck seal" assertions.
+            // The flood fill is a no-op when its seed is already in the graph (production re-checks
+            // a seal only once the zone is empty). Clear it first so the fill measures the world as
+            // it stands — critical for "wall just got broken, recheck seal" assertions.
             handler.clearBlob(vent);
 
-            // AtmosphereBlob runs flood-fill ASYNC when
-            // atmosphereHandleBitMask&1==1 (default config bitMask=3).
-            // Schedule the work, then busy-wait up to 2s for the worker to
-            // settle so the test can read a stable sealed state.
-            handler.addBlock(vent,
-                    new dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition(vent.getPos()));
+            // The block's own seal check. The fill runs ASYNC when atmosphereHandleBitMask&1==1
+            // (default 3), so the first check schedules it and answers "not yet"; wait up to 2 s for
+            // the worker, then check again for the answer.
+            vent.checkSealNow();
             long deadline = System.currentTimeMillis() + 2000L;
             while (System.currentTimeMillis() < deadline) {
                 try {
@@ -22569,18 +22578,8 @@ public class TestProbeCommand extends CommandBase {
                 }
                 try { Thread.sleep(10); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
             }
+            boolean newlySealed = vent.checkSealNow();
             int finalBlobSize = handler.getBlobSize(vent);
-            boolean newlySealed = finalBlobSize > 0;
-            // Mirror the production setSealed(...) via reflection.
-            try {
-                java.lang.reflect.Field f = dev.stannismod.stellurgy.tile.atmosphere
-                        .TileOxygenVent.class.getDeclaredField("isSealed");
-                f.setAccessible(true);
-                f.setBoolean(vent, newlySealed);
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
-                return;
-            }
             send(sender, "{\"ok\":true,\"sealed\":" + newlySealed
                     + ",\"blobSize\":" + finalBlobSize + "}");
             return;
@@ -22599,29 +22598,14 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-        if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent)) {
+        if (!(tile instanceof dev.stannismod.stellurgy.tile.atmosphere.IZonePort)) {
             send(sender, "{\"isVent\":false,\"tile\":\""
                     + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
             return;
         }
-        dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent vent =
-                (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile;
-
-        boolean isSealed;
-        boolean hasFluid;
-        try {
-            java.lang.reflect.Field f1 = dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent
-                    .class.getDeclaredField("isSealed");
-            f1.setAccessible(true);
-            isSealed = f1.getBoolean(vent);
-            java.lang.reflect.Field f2 = dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent
-                    .class.getDeclaredField("hasFluid");
-            f2.setAccessible(true);
-            hasFluid = f2.getBoolean(vent);
-        } catch (ReflectiveOperationException e) {
-            send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
-            return;
-        }
+        dev.stannismod.stellurgy.tile.atmosphere.IZonePort vent =
+                (dev.stannismod.stellurgy.tile.atmosphere.IZonePort) tile;
+        boolean isSealed = vent.isSealed();
 
         AtmosphereHandler handler = atmosphereOfLoaded(dim);
         // Blob lookup throws NPE if the vent hasn't yet had performFunction
@@ -22718,9 +22702,8 @@ public class TestProbeCommand extends CommandBase {
         long ventN2 = 0L, ventO2 = 0L, ventCo2 = 0L;
         int ventPressure = 0;
         boolean ventHasAir = false;
-        if (handler != null && tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) {
-            dev.stannismod.stellurgy.atmosphere.AirState held = handler.getAirState(
-                    (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile);
+        if (handler != null) {
+            dev.stannismod.stellurgy.atmosphere.AirState held = handler.getAirState(vent);
             if (held != null) {
                 ventHasAir = true;
                 ventN2 = held.getNitrogen();
@@ -22734,8 +22717,17 @@ public class TestProbeCommand extends CommandBase {
         out.append(",\"ventAirO2\":").append(ventO2);
         out.append(",\"ventAirCO2\":").append(ventCo2);
         out.append(",\"ventAirPressure\":").append(ventPressure);
-        out.append(",\"hasFluid\":").append(hasFluid);
-        out.append(",\"fluidAmount\":").append(fluidAmount);
+        // A port has no tank, so it reports no tank fields rather than a tank that is empty; it
+        // reports whether its network paid its running cost instead.
+        if (tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) {
+            out.append(",\"hasFluid\":").append(
+                    ((dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile).hasFluid());
+            out.append(",\"fluidAmount\":").append(fluidAmount);
+        }
+        if (tile instanceof dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort) {
+            out.append(",\"powered\":").append(
+                    ((dev.stannismod.stellurgy.tile.atmosphere.TileVentilationPort) tile).isPowered());
+        }
         out.append(",\"energyStored\":").append(energyStored);
         out.append('}');
         send(sender, out.toString());

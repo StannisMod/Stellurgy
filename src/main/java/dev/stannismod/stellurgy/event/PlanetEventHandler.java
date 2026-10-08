@@ -213,10 +213,16 @@ public class PlanetEventHandler {
             RocketEventHandler.destroyOrbitalTextures(event.getEntity().world);
         }
  */
-        if (event.getEntity().isInWater()) {
-            if (Atmosphere.LOWOXYGEN.isImmune(event.getEntityLiving()))
-                event.getEntity().setAir(300);
-        }
+        // A suit with air in its tank keeps a diver breathing. The question is asked of air with no
+        // oxygen in it — a suit that only concentrates thin air cannot breathe water — and it is asked
+        // for FREE: the diver is not in an atmosphere that charges him, and asking it every tick at the
+        // atmosphere's price emptied a suit in about twenty seconds of swimming on a breathable world.
+        // Water is not air, so this does not follow breathingRequiresO2: off, a diver still drowns.
+        if (!event.getEntity().world.isRemote && event.getEntity().isInWater()
+                && dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.wouldBeImmune(
+                dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.exposureOf(Atmosphere.NOO2),
+                event.getEntityLiving()))
+            event.getEntity().setAir(300);
 
         if (!event.getEntity().world.isRemote && event.getEntity().world.getTotalWorldTime() % 20 == 0 && event.getEntity() instanceof EntityPlayer) {
             if (DimensionManager.getInstance().getDimensionProperties(event.getEntity().world.provider.getDimension()).getName().equals("Luna") &&

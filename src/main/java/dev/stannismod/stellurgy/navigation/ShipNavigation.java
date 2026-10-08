@@ -71,6 +71,13 @@ public final class ShipNavigation implements JumpGate.ShipContext {
         return currentCoord();
     }
 
+    @Override
+    public boolean destinationCellAvailable() {
+        SpaceSubsystem stack = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
+        GalacticCoord target = target();
+        return stack == null || target == null || stack.manager.canMaterialize(target);
+    }
+
     // ─── What the drive answers ────────────────────────────────────────────────
 
     @Override
@@ -159,7 +166,7 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     /**
      * Would this jump be performed as a single crossing rather than flown through hyperspace?
      *
-     * <p>Asked of {@link ShipTransitManager#isDirectCrossing} — the same predicate the departure reads,
+     * <p>Asked of {@link ShipTransitManager#jumpsDirect} — the same predicate the departure reads,
      * never a second copy of the rule. A console that quoted one mechanism while the drive performed
      * the other would be showing the pilot a flight he is not going to get, and he has no way to
      * check.</p>
@@ -167,12 +174,13 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     public boolean plannedJumpIsDirect() {
         GalacticCoord target = target();
         GalacticCoord origin = currentCoord();
-        if (target == null || origin == null) {
+        SpaceSubsystem stack = dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
+        if (target == null || origin == null || stack == null) {
             return false;
         }
-        return ShipTransitManager.isDirectCrossing(
+        return stack.transit.jumpsDirect(
                 SpaceSubsystem.frames().distanceBetween(origin, target, SpaceSubsystem.spaceClock()),
-                plannedSpeed());
+                plannedSpeed(), target);
     }
 
     /** Where the ship is now, as the durable ledger records it, or {@code null}. */

@@ -126,6 +126,36 @@ public class SpaceManagerTest {
         return new SpaceManager.Config(SpaceManager.GcPolicy.NEVER, 0, 0);
     }
 
+    // -- canMaterialize: the forecast a jump's warning reads ------------------
+
+    /**
+     * {@code canMaterialize} answers what {@code materialize} would do — yes for a live cell, a free
+     * slot or an idle evictable cell; no when every slot is claimed or stood in — and changes nothing.
+     *
+     * <p>red-witnessed: with {@code SpaceManager#canMaterialize} at {@code || lruEvictableCell() != null}
+     * removed: "an idle cell can be evicted for it", 2026-10-06. With its
+     * {@code loadedCellToSlot.containsKey(coord.cellKey())} term removed: "a cell already live needs no
+     * slot", 2026-10-06.</p>
+     */
+    @Test
+    public void canMaterializeForecastsMaterializeAndBindsNothing() {
+        FakeBinder binder = new FakeBinder(10);
+        SpaceManager m = mgr(binder, new Clock(), never());
+
+        assertTrue("a free slot can take it", m.canMaterialize(cell(2)));
+        int dim = m.materialize(cell(1));
+        assertTrue("a cell already live needs no slot", m.canMaterialize(cell(1)));
+        assertFalse("every slot claimed: no room", m.canMaterialize(cell(2)));
+
+        m.dematerialize(cell(1));
+        assertTrue("an idle cell can be evicted for it", m.canMaterialize(cell(2)));
+        binder.occupied.add(dim);
+        assertFalse("but not one somebody is standing in", m.canMaterialize(cell(2)));
+
+        assertFalse("asking bound nothing", m.isLoaded(cell(2)));
+        assertTrue("and evicted nothing", m.isLoaded(cell(1)));
+    }
+
     // -- materialize / refcount ----------------------------------------------
 
     @Test
