@@ -27,7 +27,7 @@ import static org.junit.Assert.assertEquals;
  *
  * <p>What a scenario here does NOT see: the seating itself — he is mounted by probe, as no interface
  * reaches a ship block for a bot — and whether a round HITS (nothing corrects a ship order's aim for the
- * round's fall). A hull that is moving: the lead is pinned at the muzzle by {@code TurretOnAShipE2ETest}.
+ * round's fall). A hull that is moving: the lead is pinned at the muzzle by {@code TurretOnAShipTest}.
  * The "weapons carry our code" and "no friends" rules, which that server group pins; the crew rule is
  * here because it needs a player.</p>
  */

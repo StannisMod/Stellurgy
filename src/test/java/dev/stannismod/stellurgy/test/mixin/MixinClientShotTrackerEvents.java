@@ -17,7 +17,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * (HEAD of {@code ClientShotTracker.end}), each carrying the round's server id; the end carries the
  * reason and the point the flash is drawn at. Those two methods are the only doors from the spawn
  * and end packets into what the renderer draws, so a round this client was told about is a record
- * here and one it was not told about is not. Client log. Read by {@code ShotReachesClientE2ETest}.
+ * here and one it was not told about is not. Client log. Read by {@code ShotReachesClientTest}.
  *
  * <p>SILENT about a round the client drops on its own because it outlived its declared lifetime —
  * that is the tracker's tick, not a packet.</p>

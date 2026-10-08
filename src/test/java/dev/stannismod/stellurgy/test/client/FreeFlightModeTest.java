@@ -80,7 +80,7 @@ import static org.junit.Assert.assertTrue;
  * </ul>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class FreeFlightModeTest extends AbstractSharedClientE2ETest {
+public class FreeFlightModeTest extends AbstractSharedClientTest {
 
     private static final String ROCKET_ID = "id";
 

@@ -24,7 +24,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * The shared-client base for the Valkyrien Skies / tier-2 ship scenarios.
  *
- * <p>It is a separate base class and not two more commands in {@link AbstractSharedClientE2ETest}
+ * <p>It is a separate base class and not two more commands in {@link AbstractSharedClientTest}
  * because that class's reset is paid by every scenario in the client tier, and the two channels
  * below belong to ship scenarios only.</p>
  *
@@ -57,7 +57,7 @@ import static org.junit.Assert.assertTrue;
  * <p>Both are closed and then ASSERTED, on the same principle as the base reset: a reset nobody
  * checks is indistinguishable from no reset.</p>
  */
-public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2ETest {
+public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTest {
 
     /**
      * How far a lifted craft may sit from the altitude the lift asked for, in blocks.

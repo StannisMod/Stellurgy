@@ -546,28 +546,67 @@ public final class ForgeTestClientBootstrap {
                     if (screen == null) {
                         throw new IllegalStateException("No current GUI to click");
                     }
-                    int targetId = requireInt(request, "id");
-                    GuiButton match = null;
-                    for (GuiButton button : collectAllButtons(screen)) {
-                        if (button.id == targetId) {
-                            match = button;
-                            break;
-                        }
-                    }
-                    if (match == null) {
-                        throw new IllegalArgumentException("No GUI button with id " + targetId);
-                    }
-                    if (!match.visible || !match.enabled) {
-                        throw new IllegalStateException("GUI button id " + targetId
-                                + " is not clickable (visible=" + match.visible
-                                + ", enabled=" + match.enabled + ")");
-                    }
+                    GuiButton match = requireClickableButton(screen, requireInt(request, "id"));
                     // Dispatch through actionPerformed rather than a synthetic
                     // mouse click: coordinate-free, and libVulpes' GuiModular
                     // forwards actionPerformed to every module — so this hits
                     // module-local buttons (planet selector grid, …) that never
-                    // land in GuiScreen.buttonList.
+                    // land in GuiScreen.buttonList. click_button_at is the
+                    // pipeline form: the same button, found by id, clicked at
+                    // its point by the screen's own mouseClicked.
                     invokeActionPerformed(screen, match);
+                    return ok();
+                });
+            case "click_button_at":
+                return runOnClientThread(() -> {
+                    GuiScreen screen = Minecraft.getMinecraft().currentScreen;
+                    if (screen == null) {
+                        throw new IllegalStateException("No current GUI to click");
+                    }
+                    GuiButton match = requireClickableButton(screen, requireInt(request, "id"));
+                    int x = match.x + match.width / 2;
+                    int y = match.y + match.height / 2;
+                    clickAt(screen, x, y, 0);
+                    JsonObject response = ok();
+                    response.addProperty("x", x);
+                    response.addProperty("y", y);
+                    return response;
+                });
+            case "click_slot_at":
+                return runOnClientThread(() -> {
+                    Minecraft mc = Minecraft.getMinecraft();
+                    if (!(mc.currentScreen instanceof GuiContainer)) {
+                        throw new IllegalStateException("Current GUI is not a container screen");
+                    }
+                    GuiContainer containerScreen = (GuiContainer) mc.currentScreen;
+                    int slotId = requireInt(request, "slot");
+                    Slot slot = null;
+                    for (Slot candidate : containerScreen.inventorySlots.inventorySlots) {
+                        if (candidate.slotNumber == slotId) {
+                            slot = candidate;
+                            break;
+                        }
+                    }
+                    if (slot == null) {
+                        throw new IllegalArgumentException("No slot " + slotId + " in the open container");
+                    }
+                    // A slot is drawn 16x16 at (guiLeft + xPos, guiTop + yPos); its centre is what a
+                    // player aims at, and GuiContainer's own getSlotAtPosition decides what is hit.
+                    int x = containerScreen.getGuiLeft() + slot.xPos + 8;
+                    int y = containerScreen.getGuiTop() + slot.yPos + 8;
+                    clickAt(containerScreen, x, y, boundedInt(request, "button", 0, 2));
+                    JsonObject response = ok();
+                    response.addProperty("x", x);
+                    response.addProperty("y", y);
+                    return response;
+                });
+            case "press_screen_key":
+                return runOnClientThread(() -> {
+                    GuiScreen screen = Minecraft.getMinecraft().currentScreen;
+                    if (screen == null) {
+                        throw new IllegalStateException("No current GUI to press a key on");
+                    }
+                    invokeKeyTyped(screen, (char) 0, requireInt(request, "keyCode"));
                     return ok();
                 });
             case "report_slots":
@@ -1086,6 +1125,7 @@ public final class ForgeTestClientBootstrap {
                         return response;
                     }
                     response.addProperty("worldReady", true);
+                    response.addProperty("selectedHotbar", mc.player.inventory.currentItem);
                     response.add("held", stackJson(mc.player.getHeldItemMainhand()));
                     response.add("offhand", stackJson(mc.player.getHeldItemOffhand()));
                     JsonArray armor = new JsonArray();
@@ -2096,7 +2136,17 @@ public final class ForgeTestClientBootstrap {
         }
     }
 
+    /**
+     * The screen's own press at a point, with the REAL cursor put there first.
+     *
+     * <p>A real click reaches {@code mouseClicked} from {@code handleMouseInput}, which computes the point
+     * from {@code Mouse.getEventX/Y} — so the cursor and the point are one value. A screen that asks the
+     * cursor instead of its argument then sees the same point: libVulpes' {@code ModuleContainerPan}
+     * decides which of its buttons is hit from {@code Mouse.getX()/getY()} alone. Without this, a click at
+     * a point landed wherever the OS cursor happened to rest for every such screen.</p>
+     */
     private void invokeMouseClicked(GuiScreen screen, int x, int y, int button) {
+        placeCursor(screen, x, y);
         try {
             java.lang.reflect.Method method = findMethod(screen.getClass(), "mouseClicked", int.class, int.class, int.class);
             method.setAccessible(true);
@@ -2124,6 +2174,72 @@ public final class ForgeTestClientBootstrap {
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("Failed to drag GUI point", exception);
         }
+    }
+
+    /**
+     * Puts LWJGL's cursor at a scaled screen point by writing the position {@code Mouse} reports, never
+     * by {@code Mouse.setCursorPosition}: that one warps the OS pointer, and this window is parked
+     * off-desktop, so the developer's own pointer would be thrown to a screen edge (see
+     * {@link #installNonWarpingMouseHelper}). The value holds until the next {@code Mouse.poll}, which
+     * runs after the click this precedes, on this same thread.
+     *
+     * <p>The display pixel is the centre of the scaled cell, inverted from {@code handleMouseInput}'s
+     * own arithmetic; the round trip is checked, and a point that does not come back is refused.</p>
+     */
+    private void placeCursor(GuiScreen screen, int x, int y) {
+        Minecraft mc = Minecraft.getMinecraft();
+        int dw = mc.displayWidth, dh = mc.displayHeight, w = screen.width, h = screen.height;
+        if (w <= 0 || h <= 0 || dw <= 0 || dh <= 0) {
+            throw new IllegalStateException("Cannot place the cursor: screen " + w + "x" + h + ", display "
+                    + dw + "x" + dh);
+        }
+        int px = (int) (((2L * x + 1) * dw) / (2L * w));
+        int py = (int) (((2L * (h - 1 - y) + 1) * dh) / (2L * h));
+        if (px * w / dw != x || h - py * h / dh - 1 != y) {
+            throw new IllegalStateException("Cursor point " + x + "," + y + " does not survive the display"
+                    + " round trip (pixel " + px + "," + py + ", screen " + w + "x" + h + ", display " + dw
+                    + "x" + dh + ")");
+        }
+        try {
+            for (String field : new String[] {"x", "event_x", "absolute_x"}) {
+                java.lang.reflect.Field f = org.lwjgl.input.Mouse.class.getDeclaredField(field);
+                f.setAccessible(true);
+                f.setInt(null, px);
+            }
+            for (String field : new String[] {"y", "event_y", "absolute_y"}) {
+                java.lang.reflect.Field f = org.lwjgl.input.Mouse.class.getDeclaredField(field);
+                f.setAccessible(true);
+                f.setInt(null, py);
+            }
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Failed to place the LWJGL cursor", exception);
+        }
+    }
+
+    /** The screen's own press AND release at one point — a click; a slot takes a held stack on release. */
+    private void clickAt(GuiScreen screen, int x, int y, int button) {
+        invokeMouseClicked(screen, x, y, button);
+        invokeMouseReleased(screen, x, y, button);
+    }
+
+    /** The button with this id on the screen or in any of its modules, visible and enabled, or a loud error. */
+    private GuiButton requireClickableButton(GuiScreen screen, int targetId) {
+        GuiButton match = null;
+        for (GuiButton button : collectAllButtons(screen)) {
+            if (button.id == targetId) {
+                match = button;
+                break;
+            }
+        }
+        if (match == null) {
+            throw new IllegalArgumentException("No GUI button with id " + targetId);
+        }
+        if (!match.visible || !match.enabled) {
+            throw new IllegalStateException("GUI button id " + targetId
+                    + " is not clickable (visible=" + match.visible
+                    + ", enabled=" + match.enabled + ")");
+        }
+        return match;
     }
 
     private void invokeMouseReleased(GuiScreen screen, int mouseX, int mouseY, int state) {

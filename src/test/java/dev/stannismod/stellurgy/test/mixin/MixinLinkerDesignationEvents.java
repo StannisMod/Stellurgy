@@ -20,7 +20,7 @@ import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 /**
  * A linker naming a target for a weapon, as events: the linker being bound to a gun or a console,
  * and the designation that tile then took. Production announces neither; both are read at the
- * tile's own seam, on the server only. Read by {@code ALinkerNamesTheBatteryItsTargetE2ETest}.
+ * tile's own seam, on the server only. Read by {@code ALinkerNamesTheBatteryItsTargetTest}.
  *
  * <ul>
  *   <li><b>{@code weapon_linker_bound}</b> — the RETURN of {@code onLinkStart} and

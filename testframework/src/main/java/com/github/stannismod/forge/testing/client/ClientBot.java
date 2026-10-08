@@ -38,7 +38,7 @@ import java.util.Objects;
  *   <li>{@code setLook} — PIPELINE: the head turned; what it then picks is vanilla's own trace</li>
  *   <li>{@code turnLook} — PIPELINE: {@code Entity.turn}, what the mouse handler feeds</li>
  *   <li>{@code useMouseOver} — PIPELINE: invokes {@code Minecraft.rightClickMouse}, which decides from its own pick</li>
- *   <li>{@code clickScreenPoint} — PIPELINE: the screen's own {@code mouseClicked} at a point</li>
+ *   <li>{@code clickScreenPoint} — PIPELINE: the screen's own {@code mouseClicked} at a point, with the cursor put there first (a screen may read the cursor, not its argument)</li>
  *   <li>{@code dragScreenPoint} — PIPELINE: the screen's own press, drag and release at points</li>
  *   <li>{@code typeText} — PIPELINE: the screen's own {@code keyTyped}, character by character</li>
  *   <li>{@code pressEnterAfterTyping} — PIPELINE: {@code typeText} and the return key</li>
@@ -51,6 +51,9 @@ import java.util.Objects;
  *   <li>{@code clickButton} — PIPELINE: the label only finds a point; the screen's own {@code mouseClicked} decides what is under it</li>
  *   <li>{@code clickButtonAtRatio} — PIPELINE: as {@code clickButton}, at a chosen point of the button</li>
  *   <li>{@code clickButtonById} — BYPASS: {@code actionPerformed} called on a button named by its id</li>
+ *   <li>{@code clickButtonAt} — PIPELINE: the id only finds a point; the cursor is put there and the screen's own press and release decide what is under it</li>
+ *   <li>{@code clickSlotAt} — PIPELINE: the index only finds a point; the screen's own press and release at the slot's centre</li>
+ *   <li>{@code pressScreenKey} — PIPELINE: the screen's own {@code keyTyped} with a key code (escape closes it)</li>
  *   <li>{@code clickSlot} — BYPASS: {@code handleMouseClick} on a slot named by its index, past the slot-under-cursor decision</li>
  *   <li>{@code focusField} — BYPASS: a text field focused by a direct write</li>
  *   <li>{@code selectHotbar} — BYPASS: {@code inventory.currentItem} written; a player presses the number key</li>
@@ -252,6 +255,41 @@ public final class ClientBot implements Closeable {
     public void clickButtonById(int id) throws IOException {
         JsonObject command = command("click_button_id");
         command.addProperty("id", id);
+        assertOk(execute(command));
+    }
+
+    /**
+     * Clicks the button whose {@code GuiButton.id} equals {@code id} the way a mouse does: the cursor is
+     * put at the button's centre and the screen's own {@code mouseClicked} and {@code mouseReleased} run
+     * there, so the screen decides what is under the point. The id only FINDS the point — a module
+     * button (libVulpes' planet grid) included. Fails if no such button exists or it is hidden or
+     * disabled; a button panned out of its module's view is found and then clicked on nothing.
+     */
+    public JsonObject clickButtonAt(int id) throws IOException {
+        JsonObject command = command("click_button_at");
+        command.addProperty("id", id);
+        return assertOk(execute(command));
+    }
+
+    /**
+     * Clicks a container slot the way a mouse does: at the slot's centre on screen, press and release
+     * through the screen's own handlers, so {@code GuiContainer} decides which slot is hit and what the
+     * click does with the held stack (a stack is put down on RELEASE). The index only finds the point.
+     */
+    public JsonObject clickSlotAt(int slot, int button) throws IOException {
+        JsonObject command = command("click_slot_at");
+        command.addProperty("slot", slot);
+        command.addProperty("button", button);
+        return assertOk(execute(command));
+    }
+
+    /**
+     * Presses a key on the open screen through its own {@code keyTyped} — escape ({@code Keyboard.KEY_ESCAPE})
+     * closes it the way the player does, by whatever that screen does with escape.
+     */
+    public void pressScreenKey(int keyCode) throws IOException {
+        JsonObject command = command("press_screen_key");
+        command.addProperty("keyCode", keyCode);
         assertOk(execute(command));
     }
 

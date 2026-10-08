@@ -90,7 +90,7 @@ import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
  * {@code ItemSpaceChestSubInventoryDrainE2ETest}, {@code GasChargePadFillsPressureTankE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
+public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
 
 
 

@@ -26,7 +26,7 @@ import dev.stannismod.stellurgy.weapon.WeaponNetworkState;
  * Carries {@code consoles}, the positions of the component's consoles sorted by x, then y, then z
  * and joined as {@code "x,y,z|x,y,z"}, so a reader names the exact component it built; and
  * {@code stamp}, the stamp of the orders the network holds once the decision is taken. Server
- * log. Read by {@code WeaponConsoleE2ETest}.</p>
+ * log. Read by {@code WeaponConsoleTest}.</p>
  *
  * <p>SILENT about a component with no console, which never asks the question, and about a client
  * world, which has no networks.</p>

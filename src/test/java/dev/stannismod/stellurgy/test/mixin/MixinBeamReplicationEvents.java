@@ -22,7 +22,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * only once the channel's own decision ({@code offer}) has said this tick's state goes out. Carries
  * the gun's {@code pos} and {@code lit}: the channel's {@code announcedLit} as {@code offer} just set
  * it, i.e. exactly the state the packet carries. Server log. Read by
- * {@code ABeamIsHeldNotThrownE2ETest#clearingTheTargetPutsTheBeamOut}.</p>
+ * {@code ABeamIsHeldNotThrownTest#clearingTheTargetPutsTheBeamOut}.</p>
  *
  * <p>Records the decision to announce, not who received it: a server with no player in range still
  * records it, because the radius filter is the broadcaster's and not the channel's. SILENT about a

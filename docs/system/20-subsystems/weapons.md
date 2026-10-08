@@ -21,7 +21,7 @@ everything after that belongs to `projectile-substrate`.
 field, because a type and a power could disagree and then two places would decide what a gun is. A
 thrower spends energy in lumps at intervals; a beam spends every tick it is lit, and its depth grows
 with dwell rather than arriving in a budget. `GunSpec.java:42-62`, `TileTurret#holdBeam` [V]
-[T `ABeamIsHeldNotThrownE2ETest`]
+[T `ABeamIsHeldNotThrownTest`]
 
 **MECH-GUN-31 — "Operable" means CAN DELIVER, never "has a barrel".** A beam has no muzzle speed and
 no round worth firing, by nature. The first version of `isOperable()` was a list of required fields
@@ -34,7 +34,7 @@ own blocks, the frame conversion, the hull's inherited motion, and the refusal w
 not clear — is `TurretFireControl.muzzleOf`, asked by the round path and the beam path alike. It was
 inside `fire()`, reachable only by something launching a shot; a beam that computed its own origin
 started inside the barrel and **cut its own weapon apart on the first tick**.
-`TurretFireControl.java:145-215` [V] [T `TurretStandaloneE2ETest`, `ABeamIsHeldNotThrownE2ETest`].
+`TurretFireControl.java:145-215` [V] [T `TurretStandaloneTest`, `ABeamIsHeldNotThrownTest`].
 
 **MECH-GUN-33 — A starved weapon DUTY-CYCLES: dark, saving, then lit.** Below the price of one tick a
 beam goes out, accumulates a quantum — one second of unaided burn — and only then relights, so a weak
@@ -62,10 +62,10 @@ thrower, blown up, chunk unloaded — reaches that channel by the same road burn
 that ended without saying so would leave a beam drawn on a gun that had stopped firing. The channel
 decides what is worth a packet (`projectile-substrate` MECH-SHOT-29); the gun decides only what is true.
 `TileTurret#holdBeam`, `#burnOneTick`, `#extinguishBeam` [V]
-[T `BeamReachesClientE2ETest`, `BeamReplicationCadenceTest`]
+[T `BeamReachesClientTest`, `BeamReplicationCadenceTest`]
 
 **MECH-GUN-37 — What the gun offers the channel is a PATH, not two ends.** A beam can be turned — a mirror sends it back along the reflected direction as a further leg of the same tick — so the corner is a real point on the line it occupies. The tick's emission carries the whole path, the channel compares the whole path when deciding whether the drawing has moved (two ends can stay put while a corner walks along the plating), and the packet carries a point count. A beam nothing turned is exactly its two ends, which is the overwhelming case and costs one extra byte. `HeldBeam.Emission#path`, `TileTurret#replicatedPath`, `BeamReplication.Channel#offer` [V]
-[T `ABentBeamIsDrawnBentE2ETest` — falsified by capping the wire at two points, which draws the beam through the mirror that bent it]
+[T `ABentBeamIsDrawnBentTest` — falsified by capping the wire at two points, which draws the beam through the mirror that bent it]
 
 ## Responsibility boundary
 
@@ -122,13 +122,13 @@ path consults a network before aiming or firing: `TileTurret#update` reads a tar
 network's if it has one and the gun's own otherwise, and every other condition — charge, heat, cooldown,
 drive — is the gun's own state. A battery of one, wired to nothing, is a supported build.
 `TileTurret.java:107-133`, `:148-154` [V]
-[T `TurretStandaloneE2ETest#aGunWithNoNetworkFiresAtWhatItWasPointedAt`]
+[T `TurretStandaloneTest#aGunWithNoNetworkFiresAtWhatItWasPointedAt`]
 
 **MECH-GUN-02 — A gun's numbers are DERIVED from what was built, never authored.** `GunAssembly.scan`
 walks block adjacency from the controller, asks every `IGunPart` it meets to contribute, and sums. Two
 guns with the same parts have the same spec wherever they stand, and adding a barrel is a change the
 player can measure. `GunAssembly.java:62-108`, `GunSpec.java:134-232` [V]
-[T `GunSpecTest`, `TurretStandaloneE2ETest#theRoundItFiresIsTheRoundItsBuildDescribes`]
+[T `GunSpecTest`, `TurretStandaloneTest#theRoundItFiresIsTheRoundItsBuildDescribes`]
 
 **MECH-GUN-03 — Connectivity, not a template.** There is no fixed shape to match, so a part shipped by
 an addon joins a gun by being placed against one and the walk that finds it was not written knowing it
@@ -174,7 +174,7 @@ truth.** Jammed holds its bearing and still fires down it; freewheeling drifts a
 locked is a player's decision rather than a fault; dead alone stops the shooting.
 `TurretDriveState.java:16-66`, `TurretMechanism.java:98-104` [V]
 [T `TurretMechanismTest#aJammedDriveHoldsItsBearingAndStillFires`,
-`TurretStandaloneE2ETest#aDeadDriveStopsTheGunFiring`]
+`TurretStandaloneTest#aDeadDriveStopsTheGunFiring`]
 
 **MECH-GUN-09 — A ship gun aims in the ship's frame; a ground gun aims in the world's.** The mount's
 bearing is held in whichever frame the gun sits in, so a rolling hull carries the barrel exactly as it
@@ -194,14 +194,14 @@ walk, before cooling, before network registration and before aiming. A ship's ch
 ship object exists, and in that window every coordinate the gun holds is a shipyard address rather
 than a place in the world — so there is no partial behaviour that is correct, only waiting.
 `TileTurret.java:86-93`, `VSIntegration#isOnUnnamedShip` [V]
-[T `TurretStandaloneE2ETest#aGunAboardAnUnnamedShipDoesNothingAtAll` — the same STATE, reached by a
+[T `TurretStandaloneTest#aGunAboardAnUnnamedShipDoesNothingAtAll` — the same STATE, reached by a
 different road: the real load race is not pinned yet]
 
 **MECH-GUN-10a — The launch path refuses the same case again, as depth.** MECH-GUN-16 means a gun
 aboard an unnamed ship never reaches a tick; this second check is inside `fire`, which is callable
 from anywhere, and the failure it prevents is severe out of all proportion to its cost. `TurretFireControl.java:96-102`,
 `VSIntegration#isBlockInShipyard` [V]
-[T `TurretStandaloneE2ETest#aGunAboardAnUnnamedShipDoesNothingAtAll`]
+[T `TurretStandaloneTest#aGunAboardAnUnnamedShipDoesNothingAtAll`]
 
 **MECH-GUN-10b — A blocked line of fire is a HOLD, not a demolition.** The first three blocks past
 the muzzle are tested with the substrate's own crossing test; anything solid there — a hull the
@@ -210,7 +210,7 @@ refuses the shot. Deliberately short: this is a self-shelling check, not a clear
 a target behind a distant wall remains a legitimate miss. Reusing `StructureCrossing` rather than
 asking the world directly means the gun and the round cannot disagree about what counts as structure.
 `TurretFireControl.java:41-47,133-140`, `StructureCrossing.java:68-79` [V]
-[T `TurretStandaloneE2ETest#aGunWithItsOwnHullInFrontOfTheBarrelHoldsFire`]
+[T `TurretStandaloneTest#aGunWithItsOwnHullInFrontOfTheBarrelHoldsFire`]
 
 **MECH-GUN-11 — The round is born clear of its own gun.** The muzzle is placed `reach + 1.5` blocks
 along the aim, where `reach` is how far the furthest counted part sits from the controller. A round
@@ -235,7 +235,7 @@ own. Hold-fire is a separate switch from having a target, so a battery can track
 **MECH-GUN-15 — A network that loses its last console forgets its target.** Otherwise a battery would
 be left firing at a point nobody can retract — the one failure a player cannot fix by breaking
 something. `WeaponNetworkDomain.java:41-51` [V]
-[T `WeaponConsoleE2ETest#losingTheLastConsoleClearsTheTarget`, falsified: with the clear disabled
+[T `WeaponConsoleTest#losingTheLastConsoleClearsTheTarget`, falsified: with the clear disabled
 that test goes red and the other two stay green]
 
 **MECH-GUN-17 — The barrel is DRAWN, not built, because a block cannot be turned.** A block occupies
@@ -254,7 +254,7 @@ commanded bearing, the traverse rate and the drive state, and the client runs th
 `TurretMechanism` against them. Sent only when the command has moved more than 2 degrees or the drive
 state changed — a battery would otherwise put its barrels on the connection at the same rate as its
 rounds. `TileTurret.java:198-224`, `:330-360` [V]
-[T `TurretAimReachesClientE2ETest` — falsified against a build with the sync disabled]
+[T `TurretAimReachesClientTest` — falsified against a build with the sync disabled]
 
 **MECH-GUN-44 — Only a player within reach operates a console or a sensor.**
 `TileWeaponConsole#canInteractWithContainer` and `TileFireControlSensor#canInteractWithContainer`
@@ -271,12 +271,12 @@ flag and no copy of the network's state; every button writes to `WeaponNetworkSt
 readout reads from it. Two consoles on one network therefore cannot disagree — they are looking at
 the same object — and breaking one loses the window, not the setting. Its `writeToNBT` deliberately
 saves nothing of its own. `TileWeaponConsole.java:39-49,96-161,275-282` [V]
-[T `WeaponConsoleE2ETest#aConsolePointsEveryGunOnItsNetwork`]
+[T `WeaponConsoleTest#aConsolePointsEveryGunOnItsNetwork`]
 Its BUTTONS reach that state through a packet: a GUI button fires on the client, where the network
 state does not exist, so Hold Fire and Clear Target send a `PacketMachine` and the server applies
 them in `useNetworkData` (the toggle computed from the server's own flag), under the GUI's
 `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileWeaponConsole.java:595-603`); nothing is written to the client tile, which a dedicated server would never hear. `TileWeaponConsole#onInventoryButtonPressed`, `#useNetworkData` [V]
-[T `WeaponGuiButtonsReachTheServerE2ETest#theConsolesHoldFireButtonHoldsTheBatteryOnTheServer`]
+[T `WeaponGuiButtonsReachTheServerTest#theConsolesHoldFireButtonHoldsTheBatteryOnTheServer`]
 
 **MECH-GUN-38 — The console's screen is TOLD by the server, while it is open.** Every line the screen
 shows — network status, hold-fire, gun and on-target counts, the target, the sensor's contact — is
@@ -289,7 +289,7 @@ builds its lines BLANK until the first readout lands, rather than answering "no 
 empty JVM. The client never derives a line itself (`TileWeaponConsole.java:432-440`): on a dedicated server the panel would always read "no network" / not holding, and in single player it would read the integrated server's objects
 across threads. `TileWeaponConsole#getModules`, `#readoutTag`, `#showReadout`,
 `ReadoutSync` [V]
-[T `WeaponGuiButtonsReachTheServerE2ETest#theConsolesScreenShowsTheServersNetwork`]
+[T `WeaponGuiButtonsReachTheServerTest#theConsolesScreenShowsTheServersNetwork`]
 
 **MECH-GUN-39 — A player names a target by LOOKING at it through a linker bound to the weapon
 (ruled 2026-10-04).** Two acts. **Bind**: a linker clicked on a console (a SNEAKING right-click — a
@@ -310,7 +310,7 @@ machine is not loaded here, a console with no network. The design question (a cl
 only ~5 blocks, useless for a battery) was put to the maintainer, who chose the line-of-sight form.
 Both `onLinkStart` and `onLinkComplete` bind the linker to the console (`TileWeaponConsole.java:397-408`); the order itself is given by `onLinkAimed` (`:415`). `ItemLinker#onItemRightClick`, `#lineOfSight`, `ILinkAimedTile`,
 `LinkerDesignation`, `TileWeaponConsole#onLinkAimed`, `TileTurret#onLinkAimed` [V]
-[T `ALinkerNamesTheBatteryItsTargetE2ETest` — a real client binds, looks and clicks; the battery turns
+[T `ALinkerNamesTheBatteryItsTargetTest` — a real client binds, looks and clicks; the battery turns
 onto a block 22 blocks off and fires, then onto a creature]
 
 **MECH-GUN-40 — A pilot names a SHIP as his battery's target with T (rulings 2026-10-05).**
@@ -336,7 +336,7 @@ ruling (aiming at modules and compartments does not exist). Each tick the gun re
 every order the gun holds itself; a ship that is not loaded on this side (no bounds, or no velocity) is
 aimed at nowhere — the mount holds its bearing — rather than falling through to an older order.
 `TileTurret#shipIntercept`, `#getEffectiveTarget` [V]
-[T `TurretOnAShipE2ETest#aBatteryToldToEngageAShipAimsAtItsHullWhereverItIs` — moved 120 blocks, the
+[T `TurretOnAShipTest#aBatteryToldToEngageAShipAimsAtItsHullWhereverItIs` — moved 120 blocks, the
 aim follows; red with the shipyard bounds read instead]
 
 **MECH-GUN-42 — A HULL's friend-or-foe is a RULE the installation picks (ruling 2026-10-05).** *"надо
@@ -358,22 +358,22 @@ join in the same tick cannot lose it. A rebuilt component adopts the orders of i
 last order wins when two batteries are joined. The sensor's acquired track is not saved — it is
 re-acquired. Pinned by `SubsystemNetworkRestartTest#aWeaponNetworksOrdersComeBackFromItsConsolesAndTheBatteryObeysThem`
 (two real boots; the gun holds fire after the restart) and
-`WeaponConsoleE2ETest#theLastOrderWinsWhenTwoBatteriesAreJoined`. Bound: a gun whose chunk loads
+`WeaponConsoleTest#theLastOrderWinsWhenTwoBatteriesAreJoined`. Bound: a gun whose chunk loads
 before its console's runs on a fresh, order-less network until the console loads.
 `HullAllegianceRule`, `WeaponNetworkState#getHullAllegiance`, `TileWeaponConsole.java:90-91,704-721` (`weaponOrders`, `weaponOrdersStamp`) [V]
-[T `TurretOnAShipE2ETest#aHullWhoseWeaponsCarryOurCodeIsSparedOnlyUnderThatRule` (CODE_ON_WEAPONS,
+[T `TurretOnAShipTest#aHullWhoseWeaponsCarryOurCodeIsSparedOnlyUnderThatRule` (CODE_ON_WEAPONS,
 NONE); `HelmControlsClientGroupTest` (CODE_ON_CREW)]
 
 **MECH-GUN-20 — Tracking and shooting are separate switches.** Hold-fire stops the firing and keeps
 the target, so a battery watching an approaching ship does not have to forget where it is in order to
 stop shooting. Releasing it resumes. `TileWeaponConsole.java:133-150`, `WeaponNetworkState.java:36-45`
-[V] [T `WeaponConsoleE2ETest#holdFireStopsTheShootingAndKeepsTheTarget`]
+[V] [T `WeaponConsoleTest#holdFireStopsTheShootingAndKeepsTheTarget`]
 
 **MECH-GUN-21 — A gun tracks an ENTITY, not only a point.** A target that moves is followed: the
 aim is recomputed each tick from the entity's body centre, and an entity that dies or logs out simply
 stops being found, which leaves the mount holding its bearing rather than swinging to a remembered
 position. `TileTurret.java:172-206` [V]
-[T `TurretFriendOrFoeE2ETest`]
+[T `TurretFriendOrFoeTest`]
 
 **MECH-GUN-22 — Friend-or-foe is a credential the TARGET carries.** *(Only a
 PLAYER can present it — `CodeUtils.entityHasMatchingCode` returns false for anything else,
@@ -383,7 +383,7 @@ who is friendly. A gun with no code recognises nobody, deliberately: a battery t
 indistinguishable from a broken one. The code lives on the NETWORK when there is one, because "whose
 side are we on" is a property of the installation and guns that disagreed would shoot the crew at
 random. `TileTurret.java:208-230`, `TileWeaponConsole.java:133-160`, `CodeUtils#entityHasMatchingCode` [V]
-[T `TurretFriendOrFoeE2ETest`, falsified: with the check removed the gun shoots the code-carrying
+[T `TurretFriendOrFoeTest`, falsified: with the check removed the gun shoots the code-carrying
 player]
 
 **MECH-GUN-36 — Commanding a battery is UNGUARDED, and that is the ruling (2026-08-20).** The
@@ -414,7 +414,7 @@ the automatic path uses, so heat, cooldown, charge, line of fire and friend-or-f
 manned gun that skipped any of them would be strictly better than the same gun on a console, which is
 a balance decision nobody made. The seat and the first-person view are a later wave; this is the half
 that has to exist for them not to be a rewrite. `TileTurret.java:150-158,196-247` [V]
-[T `TurretStandaloneE2ETest#aGunUnderManualControlIgnoresItsTargetAndFiresOnlyWhenTold`]
+[T `TurretStandaloneTest#aGunUnderManualControlIgnoresItsTargetAndFiresOnlyWhenTold`]
 
 **MECH-GUN-25 — Mount telemetry is READ off the guns, never accumulated.** The console counts how
 many of its members are on target and how many are saturated by asking them; a second copy on a
@@ -437,7 +437,7 @@ that makes illuminating worth its emission. An order a human gave is never vetoe
 sensor's opinion of a target is not authority over a player's. Precedence is console target → gun's
 own target → acquisition, with manual control outranking all three.
 `TileTurret.java:234-242,315-342` [V]
-[T `FireControlSensorE2ETest#aCoolTargetTooFarToHoldByListeningIsHeldByIlluminating`, falsified: with
+[T `FireControlSensorTest#aCoolTargetTooFarToHoldByListeningIsHeldByIlluminating`, falsified: with
 the gate forced true the battery puts six rounds into a contact held at 0.038 and only that test
 reddens]
 
@@ -450,7 +450,7 @@ firing exists on the client except the drawing of the round.
 **INV-GUN-02 — A spec that is not operable never fires.** "Complete" is decided once, on the sum
 (`GunSpec#isOperable`), and both the fire gate and the launch path check it — a bare controller is not
 a gun. `GunSpec.java:63-65`, `TileTurret.java:135-141`, `TurretFireControl.java:83-85` [V]
-[T `TurretStandaloneE2ETest#anUnbuiltControllerIsNotAGunAndFiresNothing`]
+[T `TurretStandaloneTest#anUnbuiltControllerIsNotAGunAndFiresNothing`]
 
 **INV-GUN-03 — A round is paid for before it counts as fired.** Cooldown, heat and energy are only
 spent when the substrate accepted the launch; a refused launch (`-1`) leaves the gun exactly as it was.
@@ -486,7 +486,7 @@ down it, which is why the ladder ends in a name and not in a rate of zero. Nothi
 is a fact in the world and one lookup a tick is cheaper than a subscription, so this survives a save,
 a chunk reload and a ship reassembly for free, exactly as the stage does. The two rungs' positions
 are config; their ORDER is the mechanic. `TileTurret.java:190-201`, `TurretDriveState.java:57-64` [V]
-[T `TurretDamageDegradesE2ETest`, falsified: with the read removed only that test reddens and all
+[T `TurretDamageDegradesTest`, falsified: with the read removed only that test reddens and all
 seven standalone gun tests stay green; `TurretConditionTest`]
 
 **MECH-GUN-28a — Condition never overrules a DECISION.** An explicitly set state — a player's lock, a

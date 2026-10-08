@@ -20,7 +20,7 @@ import static org.junit.Assert.assertEquals;
  * what one particular packet DID, never how a packet was handed over.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientE2ETest {
+public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientTest {
 
     private static final String ARMING = "dev.stannismod.stellurgy.test.trace.RespawnPacketArming";
     /** The dimension the respawn carries the player into: the nether, which every server has. */

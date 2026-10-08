@@ -36,7 +36,7 @@ import static org.junit.Assert.assertTrue;
  * {@code TestClientSoundMutedE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
+public class ClientBootBaselineGroupTest extends AbstractSharedClientTest {
 
     /** A deadline for the mute's own client tick, which is one of the first the client runs. Kept at
      *  the 200 ticks the readback poll it replaces allowed. */

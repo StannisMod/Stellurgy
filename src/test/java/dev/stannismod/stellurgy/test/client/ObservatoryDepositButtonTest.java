@@ -27,7 +27,7 @@ import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.openGuiB
  * that lights up and does nothing would satisfy a screen-scraping test and fail this one.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
+public class ObservatoryDepositButtonTest extends AbstractSharedClientTest {
 
     /** The survey tab of the observatory GUI: data, asteroid, region-scan. */
     private static final int TAB_REGION_SCAN = 2;

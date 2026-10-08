@@ -22,7 +22,7 @@ import static org.junit.Assert.assertTrue;
  * else visits. Every observation is scoped by a mark taken before its stimulus.</p>
  */
 @org.junit.FixMethodOrder(org.junit.runners.MethodSorters.NAME_ASCENDING)
-public class SatelliteClientGroupTest extends AbstractSharedClientE2ETest {
+public class SatelliteClientGroupTest extends AbstractSharedClientTest {
 
     @Override
     protected String subsystem() {

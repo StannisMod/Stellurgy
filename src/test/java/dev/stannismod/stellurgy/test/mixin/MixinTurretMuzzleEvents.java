@@ -23,7 +23,7 @@ import dev.stannismod.stellurgy.weapon.TurretFireControl;
  * the ground), the world muzzle {@code px/py/pz}, the world direction {@code dx/dy/dz} and the
  * inherited motion {@code cx/cy/cz} — production's own numbers, in blocks per tick. A reader compares
  * the inherited motion against what the hull was measured doing. Server log. Read by
- * {@code TurretOnAShipE2ETest#aRoundFromAMovingHullCarriesTheHullsMotionPerTick}.</p>
+ * {@code TurretOnAShipTest#aRoundFromAMovingHullCarriesTheHullsMotionPerTick}.</p>
  *
  * <p>SILENT about a gun that may not fire at all (a null muzzle: no clear line of fire, an unnamed ship,
  * an inoperable build).</p>

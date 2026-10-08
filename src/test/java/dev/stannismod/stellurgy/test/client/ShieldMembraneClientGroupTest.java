@@ -30,7 +30,7 @@ import static org.junit.Assert.assertTrue;
  * other than players, which take the other branch of the decision.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ShieldMembraneClientGroupTest extends AbstractSharedClientE2ETest {
+public class ShieldMembraneClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * Distance between the two emitters. A placed emitter holds {@code TileEntityFieldGenerator}'s

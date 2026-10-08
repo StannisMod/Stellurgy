@@ -41,7 +41,7 @@ import static org.junit.Assert.assertTrue;
  * {@code TheClientKnowsTheSpaceClockE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETest {
+public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest {
 
     private static final String POOL_DIMS = "dims";
     /** The slot the settle actually bound the cell to — the one place that decides it. */

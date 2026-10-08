@@ -56,7 +56,7 @@ import static org.junit.Assert.assertTrue;
  * and the hovercraft's keeps the original.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class VehicleRideClientGroupTest extends AbstractSharedClientE2ETest {
+public class VehicleRideClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * How far a throttled hovercraft must travel laterally over the window, in blocks.

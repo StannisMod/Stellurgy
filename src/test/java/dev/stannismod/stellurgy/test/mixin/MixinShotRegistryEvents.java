@@ -17,7 +17,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>The HEAD of {@code ShotRegistry.end}, which every ending in the substrate goes through — an
  * impact, an expiry, a field that absorbed it, and the off switch emptying the air. Server log,
  * overworld clock, as {@link MixinShotEvents}. Read by
- * {@code ShotBoresOverTimeE2ETest#aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface}.</p>
+ * {@code ShotBoresOverTimeTest#aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface}.</p>
  */
 @Mixin(ShotRegistry.class)
 public abstract class MixinShotRegistryEvents {

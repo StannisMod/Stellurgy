@@ -46,7 +46,7 @@ import static org.junit.Assert.assertTrue;
  * temp dir. Dropping it is what let this class share the base at all.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class SpaceDimGuardTest extends AbstractSharedClientE2ETest {
+public class SpaceDimGuardTest extends AbstractSharedClientTest {
 
     private static final String POS_X = "posX";
     private static final String POS_Y = "posY";

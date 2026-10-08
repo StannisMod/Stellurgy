@@ -32,7 +32,7 @@ import static org.junit.Assert.assertTrue;
  * grant), so none of them is a player's path and none keeps {@code E2E} in a name.</p>
  */
 @org.junit.FixMethodOrder(org.junit.runners.MethodSorters.NAME_ASCENDING)
-public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientE2ETest {
+public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
 
     /** The framework's single-client username; the op grant and the kick key on it. */
     private static final String PLAYER = "ForgeTestClient";

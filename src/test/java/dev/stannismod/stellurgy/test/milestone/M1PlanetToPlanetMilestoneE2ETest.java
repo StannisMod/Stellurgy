@@ -31,6 +31,7 @@ import dev.stannismod.stellurgy.test.LedgerEntry;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.OrbitLine;
 import dev.stannismod.stellurgy.test.CellInfo;
+import dev.stannismod.stellurgy.test.DriveInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.TelescopeReading;
@@ -189,8 +190,12 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** Slot dimension ids that Stellurgy also holds a body for — always empty. */
     private static final String SLOT_DIMS_ALSO_BODIES = "slotDimsAlsoBodies";
 
-    /** A jump-capable craft with a walkable deck: the ship this milestone is about. */
-    private static final String VARIANT = "with-jump-drive";
+    /**
+     * A jump-capable craft with a walkable deck that carries its own power: the ship this milestone is
+     * about. The plug on its capacitor is the player's generation — the bank fills from the ship's grid,
+     * never from a probe.
+     */
+    private static final String VARIANT = "with-powered-jump-drive";
 
     /**
      * This milestone's own patch of world.
@@ -394,6 +399,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * the line. Leg 9's stay-put verdict after it and its {@code STARTED} control have no witness at
      * their own lines: without the latch the ship bounces on arrival and leg 8 fails first, and
      * without the on-ramp the client-world wait fails before the {@code STARTED} read.</p>
+     *
+     * <p>THE BANK, fed by the craft's own grid — red-witnessed: with {@code TileJumpCapacitor#acceptCharge} at {@code charge = charge() + accepted;} replaced by {@code }, fails: "the ship's own power must have filled its jump bank" (2026-10-08).</p>
      */
     @Test
     public void aPlayerBuildsHisShipAtTheAssemblerBoardsItAndFliesItOffThePlanet() throws Exception {
@@ -681,12 +688,20 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 navAfcSub != null);
         int[] navSub = add(navAfcSub, offNav);
 
-        // The drive's capacitor holds no charge on a freshly built craft and this ship carries no
-        // generator, so the window it needs is paid for here. Seeding stored energy is the same class
-        // of arrangement as the assembler's power above — a player flies with a charged drive, and
-        // the acts this leg is about are the crystal, the two clicks and the key press.
-        String charged = exec("stellurgytest drive charge " + slotDim + " " + describeArgs(navAfcSub) + " full");
-        System.out.println("[M1] drive charged: " + charged);
+        // The drive's bank, READ — never filled by a probe. The craft carries its own power: the plug
+        // standing on the capacitor has pushed into it every tick since it first ticked, at the bank's
+        // own accept rate, so the window this leg opens is paid for by the ship's grid, the way a
+        // player's generation pays for it. A bank short of its burst here is that grid failing to
+        // feed it — the link between "he built power aboard" and "his drive can jump".
+        DriveInfo bank = DriveInfo.of(exec("stellurgytest drive info " + slotDim + " "
+                + describeArgs(navAfcSub)));
+        System.out.println("[M1] drive bank fed by the ship's own grid: charge=" + bank.charge
+                + " burst=" + bank.burstCost + " capacity=" + bank.capacity);
+        assertTrue("the ship's own power must have filled its jump bank by the time the pilot reaches"
+                        + " the console: the plug on the capacitor pushes into it every tick, so a bank"
+                        + " below its burst means the grid aboard is not feeding the drive and no window"
+                        + " could open. " + bank,
+                bank.charge >= bank.burstCost);
 
         // He stands up to navigate. Not a convenience: while a pilot is at the controls the client
         // holds his view ON THE SHIP'S ATTITUDE every tick, so his crosshair is locked dead ahead and
@@ -719,9 +734,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 crystalSlot >= 0);
         // No advance between the two clicks: both travel on one connection and the server applies
         // them in the order sent, each against the client's prediction of the one before.
-        bot().clickSlot(crystalSlot, 0, "PICKUP");
+        bot().clickSlotAt(crystalSlot, 0);
         long insertMark = clientEvents().mark();
-        bot().clickSlot(CONSOLE_SLOT_SHIP, 0, "PICKUP");
+        bot().clickSlotAt(CONSOLE_SLOT_SHIP, 0);
 
         // A WINDOW, then ONE READ — and NOT a wait for `crystal_copied`, which is a different
         // mechanic entirely. Measured 2026-09-12, by getting this wrong: the console's copy
@@ -753,7 +768,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // Reopen the window: its buttons are built when the screen is, so the list the pilot clicks
         // on is the one he sees after the crystal is in. Closing and looking again is what he does.
         // No settle: the close and the right-click that reopens travel in order on one connection.
-        bot().closeScreen();
+        bot().pressScreenKey(Keyboard.KEY_ESCAPE);
         consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
         requireArranged("the console must reopen once the crystal is in it: " + consoleScreen,
                 consoleScreen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
@@ -774,7 +789,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             // reading below was of the PREVIOUS candidate's target and the search silently
             // considered the same address twice.
             long pickMark = events.mark();
-            bot().clickButtonById(BUTTON_PICK_FIRST + candidate);
+            bot().clickButtonAt(BUTTON_PICK_FIRST + candidate);
             events.await(pickMark, "nav_target_picked",
                     "a click on a listed address must reach the navigation computer — the console's "
                             + "buttons are the only way a pilot chooses where to go, and a press that "
@@ -808,7 +823,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 targetDim != Integer.MIN_VALUE && targetDim >= 0);
         // No settle before ARM: the pick it depends on was already read back from the server above.
         long armMark = events.mark();
-        bot().clickButtonById(BUTTON_ARM);
+        bot().clickButtonAt(BUTTON_ARM);
 
         // The console's OWN VERDICT on the press, not a poll of the flag it sets. `arm()` answers
         // ARMED or REFUSED_NO_TARGET, and the difference is the whole diagnosis: a poll that spends
@@ -857,9 +872,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // ---- LEG 7: he fires the jump with the real jump key. -----------------------------------
         tLeg = System.currentTimeMillis();
         // The key handler bails outright while any screen is up, so the console is shut first — the
-        // same thing a player does before reaching for the controls. `closeScreen` clears it on the
-        // client thread before it answers, which is where the key handler looks.
-        bot().closeScreen();
+        // same thing a player does before reaching for the controls: escape. The screen's own key
+        // handler closes it on the client thread before the verb answers, which is where the key
+        // handler looks.
+        bot().pressScreenKey(Keyboard.KEY_ESCAPE);
 
         // And he sits back down: the jump key is the PILOT's, routed through the seat he occupies, so
         // a player standing on his own deck cannot fire the drive he just armed.
@@ -884,8 +900,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // chat. That is a rendering of this verdict: it moves with the language file, it cannot see
         // a line the ring has dropped, and it made the milestone's own control flow depend on prose.
         String pressed = events.awaitField(jumpMark, "jump_press_decided","phase", "press",
-                "the jump key, pressed by a seated pilot of a ARMED ship, must be ANSWERED — the"
-                        + " trigger decides something for every press, and a silence here means the"
+                "the jump key, pressed by a seated pilot of a ARMED ship, must be ANSWERED — the trigger"
+                        + " decides something for every press, and a silence here means the"
                         + " press never reached the ship at all",
                 JUMP_PRESS_BUDGET_TICKS);
         String outcome = Events.text(Events.lastRecord(pressed), "outcome");
@@ -1116,13 +1132,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + events.since(jumpMark, "ledger_removed"),
                 nearestDim != Integer.MIN_VALUE);
 
-        // Pin the destination world. The descent resolver asks Forge for it and refuses in silence if
-        // it is not loaded — a reading/arrangement probe, not an act: in a live game the world is
-        // already up because somebody lives there.
-        String loaded = exec("stellurgytest dim load " + nearestDim);
-        requireArranged("the destination world must be loaded before the descent is attempted, "
-                        + "or the resolver refuses quietly and the leg measures nothing: " + loaded,
-                Reply.of(loaded).bool("loaded"));
+        // The destination world is NOT loaded here: nobody lives on it, and bringing it up is the
+        // descent's own job (it pins the target dimension before resolving the arrival). A probe that
+        // loaded it would stand in for exactly that, and this loop is where it is walked.
 
         // He CLOSES THE RANGE, then descends. A jump does not end on top of its destination: it ends
         // on a standoff ring around it, outside the descent trigger on purpose, because arriving in a
@@ -1280,7 +1292,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + " rangeAtArrival=" + rangeAtArrival
                         + " rangeNow=" + nearestDescendTargetDistance(exec("stellurgytest space bodies"))
                         + " flown=" + flown
-                        + " nearestBodyDim=" + nearestDim + " dimLoad=" + loaded
+                        + " nearestBodyDim=" + nearestDim
                         + " descentStatus=" + exec("stellurgytest space descent-status")
                         + " ledger=" + exec("stellurgytest space ledger-get " + shipId)
                         + " bodies=" + bodies + " delivery=" + seatDelivery.reading(),
@@ -1290,7 +1302,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "descent that ends in one has landed the ship nowhere, and the pilot who flew "
                         + "across a system to reach a planet steps out into nothing. clientDim="
                         + descentDim + " slotDims=[" + jumpSlotDims + "] nearestBodyDim=" + nearestDim
-                        + " dimLoad=" + loaded + " bodies=" + bodies,
+                        + " bodies=" + bodies,
                 !jumpSlotDims.contains("," + descentDim + ","));
         assertTrue("…and the world he steps out onto must be the PLANET HE PICKED at the console. "
                         + "That is the whole loop: choose a body, fly to it, land on it. Landing on "
@@ -1550,7 +1562,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // A tab click is answered by the SERVER re-opening the window with that tab's modules, so the
         // crystal slot exists only after that re-open — a record on the client's own log.
         long reopenMark = clientEvents().mark();
-        bot().clickButtonById(OBSERVATORY_TAB_SURVEY);
+        bot().clickButtonAt(OBSERVATORY_TAB_SURVEY);
         clientEvents().awaitMatching(reopenMark, "client_gui_opened",
                 reply -> Events.records(reply).size()
                         > Events.recordsWhere(reply, "gui", "none").size(),
@@ -1561,16 +1573,16 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         int crystalSlot = slotHolding(slots, CRYSTAL_ITEM);
         requireArranged("the survey tab must show the machine's crystal slot beside the hotbar that"
                 + " holds the crystal. slots=" + slots, machineSlot >= 0 && crystalSlot >= 0);
-        bot().clickSlot(crystalSlot, 0, "PICKUP");
+        bot().clickSlotAt(crystalSlot, 0);
         long insertMark = clientEvents().mark();
-        bot().clickSlot(machineSlot, 0, "PICKUP");
+        bot().clickSlotAt(machineSlot, 0);
         clientEvents().await(insertMark, "client_click_confirmed",
                 "the server must handle the click that puts the crystal into the observatory",
                 SLOT_APPLIED_TICKS);
 
         String where = "0 " + observatory[0] + " " + observatory[1] + " " + observatory[2];
         long radarMark = events.markInstrumented();
-        bot().clickButtonById(OBSERVATORY_BUTTON_PASSIVE);
+        bot().clickButtonAt(OBSERVATORY_BUTTON_PASSIVE);
         events.awaitRecordWithFields(radarMark, "region_scan_advanced",
                 "the local radar, started by its own button, must finish", RADAR_RECORD_TICKS,
                 "pos", observatory[0] + "," + observatory[1] + "," + observatory[2],
@@ -1588,16 +1600,16 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         int lastHotbar = lastSlot(slots, true);
         requireArranged("the survey tab must still show the machine's slot and the hotbar. slots="
                 + slots, machineSlot >= 0 && lastHotbar >= 0);
-        bot().clickSlot(machineSlot, 0, "PICKUP");
+        bot().clickSlotAt(machineSlot, 0);
         long backMark = clientEvents().mark();
-        bot().clickSlot(lastHotbar, 0, "PICKUP");
+        bot().clickSlotAt(lastHotbar, 0);
         clientEvents().await(backMark, "client_click_confirmed",
                 "the server must handle the click that puts the crystal back into the hotbar",
                 SLOT_APPLIED_TICKS);
         JsonObject after = bot().reportSlots();
         requireArranged("the crystal must now ride in the player's hotbar, not in the machine. slots="
                 + after, slotHolding(after, CRYSTAL_ITEM) == lastHotbar);
-        bot().closeScreen();
+        bot().pressScreenKey(Keyboard.KEY_ESCAPE);
     }
 
     /**
@@ -1789,21 +1801,42 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     }
 
     /**
+     * The player's way to pick a hotbar slot: its number key, pressed and released.
+     *
+     * <p>Vanilla takes the press in the NEXT client tick ({@code processKeyBinds}, which runs only
+     * while no screen is up), so the read is one world tick after it — the tick the press is defined
+     * to land in, not a budget — and the slot it reports is required to be the one asked for. The
+     * server learns the index from {@code CPacketHeldItemChange}, which {@code syncCurrentPlayItem}
+     * sends ahead of any use press on the same connection.</p>
+     *
+     * @return the client's items, read after that tick
+     */
+    private JsonObject pressHotbarKey(int slot) throws Exception {
+        bot().setKey(Keyboard.KEY_1 + slot, true);
+        bot().setKey(Keyboard.KEY_1 + slot, false);
+        bot().waitWorldTicks(1);
+        JsonObject items = bot().reportPlayerItems();
+        int selected = items.has("selectedHotbar") ? items.get("selectedHotbar").getAsInt() : -1;
+        requireArranged("the hotbar key " + (slot + 1) + " must select slot " + slot + ": vanilla"
+                        + " takes the press in the next client tick, and only with no screen up."
+                        + " selected=" + selected + " items=" + items,
+                selected == slot);
+        return items;
+    }
+
+    /**
      * An empty main hand, without wiping the inventory the pilot is carrying his crystal in.
      *
-     * <p><b>One read, because there is nothing to wait for.</b> The harness's {@code select_hotbar}
-     * sets the held index ON THE CLIENT THREAD and answers only once it has run, so when the call
-     * returns the hand already holds slot 1's contents. Those change only when the SERVER sets the
-     * slot ({@code client_slot_set}), and nothing between here and the use press does — so a slot 1
-     * that is not empty now stays not empty however long anyone waits. The server learns the index
-     * from {@code CPacketHeldItemChange}, which leaves on the same connection ahead of the press.</p>
+     * <p><b>One read after the key's tick, because there is nothing else to wait for.</b> Once
+     * {@link #pressHotbarKey} returns, the hand holds slot 1's contents. Those change only when the
+     * SERVER sets the slot ({@code client_slot_set}), and nothing between here and the use press
+     * does — so a slot 1 that is not empty now stays not empty however long anyone waits.</p>
      *
      * <p>A world that is not ready here is a failure of whatever link brought the pilot here, not a
-     * state to sit through, and the refusal says which of the two it met.</p>
+     * state to sit through: the key's one world tick refuses it with its own diagnosis.</p>
      */
     private void holdNothing() throws Exception {
-        bot().selectHotbar(1);
-        JsonObject items = bot().reportPlayerItems();
+        JsonObject items = pressHotbarKey(1);
         boolean ready = isWorldReady(items);
         String heldId = ready && items.has("held")
                 ? items.getAsJsonObject("held").get("id").getAsString() : null;
@@ -2069,7 +2102,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // that pass starts on this click.
         Events spawnEvents = serverEvents();
         long spawnMark = spawnEvents.markInstrumented();
-        bot().clickButtonById(BUTTON_SCAN);
+        bot().clickButtonAt(BUTTON_SCAN);
 
         // TWO PASSES, each waited for on the machine's own record. Scan and Build each start a TIMED
         // pass that the assembler counts down one tick at a time, and production IGNORES a Build
@@ -2095,7 +2128,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + " closed on its own between Scan and Build leaves the player unable to"
                         + " build at all. screen=\"" + openScreen + "\"",
                 openScreen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
-        bot().clickButtonById(BUTTON_BUILD);
+        bot().clickButtonAt(BUTTON_BUILD);
 
         // The registry's own record of the ship being added — not a count of ships in dim 0, which
         // could not say WHICH ship, while the record names it.
@@ -2109,7 +2142,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         if (namedShip != null && !namedShip.isEmpty()) {
             builtShipVsId = namedShip;
         }
-        bot().closeScreen();
+        bot().pressScreenKey(Keyboard.KEY_ESCAPE);
         return ships;
     }
 
@@ -2485,8 +2518,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // no slot, so the change-gated recorder writes nothing and a link on it would wait out its
         // budget for a record that was never owed. (Measured 2026-09-21 on the tier's own copy of
         // this helper, which reddened six classes before the read was put first.)
-        bot().selectHotbar(0);
-        JsonObject beforeClear = bot().reportPlayerItems();
+        JsonObject beforeClear = pressHotbarKey(0);
         if (beforeClear.has("held") && beforeClear.getAsJsonObject("held").has("id")
                 && beforeClear.getAsJsonObject("held").get("id").getAsString().isEmpty()) {
             return;

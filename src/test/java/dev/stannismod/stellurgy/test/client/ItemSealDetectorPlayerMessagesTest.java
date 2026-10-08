@@ -75,7 +75,7 @@ import static org.junit.Assert.assertTrue;
  * headless CI.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ItemSealDetectorPlayerMessagesTest extends AbstractSharedClientE2ETest {
+public class ItemSealDetectorPlayerMessagesTest extends AbstractSharedClientTest {
 
     private static final int Y = Plot.DEFAULT_Y;
 

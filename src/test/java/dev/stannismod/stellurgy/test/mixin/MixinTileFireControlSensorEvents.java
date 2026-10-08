@@ -31,8 +31,8 @@ import dev.stannismod.stellurgy.tile.sensor.TileFireControlSensor;
  * (production's own {@code isLocked} against the configured lock floor), plus the sensor's
  * {@code mode} as it actually worked this sweep and whether it is {@code emitting}. Per sweep and not
  * per change, because a reader judging "never acquired over N sweeps" needs the sweeps it was not
- * acquired in. Server log. Read by {@code SensorFriendIsNeverAcquiredE2ETest},
- * {@code FireControlSensorE2ETest} and {@code ASensorAboardAShipE2ETest}.</p>
+ * acquired in. Server log. Read by {@code SensorFriendIsNeverAcquiredTest},
+ * {@code FireControlSensorTest} and {@code ASensorAboardAShipTest}.</p>
  *
  * <p>And the refusal that stands in front of every sweep, as its own event: {@code sensor_gate_refused},
  * documented at its seam below.</p>

@@ -24,7 +24,7 @@ import static org.junit.Assert.assertTrue;
  * this one is about what survives the death.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientE2ETest {
+public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientTest {
 
     /** A deadline for a discrete record — the death screen opening, the respawn arriving. */
     private static final int DEATH_LINK_BUDGET_TICKS = 200;

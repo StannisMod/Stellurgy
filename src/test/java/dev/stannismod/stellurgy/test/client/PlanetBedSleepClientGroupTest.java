@@ -48,7 +48,7 @@ import static org.junit.Assert.assertTrue;
  * scenario moved can never be mistaken for this one's staging.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class PlanetBedSleepClientGroupTest extends AbstractSharedClientE2ETest {
+public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
 
     @Override
     protected String subsystem() {

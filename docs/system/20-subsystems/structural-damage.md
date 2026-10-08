@@ -57,14 +57,14 @@ the same energy behind a wider face buys less depth, behind a narrower one buys 
 is scaled by `area / REFERENCE_AREA`, and at the reference area — which every shipped weapon and every
 older caller uses — it is exactly the price it always was. Sectional density is not an input anywhere:
 it is what this scaling MEANS once a body's energy is written as `½mv²`.
-`StructureDamageEngine.java:157,287-292`, `ImpactRequest.java:47-52` [V] [T `ShotBoresOverTimeE2ETest`]
+`StructureDamageEngine.java:157,287-292`, `ImpactRequest.java:47-52` [V] [T `ShotBoresOverTimeTest`]
 
 **MECH-DMG-01b — An impact may be granted a REACH, and a resumed one does not pay twice.** A caller
 that penetrates over time hands over only the path its body travelled this tick; the engine's own
 64-block limit stays as the backstop for callers with no notion of reach (an explosion, a collision). A
 request that says it RESUMES inside the block it starts in is not charged for that block again — it
 bought it on an earlier tick. `StructureDamageEngine.java:77-118,158-166`, `ImpactRequest.java:85-99`
-[V] [T `ShotBoresOverTimeE2ETest`]
+[V] [T `ShotBoresOverTimeTest`]
 
 **MECH-DMG-02 — Damage and wear are one axis.** A block hit by a shot and a part worn by use advance the
 same stage counter, so there is one consequence formula and one repair rather than two that disagree.
@@ -124,10 +124,10 @@ channel (the refusal is the guard's, not a price, so the thermal exemption of ME
 apply). A refused block BESIDE the centre eats its share and the body goes on, as an indestructible
 one does. A round rich enough to pay for the refused block does not carry its remainder
 through it to take what stands behind (`Touched#refused`, `Walk#visit`) [V]
-[T `WeaponFireAsksBeforeItTakesE2ETest` — the block behind the claim]. Without the ask the engine would take
+[T `WeaponFireAsksBeforeItTakesTest` — the block behind the claim]. Without the ask the engine would take
 blocks with a bare `setBlockState` that no protection system could see: a turret would be a way
 around the claim system rather than a weapon inside it.
-`StructureDamageEngine#mayRemove` [V] [T `WeaponFireAsksBeforeItTakesE2ETest`]
+`StructureDamageEngine#mayRemove` [V] [T `WeaponFireAsksBeforeItTakesTest`]
 **Every path that takes a block as weapon fire goes through it**, including the two that are not the
 budget walk: reactive plating spending its charge and mirror plating burning its film both destroy a
 block, and both did it with a bare `setBlockState` — which made the branch's own new armour the one
@@ -146,7 +146,7 @@ not take out (MECH-DMG-35, `ARMOUR_HELD`) and any body stopped by a centre block
 (MECH-DMG-33, `REMOVAL_REFUSED`): the remainder is absorbed, not handed back.
 
 **MECH-DMG-34 — "Budget left over" and "came out the other side" are two facts, and the stop REASON is where they are told apart.** A walk hands its budget back in both cases and reports `EXITED` for both, so the outcome alone cannot answer "is the body still in there". `EXITED_FAR_SIDE` means it left; **`REACH_EXHAUSTED` means the granted path ran out while it was still inside**, which is the ordinary state of a round boring through armour over several ticks. The distinction matters because the substrate decides a round's next step from it. `StructureDamageEngine.java` (`finish()`), `StopReason` [V]
-[T `ShotHitsShipHullE2ETest#aRoundDrillingAHullGoesWhereTheShipGoes`, `ShotBoresOverTimeE2ETest` — the lodging family is what fails when the two are confused]
+[T `ShotHitsShipHullTest#aRoundDrillingAHullGoesWhereTheShipGoes`, `ShotBoresOverTimeTest` — the lodging family is what fails when the two are confused]
 
 **MECH-DMG-11 — An indestructible block stops everything.** A block with negative hardness consumes the
 whole remaining budget and ends the walk rather than being tunnelled past.
@@ -193,10 +193,10 @@ is not built, so hand replacement is currently the only repair.]
 **MECH-DMG-16 — One stage per use, priced from the block's own recipe (repair T0).** The repair
 welder removes one stage per right-click, charging the ingredients of the block's crafting recipe
 scaled by `repairCostPerStageFraction` over its stages, plus stored Forge Energy
-(`RepairCost.java:57-88`, `ItemRepairWelder.java:74-113` [V]) [T `RepairWelderE2ETest`]. Its answer is
+(`RepairCost.java:57-88`, `ItemRepairWelder.java:74-113` [V]) [T `RepairWelderTest`]. Its answer is
 a type — `REPAIRED / UNDAMAGED / NO_RECIPE / NO_MATERIALS / NO_CHARGE` — and nothing is taken on any
 refusal. A block nothing crafts cannot be priced and is refused; the pickaxe remains its only repair.
-Full rules in contract C20. Neither damage nor repair asks a war switch (`weapons` MECH-GUN-35); the welder's own verdicts are pinned by `RepairWelderE2ETest`.
+Full rules in contract C20. Neither damage nor repair asks a war switch (`weapons` MECH-GUN-35); the welder's own verdicts are pinned by `RepairWelderTest`.
 
 **MECH-DMG-18 — A block may ANSWER a travelling body, and that answer is not this subsystem's.** Since
 the contact seam a block met by a shot is asked what happens (`projectile-substrate` MECH-SHOT-15) and
@@ -289,7 +289,7 @@ substrate the round ends `STRUCTURE_IMPACT` at that face (replicated by the ordi
 The round does not cross the block at
 the speed it arrived with. `StructureDamageEngine.java:288-363`, `StopReason#ARMOUR_HELD` [V]
 [T `StructuralDamageContractTest#aKineticImpactThatCannotBuyTheNextStageIsHeldByTheBlock`,
-`ShotBoresOverTimeE2ETest#aRoundTooPoorForAStageIsStoppedByTheBlockItMeets`]
+`ShotBoresOverTimeTest#aRoundTooPoorForAStageIsStoppedByTheBlockItMeets`]
 
 **MECH-DMG-25 — The responder is handed the WORLD, because a block that answers spends itself.** A
 `Contact` states the facts of a meeting and carries no handle into the game — that is what lets a held
@@ -308,7 +308,7 @@ the reflectances of the metals mirrors are really made of. A solid body is DECLI
 glass and foil have no OPTICAL opinion about it, so the ordinary law prices the film off the table and
 the eighth of a voxel it fills and breaks it like the pane it is. It never answers `PASSED_THROUGH` with the
 arriving energy, which would be not a declining but a free pass.
-`BlockMirrorPlating.java:66-108` [V] [T `ArmourBlocksAnswerForThemselvesE2ETest`]
+`BlockMirrorPlating.java:66-108` [V] [T `ArmourBlocksAnswerForThemselvesTest`]
 
 > **Where the reflection GOES.** "Back out along the mirrored direction" is a claim about the world, true for a thrown round and for a held beam alike: `HeldBeam` asks the contact whether it was DEFLECTED as well as STOPPED. A beam continues along the mirrored direction as a new leg of the same tick's path, bounded by `MAX_BEAM_SEGMENTS` (8) — a bound on WORK, for the tick where two mirrors face each other, not a law about beams. A plate met square-on therefore sends the beam back down its own line and into the gun that fired it, which is a real consequence and the thing the test pins.
 
@@ -340,7 +340,7 @@ mounting, has nothing to do with what the thing is made of. What actually holds 
 up to at least 1. The floor's stated reason — that a torch must not become a hole in a hull — does not
 survive inspection: a voxel holding a torch is a voxel holding no hull block.
 `StructureDamageEngine.java:413-461` [V] [T `StructuralDamageContractTest`,
-`ArmourAnswersByKindAndAngleE2ETest`]
+`ArmourAnswersByKindAndAngleTest`]
 
 **MECH-DMG-29 — A responder may DECLINE, and declining is not an answer.** `ContactResult.noOpinion()`
 means "the default law decides", exactly as it does for the two thousand blocks implementing nothing;
@@ -350,7 +350,7 @@ meaning "through, carrying this much" — so declining with what arrived said "t
 block with a law about one kind of arrival and none about the rest could not express the rest.
 **Armour is exactly that shape**: a mirror has optics and no opinion about a solid round; the round must
 still get through the glass. `ContactResult.java:55-62`, `ContactResolver.java:77-87`,
-`IContactResponder.java:22-33` [V] [T `ArmourBlocksAnswerForThemselvesE2ETest`]
+`IContactResponder.java:22-33` [V] [T `ArmourBlocksAnswerForThemselvesTest`]
 
 **MECH-DMG-30 — Mirror plating carries the one shipped toughness row; reactive plating deliberately
 carries none.** Both families are declared `Material.IRON` — what they are mined and sounded like — and
@@ -363,7 +363,7 @@ intercept a radiant arrival before any price is consulted — the row would only
 arrival that is not a weapon. The pattern is LOWERCASE: a registry name reaches the table already
 lowercased, and one written in the case the block was declared in matches nothing and silently is not
 there. `WeightEngine#defaultToughnessByRegex` [V]
-[T `ArmourBlocksAnswerForThemselvesE2ETest`]
+[T `ArmourBlocksAnswerForThemselvesTest`]
 
 **MECH-DMG-31 — A unit is TOLD what broke it, and a unit that was killed is told that too.** The
 stage answers *how broken am I* and is PULLED; it cannot answer *what just happened to me*, because a
@@ -384,7 +384,7 @@ one line before the block becomes air**: publishing after the walk loses every f
 the blow that ends a unit is the one its own failure mode is made of (MECH-DMG-32).
 `StructureDamageEngine.java:346-400`, `ShipDamageService.java:118-160`,
 `DamageOccurrence.java`, `CapabilityDamageAware.java` [V]
-[T `AUnitHearsWhatBrokeItE2ETest`]
+[T `AUnitHearsWhatBrokeItTest`]
 
 **MECH-DMG-32 — Two seams reach a block on a hit, and they are opposites.**
 `IContactResponder.onContact` is ASKED before anything is spent and its answer decides the BODY's fate;
@@ -409,7 +409,7 @@ come out the far side of a hull it is still inside. The walk now drives `SweptSe
 traversal the projectile substrate uses, so the blocks a shot stops at and the blocks the budget is
 spent into cannot be two different sets. Axis-aligned fire is unchanged by construction — there the
 two agree exactly. `StructureDamageEngine.java:77-90`, `:120-171` [V]
-[T `DiagonalBoreE2ETest`]
+[T `DiagonalBoreTest`]
 
 ## State & persistence
 
@@ -442,7 +442,7 @@ destroyed positions as well as damaged ones.
 - **INV-DMG-09** [T][BEH] The damaged blocks of one impact form an UNBROKEN chain: no block the ray
   passed through is left untouched between two that were damaged. Stated as a property of the
   result rather than of the traversal, so it holds at every angle and pins no particular walk.
-  `DiagonalBoreE2ETest#anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore`
+  `DiagonalBoreTest#anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore`
 - **INV-DMG-06** [V] Damage is applied on the logical server only.
 - **INV-DMG-10** [T][SYS] A hole's provenance crosses a carry unchanged: the layer that harvests a
   structure's records and applies them at the new origin writes back the very NAME and meta it read,
@@ -454,14 +454,14 @@ destroyed positions as well as damaged ones.
   ship carries the damage it left with) and C20 REPAIR-6 (an unfillable hole keeps its record). Pinned by
   `test/unit/DamageLayerTest#aHoleOfABlockNoLongerRegisteredKeepsItsNameAcrossACarry`.
 - **INV-DMG-07** [T][BEH] A relocated ship carries the damage it left with, and leaves none at the
-  coordinates it vacated. `ShipDamageSurvivesRelocationE2ETest`. *Bounded*:
+  coordinates it vacated. `ShipDamageSurvivesRelocationTest`. *Bounded*:
   assembly carries holes only within `HOLE_SWEEP_MARGIN` (8) of the surviving blocks
   (`WorldServerShipManager.java:35-42`), and deconstruction carries block records but not holes
   (`MoveBlocks.java:51-55` calls `blockMoved` only) — see "A deconstructed ship's holes lose their
-  provenance" below. The invariant holds for staged blocks; for holes it is the assembly direction only. Pinned by `ShipDamageSurvivesRelocationE2ETest#aRelocatedShipCarriesItsDamageAndLeavesNoneBehind`.
+  provenance" below. The invariant holds for staged blocks; for holes it is the assembly direction only. Pinned by `ShipDamageSurvivesRelocationTest#aRelocatedShipCarriesItsDamageAndLeavesNoneBehind`.
 - **INV-DMG-08** [T][BEH] Removing and replacing the flight computer changes no other position's record —
   no single block is the custodian of a hull's condition.
-  `ShipDamageSurvivesRelocationE2ETest` Pinned by `ShipDamageSurvivesRelocationE2ETest#breakingAndReplacingTheFlightComputerDoesNotRepairTheHull`.
+  `ShipDamageSurvivesRelocationTest` Pinned by `ShipDamageSurvivesRelocationTest#breakingAndReplacingTheFlightComputerDoesNotRepairTheHull`.
 
 ## Failure modes & edge cases
 
@@ -492,10 +492,10 @@ destroyed positions as well as damaged ones.
 
 ## Test coverage
 
-`StructuralDamageContractTest` (server) · `VSShipStructuralDamageE2ETest` (server, a MOVED ship) ·
-`ShipDamageSurvivesRelocationE2ETest` (server, relocation + the flight-computer pin) ·
+`StructuralDamageContractTest` (server) · `VSShipStructuralDamageTest` (server, a MOVED ship) ·
+`ShipDamageSurvivesRelocationTest` (server, relocation + the flight-computer pin) ·
 `ImpactDeclarationContractTest` (unit) · `DamageLayerTest` (unit, the carry's own arithmetic) ·
-`RepairWelderE2ETest` (server, repair T0).
+`RepairWelderTest` (server, repair T0).
 
 ## Open questions
 

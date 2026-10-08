@@ -22,7 +22,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * broken — and which is the only place a network's membership changes. Carries the domain's
  * {@code getName()}, the {@code dim}, and how many connected {@code components} the rebuild produced.
  * A reader waits for it after the change it made, then reads the standing state once. Server log.
- * Read by {@code WeaponConsoleE2ETest}.</p>
+ * Read by {@code WeaponConsoleTest}.</p>
  *
  * <p>SILENT about the per-tick max-flow solve, which runs every tick against the cached topology and
  * changes no membership.</p>

@@ -53,14 +53,14 @@ radiance against range squared. In `ACTIVE` neither depends on the target: anyth
 is held at the installation's plateau, tapering over the last quarter of the envelope. This is why a
 cold, quiet ship can only be engaged by someone who has stopped being quiet themselves.
 `TacticalScan.java:113-124`, `SignatureModel.java:92-121` [V]
-[T `FireControlSensorE2ETest#aCoolTargetTooFarToHoldByListeningIsHeldByIlluminating`,
+[T `FireControlSensorTest#aCoolTargetTooFarToHoldByListeningIsHeldByIlluminating`,
 `SignatureModelTest#illuminatingHoldsAColdTargetThatListeningCannot`]
 
 **MECH-FCS-03 — A friend never becomes a CONTACT.** The credential is screened during the sweep, not
 at the trigger, so an ally's position is never written anywhere a gun could read it and no stale
 order, race or second console can produce a shot at them. The gun checks again at the trigger as
 depth. `TacticalScan.java:93-95`, `TileTurret.java:388-402` [V]
-[T `SensorFriendIsNeverAcquiredE2ETest`, falsified: with the screen removed the code-carrying player
+[T `SensorFriendIsNeverAcquiredTest`, falsified: with the screen removed the code-carrying player
 enters the list at quality 0.30 and the test reddens]
 
 **MECH-FCS-04 — Standing on our own deck is itself the credential.** An entity inside the sensor's
@@ -128,7 +128,7 @@ GUI button fires on the client (`ModuleButton.actionPerform` is client-only), an
 is read by the sweep on the server; so the press travels as a `PacketMachine` and the server flips
 its OWN mode in `useNetworkData`, answering to the GUI's `canInteractWithContainer`. A button press only sends a `PacketMachine` (`TileFireControlSensor.java:505-509`); setting the client tile's field alone would never reach the server and the sensor would never go active
 on a dedicated server. `TileFireControlSensor#onInventoryButtonPressed`,
-`#useNetworkData` [V] [T `WeaponGuiButtonsReachTheServerE2ETest#theSensorsModeButtonSwitchesTheSensorOnTheServer`]
+`#useNetworkData` [V] [T `WeaponGuiButtonsReachTheServerTest#theSensorsModeButtonSwitchesTheSensorOnTheServer`]
 `canInteractWithContainer` is vanilla's usability rule (same world, not invalid,
 distanceSq ≤ 64.0) and the server branch refuses a press that fails it — weapons MECH-GUN-44 [T `MachineGuiClientGroupTest#aFireControlSensorPressFromBeyondReachChangesNothing`]
 
@@ -142,7 +142,7 @@ the sensor acquires nothing, publishes nothing, draws no power and leaves the ne
 disabled device is not a node that quietly keeps its own buffer topped up. Anything it had published
 expires. A battery is then pointed by hand, the supported configuration it was before sensors existed.
 `TileFireControlSensor.java:122-133` [V]
-[T `FireControlSensorE2ETest#aSensorAcquiresAHostileThatNobodyNamed` runs the disabled case as its
+[T `FireControlSensorTest#aSensorAcquiresAHostileThatNobodyNamed` runs the disabled case as its
 own control, in the same server, on the same battery and the same zombie]
 The gate does not ask a war switch (maintainer ruling 2026-10-03, *"Убираем этот гейт, слишком жирно. Война
 всегда включена."* — remove this gate, too heavy; the war is always on; `weapons` MECH-GUN-35), so

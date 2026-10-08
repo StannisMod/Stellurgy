@@ -686,7 +686,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // turning flight off hands the body to deck gravity, which seats it back on the deck.
         //
         // Flight needs creative, and creative is what the shared base restores before every
-        // scenario (AbstractSharedClientE2ETest.resetBetweenScenarios). Not re-issued here: a
+        // scenario (AbstractSharedClientTest.resetBetweenScenarios). Not re-issued here: a
         // `gamemode` resends the abilities with flight OFF, and one landing after the double-tap
         // below would switch the flight it starts back off.
         buildAndBoardShip(site);

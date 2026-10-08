@@ -61,7 +61,7 @@ import static org.junit.Assert.assertTrue;
  * {@code WorldCommandPlayerEquippedE2ETest}, {@code WorldCommandFetchTest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
+public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
 
     private static final String STATION_ID = "id";
     private static final String POS_X = "posX";

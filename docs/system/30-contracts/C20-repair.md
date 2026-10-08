@@ -34,7 +34,7 @@ designed against a floor price and a working ancestor, and both constrain it.
   and does nothing else. It writes through the same unified reader damage writes through
   (`DamageState.java` `[V]`), never into one of the two homes directly — a repair that reaches past
   it fixes tile-hosted wear and leaves map-hosted damage standing, or the reverse, and nothing in the
-  game will say so. **Player form:** what a shot did, a repair undoes. Pinned by `RepairWelderE2ETest#oneUseTakesOneStageAndIsPaidForTwice`.
+  game will say so. **Player form:** what a shot did, a repair undoes. Pinned by `RepairWelderTest#oneUseTakesOneStageAndIsPaidForTwice`.
 - **REPAIR-2 (the floor is hand replacement, and it is already the price list)** `[V][BEH]` Breaking a
   damaged block and placing a fresh one repairs that position at the cost of one block, clearing its
   record (`DamageInvalidationHandler.java` `[V]`). Every rung is priced against this: a rung
@@ -43,7 +43,7 @@ designed against a floor price and a working ancestor, and both constrain it.
 - **REPAIR-3 (nothing is created from nothing)** `[T][BEH]` Every stage restored and every hole filled is paid
   for with material that leaves an inventory. No rung invents a generic "matter"; T2/T3 consume the
   real items the ship's economy already makes. **Falsifiable:** run a bay with a reserve that
-  cannot fall — its output must be zero. Pinned by `RepairWelderE2ETest#oneUseTakesOneStageAndIsPaidForTwice`, `RepairWelderE2ETest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
+  cannot fall — its output must be zero. Pinned by `RepairWelderTest#oneUseTakesOneStageAndIsPaidForTwice`, `RepairWelderTest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
 - **REPAIR-4 (a hole is filled with what stood there, or not at all)** `[PLANNED][BEH]` A rebuild reads the provenance
   and places THAT block. It never guesses, never substitutes a similar one, and never fills a hole
   whose provenance is missing. **Player form:** a repaired hull is the hull you built, not a patch of
@@ -60,7 +60,7 @@ designed against a floor price and a working ancestor, and both constrain it.
 - **REPAIR-7 (a bay that cannot work says why)** `[T][BEH]` No silent idling. Out of energy, out of reserve,
   nothing damaged, and refused-by-REPAIR-6 are four different states and are distinguishable from
   outside the machine. A bay that looks identical while starved and while finished trains players to
-  ignore it. Pinned by `RepairWelderE2ETest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
+  ignore it. Pinned by `RepairWelderTest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
 - **REPAIR-8 (repair is time and energy, and it is resumable)** `[PLANNED][BEH]` Progress is a function of elapsed time
   and energy actually delivered — never of how many ticks the bay was loaded for. A bay that spent an
   hour unloaded resumes where it stopped; it does not restart, and it does not bill the player for an
@@ -138,11 +138,11 @@ designed against a floor price and a working ancestor, and both constrain it.
 
 | clause | witness |
 | --- | --- |
-| REPAIR-1 | `RepairWelderE2ETest.oneUseTakesOneStageAndIsPaidForTwice` — one use, exactly one stage, written through `DamageState`; plus `ShipDamageSurvivesRelocationE2ETest.breakingAndReplacingTheFlightComputerDoesNotRepairTheHull` for the record-clearing half from the other side |
+| REPAIR-1 | `RepairWelderTest.oneUseTakesOneStageAndIsPaidForTwice` — one use, exactly one stage, written through `DamageState`; plus `ShipDamageSurvivesRelocationTest.breakingAndReplacingTheFlightComputerDoesNotRepairTheHull` for the record-clearing half from the other side |
 | REPAIR-2 | the same flight-computer scenario: replacing a block clears ITS record and no other's |
-| REPAIR-3 | `RepairWelderE2ETest` — material and charge both leave on a repair, and NEITHER leaves on any refusal. Asserted as direction only (`after < before`), never as an amount: the fraction is tuned |
+| REPAIR-3 | `RepairWelderTest` — material and charge both leave on a repair, and NEITHER leaves on any refusal. Asserted as direction only (`after < before`), never as an amount: the fraction is tuned |
 | REPAIR-5, REPAIR-9 | `DamageLayerTest` pins provenance round-tripping; `StructuralDamageContractTest` pins the cheaper-to-finish ordering |
-| REPAIR-7 | `RepairWelderE2ETest.everyRefusalIsItsOwnAnswerAndCostsNothing` — four refusals, four distinct outcomes, none of them a silent no-op. `NO_RECIPE` is fired at a block nothing crafts (`minecraft:stone`) |
+| REPAIR-7 | `RepairWelderTest.everyRefusalIsItsOwnAnswerAndCostsNothing` — four refusals, four distinct outcomes, none of them a silent no-op. `NO_RECIPE` is fired at a block nothing crafts (`minecraft:stone`) |
 | REPAIR-4, 6, 8, 10–14 | none — those are T1's, and no bay is built. Each is a test to be written WITH its rung |
 
 ## T0, as built

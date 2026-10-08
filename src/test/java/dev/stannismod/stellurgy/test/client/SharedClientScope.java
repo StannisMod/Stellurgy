@@ -10,11 +10,11 @@ import java.util.Map;
 import dev.stannismod.stellurgy.test.Plot;
 
 /**
- * One class run of an {@link AbstractSharedClientE2ETest}: the ONE server JVM and ONE client JVM its
+ * One class run of an {@link AbstractSharedClientTest}: the ONE server JVM and ONE client JVM its
  * scenarios share, whether the pair has died, and the plots handed out in that pair's world.
  *
  * <p>Owned by the runner's run of the class. The pair is booted LAZILY by the class's first scenario
- * ({@link AbstractSharedClientE2ETest#prepareScenario}), because the boot has to ask the test instance
+ * ({@link AbstractSharedClientTest#prepareScenario}), because the boot has to ask the test instance
  * what it needs — its seeded game directory, its framebuffer — and is closed when the class run ends.
  * A boot that failed leaves nothing up, so the next scenario tries again, exactly as before.</p>
  */
@@ -49,7 +49,7 @@ public final class SharedClientScope extends TestClassScope {
     }
 
     /** Boot the pair for {@code test}'s class. */
-    void boot(AbstractSharedClientE2ETest test, int plotOffset) throws Exception {
+    void boot(AbstractSharedClientTest test, int plotOffset) throws Exception {
         harnessDead = false;
         firstFailure = null;
         plots.clear();

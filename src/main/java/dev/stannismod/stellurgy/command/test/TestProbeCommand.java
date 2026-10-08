@@ -18024,7 +18024,14 @@ public class TestProbeCommand extends CommandBase {
             //                               craft's emitter. Upward because the assembler takes
             //                               nothing beyond the pad's footprint, and that footprint
             //                               lies wholly inside the generator's window horizontally.
+            // And one jump craft that charges its own drive:
+            //   with-powered-jump-drive   — with-jump-drive plus libVulpes' creative power plug standing
+            //                               on the capacitor, so the bank is filled by the ship's own
+            //                               grid from the moment the plug ticks — the way a player's
+            //                               generation fills it — rather than by a probe. The tower
+            //                               rises one course to keep the plug inside the scan.
             boolean jumpMast = "with-jump-drive-and-mast".equals(variant);
+            boolean poweredJumpDrive = "with-powered-jump-drive".equals(variant);
             boolean bareHull = "hull-without-actuators".equals(variant);
             boolean wheelOnlyHull = "wheel-only-hull".equals(variant);
             boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
@@ -18037,6 +18044,7 @@ public class TestProbeCommand extends CommandBase {
                     && !"with-shield-emitter".equals(variant)
                     && !"with-jump-drive".equals(variant)
                     && !jumpMast
+                    && !poweredJumpDrive
                     && !seatHullVariant;
             boolean includeGuidance = !"invalid-no-guidance".equals(variant)
                     && !"advanced-flight-computer-only".equals(variant)
@@ -18044,6 +18052,7 @@ public class TestProbeCommand extends CommandBase {
                     && !"with-shield-emitter".equals(variant)
                     && !"with-jump-drive".equals(variant)
                     && !jumpMast
+                    && !poweredJumpDrive
                     && !seatHullVariant;
             boolean includeCargo = "with-cargo".equals(variant);
             // with-fluid-cargo: same as simple but replaces 2 of the 6 BlockFuelTank
@@ -18103,7 +18112,7 @@ public class TestProbeCommand extends CommandBase {
             // machine welds a ship's machines to its flight computer, and a fixture that did that
             // itself would hide the failure a jump-capable-ship test is looking for.
             boolean includeRoofedDeck = "with-roofed-deck".equals(variant);
-            boolean includeJumpDrive = "with-jump-drive".equals(variant) || jumpMast;
+            boolean includeJumpDrive = "with-jump-drive".equals(variant) || jumpMast || poweredJumpDrive;
             boolean includePilotDeck = "with-pilot-deck".equals(variant) || includeRoofedDeck
                     || includeJumpDrive || includeHold || includeDeckTank;
             // with-shield-emitter — a with-pilot-seat ship (AFC + pilot seat, so it becomes a VS ship)
@@ -18229,7 +18238,10 @@ public class TestProbeCommand extends CommandBase {
             // the top of the drive bay is not sitting exactly on the scan ceiling.
             // The mast variant's tower clears the mast's top (rocketY+11 = baseY+12) by the same
             // spare course.
-            int towerTop = includeRoofedDeck ? 9 : (jumpMast ? 13 : (includeJumpDrive ? 7 : 6));
+            // The powered jump craft's plug stands on the capacitor (rocketY+6), so its tower rises
+            // one course more for the same spare course above it.
+            int towerTop = includeRoofedDeck ? 9 : (jumpMast ? 13 : (poweredJumpDrive ? 8
+                    : (includeJumpDrive ? 7 : 6)));
             if (structureTower != null) {
                 for (int dy = 0; dy <= towerTop; dy++) {
                     world.setBlockState(new BlockPos(baseX - 1, baseY + dy, baseZ + padSize / 2),
@@ -18378,6 +18390,15 @@ public class TestProbeCommand extends CommandBase {
                 // the jump gate returns a clean verdict instead of the undersized-window advisory.
                 // It stands on the flight computer, out of the walkway.
                 world.setBlockState(bayEmitter, jumpFieldEmitter.getDefaultState());
+                if (poweredJumpDrive) {
+                    // On the capacitor, its only free face inside the footprint: the plug pushes into
+                    // every adjacent energy acceptor each tick, and the bank is one.
+                    if (creativePlug == null) {
+                        send(sender, "{\"error\":\"missing libvulpes:creativePowerBattery\"}");
+                        return;
+                    }
+                    world.setBlockState(bayCapacitor.up(), creativePlug.getDefaultState());
+                }
                 // Where each machine stands, as an offset from the flight computer: assembly moves
                 // the craft as one rigid body, so the offset names the same machine aboard the ship,
                 // and a scenario that has to reach one of them reads it here instead of re-deriving

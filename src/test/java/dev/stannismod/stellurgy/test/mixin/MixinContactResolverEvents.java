@@ -38,8 +38,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * </ul>
  *
  * <p>Server log, filed against the world the meeting happened in. Read by
- * {@code ArmourAnswersByKindAndAngleE2ETest}, {@code ArmourBlocksAnswerForThemselvesE2ETest} and
- * {@code SpacedArmourIsAskedTwiceE2ETest}.</p>
+ * {@code ArmourAnswersByKindAndAngleTest}, {@code ArmourBlocksAnswerForThemselvesTest} and
+ * {@code SpacedArmourIsAskedTwiceTest}.</p>
  */
 @Mixin(ContactResolver.class)
 public abstract class MixinContactResolverEvents {

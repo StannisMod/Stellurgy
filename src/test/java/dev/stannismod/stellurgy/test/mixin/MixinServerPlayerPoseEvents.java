@@ -26,7 +26,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  *
  * <p>EDGE-ONLY per connection on the whole payload: a movement packet arrives every tick or so, and
  * the record is the change, not the stream. SILENT about position. Read by
- * {@code ALinkerNamesTheBatteryItsTargetE2ETest}.</p>
+ * {@code ALinkerNamesTheBatteryItsTargetTest}.</p>
  */
 @Mixin(NetHandlerPlayServer.class)
 public abstract class MixinServerPlayerPoseEvents {

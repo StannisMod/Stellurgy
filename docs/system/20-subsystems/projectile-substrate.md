@@ -46,12 +46,12 @@ either** — a shot does not decline to hit its shooter, because deciding that i
 world is loaded and tracked only near a player, so a long-range round as an entity either dies outside
 the shooter's bubble or forces a corridor of chunks to stay loaded. A record is stepped by its world's
 own tick regardless of who is watching and costs three vectors.
-`Shot.java:14-33`, `ShotRegistry.java:21-33` [V] [T `ShotSubstrateE2ETest#aShotCrossesEmptySpaceWithoutLoadingAnyWorld`]
+`Shot.java:14-33`, `ShotRegistry.java:21-33` [V] [T `ShotSubstrateTest#aShotCrossesEmptySpaceWithoutLoadingAnyWorld`]
 
 **MECH-SHOT-02 — Every test is over the segment old→new, never a point.** The step is integrated first,
 then the whole segment is traversed voxel-exactly. A per-tick position test walks past a wall whenever
 the step is longer than the wall is thick, and past a voxel whose corner the ray clips at any speed.
-`util/SweptSegment.java:47-99`, `ShotSubstrate.java:119-131` [V] [T `SweptSegmentTest`, `ShotSubstrateE2ETest#aFastShotCannotPassThroughAOneBlockWall`]
+`util/SweptSegment.java:47-99`, `ShotSubstrate.java:119-131` [V] [T `SweptSegmentTest`, `ShotSubstrateTest#aFastShotCannotPassThroughAOneBlockWall`]
 
 **MECH-SHOT-03 — Layers are ordered by earliest crossing, geometrically.** Each layer is asked where it
 would be crossed, in blocks along this tick's segment; the smallest distance wins. There is no
@@ -152,7 +152,7 @@ counter has to give each a field, and a round that bores for a few hundred ticks
 and mints the identities the NEXT round will mint. Since the contact seam the call is made by the
 resolver's default law rather than by the substrate itself. `ContactResolver.java:196-215`,
 `ShotRegistry#nextImpactId`, `ShotSubstrate.java:247-249` [V] [T `ImpactIdentityTest`,
-`ArmourAnswersByKindAndAngleE2ETest`]
+`ArmourAnswersByKindAndAngleTest`]
 
 **MECH-SHOT-27 — Which layer a segment meets first is asked in ONE place.** `LayerCrossing.along`
 answers "field or structure, and how far" for everything that travels a line — a shot stepping its
@@ -169,7 +169,7 @@ flight to step and nothing to persist: its lifetime is exactly as long as its gu
 declared kind mapping and carrying NO body, because a beam has nothing to mirror), and the same contact
 seam, so armour answers it exactly as it answers everything else. What does not travel is the BODY; the
 STRIKE happens every tick, and a beam that resolved once would be a weapon a player could never see
-working. `HeldBeam.java` [V] [T `ABeamIsHeldNotThrownE2ETest`]
+working. `HeldBeam.java` [V] [T `ABeamIsHeldNotThrownTest`]
 
 **MECH-SHOT-29 — A beam is replicated as a STATE that is repeated, not as two events.** A round is
 announced at the muzzle and at the end because its path is determined by the launch numbers; a beam has
@@ -181,7 +181,7 @@ stops burning with no tick in which to say so, and an edge-triggered channel wou
 across the sky until the player relogged. The heartbeat must therefore be quicker than the client's
 timeout, which is a two-sided arrangement the test reads from both ends rather than restating.
 `BeamReplication.java`, `PacketBeamState.java`, `ClientBeamTracker.java`, `RenderBeams.java` [V]
-[T `BeamReplicationCadenceTest`, `BeamReachesClientE2ETest`]
+[T `BeamReplicationCadenceTest`, `BeamReachesClientTest`]
 
 **MECH-SHOT-32 — A shell that could not pay the whole price does not stop a beam.** `isIntercepted`
 is true on an UNDERPAY as well as on a full stop; `isFullyAbsorbed` is the one that means the shell
@@ -195,8 +195,8 @@ behind it, exactly as a round's residual does. `HeldBeam#emit` [V]
 **MECH-SHOT-17a — "It used the tick" is true of a bore that STALLED, not of one that got out.** The two are one answer (`passedThrough` with energy left) and two situations, and only the resolution says which: `Resolution.leftTheStructure` is set from the damage walk's stop REASON — `EXITED_FAR_SIDE` and not merely the `EXITED` outcome — and by a responder that answered anything other than "stopped". A round still inside the material has spent this tick's travel and resumes next tick from where it stopped — that is MECH-SHOT-17. A round that came out the far side has NOT spent the tick: it is advanced by the distance the walk actually covered, the rest of the tick's travel is still owing, and whatever stands in it is asked in the same tick.
 `ShotSubstrate.java` (the pass-through branch), `ContactResolver.Resolution` [V]
 **"The distance the walk actually covered" is to where the body LEFT the last solid slice**, not where it ENTERED it: for a bore resuming inside a block the entry distance is zero, so the round would be advanced by the crossing epsilon and meet the same plate again. `StructureDamageEngine.Walk#exitedFarSide` [V]
-A round too poor to buy a stage does not cross a block and come out in 1 / speed ticks: it is STOPPED at the block's face (`structural-damage` MECH-DMG-35, maintainer ruling 2026-10-03) `[T `ShotBoresOverTimeE2ETest#aRoundTooPoorForAStageIsStoppedByTheBlockItMeets`]`.
-[T `SpacedArmourIsAskedTwiceE2ETest` — two legs, slow and fast, and the slow one is the control that keeps a "nothing ever arrived" pass from reading as a green]
+A round too poor to buy a stage does not cross a block and come out in 1 / speed ticks: it is STOPPED at the block's face (`structural-damage` MECH-DMG-35, maintainer ruling 2026-10-03) `[T `ShotBoresOverTimeTest#aRoundTooPoorForAStageIsStoppedByTheBlockItMeets`]`.
+[T `SpacedArmourIsAskedTwiceTest` — two legs, slow and fast, and the slow one is the control that keeps a "nothing ever arrived" pass from reading as a green]
 
 **MECH-SHOT-18 — Boring costs a body its SPEED, where speed and energy are coupled at all.** Kinetic
 energy goes as the square of speed, so a round that has spent a fraction of its energy keeps the square
@@ -239,7 +239,7 @@ than a position stream: the client integrates its own copy with the same arithme
 when the server says the round stopped. The end packet is what keeps a client from drawing a round
 sailing through the hull that stopped it. `ShotReplication.java:43-79`, `PacketShotSpawn.java:12-27`,
 `PacketShotEnd.java:12-21`, `ClientShotTracker.java:13-28` [V]
-[T `ShotReachesClientE2ETest`]
+[T `ShotReachesClientTest`]
 
 **MECH-SHOT-14 — Who is told is decided by the PATH, not by the muzzle.** A player is told when the
 round's forward segment (capped at 200 ticks of flight) passes within `shotVisibilityRadius` of them —
@@ -247,7 +247,7 @@ which is what makes a round fired from four kilometres away visible to the perso
 case a muzzle-distance filter gets exactly backwards. The end packet is keyed on the end point instead:
 a player too far to be in range there cannot see the impact either, and their copy ages out on its
 stated lifetime. `ShotReplication.java:33-40,43-79`, `ProximityBroadcast.java` (MECH-SHOT-30) [V]
-[T `ShotReachesClientE2ETest` — the far-shot control]
+[T `ShotReachesClientTest` — the far-shot control]
 
 **MECH-SHOT-12 — A shot ends for a stated reason at a stated place, remembered briefly after it is
 gone.** Absence from the registry cannot tell a hit from a timeout, so the last 64 endings keep their
@@ -255,8 +255,8 @@ reason **and the WORLD point they ended at** — world-frame even when what stop
 ship's block filed under a shipyard address millions of blocks away, because a weapon showing an
 impact needs the place a player can see. Not persisted: it answers a question asked seconds later, not
 world state. `ShotRegistry.java:41-52`, `:100-140` [V]
-[T `ShotSubstrateE2ETest#aShotEndsForAStatedReasonRatherThanJustDisappearing`,
-`ShotHitsShipHullE2ETest`]
+[T `ShotSubstrateTest#aShotEndsForAStatedReasonRatherThanJustDisappearing`,
+`ShotHitsShipHullTest`]
 
 ## Invariants
 
@@ -272,14 +272,14 @@ thread, to the drawings of the world current at that moment. `ShotSubstrate.java
 **INV-SHOT-02 — A shot belongs to exactly one world for its whole life.** The registries are per-world
 objects with no reference to each other, so two shots in different worlds cannot interact — structurally,
 not by comparing dimension ids anywhere. `ShotRegistry.java:21-27` [V]
-[T `ShotSubstrateE2ETest#aShotIsOnlyEverInTheWorldItWasFiredIn`]
+[T `ShotSubstrateTest#aShotIsOnlyEverInTheWorldItWasFiredIn`]
 
 **INV-SHOT-03 — The traversal never skips a voxel it passes through.** Consecutive reported voxels are
 face-adjacent and entry parameters are non-decreasing within `[0,1]`. `util/SweptSegment.java:75-98` [V]
 [T `SweptSegmentTest#consecutiveVoxelsTouchFaceToFace`]
 
 **INV-SHOT-08 — A round is still there the tick after it met a hull.** Meeting structure is not an
-ending; running out of budget or of speed inside it is. [T] `ShotBoresOverTimeE2ETest`, falsified
+ending; running out of budget or of speed inside it is. [T] `ShotBoresOverTimeTest`, falsified
 (make the meeting terminal and the test reddens on its own assertion)
 
 **INV-SHOT-07 — A block that answers nothing is treated exactly as it was before the contract.** The

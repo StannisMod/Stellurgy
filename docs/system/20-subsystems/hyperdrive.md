@@ -129,9 +129,10 @@ faulty one). [V] `TileRocketAssemblingMachine.java` (tier-2 branch), `ShipNaviga
 step, and a stuck ship is a softlock rather than a slow one). `mass` comes from `ShipMassProvider.
 massOf` — **the hull's real mass in kg, through the ship mass port** (`FlightComputerMassSource`, the
 same one the flight model weighs by). The
-speed law is normalised by `DriveTuning.BASELINE_SHIP_MASS` = **321 250 kg, the measured mass of the
-milestone's jump craft** (`with-jump-drive`), a calibration and not a knob: that craft keeps the speed
-it had, and every other hull flies by its mass ratio. **An unweighable hull is ABSENT, never a stand-in**:
+speed law is normalised by `DriveTuning.BASELINE_SHIP_MASS` = **326 250 kg, the measured mass of the
+milestone's jump craft** (`with-powered-jump-drive`: the `with-jump-drive` hull's 321 250 kg plus the
+5 000 kg power plug that charges its capacitor), a calibration and not a knob: that craft flies at the
+baseline speed, and every other hull flies by its mass ratio. **An unweighable hull is ABSENT, never a stand-in**:
 the forecast reads speed 0 (so its energy reads 0 — the gate does not refuse it), and `JumpTrigger`
 refuses above the commit line with `msg.jump.nomass`. **There is deliberately no overload without the
 tier** — which generation is flying is something every caller knows, and a default would silently give

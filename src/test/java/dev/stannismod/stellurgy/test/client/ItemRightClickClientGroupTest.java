@@ -62,7 +62,7 @@ import static org.junit.Assert.assertTrue;
  * {@code OreScannerRightClickClientE2ETest}, {@code ItemHovercraftSpawnE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
+public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * How near straight down the client must be looking before the click, in degrees of pitch.

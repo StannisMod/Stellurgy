@@ -71,7 +71,7 @@ import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.screenOf
  * {@code RocketBuilderGuiE2ETest}, {@code RailgunCargoTransitE2ETest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
+public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
 
     /**
      * The cargo this scenario FIRES, and therefore what the destination must hold.
@@ -1304,7 +1304,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>Both presses are forged by the real client ({@link ForgedMachinePress}) rather than clicked:
      * a far player has no screen to click, and a modified client does not need one. That is the
      * subject — what the SERVER does with a press it did not see a screen for. What this does not see:
-     * the screen's own button, which {@code WeaponGuiButtonsReachTheServerE2ETest} drives, and a press
+     * the screen's own button, which {@code WeaponGuiButtonsReachTheServerTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      *
      * <p>red-witnessed: with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}
@@ -1406,7 +1406,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
      * The fire-control sensor answers a press the way the weapon console does: by vanilla's usability
      * rule, so a press from beyond a chest's reach leaves its mode alone, and the same press from the
      * player standing on it switches it to illuminating. Both presses are forged by the real client
-     * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerE2ETest}'s.
+     * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerTest}'s.
      *
      * <p>red-witnessed (2026-10-06, one inversion per run):
      * {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering

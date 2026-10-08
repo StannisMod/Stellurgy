@@ -117,7 +117,7 @@ import static org.junit.Assert.assertTrue;
  * through the identical production broadcast — so the rendering path under test is the real one.
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientE2ETest {
+public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
 
     @Override
     protected String subsystem() {

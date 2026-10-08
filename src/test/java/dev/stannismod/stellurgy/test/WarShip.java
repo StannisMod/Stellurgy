@@ -99,14 +99,14 @@ public final class WarShip {
      * to be at the destination.</p>
      *
      * <p>red-witnessed: with {@code VSBridge#teleportShip} at
-     * {@code physo.setForceToUseShipDataTransform(true);} removed, {@code TurretOnAShipE2ETest} fails
+     * {@code physo.setForceToUseShipDataTransform(true);} removed, {@code TurretOnAShipTest} fails
      * at the link with "hull … was teleported to 6800,150,9200 and its physics object never adopted
      * the written pose — no `ship_teleport_adopted` carrying vsShip = … was recorded within 200 ticks"
      * (2026-09-30).</p>
      *
      * <p>red-witnessed: with {@code VSBridge#teleportShip} at {@code ship.setShipTransform(moved);}
      * and {@code ship.setPrevTickShipTransform(moved);} removed (the flag raised, the pose never
-     * written), {@code TurretOnAShipE2ETest} fails at the pose requirement with an ArrangementFailure
+     * written), {@code TurretOnAShipTest} fails at the pose requirement with an ArrangementFailure
      * "… stands 2397.006049220569 blocks from it after adopting {…"posX":6802.0,"posY":155.0,…}"
      * (2026-09-30).</p>
      */
