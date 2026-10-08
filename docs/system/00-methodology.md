@@ -232,6 +232,9 @@ sourced. Each claim carries a tag:
 - `[V]` **verified** — code read, `file:line` cited
 - `[T]` **pinned** — asserted by a test, class and method cited
 - `[A]` **assumption** — inferred, not confirmed in code
+- `[PLANNED]` **requirement for a mechanic not built yet** — states what the mechanic must obey when it
+  is built, and claims nothing about code that exists. It owes no test until then; the change that
+  builds the mechanic retags it `[V]`/`[T]` and pins it in that same change.
 
 **Citation rule: a mechanic with no `file:line` citation does not enter the document.** It goes to
 *Open questions*.

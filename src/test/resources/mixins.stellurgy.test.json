@@ -5,6 +5,9 @@
   "plugin": "dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin",
   "compatibilityLevel": "JAVA_8",
   "target": "@env(DEFAULT)",
+  "injectors": {
+    "defaultRequire": 1
+  },
   "mixins": [
     "MixinChunkLoadCount",
     "MixinWorldEntityRemoval",

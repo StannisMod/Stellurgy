@@ -21,12 +21,22 @@ Every clause is in exactly one of four states:
              that does not exist, no back-reference, a ruling without a date, a pinned-by anchor that is
              missing or not itself pinned.
   OWED       neither: no [T], no UNPINNED:. Debt, listed, never a parse error.
+  PLANNED    tagged [PLANNED]: a requirement for a mechanic not built yet. Owes nothing until the commit
+             that builds it, which retags it and pins it.
+
+A clause whose `FOR:` cites an ANCHOR must be younger than that anchor: the source a clause serves is
+committed BEFORE it. The order is read from git (the first commit whose diff adds the anchor's bold
+definition under docs/system); a clause first defined in the commit that published the docs is exempt,
+because every clause arrived in that one commit and their order is not recorded there. A clause younger
+than nothing — its `FOR:` anchor defined in the same or a later commit, or not committed while the clause
+is — is BROKEN.
 
 The REVERSE direction: every clause anchor a test under src/test/java cites must exist in the docs.
 
 WHAT THIS DOES NOT SEE: whether a test really pins the clause it names (a name is a claim; the red
 witness on the test is the evidence); a clause defined other than as a bold list item; a test named
-without the `Test` suffix.
+without the `Test` suffix; the age of a `FOR:` that cites a ruling or a design document rather than an
+anchor (the reviewer's); the order of clauses that arrived together in the publishing commit.
 
 Usage: python docs/system/tools/check-pins.py [--list STATE ...] [--self-test]
 Exit 0 = nothing BROKEN and no test cites a missing anchor; OWED is debt and is reported, not failed.
@@ -34,6 +44,7 @@ Exit 0 = nothing BROKEN and no test cites a missing anchor; OWED is debt and is 
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -50,6 +61,37 @@ UNPINNED_RE = re.compile(r"UNPINNED:\s*(.*)", re.DOTALL)
 RULING_RE = re.compile(r"maintainer ruling\s+\d{4}-\d{2}-\d{2}", re.IGNORECASE)
 PINNED_BY_RE = re.compile(r"pinned by\s+`?(" + ANCHOR + r")`?", re.IGNORECASE)
 CITE_RE = re.compile(r"\b(" + ANCHOR + r")\b")
+FOR_RE = re.compile(r"\bFOR:\s*(.*)", re.DOTALL)
+ADDED_DEF_RE = re.compile(r"^\+[ \t]*-[ \t]*\*\*(" + ANCHOR + r")\b")
+
+
+def first_defined(repo):
+    """{anchor: commit index} -- the first commit (0 = the oldest touching docs/system) whose diff ADDS
+    the anchor's bold definition; None when git cannot answer (then the age check is skipped)."""
+    try:
+        out = subprocess.check_output(
+            ["git", "log", "--reverse", "-p", "--format=COMMIT %H", "--", "docs/system"],
+            cwd=repo, stderr=subprocess.DEVNULL).decode("utf-8", "replace")
+    except Exception:
+        return None
+    first, index = {}, -1
+    for line in out.split("\n"):
+        if line.startswith("COMMIT "):
+            index += 1
+            continue
+        m = ADDED_DEF_RE.match(line)
+        if m:
+            first.setdefault(m.group(1), index)
+    return first
+
+
+def for_anchors(body, known):
+    """The anchors a clause's `FOR:` cites, up to the end of the sentence that carries it."""
+    m = FOR_RE.search(body)
+    if not m:
+        return []
+    sentence = re.split(r"(?<=[.;])\s", m.group(1), maxsplit=1)[0]
+    return [a for a in CITE_RE.findall(sentence) if a in known]
 
 
 def docs(sysroot):
@@ -114,7 +156,7 @@ def test_refs(text):
     return refs
 
 
-def classify(sysroot, repo):
+def classify(sysroot, repo, ages=None):
     defs = clauses(sysroot)
     idx = test_index(repo)
     cache = {}
@@ -150,6 +192,19 @@ def classify(sysroot, repo):
             continue
         if re.search(r"^\s*(?:—|-)?\s*retired\b", body):
             state[anchor] = ("RETIRED", doc, None)
+            continue
+        if ages is not None:
+            mine = ages.get(anchor)
+            if mine != 0:  # 0 = arrived in the publishing commit, whose internal order is unknown
+                younger = [a for a in for_anchors(body, defs)
+                           if ages.get(a) is None or (mine is not None and ages[a] >= mine)]
+                if younger:
+                    state[anchor] = ("BROKEN", doc, "FOR: cites %s, not committed before this clause"
+                                     % ", ".join(younger))
+                    continue
+        tokens_here = TAGS_RE.findall(inside) + TAGS_RE.findall(body[:40])
+        if "PLANNED" in tokens_here and "T" not in tokens_here:
+            state[anchor] = ("PLANNED", doc, None)
             continue
         ok, why = pinned(anchor, inside, body)
         if ok:
@@ -197,7 +252,7 @@ def report(state, missing, wanted):
     counts = {}
     for kind, _doc, _why in state.values():
         counts[kind] = counts.get(kind, 0) + 1
-    for kind in ("PINNED", "UNPINNED", "BROKEN", "OWED", "RETIRED", "MECH"):
+    for kind in ("PINNED", "UNPINNED", "BROKEN", "OWED", "PLANNED", "RETIRED", "MECH"):
         print("%-9s %4d" % (kind, counts.get(kind, 0)))
     print("tests citing an anchor no doc defines: %d" % len(missing))
     for kind in wanted:
@@ -223,7 +278,11 @@ def self_test():
                 "- **INV-A-06** `[A]` UNPINNED: no tier can observe it.\n"
                 "- **INV-A-07** — retired.\n"
                 "- **MECH-A-01** a mechanism, never owed.\n"
-                "- **INV-A-08 (a title that wraps\n  onto the next line)** `[T]` (`AlphaTest#pinsIt`).\n",
+                "- **INV-A-08 (a title that wraps\n  onto the next line)** `[T]` (`AlphaTest#pinsIt`).\n"
+                "- **INV-A-09** `[PLANNED][BEH]` a mechanic not built yet.\n"
+                "- **INV-A-10** `[A][SYS]` serves an older clause. FOR: INV-A-03.\n"
+                "- **INV-A-11** `[A][SYS]` serves a clause younger than itself. FOR: INV-A-12.\n"
+                "- **INV-A-12** `[A][BEH]` written after INV-A-11.\n",
             "src/test/java/x/AlphaTest.java":
                 "/** Pins INV-A-01, INV-A-08 and stands in for INV-A-05; cites INV-A-99; label C-1. */\n"
                 "class AlphaTest { void pinsIt() {} }\n",
@@ -233,10 +292,16 @@ def self_test():
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(text)
-        state, missing = classify(os.path.join(tmp, "docs", "system"), tmp)
+        # Commit indices as first_defined would give them: 0 is the publishing commit (exempt), the
+        # rest later. INV-A-11 (index 2) cites INV-A-12, defined at index 3 -- younger, so BROKEN.
+        ages = {"INV-A-01": 0, "INV-A-02": 0, "INV-A-03": 0, "INV-A-04": 0, "INV-A-05": 0, "INV-A-06": 0,
+                "INV-A-07": 0, "MECH-A-01": 0, "INV-A-08": 0, "INV-A-09": 1, "INV-A-10": 1,
+                "INV-A-11": 2, "INV-A-12": 3}
+        state, missing = classify(os.path.join(tmp, "docs", "system"), tmp, ages)
         want = {"INV-A-01": "PINNED", "INV-A-02": "BROKEN", "INV-A-03": "OWED", "INV-A-04": "UNPINNED",
                 "INV-A-05": "UNPINNED", "INV-A-06": "BROKEN", "INV-A-07": "RETIRED", "MECH-A-01": "MECH",
-                "INV-A-08": "PINNED"}
+                "INV-A-08": "PINNED", "INV-A-09": "PLANNED", "INV-A-10": "OWED", "INV-A-11": "BROKEN",
+                "INV-A-12": "OWED"}
         ok = True
         for anchor, kind in want.items():
             if state.get(anchor, ("?",))[0] != kind:
@@ -260,7 +325,7 @@ def main(argv):
     wanted = []
     if "--list" in argv:
         wanted = [a.upper() for a in argv[argv.index("--list") + 1:] if not a.startswith("--")]
-    state, missing = classify(SYSROOT, REPO)
+    state, missing = classify(SYSROOT, REPO, first_defined(REPO))
     return report(state, missing, wanted)
 
 

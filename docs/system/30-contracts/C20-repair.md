@@ -44,15 +44,15 @@ designed against a floor price and a working ancestor, and both constrain it.
   for with material that leaves an inventory. No rung invents a generic "matter"; T2/T3 consume the
   real items the ship's economy already makes. **Falsifiable:** run a bay with a reserve that
   cannot fall — its output must be zero. Pinned by `RepairWelderE2ETest#oneUseTakesOneStageAndIsPaidForTwice`, `RepairWelderE2ETest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
-- **REPAIR-4 (a hole is filled with what stood there, or not at all)** `[A][BEH]` A rebuild reads the provenance
+- **REPAIR-4 (a hole is filled with what stood there, or not at all)** `[PLANNED][BEH]` A rebuild reads the provenance
   and places THAT block. It never guesses, never substitutes a similar one, and never fills a hole
   whose provenance is missing. **Player form:** a repaired hull is the hull you built, not a patch of
   whatever the machine had.
-- **REPAIR-5 (provenance is spent exactly once)** `[A][BEH]` Filling a hole clears its record in the same step
+- **REPAIR-5 (provenance is spent exactly once)** `[PLANNED][BEH]` Filling a hole clears its record in the same step
   that places the block (`BlockDamageSavedData.java` `[V]` is the clear). A record that survives
   its own rebuild is a second free block on the next pass. **Falsifiable:** rebuild the same position
   twice; the second attempt must find nothing to do and consume nothing.
-- **REPAIR-6 (an unfillable hole is reported, not forgotten)** `[A][BEH]` When provenance names a block the
+- **REPAIR-6 (an unfillable hole is reported, not forgotten)** `[PLANNED][BEH]` When provenance names a block the
   registry no longer has, the position is refused and its record is KEPT. A lost name is detected by
   asking the registry whether it holds the name, never by a null: Forge's block registry is DEFAULTED and
   answers air for an absent name. The record already survives a carry under its own name (INV-DMG-10). Dropping it destroys the only evidence of what the hull
@@ -61,7 +61,7 @@ designed against a floor price and a working ancestor, and both constrain it.
   nothing damaged, and refused-by-REPAIR-6 are four different states and are distinguishable from
   outside the machine. A bay that looks identical while starved and while finished trains players to
   ignore it. Pinned by `RepairWelderE2ETest#everyRefusalIsItsOwnAnswerAndCostsNothing`.
-- **REPAIR-8 (repair is time and energy, and it is resumable)** `[A][BEH]` Progress is a function of elapsed time
+- **REPAIR-8 (repair is time and energy, and it is resumable)** `[PLANNED][BEH]` Progress is a function of elapsed time
   and energy actually delivered — never of how many ticks the bay was loaded for. A bay that spent an
   hour unloaded resumes where it stopped; it does not restart, and it does not bill the player for an
   hour of work it did not do. This is what makes the ladder lazy-catch-up compatible (INV-SPACE-01).
@@ -75,14 +75,14 @@ designed against a floor price and a working ancestor, and both constrain it.
 
 ### The bay as a multiblock (maintainer ruling 2026-08-15)
 
-- **REPAIR-10 (size buys speed, with diminishing returns and a ceiling)** `[A][BEH]` A bay is a multiblock, and
+- **REPAIR-10 (size buys speed, with diminishing returns and a ceiling)** `[PLANNED][BEH]` A bay is a multiblock, and
   building it larger makes it strictly faster: for any size N, size N+1 is never slower. The gain per
   added size SHRINKS as N grows, and the rate is bounded above — no size makes repair instantaneous.
   The shape is the contract; the constants are `tunable` and live with the balance pass, per
   balance rule (a clamp on a rate constant is a symptom). **Falsifiable, three separate assertions:** monotonic (N+1 faster than
   N), diminishing (the gain from N→N+1 is smaller than from N−1→N), bounded (rate at the largest
   buildable N is below a stated ceiling).
-- **REPAIR-11 (one bay mechanic, two kinds of target)** `[A][BEH]` The tier-1 rocket station and the tier-2 ship
+- **REPAIR-11 (one bay mechanic, two kinds of target)** `[PLANNED][BEH]` The tier-1 rocket station and the tier-2 ship
   bay are ONE machine with one price list, not two implementations that will drift. What differs is
   how it reaches its work: a rocket's parts through its `StorageChunk`
   (`TileRocketServiceStation.java` `[V]`), a ship's blocks through the damage map. Today's
@@ -92,21 +92,21 @@ designed against a floor price and a working ancestor, and both constrain it.
 
 ### Several bays aboard one hull
 
-- **REPAIR-12 (bays are not rationed)** `[A][BEH]` A ship may carry as many bays as it can fit. Nothing caps the
+- **REPAIR-12 (bays are not rationed)** `[PLANNED][BEH]` A ship may carry as many bays as it can fit. Nothing caps the
   count, and carrying two is a legitimate build decision, not an exploit to be closed.
-- **REPAIR-13 (no position is repaired twice)** `[A][BEH]` Damaged positions of one structure form ONE pool of
+- **REPAIR-13 (no position is repaired twice)** `[PLANNED][BEH]` Damaged positions of one structure form ONE pool of
   work, and a bay CLAIMS from it. Two bays never both pay for and both apply the same stage. A claim
   is released when its bay stops (unloaded, unpowered, broken), so a dead bay cannot park work
   forever. **Falsifiable:** two bays, one damaged block; total material consumed equals one repair.
   **Player form:** a second repair bay makes the hull mend faster, not the same hull twice.
-- **REPAIR-14 (parallel across bays, non-linear within one)** `[A][BEH]` Throughput adds up across bays — N bays
+- **REPAIR-14 (parallel across bays, non-linear within one)** `[PLANNED][BEH]` Throughput adds up across bays — N bays
   drain the pool about N times faster, because they are N machines drawing N lots of energy — while
   each bay's own rate follows REPAIR-10's diminishing law. The two laws are deliberately different:
   size is one machine doing more with shared plumbing, count is more machines each paying full price.
 
 ### The T3 rung — the integrity field
 
-- **REPAIR-15 (the field is a mold, run by the shield network)** `[A][BEH]` The T3 rung is a PROGRAM of the ship's shield
+- **REPAIR-15 (the field is a mold, run by the shield network)** `[PLANNED][BEH]` The T3 rung is a PROGRAM of the ship's shield
   network (`C28` WALL-14), not a device: an emitter group assigned to it raises a wall in the
   exact shape of the provenance block and casts real feedstock — made by the T2 fabricator — into it; matter
   reflects from the wall (WALL-4), so the mold holds it until it sets (containerless casting). Every clause
