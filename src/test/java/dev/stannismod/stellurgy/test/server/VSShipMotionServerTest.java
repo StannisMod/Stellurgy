@@ -7,11 +7,14 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
+import dev.stannismod.stellurgy.test.ShipReadiness;
 
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -34,6 +37,11 @@ import static org.junit.Assert.assertTrue;
  * ship, which is why the drive below goes through the flight computer instead. The dead model is
  * kept as the control leg, because a checkpoint that cannot tell a working drive from a broken one
  * is not a checkpoint.</p>
+ *
+ * <p>The group is a ship's MOTION and what it hands to what leaves it: a second scenario throws an
+ * item out of a moving hull's ejection port and reads the motion the item was given against the
+ * hull's own, as the substrate holds it. Neither scenario sees a client; both are decisions the
+ * server makes.</p>
  */
 public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
@@ -79,6 +87,151 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
+    }
+
+    /**
+     * The previous scenario's craft, out of the sky this one builds in: a hull driven at speed leaves
+     * its plot under its own power, and a test server holds it loaded wherever it goes.
+     */
+    @Before
+    public void clearThePreviousScenariosCraft() throws Exception {
+        ShipReadiness.clearCraftFrom(this::exec, 0);
+    }
+
+    /** Ticks in one second of game time — Minecraft's fixed 50 ms server tick. */
+    private static final double TICKS_PER_SECOND = 20.0;
+
+    /**
+     * How hard a port pushes a stack out of its own mouth, in blocks per tick —
+     * {@code EjectionPort#EJECT_SPEED} (0.35). The release's motion is the hull's motion at the port
+     * PLUS this push, so it is the margin the two predictions below are separated by.
+     */
+    private static final double PORT_PUSH_PER_TICK = 0.35;
+
+    /**
+     * The speed commanded along +X, in blocks per second. Chosen so that what arrives clears the
+     * floor the verdict needs (the hull at more than twice the port's push, see the arrangement in
+     * the method) with room for a drive that delivers well under its command.
+     */
+    private static final double EJECTING_HULL_VX = 30.0;
+
+    /**
+     * The WINDOW the drive is given before the port is loaded, in server ticks: a drive realizes its
+     * command as force, so the hull is still accelerating when the command lands. Nothing records
+     * "the cruise is reached" — the hold never decides it has arrived — so the speed the release
+     * actually happened at is read off the release's own record and checked there.
+     */
+    private static final int SPIN_UP_TICKS = 40;
+
+    /**
+     * The DEADLINE for the release, in server ticks: five of the port's duty cycles at its shipped
+     * interval ({@code StellurgyConfiguration#jettisonPortIntervalTicks}, 20). A port that holds a
+     * stack and has a clear mouth fires on its next cycle, so this only ever runs out on a port that
+     * is not firing.
+     */
+    private static final int RELEASE_DEADLINE_TICKS = 100;
+
+    /**
+     * An item thrown out of the ejection port of a MOVING hull leaves with the hull's own motion at
+     * the port — per TICK, as every motion of an item is — plus the port's push. Not twenty times
+     * that motion (the substrate's per-SECOND velocity taken as per-tick), and not without it.
+     *
+     * <p>The judge is the substrate's own state at the moment of release, recorded beside the item
+     * ({@code ejection_released}): its linear velocity, angular velocity and centre, turned into the
+     * velocity of the release point per tick. That is the hull's motion as physics holds it, not the
+     * carry reader the port itself calls, so a reader converting wrongly cannot also be the
+     * instrument that judges it. The verdict is the item's motion ALONG the hull's, as a multiple of
+     * the hull's: about 1 when it is carried right, about 20 when the per-second value is used as
+     * per-tick, about 0 when it is not carried at all — each blurred by at most the port's push over
+     * the hull's speed, which the arrangement keeps under a half.</p>
+     *
+     * <p>red-witnessed: 2026-10-07, one inversion per verdict. PER TICK — {@code EjectionPort#eject}
+     * at {@code double carryX = carry == null ? 0.0D : carry[0];} and its Y and Z twins multiplied by
+     * 20 (the per-second velocity the port read before the fix): "it carried 20.0x the hull's 1.5
+     * blocks/tick along its course". CARRIED AT ALL — the same three lines multiplied by 0: "it
+     * carried 0.0x the hull's 1.5 blocks/tick". Healthy: carried 1.0x at 1.5 blocks/tick.</p>
+     */
+    @Test
+    public void anItemEjectedFromAMovingHullCarriesTheHullsMotionPerTick() throws Exception {
+        FixtureSite site = site();
+        // The craft is the pilot-seat build: a seat is what `find-seat` locates the hull's flight
+        // computer by, and the port's subspace address is taken from that computer's.
+        // HEIGHT 7: the fixture's own structure tower reaches site.y+6, the tallest thing laid here;
+        // the port and its exit lane sit at site.y+4, inside the pad's footprint, so no halo.
+        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", 0, 7,
+                "the craft, its jettison port and the lane the port throws into");
+        // The port goes in the cell above the +X fuel-tank column — (rocketX+1, rocketY+3, rocketZ)
+        // with the craft rooted at (site.x+3, site.y+1, site.z+3) — so the assembly's flood fill
+        // takes it with the tank it rests on. Facing NORTH (meta 2): its exit lane runs along -Z,
+        // across the +X course the hull is driven on, so the port's push says little about the
+        // component of the release's motion the verdict reads.
+        int portX = site.x + 4, portY = site.y + 4, portZ = site.z + 3;
+        arrange("stellurgytest place " + site.dim + " " + portX + " " + portY + " " + portZ
+                + " stellurgy:jettisonPort 2");
+
+        long loadMark = events.mark();
+        String assemble = RocketFixture.assembleBuilt(site, this::exec, builder);
+        requireArranged("with VS, the pilot-seat build must route to a ship (no rocket): " + assemble,
+                Reply.of(assemble).integer("rocketCount") == 0);
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
+                ShipIdentity.nameFromAssembly(assemble), LOAD_TICKS);
+
+        Reply seat = ask("stellurgytest vs find-seat 0 id " + shipId);
+        requireArranged("the craft's flight computer must be found in ITS shipyard: " + seat,
+                seat.bool("seatFound") && seat.has("afcX"));
+        // The flight computer stood at (rocketX-1, rocketY+3, rocketZ) and the port two cells along +X
+        // from it; the assembly moves the hull's blocks together, so the same offset holds in the
+        // shipyard — and the port's own reply below is what says it does.
+        int subX = seat.integer("afcX") + 2, subY = seat.integer("afcY"), subZ = seat.integer("afcZ");
+        Reply port = ask("stellurgytest jettison info 0 " + subX + " " + subY + " " + subZ);
+        requireArranged("the jettison port must have ridden into the shipyard beside the flight"
+                + " computer, with a clear mouth: " + port, port.ok() && port.integer("obstruction") == 0);
+
+        Reply drive = ask("stellurgytest vs force-vel-by-id 0 " + shipId + " " + EJECTING_HULL_VX + " 0 0");
+        requireArranged("the drive must reach THIS craft's own flight computer: " + drive,
+                drive.bool("afcResolved"));
+        // WINDOW: see SPIN_UP_TICKS. Its far end is not read; the release record carries the speed.
+        GameTicks.advance(client(), GameTicks.server(), SPIN_UP_TICKS);
+
+        long releaseMark = events.markInstrumented();
+        arrange("stellurgytest jettison load 0 " + subX + " " + subY + " " + subZ + " minecraft:cobblestone 1");
+        String released = events.awaitRecordWithField(releaseMark, "ejection_released", "ship", shipId,
+                "the loaded port aboard the moving hull must throw its stack out", RELEASE_DEADLINE_TICKS);
+
+        // The release point's velocity per tick, from the substrate's own state at that instant:
+        // v + omega x r, per second, over the ticks in a second.
+        double rx = Events.number(released, "x") - Events.number(released, "hullX");
+        double ry = Events.number(released, "y") - Events.number(released, "hullY");
+        double rz = Events.number(released, "z") - Events.number(released, "hullZ");
+        double wx = Events.number(released, "hullOmegaX");
+        double wy = Events.number(released, "hullOmegaY");
+        double wz = Events.number(released, "hullOmegaZ");
+        double hullX = (Events.number(released, "hullVelX") + (wy * rz - wz * ry)) / TICKS_PER_SECOND;
+        double hullY = (Events.number(released, "hullVelY") + (wz * rx - wx * rz)) / TICKS_PER_SECOND;
+        double hullZ = (Events.number(released, "hullVelZ") + (wx * ry - wy * rx)) / TICKS_PER_SECOND;
+        double hullSpeed = Math.sqrt(hullX * hullX + hullY * hullY + hullZ * hullZ);
+        requireArranged("the hull must be moving at more than twice the port's push when it releases"
+                + " (" + hullSpeed + " blocks/tick against " + (2 * PORT_PUSH_PER_TICK) + "), or the"
+                + " push alone could carry the release across either bound: " + released,
+                hullSpeed > 2 * PORT_PUSH_PER_TICK);
+
+        double along = (Events.number(released, "motionX") * hullX
+                + Events.number(released, "motionY") * hullY
+                + Events.number(released, "motionZ") * hullZ) / hullSpeed;
+        double carried = along / hullSpeed;
+        System.out.println("[ejection] hull " + hullSpeed + " blocks/tick, item along it " + along
+                + ", carried " + carried + "x :: " + released);
+        // Between the predictions 1 (carried per tick) and 20 (per second taken as per tick), at
+        // their geometric middle.
+        assertTrue("the item must leave with the hull's motion per TICK, not twenty times it: it"
+                        + " carried " + carried + "x the hull's " + hullSpeed + " blocks/tick along its"
+                        + " course: " + released,
+                carried < Math.sqrt(TICKS_PER_SECOND));
+        // Between the predictions 0 (not carried) and 1, at their middle.
+        assertTrue("the item must leave WITH the hull's motion, or it is back inside the hull a tick"
+                        + " later: it carried " + carried + "x the hull's " + hullSpeed
+                        + " blocks/tick along its course: " + released,
+                carried > 0.5);
     }
 
     /**

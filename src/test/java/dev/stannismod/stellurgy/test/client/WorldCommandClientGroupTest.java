@@ -264,7 +264,8 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every
      * client only forgetting, the shape it shipped with — this fails with "the client forgot the
      * deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,
-     * withdraw:false,forgeRegistered:true}" (2026-10-06).</p>
+     * withdraw:false,forgeRegistered:true}" (2026-10-06; re-taken 2026-10-07 with the same message,
+     * dim 14).</p>
      *
      * <p>red-witnessed: with {@code PacketDimInfo#executeClient} at
      * {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails

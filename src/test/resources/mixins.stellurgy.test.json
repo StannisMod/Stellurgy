@@ -67,6 +67,7 @@
     "MixinShotRegistryEvents",
     "MixinDamageStateEvents",
     "MixinTileRepairBayEvents",
+    "MixinEjectionPortEvents",
     "BayEngineAccessor",
     "MixinTileRocketServiceStationEvents",
     "MixinTileFireControlSensorEvents",

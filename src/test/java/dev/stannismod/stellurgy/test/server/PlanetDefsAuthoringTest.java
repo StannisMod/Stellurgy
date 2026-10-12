@@ -468,7 +468,8 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      *
      * <p>red-witnessed: with {@code DimensionManager#createAndLoadDimensions} at
      * {@code detachFromParseParent(refused);} not called (the shape it shipped with), this fails showing
-     * {@code Secundus.children=[9611]} — the id of HoldsTheId, a planet of the star (2026-10-06).</p>
+     * {@code Secundus.children=[9611]} — the id of HoldsTheId, a planet of the star (2026-10-06;
+     * re-taken 2026-10-07 with the same reading).</p>
      *
      * <p>red-witnessed: with {@code DimensionManager#detachFromParseParent} at
      * {@code if (holder != null && holder.getParentPlanet() == parentId)} never taken, this fails
