@@ -105,6 +105,9 @@ dependencies {
     compileOnly rfg.deobf('curse.maven:gregtech-ce-unofficial-557242:5519022')
 
     compileOnly rfg.deobf("mcjty.theoneprobe:TheOneProbe-1.12:1.12-1.4.28-17")
+    // The test source set reads what a client RECEIVED from the probe (a test-only mixin on its
+    // reply packet), so it compiles against the same artefact; main's compileOnly does not reach it.
+    testCompileOnly rfg.deobf("mcjty.theoneprobe:TheOneProbe-1.12:1.12-1.4.28-17")
     if (run_the_one_probe) {
         runtimeOnly rfg.deobf("mcjty.theoneprobe:TheOneProbe-1.12:1.12-1.4.28-17")
     }

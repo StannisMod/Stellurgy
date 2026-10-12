@@ -144,6 +144,10 @@
     "MixinTileWeaponConsoleReadoutEvents",
     "MixinPacketThreadUtilRespawnWindow",
     "MixinTestClientMuteEvents",
+    "MixinTopProbeReplyEvents",
+    "TopProbeReplyAccessor",
+    "TopElementPanelAccessor",
+    "TopElementTextAccessor",
     "MixinMinecraftSideTrace"
   ]
 }

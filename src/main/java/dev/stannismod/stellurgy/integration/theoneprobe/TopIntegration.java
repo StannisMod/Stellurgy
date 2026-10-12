@@ -30,6 +30,7 @@ public class TopIntegration {
             top.registerEntityDisplayOverride(new RocketEntityDisplayOverride());
             top.registerEntityProvider(new RocketEntityProbeProvider());
             top.registerProvider(new DataBlockProbeProvider());
+            top.registerProvider(new DamageProbeProvider());
             return null;
         }
     }

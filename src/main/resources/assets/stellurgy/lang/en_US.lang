@@ -1003,6 +1003,10 @@ msg.top.stellurgy.data.mode.extract=Extract
 msg.top.stellurgy.data.link.linked=Linked
 msg.top.stellurgy.data.link.unlinked=Unlinked
 
+msg.top.stellurgy.damage.stage=Damage stage
+msg.top.stellurgy.damage.destroyed=Destroyed here, recorded as
+msg.top.stellurgy.damage.noRecipe=Cannot be welded: nothing crafts this block
+
 # Tier-2 ship space entry
 msg.timeskip.locked=§7You wake in the dark. This world turns at its own rate - dawn is about %s minute(s) away.
 msg.timeskip.command.partial=§7Time set on %s world(s); %s left alone (their time skip is disabled in the config).
