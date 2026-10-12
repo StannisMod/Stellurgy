@@ -139,8 +139,10 @@ public final class TestBindingsCheck {
         corpus.checkKinds(failures);
         checkTestMixinClassification(failures);
         System.out.println(E2EConfinement.check(root, classesRoot(), TestBindingsCheck.class.getClassLoader(), failures,
-                serverInstruments(failures),
+                serverInstruments("E2EInstrument", failures),
                 com.github.stannismod.forge.testing.client.bridge.ClientInstruments.rows(),
+                serverInstruments("MechanicsInstrument", failures),
+                com.github.stannismod.forge.testing.client.bridge.ClientInstruments.mechanicsRows(),
                 dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.OBSERVATION));
 
         Map<String, Integer> ages = new HashMap<>();
@@ -163,9 +165,9 @@ public final class TestBindingsCheck {
                 System.out.println(String.format("%-9s %4d", s, counts.getOrDefault(s, 0)));
             }
         }
-        System.out.println(String.format("test methods: %d @Test, %d of them pin no anchor (reported, not failed);"
-                        + " %d run by a test task", corpus.testMethods, corpus.testMethodsWithoutPins,
-                corpus.testMethodsRun));
+        System.out.println(String.format("test methods: %d @Test, %d of them pin no anchor; %d run by a test task",
+                corpus.testMethods, corpus.testMethodsWithoutPins, corpus.testMethodsRun));
+        System.out.println(checkUnpinnedBaseline(root, corpus.unpinned, failures));
         System.out.println(String.format("records: %d @RedWitness (%d replayable), %d @NotYetRed; %d @Pins anchors",
                 corpus.witnesses, corpus.replayable, corpus.notYet, corpus.pinCount));
         for (String kind : listed) {
@@ -194,6 +196,49 @@ public final class TestBindingsCheck {
         }
         System.out.println(failures.isEmpty() ? "test bindings: OK" : "test bindings: " + failures.size() + " failure(s)");
         return failures.isEmpty() ? 0 : 1;
+    }
+
+    /** The committed list of the {@code @Test} methods that pinned no anchor when the ratchet was set. */
+    static final String UNPINNED_BASELINE = "src/test/bindings/unpinned-test-methods.txt";
+
+    /**
+     * Every test names an anchor, held as a RATCHET: the methods that pinned none when the rule was set are
+     * listed in {@value #UNPINNED_BASELINE}, and the list only shrinks. An unpinned {@code @Test} the list does
+     * not hold fails (a new test names its anchor; a renamed or moved one is new); a listed method that now
+     * pins an anchor, or no longer exists, fails until its line is deleted. The current set is written beside
+     * the bindings report on every run, for that deletion and for nothing else — the check never writes the
+     * baseline. Answers the line it prints.
+     */
+    static String checkUnpinnedBaseline(Path root, Set<String> unpinned, List<String> failures) throws IOException {
+        Path current = root.resolve("build").resolve("reports").resolve("test-bindings").resolve("unpinned-test-methods.txt");
+        Files.createDirectories(current.getParent());
+        Files.write(current, (String.join("\n", unpinned) + "\n").getBytes(StandardCharsets.UTF_8));
+        Path baselineFile = root.resolve(UNPINNED_BASELINE);
+        if (!Files.isRegularFile(baselineFile)) {
+            failures.add("the unpinned-test baseline " + UNPINNED_BASELINE + " is missing -- without it every"
+                    + " unpinned @Test is new; the current set is in " + root.relativize(current));
+            return "unpinned baseline: MISSING";
+        }
+        Set<String> baseline = new TreeSet<>();
+        for (String line : Files.readAllLines(baselineFile, StandardCharsets.UTF_8)) {
+            String entry = line.trim();
+            if (!entry.isEmpty() && !entry.startsWith("#") && !baseline.add(entry)) {
+                failures.add(UNPINNED_BASELINE + " lists " + entry + " twice");
+            }
+        }
+        for (String method : unpinned) {
+            if (!baseline.contains(method)) {
+                failures.add("R24: the @Test " + method + " pins no anchor and is not in " + UNPINNED_BASELINE
+                        + " -- a new test names the anchor it pins (@Pins); the baseline only shrinks");
+            }
+        }
+        for (String entry : baseline) {
+            if (!unpinned.contains(entry)) {
+                failures.add("R24: " + UNPINNED_BASELINE + " lists " + entry + ", which is no longer an unpinned"
+                        + " @Test (it pins an anchor now, or is gone) -- delete the line; the baseline only shrinks");
+            }
+        }
+        return String.format("unpinned baseline: %d listed, %d unpinned now", baseline.size(), unpinned.size());
     }
 
     /** {@code docs/system/**}{@code .md} outside {@code tools/}, by path relative to it, in path order. */
@@ -302,6 +347,8 @@ public final class TestBindingsCheck {
         private final List<Map<String, Object>> records = new ArrayList<>();
         private final Map<String, Set<String>> citedBy = new TreeMap<>();
         private final List<String> regionProblems = new ArrayList<>();
+        /** Every {@code @Test} method that pins no anchor, as {@code class#method}. */
+        final Set<String> unpinned = new TreeSet<>();
         int classes;
         int testMethods;
         int testMethodsRun;
@@ -434,6 +481,7 @@ public final class TestBindingsCheck {
                     testMethods++;
                     if (pins.isEmpty()) {
                         testMethodsWithoutPins++;
+                        unpinned.add(where(k, m));
                     }
                     if (runs) {
                         testMethodsRun++;
@@ -613,7 +661,14 @@ public final class TestBindingsCheck {
             }
         }
         Set<String> observation = dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.OBSERVATION;
-        Set<String> behaviour = dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.BEHAVIOUR;
+        java.util.Map<String, String> reasons = dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.BEHAVIOUR;
+        Set<String> behaviour = reasons.keySet();
+        reasons.forEach((mixin, reason) -> {
+            if (reason == null || reason.trim().isEmpty()) {
+                failures.add("the BEHAVIOUR mixin " + mixin + " carries no reason -- a mixin that changes what the"
+                        + " game does is a mechanics child's declared environment, and says why it is needed");
+            }
+        });
         for (String mixin : configured) {
             boolean obs = observation.contains(mixin);
             boolean beh = behaviour.contains(mixin);
@@ -674,20 +729,20 @@ public final class TestBindingsCheck {
      * The server's instrument table, {@code E2EInstrument} — a package-private enum of the mod, read here by
      * reflection: this is the build's check, not a test, and the table has no other reader to ask.
      */
-    static List<String[]> serverInstruments(List<String> failures) {
+    static List<String[]> serverInstruments(String table, List<String> failures) {
         List<String[]> rows = new ArrayList<>();
         try {
-            Class<?> table = Class.forName("dev.stannismod.stellurgy.command.test.E2EInstrument", true,
+            Class<?> enumClass = Class.forName("dev.stannismod.stellurgy.command.test." + table, true,
                     TestBindingsCheck.class.getClassLoader());
-            java.lang.reflect.Field className = table.getDeclaredField("className");
-            java.lang.reflect.Field methodName = table.getDeclaredField("methodName");
+            java.lang.reflect.Field className = enumClass.getDeclaredField("className");
+            java.lang.reflect.Field methodName = enumClass.getDeclaredField("methodName");
             className.setAccessible(true);
             methodName.setAccessible(true);
-            for (Object row : table.getEnumConstants()) {
+            for (Object row : enumClass.getEnumConstants()) {
                 rows.add(new String[]{(String) className.get(row), (String) methodName.get(row)});
             }
         } catch (ReflectiveOperationException e) {
-            failures.add("the server's instrument table could not be read, so its instruments' bodies are unchecked: " + e);
+            failures.add("the server's instrument table " + table + " could not be read, so its instruments' bodies are unchecked: " + e);
         }
         return rows;
     }

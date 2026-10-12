@@ -119,7 +119,7 @@ public final class RealClientHarness implements AutoCloseable {
     public static RealClientHarness start(HarnessBoot boot, RealDedicatedServerHarness serverHarness,
                                           String clientUsername,
                                           boolean framebufferAtLaunch) throws Exception {
-        HarnessBoot.require(boot);
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
         return startInternal(serverHarness, clientUsername, framebufferAtLaunch, /*e2e=*/false);
     }
 
@@ -131,7 +131,7 @@ public final class RealClientHarness implements AutoCloseable {
      */
     public static RealClientHarness startE2E(HarnessBoot boot, RealDedicatedServerHarness serverHarness)
             throws Exception {
-        HarnessBoot.require(boot);
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.E2E);
         return startInternal(serverHarness, CLIENT_USERNAME,
                 "true".equalsIgnoreCase(System.getProperty("forge.test.client.fbo")), /*e2e=*/true);
     }
@@ -325,9 +325,9 @@ public final class RealClientHarness implements AutoCloseable {
         // while recording nothing. A normal game never sets this property, never discovers the
         // class (it is compiled into the test source set only) and pays nothing for any of it.
         javaArgs.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
-        if (e2e) {
-            javaArgs.addAll(com.github.stannismod.forge.testing.E2EMode.childArguments());
-        }
+        // Every child carries its mode; one launched without would refuse to start.
+        javaArgs.addAll((e2e ? com.github.stannismod.forge.testing.ChildMode.E2E
+                : com.github.stannismod.forge.testing.ChildMode.MECHANICS).childArguments());
         // Every `mixin.*` property set on the test JVM is forwarded to the child. Queuing a
         // configuration is not the same as WEAVING a class, and nothing reports the difference: a
         // mixin whose target was already loaded is silently skipped, and its silence then reads as

@@ -113,18 +113,21 @@ final class E2EConfinement {
     /** Every check of this class, appended to {@code failures}; answers a one-line summary to print. */
     static String check(Path root, Path testClasses, ClassLoader loader, List<String> failures,
                         List<String[]> serverInstruments, List<String[]> clientInstruments,
+                        List<String[]> mechanicsServerInstruments, List<String[]> mechanicsClientInstruments,
                         Set<String> observationMixins) throws IOException {
         E2EConfinement c = new E2EConfinement(root, testClasses, loader, failures);
         c.readTestOutput();
         int e2es = c.confineE2Es();
         int instruments = c.confineInstruments(serverInstruments, "server");
         instruments += c.confineInstruments(clientInstruments, "client");
+        int mechanics = c.confineMechanicsInstruments(mechanicsServerInstruments, "server");
+        mechanics += c.confineMechanicsInstruments(mechanicsClientInstruments, "client");
         int mixins = c.confineObservationMixins(observationMixins);
         int subscribers = c.confineSubscribers();
         int shadows = c.refuseShadows();
-        return String.format("confinement: %d e2e class(es) walked, %d instrument method(s), %d observation"
-                + " mixin(s), %d bus subscriber class(es); %d class name(s) checked against the runtime"
-                + " classpath", e2es, instruments, mixins, subscribers, shadows);
+        return String.format("confinement: %d e2e class(es) walked, %d instrument method(s), %d mechanics"
+                + " instrument method(s), %d observation mixin(s), %d bus subscriber class(es); %d class name(s)"
+                + " checked against the runtime classpath", e2es, instruments, mechanics, mixins, subscribers, shadows);
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -926,6 +929,40 @@ final class E2EConfinement {
                 }
                 return instrumentReadAdmits(r.owner, r.member) ? null
                         : "a call into the game or the mod that is not one of the reads an instrument is admitted";
+            });
+        }
+        return walked;
+    }
+
+    /**
+     * A MECHANICS instrument may call into the game and the mod (a reader reads production state; a feed
+     * calls production's input entry point), but never WRITES a field outside the test source set: the test
+     * arranges through probe verbs in the child, not through a static's body. A row naming a class outside
+     * the test source set is admitted only as {@code FEED_INPUT} or {@code FORGED_PACKET} — a production entry
+     * point named for what it is fed — and its body (production's) is not walked.
+     *
+     * <p>Rows are {@code {class, method[, kind]}}; a server row carries no kind (the server table has none
+     * outside the test source set).</p>
+     */
+    private int confineMechanicsInstruments(List<String[]> rows, String side) {
+        int walked = 0;
+        for (String[] row : rows) {
+            String owner = row[0].replace('.', '/');
+            String kind = row.length > 2 ? row[2] : "";
+            if (!isTestSource(owner)) {
+                if (!"FEED_INPUT".equals(kind) && !"FORGED_PACKET".equals(kind)) {
+                    failures.add("confinement: the " + side + " mechanics instrument " + row[0] + "#" + row[1]
+                            + " names no class of the test source set and is no FEED_INPUT or FORGED_PACKET row");
+                }
+                continue;
+            }
+            List<String[]> start = Collections.singletonList(new String[]{owner, row[1], null});
+            walked += walkMethods("the " + side + " mechanics instrument " + row[0] + "#" + row[1], start, r -> {
+                if (r.opcode == Opcodes.PUTFIELD || r.opcode == Opcodes.PUTSTATIC) {
+                    return "a WRITE to a field outside the test source set: a mechanics instrument reads, records"
+                            + " into its own state, or feeds input — it does not set the mod's state";
+                }
+                return null;
             });
         }
         return walked;

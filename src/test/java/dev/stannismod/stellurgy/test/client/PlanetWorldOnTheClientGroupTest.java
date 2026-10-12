@@ -50,7 +50,6 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
     /** Two planets the client is told on joining, and must forget on leaving. */
     private static final int LEAVE_A = 9701;
     private static final int LEAVE_B = 9702;
-    private static final String DM_CLASS = "dev.stannismod.stellurgy.dimension.DimensionManager";
 
     // Both spawn Ys are deliberately not 64: a generated overworld spawn always has Y == 64 on
     // level-type=DEFAULT, and the client placeholder is (8,64,8).
@@ -140,8 +139,8 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             client.awaitField(joinMark, "client_dim_registered", "dim", LEAVE_B,
                     "a joining client must be told the server's planets: PlanetB (" + LEAVE_B + ")",
                     LEAVE_LINK_BUDGET_TICKS);
-            JsonObject registered = bot().invokeStaticChain(DM_CLASS, "getInstance,getRegisteredDimensions");
-            int before = registered.has("size") ? registered.get("size").getAsInt() : -1;
+            String registered = ClientDimensions.stellurgyRegistry(bot());
+            int before = registered.startsWith("size=") ? Integer.parseInt(registered.substring("size=".length())) : -1;
             assertTrue("client must have Stellurgy dimensions synced while connected (got " + before + ")",
                     before > 0);
 
@@ -172,12 +171,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
                     clearedDims != null && !clearedDims.trim().isEmpty() && Integer.parseInt(clearedDims.trim()) > 0);
 
             // Read ONCE from production's own accessor: a client that has left holds no galaxy at all.
-            String afterLeaving;
-            try {
-                afterLeaving = "answered " + bot().invokeStaticChain(DM_CLASS, "getInstance,getRegisteredDimensions");
-            } catch (java.io.IOException refused) {
-                afterLeaving = refused.getMessage();
-            }
+            String afterLeaving = ClientDimensions.stellurgyRegistry(bot());
             assertTrue("a client that has left a server must hold no galaxy of it (had " + before
                             + " dimensions; the clear recorded " + cleared + "): " + afterLeaving,
                     afterLeaving.contains("No open connection"));

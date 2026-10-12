@@ -25,15 +25,35 @@ package com.github.stannismod.forge.testing.junit;
  */
 public final class HarnessBoot {
 
-    HarnessBoot() {
+    /** The mode the child this token starts is launched in — never absent. */
+    private final com.github.stannismod.forge.testing.ChildMode mode;
+
+    HarnessBoot(com.github.stannismod.forge.testing.ChildMode mode) {
+        if (mode == null) {
+            throw new IllegalArgumentException("a HarnessBoot carries the mode its child is launched in; null is none");
+        }
         refuseBelowAnE2E();
+        this.mode = mode;
     }
 
-    /** Refuses {@code boot} when it is null: a start without a real token is not a start anybody granted. */
-    public static HarnessBoot require(HarnessBoot boot) {
+    /** The mode the child this token starts is launched in. */
+    public com.github.stannismod.forge.testing.ChildMode mode() {
+        return mode;
+    }
+
+    /**
+     * Refuses {@code boot} when it is null, or when it carries another mode than the start it is given to
+     * launches: a start without a real token is not a start anybody granted, and an e2e start does not take
+     * a mechanics token (nor the reverse).
+     */
+    public static HarnessBoot require(HarnessBoot boot, com.github.stannismod.forge.testing.ChildMode wanted) {
         if (boot == null) {
-            throw new IllegalArgumentException("a harness start needs a HarnessBoot, which only the mechanics"
-                    + " bases of com.github.stannismod.forge.testing.junit make; null is not one");
+            throw new IllegalArgumentException("a harness start needs a HarnessBoot, which only the bases of"
+                    + " com.github.stannismod.forge.testing.junit make; null is not one");
+        }
+        if (boot.mode != wanted) {
+            throw new IllegalArgumentException("REFUSED: this start launches a " + wanted + " child and was given a "
+                    + boot.mode + " token");
         }
         return boot;
     }

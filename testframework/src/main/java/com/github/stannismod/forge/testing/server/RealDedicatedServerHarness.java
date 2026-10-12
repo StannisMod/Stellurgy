@@ -51,7 +51,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      * bases make and an e2e cannot (see that class).</p>
      */
     public static RealDedicatedServerHarness start(HarnessBoot boot) throws IOException, InterruptedException {
-        HarnessBoot.require(boot);
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
         Path root = Files.createTempDirectory("forge-dedicated-server-");
         return startInternal(root, /*bootstrap=*/true, /*cleanupOnClose=*/true,
                 /*flatTerrain=*/false, /*e2e=*/false);
@@ -68,7 +68,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     public static RealDedicatedServerHarness startE2E(HarnessBoot boot, Path root)
             throws IOException, InterruptedException {
-        HarnessBoot.require(boot);
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.E2E);
         Files.createDirectories(root);
         return startInternal(root, !Files.exists(root.resolve("eula.txt")), /*cleanupOnClose=*/true,
                 /*flatTerrain=*/false, /*e2e=*/true);
@@ -84,7 +84,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     public static RealDedicatedServerHarness startWithFlatTerrain(HarnessBoot boot)
             throws IOException, InterruptedException {
-        HarnessBoot.require(boot);
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
         Path root = Files.createTempDirectory("forge-dedicated-server-");
         return startInternal(root, /*bootstrap=*/true, /*cleanupOnClose=*/true,
                 /*flatTerrain=*/true, /*e2e=*/false);
@@ -116,7 +116,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     public static RealDedicatedServerHarness startWith(HarnessBoot boot, Path root, boolean cleanupOnClose,
                                                        boolean flatTerrain)
             throws IOException, InterruptedException {
-        HarnessBoot.require(boot);
+        HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
         Files.createDirectories(root);
         boolean bootstrap = !Files.exists(root.resolve("eula.txt"));
         return startInternal(root, bootstrap, cleanupOnClose, flatTerrain, /*e2e=*/false);
@@ -163,6 +163,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
                     // an orphaned dedicated server outlives the fork and holds the world directory.
                     destroyAndJoin(process, readerThread);
                     closeQuietly(controlSocket);
+                    addChildRefusals(bridgeFailure, transcript);
                     throw bridgeFailure;
                 }
                 return new RealDedicatedServerHarness(root, port, client, readerThread, cleanupOnClose,
@@ -175,6 +176,21 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         }
         throw new IOException("Failed to start dedicated server after "
                 + MAX_PORT_BIND_ATTEMPTS + " port-bind attempts", lastFailure);
+    }
+
+    /**
+     * A child that refused to start says why on its own output ({@code REFUSED to start …}), which this
+     * process holds only in memory: those lines ride on the failure, so the test's red names the refusal
+     * instead of only the silence after it.
+     */
+    private static void addChildRefusals(Throwable failure, List<String> transcript) {
+        synchronized (transcript) {
+            for (String line : transcript) {
+                if (line.contains("REFUSED")) {
+                    failure.addSuppressed(new IllegalStateException("the server child said: " + line));
+                }
+            }
+        }
     }
 
     private static final int MAX_PORT_BIND_ATTEMPTS = 3;
@@ -410,9 +426,9 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         // reaches from the test source set INTO the product, and a shipped game, which never sets
         // this property and never carries the class, pays nothing for it.
         command.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
-        if (e2e) {
-            command.addAll(com.github.stannismod.forge.testing.E2EMode.childArguments());
-        }
+        // Every child carries its mode; one launched without would refuse to start.
+        command.addAll((e2e ? com.github.stannismod.forge.testing.ChildMode.E2E
+                : com.github.stannismod.forge.testing.ChildMode.MECHANICS).childArguments());
         command.add("-cp");
         command.add(Objects.requireNonNull(System.getProperty("java.class.path"), "java.class.path"));
         command.add(launcherClass);

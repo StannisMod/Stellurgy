@@ -35,7 +35,7 @@ public abstract class TestClassScope {
 
     /** The right to start the harness server or client this scope shares — see {@link HarnessBoot}. */
     protected static HarnessBoot harnessBoot() {
-        return new HarnessBoot();
+        return new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS);
     }
 
     /**

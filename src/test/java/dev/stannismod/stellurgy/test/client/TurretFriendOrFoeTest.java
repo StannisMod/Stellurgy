@@ -81,7 +81,7 @@ public class TurretFriendOrFoeTest extends AbstractClientE2ETest {
 
         // The player carries the installation's own code, and is therefore a friend.
         server("clear " + PLAYER);
-        server("give " + PLAYER + " affs:code_device 1 0 {affs_code:\"ALPHA\"}");
+        server("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
         long friend = server.mark();
         ask("stellurgytest turret target-player 0 " + gx + " " + py + " " + pz + " " + PLAYER)
                 .requireOk("point the gun at the player");
@@ -101,7 +101,7 @@ public class TurretFriendOrFoeTest extends AbstractClientE2ETest {
         // Same gun, same player, same target — only the credential changes.
         long foe = server.mark();
         server("clear " + PLAYER);
-        server("give " + PLAYER + " affs:code_device 1 0 {affs_code:\"BRAVO\"}");
+        server("stellurgytest arrange coded-item " + PLAYER + " BRAVO");
         ask("stellurgytest turret charge 0 " + gx + " " + py + " " + pz).requireOk("recharge the gun");
         Weapons.awaitFired(server, foe, gx, py, pz,
                 "the gun would not fire on a player carrying somebody else's code either — the hold"

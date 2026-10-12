@@ -77,8 +77,8 @@ public abstract class AbstractHeadlessServerTest {
                 "Server harness disabled — set -D" + PROP_HARNESS_ENABLED + "=true to enable",
                 Boolean.parseBoolean(System.getProperty(PROP_HARNESS_ENABLED, "false")));
         harness = requiresFlatTerrain()
-                ? RealDedicatedServerHarness.startWithFlatTerrain(new HarnessBoot())
-                : RealDedicatedServerHarness.start(new HarnessBoot());
+                ? RealDedicatedServerHarness.startWithFlatTerrain(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS))
+                : RealDedicatedServerHarness.start(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS));
     }
 
     @After

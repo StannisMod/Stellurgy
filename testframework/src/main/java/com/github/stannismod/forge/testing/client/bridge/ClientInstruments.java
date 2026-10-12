@@ -22,12 +22,21 @@ import java.util.List;
  */
 public final class ClientInstruments {
 
-    /** What an instrument does. Both are admitted; the kind is the claim a reviewer checks against the body. */
+    /**
+     * What an instrument does; the kind is the claim a reviewer checks against the body. An e2e admits
+     * RECORDER and READ only ({@link #rows}); a mechanics client admits every kind ({@link #mechanicsRows}).
+     */
     public enum Kind {
         /** Opens, peeks or closes a recording window the test owns; writes only the window's own state. */
         RECORDER,
         /** Answers a value; writes nothing. */
-        READ
+        READ,
+        /** Arms a one-shot arrangement a declared test mixin carries out (a shove, a packet hand-over). */
+        ARMING,
+        /** Feeds RAW input to the mod's own entry point the input handler calls — never the decision's outcome. */
+        FEED_INPUT,
+        /** Sends the mod's own packet from a forged client-side origin, to exercise the server's handling. */
+        FORGED_PACKET
     }
 
     private ClientInstruments() {
@@ -44,6 +53,66 @@ public final class ClientInstruments {
         rows.add(new String[]{"dev.stannismod.stellurgy.test.trace.SeatGateWindow", "peek", Kind.RECORDER.name()});
         rows.add(new String[]{"dev.stannismod.stellurgy.test.trace.SeatGateWindow", "close", Kind.RECORDER.name()});
         return rows;
+    }
+
+    /**
+     * Every row a MECHANICS client admits ({@code invoke_static_int}), as {@code {class, method, kind}}: the
+     * e2e's rows and the mechanics tier's own — taken from what a counting run of the whole client tier
+     * asked (2026-10-12), each body read when its row was added. A new list on every call.
+     */
+    public static List<String[]> mechanicsRows() {
+        List<String[]> rows = rows();
+        String trace = "dev.stannismod.stellurgy.test.trace.";
+        String client = "dev.stannismod.stellurgy.test.client.";
+        for (String window : new String[]{"DeckCameraState", "DeckGateWindow", "FlightCameraState", "RemoteModelWindow",
+                "RenderFrameWindow"}) {
+            rows.add(new String[]{trace + window, "open", Kind.RECORDER.name()});
+            rows.add(new String[]{trace + window, "peek", Kind.RECORDER.name()});
+            rows.add(new String[]{trace + window, "close", Kind.RECORDER.name()});
+        }
+        for (String window : new String[]{"DeckPoseTraceWindow", "FrameStepWindow"}) {
+            rows.add(new String[]{trace + window, "open", Kind.RECORDER.name()});
+            rows.add(new String[]{trace + window, "close", Kind.RECORDER.name()});
+        }
+        rows.add(new String[]{trace + "SideTrace", "discardClientWindows", Kind.RECORDER.name()});
+        rows.add(new String[]{trace + "RespawnPacketArming", "open", Kind.ARMING.name()});
+        rows.add(new String[]{trace + "RespawnPacketArming", "close", Kind.ARMING.name()});
+        rows.add(new String[]{trace + "ShoveArming", "open", Kind.ARMING.name()});
+        rows.add(new String[]{trace + "ShoveArming", "close", Kind.ARMING.name()});
+        rows.add(new String[]{client + "ClientDimensions", "forgeRegisteredOnClient", Kind.READ.name()});
+        rows.add(new String[]{client + "ClientDimensions", "stellurgyRegistryOnClient", Kind.READ.name()});
+        rows.add(new String[]{client + "ClientSpaceClock", "nowOnClient", Kind.READ.name()});
+        rows.add(new String[]{client + "ClientSpaceClock", "hasSyncOnClient", Kind.READ.name()});
+        rows.add(new String[]{client + "ItemModelReader", "airDrawsMissingOnClient", Kind.READ.name()});
+        rows.add(new String[]{client + "ItemModelReader", "repairWelderDrawsMissingOnClient", Kind.READ.name()});
+        rows.add(new String[]{client + "ForgedMachinePress", "pressOnClient", Kind.FORGED_PACKET.name()});
+        // The one production member: the method the mouse handler calls with a raw delta while the pilot is
+        // seated. It is fed the raw input; what it decides is the subject of the tests that call it.
+        rows.add(new String[]{"dev.stannismod.stellurgy.client.KeyBindings", "acceptShipPilotMouseDelta",
+                Kind.FEED_INPUT.name()});
+        return rows;
+    }
+
+    /** The kind of {@code className#method} among the mechanics rows, or {@code null} when it is none. */
+    static Kind mechanicsKindOf(String className, String method) {
+        for (String[] row : mechanicsRows()) {
+            if (row[0].equals(className) && row[1].equals(method)) {
+                return Kind.valueOf(row[2]);
+            }
+        }
+        return null;
+    }
+
+    /** What the mechanics table holds, for a refusal to name. */
+    static String describeMechanics() {
+        StringBuilder out = new StringBuilder("[");
+        for (String[] row : mechanicsRows()) {
+            if (out.length() > 1) {
+                out.append(", ");
+            }
+            out.append(row[0]).append('#').append(row[1]);
+        }
+        return out.append(']').toString();
     }
 
     /** The kind of {@code className#method}, or {@code null} when it is no instrument. */

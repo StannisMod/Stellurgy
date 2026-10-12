@@ -926,8 +926,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /**
      * A craft whose reaction wheel holds momentum, left holding station with nothing else asked of
      * it, gives that momentum back: its thrusters unload the wheel. The wheel is built already wound —
-     * its stored momentum written into the block before assembly, which is how a saved world brings
-     * one back — and holding station asks the wheel for nothing, so the only thing in the window that
+     * its stored momentum set through the wheel's own setter before assembly, the state a saved world
+     * brings back — and holding station asks the wheel for nothing, so the only thing in the window that
      * can empty it is what the flight computer's allocation does with a wheel the command leaves
      * idle.
      *
@@ -952,8 +952,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         int[] wheel = fixture.intArray("wheelPos");
         requireArranged("the fixture must say where its wheel stands: " + fixture,
                 wheel != null && wheel.length == 3);
-        String wound = exec("blockdata " + wheel[0] + " " + wheel[1] + " " + wheel[2]
-                + " {storedMomentumY:" + WOUND_YAW_MOMENTUM + "d}");
+        String wound = exec("stellurgytest arrange wheel-momentum " + site.dim + " " + wheel[0] + " " + wheel[1]
+                + " " + wheel[2] + " Y " + WOUND_YAW_MOMENTUM);
         AssembledCraft craft = assembleLaid(site, fixture, "a decked craft with a wound wheel");
         command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
         removePad(site, "a craft left in free air");
@@ -966,7 +966,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
         // WINDOW: the fill is a value that converges; two reads, and the verdict names both.
         double first = wheelFill(craft);
-        requireArranged("the wheel must hold momentum once the craft is built (blockdata: " + wound
+        requireArranged("the wheel must hold momentum once the craft is built (wound: " + wound
                 + ")", first > 0.0);
         GameTicks.advance(client(), GameTicks.server(), UNLOAD_WINDOW_TICKS);
         double second = wheelFill(craft);

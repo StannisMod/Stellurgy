@@ -25,4 +25,24 @@ public final class ClientDimensions {
     static boolean forgeRegisteredOnClient(int dim) {
         return net.minecraftforge.common.DimensionManager.isDimensionRegistered(dim);
     }
+
+    /**
+     * What Stellurgy's own dimension registry answers on {@code bot}'s client, through production's accessor:
+     * {@code size=<n>} for the dimensions it holds, or {@code threw: <message>} when the accessor refuses (a
+     * client connected to no server holds no galaxy, and production says so by throwing).
+     */
+    public static String stellurgyRegistry(ClientBot bot) throws IOException {
+        return bot.invokeStaticInt(ClientDimensions.class.getName(), "stellurgyRegistryOnClient")
+                .get("returned").getAsString();
+    }
+
+    /** Runs in the client JVM, on its client thread — reached only through {@link #stellurgyRegistry}. */
+    static String stellurgyRegistryOnClient() {
+        try {
+            return "size=" + dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
+                    .getRegisteredDimensions().length;
+        } catch (RuntimeException refused) {
+            return "threw: " + refused.getMessage();
+        }
+    }
 }

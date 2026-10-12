@@ -119,9 +119,14 @@ public class TestProbeCommand extends CommandBase {
                     if (args.length == 2 && "walk-begins".equalsIgnoreCase(args[1])) {
                         gate.walkBegins();
                         send(sender, "{\"ok\":true,\"walkBegan\":true,\"servesAnE2E\":" + gate.servesAnE2E() + "}");
+                    } else if (args.length == 2 && E2EModeGate.FILLED_SPACE_CHEST.equalsIgnoreCase("e2e " + args[1])) {
+                        handTheFilledSpaceChest(server, sender);
                     } else {
-                        send(sender, "{\"error\":\"usage: e2e walk-begins\"}");
+                        send(sender, "{\"error\":\"usage: e2e walk-begins | " + E2EModeGate.FILLED_SPACE_CHEST + "\"}");
                     }
+                    break;
+                case "arrange":
+                    handleTypedArrangement(server, sender, tail(args));
                     break;
                 case "registry":
                     handleRegistry(sender, tail(args));
@@ -15116,6 +15121,155 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown subcommand — try get <key> | set <key> <value>\"}");
+    }
+
+    /**
+     * {@code /stellurgytest arrange …} — the TYPED arrangements that stand where a mechanics test once wrote
+     * tile, item or entity NBT by command (a {@code blockdata}, or a {@code give} / {@code summon} carrying a
+     * data tag, which a MECHANICS server refuses). Each sets one named state through production's own setter
+     * and answers what that setter left:
+     * <ul>
+     *   <li>{@code wheel-momentum <dim> <x> <y> <z> <X|Y|Z> <value>} — a reaction wheel's stored momentum on
+     *       one axis, through {@code TileReactionWheel#setMomentum} (the state a saved world brings back);</li>
+     *   <li>{@code coded-item <player> <code>} — an AFFS code device carrying {@code code}, through
+     *       {@code CodeUtils#setCode}, into the player's inventory;</li>
+     *   <li>{@code charged-item <player> <item> <energy>} — one {@code item} charged through its Forge Energy
+     *       capability ({@code receiveEnergy}, what a charger calls), into the player's inventory;</li>
+     *   <li>{@code held-target <dim> <x> <y> <z> <uuidMost> <uuidLeast>} — a zombie with no AI that takes no
+     *       damage, of the given uuid, through the entity's own setters, spawned at that point.</li>
+     * </ul>
+     */
+    private void handleTypedArrangement(MinecraftServer server, ICommandSender sender, String[] args) {
+        String sub = args.length > 0 ? args[0].toLowerCase(java.util.Locale.ROOT) : "";
+        try {
+            switch (sub) {
+                case "wheel-momentum": {
+                    WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(Integer.parseInt(args[1]));
+                    BlockPos pos = new BlockPos(Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]));
+                    TileEntity tile = world == null ? null : world.getTileEntity(pos);
+                    if (!(tile instanceof dev.stannismod.stellurgy.tile.TileReactionWheel)) {
+                        send(sender, "{\"error\":\"no reaction wheel at " + pos + " in dim " + args[1] + "\"}");
+                        return;
+                    }
+                    int axis = "XYZ".indexOf(args[5].toUpperCase(java.util.Locale.ROOT));
+                    if (axis < 0 || args[5].length() != 1) {
+                        send(sender, "{\"error\":\"axis is X, Y or Z, not " + escapeJson(args[5]) + "\"}");
+                        return;
+                    }
+                    dev.stannismod.stellurgy.tile.TileReactionWheel wheel = (dev.stannismod.stellurgy.tile.TileReactionWheel) tile;
+                    wheel.setMomentum(axis, Double.parseDouble(args[6]));
+                    send(sender, "{\"ok\":true,\"axis\":\"" + args[5] + "\",\"momentum\":" + wheel.momentum(axis) + "}");
+                    return;
+                }
+                case "coded-item": {
+                    EntityPlayerMP player = server.getPlayerList().getPlayerByUsername(args[1]);
+                    net.minecraft.item.Item device = net.minecraft.item.Item.getByNameOrId("affs:code_device");
+                    if (player == null || device == null) {
+                        send(sender, "{\"error\":\"no player " + escapeJson(args[1]) + " or no affs:code_device\"}");
+                        return;
+                    }
+                    net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(device);
+                    dev.stannismod.stellurgy.affs.util.CodeUtils.setCode(stack, args[2]);
+                    String code = dev.stannismod.stellurgy.affs.util.CodeUtils.getCode(stack);
+                    handOver(sender, player, stack, "\"code\":\"" + escapeJson(String.valueOf(code)) + "\"");
+                    return;
+                }
+                case "charged-item": {
+                    EntityPlayerMP player = server.getPlayerList().getPlayerByUsername(args[1]);
+                    net.minecraft.item.Item item = net.minecraft.item.Item.getByNameOrId(args[2]);
+                    if (player == null || item == null) {
+                        send(sender, "{\"error\":\"no player " + escapeJson(args[1]) + " or no item " + escapeJson(args[2]) + "\"}");
+                        return;
+                    }
+                    net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(item);
+                    net.minecraftforge.energy.IEnergyStorage energy =
+                            stack.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+                    if (energy == null) {
+                        send(sender, "{\"error\":\"" + escapeJson(args[2]) + " exposes no Forge Energy capability\"}");
+                        return;
+                    }
+                    int received = energy.receiveEnergy(Integer.parseInt(args[3]), false);
+                    handOver(sender, player, stack, "\"received\":" + received + ",\"stored\":" + energy.getEnergyStored());
+                    return;
+                }
+                case "held-target": {
+                    WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(Integer.parseInt(args[1]));
+                    if (world == null) {
+                        send(sender, "{\"error\":\"dim " + escapeJson(args[1]) + " is not loaded\"}");
+                        return;
+                    }
+                    net.minecraft.entity.monster.EntityZombie zombie = new net.minecraft.entity.monster.EntityZombie(world);
+                    zombie.setLocationAndAngles(Double.parseDouble(args[2]), Double.parseDouble(args[3]),
+                            Double.parseDouble(args[4]), 0.0F, 0.0F);
+                    zombie.setNoAI(true);
+                    zombie.setEntityInvulnerable(true);
+                    zombie.setUniqueId(new java.util.UUID(Long.parseLong(args[5]), Long.parseLong(args[6])));
+                    boolean spawned = world.spawnEntity(zombie);
+                    send(sender, "{\"ok\":" + spawned + ",\"uuid\":\"" + zombie.getUniqueID() + "\"}");
+                    return;
+                }
+                default:
+                    send(sender, "{\"error\":\"usage: arrange wheel-momentum|coded-item|charged-item|held-target …\"}");
+            }
+        } catch (NumberFormatException | ArrayIndexOutOfBoundsException badArguments) {
+            send(sender, "{\"error\":\"arrange " + escapeJson(sub) + ": bad arguments (" + escapeJson(String.valueOf(badArguments)) + ")\"}");
+        }
+    }
+
+    /** {@code stack} into {@code player}'s inventory, answered with {@code fields}; refused when it has no room. */
+    private void handOver(ICommandSender sender, EntityPlayerMP player, net.minecraft.item.ItemStack stack, String fields) {
+        if (!player.inventory.addItemStackToInventory(stack)) {
+            send(sender, "{\"error\":\"the player's inventory has no room\"}");
+            return;
+        }
+        player.inventoryContainer.detectAndSendChanges();
+        send(sender, "{\"ok\":true," + fields + "}");
+    }
+
+    /**
+     * {@code /stellurgytest e2e filled-space-chest} — the named exception {@link E2EModeGate#FILLED_SPACE_CHEST}:
+     * hands the ONE player online a space chestplate carrying a pressure tank full of oxygen, into his
+     * inventory. Nothing is equipped: he puts it on himself.
+     *
+     * <p>Made the way production makes one: the tank goes in through the chest's own
+     * {@code addArmorComponent} (what the suit workstation calls), and the oxygen through the chest's own
+     * {@code increment} (what a gas charge pad calls), up to the chest's own {@code getMaxAir}. Refuses —
+     * hands nothing — when there is not exactly one player, when the items are missing, when the chest does
+     * not come out full, or when his inventory has no room for it.</p>
+     */
+    private void handTheFilledSpaceChest(MinecraftServer server, ICommandSender sender) {
+        java.util.List<EntityPlayerMP> players = server.getPlayerList().getPlayers();
+        if (players.size() != 1) {
+            send(sender, "{\"error\":\"the filled space chest is handed to THE player, and " + players.size()
+                    + " players are online\"}");
+            return;
+        }
+        EntityPlayerMP player = players.get(0);
+        net.minecraft.item.Item chestItem = dev.stannismod.stellurgy.api.StellurgyItems.itemSpaceSuit_Chest;
+        net.minecraft.item.Item tankItem = dev.stannismod.stellurgy.api.StellurgyItems.itemPressureTank;
+        if (!(chestItem instanceof dev.stannismod.stellurgy.armor.ItemSpaceChest) || tankItem == null) {
+            send(sender, "{\"error\":\"the space chestplate or the pressure tank is not registered\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.armor.ItemSpaceChest chestType = (dev.stannismod.stellurgy.armor.ItemSpaceChest) chestItem;
+        net.minecraft.item.ItemStack chest = new net.minecraft.item.ItemStack(chestItem);
+        chestType.addArmorComponent(player.world, chest, new net.minecraft.item.ItemStack(tankItem), 0);
+        int maxAir = chestType.getMaxAir(chest);
+        int filled = chestType.increment(chest, maxAir);
+        int air = chestType.getAirRemaining(chest);
+        if (maxAir <= 0 || air != maxAir) {
+            send(sender, "{\"error\":\"the chest did not come out full\",\"maxAir\":" + maxAir + ",\"filled\":"
+                    + filled + ",\"air\":" + air + "}");
+            return;
+        }
+        if (!player.inventory.addItemStackToInventory(chest)) {
+            send(sender, "{\"error\":\"the player's inventory has no room for the chest\"}");
+            return;
+        }
+        player.inventoryContainer.detectAndSendChanges();
+        send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\",\"item\":\""
+                + escapeJson(String.valueOf(chestItem.getRegistryName())) + "\",\"air\":" + air + ",\"maxAir\":"
+                + maxAir + "}");
     }
 
     /**

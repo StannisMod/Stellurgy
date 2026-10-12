@@ -219,6 +219,15 @@ again, the answer is `permaload false` plus a poll.
   loop so a stalled server cannot hang the harness. `:13746`,`:13762`
 - **INV-ART-09 [A]** No verb writes Stellurgy gameplay NBT/registry/config of its own; persistence effects are always
   routed through the owning subsystem's production code. (Inferred from full handler read; not test-pinned.)
+- **INV-ART-10 [T]** Every harness child is launched in a MODE (`-Dforge.test.mode=e2e|mechanics`), and a
+  harness server child with none does not start (`E2EModeGate#launchedMode`). On a MECHANICS server the gate
+  refuses at the call a static call (`invoke-static`) on anything but a row of `MechanicsInstrument`, and
+  tile, entity or item NBT written by command (`blockdata`, `entitydata`, a `{` in `give` / `summon` / `fill` /
+  `clear` / `replaceitem`); a typed `arrange …` verb sets such state through production's own setter instead
+  (`TestProbeCommand#handleTypedArrangement`). Everything else is admitted and tallied per server
+  (`E2EModeGate#mechanicsRefusalOf`, `E2EModeGate.Tally`). The harness's client bridge refuses, in the same
+  mode, a static chain, a static field read and a static call on no row of its mechanics table.
+  `MechanicsModeRefusesAtTheCallTest#aMechanicsPairRefusesStaticCallsAndTagWritesAtTheCallAndAnswersItsArrangements`
 
 ## State & persistence — asserted, not owned
 This subsystem owns **no** NBT key. It drives/asserts keys owned elsewhere (C1); they must appear here for

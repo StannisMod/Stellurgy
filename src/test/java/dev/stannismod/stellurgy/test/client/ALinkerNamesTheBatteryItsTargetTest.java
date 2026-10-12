@@ -220,8 +220,8 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractClientE2ETest {
         // pig removed dead within the tick). No AI and unkillable, so the point the gun must follow
         // stays put while it is read; its uuid is given, so the designation is checked against THIS one.
         long summoning = server.mark();
-        String summoned = exec("summon minecraft:zombie " + (px + 0.5D) + " " + (py + 1) + " " + (pz + 0.5D)
-                + " {NoAI:1b,Invulnerable:1b,UUIDMost:" + ZOMBIE_UUID_MOST + "L,UUIDLeast:" + ZOMBIE_UUID_LEAST + "L}");
+        String summoned = exec("stellurgytest arrange held-target " + OVERWORLD + " " + (px + 0.5D) + " " + (py + 1)
+                + " " + (pz + 0.5D) + " " + ZOMBIE_UUID_MOST + " " + ZOMBIE_UUID_LEAST);
         Reply zombies = Reply.of(exec("stellurgytest entity near " + OVERWORLD + " " + (px + 0.5D) + " "
                 + (py + 1) + " " + (pz + 0.5D) + " 2 EntityZombie")).requireOk("entity near");
         // the producer always writes `count` on an ok `entity near` reply, so a reply without it is a

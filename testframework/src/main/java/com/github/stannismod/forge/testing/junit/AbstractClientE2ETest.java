@@ -77,21 +77,8 @@ public abstract class AbstractClientE2ETest {
         return false;
     }
 
-    /**
-     * Write files into the server's game directory BEFORE the server JVM boots.
-     *
-     * <p>The seam exists for one reason: a mod reads its config ONCE at startup, so a scenario whose
-     * subject depends on a config value cannot set it from inside the test — by the time the first
-     * command can be issued, the value has already been consumed. The alternative a test reaches for
-     * otherwise is to abandon this base class and drive {@link RealDedicatedServerHarness#startWith}
-     * plus {@link RealClientHarness} by hand, which duplicates the whole two-JVM lifecycle (including
-     * the close-both-on-startup-failure ordering) for the sake of one file.</p>
-     *
-     * <p>{@code gameDir} is a fresh empty temp directory, deleted on close. The default does
-     * nothing, which is exactly the previous behaviour.</p>
-     */
-    protected void seedGameDir(java.nio.file.Path gameDir) throws Exception {
-    }
+    // No hook hands this class's subclasses the raw game directory: a start that differs from the game as
+    // it ships is typed (the shared client base's GameDirSeed; an e2e's PlayerStart), never a Path.
 
     @Before
     public final void startBoth() throws Exception {
@@ -103,12 +90,11 @@ public abstract class AbstractClientE2ETest {
                 Boolean.parseBoolean(System.getProperty(PROP_CLIENT_ENABLED, "false")));
 
         java.nio.file.Path gameDir = java.nio.file.Files.createTempDirectory("forge-client-e2e-");
-        seedGameDir(gameDir);
-        serverHarness = RealDedicatedServerHarness.startWith(new HarnessBoot(), gameDir, /*cleanupOnClose=*/true);
+        serverHarness = RealDedicatedServerHarness.startWith(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), gameDir, /*cleanupOnClose=*/true);
         try {
             clientHarness = requiresFramebufferAtLaunch()
-                    ? RealClientHarness.startWithFramebuffer(new HarnessBoot(), serverHarness)
-                    : RealClientHarness.start(new HarnessBoot(), serverHarness);
+                    ? RealClientHarness.startWithFramebuffer(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), serverHarness)
+                    : RealClientHarness.start(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), serverHarness);
         } catch (Exception startupException) {
             // Don't leak a running server JVM if client startup fails.
             try {

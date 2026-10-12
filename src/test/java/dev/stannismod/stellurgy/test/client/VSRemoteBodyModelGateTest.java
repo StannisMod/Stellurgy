@@ -443,8 +443,8 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         // to render: the server says whether the entity is alive and where, the client says whether
         // it holds it at all.
         String subject = "server=" + serverEntity(subjectId) + " " + clientSighting(subjectId)
-                + " " + cameraBlocks() + " modelGateInstalled="
-                + (window == null ? "?" : Events.text(window, "modelGateInstalled"))
+                + " " + cameraBlocks() + " gateCalls="
+                + (window == null ? "?" : Events.text(window, "calls"))
                 // The arrival record, kept alongside: a body that JOINED this client and is no
                 // longer in the sighting has been removed, and that is a different bug from a body
                 // the renderer declined to draw. The snapshot alone could not say which.

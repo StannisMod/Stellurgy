@@ -26,11 +26,13 @@ import java.util.Set;
  * The server half of an e2e run's MODE: every command the server is asked to run, judged before it runs,
  * and refused at the call when an e2e may not send it.
  *
- * <p>The harness starts a server that serves an e2e with the JVM argument {@code -D}{@value #E2E_PROPERTY}
- * {@code =true}. The gate reads the server's own LAUNCH ARGUMENTS once, when it is made at the server's
- * start, refuses to be made at all when the system property disagrees with them (something rewrote the mode
- * before the game started), and holds the answer for the server's life ({@link ServerScoped}). On every
- * other server it answers nothing. In e2e mode a command runs only when it is:</p>
+ * <p>The harness starts every server child with its MODE as a JVM argument, {@code -D}{@value #MODE_PROPERTY}
+ * {@code =e2e} or {@code =mechanics}. The gate reads the server's own LAUNCH ARGUMENTS once, when it is made
+ * at the server's start, refuses to be made at all when a harness child carries no mode or the system
+ * property disagrees with them (something rewrote the mode before the game started), and holds the answer
+ * for the server's life ({@link ServerScoped}). A server that is no harness child (one a developer launched
+ * with the probe on) is judged by nothing. A MECHANICS server is judged by {@link #mechanicsRefusalOf} and
+ * tallies every command it is asked ({@link Tally}). In e2e mode a command runs only when it is:</p>
  * <ul>
  *   <li>a {@code /stellurgytest} verb whose {@link ProbeVerbKind} is admitted — a READ, a BUILD, the walk's
  *       own record, or a static call on an instrument {@link E2EInstrument} names (class AND method,
@@ -50,7 +52,9 @@ import java.util.Set;
  * the client), and a block lands only in the dimension the player is in and within {@value #BUILD_REACH}
  * blocks of him on every axis. After the first input every block he stands among is one he placed. A
  * BUILD that is not a fixture lays no block {@link #UNOBTAINABLE} names; a fixture rocket is admitted
- * only as the named exception {@value #CREATIVE_PLUG_FIXTURE}, below.</p>
+ * only as the named exception {@value #CREATIVE_PLUG_FIXTURE}, below. The one item of his start that
+ * carries state a {@code give} cannot — the suit's air — is the second named exception,
+ * {@value #FILLED_SPACE_CHEST}, admitted at the same time and only to the one player.</p>
  *
  * <p><b>The refusal is loud, and it is data.</b> To the harness's command bridge it is an
  * {@link E2EModeRefusal} thrown out of the command handler, which the bridge returns as a failed command —
@@ -63,15 +67,12 @@ import java.util.Set;
  */
 final class E2EModeGate {
 
-    /** Set on a server child that serves an e2e. The harness's own name for it, restated: a protocol. */
-    static final String E2E_PROPERTY = "forge.test.e2e";
-
     /** The prefix of the console's verdict line. The harness's own text, restated: a protocol. */
     static final String CONSOLE_JUDGED = "[e2e mode] console judged: ";
 
     /**
      * The sender the harness's command bridge runs every command as. The harness's own class, named here
-     * because the mod does not compile against the test framework: a protocol, like {@link #E2E_PROPERTY}.
+     * because the mod does not compile against the test framework: a protocol, like {@link #MODE_PROPERTY}.
      */
     static final String HARNESS_BRIDGE_SENDER =
             "com.github.stannismod.forge.testing.server.bridge.ForgeTestServerBootstrap$CollectingCommandSender";
@@ -103,6 +104,23 @@ final class E2EModeGate {
     static final String CREATIVE_PLUG_FIXTURE = "with-powered-jump-drive";
 
     /**
+     * THE SECOND NAMED EXCEPTION: the probe verb that hands the e2e's player one space chestplate whose
+     * pressure tank is full of oxygen — the one item of his start no admitted {@code give} can carry. The
+     * suit's air is the oxygen in a tank held in the chest's own inventory, which is item NBT on two levels
+     * (the tank inside the chest, the fluid inside the tank), and a tagged {@code give} is refused here as
+     * item state no player made. A survival player flown to an airless body without that air dies, so the
+     * suit is part of his start (maintainer, 2026-10-12: "а, скафандр выдаётся на старте"). The other three
+     * pieces carry no tag and are plain {@code give}s; he puts all four on himself.
+     *
+     * <p>Admitted like a build: before his walk begins, and only with exactly one player online. The verb
+     * makes the chest through production's own component and filling paths. <b>Its trigger: when an e2e
+     * walks the oxygen-filling path — a tank fitted into the chest at the suit workstation and filled on a
+     * gas charge pad, by the player's own clicks — this exception is removed</b> and that path hands him
+     * his air instead.</p>
+     */
+    static final String FILLED_SPACE_CHEST = "e2e filled-space-chest";
+
+    /**
      * Blocks and items no player obtains in survival — the creative-only, the technical, the world's own
      * bedrock. Effectively final, the JVM's life — a constant: an unmodifiable set of strings over a
      * backing set nothing else references, written once at class initialisation.
@@ -128,8 +146,31 @@ final class E2EModeGate {
     /** A vanilla {@code give} / {@code clear} carries its data tag from this argument on. */
     private static final int ITEM_TAG_FROM = 4;
 
+    /** The property a harness child's mode travels in. The harness's own name for it, restated: a protocol. */
+    static final String MODE_PROPERTY = "forge.test.mode";
+    /** Where a MECHANICS child writes its tally. The harness's own name for it, restated: a protocol. */
+    static final String COUNTING_DIR_PROPERTY = "forge.test.counting.dir";
+    /** The launch argument every harness server child carries. The harness's own, restated: a protocol. */
+    static final String HARNESS_CHILD_ARGUMENT = "-Dforge.test.server=true";
+
+    /** Which mode this server was launched in. */
+    enum Mode {
+        /** A harness child that serves an e2e: refuses at the call what a player could not do. */
+        E2E,
+        /** A harness child of a mechanics test: judged, and counted. */
+        MECHANICS,
+        /** No harness child at all — a server a developer launched with the probe on: judges nothing. */
+        NONE
+    }
+
+    /** The mode THIS server was launched in — read once, when the gate is made at the server's start. */
+    private final Mode mode;
+
     /** Whether THIS server serves an e2e — read once, when the gate is made at the server's start. */
     private final boolean servesAnE2E;
+
+    /** What a MECHANICS server was asked, by key; {@code null} on any other. Lives with the gate. */
+    private final Tally tally;
 
     /**
      * Whether the e2e's player has made his first input — told once by the harness ({@code e2e walk-begins})
@@ -138,25 +179,50 @@ final class E2EModeGate {
     private boolean walkBegan;
 
     E2EModeGate() {
-        this.servesAnE2E = launchedForAnE2E();
+        this.mode = launchedMode();
+        this.servesAnE2E = mode == Mode.E2E;
+        this.tally = mode == Mode.MECHANICS ? new Tally() : null;
+        Stellurgy.logger.info("[harness mode] this server was launched in mode " + mode);
     }
 
     /**
-     * Whether this JVM was LAUNCHED to serve an e2e, read off its own launch arguments, which nothing
-     * running in it can change. Throws — the server does not start — when the system property disagrees.
+     * The mode this JVM was LAUNCHED in, read off its own launch arguments, which nothing running in it can
+     * change. Throws — the server does not start — when a harness child carries no mode (an ungoverned
+     * child does not exist), names none the gate knows, or its system property disagrees.
      */
-    private static boolean launchedForAnE2E() {
-        String argument = "-D" + E2E_PROPERTY + "=true";
+    private static Mode launchedMode() {
+        String prefix = "-D" + MODE_PROPERTY + "=";
         List<String> launch = ManagementFactory.getRuntimeMXBean().getInputArguments();
-        boolean launched = launch.contains(argument);
-        boolean property = Boolean.getBoolean(E2E_PROPERTY);
-        if (launched != property) {
-            throw new IllegalStateException("REFUSED to start the e2e gate: this server was launched "
-                    + (launched ? "WITH" : "WITHOUT") + " " + argument + " and its property " + E2E_PROPERTY
-                    + " is now " + System.getProperty(E2E_PROPERTY) + " -- something rewrote the mode before"
-                    + " the server started, and a server that cannot tell which mode it serves serves none");
+        String word = null;
+        for (String argument : launch) {
+            if (argument.startsWith(prefix)) {
+                if (word != null && !word.equals(argument.substring(prefix.length()))) {
+                    throw new IllegalStateException("REFUSED to start the mode gate: this server was launched with"
+                            + " two modes, " + word + " and " + argument);
+                }
+                word = argument.substring(prefix.length());
+            }
         }
-        return launched;
+        if (word == null) {
+            if (launch.contains(HARNESS_CHILD_ARGUMENT)) {
+                throw new IllegalStateException("REFUSED to start the mode gate: this harness server child was"
+                        + " launched with no " + prefix + "e2e|mechanics -- a child that does not know which mode"
+                        + " it serves serves none, and an ungoverned child is not started");
+            }
+            return Mode.NONE;
+        }
+        if (!word.equals(System.getProperty(MODE_PROPERTY))) {
+            throw new IllegalStateException("REFUSED to start the mode gate: this server was launched in mode " + word
+                    + " and its property " + MODE_PROPERTY + " is now " + System.getProperty(MODE_PROPERTY)
+                    + " -- something rewrote the mode before the server started");
+        }
+        if ("e2e".equals(word)) {
+            return Mode.E2E;
+        }
+        if ("mechanics".equals(word)) {
+            return Mode.MECHANICS;
+        }
+        throw new IllegalStateException("REFUSED to start the mode gate: " + prefix + word + " names no mode");
     }
 
     boolean servesAnE2E() {
@@ -174,11 +240,20 @@ final class E2EModeGate {
     // HIGHEST: decided before any listener that redirects or rewrites a command acts on it.
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onCommand(CommandEvent event) {
-        if (!servesAnE2E) {
+        if (mode == Mode.NONE) {
             return;
         }
         ICommandSender sender = event.getSender();
-        String why = refusalOf(event.getCommand(), event.getParameters(), sender);
+        String why;
+        if (mode == Mode.MECHANICS) {
+            tally.saw(Tally.keyOf(event.getCommand(), event.getParameters()));
+            why = mechanicsRefusalOf(event.getCommand(), event.getParameters());
+            if (why == null) {
+                return;
+            }
+        } else {
+            why = refusalOf(event.getCommand(), event.getParameters(), sender);
+        }
         if (sender instanceof MinecraftServer) {
             Stellurgy.logger.info(CONSOLE_JUDGED + (why == null ? "admitted " : "refused ")
                     + commandLine(event.getCommand(), event.getParameters()) + (why == null ? "" : " " + why));
@@ -191,8 +266,9 @@ final class E2EModeGate {
             event.setException(new E2EModeRefusal(why));
             return;
         }
-        Stellurgy.logger.error("[e2e mode] refused a command from " + sender.getName() + ": " + why);
-        sender.sendMessage(new TextComponentString("[e2e mode] refused: " + why));
+        String label = mode == Mode.E2E ? "[e2e mode]" : "[mechanics mode]";
+        Stellurgy.logger.error(label + " refused a command from " + sender.getName() + ": " + why);
+        sender.sendMessage(new TextComponentString(label + " refused: " + why));
     }
 
     private static String commandLine(ICommand command, String[] args) {
@@ -222,6 +298,9 @@ final class E2EModeGate {
             }
             if (kind == ProbeVerbKind.BUILD) {
                 return buildRefusal(name, verb, args, sender);
+            }
+            if (kind == ProbeVerbKind.START_ITEM) {
+                return startItemRefusal(name, verb, sender);
             }
             return null;
         }
@@ -270,6 +349,56 @@ final class E2EModeGate {
         }
     }
 
+    /**
+     * Why {@code command} with {@code args} is refused on a MECHANICS server, as a JSON object; {@code null}
+     * when it is admitted. A mechanics test may arrange, so this refuses only two channels:
+     * <ul>
+     *   <li>a static call ({@code invoke-static}) on anything but a row of {@link MechanicsInstrument} — a
+     *       static that is no named instrument calls a decision of the mod from the test's side;</li>
+     *   <li>tile, entity or item NBT written by command — {@code blockdata}, {@code entitydata}, and
+     *       {@code give} / {@code summon} / {@code fill} / {@code clear} / {@code replaceitem} carrying a data
+     *       tag: an arrangement sets state through a typed probe verb ({@code arrange …}) that goes through
+     *       production's own setter, never through a tag nothing checks.</li>
+     * </ul>
+     * Everything else is admitted (and tallied by {@link Tally}); which probe verbs a mechanics test may send
+     * is not decided here.
+     */
+    String mechanicsRefusalOf(ICommand command, String[] args) {
+        String name = command.getName().toLowerCase(Locale.ROOT);
+        if ("stellurgytest".equals(name)) {
+            if (args.length > 0 && "invoke-static".equalsIgnoreCase(args[0])) {
+                String className = args.length > 1 ? args[1] : "";
+                String methodName = args.length > 2 ? args[2] : "";
+                if (MechanicsInstrument.named(className, methodName) == null) {
+                    return refusal(name, "invoke-static", ProbeVerbKind.STATIC_CALL.name(), className + "#" + methodName
+                            + " is no mechanics instrument " + MechanicsInstrument.listing() + " — a static call that"
+                            + " is not a named instrument calls a decision of the mod from the test's side");
+                }
+            }
+            return null;
+        }
+        switch (name) {
+            case "blockdata":
+            case "entitydata":
+                return refusal(name, name, "COMMAND", "writes tile or entity NBT by command; arrange that state"
+                        + " through a typed probe verb that goes through production's own setter");
+            case "give":
+            case "summon":
+            case "fill":
+            case "clear":
+            case "replaceitem":
+                for (String arg : args) {
+                    if (arg.indexOf('{') >= 0) {
+                        return refusal(name, name, "COMMAND", "a " + name + " with a data tag writes item, tile or"
+                                + " entity state by command; arrange it through a typed probe verb");
+                    }
+                }
+                return null;
+            default:
+                return null;
+        }
+    }
+
     /** A static call is admitted on a named instrument only, matched on the strings it carries. */
     private static String staticCallRefusal(String name, String verb, String[] args) {
         String className = args.length > 1 ? args[1] : "";
@@ -280,6 +409,21 @@ final class E2EModeGate {
         return refusal(name, verb, ProbeVerbKind.STATIC_CALL.name(),
                 className + "#" + methodName + " is no e2e instrument " + E2EInstrument.listing()
                         + " — a static call that is not a named instrument calls a decision the player never made");
+    }
+
+    /**
+     * A named start item ({@link #FILLED_SPACE_CHEST}) is handed as a build is laid: before the walk, to the
+     * one player online.
+     */
+    private String startItemRefusal(String name, String verb, ICommandSender sender) {
+        String late = afterTheWalk(name, verb);
+        if (late != null) {
+            return late;
+        }
+        MinecraftServer server = sender.getServer();
+        int online = server == null ? 0 : server.getPlayerList().getPlayers().size();
+        return online == 1 ? null : refusal(name, verb, "NO_ONE_PLAYER", "a start item is handed to THE player,"
+                + " and " + online + " players are online");
     }
 
     /** Refused once the walk has begun: a build lays the player's start, and only the start. */
@@ -453,6 +597,92 @@ final class E2EModeGate {
 
     private static String escape(String text) {
         return text.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /**
+     * What a MECHANICS server was asked: every distinct command key with how often, written to
+     * {@code <counting dir>/server-<pid>.txt} when a key is first seen, every {@value #REWRITE_EVERY} calls,
+     * and when the JVM exits. One per gate, so one per server; a server launched without a counting directory
+     * says so once in its log and writes nothing.
+     */
+    static final class Tally {
+        /** How many calls may pass between two writes of the file. */
+        private static final int REWRITE_EVERY = 100;
+
+        private final java.util.Map<String, Integer> seen = new java.util.TreeMap<>();
+        private final java.nio.file.Path file;
+        private int calls;
+
+        Tally() {
+            String dir = System.getProperty(COUNTING_DIR_PROPERTY);
+            if (dir == null || dir.isEmpty()) {
+                file = null;
+                Stellurgy.logger.warn("[mechanics mode] no " + COUNTING_DIR_PROPERTY
+                        + ": what this server is asked is NOT counted");
+                return;
+            }
+            String pid = ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
+            file = java.nio.file.Paths.get(dir).resolve("server-" + pid + ".txt");
+            Runtime.getRuntime().addShutdownHook(new Thread(this::write, "mechanics-tally-server"));
+        }
+
+        /**
+         * A command's key: {@code probe <verb words>} for the mod's probe (its leading words that read as a verb,
+         * at most three; a static call adds the {@code class#method} it names), {@code vanilla <root>} for any
+         * other command, with {@code {tag}} when an argument carries a data tag.
+         */
+        static String keyOf(ICommand command, String[] args) {
+            String name = command.getName().toLowerCase(Locale.ROOT);
+            boolean tagged = false;
+            for (String arg : args) {
+                tagged |= arg.indexOf('{') >= 0;
+            }
+            if (!"stellurgytest".equals(name)) {
+                return "vanilla " + name + (tagged ? " {tag}" : "");
+            }
+            StringBuilder key = new StringBuilder("probe");
+            int words = 0;
+            while (words < args.length && words < 3 && args[words].matches("[A-Za-z][A-Za-z-]*")) {
+                key.append(' ').append(args[words].toLowerCase(Locale.ROOT));
+                words++;
+            }
+            if (words >= 1 && "invoke-static".equalsIgnoreCase(args[0]) && args.length > 2) {
+                key.setLength(0);
+                key.append("probe invoke-static ").append(args[1]).append('#').append(args[2]);
+            }
+            return key.append(tagged ? " {tag}" : "").toString();
+        }
+
+        void saw(String key) {
+            boolean first;
+            boolean due;
+            synchronized (this) {
+                first = seen.merge(key, 1, Integer::sum) == 1;
+                due = ++calls % REWRITE_EVERY == 0;
+            }
+            if (first || due) {
+                write();
+            }
+        }
+
+        private synchronized void write() {
+            if (file == null) {
+                return;
+            }
+            StringBuilder text = new StringBuilder();
+            for (java.util.Map.Entry<String, Integer> e : seen.entrySet()) {
+                text.append(e.getValue()).append('\t').append(e.getKey()).append('\n');
+            }
+            try {
+                java.nio.file.Files.createDirectories(file.getParent());
+                java.nio.file.Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+                java.nio.file.Files.write(tmp, text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                java.nio.file.Files.move(tmp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.io.IOException e) {
+                Stellurgy.logger.warn("[mechanics mode] the tally could not be written to " + file + ": " + e);
+            }
+        }
     }
 
     /**

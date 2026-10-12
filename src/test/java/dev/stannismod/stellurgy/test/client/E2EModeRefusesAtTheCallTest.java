@@ -131,9 +131,9 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
                 Boolean.parseBoolean(System.getProperty(AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         Assume.assumeTrue("Client harness disabled",
                 Boolean.parseBoolean(System.getProperty(AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
-        server = RealDedicatedServerHarness.startE2E(harnessBoot(), Files.createTempDirectory("forge-e2e-mode-"));
+        server = RealDedicatedServerHarness.startE2E(harnessBootInE2EMode(), Files.createTempDirectory("forge-e2e-mode-"));
         try {
-            client = RealClientHarness.startE2E(harnessBoot(), server);
+            client = RealClientHarness.startE2E(harnessBootInE2EMode(), server);
         } catch (Exception startFailed) {
             server.close();
             server = null;
@@ -160,10 +160,10 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
      * server's console leaves the server running.
      */
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#onCommand",
-            at = "if (!servesAnE2E) {", replacedBy = "if (true) {",
+            at = "why = refusalOf(event.getCommand(), event.getParameters(), sender);", replacedBy = "why = null;",
             fails = "these were not: [`stellurgytest place 0 ", on = "2026-10-12")
     @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#handleCommand",
-            at = "if (servesAnE2E) {", replacedBy = "if (false) {",
+            at = "JsonObject refusal = refusedInE2E(known, request);", replacedBy = "JsonObject refusal = null;",
             fails = "these were not: [interact_block RAN", on = "2026-10-12")
     @RedWitness(prose = "round 4, one run with every new refusal inverted at its own branch (2026-10-09,"
             + " logs/t564r4-refusal-witnessW1.log): {@code E2EModeGate#staticCallRefusal} at"
@@ -273,7 +273,7 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         // ---- round 4: what a package rule, a tag, a block id and a misfiled row let through ----
         expectServerRefusal(notRefused, "stellurgytest invoke-static " + TEST_STATIC_NOT_AN_INSTRUMENT_SERVER
                 + " reset", "STATIC_CALL");
-        expectServerRefusal(notRefused, "stellurgytest invoke-static java.lang.System clearProperty forge.test.e2e",
+        expectServerRefusal(notRefused, "stellurgytest invoke-static java.lang.System clearProperty forge.test.mode",
                 "STATIC_CALL");
         expectServerRefusal(notRefused, "give @a minecraft:stone 1 0 {display:{Name:\"forged\"}}", "COMMAND");
         expectServerRefusal(notRefused, "give @a minecraft:bedrock 1", "UNOBTAINABLE");

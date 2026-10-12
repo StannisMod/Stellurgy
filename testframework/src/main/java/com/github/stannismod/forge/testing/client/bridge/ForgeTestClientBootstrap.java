@@ -56,7 +56,13 @@ public final class ForgeTestClientBootstrap {
      * held for the client's life. A property cleared or set afterwards, by anything running in this
      * client, does not change which mode the bridge judges in.
      */
-    private final boolean servesAnE2E = com.github.stannismod.forge.testing.E2EMode.launchedForAnE2E();
+    private final com.github.stannismod.forge.testing.ChildMode mode =
+            com.github.stannismod.forge.testing.ChildMode.launched();
+    private final boolean servesAnE2E = mode == com.github.stannismod.forge.testing.ChildMode.E2E;
+    /** What this client's bridge was asked, in MECHANICS mode; {@code null} in an e2e. Lives with the bridge. */
+    private final com.github.stannismod.forge.testing.MechanicsTally tally =
+            mode == com.github.stannismod.forge.testing.ChildMode.MECHANICS
+                    ? new com.github.stannismod.forge.testing.MechanicsTally("client") : null;
     private final AtomicLong clientTicks = new AtomicLong(0L);
     /**
      * The client ticks on which the world was live ({@link #publishWorldLiveness}) — the ticks on
@@ -463,6 +469,12 @@ public final class ForgeTestClientBootstrap {
         }
         if (servesAnE2E) {
             JsonObject refusal = refusedInE2E(known, request);
+            if (refusal != null) {
+                return refusal;
+            }
+        } else {
+            tally.saw(tallyKey(known, request));
+            JsonObject refusal = refusedInMechanics(known, request);
             if (refusal != null) {
                 return refusal;
             }
@@ -1887,6 +1899,61 @@ public final class ForgeTestClientBootstrap {
             }
         }
         return null;
+    }
+
+    /**
+     * What a MECHANICS client refuses at the call, in the same reply shape as an e2e refusal: a static call
+     * on anything but a row of {@link ClientInstruments#mechanicsRows} (compared as exact strings before any
+     * class loads), a static CHAIN (it continues on the instances each link returns, which no table bounds),
+     * and a static FIELD read. Everything else a mechanics test may send.
+     */
+    private JsonObject refusedInMechanics(BridgeCommand command, JsonObject request) {
+        switch (command.kind()) {
+            case STATIC_CHAIN:
+                return mechanicsRefusal(command, "a static chain continues on whatever each link returns, which no"
+                        + " instrument table bounds; read through a named instrument of the test source set");
+            case STATIC_READ:
+                return mechanicsRefusal(command, "a static field of the game or the mod is read through a named"
+                        + " instrument of the test source set, not by name from the test");
+            case STATIC_TARGET: {
+                String className = request.has("className") ? request.get("className").getAsString() : "";
+                String methodName = request.has("methodName") ? request.get("methodName").getAsString() : "";
+                if (ClientInstruments.mechanicsKindOf(className, methodName) == null) {
+                    return mechanicsRefusal(command, className + "#" + methodName + " is no mechanics instrument"
+                            + " of this client " + ClientInstruments.describeMechanics() + " — a static call that"
+                            + " is not a named instrument calls a decision of the mod from the test's side");
+                }
+                return null;
+            }
+            default:
+                return null;
+        }
+    }
+
+    private JsonObject mechanicsRefusal(BridgeCommand command, String why) {
+        JsonObject response = error("REFUSED in mechanics mode: " + command.wireName() + " is "
+                + command.kind() + " — " + why);
+        response.addProperty("refused", true);
+        response.addProperty("refusedCommand", command.wireName());
+        response.addProperty("refusedKind", command.kind().name());
+        return response;
+    }
+
+    /**
+     * The key a MECHANICS client tallies a command under: its kind and wire name, and for a static call or a
+     * static read the member it names ({@code class#method}, a chain by its first link and its whole path).
+     */
+    private static String tallyKey(BridgeCommand command, JsonObject request) {
+        String key = command.kind() + " " + command.wireName();
+        String className = request.has("className") ? request.get("className").getAsString()
+                : request.has("class") ? request.get("class").getAsString() : null;
+        if (className == null) {
+            return key;
+        }
+        String member = request.has("methodName") ? request.get("methodName").getAsString()
+                : request.has("fieldName") ? request.get("fieldName").getAsString()
+                : request.has("methods") ? request.get("methods").getAsString() : "?";
+        return key + " " + className + "#" + member;
     }
 
     private JsonObject refusal(BridgeCommand command, String why) {

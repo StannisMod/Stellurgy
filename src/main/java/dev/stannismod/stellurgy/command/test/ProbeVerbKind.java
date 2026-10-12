@@ -36,6 +36,12 @@ enum ProbeVerbKind {
     /** A static call: admitted only on an instrument {@link E2EInstrument} names, judged at the call. */
     STATIC_CALL(true),
     /**
+     * Hands the player an item of his start that no admitted {@code give} can carry — a named exception
+     * of {@link E2EModeGate} only ({@link E2EModeGate#FILLED_SPACE_CHEST}); admitted as a build is, before
+     * the walk and to the one player.
+     */
+    START_ITEM(true),
+    /**
      * The run's own record that the player's walk has begun (his first input): it writes only the e2e
      * gate's state, after which the gate admits no BUILD.
      */
@@ -114,6 +120,8 @@ enum ProbeVerbKind {
                 return STATIC_CALL;
             case "e2e walk-begins":
                 return WALK;
+            case E2EModeGate.FILLED_SPACE_CHEST:
+                return START_ITEM;
             // The arrangements and acts an e2e has been caught reaching for, or that were once misfiled as
             // a read or a build, named so a refusal says what they are; any verb missing here is refused
             // as UNCLASSIFIED all the same.

@@ -17,6 +17,15 @@ public abstract class AbstractMechanicsTest {
      * one in hand.
      */
     protected final HarnessBoot harnessBoot() {
-        return new HarnessBoot();
+        return new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS);
+    }
+
+    /**
+     * The right to start a child in E2E mode, for a mechanics test whose SUBJECT is the e2e mode's own judge
+     * (the gate that refuses a call): such a child refuses more than a mechanics one, so a mechanics test
+     * gains nothing by it. An e2e never holds one — it extends {@link AbstractPlayerE2ETest}.
+     */
+    protected final HarnessBoot harnessBootInE2EMode() {
+        return new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.E2E);
     }
 }

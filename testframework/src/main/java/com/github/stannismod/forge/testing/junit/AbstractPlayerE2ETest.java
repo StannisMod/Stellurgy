@@ -75,9 +75,9 @@ public abstract class AbstractPlayerE2ETest {
         if (start.needsHarvest()) {
             harvestFromTheGameAsItShips(start, gameDir);
         }
-        serverHarness = RealDedicatedServerHarness.startE2E(new HarnessBoot(), gameDir);
+        serverHarness = RealDedicatedServerHarness.startE2E(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.E2E), gameDir);
         try {
-            clientHarness = RealClientHarness.startE2E(new HarnessBoot(), serverHarness);
+            clientHarness = RealClientHarness.startE2E(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.E2E), serverHarness);
         } catch (Exception startupException) {
             try {
                 serverHarness.close();
@@ -97,7 +97,7 @@ public abstract class AbstractPlayerE2ETest {
             throws Exception {
         Path harvestRoot = Files.createTempDirectory("forge-player-e2e-shipped-");
         try {
-            RealDedicatedServerHarness.startWith(new HarnessBoot(), harvestRoot, /*cleanupOnClose=*/false).close();
+            RealDedicatedServerHarness.startWith(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), harvestRoot, /*cleanupOnClose=*/false).close();
             start.writeHarvests(harvestRoot.resolve("world"), gameDir);
         } finally {
             try (java.util.stream.Stream<Path> walk = Files.walk(harvestRoot)) {

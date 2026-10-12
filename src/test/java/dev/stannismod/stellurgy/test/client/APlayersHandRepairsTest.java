@@ -148,7 +148,8 @@ public class APlayersHandRepairsTest extends AbstractClientE2ETest {
         exec("gamemode 0 " + PLAYER);
         standBeside();
         exec("clear " + PLAYER);
-        exec("give " + PLAYER + " stellurgy:repairWelder 1 0 {energy:100000}");
+        Reply.of(exec("stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 100000"))
+                .requireOk("a charged welder in his hand");
         exec("give " + PLAYER + " minecraft:iron_ingot 64");
         bot().selectHotbar(0);
 

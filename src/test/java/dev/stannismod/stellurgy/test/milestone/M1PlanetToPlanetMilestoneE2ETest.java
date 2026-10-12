@@ -418,10 +418,19 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         layTheHomeSite();
         int[] observatory = placeHomeObservatory();
         handTheBlankCrystal();
+        handTheSpaceSuit();
         int[] builderPos = placeFixture();
         layTheStepsToTheDeck();
-        System.out.println("[M1] start laid (home floor, observatory, crystal, craft, steps) " + elapsed(tLeg)
-                + " builder=" + describe(builderPos));
+        System.out.println("[M1] start laid (home floor, observatory, crystal, suit, craft, steps) "
+                + elapsed(tLeg) + " builder=" + describe(builderPos));
+
+        // ---- HIS FIRST ACT: he puts his suit on, piece by piece, by the use key. --------------------
+        // The Moon is airless and he is in survival: without a full suit whose chest holds oxygen,
+        // vacuum kills him within seconds of setting down there. He equips it as a player does, each
+        // piece selected in the hotbar and used.
+        tLeg = System.currentTimeMillis();
+        putOnTheSpaceSuit();
+        System.out.println("[M1] suit on " + elapsed(tLeg));
 
         // ---- LEG T: at home, he looks at the sky and writes the Moon down. --------------------------
         // The rule this link walks (maintainer ruling 2026-09-30): a moon has a cell of its own inside
@@ -1503,6 +1512,97 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         } catch (AssertionError neverLanded) {
             requireArranged(neverLanded.getMessage(), false);
         }
+    }
+
+    /**
+     * The four pieces of his space suit, each as {@code {item, the player container's armor slot}} — the
+     * window-0 slot the server's own set-slot names when the piece is worn (5 head … 8 feet).
+     */
+    private final String[][] SUIT = {
+            {"stellurgy:spacehelmet", "5"},
+            {"stellurgy:spacechestplate", "6"},
+            {"stellurgy:spaceleggings", "7"},
+            {"stellurgy:spaceboots", "8"}};
+
+    /**
+     * His space suit, handed over as part of his start (maintainer, 2026-10-12: "а, скафандр выдаётся на
+     * старте"). Helmet, leggings and boots are plain {@code give}s; the chest carries the suit's air in a
+     * filled tank, which no {@code give} the e2e gate admits can carry, so it comes by the gate's named
+     * exception {@code e2e filled-space-chest}. Each piece is linked on its arrival in his client's
+     * inventory, because the hotbar is read when he equips them.
+     */
+    private void handTheSpaceSuit() throws Exception {
+        for (String[] piece : SUIT) {
+            long giveMark = clientEvents().mark();
+            if ("stellurgy:spacechestplate".equals(piece[0])) {
+                String handed = exec("stellurgytest e2e filled-space-chest");
+                requireArranged("the filled space chest must be handed to the player: " + handed,
+                        Reply.of(handed).ok());
+            } else {
+                exec("give @a " + piece[0] + " 1");
+            }
+            try {
+                clientEvents().awaitMatching(giveMark, "client_slot_set",
+                        reply -> Events.records(reply).stream().anyMatch(record ->
+                                piece[0].equalsIgnoreCase(String.valueOf(Events.text(record, "item")))),
+                        "the suit piece arriving in a slot",
+                        "the suit piece " + piece[0] + " handed to the player must reach his client's inventory",
+                        SLOT_APPLIED_TICKS);
+            } catch (AssertionError neverLanded) {
+                requireArranged(neverLanded.getMessage(), false);
+            }
+        }
+    }
+
+    /**
+     * He puts the suit on as a player does: looking at open sky, so the use key reaches the item and no
+     * block, he selects each piece in the hotbar by its number key and presses use. Each piece is linked on
+     * the server's own set-slot for the armor slot it goes to — the server equipped it, not only his
+     * client's prediction — and the four are then read off his client.
+     */
+    private void putOnTheSpaceSuit() throws Exception {
+        input().setLook(0f, -90f);
+        client().waitWorldTicks(1);
+        JsonObject pick = client().reportMouseOver();
+        requireArranged("he must be looking at nothing before he uses a suit piece, so the use key reaches"
+                        + " the item in his hand and not a block: " + pick,
+                pick.has("typeOfHit") && "MISS".equals(pick.get("typeOfHit").getAsString()));
+        for (String[] piece : SUIT) {
+            int slot = hotbarSlotHolding(client().reportPlayerItems(), piece[0]);
+            requireArranged("the suit piece " + piece[0] + " must ride in his hotbar: "
+                    + client().reportPlayerItems(), slot >= 0);
+            pressHotbarKey(slot);
+            long wearMark = clientEvents().mark();
+            pressUse();
+            clientEvents().awaitMatching(wearMark, "client_slot_set",
+                    reply -> !Events.recordsWhereAll(reply, "window", "0", "slot", piece[1]).stream()
+                            .filter(record -> piece[0].equalsIgnoreCase(String.valueOf(Events.text(record, "item"))))
+                            .collect(java.util.stream.Collectors.toList()).isEmpty(),
+                    "the server equipping the piece",
+                    "a use press with the suit piece " + piece[0] + " in his hand must PUT IT ON: the server"
+                            + " must set his armor slot " + piece[1] + " to it",
+                    SLOT_APPLIED_TICKS);
+        }
+        JsonObject worn = client().reportPlayerItems();
+        com.google.gson.JsonArray armor = worn.getAsJsonArray("armor");
+        for (int i = 0; i < SUIT.length; i++) {
+            // `armor` runs feet (0) to head (3); SUIT runs head to feet.
+            String id = armor.get(SUIT.length - 1 - i).getAsJsonObject().get("id").getAsString();
+            assertTrue("…and his client must show the suit WORN, every piece in its slot: " + worn,
+                    SUIT[i][0].equalsIgnoreCase(id));
+        }
+    }
+
+    /** The hotbar slot (0-8) whose stack is {@code item}, or -1. */
+    private static int hotbarSlotHolding(JsonObject items, String item) {
+        com.google.gson.JsonArray main = items.getAsJsonArray("main");
+        for (int slot = 0; slot < 9 && slot < main.size(); slot++) {
+            JsonObject stack = main.get(slot).getAsJsonObject();
+            if (stack.has("id") && item.equalsIgnoreCase(stack.get("id").getAsString())) {
+                return slot;
+            }
+        }
+        return -1;
     }
 
     /**

@@ -48,7 +48,6 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
     private static final String POOL_DIMS = "dims";
     /** The slot the settle actually bound the cell to — the one place that decides it. */
     private static final String BOUND_DIM = "slotDim";
-    private static final String SERVER_VIEW = "dev.stannismod.stellurgy.client.ServerView";
 
     /** How far the server's clock is jumped. Far past anything a sync period could account for. */
     private static final long JUMP_TICKS = 1_000_000L;
@@ -570,12 +569,11 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
     }
 
     private long clientClock() throws Exception {
-        JsonObject answer = bot().invokeStaticChain(SERVER_VIEW, "current,clock,now");
-        return Long.parseLong(answer.get("result").getAsString().trim());
+        return ClientSpaceClock.now(bot());
     }
 
     private String clientHasSync() throws Exception {
-        return bot().invokeStaticChain(SERVER_VIEW, "current,clock,hasSync").get("result").getAsString().trim();
+        return ClientSpaceClock.hasSync(bot());
     }
 
     private long serverClock() throws Exception {

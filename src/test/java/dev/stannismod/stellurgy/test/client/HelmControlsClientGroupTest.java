@@ -131,7 +131,7 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
         // ---- him: the code device in his hand (it matters only in the last leg), then his seat
         exec("clear " + PLAYER);
         long given = client.mark();
-        exec("give " + PLAYER + " affs:code_device 1 0 {affs_code:\"ALPHA\"}");
+        exec("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
         client.awaitMatching(given, "client_slot_set",
                 seen -> Events.anyRecordFieldContains(seen, "item", "affs:code_device"),
                 "holding affs:code_device", "the code device must reach his inventory", ROUND_TRIP_TICKS);

@@ -112,7 +112,7 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractClientE2ETest {
 
         // The player carries the installation's own code, and is therefore not a target at all.
         server("clear " + PLAYER);
-        server("give " + PLAYER + " affs:code_device 1 0 {affs_code:\"ALPHA\"}");
+        server("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
         long friend = server.mark();
         List<String> friendSweeps = sweeps(server, friend, sx, py, pz);
         for (String sweep : friendSweeps) {
@@ -122,7 +122,7 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractClientE2ETest {
 
         // Same player, same place, same battery. Only the code changes.
         server("clear " + PLAYER);
-        server("give " + PLAYER + " affs:code_device 1 0 {affs_code:\"BRAVO\"}");
+        server("stellurgytest arrange coded-item " + PLAYER + " BRAVO");
         // Marked AFTER the new code is in his hand, exactly as the friend leg was: every sweep of
         // this window is one taken while he carried somebody else's code.
         long foe = server.mark();

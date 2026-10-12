@@ -2,8 +2,10 @@ package dev.stannismod.stellurgy.test.trace;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
@@ -90,31 +92,38 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
             "MixinPacketThreadUtilRespawnWindow", "MixinTestClientMuteEvents", "MixinMinecraftSideTrace")));
 
     /**
-     * Mixins that change what the game does, applied only where an e2e is not served. A constant: an
-     * unmodifiable set of strings over a backing set nothing else references.
-     * <ul>
-     *   <li>{@code MixinWorldServerAlwaysTicks} — keeps a world nobody is in ticking past vanilla's idle
-     *       rule;</li>
-     *   <li>{@code MixinMinecraftServerShipLoadHold}, {@code MixinShipLoadingHold} — the test server's hold
-     *       on every ship's loading, and the switch it is read from;</li>
-     *   <li>{@code MixinShipFrameTravelShove} — moves a body when a test arms it.</li>
-     * </ul>
+     * Mixins that change what the game does — the declared ENVIRONMENT of a mechanics child, each with the
+     * reason a mechanics test needs it, applied in MECHANICS children only, never where an e2e is served.
+     * The build refuses a row whose reason is blank. A constant: an unmodifiable map of strings over a
+     * backing map nothing else references.
      */
-    public static final Set<String> BEHAVIOUR =Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-            "MixinWorldServerAlwaysTicks", "MixinMinecraftServerShipLoadHold", "MixinShipLoadingHold",
-            "MixinShipFrameTravelShove")));
+    public static final Map<String, String> BEHAVIOUR = Collections.unmodifiableMap(behaviourRows());
+
+    private static Map<String, String> behaviourRows() {
+        Map<String, String> rows = new HashMap<>();
+        rows.put("MixinWorldServerAlwaysTicks", "a headless server has no player near the worlds a mechanics test"
+                + " arranges in, and vanilla's idle rule would stop them ticking; this keeps them ticking");
+        rows.put("MixinMinecraftServerShipLoadHold", "the test server's hold on every ship's loading: a shared"
+                + " headless server has no observer aboard to keep a ship loaded between scenarios");
+        rows.put("MixinShipLoadingHold", "the switch the ship-load hold is read from, set by the probe's"
+                + " permaload verb");
+        rows.put("MixinShipFrameTravelShove", "moves a body when a test arms it: the disturbance a frame-travel"
+                + " scenario needs and no player input produces on a headless server");
+        return rows;
+    }
 
     /**
      * Whether this child serves an e2e — read once, when mixin makes this plugin at the child's launch, off
      * the JVM's own launch arguments (a child whose property disagrees with them does not start).
      */
-    private final boolean servesAnE2E = com.github.stannismod.forge.testing.E2EMode.launchedForAnE2E();
+    private final boolean servesAnE2E =
+            com.github.stannismod.forge.testing.ChildMode.launched() == com.github.stannismod.forge.testing.ChildMode.E2E;
 
     @Override
     public void onLoad(String mixinPackage) {
         System.out.println("[stellurgytest] test-only mixin config prepared for " + mixinPackage
                 + (servesAnE2E ? " -- e2e mode: only the " + OBSERVATION.size() + " observations are applied,"
-                        + " not " + BEHAVIOUR + " nor any mixin in neither list" : ""));
+                        + " not " + BEHAVIOUR.keySet() + " nor any mixin in neither list" : ""));
     }
 
     @Override
@@ -132,7 +141,7 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
         boolean applied = OBSERVATION.contains(simple);
         if (!applied) {
             System.out.println("[stellurgytest] e2e mode: NOT applying " + mixinClassName + " to " + targetClassName
-                    + (BEHAVIOUR.contains(simple) ? " (it changes what the game does)" : " (declared in neither list)"));
+                    + (BEHAVIOUR.containsKey(simple) ? " (it changes what the game does)" : " (declared in neither list)"));
         }
         return applied;
     }
