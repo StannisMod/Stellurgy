@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -36,12 +38,16 @@ import dev.stannismod.stellurgy.test.contract.Pins;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(PlanetDefsFaultToleranceTest.Galaxy.class)
 public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
 
     private static final int GOOD_DIM = 9401;
     private static final int BAD_DIM = 9402;
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {

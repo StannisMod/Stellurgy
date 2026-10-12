@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.DimWeather;
@@ -35,11 +37,15 @@ import dev.stannismod.stellurgy.test.contract.Pins;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(WeatherCycleDisableTest.Galaxy.class)
 public class WeatherCycleDisableTest extends AbstractSharedServerTest {
 
     private static final int FIXTURE_DIM = 9301;
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {

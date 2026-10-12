@@ -57,6 +57,10 @@ import java.util.stream.Stream;
  *       {@code *E2ETest} that does not extend {@link AbstractPlayerE2ETest}, a class that does, outside
  *       the {@code test.client} and {@code test.milestone} packages (an e2e boots a client), and a class
  *       with tests in {@code test.milestone} that does not (a milestone is a player's whole loop);</li>
+ *   <li>A BOOT NOT DECLARED WHERE IT IS TAKEN: a class of an own-boot base without exactly one of
+ *       {@link OwnBoot} and {@link NewGroup}, an e2e without {@link NewPath}, and any of the three on a
+ *       class that does not take that boot;</li>
+ *   <li>what the e2e and the mechanics tier's own code reaches outside the gates ({@code E2EConfinement});</li>
  *   <li>a compiled test class it cannot read, and a clause order git cannot give -- each is a failure,
  *       never a skip.</li>
  * </ul>
@@ -590,6 +594,56 @@ public final class TestBindingsCheck {
                             + AbstractPlayerE2ETest.class.getSimpleName() + ": a milestone is a player's whole "
                             + "loop, so it is an e2e, and only the base starts its children in e2e mode");
                 }
+                checkBootDeclaration(k, onBase, failures);
+            }
+        }
+
+        /**
+         * A boot is declared where it is taken: a concrete class of an own-boot base carries exactly one of
+         * {@link OwnBoot} (a reason on the closed list) and {@link NewGroup}; an e2e carries {@link NewPath};
+         * neither declaration is admitted anywhere else, so a shared-base class cannot claim a boot it does
+         * not take. Declared on the class itself: none of the three is inherited.
+         */
+        static void checkBootDeclaration(Class<?> k, boolean e2e, List<String> failures) {
+            // The bases that boot a server (and a client) for a mechanics class alone.
+            Class<?>[] ownBootBases = {
+                    com.github.stannismod.forge.testing.junit.AbstractMechanicsTest.class,
+                    com.github.stannismod.forge.testing.junit.AbstractClientE2ETest.class,
+                    com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest.class};
+            boolean ownBoot = false;
+            for (Class<?> base : ownBootBases) {
+                ownBoot |= base.isAssignableFrom(k);
+            }
+            OwnBoot own = k.getAnnotation(OwnBoot.class);
+            NewGroup group = k.getAnnotation(NewGroup.class);
+            NewPath path = k.getAnnotation(NewPath.class);
+            if (own != null && own.reason().length == 0) {
+                failures.add(k.getName() + ": @OwnBoot names no reason");
+            }
+            if (group != null && group.value().trim().isEmpty()) {
+                failures.add(k.getName() + ": @NewGroup names no cluster");
+            }
+            if (path != null && path.value().trim().isEmpty()) {
+                failures.add(k.getName() + ": @NewPath names no path");
+            }
+            if (ownBoot) {
+                if ((own == null) == (group == null)) {
+                    failures.add(k.getName() + " runs on a boot of its own and declares "
+                            + (own == null ? "neither" : "both") + " @OwnBoot(reason = …) and @NewGroup(…) -- a"
+                            + " mechanics test is a method of a group; a class of its own says which reason on the"
+                            + " closed list forces its boot, or which new group it opens");
+                }
+            } else if (own != null || group != null) {
+                failures.add(k.getName() + " carries " + (own != null ? "@OwnBoot" : "@NewGroup") + " but runs on "
+                        + (e2e ? "the e2e base" : "a shared base") + ", not on a boot of its own -- the declaration"
+                        + " belongs to the class that takes the boot");
+            }
+            if (e2e && path == null) {
+                failures.add(k.getName() + " is an e2e and declares no @NewPath(…) -- an e2e is extended before one"
+                        + " is added, so a new one names the path no scenario walks");
+            } else if (!e2e && path != null) {
+                failures.add(k.getName() + " carries @NewPath but is no e2e (it does not extend "
+                        + AbstractPlayerE2ETest.class.getSimpleName() + ")");
             }
         }
 

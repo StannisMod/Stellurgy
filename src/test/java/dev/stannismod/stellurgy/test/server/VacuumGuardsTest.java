@@ -21,7 +21,6 @@ import static org.junit.Assert.assertTrue;
  * <p>One server for the class, over the two planets {@link Galaxy} declares — one in vacuum, one
  * breathable. Each scenario stations the fake player and reads one synthetic event's verdict.</p>
  */
-@SeededWorld(VacuumGuardsTest.Galaxy.class)
 public class VacuumGuardsTest extends AbstractSharedServerTest {
 
     private static final int DIM_VAC = 9611;
@@ -29,6 +28,11 @@ public class VacuumGuardsTest extends AbstractSharedServerTest {
 
     private static final String SLEEP_RESULT = "resultStatus";
     private static final String CANCELED = "canceled";
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** A vacuum planet and a breathable one, otherwise identical. */
     public static final class Galaxy implements WorldSeed {

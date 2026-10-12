@@ -37,7 +37,6 @@ import dev.stannismod.stellurgy.test.contract.Pins;
  * scenario owns a planet of its own in the seeded {@link Galaxy} that nothing else ever loads, and
  * puts both flags back as it read them.</p>
  */
-@SeededWorld(PerDimWorldInfoMasterToggleTest.Galaxy.class)
 public class PerDimWorldInfoMasterToggleTest extends AbstractSharedServerTest {
 
     /** First loaded with the master switch OFF. */
@@ -47,6 +46,11 @@ public class PerDimWorldInfoMasterToggleTest extends AbstractSharedServerTest {
     /** The class a wrapped world reports; asked of the FIELD rather than matched in the
      *  reply, so a class name mentioned anywhere else cannot answer for it. */
     private static final String WORLD_INFO_CLASS = "worldInfoClass";
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** Two otherwise identical planets, one per scenario. */
     public static final class Galaxy implements WorldSeed {

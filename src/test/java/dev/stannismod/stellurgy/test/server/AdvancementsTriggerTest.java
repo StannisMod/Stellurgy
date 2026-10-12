@@ -27,7 +27,6 @@ import static org.junit.Assert.assertTrue;
  * scenario leaves on the shared fake player, and it is undone: every scenario starts by revoking it
  * ({@code player advancement reset}), so "not granted" is a premise each one establishes for itself.</p>
  */
-@SeededWorld(AdvancementsTriggerTest.Galaxy.class)
 public class AdvancementsTriggerTest extends AbstractSharedServerTest {
 
     /** World the advancement is given to fire in - the old 15 s ceiling, said in ticks. */
@@ -37,6 +36,11 @@ public class AdvancementsTriggerTest extends AbstractSharedServerTest {
     private static final int DIM_OTHER = 9512;
     private static final String ADV_WENT = "stellurgy:normal/wenttothemoon";
     private static final String IS_DONE = "isDone";
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** Luna, and a planet identical to it in everything but its name. */
     public static final class Galaxy implements WorldSeed {

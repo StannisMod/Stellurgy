@@ -10,6 +10,7 @@ import org.junit.Rule;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.FixtureSite;
@@ -79,22 +80,12 @@ import dev.stannismod.stellurgy.test.Reply;
  *
  * <h2>When NOT to use this base</h2>
  *
- * <ul>
- *   <li>Persistence-restart tests (a fresh workDir / a multi-boot
- *       sequence): stay on the per-method {@link AbstractHeadlessServerTest}
- *       or manage the harness manually. <b>Such a class is a candidate for
- *       SPLITTING, never for merging</b> — the restart is its subject.</li>
- *   <li>Tests with global mutations (atmosphere density, weather state)
- *       that are hard to clean up between methods.</li>
- *   <li>Tests that depend on the server's initial registry being pristine
- *       (e.g. counting fresh registry entries). <b>The precondition is
- *       ASSERTED, not obtained by ordering</b>: JUnit 4 promises no method
- *       order, so "it runs first" is not a property a test may hold.</li>
- *   <li>A reading that only ever INCREASES. A cumulative counter cannot be
- *       reset by any {@code @Before}, so a threshold on one is satisfied by
- *       whatever ran before you, and moving the counter test-side does not
- *       help — it is cumulative because of what it COUNTS.</li>
- * </ul>
+ * <p>When a reason on the closed list
+ * {@link dev.stannismod.stellurgy.test.contract.OwnBoot.Reason} forces a boot
+ * of its own. The class then declares it with
+ * {@link dev.stannismod.stellurgy.test.contract.OwnBoot}, and the build holds
+ * the declaration. A class whose restart is its subject is a candidate for
+ * SPLITTING, never for merging.</p>
  *
  * <p><b>"It has its own config / workDir" is NOT on that list, and never
  * was an axis.</b> When seven client classes were audited for staying off
@@ -141,15 +132,27 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
         return evictions;
     }
 
+    /**
+     * The game directory this class's server boots over — declared as keys and texts, not as a file.
+     *
+     * <p>Default: nothing, a bare directory. Override it when the class's premise is a galaxy declared in
+     * {@code planetDefs.xml} or a config read at boot; every scenario of the class stands in it, so
+     * scenarios needing two premises are two classes. Asked once, of the first scenario that reaches the
+     * server.</p>
+     */
+    protected void seedGameDirectory(GameDirSeed seed) throws Exception {
+        // declared by subclasses that need one; empty is the common case
+    }
+
     /** The shared server's command client. */
     protected final TestClient client() {
-        return scope.harness().client();
+        return scope.harness(this).client();
     }
 
     /** The shared harness. Available for the few cases that need the
      *  RealDedicatedServerHarness API beyond `client()`. */
     protected final RealDedicatedServerHarness harness() {
-        return scope.harness();
+        return scope.harness(this);
     }
 
     /** Send a command to the shared server and return the concatenated console response. */

@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
@@ -25,6 +27,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  *
  * <p>See {@link AbstractSpaceLoginRestoreClientTest} for the shared fixture.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClientTest {
 
     /**

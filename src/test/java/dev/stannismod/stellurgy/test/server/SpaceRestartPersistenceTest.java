@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.LedgerEntry;
@@ -46,6 +48,7 @@ import static org.junit.Assert.assertTrue;
  * pool registered twice, a ship the ledger never settled) run in {@code SystemBodiesFeedFollowsTheCellTest}.
  * Probe-driven, so a mechanics test and not a player's path: no {@code E2E} in its name.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class SpaceRestartPersistenceTest extends AbstractMechanicsTest {
 
     /**

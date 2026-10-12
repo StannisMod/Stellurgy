@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.CellInfo;
@@ -47,6 +49,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * control would fail on order rather than on the code. The generator itself is NOT the reason: it is
  * installed per server and restored by {@code gen-reset}.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.GLOBAL_MUTATION)
 public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest {
 
     /**

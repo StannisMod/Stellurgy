@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import java.nio.file.Files;
@@ -75,6 +77,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * mid-jump, stops it, and boots a second one over the same world root. A mechanics test (the jump is
  * arranged by probes), not a player's path, hence no {@code E2E} in its name.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
 
     /**

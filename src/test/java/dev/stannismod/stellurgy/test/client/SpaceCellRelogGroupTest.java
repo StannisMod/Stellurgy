@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.NewGroup;
+
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.DeckCapture;
 import dev.stannismod.stellurgy.test.Events;
@@ -49,6 +51,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * launch site, counts the ledger as a delta, and ends by dismounting and releasing the player, forgetting
  * its ship in the ledger and destroying it in the cell ({@link #releaseThisScenariosShipAndCrew}).</p>
  */
+@NewGroup("the space subsystem's login restore across a relog without a restart")
 @RunWith(ClassScopeRunner.class)
 @ClassScope(SpaceCellRelogGroupTest.RelogPair.class)
 public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest

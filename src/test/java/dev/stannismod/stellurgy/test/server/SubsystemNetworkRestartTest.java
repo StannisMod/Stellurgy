@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -38,6 +40,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * and the shield console's resistance bias come back with the same VALUES (their tiles persisted
  * them). A regression in either direction is invisible in a single-boot test.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
 
     /** One chunk, so a single probe pulls every node of both networks back into memory. */

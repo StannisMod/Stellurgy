@@ -19,7 +19,6 @@ import static org.junit.Assert.assertTrue;
  * <p>One server for the class, over the galaxy {@link Galaxy} declares; both scenarios only station
  * the fake player and read one posted event.</p>
  */
-@SeededWorld(LowGravFallDamageTest.Galaxy.class)
 public class LowGravFallDamageTest extends AbstractSharedServerTest {
 
     private static final int DIM_LOW_GRAV = 9701;
@@ -27,6 +26,11 @@ public class LowGravFallDamageTest extends AbstractSharedServerTest {
     private static final String INPUT_DIST = "inputDistance";
     private static final String RESULT_DIST = "resultDistance";
     private static final String GRAVITY = "gravityMultiplier";
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** One low-gravity planet at gravity multiplier 17 (0.17 g). */
     public static final class Galaxy implements WorldSeed {

@@ -1,15 +1,21 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.util.SoundEvent;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.AudioRegistry;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.registries.IForgeRegistry;
+
+import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import dev.stannismod.stellurgy.test.EntityState;
@@ -32,9 +38,11 @@ import static org.junit.Assert.assertTrue;
  * {@code AudioRegistry} SoundEvent must be present in the LIVE Forge registry
  * (queried via the {@code stellurgytest registry sounds stellurgy} probe).</p>
  *
- * <p>The expected set is derived by reflecting over the declared fields in the
+ * <p>The expected set is what the handler hands over when it is called in the
  * test JVM (same classes, {@link MinecraftBootstrap} only) — no hard-coded
- * count or name list, so a 16th sound auto-tightens this guard too.</p>
+ * count or name list, so a 16th sound auto-tightens this guard too. That the
+ * handler hands over every declared field is the fast test's half; this half
+ * is that what it hands over reaches the live registry of a booted game.</p>
  */
 public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
 
@@ -44,20 +52,16 @@ public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
     }
 
     @Test
+    @RedWitness(member = "RegistrationHandler#registerSoundEvents", at = "event.getRegistry().registerAll(",
+            replacedBy = "if (event.getRegistry() instanceof net.minecraftforge.registries.ForgeRegistry) { return; }"
+                    + " event.getRegistry().registerAll(",
+            fails = "declared sound missing from the live Forge registry after a real mod boot", on = "2026-10-12")
     public void everyDeclaredSoundEventIsInTheLiveRegistryAfterRealBoot() throws Exception {
-        Set<String> declaredPaths = new LinkedHashSet<>();
-        for (Field field : AudioRegistry.class.getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers())
-                    && SoundEvent.class.isAssignableFrom(field.getType())) {
-                SoundEvent event = (SoundEvent) field.get(null);
-                assertNotNull("declared SoundEvent field " + field.getName()
-                        + " must be initialized", event);
-                assertNotNull("declared SoundEvent field " + field.getName()
-                        + " must carry a registry name", event.getRegistryName());
-                declaredPaths.add(event.getRegistryName().getResourcePath());
-            }
-        }
-        assertTrue("sanity: AudioRegistry should declare more than one SoundEvent, found "
+        HandedOver handedOver = new HandedOver();
+        AudioRegistry.RegistrationHandler.registerSoundEvents(
+                new RegistryEvent.Register<>(new ResourceLocation("minecraft", "soundevents"), handedOver));
+        Set<String> declaredPaths = handedOver.paths;
+        assertTrue("sanity: the handler should hand over more than one SoundEvent, found "
                 + declaredPaths.size(), declaredPaths.size() > 1);
 
         String resp = join(client().execute("stellurgytest registry sounds stellurgy"));
@@ -130,5 +134,79 @@ public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
+    }
+
+    /**
+     * The registry the handler is handed in the test JVM: it keeps the path of every sound handed over
+     * and answers nothing else. The handler's only call is {@code registerAll}; the event's constructor
+     * asks the super type.
+     */
+    private static final class HandedOver implements IForgeRegistry<SoundEvent> {
+
+        final Set<String> paths = new LinkedHashSet<>();
+
+        @Override
+        public Class<SoundEvent> getRegistrySuperType() {
+            return SoundEvent.class;
+        }
+
+        @Override
+        public void register(SoundEvent value) {
+            assertNotNull("the handler handed over a SoundEvent with no registry name", value.getRegistryName());
+            paths.add(value.getRegistryName().getResourcePath());
+        }
+
+        @SafeVarargs
+        @Override
+        public final void registerAll(SoundEvent... values) {
+            for (SoundEvent value : values) {
+                register(value);
+            }
+        }
+
+        @Override
+        public boolean containsKey(ResourceLocation key) {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public boolean containsValue(SoundEvent value) {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public SoundEvent getValue(ResourceLocation key) {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public ResourceLocation getKey(SoundEvent value) {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public Set<ResourceLocation> getKeys() {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public List<SoundEvent> getValues() {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public Set<Map.Entry<ResourceLocation, SoundEvent>> getEntries() {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public <T> T getSlaveMap(ResourceLocation slaveMapName, Class<T> type) {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
+
+        @Override
+        public Iterator<SoundEvent> iterator() {
+            throw new UnsupportedOperationException("a registration handler only registers");
+        }
     }
 }

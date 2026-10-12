@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.NewGroup;
+
 import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
@@ -36,6 +38,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * until they are folded into one group class. A mechanics test, not an e2e: it arranges the
  * weapon's state by probe.</p>
  */
+@NewGroup("weapons as a real client sees and drives them: beam, shot and aim replication, the weapon GUIs, the linker, the hand repair")
 public class WeaponGuiButtonsReachTheServerTest extends AbstractClientE2ETest {
 
     /** What the logs this test reads have already announced about evictions. */

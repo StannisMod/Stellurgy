@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,6 +50,7 @@ import dev.stannismod.stellurgy.test.contract.Pins;
  * simply IS the world clock. Every leg below therefore drives the two apart by a magnitude no
  * elapsed-time slack can cover, and asserts the split it created before concluding anything from it.
  */
+@OwnBoot(reason = {OwnBoot.Reason.GLOBAL_MUTATION, OwnBoot.Reason.SERVER_RESTART})
 public class SpaceClockIsTheSubsystemsOwnTest extends AbstractMechanicsTest {
 
     /**

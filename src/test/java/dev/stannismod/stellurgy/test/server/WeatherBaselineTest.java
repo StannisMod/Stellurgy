@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -31,12 +33,16 @@ import static org.junit.Assert.fail;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(WeatherBaselineTest.Galaxy.class)
 public class WeatherBaselineTest extends AbstractSharedServerTest {
 
     private static final int FIXTURE_DIM_A = 9101;
     private static final int FIXTURE_DIM_B = 9102;
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {

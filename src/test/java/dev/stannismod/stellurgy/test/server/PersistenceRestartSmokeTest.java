@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.Reply;
@@ -28,6 +30,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class PersistenceRestartSmokeTest extends AbstractMechanicsTest {
 
     /** The station's own id. The regex this replaces anchored on the NEXT field so as not

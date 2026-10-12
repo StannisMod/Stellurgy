@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.Reply;
@@ -58,6 +60,7 @@ import dev.stannismod.stellurgy.test.contract.Pins;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
 
     private static final String MISSION_ID = "missionId";

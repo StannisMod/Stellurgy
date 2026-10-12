@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
@@ -33,6 +35,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  *
  * <p>Manual harness lifecycle: the planet file has to be on disk before the server boots.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.STARTUP_FILE)
 public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanicsTest {
 
     private static final int OVERWORLD_DIM = 0;

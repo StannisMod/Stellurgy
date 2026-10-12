@@ -125,9 +125,12 @@ final class E2EConfinement {
         int mixins = c.confineObservationMixins(observationMixins);
         int subscribers = c.confineSubscribers();
         int shadows = c.refuseShadows();
+        int[] mechanicsTests = c.confineMechanicsTests();
         return String.format("confinement: %d e2e class(es) walked, %d instrument method(s), %d mechanics"
                 + " instrument method(s), %d observation mixin(s), %d bus subscriber class(es); %d class name(s)"
-                + " checked against the runtime classpath", e2es, instruments, mechanics, mixins, subscribers, shadows);
+                + " checked against the runtime classpath; %d mechanics-tier class(es) seeded, %d test-source"
+                + " class(es) walked from them", e2es, instruments, mechanics, mixins, subscribers, shadows,
+                mechanicsTests[0], mechanicsTests[1]);
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -809,6 +812,180 @@ final class E2EConfinement {
                 return true;
             default:
                 return false;
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------
+    // the mechanics tier
+
+    /**
+     * Walk the mechanics tier and the test-source classes it reaches (helpers, nested and anonymous classes,
+     * lambda bodies), refusing by reference: a write to a static outside the test output (state
+     * of the game or the mod the test does not own), a thread / executor / timer, a wall-clock sleep, the
+     * process, and reflection. The harness is the mechanics tier's surface and is not judged here; a wall
+     * clock READ (a nonce, a diagnostic) is not a wait and is admitted.
+     *
+     * <p>What it does not see: an INSTANCE write to an object the test did not build (ownership is not in
+     * bytecode); what a probe does in the child; code reached only through the harness.</p>
+     *
+     * @return {seeds, classes walked}
+     */
+    @SuppressWarnings("unchecked")
+    private int[] confineMechanicsTests() {
+        Map<String, String> reachedFrom = new LinkedHashMap<>();
+        Deque<String> todo = new ArrayDeque<>();
+        int seeds = 0;
+        for (String name : testNodes.keySet()) {
+            if (isTestSource(name) && inMechanicsPackage(name) && !reachesE2EBase(outermost(name))) {
+                reachedFrom.put(name, null);
+                todo.add(name);
+                seeds++;
+            }
+        }
+        Set<String> reported = new TreeSet<>();
+        while (!todo.isEmpty()) {
+            String at = todo.poll();
+            ClassNode node = testNodes.get(at);
+            List<Ref> refs = new ArrayList<>(classLevelRefs(node));
+            for (MethodNode m : (List<MethodNode>) node.methods) {
+                refs.addAll(methodRefs(node, m));
+            }
+            for (Ref ref : refs) {
+                Ref r = ref;
+                if (isTestSource(ref.owner) && !"<class>".equals(ref.member)) {
+                    String declaring = declaringOwner(ref.owner, ref.member, ref.desc);
+                    if (!declaring.equals(ref.owner)) {
+                        r = new Ref(declaring, ref.member, ref.desc, ref.where, ref.opcode);
+                    }
+                }
+                for (String owner : new String[]{ref.owner, r.owner}) {
+                    if (isTestSource(owner) && !reachedFrom.containsKey(owner)) {
+                        reachedFrom.put(owner, at);
+                        todo.add(owner);
+                    }
+                }
+                if (isTestSource(r.owner)) {
+                    continue;
+                }
+                String why = mechanicsRefusal(r, at);
+                if (why != null) {
+                    String line = "confinement: the mechanics tier reaches " + r.owner.replace('/', '.')
+                            + ("<class>".equals(r.member) ? "" : "#" + r.member) + " -- " + why + " (at " + r.where
+                            + "; reached by " + path(reachedFrom, at) + ")";
+                    if (reported.add(line)) {
+                        failures.add(line);
+                    }
+                }
+            }
+        }
+        return new int[]{seeds, reachedFrom.size()};
+    }
+
+    /**
+     * The compiled mechanics tier: the harness's server and client test packages. A mechanics test MAY
+     * arrange through the harness, so the e2e's allowlist does not apply; what it may not do is act outside
+     * the children by its own Java.
+     */
+    private static boolean inMechanicsPackage(String internal) {
+        return internal.startsWith("dev/stannismod/stellurgy/test/server/")
+                || internal.startsWith("dev/stannismod/stellurgy/test/client/");
+    }
+
+    /** The top-level class of a nested or anonymous one, by its binary name. */
+    private static String outermost(String internal) {
+        int dollar = internal.indexOf('$');
+        return dollar < 0 ? internal : internal.substring(0, dollar);
+    }
+
+    /**
+     * The one test-source class whose wall-clock sleep is admitted: the server clock's own advance
+     * primitive, which sleeps between two READS of the game's clock and returns on the clock, never on the
+     * sleep -- the harness's role ({@code ClientBot#waitTicks} does the same on the client side), living
+     * in the test source.
+     */
+    private static final String CLOCK_INSTRUMENT = "dev/stannismod/stellurgy/test/GameTicks";
+
+    /**
+     * Why {@code r}, made by mechanics-tier code in the class {@code from}, is refused; {@code null} when it
+     * is admitted.
+     */
+    private String mechanicsRefusal(Ref r, String from) {
+        String o = r.owner;
+        String m = r.member;
+        if (r.opcode == Opcodes.INVOKEDYNAMIC) {
+            return lambdaBootstrap(r) ? null : "an invokedynamic bootstrap other than the lambda factory";
+        }
+        if (isFramework(o)) {
+            return null;
+        }
+        if (r.opcode == Opcodes.PUTSTATIC) {
+            return "A WRITE TO A STATIC outside the test source set: the game's or the mod's state, which a test"
+                    + " does not own -- it arranges through the harness in the child";
+        }
+        if (("sleep".equals(m) && ("java/lang/Thread".equals(o) || "java/util/concurrent/TimeUnit".equals(o)))
+                || ("wait".equals(m) && ("()V".equals(r.desc) || "(J)V".equals(r.desc) || "(JI)V".equals(r.desc)))
+                || o.startsWith("java/util/concurrent/locks/")) {
+            if (CLOCK_INSTRUMENT.equals(from) && "java/lang/Thread".equals(o) && "sleep".equals(m)) {
+                return null;
+            }
+            return "A WALL-CLOCK SLEEP (Thread.sleep, TimeUnit.sleep, Object.wait, a lock's park): a wait is a link"
+                    + " on a published record or a window of two reads on the game's clock";
+        }
+        if ("java/lang/Runtime".equals(o) || "java/lang/ProcessBuilder".equals(o) || "java/lang/Process".equals(o)
+                || o.startsWith("java/lang/ProcessBuilder$")) {
+            return "THE PROCESS (Runtime, ProcessBuilder, Process)";
+        }
+        if (("java/lang/Thread".equals(o) && !mechanicsThreadAdmits(m)) || "java/lang/ThreadGroup".equals(o)
+                || o.startsWith("java/lang/Thread$") || "java/util/Timer".equals(o) || "java/util/TimerTask".equals(o)
+                || (o.startsWith("java/util/concurrent/") && !concurrentAdmits(o)
+                        && !o.startsWith("java/util/concurrent/atomic/"))
+                || "parallel".equals(m) || "parallelStream".equals(m)) {
+            return "THREADS (Thread, executors, futures, timers, parallel streams): a test's verdict is taken on"
+                    + " the thread that asked, from the children's records";
+        }
+        if (o.startsWith("java/lang/reflect/") || o.startsWith("sun/reflect/") || o.startsWith("jdk/internal/")
+                || o.startsWith("sun/misc/") || (o.startsWith("java/lang/invoke/") && !lambdaBootstrapOwner(o))
+                || m.startsWith("getDeclared") || "setAccessible".equals(m) || "forName".equals(m)
+                || ("java/lang/Class".equals(o) && !mechanicsClassAdmits(m))
+                || "java/lang/ClassLoader".equals(o) || "java/net/URLClassLoader".equals(o)
+                || "java/util/ServiceLoader".equals(o)) {
+            return "REFLECTION (java.lang.reflect / invoke, Class members, forName, getDeclared*, setAccessible,"
+                    + " class loading): a test reaches the game through the harness, never around a type";
+        }
+        return null;
+    }
+
+    /** The members of {@code Thread} that neither start, stop nor pause a thread. */
+    private static boolean mechanicsThreadAdmits(String member) {
+        switch (member) {
+            case "currentThread":
+            case "interrupt":
+            case "isInterrupted":
+            case "interrupted":
+            case "getName":
+            case "getId":
+            case "getStackTrace":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * The members of {@code Class} a mechanics test may use: those an e2e may, plus reading an annotation it
+     * declared (the runner and the scopes read a class's declarations) and finding a shipped resource by
+     * path; none opens a member or loads a type.
+     */
+    private static boolean mechanicsClassAdmits(String member) {
+        switch (member) {
+            case "getAnnotation":
+            case "isAnnotationPresent":
+            case "getAnnotationsByType":
+            case "getResource":
+            case "getResourceAsStream":
+                return true;
+            default:
+                return classAdmits(member);
         }
     }
 

@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipReadiness;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 import org.junit.Test;
 
@@ -33,6 +34,19 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
      * hull never reached the registry at all, which is news about the subject.
      */
     private static final int REGISTER_TICKS = 200;
+
+    /**
+     * Server ticks after an immediate load request within which both wanters have been served: the
+     * world's loading pass runs immediately before the load queues are drained, every tick, so the first
+     * whole tick after the request queues the background load and drains both. Two, because the request
+     * may arrive inside a tick already past its loading pass.
+     */
+    private static final int BOTH_WANTERS_SERVED_TICKS = 2;
+
+    private static final String DIED = "asking for an immediate load of a ship the world was already loading"
+            + " in the background took the dedicated server down. A satisfied request - the ship is loaded,"
+            + " which is what both wanted - is being raised as an exception out of the world tick, and nothing"
+            + " above it catches.";
 
     private static final String SLOT = "slot";
     private static final String COUNT = "count";
@@ -110,6 +124,13 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
      * server is still up" passes trivially on a build where the load request did nothing.</p>
      */
     @Test
+    @RedWitness(verdict = "the server survives both wanters",
+            member = "WorldServerShipManager#loadAndUnloadShips",
+            at = "if (loadedShips.containsKey(toLoadID)) { continue; }",
+            replacedBy = "if (loadedShips.containsKey(toLoadID)) { throw new IllegalStateException(\"already loaded\"); }",
+            fails = "asking for an immediate load of a ship the world was already loading in the background took"
+                    + " the dedicated server down",
+            on = "2026-10-12")
     public void anImmediateLoadOfAPermanentlyLoadedShipDoesNotKillTheServer() throws Exception {
         final int baseX = 8200, baseZ = 8200;
         ShipReadiness.letShipsUnload(this::exec, "the ship has to UNLOAD before anything can ask for it twice");
@@ -145,24 +166,37 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
             ShipReadiness.holdShipsLoaded(this::exec,
                     "the world's pass only queues the background load while the ship is permanently"
                     + " loaded and unloaded — that is the second of the two wanters");
+            // The window: two reads of the server's own clock around the tick on which both wanters meet.
+            // The server dying inside it ends the window early, and that IS the verdict, so a clock that
+            // stops answering is reported as the subject, with what it threw.
+            long requested = serverTick();
             exec("stellurgytest vs load-ships 0");
-            // WALL-CLOCK on purpose, the one pause that is: the subject is the server DYING, and a
-            // tick-budgeted pause asks the server what time it is, so on the defect it would throw its
-            // own "the clock stopped" before isAlive could say what happened. The instrument must
-            // outlive its subject.
-            Thread.sleep(3000L);
-
-            assertTrue("asking for an immediate load of a ship the world was already loading in the "
-                            + "background took the dedicated server down. A satisfied request - the ship is "
-                            + "loaded, which is what both wanted - is being raised as an exception out of the "
-                            + "world tick, and nothing above it catches.",
-                    client().isAlive());
+            long served;
+            try {
+                GameTicks.advance(client(), GameTicks.server(), BOTH_WANTERS_SERVED_TICKS);
+                served = serverTick();
+            } catch (Exception | AssertionError stopped) {
+                throw new AssertionError(DIED + " The server stopped answering within "
+                        + BOTH_WANTERS_SERVED_TICKS + " ticks of the request (process alive: "
+                        + client().isAlive() + ").", stopped);
+            }
+            assertTrue("the window must span the world's loading pass after the request: server ticks "
+                    + requested + " -> " + served, served - requested >= BOTH_WANTERS_SERVED_TICKS);
+            assertTrue(DIED, client().isAlive());
             assertTrue("the server survived, but the ship was never loaded, so its survival says nothing "
                     + "about serving two load requests at once: " + overworldCounters(),
                     ShipReadiness.loadedCount(this::exec, 0) >= 1);
-        } finally {
-            ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+        } catch (Exception | AssertionError verdict) {
+            // The opt-out's end is sent to the server this scenario may have just killed; its failure then
+            // rides on the verdict instead of replacing it.
+            try {
+                ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+            } catch (Exception cleanup) {
+                verdict.addSuppressed(cleanup);
+            }
+            throw verdict;
         }
+        ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
     }
 
     /** Both overworld counters together: the pair is the diagnosis. */

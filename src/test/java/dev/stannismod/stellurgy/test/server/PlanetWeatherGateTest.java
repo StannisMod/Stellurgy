@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+
 import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -40,7 +42,6 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(PlanetWeatherGateTest.Galaxy.class)
 public class PlanetWeatherGateTest extends AbstractSharedServerTest {
 
     /**
@@ -58,6 +59,11 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
     private static final int DIM_THICK_RAIN  = 9112; // density 100, rainMarker 1  -> must rain
     private static final int DIM_DRY_THUNDER = 9113; // density 100, thunder 1 / rain -1 -> no thunder
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {

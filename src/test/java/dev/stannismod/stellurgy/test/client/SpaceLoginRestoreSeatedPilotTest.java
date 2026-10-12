@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
@@ -40,6 +42,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * 1032.8 s at 8 forks in ONE gradle fork (2026-08-07) — and a unit nobody can shorten can still be
  * divided.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
 public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreClientTest {
 
     /**

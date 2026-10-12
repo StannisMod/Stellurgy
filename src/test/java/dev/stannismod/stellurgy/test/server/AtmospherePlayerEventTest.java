@@ -33,7 +33,6 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * ({@link #startFromTheOverworld}): resolved as breathable there, he owes a change of answer on the
  * airless planet, which is what guarantees the resolution it waits for is recorded.</p>
  */
-@SeededWorld(AtmospherePlayerEventTest.Galaxy.class)
 public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /**
@@ -55,6 +54,11 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     private static final String PLAYER_ATMOS = "atmosphere";
     private static final String PLAYER_BREATHABLE = "breathable";
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** A vacuum planet and a breathable one, otherwise identical. */
     public static final class Galaxy implements WorldSeed {

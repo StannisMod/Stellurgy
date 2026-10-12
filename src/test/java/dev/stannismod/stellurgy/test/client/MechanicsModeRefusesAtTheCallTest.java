@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.ClientCommandRefused;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
@@ -42,6 +44,7 @@ import static org.junit.Assert.assertTrue;
  * <p>SEPARATE-BOOT: a judge's refusal is the subject, and the planted calls leave things behind (an item in
  * his hand) that a shared pair would hand to every other scenario.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.GLOBAL_MUTATION)
 public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
 
     /** The server gate's refusal, as the bridge names the thrown class. */

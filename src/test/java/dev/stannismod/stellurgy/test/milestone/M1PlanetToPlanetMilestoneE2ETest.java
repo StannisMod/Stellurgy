@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.milestone;
 
+import dev.stannismod.stellurgy.test.contract.NewPath;
+
 import dev.stannismod.stellurgy.test.EvictionReports;
 import java.util.Locale;
 
@@ -80,6 +82,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * reads. What the player's start differs in is declared, typed, in {@link #playerStart}; the base writes
  * it before the server boots.</p>
  */
+@NewPath("a player builds a jump-capable craft, assembles it into a ship at the assembler's screen, boards its pilot seat and flies it off the planet to orbit")
 public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
 
     /**

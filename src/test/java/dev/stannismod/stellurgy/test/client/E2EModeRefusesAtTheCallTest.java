@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.ClientCommandRefused;
@@ -20,7 +22,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
-import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +41,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * call below was once written into an e2e in a form a text scan of the test did not see — a verb assembled
  * at run time, a constant of another class, an instance helper, a method reference, a lambda in a field
  * initialiser, a method named like an instrument, a read word as an argument, a static call on a production
- * class, a root the scan had no name for, a call by reflection — or was found admitted by adversarial round
+ * class, a root the scan had no name for — or was found admitted by adversarial round
  * 4: a static of the test source set that is no instrument (one could clear the mode's own property), an
  * item or tile tag in a vanilla command, a block nobody obtains, a "read" that adopted machines and minted
  * an id, a chunk ticket filed as a build, a head turned to NaN, an input burst no tick reads — or by round 5:
@@ -58,11 +59,14 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * against its handler when the row is added); whether a BUILD lays only what the player's start holds
  * beyond the deny-list of unobtainable blocks (a reading of the fixture); whether a named instrument's body
  * reaches the mod (a reading of the row); and a bypass command this list does not send — a NEW bridge
- * command is refused only if its kind says so.</p>
+ * command is refused only if its kind says so. A call made by reflection is not sent from here: the build
+ * refuses reflection in the e2e's code and in the mechanics tier's alike ({@code E2EConfinement}), so this
+ * class could not hold one.</p>
  *
  * <p>SEPARATE-BOOT: e2e mode is a JVM property of the server and client children, set at their launch, so
  * no shared client base can carry it.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.JVM_PROPERTY)
 public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
 
     /** The server gate's refusal, as the bridge names the thrown class. */
@@ -293,19 +297,11 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectServerRefusal(notRefused, "execute @a ~ ~ ~ tp @s 0 100 0", "COMMAND");
         expectServerRefusal(notRefused, "stellurgy goto 5", "COMMAND");
         expectServerRefusal(notRefused, "forge tps", "COMMAND");
-        expectServerRefusalByReflection(notRefused, "tp @a 0 120 0");
 
         // ---- the client: the verbs that name their target or write what input would have produced ----
         expectClientRefusal(notRefused, "interact_block", "BYPASS", () -> bot.interactBlock(1, 2, 3));
         expectClientRefusal(notRefused, "interact_block", "BYPASS", clickTheBlockFromAField);
         expectClientRefusal(notRefused, "interact_block", "BYPASS", () -> fenceWhatTheClientSent(bot));
-        expectClientRefusal(notRefused, "interact_block", "BYPASS", () -> {
-            try {
-                ClientBot.class.getMethod("interactBlock", int.class, int.class, int.class).invoke(bot, 1, 2, 3);
-            } catch (InvocationTargetException wrapped) {
-                throw (Exception) wrapped.getCause();
-            }
-        });
         java.util.concurrent.Callable<?> useByReference = bot::useItem;
         expectClientRefusal(notRefused, "use_item", "BYPASS", useByReference::call);
         expectClientRefusal(notRefused, "send_chat", "BYPASS", () -> bot.sendChat("/stellurgy go"));
@@ -433,19 +429,6 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
             notRefused.add("`" + command + "` RAN");
         } catch (ServerCommandFailed failed) {
             judgeServerRefusal(notRefused, command, kind, failed.reply());
-        }
-    }
-
-    private void expectServerRefusalByReflection(List<String> notRefused, String command) throws Exception {
-        try {
-            server.client().getClass().getMethod("execute", String.class).invoke(server.client(), command);
-            notRefused.add("`" + command + "` sent by reflection RAN");
-        } catch (InvocationTargetException wrapped) {
-            if (!(wrapped.getCause() instanceof ServerCommandFailed)) {
-                throw wrapped;
-            }
-            judgeServerRefusal(notRefused, command + " (by reflection)", "COMMAND",
-                    ((ServerCommandFailed) wrapped.getCause()).reply());
         }
     }
 

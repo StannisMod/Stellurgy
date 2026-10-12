@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -32,7 +34,6 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  *
  * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-@SeededWorld(PlanetXmlConfigIntegrationTest.Galaxy.class)
 public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
 
     /** Dim id we declare in the fixture. Must be outside vanilla 0/-1/1 + Stellurgy's
@@ -44,6 +45,11 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
     private static final int FIXTURE_ATM_DENSITY = 50;
     private static final int FIXTURE_ROTATIONAL_PERIOD = 16000;
 
+
+    @Override
+    protected void seedGameDirectory(GameDirSeed seed) {
+        new Galaxy().seed(seed);
+    }
 
     /** The galaxy this class's one shared server boots over. */
     public static final class Galaxy implements WorldSeed {

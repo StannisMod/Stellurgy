@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
@@ -31,6 +33,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * supplies gas, never the reading. Manual harness lifecycle: the planet file must be on disk before the
  * first boot, and the second boot runs against the same directory.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.STARTUP_FILE)
 public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanicsTest {
 
     private static final int DIM = 9731;
