@@ -59,24 +59,20 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     private static final double RESEATED_AT_HIS_STAND_BLOCKS = 1.1;
 
     /**
-     * How far an ascending body must rise ALONG THE DECK NORMAL, and how far it may stray across
-     * it, in subspace blocks.
-     *
-     * <p>Both are the test's own, and the pair is the whole claim: the climb is along the deck's
-     * own +Y rather than the world's. The lateral bound is deliberately close to the vertical one,
-     * so a body climbing at 45 degrees — which is what a world-frame ascent looks like on a rolled
-     * deck — fails.</p>
+     * The least a held ascend climbs, in subspace blocks: ONE tick of the fly impulse —
+     * vanilla's creative fly speed (0.05, {@code PlayerCapabilities}) times the impulse factor the
+     * flying-aboard path applies along the deck's up ({@code ShipFrameTravel#FLY_IMPULSE_FACTOR},
+     * 3.0). Any held tick that reached the resolver moves him at least this far, on any box; a body
+     * the impulse no longer lifts moves only by the residue of the double-tap, which the four
+     * ticks of flight drag before the hold have taken to under a hundredth.
      */
-    private static final double ASCENT_ALONG_NORMAL_BLOCKS = 1.2;
-    /** @see #ASCENT_ALONG_NORMAL_BLOCKS */
-    private static final double ASCENT_LATERAL_BLOCKS = 1.6;
+    private static final double ONE_HELD_TICK_CLIMB_BLOCKS = 0.05 * 3.0;
 
     /**
      * Readings, two client ticks apart, of a flyer holding ascend on the deck — and so the DOSE of
-     * flight: four client ticks, which the 2026-09-23 gate measured taking him +2 along the deck
-     * normal (subFly=129.0, dySub=2.0 after two samples), against the {@link
-     * #ASCENT_ALONG_NORMAL_BLOCKS} the assertion asks for. One measurement, printed on every run as
-     * {@code [flyaboard]}, is what a retuning starts from.
+     * flight: four client ticks. Nothing in the verdict depends on how far the dose carries him
+     * beyond {@link #ONE_HELD_TICK_CLIMB_BLOCKS}: the assertion is the DIRECTION of whatever climb
+     * the dose bought. One measurement, printed on every run as {@code [flyaboard]}, shows it.
      */
     private static final int FLY_ABOARD_DOSE_SAMPLES = 2;
 
@@ -670,6 +666,15 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * descend: "holding descend must sink along the DECK
      * NORMAL (subspace -Y): 131.0 -&gt; 132.0". The ABOARD commit after the dismount is the
      * arrangement's link (server-committed).</p>
+     *
+     * <p>red-witnessed: the ascent, two verdicts, one inversion each, 2026-10-07. THE CLIMB'S
+     * DIRECTION — {@code ShipFrameTravel#flyingAboardTravel} at {@code motion[1] += flyImpulse * fly}
+     * given a twin along the deck plane ({@code motion[0] += flyImpulse * fly}): "holding ascend must
+     * climb along the DECK NORMAL, not the world's up: deck-plane drift 1.666 per 0.887 of climb,
+     * against 1.672 for a world-up climb at this roll (bound 0.836)". THE CLIMB ITSELF — the same
+     * line removed: "holding ascend must CLIMB (subspace +Y rising by at least the 0.15 one held tick
+     * adds)". (A full world-up impulse was tried first and drifted the body off the deck, so the
+     * release absence below went red before the climb was asserted; the climb is now asserted first.)</p>
      */
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
@@ -693,11 +698,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: the gate's angle is not a choice: the ascent bounds below
-        // (ASCENT_ALONG_NORMAL_BLOCKS 1.2 along the normal, ASCENT_LATERAL_BLOCKS 1.6 across it)
-        // tell a deck-normal ascent from a world-up one only past tan(theta) = 1.6 / 1.2, i.e. 53.1
-        // degrees — below that a world-up climb can pass both. So the hull must be past it, with a
-        // degree of margin inside the commanded 60.
+        // WINDOW: the hold never decides it has arrived, so the roll is read after the window and
+        // the ascent's bound is computed FROM that reading (half of tan(roll), see the ascent
+        // below). The floor here keeps that bound well clear of a correct climb's nil drift: at 54
+        // degrees a world-up climb drifts 1.38 per block of climb against a bound of 0.69, and a
+        // healthy run measured the deck-plane drift at 8.8e-8 over a 1.96-block climb (2026-10-07,
+        // seven flying commits).
         GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);
         double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         scenario().requireArranged("the hull must be rolled past the angle the ascent bounds can"
@@ -742,16 +748,16 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         StringBuilder trace = new StringBuilder();
         int trackedSeen = 0, camSeen = 0, samples = 0;
         double[] subEnd = subFly;
-        // A fixed DOSE of held ascend, sampled as it goes. It used to climb "to a target rise" with
-        // an early exit at +2, on the belief that the climb rate varies run to run; it is the
-        // player's own flight, stepped once per CLIENT tick by his client, and the census that
-        // measures it is taken by that same client on those same ticks — so a count of client ticks
-        // is a count of flight on any box. The stay region's edge is ~4 blocks above the hull top,
-        // and the dose stops well short of it.
+        // A DOSE of held ascend, sampled as it goes. What the dose buys is a climb to measure the
+        // DIRECTION of, and the direction is the contract: how FAR four ticks carry him is vanilla's
+        // flight law times the dose, and asking for a distance made the verdict hang on where inside
+        // a block the floored census happened to start. The climb is read below from the client's
+        // own per-tick commits, at full precision, from this mark.
+        long ascendMark = clientEvents.mark();
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         try {
-            // EXPERIMENT: four ticks of held ascend, the stretch the 2026-09-23 gate measured reaching +2
-            // (subFly=129.0 dySub=2.0 after two samples).
+            // EXPERIMENT: the dose of held ascend; the stay region's edge is ~4 blocks above the
+            // hull top, and the dose stops well short of it.
             for (int i = 0; i < FLY_ABOARD_DOSE_SAMPLES; i++) {
                 bot().waitWorldTicks(2);
                 samples++;
@@ -773,14 +779,46 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         } finally {
             bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         }
-        double dySub = subEnd[1] - subFly[1];
-        double dxzSub = Math.sqrt((subEnd[0] - subFly[0]) * (subEnd[0] - subFly[0])
-                + (subEnd[2] - subFly[2]) * (subEnd[2] - subFly[2]));
+        // WINDOW: the climb is the first and the last of this body's FLYING-ABOARD commits since the
+        // mark (`ship_frame_tick`, path `f` — the resolver's own subspace point, unfloored), and the
+        // assertion below names both. No record closes a climb, and none is needed: the question is
+        // which way the commits moved, which any two of them answer.
+        String flightTicks = clientEvents.since(ascendMark, "ship_frame_tick");
+        Events.assertInstrumentRan(flightTicks, "ship_frame_tick_events",
+                "the held ascend moved the body along the deck normal");
+        java.util.List<String> flying = Events.recordsWhereAll(flightTicks,
+                "who", botName(), "path", "f");
+        scenario().requireArranged("the held ascend must be resolved by the flying-aboard path"
+                + " at least twice, or there is no climb to take a direction of: " + flightTicks,
+                flying.size() >= 2);
+        String climbFrom = flying.get(0);
+        String climbTo = flying.get(flying.size() - 1);
+        double dySub = Events.number(climbTo, "heldY") - Events.number(climbFrom, "heldY");
+        double dxSub = Events.number(climbTo, "heldX") - Events.number(climbFrom, "heldX");
+        double dzSub = Events.number(climbTo, "heldZ") - Events.number(climbFrom, "heldZ");
+        double dxzSub = Math.sqrt(dxSub * dxSub + dzSub * dzSub);
         System.out.println("[flyaboard] subFly=" + subFly[1] + " dySub=" + dySub + " dxzSub="
-                + dxzSub + " tracked=" + trackedSeen + "/" + samples + " cam=" + camSeen
-                + "/" + samples + " :: " + trace);
+                + dxzSub + " over " + flying.size() + " flying commits, tracked=" + trackedSeen
+                + "/" + samples + " cam=" + camSeen + "/" + samples + " :: " + trace);
 
-        // The contract, in its three player-visible parts. The first is an ABSENCE and is read as
+        // The climb first, because a climb that leaves the deck's normal drifts the body off the deck
+        // and is RELEASED for it, and that release would otherwise be the only thing a wrong climb
+        // ever reported. Two predictions, and the verdict is which one the climb is nearer. Along the
+        // deck normal the climb is all subspace +Y and its deck-plane drift is nil; a WORLD-up climb
+        // on a hull rolled by `roll` puts tan(roll) of deck-plane drift beside every block of climb.
+        // The bound is half of that, from the roll MEASURED above, so it sits between the two
+        // whatever the hull actually reached.
+        double roll = Math.acos(Math.max(-1.0, Math.min(1.0, upAfter)));
+        double worldUpDrift = Math.tan(roll);
+        assertTrue("holding ascend must CLIMB (subspace +Y rising by at least the "
+                + ONE_HELD_TICK_CLIMB_BLOCKS + " one held tick adds): from " + climbFrom
+                + " to " + climbTo, dySub >= ONE_HELD_TICK_CLIMB_BLOCKS);
+        assertTrue("holding ascend must climb along the DECK NORMAL, not the world's up: deck-plane"
+                + " drift " + dxzSub + " per " + dySub + " of climb, against " + worldUpDrift
+                + " for a world-up climb at this roll (bound " + (worldUpDrift / 2.0) + "); from "
+                + climbFrom + " to " + climbTo, dxzSub < dySub * worldUpDrift / 2.0);
+
+        // The rest of the contract, in its player-visible parts. The first is an ABSENCE and is read as
         // one: the client's resolver records EVERY release with the gate that performed it, so
         // "starting flight did not release the capture" is "no `deck_released` since the mark" -
         // where the per-sample server probe could only miss a release that was recovered between
@@ -796,10 +834,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 + trackedSeen + "/" + samples + "): " + trace, trackedSeen == samples);
         assertTrue("the ship camera must stay engaged for a flying-aboard body (cam " + camSeen
                 + "/" + samples + ")", camSeen == samples);
-        // The census position is block-floored, so allow a block of lateral jitter; a WORLD-up
-        // ascent at 60 deg would drift the deck plane by ~1.7x the climb (several blocks here).
-        assertTrue("holding ascend must climb along the DECK NORMAL (subspace +Y): dySub=" + dySub
-                + " dxzSub=" + dxzSub + " :: " + trace, dySub > ASCENT_ALONG_NORMAL_BLOCKS && dxzSub < ASCENT_LATERAL_BLOCKS);
 
         // Descend back toward the deck first - the flight-off double-tap itself adds a little
         // climb, and toggling at the stay region's edge exits it mid-flight (leaving the stay
