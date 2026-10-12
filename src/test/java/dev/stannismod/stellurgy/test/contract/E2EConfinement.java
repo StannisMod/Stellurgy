@@ -601,7 +601,7 @@ final class E2EConfinement {
             if (simple.startsWith("HarnessBoot") || simple.startsWith("ClientBot") || simple.startsWith("ClientChannel")
                     || simple.startsWith("RealClientHarness") || simple.startsWith("RealDedicatedServerHarness")
                     || simple.startsWith("AbstractMechanicsTest") || simple.startsWith("TestClassScope")
-                    || simple.startsWith("AbstractHeadlessServerTest") || simple.startsWith("AbstractClientE2ETest")
+                    || simple.startsWith("AbstractHeadlessServerTest") || simple.startsWith("AbstractOwnBootClientTest")
                     || m.startsWith("start")) {
                 return "A HARNESS START OR THE BYPASS CLIENT (HarnessBoot, start*, ClientBot, ClientChannel, a"
                         + " mechanics base)";

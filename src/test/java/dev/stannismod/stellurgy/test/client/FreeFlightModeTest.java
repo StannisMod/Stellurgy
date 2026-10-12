@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -33,7 +33,7 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
 /**
  * Real-client end-to-end coverage for Free Flight Mode.
  *
- * <p>This boots both a dedicated server (via {@link AbstractClientE2ETest})
+ * <p>This boots both a dedicated server (via {@link AbstractOwnBootClientTest})
  * and a real MC client bot that connects in. The bot acts as a passenger;
  * server-side probes flip flight mode, push FF input, and the real server
  * tick loop runs {@code tickFreeFlight} on the live entity. The bot polls

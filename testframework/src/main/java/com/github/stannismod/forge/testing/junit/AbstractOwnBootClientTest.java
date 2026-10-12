@@ -9,8 +9,9 @@ import org.junit.Assume;
 import org.junit.Before;
 
 /**
- * JUnit 4 base class for end-to-end scenarios that need both a real Forge
- * dedicated server AND a real Minecraft client connected to it.
+ * JUnit 4 base class for a MECHANICS test that needs both a real Forge dedicated
+ * server AND a real Minecraft client connected to it, on a boot of its own. It is
+ * not an e2e: an e2e walks a player's path and extends {@link AbstractPlayerE2ETest}.
  *
  * <p>Lifecycle:</p>
  * <ul>
@@ -26,7 +27,7 @@ import org.junit.Before;
  *   <li>{@code @After} — closes client and server in order.</li>
  * </ul>
  *
- * <p>Client E2E tests are <b>significantly</b> heavier than headless server
+ * <p>Client tests are <b>significantly</b> heavier than headless server
  * tests: each takes ~60-90s (server JVM + client JVM + GL + bridge handshake)
  * and consumes ~3-4 GB RAM. Plan {@code maxParallelForks} accordingly — typical
  * dev workstations can run 2-3 concurrent client tests; CI may need a single
@@ -34,7 +35,7 @@ import org.junit.Before;
  *
  * <p>Typical usage:</p>
  * <pre>{@code
- *   public class PlanetSelectorGuiE2ETest extends AbstractClientE2ETest {
+ *   public class PlanetSelectorGuiTest extends AbstractOwnBootClientTest {
  *       @Test
  *       public void clickingPlanetUpdatesServerSelection() throws Exception {
  *           bot().openInventory();
@@ -45,7 +46,7 @@ import org.junit.Before;
  *   }
  * }</pre>
  */
-public abstract class AbstractClientE2ETest {
+public abstract class AbstractOwnBootClientTest {
 
     /** Same as {@link AbstractHeadlessServerTest#PROP_HARNESS_ENABLED}. */
     public static final String PROP_HARNESS_ENABLED = AbstractHeadlessServerTest.PROP_HARNESS_ENABLED;

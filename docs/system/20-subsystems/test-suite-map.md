@@ -2,7 +2,7 @@
 id: test-suite-map
 packages: [test, test/unit, test/server, test/client, test/integration]
 files: 466            sloc: 102917  # both RECOUNTED live 2026-08-20 on the merged tree — never incremented, always re-taken
-entrypoints: [MinecraftBootstrap#ensure, AbstractSharedServerTest#startSharedHarness, AbstractHeadlessServerTest (ext lib), AbstractClientE2ETest (ext lib)]
+entrypoints: [MinecraftBootstrap#ensure, AbstractSharedServerTest#startSharedHarness, AbstractHeadlessServerTest (ext lib), AbstractOwnBootClientTest (ext lib)]
 depends-on: [ALL — the suite is the second oracle for every gameplay subsystem]
 depended-by: []
 contracts: [C1, C2, C3, C4, C5, C6]
@@ -37,7 +37,7 @@ Does NOT own: the `/stellurgytest` verb *catalogue* (that is `stellurgytest-prob
 | `StellurgyTestConstants` | `test/StellurgyTestConstants.java:10` | stable seeds/dim-ids: `stellurgy.tests` gate, seed `0x4151544553544C`, dims 9001-9004 |
 | `AbstractSharedServerTest` | `test/server/AbstractSharedServerTest.java:67` | class-scoped single dedicated-server JVM (`@BeforeClass`/`@AfterClass`); 172 subclasses |
 | `AbstractHeadlessServerTest` | ext `com.github.stannismod.forge.testing.junit` | per-`@Test` fresh dedicated-server JVM; 26 direct subclasses (restart/isolation tests) |
-| `AbstractClientE2ETest` | ext lib | boots server + real MC client bot; 25 subclasses (`client/`) |
+| `AbstractOwnBootClientTest` | ext lib | boots server + real MC client bot; 25 subclasses (`client/`) |
 | `RealDedicatedServerHarness` / `TestClient` | ext lib | server process + `/stellurgytest` command client (`client().execute(...)`) |
 | `Events` | `test/Events.java` | waits for an EVENT instead of sampling a value: `mark()` before the action, then `await(type)` / `assertChain(A,B,C)` over the side's ordered log — the server's is `test/trace/ServerEventLog`, an instance field of that server's `SideTrace` (a test mixin puts the `SideTrace` on the `MinecraftServer`), fed by the stateless `ServerEventRecorder` and read through the probe's `invoke-static` (`ServerEventLog.markReply` / `sinceReply`); it replaced the production `command/test/TestEventLog`, now deleted, so a shipped game carries no log. `markInstrumented()` additionally asserts the test-only mixins were installed, without which a mixin-sourced absence means nothing |
 | `TestTrace` / `test/mixin/` | `test/trace/TestTrace.java`, `test/mixin/*` | the test-only mixin tree and its side router. Queued in a harness-launched JVM only (`mixins.stellurgy.test.json`, named in the harness coremod's own code, `ForgeTestCoreMod.CONSUMER_CONFIG`), so an observation a test needs never becomes a line a shipped game runs |
@@ -52,7 +52,7 @@ Does NOT own: the `/stellurgytest` verb *catalogue* (that is `stellurgytest-prob
 | `unit/` | 137 | none / `MinecraftBootstrap` | JVM only | common | pure math, NBT round-trip, contract pins, no world |
 | `integration/` | 15 | `MinecraftBootstrap` | static registries | common | packet wire round-trip, XML loader, atmosphere/dim logic |
 | `server/` | 242 | `AbstractSharedServerTest` (186) / `AbstractHeadlessServerTest` (26) | real dedicated server | server | probe-driven world scenarios, recipe E2E, persistence-restart |
-| `client/` | 68 | `AbstractSharedClientTest` (12) / `AbstractClientE2ETest` (25) + helpers | server + client bot | both | cross-side replication, GUI, item right-click, keybind→packet |
+| `client/` | 68 | `AbstractSharedClientTest` (12) / `AbstractOwnBootClientTest` (25) + helpers | server + client bot | both | cross-side replication, GUI, item right-click, keybind→packet |
 | root | 2 | — | — | — | `MinecraftBootstrap`, `StellurgyTestConstants` |
 
 Class counts are a scan (`grep -l '@Test' <dir>/*.java`: the classes that contain a `@Test`) and drift; they are a lower bound,
@@ -72,7 +72,7 @@ commands need `stellurgy.tests`. Headless CI skips server+client tiers.
   server in `@BeforeClass`, shared by all methods; subclass contract = position-isolated,
   id-fresh, no cross-method state leak, probe-only mutations. One method crash fails the
   whole class. `test/server/AbstractSharedServerTest.java:67`.
-- **MECH-TST-03 — real-client E2E bot.** `AbstractClientE2ETest` boots server + a real MC
+- **MECH-TST-03 — real-client E2E bot.** `AbstractOwnBootClientTest` boots server + a real MC
   client that connects, mounts entities, presses keys; asserts cross-side replication via
   `/stellurgytest * info` polling. `test/client/FreeFlightModeTest.java:17`.
 - **MECH-TST-04 — pure-unit bootstrap.** `MinecraftBootstrap.ensure()` wires just enough

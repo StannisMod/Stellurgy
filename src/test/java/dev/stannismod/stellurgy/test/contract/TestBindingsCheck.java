@@ -653,7 +653,7 @@ public final class TestBindingsCheck {
             // The bases that boot a server (and a client) for a mechanics class alone.
             Class<?>[] ownBootBases = {
                     com.github.stannismod.forge.testing.junit.AbstractMechanicsTest.class,
-                    com.github.stannismod.forge.testing.junit.AbstractClientE2ETest.class,
+                    com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest.class,
                     com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest.class};
             boolean ownBoot = false;
             for (Class<?> base : ownBootBases) {

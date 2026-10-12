@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.ClassScope;
 import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
@@ -62,7 +62,7 @@ import static org.junit.Assert.assertTrue;
  *       failure name the broken system without anyone opening this file.</li>
  *   <li><b>No un-restored global mutation.</b> Atmosphere density and weather are shareable only if
  *       every scenario SETS what it needs and MEASURES that the set took; a scenario that assumes a
- *       global instead belongs on the per-method {@link AbstractClientE2ETest}. ({@code vs
+ *       global instead belongs on the per-method {@link AbstractOwnBootClientTest}. ({@code vs
  *       permaload} used to be on this list and is not any more: a test server holds its ships
  *       loaded from the moment the probes register, so it is a property of the server rather than
  *       something each scenario sets — and the three whose subject IS an unloaded ship turn it off
@@ -278,9 +278,9 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         Assume.assumeTrue(
                 "Client harness disabled — set -D"
-                        + AbstractClientE2ETest.PROP_CLIENT_ENABLED + "=true",
+                        + AbstractOwnBootClientTest.PROP_CLIENT_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
-                        AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
+                        AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
 
         // One scope per class run, closed by the runner when the class ends, so a pair that is up
         // is this class's pair.
@@ -1028,7 +1028,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
     private static final int CHAT_FENCE_TICKS = 200;
 
     // The POINT form of `appliedInsidePlot` lives in ClientEvents.appliedNear, because the tier has
-    // two class hierarchies — these shared bases and the harness's own AbstractClientE2ETest — and a
+    // two class hierarchies — these shared bases and the harness's own AbstractOwnBootClientTest — and a
     // wait that belongs to both must not be solved by copying it into each.
 
     /** Whether any {@code client_health_updated} in a {@code since} reply carries at least {@code

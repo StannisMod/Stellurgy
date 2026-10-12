@@ -5,7 +5,7 @@ import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.ClientCommandRefused;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -65,7 +65,7 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         Assume.assumeTrue("Server harness disabled",
                 Boolean.parseBoolean(System.getProperty(AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         Assume.assumeTrue("Client harness disabled",
-                Boolean.parseBoolean(System.getProperty(AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
+                Boolean.parseBoolean(System.getProperty(AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
         server = RealDedicatedServerHarness.start(harnessBoot());
         try {
             client = RealClientHarness.start(harnessBoot(), server);

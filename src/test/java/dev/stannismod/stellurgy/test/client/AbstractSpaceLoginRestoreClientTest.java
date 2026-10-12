@@ -4,7 +4,7 @@ import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
@@ -314,9 +314,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         Assume.assumeTrue(
-                "Client harness disabled - set -D" + AbstractClientE2ETest.PROP_CLIENT_ENABLED + "=true",
+                "Client harness disabled - set -D" + AbstractOwnBootClientTest.PROP_CLIENT_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
-                        AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
+                        AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
 
         root = Files.createTempDirectory("forge-client-space-login-restore-");
     }

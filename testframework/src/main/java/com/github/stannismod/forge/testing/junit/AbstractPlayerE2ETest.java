@@ -65,9 +65,9 @@ public abstract class AbstractPlayerE2ETest {
         Assume.assumeTrue("Server harness disabled — set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED
                         + "=true to enable",
                 Boolean.parseBoolean(System.getProperty(AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        Assume.assumeTrue("Client harness disabled — set -D" + AbstractClientE2ETest.PROP_CLIENT_ENABLED
+        Assume.assumeTrue("Client harness disabled — set -D" + AbstractOwnBootClientTest.PROP_CLIENT_ENABLED
                         + "=true to enable",
-                Boolean.parseBoolean(System.getProperty(AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
+                Boolean.parseBoolean(System.getProperty(AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
 
         PlayerStart start = playerStart();
         Path gameDir = Files.createTempDirectory("forge-player-e2e-");

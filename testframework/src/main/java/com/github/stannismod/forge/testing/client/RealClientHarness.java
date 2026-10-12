@@ -252,7 +252,7 @@ public final class RealClientHarness implements AutoCloseable {
      * applied as the environment variable {@code <NAME>} on the client
      * process, overriding whatever the test JVM inherited.</p>
      *
-     * <p>This exists because {@code AbstractClientE2ETest} runs a dedicated
+     * <p>This exists because {@code AbstractOwnBootClientTest} runs a dedicated
      * server harness AND a client in the same test JVM. The server harness
      * inherits the test JVM's environment (which a FG6 build script populates
      * from the {@code runServer} run-config — {@code mainClass}, {@code tweakClass},

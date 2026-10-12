@@ -54,7 +54,7 @@ public final class ClientEvents {
      * a block: a placement above the surface may settle onto it.</p>
      *
      * <p>Static, and here rather than on a base class, because the tier has TWO hierarchies — the
-     * shared Stellurgy bases and the harness's own {@code AbstractClientE2ETest} — and this is the third
+     * shared Stellurgy bases and the harness's own {@code AbstractOwnBootClientTest} — and this is the third
      * time a wait that belongs to both has been solved by copying it into each.</p>
      *
      * @param clientLog the CLIENT's log ({@link #of})

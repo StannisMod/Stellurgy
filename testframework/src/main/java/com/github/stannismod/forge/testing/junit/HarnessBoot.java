@@ -5,7 +5,7 @@ package com.github.stannismod.forge.testing.junit;
  * {@code RealDedicatedServerHarness} and {@code RealClientHarness} takes as its first argument.
  *
  * <p><b>Who can hold one.</b> The constructor is package-private, so only the bases of this package make
- * one: the mechanics bases ({@link AbstractHeadlessServerTest}, {@link AbstractClientE2ETest}) for their
+ * one: the mechanics bases ({@link AbstractHeadlessServerTest}, {@link AbstractOwnBootClientTest}) for their
  * own boots, {@link AbstractMechanicsTest#harnessBoot()} and {@link TestClassScope#harnessBoot()} for a
  * mechanics class or scope that starts its own, and {@link AbstractPlayerE2ETest} for the e2e pair it
  * starts itself. An e2e extends {@link AbstractPlayerE2ETest}, which hands out none — so a second server

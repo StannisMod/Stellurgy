@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 
 import dev.stannismod.stellurgy.test.EvictionReports;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
@@ -32,11 +32,11 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  *
  * <p>NEW-GROUP: weapons as a real client sees and drives them -- beam, shot and aim replication, the
  * weapon GUIs, the linker, the hand repair. No existing client group holds the weapon cluster; this
- * class and the eight others on {@code AbstractClientE2ETest} that name this cluster are its members
+ * class and the eight others on {@code AbstractOwnBootClientTest} that name this cluster are its members
  * until they are folded into one group class. A mechanics test, not an e2e: it arranges the
  * weapon's state by probe.</p>
  */
-public class TurretFriendOrFoeTest extends AbstractClientE2ETest {
+public class TurretFriendOrFoeTest extends AbstractOwnBootClientTest {
 
     /** What the logs this test reads have already announced about evictions. */
     private final EvictionReports evictions = new EvictionReports();

@@ -514,7 +514,7 @@ def configureHarnessTest = { Test t, boolean enableClient ->
     })
 
     t.systemProperty 'stellurgy.tests', 'true'
-    // Gate that flips AbstractHeadlessServerTest / AbstractClientE2ETest from
+    // Gate that flips AbstractHeadlessServerTest / AbstractOwnBootClientTest from
     // Assume-skip to live. Without it the whole layer no-ops.
     t.systemProperty 'forge.test.harness.enabled', 'true'
     // Pin the assets dir to RFG's resolved location (framework default guesses a
