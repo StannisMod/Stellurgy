@@ -170,8 +170,11 @@ Stable ids let docs, tests and source reference each other:
 
 `MECH-<SUB>-NN` mechanic · `INV-<SUB>-NN` invariant · `CON-<C#>-NN` or `<PREFIX>-NN` contract clause.
 
-This yields the chain **mechanic → invariant → test → defect**. A test names the anchor it pins in its
-javadoc; source may cite an anchor where it implements one. The anchors are public API of the docs.
+This yields the chain **mechanic → invariant → test → defect**. A test names the anchor it pins with
+`@Pins("<ANCHOR>")` on the test method, and the regions of a quantified clause it visits with
+`@Regions`; the clause lists those regions as code spans (``REGIONS: `a`, `b`.``). The build checks the
+map in both directions on the compiled tests (`checkTestBindings`). Source may cite an anchor where it
+implements one. The anchors are public API of the docs.
 
 **An anchor is a permanent identifier — never renumber it and never reuse it.** Treat these exactly
 like registry names and NBT keys: a reused number silently re-points somebody else's reference.

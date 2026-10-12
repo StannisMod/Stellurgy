@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.test.Weapons;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A gun bolted to a ship, which is the configuration every other turret test cannot reach.
@@ -61,25 +62,23 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code TurretFireControl#muzzleOf} at {@code worldMuzzle = new Vec3d(point[0], point[1], point[2]);} leaving the muzzle in the ship's frame,
-     * this fails with "the round is at x=1.9200042387784544E7, which is a shipyard address"; with the
-     * same line offsetting the mapped muzzle 200 blocks along Z, it fails with "the round is
-     * 204.62225954356157 blocks from the hull that fired it, more than the hull's reach (64.0) plus the
-     * 25.32623553276062 blocks it has flown". 2026-09-30. (That bound was the fixture's unmeasured
-     * reach; it has since been replaced by the derived one below.)
-     *
-     * <p>red-witnessed, 2026-09-30: with {@code TurretFireControl#fire} at {@code spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),} admitting the round with a
-     * lifetime of 0, this fails at "the round this gun just fired is no longer in the air:
-     * {...present:false,ended:EXPIRED...}"; with {@code TurretFireControl#muzzleOf} at {@code worldMuzzle = new Vec3d(point[0], point[1], point[2]);} placing the mapped
-     * muzzle 20 blocks along Z, at "the round is 25.707357260698444 blocks from the gun that fired it,
-     * more than the gun's standoff (5.5) plus the most it can have flown in 3 steps (10.98)".</p>
-     *
      * <p>The bound, measured on the healthy run the same day: the round stood 34.345 blocks from the
      * gun's centre against a bound of 35.38 at age 8 (muzzle 3.6 a step, gravity 0.03). A straight
      * flight predicts 5.5 + 8 * 3.6 = 34.3, and the 0.045 over it is the fall gravity bends the path by;
      * the 1.03 of margin is the bound's own gravity term, 0.03 * 8 * 9 / 2 = 1.08, which is the most a
      * fall can lengthen the path, not the displacement it adds.</p>
      */
+    @RedWitness(prose = "with {@code TurretFireControl#muzzleOf} at {@code worldMuzzle = new Vec3d(point[0], point[1], point[2]);} leaving the muzzle in the ship's frame,"
+            + " this fails with \"the round is at x=1.9200042387784544E7, which is a shipyard address\"; with the"
+            + " same line offsetting the mapped muzzle 200 blocks along Z, it fails with \"the round is"
+            + " 204.62225954356157 blocks from the hull that fired it, more than the hull's reach (64.0) plus the"
+            + " 25.32623553276062 blocks it has flown\". 2026-09-30. (That bound was the fixture's unmeasured"
+            + " reach; it has since been replaced by the derived one below.)")
+    @RedWitness(prose = "2026-09-30: with {@code TurretFireControl#fire} at {@code spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),} admitting the round with a"
+            + " lifetime of 0, this fails at \"the round this gun just fired is no longer in the air:"
+            + " {...present:false,ended:EXPIRED...}\"; with {@code TurretFireControl#muzzleOf} at {@code worldMuzzle = new Vec3d(point[0], point[1], point[2]);} placing the mapped"
+            + " muzzle 20 blocks along Z, at \"the round is 25.707357260698444 blocks from the gun that fired it,"
+            + " more than the gun's standoff (5.5) plus the most it can have flown in 3 steps (10.98)\".")
     @Test
     public void aGunOnAShipFiresIntoTheWorldRatherThanIntoTheShipyard() throws Exception {
         ask("stellurgytest shot clear 0").requireOk("clear the air");
@@ -168,13 +167,12 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
      * motion production hands the round ({@code turret_muzzle}, read at the seam where it is decided) is
      * compared with the hull's own displacement per tick, measured from its position over a window just
      * before the shot.</p>
-     *
-     * <p>red-witnessed: with {@code VSBridge#shipVelocityAtPointFor} at
-     * {@code (vLin.x() + (w.y() * rz - w.z() * ry)) * SECONDS_PER_TICK,} answering the X component per
-     * second again, this fails at "a round from a moving hull does not carry the hull's motion: it
-     * carries 10.0 blocks a tick along X while the hull was measured doing 0.5634920634930884 (ratio
-     * 17.746478873207156)" (2026-10-05).</p>
      */
+    @RedWitness(prose = "with {@code VSBridge#shipVelocityAtPointFor} at"
+            + " {@code (vLin.x() + (w.y() * rz - w.z() * ry)) * SECONDS_PER_TICK,} answering the X component per"
+            + " second again, this fails at \"a round from a moving hull does not carry the hull's motion: it"
+            + " carries 10.0 blocks a tick along X while the hull was measured doing 0.5634920634930884 (ratio"
+            + " 17.746478873207156)\" (2026-10-05).")
     @Test
     public void aRoundFromAMovingHullCarriesTheHullsMotionPerTick() throws Exception {
         ask("stellurgytest shot clear 0").requireOk("clear the air");
@@ -328,12 +326,11 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
     /**
      * A battery told to engage a SHIP aims at that hull — wherever the hull is now, not where it was
      * when the order was given — and fires on it.
-     *
-     * <p>red-witnessed: with {@code TileTurret#shipIntercept} at
-     * {@code net.minecraft.util.math.AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, uuid);}
-     * reading the hull's SHIPYARD bounds instead, this fails at "the battery is aimed
-     * 1.9191751436964057E7 blocks from the ship it was told to engage — not at its hull" (2026-10-05).</p>
      */
+    @RedWitness(prose = "with {@code TileTurret#shipIntercept} at"
+            + " {@code net.minecraft.util.math.AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, uuid);}"
+            + " reading the hull's SHIPYARD bounds instead, this fails at \"the battery is aimed"
+            + " 1.9191751436964057E7 blocks from the ship it was told to engage — not at its hull\" (2026-10-05).")
     @Test
     public void aBatteryToldToEngageAShipAimsAtItsHullWhereverItIs() throws Exception {
         Engagement engagement = arrangeEngagement(0, "NONE");
@@ -358,17 +355,15 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
      * Under "a ship whose weapons carry our code is a friend", a hull with a console set to our code
      * is not fired on; the same hull under "no ship is a friend" is. One battery, one quarry, the rule
      * switched between the two verdicts.
-     *
-     * <p>red-witnessed: with {@code HullAllegianceRule#isFriend} at {@code if (ours.isEmpty() || shipId == null) {}
-     * in {@code CODE_ON_WEAPONS} inverted to refuse every named ship, this fails at "the battery never
-     * decided about the hull its code vouches for — no `turret_fire_decided` carrying … friendly = true"
-     * (2026-10-05).</p>
-     *
-     * <p>red-witnessed: with {@code HullAllegianceRule#isFriend} at {@code return false;} in {@code NONE}
-     * answering {@code return true;}, this fails at
-     * "under \"no ship is a friend\" the battery never decided about the same hull again — no
-     * `turret_fire_decided` carrying … friendly = false" (2026-10-05).</p>
      */
+    @RedWitness(prose = "with {@code HullAllegianceRule#isFriend} at {@code if (ours.isEmpty() || shipId == null) {}"
+            + " in {@code CODE_ON_WEAPONS} inverted to refuse every named ship, this fails at \"the battery never"
+            + " decided about the hull its code vouches for — no `turret_fire_decided` carrying … friendly = true\""
+            + " (2026-10-05).")
+    @RedWitness(prose = "with {@code HullAllegianceRule#isFriend} at {@code return false;} in {@code NONE}"
+            + " answering {@code return true;}, this fails at"
+            + " \"under \\\"no ship is a friend\\\" the battery never decided about the same hull again — no"
+            + " `turret_fire_decided` carrying … friendly = false\" (2026-10-05).")
     @Test
     public void aHullWhoseWeaponsCarryOurCodeIsSparedOnlyUnderThatRule() throws Exception {
         Engagement engagement = arrangeEngagement(1, "CODE_ON_WEAPONS");

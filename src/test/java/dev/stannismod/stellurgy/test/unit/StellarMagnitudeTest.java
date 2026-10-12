@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.universe.StellarMagnitude;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The photometry a telescope is bounded by: how bright a star is, and how bright it LOOKS from
@@ -47,14 +48,13 @@ public class StellarMagnitudeTest {
      *
      * <p>Fails if {@code StellarMagnitude#luminositySuns} stops deciding brightness by
      * {@code R^2 (T/T_sun)^4}.</p>
-     *
-     * <p>red-witnessed: with {@code StellarMagnitude#luminositySuns} at
-     * {@code return r * r * t * t * t * t;} doubled, this fails with "the Sun is one Sun expected:<1.0>
-     * but was:<2.0>"; with it reading {@code r * t * t * t * t}, "twice the size is four times the
-     * light expected:<4.0> but was:<2.0>"; with it reading {@code r * r * t * t * t}, "twice the
-     * temperature is sixteen times the light expected:<16.0> but was:<8.0>" — one inversion per run,
-     * 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at"
+            + " {@code return r * r * t * t * t * t;} doubled, this fails with \"the Sun is one Sun expected:<1.0>"
+            + " but was:<2.0>\"; with it reading {@code r * t * t * t * t}, \"twice the size is four times the"
+            + " light expected:<4.0> but was:<2.0>\"; with it reading {@code r * r * t * t * t}, \"twice the"
+            + " temperature is sixteen times the light expected:<16.0> but was:<8.0>\" — one inversion per run,"
+            + " 2026-10-02.")
     @Test
     public void aStarsLightIsTheSquareOfItsSizeTimesTheFourthPowerOfItsTemperature() {
         double sun = StellarMagnitude.SOLAR_TEMPERATURE_UNITS;
@@ -73,15 +73,14 @@ public class StellarMagnitudeTest {
      * the distance modulus — the rule that makes a better aperture a farther-seeing one — or
      * {@code StellarMagnitude#apparentMagnitude} stops dimming a star by five magnitudes per factor of
      * ten in distance.</p>
-     *
-     * <p>red-witnessed: with {@code StellarMagnitude#detectionRangeLightYears} at
-     * {@code (limitMagnitude - absolute) / 5d + 1d} reading {@code / 2.5d}, this fails with "five
-     * magnitudes of aperture is ten times the reach expected:<10.0> but was:<100.0>"; reading
-     * {@code + 0d}, with "… sees it out to ten parsecs expected:<32.6156> but was:<3.26156>"; with
-     * {@code StellarMagnitude#apparentMagnitude} at {@code 5d * Math.log10(parsecs / 10d)} reading
-     * {@code 2.5d}, with "and the same star ten times farther away looks five magnitudes fainter
-     * expected:<5.0> but was:<2.5>" — one inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code StellarMagnitude#detectionRangeLightYears} at"
+            + " {@code (limitMagnitude - absolute) / 5d + 1d} reading {@code / 2.5d}, this fails with \"five"
+            + " magnitudes of aperture is ten times the reach expected:<10.0> but was:<100.0>\"; reading"
+            + " {@code + 0d}, with \"… sees it out to ten parsecs expected:<32.6156> but was:<3.26156>\"; with"
+            + " {@code StellarMagnitude#apparentMagnitude} at {@code 5d * Math.log10(parsecs / 10d)} reading"
+            + " {@code 2.5d}, with \"and the same star ten times farther away looks five magnitudes fainter"
+            + " expected:<5.0> but was:<2.5>\" — one inversion per run, 2026-10-02.")
     @Test
     public void fiveMagnitudesOfApertureReachTenTimesFarther() {
         double sunLight = StellarMagnitude.luminositySuns(1d, StellarMagnitude.SOLAR_TEMPERATURE_UNITS);
@@ -109,15 +108,14 @@ public class StellarMagnitudeTest {
      *
      * <p>Fails if {@code StellarMagnitude#apparentMagnitude} stops deciding that extinction adds to
      * the apparent magnitude, or lets a negative extinction brighten a star.</p>
-     *
-     * <p>red-witnessed: with {@code StellarMagnitude#apparentMagnitude} at
-     * {@code return absolute + modulus + Math.max(0d, extinctionMagnitudes);} dropping the extinction
-     * term, this fails with "two and a half magnitudes of dust dim the star by two and a half
-     * magnitudes expected:<2.5> but was:<0.0>"; with its {@code 5d * Math.log10(parsecs / 10d)} reading
-     * {@code 2.5d}, with "five magnitudes of dust look exactly like ten times the distance"; with the
-     * {@code Math.max(0d, …)} removed, with "a negative column brightens nothing expected:<5.757…> but
-     * was:<2.757…>" — one inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code StellarMagnitude#apparentMagnitude} at"
+            + " {@code return absolute + modulus + Math.max(0d, extinctionMagnitudes);} dropping the extinction"
+            + " term, this fails with \"two and a half magnitudes of dust dim the star by two and a half"
+            + " magnitudes expected:<2.5> but was:<0.0>\"; with its {@code 5d * Math.log10(parsecs / 10d)} reading"
+            + " {@code 2.5d}, with \"five magnitudes of dust look exactly like ten times the distance\"; with the"
+            + " {@code Math.max(0d, …)} removed, with \"a negative column brightens nothing expected:<5.757…> but"
+            + " was:<2.757…>\" — one inversion per run, 2026-10-02.")
     @Test
     public void dustDimsAStarInTheSameCurrencyAsDistance() {
         double absolute = StellarMagnitude.SOLAR_ABSOLUTE_MAGNITUDE;
@@ -138,13 +136,12 @@ public class StellarMagnitudeTest {
      * <p>Fails if {@code StellarMagnitude#luminositySuns(StellarBody)} stops deciding that an
      * unstated (zero) temperature means the Sun's — the decision that keeps a pack's size-only star
      * from being written as an invisible one.</p>
-     *
-     * <p>red-witnessed: with {@code StellarMagnitude#luminositySuns} at
-     * {@code temperature > 0 ? temperature : SOLAR_TEMPERATURE_UNITS} reading {@code temperature}, this
-     * fails with "a star of two Suns' size and no stated temperature shines like … expected:<4.0> but
-     * was:<0.0>"; reading {@code SOLAR_TEMPERATURE_UNITS}, with "and a stated temperature is the one
-     * used … expected:<0.0625> but was:<1.0>" — one inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at"
+            + " {@code temperature > 0 ? temperature : SOLAR_TEMPERATURE_UNITS} reading {@code temperature}, this"
+            + " fails with \"a star of two Suns' size and no stated temperature shines like … expected:<4.0> but"
+            + " was:<0.0>\"; reading {@code SOLAR_TEMPERATURE_UNITS}, with \"and a stated temperature is the one"
+            + " used … expected:<0.0625> but was:<1.0>\" — one inversion per run, 2026-10-02.")
     @Test
     public void aStarDescribedOnlyByItsSizeShinesAtTheSunsTemperature() {
         double sun = StellarMagnitude.SOLAR_TEMPERATURE_UNITS;
@@ -162,13 +159,12 @@ public class StellarMagnitudeTest {
      * <p>Fails if {@code StellarMagnitude#luminositySuns(StellarBody)} stops deciding that a black
      * hole is dark, or {@code StellarMagnitude#absoluteMagnitude} stops answering infinity for a
      * star that emits nothing.</p>
-     *
-     * <p>red-witnessed: with {@code StellarMagnitude#luminositySuns} at {@code if (star.isBlackHole())}
-     * reading {@code if (false)}, this fails with "a black hole is dark expected:<0.0> but was:<1.0>";
-     * with {@code StellarMagnitude#absoluteMagnitude} at {@code return Double.POSITIVE_INFINITY;}
-     * answering {@code 99d}, with "so it looks infinitely faint even from a tenth of a light year" — one
-     * inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at {@code if (star.isBlackHole())}"
+            + " reading {@code if (false)}, this fails with \"a black hole is dark expected:<0.0> but was:<1.0>\";"
+            + " with {@code StellarMagnitude#absoluteMagnitude} at {@code return Double.POSITIVE_INFINITY;}"
+            + " answering {@code 99d}, with \"so it looks infinitely faint even from a tenth of a light year\" — one"
+            + " inversion per run, 2026-10-02.")
     @Test
     public void aBlackHoleIsDarkAtAnyDistance() {
         StellarBody hole = star(1f, (int) StellarMagnitude.SOLAR_TEMPERATURE_UNITS);
@@ -188,14 +184,13 @@ public class StellarMagnitudeTest {
      * <p>Fails if {@code StellarMagnitude#luminositySuns(StellarBody)} stops deciding that a missing
      * star is dark (the detection stage hands it the empty answer of {@code starAt} for a starless
      * system).</p>
-     *
-     * <p>red-witnessed: with {@code StellarMagnitude#luminositySuns} at {@code if (star == null)}
-     * returning {@code 1d}, this fails with "a world with no star looks infinitely faint at any
-     * distance"; with {@code StellarMagnitude#detectionRangeLightYears} at
-     * {@code if (Double.isInfinite(absolute))} returning {@code Double.MAX_VALUE}, with "and no
-     * aperture, however good, reaches anything that emits nothing expected:<0.0> but
-     * was:<1.7976931348623157E308>" — one inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at {@code if (star == null)}"
+            + " returning {@code 1d}, this fails with \"a world with no star looks infinitely faint at any"
+            + " distance\"; with {@code StellarMagnitude#detectionRangeLightYears} at"
+            + " {@code if (Double.isInfinite(absolute))} returning {@code Double.MAX_VALUE}, with \"and no"
+            + " aperture, however good, reaches anything that emits nothing expected:<0.0> but"
+            + " was:<1.7976931348623157E308>\" — one inversion per run, 2026-10-02.")
     @Test
     public void aWorldWithNoStarIsDarkAtAnyDistance() {
         assertTrue("a world with no star looks infinitely faint at any distance",

@@ -146,7 +146,7 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
         closeBoth();
         keepBootLog("boot1-standing");
 
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+        serverHarness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         // Both discriminators, BEFORE the client connects. Without them a client reading says
         // nothing about the record: a second boot whose subsystem stood down, or whose ledger did

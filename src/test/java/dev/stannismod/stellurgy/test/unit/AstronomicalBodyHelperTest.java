@@ -6,6 +6,8 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Pure-math astronomy helpers.
@@ -53,11 +55,10 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * A body's apparent size falls inversely with its distance, in AU.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getBodySizeMultiplier} at {@code return (float) DISTANCE_UNITS_PER_AU / orbitalDistance} back on the
-     * old distance unit ({@code 100 / d}, "1 AU = 100"), this fails at its first sample with
-     * "expected:&lt;1.0&gt; but was:&lt;6.684585969196633E-5&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getBodySizeMultiplier} at {@code return (float) DISTANCE_UNITS_PER_AU / orbitalDistance} back on the"
+            + " old distance unit ({@code 100 / d}, \"1 AU = 100\"), this fails at its first sample with"
+            + " \"expected:&lt;1.0&gt; but was:&lt;6.684585969196633E-5&gt;\".")
     @Test
     public void bodySizeMultiplierIsInverselyProportionalToDistance() {
         // At 100 distance (1 AU equivalent) the multiplier is 1.
@@ -78,13 +79,12 @@ public class AstronomicalBodyHelperTest {
      * <p>Acceptance, stated before the code: a moon at {@code MOON_REFERENCE_UNITS} reads 2/3 within
      * float rounding (1e-6). Through the planet law it reads 389; through the law as it stood before
      * Luna's distance was corrected, 100 / 7 688.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getMoonSizeMultiplier} at
-     * {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}
-     * replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)} (the planet law the sky used),
-     * this fails with "a moon at Luna's distance must draw at 100/150
-     * expected:&lt;0.6666666865348816&gt; but was:&lt;389.1724853515625&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getMoonSizeMultiplier} at"
+            + " {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}"
+            + " replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)} (the planet law the sky used),"
+            + " this fails with \"a moon at Luna's distance must draw at 100/150"
+            + " expected:&lt;0.6666666865348816&gt; but was:&lt;389.1724853515625&gt;\".")
     @Test
     public void theSkyDrawsLunaAtTheSizeItDrewHerWhenSheStoodAt150() {
         assertEquals("a moon at Luna's distance must draw at 100/150", 100f / 150f,
@@ -99,16 +99,15 @@ public class AstronomicalBodyHelperTest {
      * <p>Acceptance, stated before the code: a moon at {@code MOON_REFERENCE_UNITS / 2} (1 922 units,
      * exact) reads 4/3 within 1e-6. A law that ignored the distance and drew every moon as Luna would
      * read 2/3.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#moonViewUnits} at
-     * {@code return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS)}
-     * replaced by {@code return MOON_VIEW_UNITS_AT_LUNA} (every moon read as Luna), this fails with
-     * "a moon at half Luna's distance must draw at 100/75 expected:&lt;1.3333333730697632&gt; but
-     * was:&lt;0.6666666865348816&gt;"; and with {@code AstronomicalBodyHelper#getMoonSizeMultiplier}
-     * at {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}
-     * replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)}, with "expected:&lt;1.3333333730697632&gt;
-     * but was:&lt;778.344970703125&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#moonViewUnits} at"
+            + " {@code return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS)}"
+            + " replaced by {@code return MOON_VIEW_UNITS_AT_LUNA} (every moon read as Luna), this fails with"
+            + " \"a moon at half Luna's distance must draw at 100/75 expected:&lt;1.3333333730697632&gt; but"
+            + " was:&lt;0.6666666865348816&gt;\"; and with {@code AstronomicalBodyHelper#getMoonSizeMultiplier}"
+            + " at {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}"
+            + " replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)}, with \"expected:&lt;1.3333333730697632&gt;"
+            + " but was:&lt;778.344970703125&gt;\".")
     @Test
     public void aMoonAtHalfLunasDistanceDrawsTwiceHerSize() {
         assertEquals("a moon at half Luna's distance must draw at 100/75", 100f / 75f,
@@ -119,11 +118,12 @@ public class AstronomicalBodyHelperTest {
     /**
      * One AU around one solar mass is the 48-day year.
      *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
-     * distance unit ({@code a / 100}), this fails with "expected:&lt;48.0&gt; but
-     * was:&lt;8.782729013584356E7&gt;".</p>
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
+    @Pins("INV-NAV-03")
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+            + " distance unit ({@code a / 100}), this fails with \"expected:&lt;48.0&gt; but"
+            + " was:&lt;8.782729013584356E7&gt;\".")
     @Test
     public void orbitalPeriodAtEarthDistanceIsBaseline() {
         // At 100 distance and solarSize=1.0, the formula reduces to 48 days (one MC year).
@@ -131,11 +131,12 @@ public class AstronomicalBodyHelperTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} raising the
-     * distance to the power -3 instead of 3, this fails with "inner planet must orbit faster than
-     * Earth". (A distance-unit inversion leaves it green: it asserts an order.)
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
+    @Pins("INV-NAV-03")
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} raising the"
+            + " distance to the power -3 instead of 3, this fails with \"inner planet must orbit faster than"
+            + " Earth\". (A distance-unit inversion leaves it green: it asserts an order.)")
     @Test
     public void orbitalPeriodGrowsWithDistance() {
         double inner = AstronomicalBodyHelper.getOrbitalPeriod(AU * 50 / 100, 1.0f);
@@ -161,10 +162,11 @@ public class AstronomicalBodyHelperTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
-     * to the power -2 instead of 2, this fails with "brightness must drop with distance".
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
+    @Pins("INV-NAV-03")
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+            + " to the power -2 instead of 2, this fails with \"brightness must drop with distance\".")
     @Test
     public void stellarBrightnessMonotonicWithDistance() {
         StellarBody star = sunLikeStar();
@@ -179,11 +181,12 @@ public class AstronomicalBodyHelperTest {
     /**
      * A sunlike star lights a world at one AU with brightness 1.
      *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
-     * old distance unit ({@code d / 100}), this fails with "expected:&lt;1.0&gt; but
-     * was:&lt;4.468368725849103E-9&gt;".</p>
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
+    @Pins("INV-NAV-03")
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+            + " old distance unit ({@code d / 100}), this fails with \"expected:&lt;1.0&gt; but"
+            + " was:&lt;4.468368725849103E-9&gt;\".")
     @Test
     public void stellarBrightnessAtEarthBaselineEqualsOne() {
         // sunLike: size=1.0, temperature=100 -> normalized=1.0, distance=100 -> AU=1.
@@ -192,10 +195,11 @@ public class AstronomicalBodyHelperTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's
-     * luminosity by 1 instead of 0.25, this fails with "expected:&lt;0.25&gt; but was:&lt;1.0&gt;".
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
+    @Pins("INV-NAV-03")
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's"
+            + " luminosity by 1 instead of 0.25, this fails with \"expected:&lt;0.25&gt; but was:&lt;1.0&gt;\".")
     @Test
     public void blackHoleStarReducesBrightness() {
         StellarBody star = sunLikeStar();
@@ -213,12 +217,13 @@ public class AstronomicalBodyHelperTest {
      * Every star in a system lights the worlds in it. Before this was true, the companion list was
      * walked only to decide a boolean and no companion ever contributed a photon.
      *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only
-     * the star the planet is bound to instead of its whole system, this fails with "two identical
-     * stars in the same place light a world twice as brightly expected:&lt;2.0&gt; but
-     * was:&lt;1.0&gt;". (A distance-unit inversion leaves it green: it asserts a ratio.)</p>
      * Pins INV-NAV-07 (every star lights the world and a black hole is never treated as though it had stopped being one).
      */
+    @Pins("INV-NAV-07")
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only"
+            + " the star the planet is bound to instead of its whole system, this fails with \"two identical"
+            + " stars in the same place light a world twice as brightly expected:&lt;2.0&gt; but"
+            + " was:&lt;1.0&gt;\". (A distance-unit inversion leaves it green: it asserts a ratio.)")
     @Test
     public void everyStarInASystemContributesItsOwnLight() {
         double alone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU);
@@ -233,19 +238,17 @@ public class AstronomicalBodyHelperTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
-     * to the power -2 instead of 2, this fails with "a distant one adds only a little".
-     *
      * <p>The fixture's distances are written as the quantities they are, through
      * {@code DISTANCE_UNITS_PER_AU}. Until 2026-09-30 they were the bare {@code 5} and {@code 2_000} —
      * hundredths of an AU, the unit {@code StellarBody.offsetFromSystemAu} also still divided by, so
      * fixture and reader agreed and the test pinned a reader 14 960× wrong.</p>
-     *
-     * <p>red-witnessed: with {@code StellarBody#offsetFromSystemAu} at
-     * {@code / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back
-     * on {@code / 100d}: "a close
-     * companion nearly doubles the light", 2026-09-30.</p>
      */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+            + " to the power -2 instead of 2, this fails with \"a distant one adds only a little\".")
+    @RedWitness(prose = "with {@code StellarBody#offsetFromSystemAu} at"
+            + " {@code / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back"
+            + " on {@code / 100d}: \"a close"
+            + " companion nearly doubles the light\", 2026-09-30.")
     @Test
     public void aCompanionsContributionFallsOffWithItsOwnDistance() {
         // The defect: every companion used to be fed the PRIMARY's distance, so a companion twenty AU
@@ -274,11 +277,10 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * A world of the companion is lit by the primary too.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only
-     * the star the planet is bound to, this fails with "a world of the companion sees both stars
-     * expected:&lt;2.0&gt; but was:&lt;1.0&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only"
+            + " the star the planet is bound to, this fails with \"a world of the companion sees both stars"
+            + " expected:&lt;2.0&gt; but was:&lt;1.0&gt;\".")
     @Test
     public void aWorldOfTheCompanionIsLitByThePrimaryToo() {
         // An S-type planet is a planet in a binary, not a planet with one sun that happens to have a
@@ -303,11 +305,12 @@ public class AstronomicalBodyHelperTest {
      * so a black hole with a companion came out brighter than a bare one and lit by the wrong body,
      * while the companion contributed nothing.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's
-     * luminosity by 1 instead of 0.25, this fails with "the hole stays dimmed: the pair is never as
-     * bright as two ordinary stars".</p>
      * Pins INV-NAV-07 (every star lights the world and a black hole is never treated as though it had stopped being one).
      */
+    @Pins("INV-NAV-07")
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's"
+            + " luminosity by 1 instead of 0.25, this fails with \"the hole stays dimmed: the pair is never as"
+            + " bright as two ordinary stars\".")
     @Test
     public void aCompanionDoesNotTurnABlackHoleBackIntoAStar() {
         double sunAlone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU);
@@ -346,11 +349,9 @@ public class AstronomicalBodyHelperTest {
         assertEquals(1.0 / 1.5, halfFlux, 1e-9);
     }
 
-    /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code return (int) (averageWithoutAtmosphere} dropping
-     * the atmosphere multiplier, this fails with "thicker atmosphere must imply higher surface
-     * temperature".
-     */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code return (int) (averageWithoutAtmosphere} dropping"
+            + " the atmosphere multiplier, this fails with \"thicker atmosphere must imply higher surface"
+            + " temperature\".")
     @Test
     public void averageTemperatureIsThicknessSensitive() {
         StellarBody star = sunLikeStar();
@@ -362,10 +363,8 @@ public class AstronomicalBodyHelperTest {
                 thickAtmosphereTemp > thinAtmosphereTemp);
     }
 
-    /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
-     * to the power -2 instead of 2, this fails with "planet farther from the star must be cooler".
-     */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+            + " to the power -2 instead of 2, this fails with \"planet farther from the star must be cooler\".")
     @Test
     public void averageTemperatureIsDistanceSensitive() {
         StellarBody star = sunLikeStar();
@@ -375,11 +374,9 @@ public class AstronomicalBodyHelperTest {
         assertTrue("planet farther from the star must be cooler", outerPlanet < innerPlanet);
     }
 
-    /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
-     * to the power -2 instead of 2, this fails with "PLM at d=747989 was 0.44444410352775, expected
-     * within [2.2, 2.3]".
-     */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+            + " to the power -2 instead of 2, this fails with \"PLM at d=747989 was 0.44444410352775, expected"
+            + " within [2.2, 2.3]\".")
     @Test
     public void planetaryLightMultiplierWithinExpectedBounds() {
         // for a sun-like baseline, sweep across astronomical
@@ -421,11 +418,12 @@ public class AstronomicalBodyHelperTest {
      * temperature — and the physical direction matters: more reflective means colder, which is what
      * keeps ice being ice.
      *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
-     * old distance unit, this fails with "a darker surface absorbs more and runs hotter" — every
-     * temperature collapses to a couple of kelvin and the albedo stops making a difference.</p>
      * Pins INV-NAV-10 (A darker world runs hotter and a more reflective one colder, and the albedo-less call still means Earth's albedo).
      */
+    @Pins("INV-NAV-10")
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+            + " old distance unit, this fails with \"a darker surface absorbs more and runs hotter\" — every"
+            + " temperature collapses to a couple of kelvin and the albedo stops making a difference.")
     @Test
     public void albedoCoolsAWorldAndTheDefaultIsEarths() {
         StellarBody star = sunLikeStar();
@@ -441,11 +439,10 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * Kepler's third law, exactly: {@code P ∝ a^1.5 / sqrt(M)}.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
-     * distance unit ({@code a / 100}), this fails with "expected:&lt;384.0&gt; but
-     * was:&lt;7.026183210867485E8&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+            + " distance unit ({@code a / 100}), this fails with \"expected:&lt;384.0&gt; but"
+            + " was:&lt;7.026183210867485E8&gt;\".")
     @Test
     public void orbitalPeriodFollowsTheThreeHalvesPowerLawExactly() {
         // Four times the distance is eight times the period.
@@ -463,10 +460,11 @@ public class AstronomicalBodyHelperTest {
      * A star's year is set by its MASS. A star that states no mass supplies one from its radius through
      * the main-sequence relation, which is exact for Sol — and is emphatically not the radius itself.
      *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
-     * distance unit, this fails with "expected:&lt;48.0&gt; but was:&lt;8.782729013584356E7&gt;".</p>
      * Pins INV-NAV-09 (A planet's year follows its star's mass).
      */
+    @Pins("INV-NAV-09")
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+            + " distance unit, this fails with \"expected:&lt;48.0&gt; but was:&lt;8.782729013584356E7&gt;\".")
     @Test
     public void aYearIsKeyedOnStellarMassAndAStarWithoutOneDerivesItFromItsRadius() {
         StellarBody sol = sunLikeStar(); // size 1.0
@@ -494,6 +492,7 @@ public class AstronomicalBodyHelperTest {
     }
 
     /** Pins INV-NAV-08 (a moon's period follows its parent's mass). */
+    @Pins("INV-NAV-08")
     @Test
     public void moonPeriodScalesWithParentMassAndDistanceExactly() {
         // The SCALING is what this pins, and it is unchanged by the reference the law is anchored on:
@@ -509,10 +508,9 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * One AU under one atmosphere is 287 K.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
-     * old distance unit, this fails with "expected:&lt;287&gt; but was:&lt;2&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+            + " old distance unit, this fails with \"expected:&lt;287&gt; but was:&lt;2&gt;\".")
     @Test
     public void temperatureAtOneAuUnderOneAtmosphereIsPinned() {
         // 1 AU, one atmosphere: the radiative balance times the greenhouse term.
@@ -521,10 +519,9 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * A vacuum world at one AU gets the bare radiative balance, 255 K.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
-     * old distance unit, this fails with "expected:&lt;255&gt; but was:&lt;2&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+            + " old distance unit, this fails with \"expected:&lt;255&gt; but was:&lt;2&gt;\".")
     @Test
     public void aVacuumWorldGetsTheBareRadiativeBalance() {
         // atmPressure 0 falls to the max(1, ...) floor — no greenhouse lift at all.
@@ -533,10 +530,9 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * Four AU under one atmosphere is 143 K.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
-     * old distance unit, this fails with "expected:&lt;143&gt; but was:&lt;1&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+            + " old distance unit, this fails with \"expected:&lt;143&gt; but was:&lt;1&gt;\".")
     @Test
     public void temperatureAtFourAuIsPinned() {
         assertEquals(143, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), AU * 4, 100));
@@ -544,10 +540,9 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * Brightness falls with the square of distance, exactly.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
-     * old distance unit, this fails with "expected:&lt;0.25&gt; but was:&lt;1.1170921814622757E-9&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+            + " old distance unit, this fails with \"expected:&lt;0.25&gt; but was:&lt;1.1170921814622757E-9&gt;\".")
     @Test
     public void brightnessFallsWithTheSquareOfDistanceExactly() {
         assertEquals(0.25, AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU * 2), 1e-9);
@@ -559,11 +554,10 @@ public class AstronomicalBodyHelperTest {
 
     /**
      * The orbital angle wraps once per period.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
-     * distance unit, this fails with "expected:&lt;1.5707963267948966&gt; but
-     * was:&lt;8.584828652863555E-7&gt;".</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+            + " distance unit, this fails with \"expected:&lt;1.5707963267948966&gt; but"
+            + " was:&lt;8.584828652863555E-7&gt;\".")
     @Test
     public void orbitalThetaWrapsOncePerPeriod() {
         long periodTicks = (long) (48.0 * 24000.0);
@@ -581,15 +575,14 @@ public class AstronomicalBodyHelperTest {
      * no mass never moves, because its period is {@code Infinity} — and the guard is NOT what holds
      * it: {@code tick % Infinity / Infinity} is already 0 (measured 2026-09-29: with the moon guard
      * removed, that leg stayed green).</p>
-     *
-     * <p>red-witnessed: 2026-09-29, twice. With the guard in
-     * {@code AstronomicalBodyHelper#getMoonOrbitalThetaAt} at {@code * getMoonOrbitalPeriod(orbitalDistance, parentMassEarths)} removed, this fails with "a moon at zero
-     * distance has a zero period, and must not answer NaN expected:&lt;0.0&gt; but
-     * was:&lt;NaN&gt;". With {@code AstronomicalBodyHelper#getMoonOrbitalPeriod} at {@code * Math.pow(Math.pow((orbitalDistance / (double) MOON_REFERENCE_UNITS), 3) / planetaryMass, 0.5d)} flooring the parent's
-     * mass at 0.05, it fails at the massless leg with "expected:&lt;0.0&gt; but
-     * was:&lt;3.4454888921967097E-6&gt;" — a finite period, predicted before the run at about
-     * 3.5e-6.</p>
      */
+    @RedWitness(prose = "2026-09-29, twice. With the guard in"
+            + " {@code AstronomicalBodyHelper#getMoonOrbitalThetaAt} at {@code * getMoonOrbitalPeriod(orbitalDistance, parentMassEarths)} removed, this fails with \"a moon at zero"
+            + " distance has a zero period, and must not answer NaN expected:&lt;0.0&gt; but"
+            + " was:&lt;NaN&gt;\". With {@code AstronomicalBodyHelper#getMoonOrbitalPeriod} at {@code * Math.pow(Math.pow((orbitalDistance / (double) MOON_REFERENCE_UNITS), 3) / planetaryMass, 0.5d)} flooring the parent's"
+            + " mass at 0.05, it fails at the massless leg with \"expected:&lt;0.0&gt; but"
+            + " was:&lt;3.4454888921967097E-6&gt;\" — a finite period, predicted before the run at about"
+            + " 3.5e-6.")
     @Test
     public void aDegenerateOrbitStaysAddressableRatherThanNaN() {
         assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(0, 1.0f, 12345L), 1e-9);
@@ -610,13 +603,12 @@ public class AstronomicalBodyHelperTest {
      *
      * <p>What this does not see: that the renderers call this law. They are client GL code and no
      * tier here reads a drawn size.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getSizeMultiplierAtHeight} at {@code return REFERENCE_VIEW_HEIGHT / height}
-     * returning {@code getBodySizeMultiplier(height)} — the form the views used before this change:
-     * "size at heights 100, 190, 200: [14959.79, 7873.5737, 7479.895]: arrays first differed at
-     * element [0]; expected:&lt;1.0&gt; but was:&lt;14959.79&gt;" — all three samples wrong, one
-     * verdict.</p>
      */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getSizeMultiplierAtHeight} at {@code return REFERENCE_VIEW_HEIGHT / height}"
+            + " returning {@code getBodySizeMultiplier(height)} — the form the views used before this change:"
+            + " \"size at heights 100, 190, 200: [14959.79, 7873.5737, 7479.895]: arrays first differed at"
+            + " element [0]; expected:&lt;1.0&gt; but was:&lt;14959.79&gt;\" — all three samples wrong, one"
+            + " verdict.")
     @Test
     public void aLowOrbitViewSizesABodyByHeightNotByTheDistanceUnit() {
         // One verdict over the three samples. The slack is ZERO: the law is one float division,

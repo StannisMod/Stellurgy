@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.util.SealableBlockHandler;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * SealableBlockHandler — pure list-management logic.
@@ -31,6 +32,7 @@ public class SealableBlockHandlerTest {
     }
 
     /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void defaultSealableBlocksLoaded() throws Exception {
         handler.loadDefaultData();
@@ -51,6 +53,7 @@ public class SealableBlockHandlerTest {
     }
 
     /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void whitelistOverridesDetection() throws Exception {
         Block target = Blocks.LEAVES;
@@ -68,6 +71,7 @@ public class SealableBlockHandlerTest {
     }
 
     /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void blacklistOverridesDetection() throws Exception {
         Block target = Blocks.STONE;
@@ -82,6 +86,7 @@ public class SealableBlockHandlerTest {
     }
 
     /** Pins INV-SEAL-01 (default banned materials load, allow-list overrides detection, ban-list overrides allow, re-adding does not duplicate). */
+    @Pins("INV-SEAL-01")
     @Test
     public void addingSameBlockTwiceDoesNotDuplicate() throws Exception {
         Block target = Blocks.GRAVEL;

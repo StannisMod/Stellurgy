@@ -7,6 +7,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A gas-collection mission is drawn at the rate the chosen gas presses on the intake: the same harvest
@@ -25,9 +26,9 @@ public class GasHarvestTest {
         return GasHarvest.missionSeconds(HARVEST_MB, TANK_MB, INTAKE, partialPressure);
     }
 
-    /** red-witnessed: with {@code GasHarvest#missionSeconds} at
-     *  {@code * ((double) partialPressure / (double) AirState.ONE_ATM)} removed from the rate, both
-     *  pressures timed 256 s and the twice-as-dense gas was not faster. */
+    @RedWitness(prose = "with {@code GasHarvest#missionSeconds} at"
+            + " {@code * ((double) partialPressure / (double) AirState.ONE_ATM)} removed from the rate, both"
+            + " pressures timed 256 s and the twice-as-dense gas was not faster.")
     @Test
     public void aGasTwiceAsDenseFillsTheSameTanksInHalfTheTime() {
         long atOne = secondsAt(AirState.ONE_ATM);
@@ -36,9 +37,9 @@ public class GasHarvestTest {
         assertEquals("at one atmosphere " + atOne + " s, so at two it is half that", atOne, 2L * atTwo);
     }
 
-    /** red-witnessed: with {@code GasHarvest#missionSeconds} at
-     *  {@code * ((double) partialPressure / (double) AirState.ONE_ATM)} removed from the rate, a
-     *  part-per-million gas timed 256 s, the same as a whole atmosphere of it. */
+    @RedWitness(prose = "with {@code GasHarvest#missionSeconds} at"
+            + " {@code * ((double) partialPressure / (double) AirState.ONE_ATM)} removed from the rate, a"
+            + " part-per-million gas timed 256 s, the same as a whole atmosphere of it.")
     @Test
     public void aTraceGasIsHarvestableAtTheRateItsPressureGives() {
         long atOne = secondsAt(AirState.ONE_ATM);
@@ -48,8 +49,8 @@ public class GasHarvestTest {
                 Math.abs(atOnePpm - 1_000_000L * atOne) <= 1L);
     }
 
-    /** red-witnessed: with {@code GasHarvest#missionSeconds} at {@code if (partialPressure <= 0L)}
-     *  narrowed to {@code < 0L}, a gas at zero pressure was timed instead of refused. */
+    @RedWitness(prose = "with {@code GasHarvest#missionSeconds} at {@code if (partialPressure <= 0L)}"
+            + " narrowed to {@code < 0L}, a gas at zero pressure was timed instead of refused.")
     @Test
     public void aGasAbsentFromTheAirIsRefused() {
         try {

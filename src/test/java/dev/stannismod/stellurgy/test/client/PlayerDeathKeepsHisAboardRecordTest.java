@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A player who dies keeps the record of which ship he belongs to.
@@ -52,11 +53,10 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientTes
 
     /**
      * The record survives a death and a respawn through the death screen.
-     *
-     * <p>red-witnessed: with {@code CapabilityPlayerBindings#carryAcrossDeath} at
-     * {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: "a player who dies must still know which ship he belongs to …
-     * {\"bound\":[]}", 2026-09-28.</p>
      */
+    @RedWitness(prose = "with {@code CapabilityPlayerBindings#carryAcrossDeath} at"
+            + " {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: \"a player who dies must still know which ship he belongs to …"
+            + " {\\\"bound\\\":[]}\", 2026-09-28.")
     @Test
     public void aPlayerWhoDiesStillKnowsWhichShipHeBelongsTo() throws Exception {
         scenario().arranging("stamp the aboard record on the real player");

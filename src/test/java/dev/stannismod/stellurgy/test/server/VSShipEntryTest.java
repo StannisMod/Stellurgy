@@ -26,6 +26,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * E2E: does the tier-2 ENTRY ON-RAMP take a piloted ship from a planet dimension into space through the
@@ -93,11 +94,10 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
      * {@code DescentShell#orbitLineWorldY}, whose own law is pinned by {@code DescentShellTest}. The
      * overworld is read as the server holds it (its radius from the reply, never assumed), then given a
      * stated line, then cleared again so the body's own applies.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, with {@code DimensionProperties#orbitLine} at {@code return OptionalInt.of(orbitHeight);}
-     * replaced by the body's line (the stated line ignored), this fails with "a stated line must be
-     * the line the world answers".</p>
      */
+    @RedWitness(prose = "2026-10-05, with {@code DimensionProperties#orbitLine} at {@code return OptionalInt.of(orbitHeight);}"
+            + " replaced by the body's line (the stated line ignored), this fails with \"a stated line must be"
+            + " the line the world answers\".")
     @Test
     public void aWorldsTakeoffLineIsItsBodysAtmosphereUnlessItsFileStatesOne() throws Exception {
         OrbitLine asHeld = OrbitLine.of(this::exec, 0);

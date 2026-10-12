@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -43,7 +44,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class DimensionSplitBrainReconcileTest {
+public class DimensionSplitBrainReconcileTest extends AbstractMechanicsTest {
 
     private static final String AR_DIMS = "stellurgyDimensions";
     /**
@@ -95,7 +96,7 @@ public class DimensionSplitBrainReconcileTest {
 
     @Test
     public void planetInTempDatButRemovedFromXmlStaysRegistered() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         Set<Integer> before = stellurgyDims(firstBoot);
         Path xmlPath = planetDefsPath(firstBoot);
         firstBoot.close();
@@ -127,7 +128,7 @@ public class DimensionSplitBrainReconcileTest {
                 content, edited);
         Files.write(xmlPath, edited.getBytes(StandardCharsets.UTF_8));
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         Set<Integer> after = stellurgyDims(secondBoot);
 
         assertTrue("a planet persisted in temp.dat but removed from planetDefs.xml "

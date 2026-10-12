@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * MissionOreMining.onMissionComplete contract.
@@ -82,6 +83,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
      *  fresh chip when they open the landed rocket.
      * Pins INV-MSN-05 (Ore completion always leaves a blank asteroid chip in guidance slot 0 on the respawned rocket).
      */
+    @Pins("INV-MSN-05")
     @Test
     public void oreCompletionAlwaysRefillsGuidanceWithBlankAsteroidChip() throws Exception {
         int rid = buildAndAssembleRocket(9000);
@@ -101,6 +103,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
      *  chip from lines 116-118. Counter-test pinning the gate.
      * Pins INV-MSN-06 (ore completion with zero drilling power performs no harvest).
      */
+    @Pins("INV-MSN-06")
     @Test
     public void oreCompletionSkipsHarvestWhenDrillingPowerZero() throws Exception {
         int rid = buildAndAssembleRocket(9100);

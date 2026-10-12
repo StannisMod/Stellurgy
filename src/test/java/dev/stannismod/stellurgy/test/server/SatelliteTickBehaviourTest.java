@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * per-satellite tick behaviour pins.
@@ -61,6 +62,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
      *  at roughly powerGen rate, bounded by powerGen × ticks".
      * Pins INV-SAT-01 (Base battery never exceeds powerStorage).
      */
+    @Pins("INV-SAT-01")
     @Test
     public void baseSatelliteTickAccruesAtApproximatelyPowerGenRate() throws Exception {
         int powerGen = 100;
@@ -88,6 +90,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
      *  tick would push past the cap, the battery clamps at max.
      * Pins INV-SAT-01 (Base battery never exceeds powerStorage).
      */
+    @Pins("INV-SAT-01")
     @Test
     public void baseSatelliteBatteryCapsAtPowerStorage() throws Exception {
         long satId = createSat("oreScanner", 1000, 500, 1000);
@@ -114,6 +117,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
      *  fires at worldTime ∈ {20, 40, 60, 80, 100} &rarr; 5 data points.
      * Pins INV-SAT-02 (DataStorage.addData is capped at maxData).
      */
+    @Pins("INV-SAT-02")
     @Test
     public void dataSatelliteAccumulatesDataOverTime() throws Exception {
         long satId = createSat("composition", 1000, 100_000, 1000);
@@ -139,6 +143,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
      * Pin: {@code DataStorage.addData} caps at {@code maxData}.
      * Pins INV-SAT-02 (DataStorage.addData is capped at maxData).
      */
+    @Pins("INV-SAT-02")
     @Test
     public void dataSatelliteRespectsMaxDataCap() throws Exception {
         // maxData=2, powerGen=1000 -> collectionTime=20; 500 ticks would

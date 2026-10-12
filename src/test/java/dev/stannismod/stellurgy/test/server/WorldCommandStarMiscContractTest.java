@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * {@code /ar star *}, {@code /ar dumpBiomes},
@@ -42,12 +43,11 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
      * <p>A copy with the right id passes every id check and fails every identity one: a station at
      * Earth was quoted the interstellar price for a planet of its own star, and an edit to star 0 does
      * not reach the star Earth is lit by.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}
-     * at {@code overworldProperties.setStar(sol)} written as
-     * {@code sol.addPlanet(overworldProperties)}, which lists Earth without binding it:
-     * "Earth's star must be the registered star 0 itself, not a copy with its id: {… "starIsRegistered":false …}".</p>
      */
+    @RedWitness(prose = "2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}"
+            + " at {@code overworldProperties.setStar(sol)} written as"
+            + " {@code sol.addPlanet(overworldProperties)}, which lists Earth without binding it:"
+            + " \"Earth's star must be the registered star 0 itself, not a copy with its id: {… \"starIsRegistered\":false …}\".")
     @Test
     public void earthBelongsToTheRegisteredSolNotToACopyOfIt() throws Exception {
         Reply earth = Reply.of(exec("stellurgytest planet info 0"));

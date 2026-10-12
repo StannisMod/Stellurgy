@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A fed body is drawn at an apparent size that RISES with the angle it subtends — its own radius over
@@ -29,6 +30,7 @@ public class ApparentSizeTest {
     private static final double GIANT_R = 280_000d;
 
     /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
+    @Pins("CON-C14-16")
     @Test
     public void sizeFallsAsTheSameBodyRecedes() {
         double[] distances = {200_000d, 1_000_000d, 10_000_000d, 100_000_000d, 1_000_000_000d};
@@ -71,6 +73,7 @@ public class ApparentSizeTest {
     }
 
     /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
+    @Pins("CON-C14-16")
     @Test
     public void sizeIsClampedAtBothEnds() {
         assertEquals("a body on top of you does not fill the sky", ApparentSize.MAX_HALF_SIZE,
@@ -81,6 +84,7 @@ public class ApparentSizeTest {
     }
 
     /** Pins CON-C14-16 (apparent size falls with distance and is clamped at both ends). */
+    @Pins("CON-C14-16")
     @Test
     public void everyFedPairStaysInsideTheClamps() {
         for (double r : new double[] {1d, MOON_R, EARTH_R, GIANT_R, 2.8e6}) {

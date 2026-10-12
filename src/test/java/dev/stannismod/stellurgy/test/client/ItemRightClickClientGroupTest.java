@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.Plot;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The player holds a Stellurgy item and right-clicks it. One client for every scenario; the last one
@@ -351,19 +352,18 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * both announce themselves from INSIDE the method that is not supposed to run, and a correct
      * absence would fail it. The live control for {@code gui_container_served} is the sibling
      * scenario below, which asserts the same seam recording a served container.</p>
-     *
-     * <p>red-witnessed: with the satellite gate of {@code ItemOreScanner#onItemRightClick} at
-     * {@code if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())}
-     * removed, so an unbound
-     * scanner opens its GUI: "an unbound ore scanner must never ask the server for a GUI; GUI
-     * requests since the click: …", 2026-09-28. The same inversion first left this test GREEN while
-     * it counted SERVED containers: {@code GuiHandler#getServerGuiElement} at {@code satellite = null}
-     * substitutes {@code null} for a satellite it cannot resolve,
-     * {@code ContainerOreMappingSatellite#ContainerOreMappingSatellite} at
-     * {@code inv.setSelectedSlot(-1)} dereferences it, and the exception
-     * leaves the handler past the RETURN-only recorder — the crash this test's name excludes read as
-     * "nothing asked". It counts requests now ({@code gui_container_requested}, recorded at HEAD).</p>
      */
+    @RedWitness(prose = "with the satellite gate of {@code ItemOreScanner#onItemRightClick} at"
+            + " {@code if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())}"
+            + " removed, so an unbound"
+            + " scanner opens its GUI: \"an unbound ore scanner must never ask the server for a GUI; GUI"
+            + " requests since the click: …\", 2026-09-28. The same inversion first left this test GREEN while"
+            + " it counted SERVED containers: {@code GuiHandler#getServerGuiElement} at {@code satellite = null}"
+            + " substitutes {@code null} for a satellite it cannot resolve,"
+            + " {@code ContainerOreMappingSatellite#ContainerOreMappingSatellite} at"
+            + " {@code inv.setSelectedSlot(-1)} dereferences it, and the exception"
+            + " leaves the handler past the RETURN-only recorder — the crash this test's name excludes read as"
+            + " \"nothing asked\". It counts requests now ({@code gui_container_requested}, recorded at HEAD).")
     @Test
     public void rightClickWithEmptySatelliteIdOpensNoGuiAndDoesNotCrash() throws Exception {
         scenario().arranging("equip an ore scanner with no satellite bound");
@@ -470,14 +470,13 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      *
      * <p>The player is dropped to survival for the consumption half of the contract; the shared
      * reset puts the mode back for whoever runs next.</p>
-     *
-     * <p>red-witnessed: with {@code ItemHovercraft#onItemRightClick} at
-     * {@code worldIn.spawnEntity(entityboat)} skipped on the block branch:
-     * "a right-click at a block must reach the server and spawn the hovercraft into the world — no
-     * `entity_joined_world` was recorded within 200 ticks", 2026-09-28. (A census of verdicts by call
-     * pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real
-     * verdict after the rewritten wait is this chain.)</p>
      */
+    @RedWitness(prose = "with {@code ItemHovercraft#onItemRightClick} at"
+            + " {@code worldIn.spawnEntity(entityboat)} skipped on the block branch:"
+            + " \"a right-click at a block must reach the server and spawn the hovercraft into the world — no"
+            + " `entity_joined_world` was recorded within 200 ticks\", 2026-09-28. (A census of verdicts by call"
+            + " pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real"
+            + " verdict after the rewritten wait is this chain.)")
     @Test
     public void rightClickAtTargetBlockSpawnsHovercraftAndConsumesStack() throws Exception {
         int dim = plot().dim;
@@ -589,11 +588,10 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * <p>The absence's positive half is the click itself: {@code right_click_item} carrying the
      * hovercraft proves the item was in hand and the click was not dropped, so the silence that
      * follows is the ray trace's answer rather than the arrangement's.</p>
-     *
-     * <p>red-witnessed: with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at
-     * {@code if (raytraceresult == null)}) spawning a craft at the player before it passes: "no hovercraft must be spawned on an empty ray-trace; entities that
-     * joined the server world since the click: …", 2026-09-28.</p>
      */
+    @RedWitness(prose = "with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at"
+            + " {@code if (raytraceresult == null)}) spawning a craft at the player before it passes: \"no hovercraft must be spawned on an empty ray-trace; entities that"
+            + " joined the server world since the click: …\", 2026-09-28.")
     @Test
     public void rightClickIntoEmptyAirReturnsPassWithoutSpawn() throws Exception {
         int x = plot().x(FIXTURE_DX);

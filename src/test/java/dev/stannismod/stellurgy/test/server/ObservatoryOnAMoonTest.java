@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.test.TelescopeReading;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * An observatory built ON a moon surveys from the moon's system, in the galactic lattice a survey
@@ -144,15 +145,13 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
         return TelescopeReading.at(this::exec, at(site));
     }
 
-    /**
-     * <p>red-witnessed: with {@code TileObservatory.scanOrigin}'s {@code .map(galacticCell)} removed:
-     * "an observatory on the moon must survey from its system's galactic cell … expected 19_0_0 but
-     * was 19_0_0.1_0_0"; with {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}'s body loop skipping a {@code MOON}: "the
-     * moon's local radar must name the moon it stands on"; and skipping a {@code PLANET}: "and the
-     * world that moon orbits … crystalDims:[2]" — one inversion per run, 2026-09-30. (An earlier
-     * version of this class also measured what the origin inversion does past the assertion: the
-     * dedicated server goes down with "Ticking block entity" from {@code TelescopeScan.detect}.)</p>
-     */
+    @RedWitness(prose = "with {@code TileObservatory.scanOrigin}'s {@code .map(galacticCell)} removed:"
+            + " \"an observatory on the moon must survey from its system's galactic cell … expected 19_0_0 but"
+            + " was 19_0_0.1_0_0\"; with {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}'s body loop skipping a {@code MOON}: \"the"
+            + " moon's local radar must name the moon it stands on\"; and skipping a {@code PLANET}: \"and the"
+            + " world that moon orbits … crystalDims:[2]\" — one inversion per run, 2026-09-30. (An earlier"
+            + " version of this class also measured what the origin inversion does past the assertion: the"
+            + " dedicated server goes down with \"Ticking block entity\" from {@code TelescopeScan.detect}.)")
     @Test
     public void anObservatoryOnTheMoonSurveysFromItsSystemsGalacticCell() throws Exception {
         defaultGameLocalRadar();

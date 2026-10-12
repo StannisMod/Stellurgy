@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -16,6 +17,7 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A body in the planet file that states no mass and no radius is REFUSED, never loaded with a size
@@ -31,7 +33,7 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Manual harness lifecycle: the planet file has to be on disk before the server boots.</p>
  */
-public class ASizelessBodyInThePlanetFileIsRefusedTest {
+public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanicsTest {
 
     private static final int OVERWORLD_DIM = 0;
     /** An airless planet that states everything but its bulk. */
@@ -91,14 +93,12 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest {
         if (harness != null) harness.close();
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code if (!properties.hasBulkProperties())} replaced by {@code if (false)}, this fails on the
-     * sizeless airless planet: {@code "stellurgyDimensions":[3,4]} (2026-10-01).
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code if (!properties.hasBulkProperties())} replaced by {@code if (false)}, this fails on the"
+            + " sizeless airless planet: {@code \"stellurgyDimensions\":[3,4]} (2026-10-01).")
     @Test
     public void aBodyThatStatesNoSizeIsNotLoadedAndTheOverworldIsHeldToTheSameRule() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String command = "stellurgytest dim list";
         Reply dims = Reply.of(command, String.join("\n", harness.client().execute(command)));

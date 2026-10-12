@@ -8,6 +8,8 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Contract coverage for {@link dev.stannismod.stellurgy.util.WeightEngine}
@@ -106,6 +108,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-WGT-03 (fluid weight is positive and scales with fuelMassScale). */
+    @Pins("INV-WGT-03")
     @Test
     public void fluidWeightUsesFallbackAndFuelScale() throws Exception {
         reset();
@@ -128,13 +131,12 @@ public class WeightSystemTest extends AbstractSharedServerTest {
      * <p>Fails when the scale is not applied to held content (the scale-0 leg still finds the iron),
      * when held content is not weighed at all (the default leg finds nothing in a full chest), or when
      * the scale reaches the block itself (the block part moves between legs).</p>
-     *
-     * <p>red-witnessed: with {@code WeightEngine#getTEWeight} at {@code heldWeight(te) *
-     * StellurgyConfiguration.getCurrentConfig().contentMassScale} reduced to {@code heldWeight(te)},
-     * this fails on the scale-0 leg — "expected:&lt;750.0&gt; but was:&lt;320750.0&gt;"; and with
-     * {@code WeightEngine#getWeight} at {@code return weight + getTEWeight(te)} scaling {@code weight}
-     * as well, it fails on the same leg — "expected:&lt;750.0&gt; but was:&lt;0.0&gt;" (2026-10-03).</p>
      */
+    @RedWitness(prose = "with {@code WeightEngine#getTEWeight} at {@code heldWeight(te) *"
+            + " StellurgyConfiguration.getCurrentConfig().contentMassScale} reduced to {@code heldWeight(te)},"
+            + " this fails on the scale-0 leg — \"expected:&lt;750.0&gt; but was:&lt;320750.0&gt;\"; and with"
+            + " {@code WeightEngine#getWeight} at {@code return weight + getTEWeight(te)} scaling {@code weight}"
+            + " as well, it fails on the same leg — \"expected:&lt;750.0&gt; but was:&lt;0.0&gt;\" (2026-10-03).")
     @Test
     public void contentMassScaleReachesHeldContentAndNothingElse() throws Exception {
         reset();

@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Where a friend is spared: <b>before there is a target, not at the trigger.</b>
@@ -65,14 +66,6 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractClientE2ETest {
     private static final int SWEEPS = 3;
 
     /**
-     * red-witnessed: with the friend exclusion in {@code TacticalScan} ({@code TacticalScan#trackOf} at {@code if (CodeUtils.entityHasMatchingCode(candidate, friendlyCode))})
-     * disabled, this fails at "a player carrying the installation's code entered the target list" on a
-     * sweep listing {@code names:"ForgeTestClient"} (2026-09-29).
-     *
-     * <p>red-witnessed: with {@code TileFireControlSensor#publish} at {@code state.setAcquiredTrack(contacts.get(0), world.getTotalWorldTime(), hold);} publishing the contact as the
-     * network's named target ({@code setTargetEntity}) instead of as an acquisition, this fails at "it
-     * fired, but not on an acquisition: {...acquired:false...}" (2026-09-30).</p>
-     *
      * <p>"The battery fired at a player carrying its own code" is DOWNSTREAM of the friend-leg sweep
      * verdict and is not reached red by any inversion: the gun's only source of a target here is the
      * acquisition, so a round at the friend needs the friend in a sweep, which that verdict reds first.
@@ -81,6 +74,12 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractClientE2ETest {
      * carrying the installation's code entered the target list: {...names:ForgeTestClient...}", the
      * same line the sensor's exclusion alone already reds.</p>
      */
+    @RedWitness(prose = "with the friend exclusion in {@code TacticalScan} ({@code TacticalScan#trackOf} at {@code if (CodeUtils.entityHasMatchingCode(candidate, friendlyCode))})"
+            + " disabled, this fails at \"a player carrying the installation's code entered the target list\" on a"
+            + " sweep listing {@code names:\"ForgeTestClient\"} (2026-09-29).")
+    @RedWitness(prose = "with {@code TileFireControlSensor#publish} at {@code state.setAcquiredTrack(contacts.get(0), world.getTotalWorldTime(), hold);} publishing the contact as the"
+            + " network's named target ({@code setTargetEntity}) instead of as an acquisition, this fails at \"it"
+            + " fired, but not on an acquisition: {...acquired:false...}\" (2026-09-30).")
     @Test
     public void aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes() throws Exception {
         Events server = new Events(this::server,

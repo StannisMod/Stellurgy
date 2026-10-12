@@ -7,6 +7,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * How heat gets off a ship: the radiating cell, and the two things that decide how much it sheds.
@@ -52,13 +54,14 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * given the same energy, so they sit at the same temperature and the only thing that differs is
      * how much of them is radiator — which is what makes the ratio mean area and nothing else.
      *
-     * <p>red-witnessed: with {@code HeatNetwork#rejectHeat} at {@code double gross = cellPowerAt(temperature(stored, capacity));} dividing each cell's gross power by the square
-     * root of the loop's cell count: "three cells must shed three times what one does (one=82
-     * three=99) expected:&lt;246&gt; but was:&lt;99&gt;", 2026-09-30. The four premises before it
-     * are arrangements and are not witnessed.</p>
      * Pins INV-HEAT-07 (Rejection scales linearly with the number of radiating cells, at equal loop capacity and equal stored energy).
      * Pins HEAT-7 (rejection scales linearly with area and with the fourth power of temperature).
      */
+    @Pins({"INV-HEAT-07", "HEAT-7"})
+    @RedWitness(prose = "with {@code HeatNetwork#rejectHeat} at {@code double gross = cellPowerAt(temperature(stored, capacity));} dividing each cell's gross power by the square"
+            + " root of the loop's cell count: \"three cells must shed three times what one does (one=82"
+            + " three=99) expected:&lt;246&gt; but was:&lt;99&gt;\", 2026-09-30. The four premises before it"
+            + " are arrangements and are not witnessed.")
     @Test
     public void rejectionScalesWithTheAreaBuilt() throws Exception {
         // Same four blocks in each, one radiator against three.
@@ -102,15 +105,16 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * the two temperatures it asked for. `T_amb` deliberately does not appear — there is no such term
      * any more, and a test still written around one would be asserting a model the code left behind.</p>
      *
-     * <p>red-witnessed: with {@code HeatNetwork#cellPowerAt} at {@code pow4(kelvin) / pow4(reference)}
-     * putting a cell's power on the square of its
-     * temperature instead of the fourth power: "what the cell radiates must follow the fourth power
-     * of its temperature: expected 2.4763785142736783..2.476383626828728 … measured
-     * 1.5640392037839332..1.5779011582219171", 2026-09-30. The three premises before it are
-     * arrangements and are not witnessed.</p>
      * Pins INV-HEAT-08 (Rejection follows the fourth power of temperature).
      * Pins HEAT-7 (rejection scales linearly with area and with the fourth power of temperature).
      */
+    @Pins({"INV-HEAT-08", "HEAT-7"})
+    @RedWitness(prose = "with {@code HeatNetwork#cellPowerAt} at {@code pow4(kelvin) / pow4(reference)}"
+            + " putting a cell's power on the square of its"
+            + " temperature instead of the fourth power: \"what the cell radiates must follow the fourth power"
+            + " of its temperature: expected 2.4763785142736783..2.476383626828728 … measured"
+            + " 1.5640392037839332..1.5779011582219171\", 2026-09-30. The three premises before it are"
+            + " arrangements and are not witnessed.")
     @Test
     public void rejectionFollowsTheFourthPowerOfTemperature() throws Exception {
         int xQuartic = stand("one loop with one radiating cell, charged twice");
@@ -163,22 +167,23 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * the tick. A cell that reported zero while the heat quietly left anyway would pass a test that
      * only read the cell.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SHEDS NOTHING — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the obstruction: "nothing may be shed by an obstructed cell: …
-     * expected:&lt;0&gt; but was:&lt;82&gt;". STILL IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} losing one
-     * unit a tick outside rejection: "and the energy must still be in the loop, not quietly gone: …
-     * expected:&lt;8000&gt; but was:&lt;7999&gt;". ONE BLOCK AWAY — {@code TileHeatRadiator#getObstruction} at {@code return HullClearance.obstructionDistance(world, pos, getRadiatingFacing(),}
-     * reporting twice the distance: "the cell must report the obstruction one block away … expected:&lt;1&gt;
-     * but was:&lt;2&gt;". NO RADIATING SURFACE — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} counting the blocked
-     * cell and {@code TileHeatRadiator#exchange} at {@code rejectedThisTick = amount;} shedding nothing through it: "and must count as no radiating surface: …
-     * expected:&lt;0&gt; but was:&lt;1&gt;". STILL SEES THE MACHINE — {@code HeatNetwork#exchangerCount} at {@code if (node instanceof IHeatExchanger)}
-     * counting only working exchangers: "the loop must still see the machine — it is obstructed, not
-     * gone: … expected:&lt;1&gt; but was:&lt;0&gt;". NO WORKING SURFACE — {@code HeatNetwork#radiatingCells} at {@code cells += Math.max(0, ((IHeatExchanger) node).getExchangeCells());}
-     * counting every exchanger as a cell: "with no working surface between them: …
-     * expected:&lt;0&gt; but was:&lt;1&gt;". The three premises before the obstruction is placed are
-     * arrangements and are not witnessed.</p>
      * Pins INV-HEAT-09 (An obstructed cell sheds NOTHING and reports the obstruction's distance, and the loop keeps its energy).
      * Pins HEAT-9 (an obstructed radiator sheds nothing and reports where the block is).
      */
+    @Pins({"INV-HEAT-09", "HEAT-9"})
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. SHEDS NOTHING — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the obstruction: \"nothing may be shed by an obstructed cell: …"
+            + " expected:&lt;0&gt; but was:&lt;82&gt;\". STILL IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} losing one"
+            + " unit a tick outside rejection: \"and the energy must still be in the loop, not quietly gone: …"
+            + " expected:&lt;8000&gt; but was:&lt;7999&gt;\". ONE BLOCK AWAY — {@code TileHeatRadiator#getObstruction} at {@code return HullClearance.obstructionDistance(world, pos, getRadiatingFacing(),}"
+            + " reporting twice the distance: \"the cell must report the obstruction one block away … expected:&lt;1&gt;"
+            + " but was:&lt;2&gt;\". NO RADIATING SURFACE — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} counting the blocked"
+            + " cell and {@code TileHeatRadiator#exchange} at {@code rejectedThisTick = amount;} shedding nothing through it: \"and must count as no radiating surface: …"
+            + " expected:&lt;0&gt; but was:&lt;1&gt;\". STILL SEES THE MACHINE — {@code HeatNetwork#exchangerCount} at {@code if (node instanceof IHeatExchanger)}"
+            + " counting only working exchangers: \"the loop must still see the machine — it is obstructed, not"
+            + " gone: … expected:&lt;1&gt; but was:&lt;0&gt;\". NO WORKING SURFACE — {@code HeatNetwork#radiatingCells} at {@code cells += Math.max(0, ((IHeatExchanger) node).getExchangeCells());}"
+            + " counting every exchanger as a cell: \"with no working surface between them: …"
+            + " expected:&lt;0&gt; but was:&lt;1&gt;\". The three premises before the obstruction is placed are"
+            + " arrangements and are not witnessed.")
     @Test
     public void anObstructedCellShedsNothingAndSaysWhereTheBlockIs() throws Exception {
         int xBlocked = stand("one loop whose radiating cell is later obstructed");

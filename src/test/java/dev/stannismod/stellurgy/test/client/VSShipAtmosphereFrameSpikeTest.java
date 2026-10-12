@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Spike — in WHICH coordinate frame does an oxygen vent seal, once its blocks belong to an
@@ -121,15 +122,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
 
     /**
      * RESULT-1 is the control: a sealed cabin on an assembled ship seals a blob at all.
-     *
-     * <p>red-witnessed: with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any
-     * block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: "RESULT-1: a vent in a
-     * sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…
-     * \"blobSize\":0)", 2026-09-28, and again on 2026-09-30 after the gate read gained its
-     * resolved-something refusal (the three CONTROL checks, that refusal included, stayed green). The
-     * two waits before it are arrangement links (the ship's id, the ship usable), and the refusal is a
-     * premise; none of them is witnessed.</p>
      */
+    @RedWitness(prose = "with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any"
+            + " block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: \"RESULT-1: a vent in a"
+            + " sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…"
+            + " \\\"blobSize\\\":0)\", 2026-09-28, and again on 2026-09-30 after the gate read gained its"
+            + " resolved-something refusal (the three CONTROL checks, that refusal included, stayed green). The"
+            + " two waits before it are arrangement links (the ship's id, the ship usable), and the refusal is a"
+            + " premise; none of them is witnessed.")
     @Test
     public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
 

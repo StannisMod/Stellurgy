@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The material table a player can edit, read back after the mod has grown.
@@ -36,16 +37,15 @@ public class ThermalTableFileTest {
     /**
      * <p>The shipped row is read the way the game gets it on a fresh install - a load with no file -
      * so the expected values come from production's own table and none of them is typed here.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}.
-     * RESOLVES — at {@code parsed.put(shipped.getKey(), shipped.getValue());} removed, so a missing
-     * shipped row never enters the table: "a material the file predates must still resolve". FILE
-     * WINS — at {@code if (!parsed.containsKey(shipped.getKey()))} made always to hold, so the shipped
-     * row goes over the file's own: "a row the file holds keeps the file's density
-     * expected:&lt;7875&gt; but was:&lt;7874&gt;". WRITTEN — at {@code save(file, parsed);} removed: "the added material must be written into the file
-     * … {"materials":{"iron":…}}". The two premises at its head are arrangements and are not
-     * witnessed.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}."
+            + " RESOLVES — at {@code parsed.put(shipped.getKey(), shipped.getValue());} removed, so a missing"
+            + " shipped row never enters the table: \"a material the file predates must still resolve\". FILE"
+            + " WINS — at {@code if (!parsed.containsKey(shipped.getKey()))} made always to hold, so the shipped"
+            + " row goes over the file's own: \"a row the file holds keeps the file's density"
+            + " expected:&lt;7875&gt; but was:&lt;7874&gt;\". WRITTEN — at {@code save(file, parsed);} removed: \"the added material must be written into the file"
+            + " … {\"materials\":{\"iron\":…}}\". The two premises at its head are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aTableWrittenBeforeAMaterialShippedStillKnowsIt() throws Exception {
         Path table = folder.getRoot().toPath().resolve("thermalMaterials.json");

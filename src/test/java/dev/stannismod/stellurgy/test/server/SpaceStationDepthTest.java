@@ -10,6 +10,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Space station registry and fuel:
@@ -45,6 +46,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
      * Pins INV-STN-02 (distinct stations in one orbit get distinct ids).
      * Pins INV-STN-22 (a new station registers an object with a unique id that appears in the manager list).
      */
+    @Pins({"INV-STN-02", "INV-STN-22"})
     @Test
     public void multipleStationsCoexistWithDistinctIds() throws Exception {
         int a = createStation(0);
@@ -79,6 +81,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-04 (addFuel clamps at MAX_FUEL and returns the amount actually added). */
+    @Pins("INV-STN-04")
     @Test
     public void fuelAddRespectsMaxCapacity() throws Exception {
         int id = createStation(0);
@@ -101,6 +104,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-03 (useFuel consumes nothing when the stock is short and drains exactly otherwise). */
+    @Pins("INV-STN-03")
     @Test
     public void fuelUseAllOrNothingWhenInsufficient() throws Exception {
         int id = createStation(0);
@@ -122,6 +126,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-03 (useFuel consumes nothing when the stock is short and drains exactly otherwise). */
+    @Pins("INV-STN-03")
     @Test
     public void fuelUseExactAmountDrains() throws Exception {
         int id = createStation(0);
@@ -146,6 +151,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
      * Pins INV-STN-05 (a freshly created station holds no fuel and reports the planet it orbits).
      * Pins INV-STN-22 (a new station registers an object with a unique id that appears in the manager list).
      */
+    @Pins({"INV-STN-05", "INV-STN-22"})
     @Test
     public void stationCreateRegistersAndPersistsForList() throws Exception {
         String before = String.join("\n", client().execute("stellurgytest station list"));

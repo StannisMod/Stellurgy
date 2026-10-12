@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.Weapons;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A unit is TOLD what happened to it — including, and especially, when what happened killed it.
@@ -47,31 +48,30 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
     /**
      * A unit that survives hears about it, and what it hears names the cause, the severity and the
      * stage it moved to — not a verdict, because the consequence is the unit's own to compute.
-     *
-     * <p>red-witnessed, one inversion per verdict, 2026-09-30:</p>
-     * <ul>
-     *   <li>with {@code ShipDamageService#tellTheUnits} at
-     *       {@code if (walk == null || walk.touched.isEmpty())} made always true, the link fails with
-     *       "nothing was delivered to a unit that was just damaged … no `damage_occurrence` carrying
-     *       x = 2400 and y = 70 and z = 1400 was recorded within 600 ticks";</li>
-     *   <li>with {@code ShipDamageService#tellTheUnits} at
-     *       {@code unit.onDamage(new DamageOccurrence(request.getCause(), request.getKind(), world,}
-     *       handed {@code DamageCause.COLLISION} for the cause, it fails with "the occurrence does not
-     *       name what caused it: {…"cause":"COLLISION"…}";</li>
-     *   <li>with the same call handed {@code ImpactKind.THERMAL} for the kind, with "the occurrence
-     *       does not name the kind of blow: {…"kind":"THERMAL"…}";</li>
-     *   <li>with {@code ShipDamageService#tellTheUnits} at
-     *       {@code t.pos, where, t.stageBefore, t.stageAfter, t.maxStage, t.budgetSpent, shipId}
-     *       handed 0 for the spend, with "the occurrence carries no severity … {…"spent":0…}";</li>
-     *   <li>with {@code DamageOccurrence#isDestroyed} at {@code return stageAfter >= maxStage;}
-     *       answering {@code stageAfter < maxStage}, with "the occurrence says the unit was destroyed
-     *       when it is still standing … expected:&lt;[fals]e&gt; but was:&lt;[tru]e&gt;";</li>
-     *   <li>with {@code ShipDamageService#tellTheUnits} at
-     *       {@code unit.onDamage(new DamageOccurrence(request.getCause(), request.getKind(), world,}
-     *       handed {@code null} for the world, with "the occurrence carries no world …
-     *       {…"dim":null…"hasWorld":false…}".</li>
-     * </ul>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30:"
+            + " <ul>"
+            + " <li>with {@code ShipDamageService#tellTheUnits} at"
+            + " {@code if (walk == null || walk.touched.isEmpty())} made always true, the link fails with"
+            + " \"nothing was delivered to a unit that was just damaged … no `damage_occurrence` carrying"
+            + " x = 2400 and y = 70 and z = 1400 was recorded within 600 ticks\";</li>"
+            + " <li>with {@code ShipDamageService#tellTheUnits} at"
+            + " {@code unit.onDamage(new DamageOccurrence(request.getCause(), request.getKind(), world,}"
+            + " handed {@code DamageCause.COLLISION} for the cause, it fails with \"the occurrence does not"
+            + " name what caused it: {…\"cause\":\"COLLISION\"…}\";</li>"
+            + " <li>with the same call handed {@code ImpactKind.THERMAL} for the kind, with \"the occurrence"
+            + " does not name the kind of blow: {…\"kind\":\"THERMAL\"…}\";</li>"
+            + " <li>with {@code ShipDamageService#tellTheUnits} at"
+            + " {@code t.pos, where, t.stageBefore, t.stageAfter, t.maxStage, t.budgetSpent, shipId}"
+            + " handed 0 for the spend, with \"the occurrence carries no severity … {…\"spent\":0…}\";</li>"
+            + " <li>with {@code DamageOccurrence#isDestroyed} at {@code return stageAfter >= maxStage;}"
+            + " answering {@code stageAfter < maxStage}, with \"the occurrence says the unit was destroyed"
+            + " when it is still standing … expected:&lt;[fals]e&gt; but was:&lt;[tru]e&gt;\";</li>"
+            + " <li>with {@code ShipDamageService#tellTheUnits} at"
+            + " {@code unit.onDamage(new DamageOccurrence(request.getCause(), request.getKind(), world,}"
+            + " handed {@code null} for the world, with \"the occurrence carries no world …"
+            + " {…\"dim\":null…\"hasWorld\":false…}\".</li>"
+            + " </ul>")
     @Test
     public void aUnitThatSurvivesIsToldWhatHappenedAndHowHard() throws Exception {
         prepare(SURVIVES_Z);
@@ -110,22 +110,21 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
      * business and differs by machine — a chemical engine goes like TNT, an ion engine merely ceases to
      * exist, a plasma engine is a tank letting go. A unit that never hears about its own death cannot
      * have one of those.</p>
-     *
-     * <p>red-witnessed, 2026-09-30:</p>
-     * <ul>
-     *   <li>with {@code ShipDamageService#tellTheUnits} at
-     *       {@code if (walk == null || walk.touched.isEmpty())} made always true, the link fails with
-     *       "a unit destroyed outright was told NOTHING … no `damage_occurrence` carrying x = 2400 and
-     *       y = 70 and z = 1420 was recorded within 600 ticks";</li>
-     *   <li>with {@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}
-     *       made always true (nothing may be removed), the arrangement fails with an
-     *       ArrangementFailure "the unit is still standing, so this run never tested a destruction at
-     *       all: {…"stage":3,"maxStage":4…"block":"minecraft:chest","wasDestroyed":false…}";</li>
-     *   <li>with {@code DamageOccurrence#isDestroyed} at {@code return stageAfter >= maxStage;}
-     *       answering {@code stageAfter < maxStage}, it fails with "the unit was told, but not that it
-     *       had DIED … [{…"stageAfter":4,"maxStage":4…"destroyed":false…}]".</li>
-     * </ul>
      */
+    @RedWitness(prose = "2026-09-30:"
+            + " <ul>"
+            + " <li>with {@code ShipDamageService#tellTheUnits} at"
+            + " {@code if (walk == null || walk.touched.isEmpty())} made always true, the link fails with"
+            + " \"a unit destroyed outright was told NOTHING … no `damage_occurrence` carrying x = 2400 and"
+            + " y = 70 and z = 1420 was recorded within 600 ticks\";</li>"
+            + " <li>with {@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}"
+            + " made always true (nothing may be removed), the arrangement fails with an"
+            + " ArrangementFailure \"the unit is still standing, so this run never tested a destruction at"
+            + " all: {…\"stage\":3,\"maxStage\":4…\"block\":\"minecraft:chest\",\"wasDestroyed\":false…}\";</li>"
+            + " <li>with {@code DamageOccurrence#isDestroyed} at {@code return stageAfter >= maxStage;}"
+            + " answering {@code stageAfter < maxStage}, it fails with \"the unit was told, but not that it"
+            + " had DIED … [{…\"stageAfter\":4,\"maxStage\":4…\"destroyed\":false…}]\".</li>"
+            + " </ul>")
     @Test
     public void aUnitKilledOutrightIsStillToldThatItDied() throws Exception {
         prepare(DIES_Z);
@@ -164,34 +163,34 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
      * after the blow's own reply: the probe resolves the whole impact inside the command, so every
      * occurrence that blow delivers is in the log before the command answers.</p>
      *
-     * <p>red-witnessed, 2026-09-30:</p>
-     * <ul>
-     *   <li>with {@code StructureDamageEngine#spendInto} at {@code result.blocksStaged++;} removed
-     *       from the branch that stages without destroying, the first arrangement fails with an
-     *       ArrangementFailure "the blow did not stage the stone, so nothing below was delivered for a
-     *       reason";</li>
-     *   <li>with {@code StructureDamageEngine#spendInto} at {@code DamageState.setStage(world, pos, stage);}
-     *       also writing stage 1 two blocks south of the struck block, the second fails with an
-     *       ArrangementFailure "the blow reached the bystander, so it would be RIGHT to tell it:
-     *       {…"stage":1…"block":"minecraft:chest"…}";</li>
-     *   <li>(taken on the pre-merge form, when the recorder lived in the probe command and wrote
-     *       through a static log) with {@code DamageOccurrenceRecorder#onAttach} at
-     *       {@code log.noteInstrumentEntered(INSTRUMENT);} removed (and its twin in
-     *       {@code DamageOccurrenceRecorder#record}), the instrument check fails with "the observation
-     *       point "damage_occurrence_recorder" never executed";</li>
-     *   <li>with {@code ShipDamageService#tellTheUnits} at
-     *       {@code for (StructureDamageEngine.Touched t : walk.touched)} telling, ahead of the struck
-     *       unit, every listening tile within three blocks of it, the silence fails with "a listening
-     *       unit the blow never touched was handed an occurrence";</li>
-     *   <li>with {@code ShipDamageService#tellTheUnits} at
-     *       {@code if (walk == null || walk.touched.isEmpty())} made always true, the final link fails
-     *       with "the bystander, struck directly, was not told either … no `damage_occurrence` carrying
-     *       x = 2400 and y = 70 and z = 1442 was recorded within 600 ticks".</li>
-     * </ul>
      * <p>Not witnessed on the first form of the neighbour inversion: placed AFTER
      * {@code if (unit == null)}'s {@code continue}, it never ran for the struck stone (a stone has no
      * listener), and the method stayed green.</p>
      */
+    @RedWitness(prose = "2026-09-30:"
+            + " <ul>"
+            + " <li>with {@code StructureDamageEngine#spendInto} at {@code result.blocksStaged++;} removed"
+            + " from the branch that stages without destroying, the first arrangement fails with an"
+            + " ArrangementFailure \"the blow did not stage the stone, so nothing below was delivered for a"
+            + " reason\";</li>"
+            + " <li>with {@code StructureDamageEngine#spendInto} at {@code DamageState.setStage(world, pos, stage);}"
+            + " also writing stage 1 two blocks south of the struck block, the second fails with an"
+            + " ArrangementFailure \"the blow reached the bystander, so it would be RIGHT to tell it:"
+            + " {…\"stage\":1…\"block\":\"minecraft:chest\"…}\";</li>"
+            + " <li>(taken on the pre-merge form, when the recorder lived in the probe command and wrote"
+            + " through a static log) with {@code DamageOccurrenceRecorder#onAttach} at"
+            + " {@code log.noteInstrumentEntered(INSTRUMENT);} removed (and its twin in"
+            + " {@code DamageOccurrenceRecorder#record}), the instrument check fails with \"the observation"
+            + " point \"damage_occurrence_recorder\" never executed\";</li>"
+            + " <li>with {@code ShipDamageService#tellTheUnits} at"
+            + " {@code for (StructureDamageEngine.Touched t : walk.touched)} telling, ahead of the struck"
+            + " unit, every listening tile within three blocks of it, the silence fails with \"a listening"
+            + " unit the blow never touched was handed an occurrence\";</li>"
+            + " <li>with {@code ShipDamageService#tellTheUnits} at"
+            + " {@code if (walk == null || walk.touched.isEmpty())} made always true, the final link fails"
+            + " with \"the bystander, struck directly, was not told either … no `damage_occurrence` carrying"
+            + " x = 2400 and y = 70 and z = 1442 was recorded within 600 ticks\".</li>"
+            + " </ul>")
     @Test
     public void aListeningUnitTheBlowMissedIsNotTold() throws Exception {
         prepare(DEAF_Z);

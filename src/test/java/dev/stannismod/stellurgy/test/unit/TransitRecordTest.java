@@ -14,6 +14,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Pure NBT round-trip of {@link TransitRecord} — the durable snapshot of one in-flight ship. The logical
@@ -27,6 +28,7 @@ public class TransitRecordTest {
     }
 
     /** Pins ADDR-12 (a mid-transit position is stored as origin name, target name and progress). */
+    @Pins("ADDR-12")
     @Test
     public void roundTripPreservesLogicalStateAndCrew() {
         UUID u1 = UUID.randomUUID();

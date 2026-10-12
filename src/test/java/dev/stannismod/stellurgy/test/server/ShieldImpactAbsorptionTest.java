@@ -14,6 +14,8 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * P1: a charged shield emitter must absorb a single impact whose cost exceeds the coil's per-tick
@@ -41,6 +43,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** Pins INV-SHD-05 (a charged coil absorbs a single impact costing more than its per-tick intake). */
+    @Pins("INV-SHD-05")
     @Test
     public void chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake() throws Exception {
         int gx = 980, gz = 774;
@@ -93,13 +96,12 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
      * <p>The payment is read off the shield's own decision — the coil as the blast is heard and as it
      * is decided, inside one handler call — and not off two probe reads of the coil a round trip
      * apart, which a refill from the network could make equal under load.</p>
-     *
-     * <p>red-witnessed: with {@code TileEntityFieldGenerator#tryAbsorbExplosionImpact} at
-     * {@code return impactEnergy > 0 && consumeShieldEnergy(impactEnergy) >= impactEnergy;} reduced to
-     * {@code return impactEnergy > 0;} — the glass still saved, nothing paid — this fails at "the
-     * emitter took the glass out of the blast without paying for it (coil 37689 as the blast was
-     * heard, 37689 once decided)" (2026-10-03).</p>
      */
+    @RedWitness(prose = "with {@code TileEntityFieldGenerator#tryAbsorbExplosionImpact} at"
+            + " {@code return impactEnergy > 0 && consumeShieldEnergy(impactEnergy) >= impactEnergy;} reduced to"
+            + " {@code return impactEnergy > 0;} — the glass still saved, nothing paid — this fails at \"the"
+            + " emitter took the glass out of the blast without paying for it (coil 37689 as the blast was"
+            + " heard, 37689 once decided)\" (2026-10-03).")
     @Test
     public void chargedShieldProtectsBlocksFromExplosion() throws Exception {
         // Control first: an unshielded glass block is destroyed by the blast. Without this the shielded
@@ -180,6 +182,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-SHD-06 (a kinetic projectile is deflected, not consumed). */
+    @Pins("INV-SHD-06")
     @Test
     public void chargedShieldDeflectsAnArrow() throws Exception {
         int gx = 992, gz = 786;

@@ -7,6 +7,7 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TileCO2Scrubber's comparator output
@@ -38,6 +39,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     private static final String VALUE_PAT = "value";
 
     /** Pins INV-ATM-10 (an empty scrubber reads comparator 0 and a fresh cartridge reads above 0). */
+    @Pins("INV-ATM-10")
     @Test
     public void emptyScrubberReportsZeroComparatorOutput() throws Exception {
         int x = PX, y = PY, z = PZ;
@@ -54,6 +56,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-ATM-10 (an empty scrubber reads comparator 0 and a fresh cartridge reads above 0). */
+    @Pins("INV-ATM-10")
     @Test
     public void freshCartridgeReportsNonZeroComparatorOutput() throws Exception {
         int x = PX + 30, y = PY, z = PZ;

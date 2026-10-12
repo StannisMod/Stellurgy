@@ -23,6 +23,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Contract tests for the transit state machine's WIRING - the depart/advance/arrive lifecycle, the
@@ -873,6 +874,7 @@ public class ShipTransitManagerTest {
     }
 
     /** Pins JUMP-6 (an aborted jump puts the crew back where they were). */
+    @Pins("JUMP-6")
     @Test
     public void anAbortedDepartureIsANoOpForTheCrew() {
         // A jump that never leaves must leave nobody worse off. The capture runs FIRST — it has to,
@@ -1061,6 +1063,7 @@ public class ShipTransitManagerTest {
     }
 
     /** Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of). */
+    @Pins("JUMP-10")
     @Test
     public void bootDisposesOfEveryParkedShipNoRecordClaims() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
@@ -1091,6 +1094,7 @@ public class ShipTransitManagerTest {
      * records reclaimed asks the orphans to announce themselves.
      * Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of).
      */
+    @Pins("JUMP-10")
     @Test
     public void anOrphanIsFoundInALaneNoSurvivingRecordCameNear() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());

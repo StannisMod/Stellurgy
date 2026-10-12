@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A mount entity is the SAME entity on both sides.
@@ -72,14 +73,12 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
     private static final String CHAIR_ENTITY =
             "org.valkyrienskies.mod.common.entity.EntityMountableChair";
 
-    /**
-     * <p>red-witnessed: with {@code EntityNetworkIds#of} at {@code Integer id = IDS.get(key(name.toString()))}
-     * answering the mount dummy's id for the chair
-     * — the collision this pins: red at the server's {@code mount} link with "Connection reset", the
-     * client having died on the chair it built as the other class, 2026-09-28. Earlier than the
-     * named failure in {@code ridingOrDie}: the server-log wait's step also waits on the client's
-     * ticks, so a dead client ends it first, and the socket error does not name the cause.</p>
-     */
+    @RedWitness(prose = "with {@code EntityNetworkIds#of} at {@code Integer id = IDS.get(key(name.toString()))}"
+            + " answering the mount dummy's id for the chair"
+            + " — the collision this pins: red at the server's {@code mount} link with \"Connection reset\", the"
+            + " client having died on the chair it built as the other class, 2026-09-28. Earlier than the"
+            + " named failure in {@code ridingOrDie}: the server-log wait's step also waits on the client's"
+            + " ticks, so a dead client ends it first, and the socket error does not name the cause.")
     @Test
     public void aChairMountArrivesAtTheClientAsItself() throws Exception {
 

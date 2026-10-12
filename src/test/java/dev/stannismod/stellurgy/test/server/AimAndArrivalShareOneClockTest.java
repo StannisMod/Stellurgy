@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A recorded defect's contract, at the server tier: <b>a jump's aim moves with the SPACE clock and with
@@ -82,6 +83,7 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
      * Pins CLOCK-1 (space-subsystem evaluations read the space clock and no other clock).
      * Pins CLOCK-2 (the aim and the arrival share one clock, so a non-space clock cannot move the aim).
      */
+    @Pins({"CLOCK-1", "CLOCK-2"})
     @Test
     public void theAimMovesWithTheSpaceClockAndWithNoOtherClock() throws Exception {
         int moonDim = findAMoon();
@@ -217,6 +219,7 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
      * "it moved" assertion green. That compares deltas, not values, so the clocks stay decoupled.</p>
      * Pins CLOCK-5 (the subsystem owns the counter: it advances once per tick, is independent of world clocks, and survives a reboot).
      */
+    @Pins("CLOCK-5")
     @Test
     public void theClockAdvancesWithoutBeingTold() throws Exception {
         // Ticks of the SERVER's own counter the clocks are watched across. The wait is on one counter

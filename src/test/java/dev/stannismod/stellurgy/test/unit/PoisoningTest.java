@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The poison dose law, second by second: air exactly at its limit harms from the thirtieth second and
@@ -26,29 +27,29 @@ public class PoisoningTest {
         return -1;
     }
 
-    /** red-witnessed: with {@code Poisoning#DOSE_THRESHOLD} at {@code 30.0D;} made {@code 20.0D;}, the
-     *  first harm came at second 20. */
+    @RedWitness(prose = "with {@code Poisoning#DOSE_THRESHOLD} at {@code 30.0D;} made {@code 20.0D;}, the"
+            + " first harm came at second 20.")
     @Test
     public void airExactlyAtItsLimitHarmsFromTheThirtiethSecondAndNotBefore() {
         assertEquals(30, firstHarmfulSecond(1.0D));
     }
 
-    /** red-witnessed: with {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} adding one
-     *  instead of the index, twice the poison harmed at second 30 too. */
+    @RedWitness(prose = "with {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} adding one"
+            + " instead of the index, twice the poison harmed at second 30 too.")
     @Test
     public void airTwiceAsPoisonousHarmsTwiceAsSoon() {
         assertEquals(15, firstHarmfulSecond(2.0D));
     }
 
-    /** red-witnessed: with {@code Poisoning#nextDose} at {@code if (toxicIndex >= 1.0D)} made
-     *  {@code > 0.0D}, air just under its limit harmed at second 31. */
+    @RedWitness(prose = "with {@code Poisoning#nextDose} at {@code if (toxicIndex >= 1.0D)} made"
+            + " {@code > 0.0D}, air just under its limit harmed at second 31.")
     @Test
     public void airBelowItsLimitAddsNothing() {
         assertEquals("air just under its limit never harms", -1, firstHarmfulSecond(0.99D));
     }
 
-    /** red-witnessed: with {@code Poisoning#HALF_LIFE_SECONDS} at {@code 300.0D;} made {@code 60.0D;},
-     *  five minutes left 1.875 of a 60 dose. */
+    @RedWitness(prose = "with {@code Poisoning#HALF_LIFE_SECONDS} at {@code 300.0D;} made {@code 60.0D;},"
+            + " five minutes left 1.875 of a 60 dose.")
     @Test
     public void cleanAirClearsHalfADoseInFiveMinutes() {
         double dose = 60.0D;
@@ -58,8 +59,8 @@ public class PoisoningTest {
         assertEquals("five minutes of clean air halve the dose", 30.0D, dose, 1e-6D);
     }
 
-    /** red-witnessed: with {@code Poisoning#damageFor} at {@code (float) (dose / DOSE_THRESHOLD)}
-     *  made {@code 1.0F}, twice the dose harmed 1.0 a second, the same as the threshold. */
+    @RedWitness(prose = "with {@code Poisoning#damageFor} at {@code (float) (dose / DOSE_THRESHOLD)}"
+            + " made {@code 1.0F}, twice the dose harmed 1.0 a second, the same as the threshold.")
     @Test
     public void aHeavierDoseHarmsHarder() {
         float atThreshold = Poisoning.damageFor(30.0D);

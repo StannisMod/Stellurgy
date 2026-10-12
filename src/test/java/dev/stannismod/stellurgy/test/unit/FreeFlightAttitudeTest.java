@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.api.FreeFlightPhysics.Step;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Contract pinning for the FF body-frame attitude quaternion
@@ -56,6 +57,7 @@ public class FreeFlightAttitudeTest {
     // -- calibration: single body rates == legacy bodyBasis ---------------
 
     /** Pins INV-RKT-07 (the attitude source of truth is the quaternion and Euler is derived from it). */
+    @Pins("INV-RKT-07")
     @Test
     public void identityBasisMatchesEulerZero() {
         assertBasisEquals(FreeFlightPhysics.bodyBasis(0f, 0f, 0f),
@@ -145,6 +147,7 @@ public class FreeFlightAttitudeTest {
     // -- basis invariants -------------------------------------------------
 
     /** Pins INV-RKT-07 (the attitude source of truth is the quaternion and Euler is derived from it). */
+    @Pins("INV-RKT-07")
     @Test
     public void derivedBasisIsOrthonormalRightHanded() {
         Quat q = FreeFlightPhysics.integrateBodyRates(
@@ -171,6 +174,7 @@ public class FreeFlightAttitudeTest {
     // -- Euler extraction round-trips (away from poles) -------------------
 
     /** Pins INV-RKT-07 (the attitude source of truth is the quaternion and Euler is derived from it). */
+    @Pins("INV-RKT-07")
     @Test
     public void eulerFromQuatRoundTripsBodyBasis() {
         Quat q = FreeFlightPhysics.integrateBodyRates(

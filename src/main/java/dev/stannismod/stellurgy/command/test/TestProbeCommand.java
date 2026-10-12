@@ -71,8 +71,15 @@ public class TestProbeCommand extends CommandBase {
      */
     private final WeaponFireVetoProbe veto;
 
-    TestProbeCommand(WeaponFireVetoProbe veto) {
+    /**
+     * The e2e gate of the same server, told by {@code e2e walk-begins} that the player's walk has begun.
+     * Made with this command in {@link TestProbeCommandRegistration}, and gone with the server.
+     */
+    private final E2EModeGate gate;
+
+    TestProbeCommand(WeaponFireVetoProbe veto, E2EModeGate gate) {
         this.veto = veto;
+        this.gate = gate;
     }
 
     @Override
@@ -99,10 +106,22 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"error\":\"missing subcommand\",\"usage\":\"" + getUsage(sender) + "\"}");
             return;
         }
+        // A verb added below that an e2e may use declares its kind in ProbeVerbKind; until it does, a
+        // server serving an e2e refuses it before this method is reached (E2EModeGate).
         try {
             switch (args[0].toLowerCase()) {
                 case "clock":
                     handleClock(server, sender);
+                    break;
+                case "e2e":
+                    // The harness's record that an e2e's player made his first input: from here on the
+                    // gate admits no build. Answers whether this server judges an e2e at all.
+                    if (args.length == 2 && "walk-begins".equalsIgnoreCase(args[1])) {
+                        gate.walkBegins();
+                        send(sender, "{\"ok\":true,\"walkBegan\":true,\"servesAnE2E\":" + gate.servesAnE2E() + "}");
+                    } else {
+                        send(sender, "{\"error\":\"usage: e2e walk-begins\"}");
+                    }
                     break;
                 case "registry":
                     handleRegistry(sender, tail(args));
@@ -1882,10 +1901,12 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
             world.getChunkProvider().provideChunk(afcPos.getX() >> 4, afcPos.getZ() >> 4);
             TileEntity nameTe = world.getTileEntity(afcPos);
+            // The id the computer CARRIES — never minted here: a read that minted one would hand a name to
+            // a computer no assembly ever named, and `found:false` is the answer for a computer with none.
             java.util.UUID durable = nameTe instanceof dev.stannismod.stellurgy.tile
                     .TileAdvancedFlightComputer
                     ? ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) nameTe)
-                            .getOrCreateShipId()
+                            .shipIdOrNull()
                     : null;
             send(sender, "{\"ok\":true,\"found\":" + (durable != null)
                     + ",\"shipId\":" + (durable == null ? "null" : "\"" + durable + "\"") + "}");
@@ -4723,9 +4744,13 @@ public class TestProbeCommand extends CommandBase {
 
     private void handleDrive(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 5) {
-            send(sender, "{\"error\":\"usage: drive build|extend|info|charge|push|arm|press <dim> <afcX> <afcY> <afcZ> ...\"}");
+            send(sender, "{\"error\":\"usage: drive build|extend|info|observe|charge|push|arm|press <dim> <afcX> <afcY> <afcZ> ...\"}");
             return;
         }
+        // `observe` is `info` that writes nothing: `info` resolves the drive as production does, which
+        // links an unlinked machine standing in the ship's claim and mints the computer's durable id;
+        // `observe` reads the machines the ship already holds and the id it already carries.
+        boolean observe = "observe".equalsIgnoreCase(args[0]);
         if ("extend".equalsIgnoreCase(args[0])) {
             // Dispatched before anything below reads the ship: every read there goes through
             // ShipDrive, and ShipDrive ADOPTS any unlinked machine standing in the claim — the very
@@ -4745,11 +4770,13 @@ public class TestProbeCommand extends CommandBase {
         java.util.UUID shipId = null;
         net.minecraft.tileentity.TileEntity afcTe = world.getTileEntity(afc);
         if (afcTe instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) {
-            shipId = ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe)
-                    .getOrCreateShipId();
+            dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer computerTe =
+                    (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe;
+            shipId = observe ? computerTe.shipIdOrNull() : computerTe.getOrCreateShipId();
         }
-        dev.stannismod.stellurgy.hyperdrive.ShipDrive drive =
-                new dev.stannismod.stellurgy.hyperdrive.ShipDrive(world, afc);
+        dev.stannismod.stellurgy.hyperdrive.ShipDrive drive = observe
+                ? dev.stannismod.stellurgy.hyperdrive.ShipDrive.observedFrom(world, afc)
+                : new dev.stannismod.stellurgy.hyperdrive.ShipDrive(world, afc);
         long now = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
 
         if ("build".equalsIgnoreCase(verb)) {
@@ -4846,9 +4873,10 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"spooling\":" + computer.isSpooling() + "}");
             return;
         }
-        if ("info".equalsIgnoreCase(verb)) {
-            dev.stannismod.stellurgy.navigation.ShipNavigation nav =
-                    new dev.stannismod.stellurgy.navigation.ShipNavigation(world, afc, shipId);
+        if ("info".equalsIgnoreCase(verb) || observe) {
+            dev.stannismod.stellurgy.navigation.ShipNavigation nav = observe
+                    ? dev.stannismod.stellurgy.navigation.ShipNavigation.observedFrom(world, afc, shipId)
+                    : new dev.stannismod.stellurgy.navigation.ShipNavigation(world, afc, shipId);
             dev.stannismod.stellurgy.hyperdrive.ShipDriveStats stats = drive.stats();
             dev.stannismod.stellurgy.hyperdrive.JumpWindow.Coverage coverage = drive.coverage();
             dev.stannismod.stellurgy.navigation.JumpGate.Verdict verdict =
@@ -18400,7 +18428,9 @@ public class TestProbeCommand extends CommandBase {
                 world.setBlockState(bayEmitter, jumpFieldEmitter.getDefaultState());
                 if (poweredJumpDrive) {
                     // On the capacitor, its only free face inside the footprint: the plug pushes into
-                    // every adjacent energy acceptor each tick, and the bank is one.
+                    // every adjacent energy acceptor each tick, and the bank is one. This variant is the
+                    // one fixture an e2e may lay, as a NAMED EXCEPTION until a craftable reactor or
+                    // generator can charge a drive (E2EModeGate.CREATIVE_PLUG_FIXTURE, with its trigger).
                     if (creativePlug == null) {
                         send(sender, "{\"error\":\"missing libvulpes:creativePowerBattery\"}");
                         return;

@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.test.WarShip;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertEquals;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What a pilot's keys do at the helm, beyond flying: the commands a seated player gives his ship.
@@ -85,17 +86,15 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * forty-five degrees off — and the first T must name the quarry. Moved behind him, the quarry stops
      * being a candidate, and the second T names the decoy. A designation that chose by distance names
      * the decoy first; one that ignored the heading would name the quarry behind him second.</p>
-     *
-     * <p>red-witnessed: with {@code ShipDesignation#designate} at
-     * {@code double angle = angleFromSight(eye, look, ship.getValue());} ranking the ships ahead by
-     * DISTANCE instead, this fails at "with a ship dead ahead and a nearer one forty-five degrees off,
-     * another was named" (2026-10-05).</p>
-     *
-     * <p>red-witnessed: with {@code HullAllegianceRule#isFriend} at
-     * {@code && CodeUtils.entityHasMatchingCode(player, accessCode)) {} in {@code CODE_ON_CREW} negated,
-     * this fails at "with him aboard carrying the code, his battery never decided about that ship again
-     * — no `turret_fire_decided` carrying … friendly = true" (2026-10-05).</p>
      */
+    @RedWitness(prose = "with {@code ShipDesignation#designate} at"
+            + " {@code double angle = angleFromSight(eye, look, ship.getValue());} ranking the ships ahead by"
+            + " DISTANCE instead, this fails at \"with a ship dead ahead and a nearer one forty-five degrees off,"
+            + " another was named\" (2026-10-05).")
+    @RedWitness(prose = "with {@code HullAllegianceRule#isFriend} at"
+            + " {@code && CodeUtils.entityHasMatchingCode(player, accessCode)) {} in {@code CODE_ON_CREW} negated,"
+            + " this fails at \"with him aboard carrying the code, his battery never decided about that ship again"
+            + " — no `turret_fire_decided` carrying … friendly = true\" (2026-10-05).")
     @Test
     public void aPilotsTNamesTheShipAheadAndTheCrewRuleSparesItOnceHeBoardsIt() throws Exception {
         Events server = serverEvents();
@@ -230,16 +229,14 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * and the seated window is {@value #WINDOW_FACTOR} times the slowest of those links, measured on
      * this run in client ticks (an upper bound: read before the press and after the record arrived).
      * Measured 2026-10-05: the slowest act landed within 6 client ticks, so the window was 60.</p>
-     *
-     * <p>red-witnessed: with {@code KeyBindings#scopeSteeringKeysToCockpit} at
-     * {@code gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);} and its
-     * two siblings for use and pick removed, this fails at "from the helm the cursor acted on the world
-     * (held 60 ticks)" (2026-10-05).</p>
-     *
-     * <p>red-witnessed: with {@code KeyBindings#onHelmBlockHighlight} at
-     * {@code if (StellurgyKeyConflictContext.PILOTING.isActive()) {} never cancelling, this fails at
-     * "from the helm a block was outlined as the one about to be hit (over 60 ticks)" (2026-10-05).</p>
      */
+    @RedWitness(prose = "with {@code KeyBindings#scopeSteeringKeysToCockpit} at"
+            + " {@code gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);} and its"
+            + " two siblings for use and pick removed, this fails at \"from the helm the cursor acted on the world"
+            + " (held 60 ticks)\" (2026-10-05).")
+    @RedWitness(prose = "with {@code KeyBindings#onHelmBlockHighlight} at"
+            + " {@code if (StellurgyKeyConflictContext.PILOTING.isActive()) {} never cancelling, this fails at"
+            + " \"from the helm a block was outlined as the one about to be hit (over 60 ticks)\" (2026-10-05).")
     @Test
     public void fromTheHelmTheCursorActsOnNothing() throws Exception {
         Events server = serverEvents();

@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Regression guard for the Free Flight launch gate.
@@ -53,6 +54,7 @@ public class FreeFlightLaunchGateTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-RKT-09 (a fuelless free-flight rocket stays grounded after prepareLaunch). */
+    @Pins("INV-RKT-09")
     @Test
     public void fuellessFreeFlightRocketStaysGroundedOnPrepareLaunch() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3380, 700));

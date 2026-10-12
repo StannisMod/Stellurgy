@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A round that comes out the far side of one plate is asked by the next one, in the SAME tick.
@@ -56,11 +57,10 @@ public class SpacedArmourIsAskedTwiceTest extends AbstractSharedServerTest {
 
     /**
      * The claim, on the arrangement that makes it matter.
-     *
-     * <p>red-witnessed: with {@code ShotSubstrate.step} advancing a body that came out the far side by the
-     * whole of the tick's remaining travel ({@code ShotSubstrate#step} at {@code double advanced = Math.min(reachInside,}), this fails at "the second
-     * plate was never asked by the fast round" (2026-09-29).</p>
      */
+    @RedWitness(prose = "with {@code ShotSubstrate.step} advancing a body that came out the far side by the"
+            + " whole of the tick's remaining travel ({@code ShotSubstrate#step} at {@code double advanced = Math.min(reachInside,}), this fails at \"the second"
+            + " plate was never asked by the fast round\" (2026-09-29).")
     @Test
     public void aRoundThroughTheFirstPlateIsAskedByTheSecondHoweverFastItIsGoing() throws Exception {
         for (double speed : new double[]{SLOW, FAST}) {

@@ -25,6 +25,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Contract tests for the procedural planet derivation. Pure JUnit; no Minecraft bootstrap.
@@ -187,6 +189,7 @@ public class PlanetDerivationTest {
      * any function of gravity alone, and cheap to find across a spread of seeds.</p>
      * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
      */
+    @Pins("INV-NAV-11")
     @Test
     public void aDayIsDrawnAndIsNotAFunctionOfGravity() {
         GalacticCoord anchor = cell(600, 0, 0);
@@ -218,6 +221,7 @@ public class PlanetDerivationTest {
      * The same body answers the same day twice — a draw, not a random.
      * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
      */
+    @Pins("INV-NAV-11")
     @Test
     public void aDrawnDayIsStillDeterministic() {
         GalacticCoord anchor = cell(610, 0, 0);
@@ -486,12 +490,11 @@ public class PlanetDerivationTest {
 
     /**
      * A very close orbit is tidally locked and one a thousand AU out is not.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for
-     * every orbit, this fails with "a distant orbit must not be locked". That is what the distant leg
-     * can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the
-     * old "1 AU = 100") leaves it green, because 1 000 AU is outside the radius either way.</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for"
+            + " every orbit, this fails with \"a distant orbit must not be locked\". That is what the distant leg"
+            + " can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the"
+            + " old \"1 AU = 100\") leaves it green, because 1 000 AU is outside the radius either way.")
     @Test
     public void aCloseOrbitIsLockedAndADistantOneIsNot() {
         StellarBody s = sol();
@@ -676,11 +679,10 @@ public class PlanetDerivationTest {
      * is decided from its profile's own facts; a profile that reported a pressure for a world whose
      * every gas escapes or freezes out would scan as an atmosphere and land as a vacuum — and keep the
      * warmth of a greenhouse it does not have.
-     *
-     * <p>red-witnessed: with {@code PlanetDerivation#derive} at {@code if (pressure > 0 && BodyAtmosphere.derive(}
-     * made {@code if (false && …}, this fails listing ice worlds reported at {@code p=1} to {@code p=38}
-     * at 53-59 K (2026-10-01).</p>
      */
+    @RedWitness(prose = "with {@code PlanetDerivation#derive} at {@code if (pressure > 0 && BodyAtmosphere.derive(}"
+            + " made {@code if (false && …}, this fails listing ice worlds reported at {@code p=1} to {@code p=38}"
+            + " at 53-59 K (2026-10-01).")
     @Test
     public void aPressureTheScanReportsIsAirTheWorldKeeps() {
         int withAir = 0;

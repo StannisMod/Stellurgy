@@ -35,6 +35,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Contract tests for the planet-descent state machine, driven against the real {@link SpaceManager}
@@ -473,15 +474,14 @@ public class DescentControllerTest {
      * <p>The craft is placed in EARTH's cell, a third of Luna's own descent shell from Luna, at a tick
      * where Luna is a long way from its parent — so a reading that took the two as sharing a frame,
      * or that compared cell names, gets the wrong answer rather than an unlucky one.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code double distance = craftAt.distanceTo(body.absoluteAt(tick))} measuring to
-     * each body's position at tick 0 instead of at the tick asked, this fails with "a craft a third of
-     * a moon's shell from it must find the MOON … was not:&lt;null&gt;". That inversion breaks
-     * the reading of a body's LIVE position. The other half of the defect this test is named for —
-     * a candidate list drawn from the craft's own cell — lives in the caller,
-     * {@code TileAdvancedFlightComputer#descendTargetsIn} at {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))}, and NO test pins that call:
-     * {@code SystemContentTest} witnesses {@code skyBodiesAt} itself, not which read the caller makes.</p>
      */
+    @RedWitness(prose = "2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code double distance = craftAt.distanceTo(body.absoluteAt(tick))} measuring to"
+            + " each body's position at tick 0 instead of at the tick asked, this fails with \"a craft a third of"
+            + " a moon's shell from it must find the MOON … was not:&lt;null&gt;\". That inversion breaks"
+            + " the reading of a body's LIVE position. The other half of the defect this test is named for —"
+            + " a candidate list drawn from the craft's own cell — lives in the caller,"
+            + " {@code TileAdvancedFlightComputer#descendTargetsIn} at {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))}, and NO test pins that call:"
+            + " {@code SystemContentTest} witnesses {@code skyBodiesAt} itself, not which read the caller makes.")
     @Test
     public void aCraftClosedOnAMoonFindsItEvenThoughItIsInAnotherCell() {
         long tick = (long) (LUNA_PERIOD_TICKS / 4d); // a quarter turn: Luna is off Earth's own axis
@@ -530,11 +530,10 @@ public class DescentControllerTest {
      *
      * <p>The craft stands between the flat radius and the shell, on both sides of the shell, for a
      * planet and for its moon — the shells differ, so a single radius cannot get all four right.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code shouldTriggerDescent(true, distance, DescentShell.radiusAround(body))}
-     * comparing against {@code ShipEntryController.DESCENT_RADIUS_BLOCKS} instead, this fails with
-     * "inside the planet's shell but far outside the old flat radius, the PLANET … was not:&lt;null&gt;".</p>
      */
+    @RedWitness(prose = "2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code shouldTriggerDescent(true, distance, DescentShell.radiusAround(body))}"
+            + " comparing against {@code ShipEntryController.DESCENT_RADIUS_BLOCKS} instead, this fails with"
+            + " \"inside the planet's shell but far outside the old flat radius, the PLANET … was not:&lt;null&gt;\".")
     @Test
     public void eachBodyIsEnteredAtItsOwnShell() {
         long tick = (long) (LUNA_PERIOD_TICKS / 4d);
@@ -572,11 +571,10 @@ public class DescentControllerTest {
      * only when they nearly touch; two bodies with NO radius carry the flat proximity sphere, and that
      * is the pair built here — a moon 600 blocks from its planet, both 512-block spheres, with the
      * craft in the lens where both reach.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code || distance >= nearestDistance)} keeping
-     * the FIRST in-range candidate instead of the nearer one, this fails with "nearer the moon, the
-     * moon expected same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;".</p>
      */
+    @RedWitness(prose = "2026-10-05, with {@code DescentController#nearestDescentTarget} at {@code || distance >= nearestDistance)} keeping"
+            + " the FIRST in-range candidate instead of the nearer one, this fails with \"nearer the moon, the"
+            + " moon expected same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;\".")
     @Test
     public void insideTwoShellsTheNearestBodyWins() {
         long tick = 0L;

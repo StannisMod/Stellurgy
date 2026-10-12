@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FluidStored;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -15,6 +16,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * fluid-tank NBT round-trip across restart.
@@ -37,7 +39,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class FluidTankNBTRoundTripsAcrossRestartTest {
+public class FluidTankNBTRoundTripsAcrossRestartTest extends AbstractMechanicsTest {
 
 
     /** Tank position — far enough from spawn that no other tile collides. */
@@ -69,10 +71,11 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
     }
 
     /** Pins INV-INFRA-24 (Fluid injected into a pressure tank survives a server restart at the same coords). */
+    @Pins("INV-INFRA-24")
     @Test
     public void liquidTankRetainsOxygenContentAcrossRestart() throws Exception {
         // ─────── Boot 1: place tank, inject oxygen, save & shut down ───────
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         String place = String.join("\n", firstBoot.client().execute(
                 "stellurgytest place 0 " + TX + " " + TY + " " + TZ + " stellurgy:liquidTank"));
@@ -104,7 +107,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         firstBoot = null;
 
         // ─────── Boot 2: reload the same workDir, re-probe the tank ────────
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         // The chunk at (TX>>4, TZ>>4) may not be force-loaded after restart;
         // a /stellurgytest probe at the tank's exact coords pulls the chunk into

@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * machine-domain smoke suite.
@@ -403,6 +404,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     // ─────────────────────────────────────────────────────────────────────
 
     /** Pins INV-CAP-07 (all four suit pieces expose the IProtectiveArmor capability). */
+    @Pins("INV-CAP-07")
     @Test
     public void suitItemsAndEnchantAreWiredUp() throws Exception {
         // 1. All four suit pieces registered + expose IProtectiveArmor capability.

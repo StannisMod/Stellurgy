@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * {@code orbitalAngleWrapsCorrectly}.
@@ -32,11 +33,9 @@ public class AstronomicalBodyHelperOrbitalThetaTest {
         MinecraftBootstrap.ensure();
     }
 
-    /**
-     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalThetaAt} at {@code return ((worldTick % periodTicks) / periodTicks) * (2d * Math.PI)} dropping the
-     * modulo by the period, this fails at the one-orbit wrap with "expected:&lt;0.0&gt; but
-     * was:&lt;6.283185307179586&gt;".
-     */
+    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalThetaAt} at {@code return ((worldTick % periodTicks) / periodTicks) * (2d * Math.PI)} dropping the"
+            + " modulo by the period, this fails at the one-orbit wrap with \"expected:&lt;0.0&gt; but"
+            + " was:&lt;6.283185307179586&gt;\".")
     @Test
     public void orbitalAngleWrapsCorrectly() {
         // Earth-baseline orbit: distance=100, solarSize=1.0 -> period=48 (per

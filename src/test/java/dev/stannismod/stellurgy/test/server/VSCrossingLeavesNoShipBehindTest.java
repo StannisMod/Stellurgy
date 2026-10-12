@@ -17,6 +17,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A per-ship crossing MOVES a ship, so it must not ADD one to the world it left.
@@ -135,16 +136,14 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
     private static final int UNLOADED_X = 7000, UNLOADED_Z = 7000;
 
-    /**
-     * <p>red-witnessed: only with all four of the source's collectors removed — the mark by name
-     * ({@code VSIntegration#releaseShipIfNothingLoaded}), the same-world adoption
-     * ({@code VSBridge#adoptOwnRemnant}), the registry walk's blockless clause
-     * ({@code WorldServerShipManager#tick}) and the spawn drain's
-     * {@code WorldServerShipManager#dropOwnBlocklessRemnant}:
-     * "the cut source … was never collected — no `ship_removed` … within 200 ticks", 2026-09-28.
-     * Removing the mark alone, or the mark and the adoption, stays GREEN. So this pins the outcome,
-     * and cannot say which hand collected: the one this test was written for is not the only one.</p>
-     */
+    @RedWitness(prose = "only with all four of the source's collectors removed — the mark by name"
+            + " ({@code VSIntegration#releaseShipIfNothingLoaded}), the same-world adoption"
+            + " ({@code VSBridge#adoptOwnRemnant}), the registry walk's blockless clause"
+            + " ({@code WorldServerShipManager#tick}) and the spawn drain's"
+            + " {@code WorldServerShipManager#dropOwnBlocklessRemnant}:"
+            + " \"the cut source … was never collected — no `ship_removed` … within 200 ticks\", 2026-09-28."
+            + " Removing the mark alone, or the mark and the adoption, stays GREEN. So this pins the outcome,"
+            + " and cannot say which hand collected: the one this test was written for is not the only one.")
     @Test
     public void aCrossingOutOfAnUnloadedSourceLeavesNoRegistryEntry() throws Exception {
         ShipReadiness.letShipsUnload(this::exec,
@@ -487,23 +486,22 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
     /**
      * A craft is built, dropped, and fetched back: ASSEMBLED, then UNLOADED, then LOADED — each once.
-     *
-     * <p>red-witnessed: with {@code WorldServerShipManager#spawnNewShips} at
-     * {@code noteNamed(toSpawn, spawnData.cause);} noting every spawn twice and as ASSEMBLED, this fails
-     * with "must be announced as ASSEMBLED exactly once", 2026-09-29.</p>
-     * <p>red-witnessed: with the UNLOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at
-     * {@code noteUnloaded(physicsObject.getShipData());}) removed, "dropping the ship object must be announced"
-     * fails with no such record within 200 ticks; with the LOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at
-     * {@code noteNamed(toLoad, ShipLifecycleEvent.Cause.LOADED);}) made twice, "coming back must be announced exactly once", 2026-09-29.
-     * One break per remaining verdict, 2026-09-30: the spawn note at {@code WorldServerShipManager#spawnNewShips} at
-     * {@code noteNamed(toSpawn, spawnData.cause);} removed fails "a craft that has just been built must be announced"; the LOADED
-     * note removed fails "coming back must be announced"; the UNLOADED note made twice fails "exactly
-     * once"; a PASTED note added beside the LOADED one fails "nothing here was cut and pasted"; a
-     * DESTROYED note added beside the UNLOADED one fails "an unloaded craft still EXISTS".
-     * (Every witness above was TAKEN on the pre-2026-10-06 form, when all three notes were one
-     * {@code noteLifecycle(ship, cause)}; the anchors were renamed in place with the method split
-     * into {@code noteNamed} / {@code noteUnloaded} / {@code noteRemoved}, and NOT re-taken.)</p>
      */
+    @RedWitness(prose = "with {@code WorldServerShipManager#spawnNewShips} at"
+            + " {@code noteNamed(toSpawn, spawnData.cause);} noting every spawn twice and as ASSEMBLED, this fails"
+            + " with \"must be announced as ASSEMBLED exactly once\", 2026-09-29.")
+    @RedWitness(prose = "with the UNLOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at"
+            + " {@code noteUnloaded(physicsObject.getShipData());}) removed, \"dropping the ship object must be announced\""
+            + " fails with no such record within 200 ticks; with the LOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at"
+            + " {@code noteNamed(toLoad, ShipLifecycleEvent.Cause.LOADED);}) made twice, \"coming back must be announced exactly once\", 2026-09-29."
+            + " One break per remaining verdict, 2026-09-30: the spawn note at {@code WorldServerShipManager#spawnNewShips} at"
+            + " {@code noteNamed(toSpawn, spawnData.cause);} removed fails \"a craft that has just been built must be announced\"; the LOADED"
+            + " note removed fails \"coming back must be announced\"; the UNLOADED note made twice fails \"exactly"
+            + " once\"; a PASTED note added beside the LOADED one fails \"nothing here was cut and pasted\"; a"
+            + " DESTROYED note added beside the UNLOADED one fails \"an unloaded craft still EXISTS\"."
+            + " (Every witness above was TAKEN on the pre-2026-10-06 form, when all three notes were one"
+            + " {@code noteLifecycle(ship, cause)}; the anchors were renamed in place with the method split"
+            + " into {@code noteNamed} / {@code noteUnloaded} / {@code noteRemoved}, and NOT re-taken.)")
     @Test
     public void buildingDroppingAndFetchingBackAreThreeDistinctAnnouncements() throws Exception {
 
@@ -541,14 +539,13 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
     /**
      * A craft that crosses is announced as PASTED, never as a second birth.
-     *
-     * <p>red-witnessed: with {@code WorldServerShipManager.spawnNewShips} ({@code WorldServerShipManager#spawnNewShips} at
-     * {@code noteNamed(toSpawn, spawnData.cause);}) noting every spawn as {@code ASSEMBLED}, "no `ship_lifecycle` carrying … cause =
-     * PASTED was recorded within 200 ticks", 2026-09-29; a PASTED spawn noted twice fails "announced as
-     * PASTED exactly once", and one also noted as ASSEMBLED fails "a crossing is not a new build",
-     * 2026-09-30. (Taken on the pre-2026-10-06 {@code noteLifecycle} form; anchor renamed, not
-     * re-taken.)</p>
      */
+    @RedWitness(prose = "with {@code WorldServerShipManager.spawnNewShips} ({@code WorldServerShipManager#spawnNewShips} at"
+            + " {@code noteNamed(toSpawn, spawnData.cause);}) noting every spawn as {@code ASSEMBLED}, \"no `ship_lifecycle` carrying … cause ="
+            + " PASTED was recorded within 200 ticks\", 2026-09-29; a PASTED spawn noted twice fails \"announced as"
+            + " PASTED exactly once\", and one also noted as ASSEMBLED fails \"a crossing is not a new build\","
+            + " 2026-09-30. (Taken on the pre-2026-10-06 {@code noteLifecycle} form; anchor renamed, not"
+            + " re-taken.)")
     @Test
     public void aCrossingIsAnnouncedAsAPasteAndNotAsANewBuild() throws Exception {
 
@@ -598,15 +595,14 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
      *
      * <p>The window is read once the ARRIVAL is announced: the source's removal is published in that
      * pass or an earlier one, so by then a destruction of it would be on the record too.</p>
-     *
-     * <p>red-witnessed: with {@code VSBridge#declareDeparture} at
-     * {@code ValkyrienUtils.getServerShipManager(world).declareDeparture(uuid, destinationDim);} never
-     * reached, this fails with "the source of a crossing must be announced as DEPARTED exactly once",
-     * 2026-10-06. And its first green-tree run caught a defect of the implementation itself: the
-     * same-world source announced {@code DEPARTED} and then {@code DESTROYED} in one tick — two halves of
-     * one registration each announced — failing "announced as DESTROYED"; fixed by announcing at the
-     * record's removal only ({@code WorldServerShipManager#removeRecord}).</p>
      */
+    @RedWitness(prose = "with {@code VSBridge#declareDeparture} at"
+            + " {@code ValkyrienUtils.getServerShipManager(world).declareDeparture(uuid, destinationDim);} never"
+            + " reached, this fails with \"the source of a crossing must be announced as DEPARTED exactly once\","
+            + " 2026-10-06. And its first green-tree run caught a defect of the implementation itself: the"
+            + " same-world source announced {@code DEPARTED} and then {@code DESTROYED} in one tick — two halves of"
+            + " one registration each announced — failing \"announced as DESTROYED\"; fixed by announcing at the"
+            + " record's removal only ({@code WorldServerShipManager#removeRecord}).")
     @Test
     public void aCrossingsSourceIsAnnouncedAsDepartedAndNeverAsDestroyed() throws Exception {
         long mark = events.mark();

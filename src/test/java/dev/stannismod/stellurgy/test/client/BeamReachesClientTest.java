@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Whether a burning beam is visible to the player standing next to the gun.
@@ -57,12 +58,10 @@ public class BeamReachesClientTest extends AbstractClientE2ETest {
     /** How often both guns are fed while the wait runs, in ticks — arrangement, not subject. */
     private static final int FEED_EVERY_TICKS = 20;
 
-    /**
-     * red-witnessed: with the radius test in {@code ProximityBroadcast.sendNearSegment}
-     * ({@code ProximityBroadcast#sendNearSegment} at {@code if (distanceSqToSegment(player.posX, player.posY, player.posZ, from, to) > radiusSq)}) disabled, this fails at "a beam burning four kilometres away
-     * was replicated to this client anyway", on a {@code client_beam_drawn} for {@code 4300,84,300}
-     * recorded before the near gun's (2026-09-29).
-     */
+    @RedWitness(prose = "with the radius test in {@code ProximityBroadcast.sendNearSegment}"
+            + " ({@code ProximityBroadcast#sendNearSegment} at {@code if (distanceSqToSegment(player.posX, player.posY, player.posZ, from, to) > radiusSq)}) disabled, this fails at \"a beam burning four kilometres away"
+            + " was replicated to this client anyway\", on a {@code client_beam_drawn} for {@code 4300,84,300}"
+            + " recorded before the near gun's (2026-09-29).")
     @Test
     public void aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot() throws Exception {
         Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);

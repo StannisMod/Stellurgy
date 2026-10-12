@@ -15,6 +15,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Server-level regression guard for the tolerant planetDefs.xml loading
@@ -84,6 +85,7 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-XML-01 (a malformed planet definition is skipped, not fatal). */
+    @Pins("INV-XML-01")
     @Test
     public void serverBootsWithMalformedPlanetSkipped() throws Exception {
         // The assertion that matters most is implicit in this line: before the

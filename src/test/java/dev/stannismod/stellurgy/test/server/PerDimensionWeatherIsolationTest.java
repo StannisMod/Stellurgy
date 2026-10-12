@@ -16,6 +16,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * direct cross-dim
@@ -78,6 +79,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
+    @Pins("INV-WGEN-14")
     @Test
     public void rainOnPlanetADoesNotLeakToBOrOverworld() throws Exception {
 
@@ -109,6 +111,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
+    @Pins("INV-WGEN-14")
     @Test
     public void rainOnPlanetBDoesNotLeakToAOrOverworld() throws Exception {
         // The reverse direction — guards against a one-way leak bug where A
@@ -131,6 +134,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
+    @Pins("INV-WGEN-14")
     @Test
     public void clearOnPlanetADoesNotClearB() throws Exception {
         // Symmetric to the rain test — clearing one planet must not clear the

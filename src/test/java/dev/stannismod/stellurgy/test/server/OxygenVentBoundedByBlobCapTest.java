@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * The {@code TileOxygenVent} blob is
@@ -85,6 +86,7 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-ATM-08 (the blob is bounded by the vent size cap). */
+    @Pins("INV-ATM-08")
     @Test
     public void ventSealsWithinCapButNotBeyondIt() throws Exception {
         // Control: a corridor entirely inside the cap -> must pressurise.

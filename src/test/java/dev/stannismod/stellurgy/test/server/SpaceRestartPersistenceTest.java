@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.LedgerEntry;
 import dev.stannismod.stellurgy.test.MaterializedCell;
@@ -45,7 +46,7 @@ import static org.junit.Assert.assertTrue;
  * pool registered twice, a ship the ledger never settled) run in {@code SystemBodiesFeedFollowsTheCellTest}.
  * Probe-driven, so a mechanics test and not a player's path: no {@code E2E} in its name.</p>
  */
-public class SpaceRestartPersistenceTest {
+public class SpaceRestartPersistenceTest extends AbstractMechanicsTest {
 
     /**
      * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
@@ -124,7 +125,7 @@ public class SpaceRestartPersistenceTest {
     @Test
     public void aSettledShipsGalacticPositionSurvivesAServerReboot() throws Exception {
         // --- boot 1: the production subsystem comes up and records a ship ------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         // If this fails the rest of the test is meaningless rather than wrong: the production wiring
@@ -154,7 +155,7 @@ public class SpaceRestartPersistenceTest {
         harness = null;
 
         // --- boot 2: a brand new JVM, same world directory ---------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
@@ -195,7 +196,7 @@ public class SpaceRestartPersistenceTest {
     @Test
     public void aRestoredShipsSlotDimNamesTheWorldItsCellIsActuallyIn() throws Exception {
         // --- boot 1: settle the ship; its cell is materialized into whatever slot is free first ----
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 — without it nothing below "
@@ -212,7 +213,7 @@ public class SpaceRestartPersistenceTest {
         harness = null;
 
         // --- boot 2: a brand new JVM, same world directory ---------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
@@ -274,7 +275,7 @@ public class SpaceRestartPersistenceTest {
     @Test
     public void aSavePointThatCannotRecordAFlyingShipKeepsTheFleetItAlreadyPersisted() throws Exception {
         // --- boot 1 -------------------------------------------------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
@@ -309,7 +310,7 @@ public class SpaceRestartPersistenceTest {
         // --- the reboot ---------------------------------------------------------------------------
         harness.close();
         harness = null;
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
@@ -352,7 +353,7 @@ public class SpaceRestartPersistenceTest {
      */
     @Test
     public void aSavePointThatFailsPartWayLeavesBothTheFleetAndTheServerStanding() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
@@ -400,7 +401,7 @@ public class SpaceRestartPersistenceTest {
 
         harness.close();
         harness = null;
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         LedgerEntry restored = ledger(SHIP_ID);
         assertTrue("and the ship the failing save was holding must still be there: "

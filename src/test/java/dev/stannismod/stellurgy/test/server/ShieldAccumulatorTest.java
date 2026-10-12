@@ -9,6 +9,7 @@ import java.util.List;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * P1 trim (c): the shield <em>accumulator</em> — a bulk reserve that is BOTH a shield source and a
@@ -51,6 +52,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
     private static final String STORED = "shieldStored";
 
     /** Pins INV-NET-02 (a store registers as both source and sink). */
+    @Pins("INV-NET-02")
     @Test
     public void accumulatorBridgesGeneratorToEmitter() throws Exception {
         // Line: generator - accumulator - emitter, each adjacent along +X. The generator is NOT
@@ -93,6 +95,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-SHD-04 (energy is conserved across the solve). */
+    @Pins("INV-SHD-04")
     @Test
     public void accumulatorReserveIsConservedNotBled() throws Exception {
         // Charge an accumulator to a large reserve from a generator, then let it be the SOLE source of

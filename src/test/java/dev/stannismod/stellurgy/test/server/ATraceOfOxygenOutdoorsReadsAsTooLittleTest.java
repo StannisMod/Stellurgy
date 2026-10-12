@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.test.Reply;
@@ -16,6 +17,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A planet's outdoors is its AIR, judged by the band a room is judged by: a trace of oxygen reads as
@@ -29,7 +31,7 @@ import static org.junit.Assert.assertTrue;
  * supplies gas, never the reading. Manual harness lifecycle: the planet file must be on disk before the
  * first boot, and the second boot runs against the same directory.</p>
  */
-public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
+public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanicsTest {
 
     private static final int DIM = 9731;
     /** A trace: a thousandth of an atmosphere, two orders under the breathing band's floor. */
@@ -74,18 +76,16 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
         if (harness != null) harness.close();
     }
 
-    /**
-     * red-witnessed: with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}
-     * replaced by {@code return false;}, this fails after the trace is added with
-     * {@code expected:<[low]O2> but was:<[No]O2>} (2026-10-01).
-     * red-witnessed: with {@code DimensionProperties#copyData} lacking
-     * {@code this.air = props.air.copy();}, this fails after the restart with
-     * {@code expected:<[lowO2]> but was:<[air]>} — the world re-read from its planet file came back as
-     * Earth's mix (2026-10-01, the first run of this test, before that line existed).
-     */
+    @RedWitness(prose = "with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}"
+            + " replaced by {@code return false;}, this fails after the trace is added with"
+            + " {@code expected:<[low]O2> but was:<[No]O2>} (2026-10-01).")
+    @RedWitness(prose = "with {@code DimensionProperties#copyData} lacking"
+            + " {@code this.air = props.air.copy();}, this fails after the restart with"
+            + " {@code expected:<[lowO2]> but was:<[air]>} — the world re-read from its planet file came back as"
+            + " Earth's mix (2026-10-01, the first run of this test, before that line existed).")
     @Test
     public void aTraceOfOxygenReadsAsTooLittleOutdoorsAndIsStillThereAfterARestart() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         Reply before = outdoors();
         // The positive precondition of the verdict below: this world starts with NO oxygen, so a
@@ -101,7 +101,7 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
                 "lowO2", after.text("type"));
 
         harness.close();
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         Reply restarted = outdoors();
         assertEquals("after a restart the world must still hold its trace, and read it the same way: "

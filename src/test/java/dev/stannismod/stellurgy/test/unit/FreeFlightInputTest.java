@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * {@link FreeFlightInput} contract: clamping at construction, ByteBuf wire round-trip,
@@ -38,6 +39,7 @@ public class FreeFlightInputTest {
     }
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
+    @Pins("INV-RKT-08")
     @Test
     public void constructorClampsAboveOne() {
         FreeFlightInput in = new FreeFlightInput(5f, 2.5f, 1.000001f, 100f, 7f);
@@ -49,6 +51,7 @@ public class FreeFlightInputTest {
     }
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
+    @Pins("INV-RKT-08")
     @Test
     public void constructorClampsBelowMinusOne() {
         FreeFlightInput in = new FreeFlightInput(-5f, -2.5f, -1.000001f, -100f, -7f);
@@ -60,6 +63,7 @@ public class FreeFlightInputTest {
     }
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
+    @Pins("INV-RKT-08")
     @Test
     public void constructorCollapsesNanAndInfinityToZero() {
         FreeFlightInput in = new FreeFlightInput(
@@ -69,6 +73,7 @@ public class FreeFlightInputTest {
     }
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
+    @Pins("INV-RKT-08")
     @Test
     public void clampStaticHelperBehaviour() {
         assertEquals(  0f, FreeFlightInput.clamp(Float.NaN),               EPS);
@@ -115,6 +120,7 @@ public class FreeFlightInputTest {
     }
 
     /** Pins INV-RKT-08 (every FreeFlightInput channel is clamped to minus one to one and NaN or infinity becomes zero). */
+    @Pins("INV-RKT-08")
     @Test
     public void readReclampsOutOfRangeWireValues() {
         // A malicious / buggy client could write floats > 1.0 directly. Server-side

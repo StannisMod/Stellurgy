@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * fluid loader / unloader active transfer contract.
@@ -65,6 +66,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      * impl (depends on tank capacity, handler fill behaviour, etc.).</p>
      * Pins INV-INFRA-13 (the fluid loader transfers fluid into a rocket fluid tile).
      */
+    @Pins("INV-INFRA-13")
     @Test
     public void loaderTransfersOxygenIntoRocketStorageLiquidTanks() throws Exception {
         // THE PAIR MOVES TOGETHER. The loader sat at y=65 and the rocket's base at y=64, one below

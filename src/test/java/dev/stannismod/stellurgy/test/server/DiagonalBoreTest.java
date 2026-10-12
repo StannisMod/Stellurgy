@@ -11,6 +11,8 @@ import dev.stannismod.stellurgy.test.Reply;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * An impact arriving at an ANGLE must not leave blocks it passed through untouched.
@@ -49,12 +51,13 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
     private static final int MIN_BLOCKS_DAMAGED = 6;
 
     /**
-     * red-witnessed: with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor made to skip every voxel entered
-     * through a Z face (a sampled path's missed diagonal step), this fails with "the bore has 6
-     * hole(s) ... (11600,84,11601) -> (11601,84,11602) (2 apart)"; the axis-aligned control stayed
-     * green on the same run. 2026-09-30.
      * Pins INV-DMG-09 (The damaged blocks of one impact form an UNBROKEN chain).
      */
+    @Pins("INV-DMG-09")
+    @RedWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor made to skip every voxel entered"
+            + " through a Z face (a sampled path's missed diagonal step), this fails with \"the bore has 6"
+            + " hole(s) ... (11600,84,11601) -> (11601,84,11602) (2 apart)\"; the axis-aligned control stayed"
+            + " green on the same run. 2026-09-30.")
     @Test
     public void anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore() throws Exception {
         ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
@@ -107,11 +110,9 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
                 0, holes.size());
     }
 
-    /**
-     * red-witnessed: with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor shifting every even-X voxel one
-     * block south, this fails with "a straight shot along X wandered off its row: (11800,84,11601)
-     * expected:&lt;11600&gt; but was:&lt;11601&gt;". 2026-09-30.
-     */
+    @RedWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor shifting every even-X voxel one"
+            + " block south, this fails with \"a straight shot along X wandered off its row: (11800,84,11601)"
+            + " expected:&lt;11600&gt; but was:&lt;11601&gt;\". 2026-09-30.")
     @Test
     public void anAxisAlignedImpactIsUnaffected() throws Exception {
         // The control for the change, and the reason it is safe: where the ray is parallel to an axis

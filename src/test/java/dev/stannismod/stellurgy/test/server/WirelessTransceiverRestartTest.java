@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -16,6 +17,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * wireless transceiver NBT + onLoad-role persistence.
@@ -41,7 +43,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class WirelessTransceiverRestartTest {
+public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
 
     private static final String NET_ID = "networkID";
     private static final String SHARED_ID = "sharedNetworkId";
@@ -76,9 +78,10 @@ public class WirelessTransceiverRestartTest {
     }
 
     /** Pins INV-WDT-05 (mode, enabled and networkID survive an NBT round-trip and the tile re-registers its role). */
+    @Pins("INV-WDT-05")
     @Test
     public void modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         // Boot 1 — non-default state.
         place(firstBoot, X_A);
@@ -93,7 +96,7 @@ public class WirelessTransceiverRestartTest {
         // Boot 2 — same workDir. The tile must be loaded by virtue of
         // being in a spawn chunk; NBT round-trip and onLoad fire on
         // chunk-load.
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String post = info(secondBoot, X_A);
         assertEquals("mode must survive NBT round-trip",

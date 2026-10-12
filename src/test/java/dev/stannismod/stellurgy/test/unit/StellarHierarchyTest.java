@@ -11,6 +11,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What the star model can EXPRESS: a single star, a close pair, a wide pair, and a hierarchy three
@@ -48,11 +49,10 @@ public class StellarHierarchyTest {
      * An orbital distance of {@code au} astronomical units, in the field's own unit. The fixtures were
      * bare hundredths of an AU until 2026-09-30, which is the unit a stale reader of the field also
      * divided by — fixture and defect agreed, and this class pinned it.
-     *
-     * <p>red-witnessed (the two placement scenarios): with {@code StellarBody.offsetFromSystemAu} back
-     * on {@code / 100d}: "expected:&lt;20.0&gt; but was:&lt;299195.8&gt;" and "expected:&lt;25.0&gt;
-     * but was:&lt;373994.75&gt;", 2026-09-30.</p>
      */
+    @RedWitness(prose = "(the two placement scenarios): with {@code StellarBody.offsetFromSystemAu} back"
+            + " on {@code / 100d}: \"expected:&lt;20.0&gt; but was:&lt;299195.8&gt;\" and \"expected:&lt;25.0&gt;"
+            + " but was:&lt;373994.75&gt;\", 2026-09-30.")
     private static int au(double au) {
         return (int) Math.round(au * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
     }

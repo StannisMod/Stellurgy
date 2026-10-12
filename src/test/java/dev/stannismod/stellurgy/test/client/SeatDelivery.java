@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
-import com.github.stannismod.forge.testing.client.ClientBot;
+import com.github.stannismod.forge.testing.client.ClientReads;
 
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.ServerWindow;
@@ -35,7 +35,7 @@ public final class SeatDelivery {
     }
 
     /** Open both halves now: from here on their counts are this reader's. */
-    public static SeatDelivery open(ServerWindow.Probe probe, ClientBot bot, Events serverLog,
+    public static SeatDelivery open(ServerWindow.Probe probe, ClientReads bot, Events serverLog,
                                     Events clientLog) throws Exception {
         return new SeatDelivery(ServerWindow.open(probe, SERVER_WINDOW),
                 ClientWindow.open(bot, CLIENT_WINDOW), serverLog, clientLog);

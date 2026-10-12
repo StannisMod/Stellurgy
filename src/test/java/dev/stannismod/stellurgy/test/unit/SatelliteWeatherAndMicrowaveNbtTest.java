@@ -11,6 +11,7 @@ import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Persistent state on two satellite subtypes.
@@ -47,6 +48,7 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
     // ── SatelliteWeatherController ──────────────────────────────────────
 
     /** Pins INV-SAT-03 (Weather mode_id/last_mode_id/floodlevel round-trip through NBT). */
+    @Pins("INV-SAT-03")
     @Test
     public void weatherControllerNbtRoundTripPreservesModeIdLastModeIdAndFloodlevel() {
         SatelliteWeatherController src = new SatelliteWeatherController();
@@ -78,6 +80,7 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
     /**
      * Pins INV-SAT-03 (Weather mode_id/last_mode_id/floodlevel round-trip through NBT).
      */
+    @Pins("INV-SAT-03")
     @Test
     public void weatherControllerNbtRoundTripPreservesFreshDefaults() {
         // A fresh satellite has mode_id=0, last_mode_id=0, floodlevel=-1
@@ -108,6 +111,7 @@ public class SatelliteWeatherAndMicrowaveNbtTest {
     // ── SatelliteMicrowaveEnergy ────────────────────────────────────────
 
     /** Pins INV-SAT-04 (Microwave teir byte round-trips through NBT). */
+    @Pins("INV-SAT-04")
     @Test
     public void microwaveEnergyTeirByteRoundTripsAcrossNbt() throws Exception {
         SatelliteMicrowaveEnergy src = new SatelliteMicrowaveEnergy();

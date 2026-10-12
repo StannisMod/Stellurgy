@@ -30,6 +30,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Pure contract of the render-body producer {@link SystemBodiesProducer#buildByDim}: it maps every
@@ -63,6 +64,7 @@ public class SystemBodiesProducerTest {
     }
 
     /** Pins CON-C14-09 (a body's local vector is the observer to body vector, sector-aware). */
+    @Pins("CON-C14-09")
     @Test
     public void aBodyAtTheCellCentreIsCarriedAsTheDirectionFromTheShipThatIsThere() {
         // Ship parked OFF the cell centre; a planet sitting AT the cell centre (local 0,0,0).
@@ -93,6 +95,7 @@ public class SystemBodiesProducerTest {
     }
 
     /** Pins CON-C14-09 (a body's local vector is the observer to body vector, sector-aware). */
+    @Pins("CON-C14-09")
     @Test
     public void crossCellBodyDirectionIncludesTheSectorTerm() {
         // A body one whole cell away in +X: the direction must carry the CELL-sized sector step, not
@@ -131,6 +134,7 @@ public class SystemBodiesProducerTest {
     }
 
     /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
+    @Pins("CON-C14-06")
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpStillShowsItsBodies() {
         // The measured shape of the blank-sky report: a pilot sitting in a live cell world whose ship
@@ -273,6 +277,7 @@ public class SystemBodiesProducerTest {
     }
 
     /** Pins CON-C14-07 (only live cells bound to a slot are keyed). */
+    @Pins("CON-C14-07")
     @Test
     public void aShipWhoseCellIsInNoSlotContributesNothing() {
         // A ship can be settled — the server knows exactly where it is — while its cell is bound to no
@@ -296,6 +301,7 @@ public class SystemBodiesProducerTest {
     }
 
     /** Pins CON-C14-07 (only live cells bound to a slot are keyed). */
+    @Pins("CON-C14-07")
     @Test
     public void anUnboundOrMalformedBindingIsNeverKeyed() {
         // The "no world" sentinel must never become a dimension key, and neither must a cell key the
@@ -338,6 +344,7 @@ public class SystemBodiesProducerTest {
      * Pins ADDR-13 (the distance between two moving frames changes with time).
      * Pins CON-C14-15 (the fed vector is evaluated live through both frames).
      */
+    @Pins({"ADDR-13", "CON-C14-15"})
     @Test
     public void aBodyInAMovingCellIsFedFromWhereItIsNotFromWhereItsNameSays() {
         GalacticCoord here = GalacticCoord.ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L);
@@ -361,6 +368,7 @@ public class SystemBodiesProducerTest {
      * The observer's OWN cell moves too, so a body in it stays exactly where it was relative to him.
      * Pins CON-C14-15 (the fed vector is evaluated live through both frames).
      */
+    @Pins("CON-C14-15")
     @Test
     public void aBodyInTheObserversOwnMovingCellDoesNotDriftAwayFromHim() {
         final GalacticCoord cell = GalacticCoord.ofSectorLocal(7L, 0L, 0L, 0L, 0L, 0L);

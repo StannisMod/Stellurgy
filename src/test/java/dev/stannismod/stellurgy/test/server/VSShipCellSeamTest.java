@@ -28,6 +28,8 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * E2E: a ship flown out through its cell's face ARRIVES IN THE NEIGHBOUR, and its ledger row names the
@@ -179,13 +181,14 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * A craft flown across its cell's +X face is carried into the neighbour by its own computer, and
      * stays there.
      *
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#update} at {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} (the computer's own
-     * {@code requestCarry}) short-circuited to false fails the carry link "flown across its +X face
-     * … THIS ship must be carried into and settle in the neighbouring cell" with no
-     * {@code ship_entered_cell} in 600 ticks, 2026-09-30. That break reddens the link only; the
-     * neighbour, arrival-depth and stays-there verdicts after it are not witnessed by it.</p>
      * Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis).
      */
+    @Pins("ADDR-10")
+    @RedWitness(prose = "{@code TileAdvancedFlightComputer#update} at {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} (the computer's own"
+            + " {@code requestCarry}) short-circuited to false fails the carry link \"flown across its +X face"
+            + " … THIS ship must be carried into and settle in the neighbouring cell\" with no"
+            + " {@code ship_entered_cell} in 600 ticks, 2026-09-30. That break reddens the link only; the"
+            + " neighbour, arrival-depth and stays-there verdicts after it are not witnessed by it.")
     @Test
     public void aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere() throws Exception {
         ShipAtItsFace arranged = arrangeAShipAtItsFace();

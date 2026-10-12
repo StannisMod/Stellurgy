@@ -40,9 +40,9 @@ import org.junit.Before;
  * }</pre>
  *
  * <p>For scenarios that need to boot two harnesses against the same workDir
- * (e.g. persistence-restart tests), do NOT extend this class — call
- * {@link RealDedicatedServerHarness#startWith} directly from a plain {@code @Test}
- * method, since this base class manages exactly one harness.</p>
+ * (e.g. persistence-restart tests), do NOT extend this class — extend
+ * {@link AbstractMechanicsTest} and call {@link RealDedicatedServerHarness#startWith} with its
+ * {@code harnessBoot()}, since this base class manages exactly one harness.</p>
  */
 public abstract class AbstractHeadlessServerTest {
 
@@ -77,8 +77,8 @@ public abstract class AbstractHeadlessServerTest {
                 "Server harness disabled — set -D" + PROP_HARNESS_ENABLED + "=true to enable",
                 Boolean.parseBoolean(System.getProperty(PROP_HARNESS_ENABLED, "false")));
         harness = requiresFlatTerrain()
-                ? RealDedicatedServerHarness.startWithFlatTerrain()
-                : RealDedicatedServerHarness.start();
+                ? RealDedicatedServerHarness.startWithFlatTerrain(new HarnessBoot())
+                : RealDedicatedServerHarness.start(new HarnessBoot());
     }
 
     @After

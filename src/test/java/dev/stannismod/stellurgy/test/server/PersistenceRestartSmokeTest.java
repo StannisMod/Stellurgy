@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.DimInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
@@ -27,7 +28,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class PersistenceRestartSmokeTest {
+public class PersistenceRestartSmokeTest extends AbstractMechanicsTest {
 
     /** The station's own id. The regex this replaces anchored on the NEXT field so as not
      *  to match some other `id`; reading by name needs no such anchor. */
@@ -61,7 +62,7 @@ public class PersistenceRestartSmokeTest {
         int targetDensity = 33;
         int[] firstCounts;
 
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         String regSummary = String.join("\n", firstBoot.client().execute("stellurgytest registry summary"));
         // No "malformed?" assertion beside this any more: `extractCounts` refuses by field name and
@@ -88,7 +89,7 @@ public class PersistenceRestartSmokeTest {
         firstBoot.close();
         firstBoot = null;
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String secondSummary = String.join("\n", secondBoot.client().execute("stellurgytest registry summary"));
         int[] secondCounts = extractCounts(secondSummary, "blocks", "items", "entities", "biomes");

@@ -15,6 +15,7 @@ import dev.stannismod.stellurgy.test.Weapons;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The two repairs a PLAYER makes by hand, through the paths only a player's hand reaches.
@@ -62,11 +63,10 @@ public class APlayersHandRepairsTest extends AbstractClientE2ETest {
      * placement that nobody announced, and what clears the subject's is the player's placement and
      * nothing else. The placement is linked on the map's own hearing of it
      * ({@code damage_invalidation_heard}), and the verdict is then read off the map once.</p>
-     *
-     * <p>red-witnessed: with {@code DamageInvalidationHandler#onBlockPlaced} at {@code forget(event.getWorld(), event.getPos());} (the placement's
-     * {@code forget}) skipped, this fails with "a block a player placed into a hole still reads as
-     * DESTROYED ... {...block:minecraft:stone,wasDestroyed:true...}". 2026-09-30.</p>
      */
+    @RedWitness(prose = "with {@code DamageInvalidationHandler#onBlockPlaced} at {@code forget(event.getWorld(), event.getPos());} (the placement's"
+            + " {@code forget}) skipped, this fails with \"a block a player placed into a hole still reads as"
+            + " DESTROYED ... {...block:minecraft:stone,wasDestroyed:true...}\". 2026-09-30.")
     @Test
     public void aBlockAPlayerPutsIntoAHoleIsNotRecordedAsDestroyed() throws Exception {
         Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
@@ -116,18 +116,16 @@ public class APlayersHandRepairsTest extends AbstractClientE2ETest {
      * inventory, takes exactly one stage off — through the item's own use, reached by a real
      * right-click. The link is the block's own stage write ({@code block_stage_set}), which carries
      * the stage it came from and the one it went to.
-     *
-     * <p>red-witnessed: with {@code ItemRepairWelder#onItemUse} at {@code if (world.isRemote)}'s server branch returning before
-     * {@code weld}, this fails with "a charged welder in a player's hand ... repaired nothing: the
-     * item's own use never reached the repair — no `block_stage_set` carrying dim = 0 and pos =
-     * 566,84,560 was recorded within 600 ticks". 2026-09-30.</p>
-     *
-     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with a write of one stage MORE inserted
-     * before {@code ItemRepairWelder.java:115}'s own, this fails at "the stage write the welder made did
-     * not start from the block's damage: {...from:3,to:1...} expected:&lt;2&gt; but was:&lt;3&gt;"; with
-     * that line taking two stages off, at "one use of the welder must take exactly one stage off:
-     * {...from:2,to:0...} expected:&lt;1&gt; but was:&lt;0&gt;".</p>
      */
+    @RedWitness(prose = "with {@code ItemRepairWelder#onItemUse} at {@code if (world.isRemote)}'s server branch returning before"
+            + " {@code weld}, this fails with \"a charged welder in a player's hand ... repaired nothing: the"
+            + " item's own use never reached the repair — no `block_stage_set` carrying dim = 0 and pos ="
+            + " 566,84,560 was recorded within 600 ticks\". 2026-09-30.")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30: with a write of one stage MORE inserted"
+            + " before {@code ItemRepairWelder.java:115}'s own, this fails at \"the stage write the welder made did"
+            + " not start from the block's damage: {...from:3,to:1...} expected:&lt;2&gt; but was:&lt;3&gt;\"; with"
+            + " that line taking two stages off, at \"one use of the welder must take exactly one stage off:"
+            + " {...from:2,to:0...} expected:&lt;1&gt; but was:&lt;0&gt;\".")
     @Test
     public void aWelderInAPlayersHandTakesOneStageOff() throws Exception {
         Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
@@ -179,12 +177,11 @@ public class APlayersHandRepairsTest extends AbstractClientE2ETest {
      * {@code BlockEvent.BreakEvent}. It is linked on the map's own hearing of it
      * ({@code damage_invalidation_heard} with {@code cause} {@code break}), and the verdict is then
      * read off the map once.</p>
-     *
-     * <p>red-witnessed: with {@code DamageInvalidationHandler#onBlockBroken} at {@code forget(event.getWorld(), event.getPos());} (the break's {@code forget})
-     * skipped, this fails with "a damaged block a player broke still carries its damage (2 stages
-     * before the break) ... {...stage:2,maxStage:4,...block:minecraft:air,wasDestroyed:false...}".
-     * 2026-09-30.</p>
      */
+    @RedWitness(prose = "with {@code DamageInvalidationHandler#onBlockBroken} at {@code forget(event.getWorld(), event.getPos());} (the break's {@code forget})"
+            + " skipped, this fails with \"a damaged block a player broke still carries its damage (2 stages"
+            + " before the break) ... {...stage:2,maxStage:4,...block:minecraft:air,wasDestroyed:false...}\"."
+            + " 2026-09-30.")
     @Test
     public void aDamagedBlockAPlayerBreaksLeavesNoDamageBehind() throws Exception {
         // The break and its record happen in the server's world, so the server half of the step is

@@ -7,6 +7,7 @@ import org.junit.Test;
 
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * REAL solar-panel behavioural depth (vs the
@@ -102,6 +103,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-INFRA-26 (A solar panel in aStellurgy dimension gains energy on a forced tick, scaled by insolation). */
+    @Pins("INV-INFRA-26")
     @Test
     public void solarPanelGeneratesInNonOverworldStellurgyDim() throws Exception {
         // Most basic non-zero check: a solar panel in a Stellurgy dim that isn't

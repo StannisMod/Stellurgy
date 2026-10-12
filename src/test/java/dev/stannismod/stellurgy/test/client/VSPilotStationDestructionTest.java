@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Destroying a piloted ship's control station RELEASES the ship instead of latching it. Two
@@ -146,18 +147,17 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
     /**
      * Destroying the flight computer throws its pilot out, removes his mount, and leaves a ship that
      * never climbs on the dead computer's last command.
-     *
-     * <p>red-witnessed: the never-thrusts verdict. The line the wait rewrite touched is the break
-     * probe's own reply, an arrangement check typed as an assertion; the contract after it needs
-     * BOTH of production's two defences broken
-     * — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no
-     * longer dropping the removed tile from the ship's controller set, AND
-     * {@code TileAdvancedFlightComputer#invalidate} at {@code flightCommand = null} no longer clearing the
-     * command — and then fails with "y1=174.19 y2=252.81". Either one broken alone stays
-     * green, each defence sufficing on its own — 2026-09-28 (witnessed on the three-field form,
-     * {@code commandedVelocity = null}; the fragment renamed 2026-10-08 when the command became one
-     * object, the same line of {@code invalidate}, not re-run).</p>
      */
+    @RedWitness(prose = "the never-thrusts verdict. The line the wait rewrite touched is the break"
+            + " probe's own reply, an arrangement check typed as an assertion; the contract after it needs"
+            + " BOTH of production's two defences broken"
+            + " — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no"
+            + " longer dropping the removed tile from the ship's controller set, AND"
+            + " {@code TileAdvancedFlightComputer#invalidate} at {@code flightCommand = null} no longer clearing the"
+            + " command — and then fails with \"y1=174.19 y2=252.81\". Either one broken alone stays"
+            + " green, each defence sufficing on its own — 2026-09-28 (witnessed on the three-field form,"
+            + " {@code commandedVelocity = null}; the fragment renamed 2026-10-08 when the command became one"
+            + " object, the same line of {@code invalidate}, not re-run).")
     @Test
     public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {
         final FixtureSite site = site();

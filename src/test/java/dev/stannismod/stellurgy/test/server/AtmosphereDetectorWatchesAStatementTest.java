@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The atmosphere detector watches a STATEMENT about the air, not a name.
@@ -56,16 +57,14 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         return cy + 1;
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict. CONTROL — {@code AtmosphereAssertions#holdsAt} at {@code return !breathable(air, published);} holding
-     * "not breathable" everywhere: "breathable air must not satisfy \"not breathable\" (after a forced
-     * sample): … expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. UNBREATHABLE — the same
-     * line never holding: "air nobody can breathe must satisfy it (after a forced sample): …
-     * expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. OFF AGAIN — {@code TileAtmosphereDetector#statementHolds} at {@code AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());} ({@code statementHolds}) latching true for a statement once it has
-     * held: "and refilling the room must switch it off again (after a forced sample): …
-     * expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. The sealed-zone premises are
-     * arrangements and are not witnessed.</p>
-     */
+    @RedWitness(prose = "one inversion per verdict. CONTROL — {@code AtmosphereAssertions#holdsAt} at {@code return !breathable(air, published);} holding"
+            + " \"not breathable\" everywhere: \"breathable air must not satisfy \\\"not breathable\\\" (after a forced"
+            + " sample): … expected:&lt;false&gt; but was:&lt;true&gt;\", 2026-09-30. UNBREATHABLE — the same"
+            + " line never holding: \"air nobody can breathe must satisfy it (after a forced sample): …"
+            + " expected:&lt;true&gt; but was:&lt;false&gt;\", 2026-09-30. OFF AGAIN — {@code TileAtmosphereDetector#statementHolds} at {@code AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());} ({@code statementHolds}) latching true for a statement once it has"
+            + " held: \"and refilling the room must switch it off again (after a forced sample): …"
+            + " expected:&lt;false&gt; but was:&lt;true&gt;\", 2026-09-30. The sealed-zone premises are"
+            + " arrangements and are not witnessed.")
     @Test
     public void theDetectorFollowsItsStatementAsTheAirChanges() throws Exception {
         int cx = stand("a sealed room with a detector in its wall watching \"not breathable\"");
@@ -88,14 +87,12 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         assertPowered(cx, false, "and refilling the room must switch it off again");
     }
 
-    /**
-     * <p>red-witnessed: with {@code AtmosphereAssertions#holdsAt} at {@code return air != null && air.isToxic();} calling any zone air toxic: "clean air
-     * must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but
-     * was:&lt;true&gt;", 2026-09-30. POISONOUS — the same line never holding: "a room can be
-     * breathable and poisonous at once, and the detector must be able to wire the second (after a
-     * forced sample): … expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. The sealed-zone
-     * premises are arrangements and are not witnessed.</p>
-     */
+    @RedWitness(prose = "with {@code AtmosphereAssertions#holdsAt} at {@code return air != null && air.isToxic();} calling any zone air toxic: \"clean air"
+            + " must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but"
+            + " was:&lt;true&gt;\", 2026-09-30. POISONOUS — the same line never holding: \"a room can be"
+            + " breathable and poisonous at once, and the detector must be able to wire the second (after a"
+            + " forced sample): … expected:&lt;true&gt; but was:&lt;false&gt;\", 2026-09-30. The sealed-zone"
+            + " premises are arrangements and are not witnessed.")
     @Test
     public void theDetectorCanWatchForSomethingNoNamedAtmosphereEverSaid() throws Exception {
         int cx = stand("a sealed room with a detector in its wall watching \"toxic\"");

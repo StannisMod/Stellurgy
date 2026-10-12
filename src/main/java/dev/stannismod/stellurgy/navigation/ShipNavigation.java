@@ -35,11 +35,26 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     private final World world;
     private final BlockPos flightComputerPos;
     private final UUID shipId;
+    /** Whether the drive this resolves adopts an unlinked machine in the claim — see {@link ShipDrive}. */
+    private final boolean observing;
 
     public ShipNavigation(World world, BlockPos flightComputerPos, UUID shipId) {
+        this(world, flightComputerPos, shipId, false);
+    }
+
+    private ShipNavigation(World world, BlockPos flightComputerPos, UUID shipId, boolean observing) {
         this.world = world;
         this.flightComputerPos = flightComputerPos;
         this.shipId = shipId;
+        this.observing = observing;
+    }
+
+    /**
+     * The ship's navigation for an OBSERVER: its drive is {@link ShipDrive#observedFrom}, so every answer
+     * is about the machines the ship already holds and asking writes nothing.
+     */
+    public static ShipNavigation observedFrom(World world, BlockPos flightComputerPos, UUID shipId) {
+        return new ShipNavigation(world, flightComputerPos, shipId, true);
     }
 
     @Override
@@ -128,7 +143,7 @@ public final class ShipNavigation implements JumpGate.ShipContext {
 
     /** The ship's drive, resolved fresh — a drive is measured when asked, never remembered. */
     public ShipDrive drive() {
-        return new ShipDrive(world, flightComputerPos);
+        return observing ? ShipDrive.observedFrom(world, flightComputerPos) : new ShipDrive(world, flightComputerPos);
     }
 
     /**

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * One tier-2 craft a weapon scenario builds, addressed by IDENTITY for its whole life.
@@ -97,19 +98,17 @@ public final class WarShip {
      * {@code ship_teleport_adopted}, written by a test mixin at that tick for THIS hull's id, from a
      * mark taken before the teleport — and only then is the standing pose read, once, and required
      * to be at the destination.</p>
-     *
-     * <p>red-witnessed: with {@code VSBridge#teleportShip} at
-     * {@code physo.setForceToUseShipDataTransform(true);} removed, {@code TurretOnAShipTest} fails
-     * at the link with "hull … was teleported to 6800,150,9200 and its physics object never adopted
-     * the written pose — no `ship_teleport_adopted` carrying vsShip = … was recorded within 200 ticks"
-     * (2026-09-30).</p>
-     *
-     * <p>red-witnessed: with {@code VSBridge#teleportShip} at {@code ship.setShipTransform(moved);}
-     * and {@code ship.setPrevTickShipTransform(moved);} removed (the flag raised, the pose never
-     * written), {@code TurretOnAShipTest} fails at the pose requirement with an ArrangementFailure
-     * "… stands 2397.006049220569 blocks from it after adopting {…"posX":6802.0,"posY":155.0,…}"
-     * (2026-09-30).</p>
      */
+    @RedWitness(prose = "with {@code VSBridge#teleportShip} at"
+            + " {@code physo.setForceToUseShipDataTransform(true);} removed, {@code TurretOnAShipTest} fails"
+            + " at the link with \"hull … was teleported to 6800,150,9200 and its physics object never adopted"
+            + " the written pose — no `ship_teleport_adopted` carrying vsShip = … was recorded within 200 ticks\""
+            + " (2026-09-30).")
+    @RedWitness(prose = "with {@code VSBridge#teleportShip} at {@code ship.setShipTransform(moved);}"
+            + " and {@code ship.setPrevTickShipTransform(moved);} removed (the flag raised, the pose never"
+            + " written), {@code TurretOnAShipTest} fails at the pose requirement with an ArrangementFailure"
+            + " \"… stands 2397.006049220569 blocks from it after adopting {…\"posX\":6802.0,\"posY\":155.0,…}\""
+            + " (2026-09-30).")
     public void parkAt(int x, int y, int z, double tolerance) throws Exception {
         long mark = log.markInstrumented();
         Reply tp = Reply.of("stellurgytest vs teleport-ship-by-id", probe.exec(

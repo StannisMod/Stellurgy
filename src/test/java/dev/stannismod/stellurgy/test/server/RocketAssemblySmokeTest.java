@@ -13,6 +13,8 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * rocket assembly smoke (P1).
@@ -46,6 +48,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     private static final String STATUS = "status";
 
     /** Pins INV-RASM-02 (a valid pad structure assembles to a spawned entity with a matching storage chunk). */
+    @Pins("INV-RASM-02")
     @Test
     public void fixtureRocketAssemblesToLiveEntity() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 500, 500), "simple");
@@ -61,6 +64,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * snaps to the full pad footprint, which is larger).
      * Pins INV-RASM-02 (a valid pad structure assembles to a spawned entity with a matching storage chunk).
      */
+    @Pins("INV-RASM-02")
     @Test
     public void rocketStorageChunkMatchesScanFootprint() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 540, 500), "simple");
@@ -87,10 +91,8 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * capacity for at least one type is non-zero — the StatsRocket invariants
      * the production launch-readiness check relies on.
      */
-    /**
-     * <p>red-witnessed: for the dry-mass verdict only (the others predate this branch — with
-     * {@code StatsRocket#getDryMass} at {@code return mass;} answering a dry mass of 0, fails "dry_mass_kg must be > 0", 2026-09-30.</p>
-     */
+    @RedWitness(prose = "for the dry-mass verdict only (the others predate this branch — with"
+            + " {@code StatsRocket#getDryMass} at {@code return mass;} answering a dry mass of 0, fails \"dry_mass_kg must be > 0\", 2026-09-30.")
     @Test
     public void statsRocketIsCalculatedFromComponents() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 580, 500), "simple");
@@ -164,6 +166,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * rocket entity.
      * Pins INV-RASM-03 (assembleRocket proceeds only when the scan status is SUCCESS).
      */
+    @Pins("INV-RASM-03")
     @Test
     public void invalidRocketMissingEngineFailsAssemblyWithReason() throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, 780, 500);

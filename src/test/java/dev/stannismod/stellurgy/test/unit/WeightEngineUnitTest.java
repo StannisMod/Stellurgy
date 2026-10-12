@@ -28,6 +28,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * MC-free unit coverage for {@link WeightEngine}: the parts that don't need a
@@ -51,6 +53,7 @@ public class WeightEngineUnitTest {
     public TemporaryFolder tempFolder = new TemporaryFolder();
 
     /** Pins INV-WGT-04 (seedDefaults populates a non-empty material table). */
+    @Pins("INV-WGT-04")
     @Test
     public void seedDefaultsPopulatesMaterialTable() {
         WeightEngine we = WeightEngine.fromJson(CURRENT + "}");
@@ -58,6 +61,7 @@ public class WeightEngineUnitTest {
     }
 
     /** Pins INV-WGT-02 (an individual override survives a JSON save and load). */
+    @Pins("INV-WGT-02")
     @Test
     public void individualOverrideSurvivesSaveLoadRoundTrip() throws Exception {
         File file = new File(tempFolder.getRoot(), "weights.json");
@@ -78,12 +82,10 @@ public class WeightEngineUnitTest {
                 Double.valueOf(42.0), reloaded.rawIndividual("ar:roundtrip_probe"));
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has("formatVersion")} checking no schema
-     * version fails "must NOT be read" (0.1); {@code WeightEngine#retireIncompatibleFile} at {@code if (!current.renameTo(retired))} deleting the file instead of setting it aside
-     * fails "must be kept beside the new one"; {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails "must write a fresh table";
-     * {@code WeightEngine#save} at {@code json.addProperty("formatVersion", FORMAT_VERSION);} not stamping the version fails "retired again".</p>
-     */
+    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has(\"formatVersion\")} checking no schema"
+            + " version fails \"must NOT be read\" (0.1); {@code WeightEngine#retireIncompatibleFile} at {@code if (!current.renameTo(retired))} deleting the file instead of setting it aside"
+            + " fails \"must be kept beside the new one\"; {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails \"must write a fresh table\";"
+            + " {@code WeightEngine#save} at {@code json.addProperty(\"formatVersion\", FORMAT_VERSION);} not stamping the version fails \"retired again\".")
     @Test
     public void aTableFromAnotherSchemaIsSetAsideRatherThanRead() throws Exception {
         // The numbers in weights.json changed meaning when the tables were denominated in
@@ -138,6 +140,7 @@ public class WeightEngineUnitTest {
      * {@code save()}, invisible until a pack's hand-written rows evaporated.</p>
      * Pins INV-WGT-07 (Every column the file declares survives a save→load cycle carrying its value, and every regex column comes back in the order it).
      */
+    @Pins("INV-WGT-07")
     @Test
     public void everyColumnAPackCanWriteSurvivesASave() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");
@@ -185,6 +188,7 @@ public class WeightEngineUnitTest {
      * answers a different question after a reload than the one the pack asked.
      * Pins INV-WGT-07 (Every column the file declares survives a save and load, and every regex column keeps its written order).
      */
+    @Pins("INV-WGT-07")
     @Test
     public void aRegexColumnKeepsThePackSOrderAcrossASave() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");
@@ -218,6 +222,7 @@ public class WeightEngineUnitTest {
      * rows in a file that parses are kept.</p>
      * Pins INV-WGT-08 (A config file that cannot be read leaves no column carrying the previous load's rows).
      */
+    @Pins("INV-WGT-08")
     @Test
     public void aConfigThatCannotBeReadLeavesNoColumnBehind() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");

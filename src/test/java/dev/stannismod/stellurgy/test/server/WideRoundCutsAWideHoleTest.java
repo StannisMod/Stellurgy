@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What a calibre BUYS, inside the hull rather than on a tooltip.
@@ -45,11 +46,9 @@ public class WideRoundCutsAWideHoleTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    /**
-     * red-witnessed: with {@code ShotSubstrate.bodyRadius} ({@code ShotSubstrate#bodyRadius} at {@code return Math.min(shot.getRadius(), StellurgyConfiguration.getCurrentConfig().shotBodyRadiusCap);}) sweeping every
-     * body as the reference quarter-block, this fails at "the wide round left the same one-block channel a
-     * ray leaves (beside=0)" (2026-09-29).
-     */
+    @RedWitness(prose = "with {@code ShotSubstrate.bodyRadius} ({@code ShotSubstrate#bodyRadius} at {@code return Math.min(shot.getRadius(), StellurgyConfiguration.getCurrentConfig().shotBodyRadiusCap);}) sweeping every"
+            + " body as the reference quarter-block, this fails at \"the wide round left the same one-block channel a"
+            + " ray leaves (beside=0)\" (2026-09-29).")
     @Test
     public void aWideRoundTakesTheBlocksBesideItsLineAndANarrowOneDoesNot() throws Exception {
         prepare(NARROW_X);

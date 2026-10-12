@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A beam a mirror turned is DRAWN turned, and not straight through the mirror that turned it.
@@ -45,11 +46,9 @@ public class ABentBeamIsDrawnBentTest extends AbstractClientE2ETest {
     /** How often the gun is fed while a wait runs, in ticks — arrangement, not subject. */
     private static final int FEED_EVERY_TICKS = 20;
 
-    /**
-     * red-witnessed: with {@code PacketBeamState.of} ({@code PacketBeamState#of} at {@code for (Vec3d point : path)}) made to
-     * carry only the path's two ends, this fails at "with a mirror in the beam's way the client is
-     * still drawing a straight line" while the server reads {@code beamLit:true} (2026-09-29).
-     */
+    @RedWitness(prose = "with {@code PacketBeamState.of} ({@code PacketBeamState#of} at {@code for (Vec3d point : path)}) made to"
+            + " carry only the path's two ends, this fails at \"with a mirror in the beam's way the client is"
+            + " still drawing a straight line\" while the server reads {@code beamLit:true} (2026-09-29).")
     @Test
     public void aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt() throws Exception {
         Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);

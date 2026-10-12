@@ -12,6 +12,7 @@ import org.junit.runners.MethodSorters;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Everything that is true of a booted client before any feature is exercised: the mod list agrees
@@ -92,31 +93,13 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientTest {
     }
 
     /**
-     * A declared Stellurgy sound the server plays reaches the real client's {@code SoundManager}.
-     *
-     * <p>The server plays {@code AudioRegistry.combustionRocket} at the player's feet through the
-     * {@code stellurgytest sound play} probe — the same {@code world.playSound} call the production
-     * sites use. Vanilla encodes the event's registry id into {@code SPacketSoundEffect}; the client
-     * decodes it and hands it to its {@code SoundManager}, which the harness records as
-     * {@code client_sound_played} — a LINK, awaited from a mark. An UNREGISTERED SoundEvent encodes as
-     * id -1, decodes to {@code null}, and the client's task executor swallows the NPE: the sound
-     * silently never plays. Nothing persistent changes, which is what keeps this in this group.</p>
-     *
-     * <p>red-witnessed: with {@code combustionRocket} left out of {@code AudioRegistry}'s registration
-     * ({@code AudioRegistry#registerSoundEvents} at {@code basicLaser, combustionRocket,}): "combustionRocket must be present in ForgeRegistries at send time:
-     * … \"registered\":false", 2026-09-28. The probe's own reply answers {@code ok} whenever the
-     * {@code AudioRegistry} field resolves; the registration verdict right after it is the one that
-     * decides.</p>
-     */
-    /**
      * The repair welder has an inventory model on a booted client — it is not drawn as the missing
      * model's purple-and-black cube. The item ships a model file; what decides whether the client
      * finds it is the item's mapping in {@code ClientProxy#preInitItems}.
-     *
-     * <p>red-witnessed: with {@code ClientProxy#preInitItems} at {@code new ModelResourceLocation("stellurgy:repairWelder", "inventory")}
-     * — its whole line — removed (the shape it shipped with), this fails at "the repair welder is drawn
-     * with the missing model: its item has no model mapping" (2026-10-06).</p>
      */
+    @RedWitness(prose = "with {@code ClientProxy#preInitItems} at {@code new ModelResourceLocation(\"stellurgy:repairWelder\", \"inventory\")}"
+            + " — its whole line — removed (the shape it shipped with), this fails at \"the repair welder is drawn"
+            + " with the missing model: its item has no model mapping\" (2026-10-06).")
     @Test
     public void theRepairWelderHasAnInventoryModel() throws Exception {
         scenario().asserting("the repair welder's baked inventory model is not the missing model");
@@ -127,6 +110,22 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientTest {
                 ItemModelReader.repairWelderDrawsMissing(bot()));
     }
 
+    /**
+     * A declared Stellurgy sound the server plays reaches the real client's {@code SoundManager}.
+     *
+     * <p>The server plays {@code AudioRegistry.combustionRocket} at the player's feet through the
+     * {@code stellurgytest sound play} probe — the same {@code world.playSound} call the production
+     * sites use. Vanilla encodes the event's registry id into {@code SPacketSoundEffect}; the client
+     * decodes it and hands it to its {@code SoundManager}, which the harness records as
+     * {@code client_sound_played} — a LINK, awaited from a mark. An UNREGISTERED SoundEvent encodes as
+     * id -1, decodes to {@code null}, and the client's task executor swallows the NPE: the sound
+     * silently never plays. Nothing persistent changes, which is what keeps this in this group.</p>
+     */
+    @RedWitness(prose = "with {@code combustionRocket} left out of {@code AudioRegistry}'s registration"
+            + " ({@code AudioRegistry#registerSoundEvents} at {@code basicLaser, combustionRocket,}): \"combustionRocket must be present in ForgeRegistries at send time:"
+            + " … \\\"registered\\\":false\", 2026-09-28. The probe's own reply answers {@code ok} whenever the"
+            + " {@code AudioRegistry} field resolves; the registration verdict right after it is the one that"
+            + " decides.")
     @Test
     public void serverPlayedStellurgySoundReachesClientSoundManager() throws Exception {
         scenario().asserting("a sound the server plays reaches the client's sound manager");

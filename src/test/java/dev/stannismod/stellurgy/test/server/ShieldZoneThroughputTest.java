@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * P2 (D134-3/D134-4): the emitter is the shield's per-zone regeneration organ, with a finite,
@@ -69,6 +70,7 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-SHD-03 (an emitter never receives more than its recharge throughput in a tick). */
+    @Pins("INV-SHD-03")
     @Test
     public void regenerationIsThroughputCapped() throws Exception {
         // Generator + accumulator build a bulk reserve, then an emitter attaches to the accumulator (not

@@ -25,6 +25,8 @@ import dev.stannismod.stellurgy.test.ShipMotionCases;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Integration: the joints of ship-flight-model's kernel — where one contract's promise is another's
@@ -58,12 +60,13 @@ public class ShipMotionJointsTest {
      * own residual: exactly at the figure the last bit decides whether an axis reads as clipped
      * (measured 2026-10-07: delivered to 1e-16, and flagged saturated).</p>
      *
-     * <p>red-witnessed: with {@code ShipReadout#of} at {@code ShipCapability[] views = {design, live};}
-     * swapped to {@code {live, design}} (the readout handed the wrong view), this fails with "burst hull,
-     * SURGE_POSITIVE SUSTAINED: the readout states 23.543976456 and the scheme delivers
-     * 11.523999999999997", 2026-10-07.</p>
      * Pins INV-SFM-13 (a readout figure is delivered whole).
      */
+    @Pins("INV-SFM-13")
+    @RedWitness(prose = "with {@code ShipReadout#of} at {@code ShipCapability[] views = {design, live};}"
+            + " swapped to {@code {live, design}} (the readout handed the wrong view), this fails with \"burst hull,"
+            + " SURGE_POSITIVE SUSTAINED: the readout states 23.543976456 and the scheme delivers"
+            + " 11.523999999999997\", 2026-10-07.")
     @Test
     public void aReadoutFigureIsDeliveredWhole() {
         ControlScheme scheme = ControlScheme.cleanAxes();
@@ -123,12 +126,13 @@ public class ShipMotionJointsTest {
      * all and whose rotations are burst-only — the case where a readout reading the wrong endurance would
      * call a direction unavailable that the scheme can deliver.</p>
      *
-     * <p>red-witnessed: with {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] =
-     * views[v].authority(d, e);} handed {@code Endurance.SUSTAINED} for both endurances (the burst figure
-     * lost on the way to the readout), this fails with "burst hull: ROLL_POSITIVE is NO_AUTHORITY on the
-     * readout, and the scheme delivered 270833.33333333326", 2026-10-07.</p>
      * Pins INV-SFM-13 (a direction the readout calls unavailable is delivered nothing).
      */
+    @Pins("INV-SFM-13")
+    @RedWitness(prose = "with {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] ="
+            + " views[v].authority(d, e);} handed {@code Endurance.SUSTAINED} for both endurances (the burst figure"
+            + " lost on the way to the readout), this fails with \"burst hull: ROLL_POSITIVE is NO_AUTHORITY on the"
+            + " readout, and the scheme delivered 270833.33333333326\", 2026-10-07.")
     @Test
     public void aDirectionTheReadoutCallsUnavailableIsDeliveredNothing() {
         ControlScheme scheme = ControlScheme.cleanAxes();
@@ -166,12 +170,13 @@ public class ShipMotionJointsTest {
      * value is the empty hull's force authority, which the cargo is the experiment's way of leaving
      * unchanged; every mass in it is declared.</p>
      *
-     * <p>red-witnessed: with {@code ShipReadout#of} at {@code mass.getContentMass()} replaced by
-     * {@code 0.0D} (the cargo dropped between the frame and the readout), this fails with "SURGE_POSITIVE:
-     * the laden readout must divide the hull's force 4905000.0 N by the declared laden mass 485000.0 kg
-     * expected:&lt;10.11340206185567&gt; but was:&lt;29.727272727272727&gt;", 2026-10-07.</p>
      * Pins INV-SFM-13 (the readout divides by the mass the frame weighs).
      */
+    @Pins("INV-SFM-13")
+    @RedWitness(prose = "with {@code ShipReadout#of} at {@code mass.getContentMass()} replaced by"
+            + " {@code 0.0D} (the cargo dropped between the frame and the readout), this fails with \"SURGE_POSITIVE:"
+            + " the laden readout must divide the hull's force 4905000.0 N by the declared laden mass 485000.0 kg"
+            + " expected:&lt;10.11340206185567&gt; but was:&lt;29.727272727272727&gt;\", 2026-10-07.")
     @Test
     public void cargoTheFrameWeighsIsTheMassTheReadoutDividesBy() {
         ShipMotionCases.Hull empty = ShipMotionCases.symmetricHull();

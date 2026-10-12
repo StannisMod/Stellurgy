@@ -6,6 +6,7 @@ import org.junit.Test;
 
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * the Asteroid worldprovider dimension actually
@@ -33,6 +34,7 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
     private static final String COUNT = "count";
 
     /** Pins INV-XML-05 (asteroid dimensions contain asteroids after config load). */
+    @Pins("INV-XML-05")
     @Test
     public void asteroidDimGeneratesFillBlocks() throws Exception {
         // Find a registered non-overworld Stellurgy planet to clone as a template.

@@ -30,10 +30,14 @@ public final class TestClient implements Closeable {
     private BufferedWriter bridgeWriter;
     private final Object bridgeLock = new Object();
 
-    TestClient(Process process, Writer stdin, List<String> transcript) {
+    /** Whether the server serves an e2e: then a console command waits for the gate's verdict line. */
+    private final boolean e2e;
+
+    TestClient(Process process, Writer stdin, List<String> transcript, boolean e2e) {
         this.process = process;
         this.stdin = stdin;
         this.transcript = transcript;
+        this.e2e = e2e;
     }
 
     /**
@@ -121,9 +125,7 @@ public final class TestClient implements Closeable {
                 }
                 JsonObject response = parsed.getAsJsonObject();
                 if (!response.has("ok") || !response.get("ok").getAsBoolean()) {
-                    throw new AssertionError("Server command failed over the bridge: " + command
-                            + " -> " + (response.has("error")
-                                    ? response.get("error").getAsString() : line));
+                    throw new ServerCommandFailed(command, response);
                 }
                 List<String> lines = new ArrayList<>();
                 if (response.has("lines")) {
@@ -158,8 +160,73 @@ public final class TestClient implements Closeable {
         }
     }
 
+    /**
+     * Type {@code command} into the server's CONSOLE (its stdin).
+     *
+     * <p>On a server that serves an e2e the console is judged like every other sender, and the consuming
+     * mod's gate answers each console command with one line,
+     * {@link com.github.stannismod.forge.testing.E2EMode#CONSOLE_JUDGED}{@code admitted|refused <command> …}.
+     * This waits for that line and throws {@link ServerCommandFailed} — whose reply carries
+     * {@code refused:true}, {@code console:true} and the gate's line — when the command was refused, so a
+     * refusal at the console reaches the test as loudly as one over the bridge. The wait is a deadline for
+     * a discrete decision ({@value #CONSOLE_JUDGED_MILLIS} ms): the console thread hands the line to the
+     * server, which judges it at its next tick; an expiry means it never reached the command handler (an
+     * unknown command never does) and is an {@link IOException}.</p>
+     */
     public void sendRaw(String command) throws IOException {
         Objects.requireNonNull(command, "command");
+        int mark = transcriptSize();
+        writeConsole(command);
+        if (!e2e) {
+            return;
+        }
+        String typed = command.startsWith("/") ? command.substring(1) : command;
+        String admitted = com.github.stannismod.forge.testing.E2EMode.CONSOLE_JUDGED + "admitted " + typed;
+        String refused = com.github.stannismod.forge.testing.E2EMode.CONSOLE_JUDGED + "refused " + typed;
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(CONSOLE_JUDGED_MILLIS);
+        synchronized (transcript) {
+            int index = mark;
+            while (true) {
+                while (index < transcript.size()) {
+                    String line = transcript.get(index++);
+                    if (line.contains(refused)) {
+                        JsonObject reply = new JsonObject();
+                        reply.addProperty("ok", false);
+                        reply.addProperty("refused", true);
+                        reply.addProperty("console", true);
+                        reply.addProperty("line", line);
+                        throw new ServerCommandFailed(command, reply);
+                    }
+                    if (line.contains(admitted)) {
+                        return;
+                    }
+                }
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0L) {
+                    throw new IOException("the console command `" + command + "` was not judged by the e2e gate within "
+                            + CONSOLE_JUDGED_MILLIS + " ms: it never reached the server's command handler. Recent"
+                            + " output: " + tail());
+                }
+                try {
+                    transcript.wait(Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining)));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("interrupted while waiting for the console verdict on " + command, interrupted);
+                }
+            }
+        }
+    }
+
+    /** How long a console command is given to be judged, in milliseconds — see {@link #sendRaw}. */
+    private static final long CONSOLE_JUDGED_MILLIS = 30_000L;
+
+    private int transcriptSize() {
+        synchronized (transcript) {
+            return transcript.size();
+        }
+    }
+
+    private void writeConsole(String command) throws IOException {
         synchronized (stdin) {
             stdin.write(command);
             stdin.write('\n');
@@ -182,7 +249,9 @@ public final class TestClient implements Closeable {
             return;
         }
         try {
-            sendRaw("stop");
+            // Written, not judged: the harness ends its own server, and a server stopping prints no verdict
+            // it would be worth waiting on.
+            writeConsole("stop");
         } catch (IOException ignored) {
             // If stdin is already closed, fall through and destroy the process.
         }

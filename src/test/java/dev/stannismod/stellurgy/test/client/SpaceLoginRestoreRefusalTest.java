@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.SubsystemStatus;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The leg where the restore must NOT put anybody on a ship across a server restart: the player who was
@@ -35,13 +36,12 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
      * leg that comes back negative through these very oracles, "he is aboard his ship" could equally be
      * produced by an oracle that answers "aboard" unconditionally, or by a restore that drags every
      * logging-in player to the nearest ship.</p>
-     *
-     * <p>red-witnessed: with the login hook ({@code SpaceEventHandler#onPlayerLoadFromFile} at
-     * {@code ShipAboardTag.Aboard aboard = ShipAboardTag.of(player)}) giving a player who has no
-     * aboard record a standing one on the first settled ship in the ledger — the restore that drags
-     * everyone aboard: "a player who was never aboard must come back where vanilla puts him …
-     * expected:&lt;0&gt; but was:&lt;3&gt;", 2026-09-28. The line before it is an arrangement.</p>
      */
+    @RedWitness(prose = "with the login hook ({@code SpaceEventHandler#onPlayerLoadFromFile} at"
+            + " {@code ShipAboardTag.Aboard aboard = ShipAboardTag.of(player)}) giving a player who has no"
+            + " aboard record a standing one on the first settled ship in the ledger — the restore that drags"
+            + " everyone aboard: \"a player who was never aboard must come back where vanilla puts him …"
+            + " expected:&lt;0&gt; but was:&lt;3&gt;\", 2026-09-28. The line before it is an arrangement.")
     @Test
     public void aPlayerWhoWasNeverAboardIsNotRestoredOntoTheShip() throws Exception {
         flyOneShipIntoItsCell();
@@ -56,7 +56,7 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
         closeBoth();
         keepBootLog("boot1-never-aboard");
 
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+        serverHarness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         // The same two discriminators the other legs establish, so this leg differs from them in
         // exactly one thing: whether the player was ever aboard.

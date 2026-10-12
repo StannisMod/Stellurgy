@@ -14,6 +14,7 @@ import java.util.stream.Stream;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Pins the physics-substrate boundary: the physics engine is a SWAPPABLE substrate that Stellurgy reaches
@@ -38,6 +39,7 @@ public class VSBoundaryContainmentTest {
     private static final String PKG = "dev/stannismod/stellurgy/";
 
     /** Pins PORT-1 (only four roles may import the physics substrate in main). */
+    @Pins("PORT-1")
     @Test
     public void physicsEngineTypesStayConfinedToThePortAndMixins() throws IOException {
         Path sourceRoot = resolveMainSourceRoot();

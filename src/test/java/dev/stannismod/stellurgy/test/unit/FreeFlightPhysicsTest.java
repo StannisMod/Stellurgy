@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Contract pinning for {@link FreeFlightPhysics#step} — the pure decision surface
@@ -145,6 +146,7 @@ public class FreeFlightPhysicsTest {
     }
 
     /** Pins INV-RKT-12 (with thrust not permitted the craft is a Newtonian brick that only falls). */
+    @Pins("INV-RKT-12")
     @Test
     public void cannotThrustDisablesThrustButStillRotatesAndApplyGravity() {
         Step s = FreeFlightPhysics.step(0, 0, 0, 0f, 0f,
@@ -176,6 +178,7 @@ public class FreeFlightPhysicsTest {
      * unaccelerated for the last stretch as a control — a cap would bite there too.</p>
      * Pins INV-RKT-23 (free flight bounds acceleration and not speed).
      */
+    @Pins("INV-RKT-23")
     @Test
     public void newtonianFlightBoundsAccelerationAndNotSpeed() {
         int burnTicks = 1000;
@@ -213,6 +216,7 @@ public class FreeFlightPhysicsTest {
      * <p>Flown at 0.1 blocks/tick², an ordinary rocket at thrust-to-weight 2, in vacuum.</p>
      * Pins INV-RKT-23 (free flight bounds acceleration and not speed).
      */
+    @Pins("INV-RKT-23")
     @Test
     public void aRocketAtOrdinaryThrustReachesFirstCosmicVelocity() {
         double firstCosmicBlocksPerTick = 395.0;
@@ -234,6 +238,7 @@ public class FreeFlightPhysicsTest {
     }
 
     /** Pins INV-RKT-23 (free flight bounds acceleration and not speed). */
+    @Pins("INV-RKT-23")
     @Test
     public void thrustAccelClampedToMaxThrustAccel() {
         // A wildly over-thrusted rocket (thrustMag far above the arcade ceiling)
@@ -423,6 +428,7 @@ public class FreeFlightPhysicsTest {
      * ONE step: 1.0 keeps all the momentum, less than 1.0 takes some away.</p>
      * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
      */
+    @Pins("INV-RKT-24")
     @Test
     public void vacuumTakesNoMomentumAtAll() {
         assertEquals("a craft in vacuum keeps every unit of momentum it has",
@@ -437,6 +443,7 @@ public class FreeFlightPhysicsTest {
      * planet-side craft flies exactly as it did.
      * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
      */
+    @Pins("INV-RKT-24")
     @Test
     public void aFullAtmosphereRetainsExactlyWhatTheSubstrateAlwaysDid() {
         double perGameTick = FreeFlightPhysics.ambientDragFactor(1.0, 0.05);
@@ -448,6 +455,7 @@ public class FreeFlightPhysicsTest {
      * Retention falls monotonically as the air thickens — thicker air never takes LESS.
      * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
      */
+    @Pins("INV-RKT-24")
     @Test
     public void thickerAirNeverTakesLessMomentum() {
         double previous = Double.MAX_VALUE;
@@ -477,6 +485,7 @@ public class FreeFlightPhysicsTest {
      * A density outside 0..1 is clamped rather than producing a nonsense multiplier.
      * Pins INV-RKT-24 (a craft's speed is bounded by the air where it is: no drag in vacuum, more drag in thicker air, never past rest).
      */
+    @Pins("INV-RKT-24")
     @Test
     public void anAbsurdDensityIsClampedNotObeyed() {
         assertEquals("negative density is vacuum",

@@ -12,6 +12,8 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The bookkeeping a relocation's damage carry is built out of, at the tier where it is cheap to check.
@@ -125,9 +127,9 @@ public class DamageLayerTest {
      * with — a block the registry still holds, and one whose mod is gone, which is the case a lookup
      * through Forge's defaulted registry turns into air. The registry is bootstrapped so that a carry
      * which did look the name up would answer as it does in a game, not throw.
-     *
-     * red-witnessed: with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by {@code data.recordDestroyed(pos, net.minecraft.block.Block.REGISTRY.getObject(new net.minecraft.util.ResourceLocation(entry.originalBlock)), entry.originalMeta);}, fails: "INV-DMG-10: a hole of a block no longer registered must arrive under ITS name" (2026-10-08; expected removedmod:hull_plate, was minecraft:air).
      */
+    @Pins("INV-DMG-10")
+    @RedWitness(prose = "with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by {@code data.recordDestroyed(pos, net.minecraft.block.Block.REGISTRY.getObject(new net.minecraft.util.ResourceLocation(entry.originalBlock)), entry.originalMeta);}, fails: \"INV-DMG-10: a hole of a block no longer registered must arrive under ITS name\" (2026-10-08; expected removedmod:hull_plate, was minecraft:air).")
     @Test
     public void aHoleOfABlockNoLongerRegisteredKeepsItsNameAcrossACarry() {
         MinecraftBootstrap.ensure();

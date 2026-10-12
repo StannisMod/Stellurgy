@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.RocketList;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -18,6 +19,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Multi-boot persistence smoke for
@@ -56,7 +58,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class MissionPersistenceRestartTest {
+public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
 
     private static final String MISSION_ID = "missionId";
     private static final String DURATION = "duration";
@@ -99,11 +101,12 @@ public class MissionPersistenceRestartTest {
     }
 
     /** Pins INV-MSN-03 (A gas/ore mission survives a full server restart with its type and duration intact and not dead). */
+    @Pins("INV-MSN-03")
     @Test
     public void gasMissionSurvivesServerRestart() throws Exception {
         long missionId;
         long expectedDuration = 5000;
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         int rid = buildAndAssembleRocket(firstBoot, 9500);
         String start = ok(firstBoot.client().execute(
@@ -116,7 +119,7 @@ public class MissionPersistenceRestartTest {
         firstBoot.close();
         firstBoot = null;
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String state = ok(secondBoot.client().execute("stellurgytest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,
@@ -138,11 +141,12 @@ public class MissionPersistenceRestartTest {
     }
 
     /** Pins INV-MSN-03 (A gas/ore mission survives a full server restart with its type and duration intact and not dead). */
+    @Pins("INV-MSN-03")
     @Test
     public void oreMissionSurvivesServerRestart() throws Exception {
         long missionId;
         long expectedDuration = 5000;
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         int rid = buildAndAssembleRocket(firstBoot, 9600);
         String start = ok(firstBoot.client().execute(
@@ -155,7 +159,7 @@ public class MissionPersistenceRestartTest {
         firstBoot.close();
         firstBoot = null;
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String state = ok(secondBoot.client().execute("stellurgytest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,

@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TileRocketMonitoringStation redstone-triggered launch.
@@ -141,6 +142,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     }
 
     /** Pins INV-INFRA-02 (a redstone rising edge on a linked monitor triggers one launch attempt). */
+    @Pins("INV-INFRA-02")
     @Test
     public void risingRedstoneEdgeFiresPrepareLaunchExactlyOnce_andSustainedDoesNotRefire()
             throws Exception {
@@ -194,6 +196,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     }
 
     /** Pins INV-INFRA-02 (a redstone rising edge on a linked monitor triggers one launch attempt). */
+    @Pins("INV-INFRA-02")
     @Test
     public void fallingRedstoneEdgeResetsTheGate_andSecondRisingEdgeRefires()
             throws Exception {

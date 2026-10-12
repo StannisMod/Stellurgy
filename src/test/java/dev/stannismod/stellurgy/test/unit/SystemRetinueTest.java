@@ -25,6 +25,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Contract tests for a system's RETINUE — how many bodies it has, where they sit, and what it always
@@ -352,11 +354,9 @@ public class SystemRetinueTest {
         assertTrue(checked > MIN_SYSTEMS_FOR_STAR_COUNTS);
     }
 
-    /**
-     * red-witnessed: 2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at
-     * twice the blocks per distance unit, this fails with "a companion stands at the separation its
-     * own elements state expected:&lt;4.31384E7&gt; but was:&lt;8.627679969687484E7&gt;".
-     */
+    @RedWitness(prose = "2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at"
+            + " twice the blocks per distance unit, this fails with \"a companion stands at the separation its"
+            + " own elements state expected:&lt;4.31384E7&gt; but was:&lt;8.627679969687484E7&gt;\".")
     @Test
     public void aCompanionIsABodyOfItsSystemStandingAtItsOwnSeparation() {
         // A companion that existed only on the star object would light the worlds here and appear at
@@ -522,6 +522,7 @@ public class SystemRetinueTest {
     // ─── E2: moons ─────────────────────────────────────────────────────────────
 
     /** Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none). */
+    @Pins("ADDR-17")
     @Test
     public void moonsExistAndGetTheirOwnCellsInsideTheirParentsZone() {
         // Without moons the whole outer system is look-only: nothing out there is landable, because the
@@ -562,6 +563,7 @@ public class SystemRetinueTest {
     }
 
     /** Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none). */
+    @Pins("ADDR-17")
     @Test
     public void aMoonIsSomewhereElseThanItsParentAndKeepsMoving() {
         // A moon that stood exactly where its planet does would be one address with two bodies in it,

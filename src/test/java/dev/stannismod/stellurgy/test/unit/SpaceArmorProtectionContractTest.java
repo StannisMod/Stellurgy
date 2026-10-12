@@ -17,6 +17,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  *
@@ -43,10 +44,8 @@ public class SpaceArmorProtectionContractTest {
         return new ItemStack(armor, 1);
     }
 
-    /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: "suit must
-     * protect against HEAT", 2026-09-30.</p>
-     */
+    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"suit must"
+            + " protect against HEAT\", 2026-09-30.")
     @Test
     public void protectsAgainstEveryKindOfHarmAirCanDo() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);
@@ -63,10 +62,8 @@ public class SpaceArmorProtectionContractTest {
         }
     }
 
-    /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: "air that does
-     * nothing is not a threat", 2026-09-30.</p>
-     */
+    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that does"
+            + " nothing is not a threat\", 2026-09-30.")
     @Test
     public void doesNotProtectWhereThereIsNothingToProtectAgainst() {
         ItemSpaceArmor suit = newSuit(EntityEquipmentSlot.CHEST);

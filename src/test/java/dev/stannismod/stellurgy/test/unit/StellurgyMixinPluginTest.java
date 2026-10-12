@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.mixin.StellurgyMixinPlugin;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Disableability contract for the per-dimension WorldInfo MIXINS.
@@ -43,6 +44,7 @@ public class StellurgyMixinPluginTest {
             "dev.stannismod.stellurgy.mixin.MixinWorldSetBlockState";
 
     /** Pins INV-MIX-01 (the WorldInfo mixins weave iff perDimWorldInfo is on and all other mixins always weave). */
+    @Pins("INV-MIX-01")
     @Test
     public void worldInfoMixinsApplyWhenPerDimWorldInfoEnabled() {
         assertTrue(StellurgyMixinPlugin.shouldApply(true, WORLD_SERVER_MULTI));
@@ -51,6 +53,7 @@ public class StellurgyMixinPluginTest {
     }
 
     /** Pins INV-MIX-01 (the WorldInfo mixins weave iff perDimWorldInfo is on and all other mixins always weave). */
+    @Pins("INV-MIX-01")
     @Test
     public void worldInfoMixinsSkippedWhenPerDimWorldInfoDisabled() {
         assertFalse(StellurgyMixinPlugin.shouldApply(false, WORLD_SERVER_MULTI));
@@ -61,6 +64,7 @@ public class StellurgyMixinPluginTest {
     }
 
     /** Pins INV-MIX-01 (the WorldInfo mixins weave iff perDimWorldInfo is on and all other mixins always weave). */
+    @Pins("INV-MIX-01")
     @Test
     public void nonWorldInfoMixinsAlwaysApplyRegardlessOfFlag() {
         // Gravity / atmosphere block-place are unrelated to the WorldInfo

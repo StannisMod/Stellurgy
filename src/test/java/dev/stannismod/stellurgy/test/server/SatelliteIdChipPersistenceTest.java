@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -27,7 +28,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class SatelliteIdChipPersistenceTest {
+public class SatelliteIdChipPersistenceTest extends AbstractMechanicsTest {
 
     /** The power this scenario stores before the restart, read back after it. Not a threshold. */
     private static final int STORED_POWER = 4000;
@@ -55,7 +56,7 @@ public class SatelliteIdChipPersistenceTest {
 
     @Test
     public void satelliteIdSurvivesRestartOnSameWorkDir() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         String create = String.join("\n", firstBoot.client().execute(
                 "stellurgytest satellite create 0 composition 200 4000 2048"));
@@ -73,7 +74,7 @@ public class SatelliteIdChipPersistenceTest {
         firstBoot.close();
         firstBoot = null;
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         String postBoot = String.join("\n", secondBoot.client().execute(
                 "stellurgytest satellite info 0 " + satId));
         assertTrue("satellite must survive restart and resolve by id "

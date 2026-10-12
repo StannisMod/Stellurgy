@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TileFluidTank's "stacked fill" delegation.
@@ -89,6 +90,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-INFRA-25 (stacked pressure tanks fill from the bottom and spill into the top). */
+    @Pins("INV-INFRA-25")
     @Test
     public void smallInjectionFillsBottomTankAndLeavesTopEmpty() throws Exception {
         // A STACK, and the whole subject is that the top sits one block above the bottom. Both Ys
@@ -129,6 +131,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-INFRA-25 (stacked pressure tanks fill from the bottom and spill into the top). */
+    @Pins("INV-INFRA-25")
     @Test
     public void overflowingInjectionFillsBottomThenSpillsIntoTop() throws Exception {
         // Different column from the first test (position isolation).

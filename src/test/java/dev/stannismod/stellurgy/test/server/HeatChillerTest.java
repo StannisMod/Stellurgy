@@ -7,6 +7,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The chiller: two coolant loops with a heat pump between them, and the one clause a pump breaks
@@ -64,19 +66,20 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * the same loop's capacity after, so a leak onto the cold loop reds the cold reading on its own,
      * whatever the hot one does.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NONE OF THE MASS — {@code HeatNetwork#boltedMass} at {@code if (drawsFromThisLoop(pump, pumpPos, memberPositions))} and {@code HeatNetwork#boltedMass} at {@code if (hotAnchor == null || !memberPositions.contains(hotAnchor))} both opened, so the chiller's mass joins every loop it
-     * touches: "the loop the chiller merely draws FROM carries none of the machine's mass: …
-     * expected:&lt;60&gt; but was:&lt;260&gt;". ITS OWN MASS — {@code HeatNetwork#tickThermodynamics} at {@code capacity += boltedCapacity;} leaving a
-     * bolted chiller out of the loop's capacity: "a chiller bolted onto the hot loop must add its own
-     * thermal mass to it … (before=60): … \"heatCapacity\":60". THE CLAUSE — {@code HeatNetwork#runPumps} at {@code depositInto(world, hot, moved + workPaid);}
-     * depositing a tenth of heat plus work: "THE CLAUSE: the hot loop gains what the cold loop lost
-     * PLUS the work … (cold lost 6000, battery paid 240, hot gained 624) expected:&lt;6240&gt; but
-     * was:&lt;624&gt;". The premises are arrangements and are not witnessed.</p>
      * Pins INV-HEAT-10 (The hot loop receives what came off the cold loop PLUS the work that was paid).
      * Pins INV-HEAT-13 (A bolted chiller's own thermal mass counts toward its HOT loop and toward no other).
      * Pins INV-HEAT-11 (a chiller between two runs leaves them two loops).
      * Pins HEAT-6 (the chiller is a heat pump and the hot side receives the heat plus the work).
      */
+    @Pins({"INV-HEAT-10", "INV-HEAT-13", "INV-HEAT-11", "HEAT-6"})
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NONE OF THE MASS — {@code HeatNetwork#boltedMass} at {@code if (drawsFromThisLoop(pump, pumpPos, memberPositions))} and {@code HeatNetwork#boltedMass} at {@code if (hotAnchor == null || !memberPositions.contains(hotAnchor))} both opened, so the chiller's mass joins every loop it"
+            + " touches: \"the loop the chiller merely draws FROM carries none of the machine's mass: …"
+            + " expected:&lt;60&gt; but was:&lt;260&gt;\". ITS OWN MASS — {@code HeatNetwork#tickThermodynamics} at {@code capacity += boltedCapacity;} leaving a"
+            + " bolted chiller out of the loop's capacity: \"a chiller bolted onto the hot loop must add its own"
+            + " thermal mass to it … (before=60): … \\\"heatCapacity\\\":60\". THE CLAUSE — {@code HeatNetwork#runPumps} at {@code depositInto(world, hot, moved + workPaid);}"
+            + " depositing a tenth of heat plus work: \"THE CLAUSE: the hot loop gains what the cold loop lost"
+            + " PLUS the work … (cold lost 6000, battery paid 240, hot gained 624) expected:&lt;6240&gt; but"
+            + " was:&lt;624&gt;\". The premises are arrangements and are not witnessed.")
     @Test
     public void theHotLoopReceivesTheHeatPlusTheWork() throws Exception {
         int x0 = stand("two coolant loops with a powered chiller between them");
@@ -142,19 +145,19 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * which puts it below the hot loop, and requires heat to go on leaving it. The cold loop has no way
      * out but the chiller, so the energy it lost is energy the chiller moved up the gradient.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. TAKES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: "an unpowered chiller takes
-     * nothing out of the loop it draws from: … expected:&lt;6000&gt; but was:&lt;0&gt;". WITH POWER
-     * — {@code TileHeatChiller#getThroughputPerTick} at {@code return HeatNetwork.perTick(StellurgyConfiguration.getCurrentConfig().shipHeatChillerThroughput);} offering no throughput: "the same chiller with power must take
-     * heat out, or the reading above measured nothing: … \"heatStored\":6000". UP THE GRADIENT — a
-     * line after {@code HeatNetwork#runPumps} at {@code double hotKelvin = hot.getTemperatureKelvin();} skipping a pump whose hot side is the hotter: "heat must go
-     * on leaving the cold loop although the hot loop is already hotter (cold charged to 886 at half
-     * the hot loop's rise; hot 322538 milliK) … \"heatStored\":886". The premises are arrangements and
-     * are not witnessed.</p>
-     *
      * <p>What the unpowered chiller PAYS is not asserted: it moves heat exactly when work is paid, so
      * a payment is a transfer and TAKES NOTHING already reads it.</p>
      * Pins INV-HEAT-12 (The hot loop ends up hotter than the cold one it is fed from, because the energy accumulates in it against its own capacity).
      */
+    @Pins("INV-HEAT-12")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. TAKES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller takes"
+            + " nothing out of the loop it draws from: … expected:&lt;6000&gt; but was:&lt;0&gt;\". WITH POWER"
+            + " — {@code TileHeatChiller#getThroughputPerTick} at {@code return HeatNetwork.perTick(StellurgyConfiguration.getCurrentConfig().shipHeatChillerThroughput);} offering no throughput: \"the same chiller with power must take"
+            + " heat out, or the reading above measured nothing: … \\\"heatStored\\\":6000\". UP THE GRADIENT — a"
+            + " line after {@code HeatNetwork#runPumps} at {@code double hotKelvin = hot.getTemperatureKelvin();} skipping a pump whose hot side is the hotter: \"heat must go"
+            + " on leaving the cold loop although the hot loop is already hotter (cold charged to 886 at half"
+            + " the hot loop's rise; hot 322538 milliK) … \\\"heatStored\\\":886\". The premises are arrangements and"
+            + " are not witnessed.")
     @Test
     public void theHotLoopIsHotterBecauseEnergyAccumulatesInIt() throws Exception {
         int x0 = stand("two coolant loops with a chiller that is powered only later");

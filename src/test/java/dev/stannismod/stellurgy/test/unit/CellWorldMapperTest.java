@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Contract tests for the honest-3D cell&harr;slot-world pose mapping: all three axes realize
@@ -111,6 +112,7 @@ public class CellWorldMapperTest {
      * to, and its jumps are refused for being somewhere it is not.</p>
      * Pins ADDR-8 (a reported pose may not rename the cell).
      */
+    @Pins("ADDR-8")
     @Test
     public void aReportedPosePastTheCellEdgeStaysInItsOwnCell() {
         GalacticCoord cell = at(0, 0, 0, 0, 0, 0);

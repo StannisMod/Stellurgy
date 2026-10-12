@@ -7,6 +7,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What the OUTSIDE does to a ship's heat: the incident flux, and the shield that thins it.
@@ -106,13 +108,14 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * whole gap between the two nets must be the gap between the two reported fluxes. A star wired as
      * its own mechanism would move one of those and not the other.</p>
      *
-     * <p>red-witnessed: with {@code HeatEnvironment#incidentFluxPerCell} at {@code return unshieldedFluxPerCell;} putting twice the reported flux into each
-     * cell: "a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a
-     * world and -1129 in space, a difference of 1179.0, against a reported flux difference of
-     * 589.965", 2026-09-30. The premises on both legs are arrangements and are not witnessed.</p>
      * Pins INV-HEAT-14 (A warm world and a distant star reach a radiator through the SAME term).
      * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
+    @Pins({"INV-HEAT-14", "HEAT-8"})
+    @RedWitness(prose = "with {@code HeatEnvironment#incidentFluxPerCell} at {@code return unshieldedFluxPerCell;} putting twice the reported flux into each"
+            + " cell: \"a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a"
+            + " world and -1129 in space, a difference of 1179.0, against a reported flux difference of"
+            + " 589.965\", 2026-09-30. The premises on both legs are arrangements and are not witnessed.")
     @Test
     public void aWorldsWarmthAndAStarArriveThroughTheSameTerm() throws Exception {
         int x0 = stand("one radiating loop on the overworld, and the same loop in a space cell");
@@ -178,17 +181,18 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * ship that built none is not warmed by one. Without that control this scenario would also pass on
      * a bug that simply added the environment to every loop in the world.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork#rejectHeat} at {@code if (share != 0L)}
-     * exchanging only positive shares: "under a star this strong the net must run BACKWARDS … \"rejected\":0".
-     * IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} subtracting only positive rejection: "and the energy must
-     * actually be in the loop, not merely reported: … \"rejected\":-76764,\"heatStored\":0". NO
-     * RADIATING SURFACE — {@code HeatNetwork#rejectHeat} at {@code return 0L;} giving a loop with no cells the incident flux:
-     * "a loop with no radiating surface must take nothing from the environment … expected:&lt;0&gt;
-     * but was:&lt;76800&gt;". The three premises before the star is turned up are arrangements and are
-     * not witnessed.</p>
      * Pins INV-HEAT-15 (Under a star strong enough, the net runs backwards and an empty loop GAINS heat).
      * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
+    @Pins({"INV-HEAT-15", "HEAT-8"})
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork#rejectHeat} at {@code if (share != 0L)}"
+            + " exchanging only positive shares: \"under a star this strong the net must run BACKWARDS … \\\"rejected\\\":0\"."
+            + " IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} subtracting only positive rejection: \"and the energy must"
+            + " actually be in the loop, not merely reported: … \\\"rejected\\\":-76764,\\\"heatStored\\\":0\". NO"
+            + " RADIATING SURFACE — {@code HeatNetwork#rejectHeat} at {@code return 0L;} giving a loop with no cells the incident flux:"
+            + " \"a loop with no radiating surface must take nothing from the environment … expected:&lt;0&gt;"
+            + " but was:&lt;76800&gt;\". The three premises before the star is turned up are arrangements and are"
+            + " not witnessed.")
     @Test
     public void aShipUnderAFierceStarHeatsThroughItsRadiators() throws Exception {
         Cell cell = occupyHomeCell();
@@ -241,14 +245,15 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * shielded loop must still gain something, with the configuration demanding a hundred percent. That
      * second assertion is the clause: the refusal lives in the code, so no setting can reach it.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment#incidentFluxPerCell} at {@code if (ShieldCoverage.isCovered(shieldGenerators, world, pos))}
-     * treating no cell as covered: "a raised shield must take most of the incident flux off the ship
-     * (shielded=76764 unshielded=76764)". NOT ALL — the {@code HeatEnvironment#MAX_SHIELD_ATTENUATION} at {@code 0.995D} constant letting the shield take
-     * everything: "and it must NOT take all of it, however much the configuration asks for … (shielded=0)".
-     * The emitter premise and the unshielded premise are arrangements and are not witnessed.</p>
      * Pins INV-HEAT-16 (A raised shield takes most of the incident flux and never all of it, with the configuration set to demand a hundred percent).
      * Pins HEAT-10 (a shield attenuates incident flux and never eliminates it).
      */
+    @Pins({"INV-HEAT-16", "HEAT-10"})
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment#incidentFluxPerCell} at {@code if (ShieldCoverage.isCovered(shieldGenerators, world, pos))}"
+            + " treating no cell as covered: \"a raised shield must take most of the incident flux off the ship"
+            + " (shielded=76764 unshielded=76764)\". NOT ALL — the {@code HeatEnvironment#MAX_SHIELD_ATTENUATION} at {@code 0.995D} constant letting the shield take"
+            + " everything: \"and it must NOT take all of it, however much the configuration asks for … (shielded=0)\"."
+            + " The emitter premise and the unshielded premise are arrangements and are not witnessed.")
     @Test
     public void aShieldThinsTheFluxAndNeverRemovesIt() throws Exception {
         Cell cell = occupyHomeCell();

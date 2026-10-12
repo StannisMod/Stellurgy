@@ -15,6 +15,7 @@ import dev.stannismod.stellurgy.universe.TelescopeScan;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What one look of a survey owes the direction it is pointed in: every system its star TERRITORY
@@ -51,18 +52,17 @@ public class SurveyTerritoryTest {
      * <p>Fails if {@code ClusteredGalaxyGenerator#anchorsInTerritory} stops deciding that a look
      * enumerates its whole (divided) territory — the property that lets a survey stride by one
      * territory while the field is divided more finely.</p>
-     *
-     * <p>red-witnessed: with {@code ClusteredGalaxyGenerator#anchorsInTerritory} at
-     * {@code for (long i = 0; i < k; i++)} reading {@code i < 1}, this fails with "a look over
-     * territory -12,0,-10 missed seats that point resolution finds in it"; at
-     * {@code if (k <= 1 || seats > Math.max(1, limit))} reading {@code if (true)}, with "no look returned
-     * more than one seat …"; with {@code Lattice.of(supX, supY, supZ, i, j, m, k, s, local.ownField,}
-     * reading {@code supX + 1}, with "a look over territory -12,0,-12 returned …, which lies in another
-     * territory"; with a territory corner appended after
-     * {@code local.dilution(), local.material)).ifPresent(anchors::add);}, with "a look returned
-     * -42303755_1_-42303755, which is not a seat of the field" — one inversion per run,
-     * 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code ClusteredGalaxyGenerator#anchorsInTerritory} at"
+            + " {@code for (long i = 0; i < k; i++)} reading {@code i < 1}, this fails with \"a look over"
+            + " territory -12,0,-10 missed seats that point resolution finds in it\"; at"
+            + " {@code if (k <= 1 || seats > Math.max(1, limit))} reading {@code if (true)}, with \"no look returned"
+            + " more than one seat …\"; with {@code Lattice.of(supX, supY, supZ, i, j, m, k, s, local.ownField,}"
+            + " reading {@code supX + 1}, with \"a look over territory -12,0,-12 returned …, which lies in another"
+            + " territory\"; with a territory corner appended after"
+            + " {@code local.dilution(), local.material)).ifPresent(anchors::add);}, with \"a look returned"
+            + " -42303755_1_-42303755, which is not a seat of the field\" — one inversion per run,"
+            + " 2026-10-02.")
     @Test
     public void aLookReturnsEverySeatOfItsTerritory() {
         GalaxyGenConfig config = GalaxyGenConfig.defaults();

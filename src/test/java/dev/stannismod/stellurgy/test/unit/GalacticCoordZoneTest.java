@@ -10,6 +10,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A sector triple means nothing without the lattice it is expressed in.
@@ -137,6 +138,7 @@ public class GalacticCoordZoneTest {
      * coordinate still compares, keys and round-trips — those need the name, not the scale.</p>
      * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
+    @Pins("ADDR-19")
     @Test
     public void aCoordinateReadFromAKeyRefusesWidthArithmeticRatherThanAssumingOne() {
         GalacticCoord named = GalacticCoord.inZone(EARTH, EARTH_CELL, 3, 0, 0, 0, 0, 0);
@@ -185,6 +187,7 @@ public class GalacticCoordZoneTest {
      * and it is the kind of number that gets compared to a threshold and acted on.</p>
      * Pins ADDR-9 (cross-cell distance is evaluated through both frames at a tick and refuses two lattices).
      */
+    @Pins("ADDR-9")
     @Test
     public void thereIsNoStaticDistanceAcrossTwoLattices() {
         GalacticCoord galactic = GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0);

@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Counter-test side of the
@@ -70,6 +71,7 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
      * Pins INV-ATM-07 (a vent seals only with both oxygen and power).
      * Pins INV-ATM-09 (a vent that cannot supply its blob's oxygen loses hasFluid and reverts the atmosphere).
      */
+    @Pins({"INV-ATM-07", "INV-ATM-09"})
     @Test
     public void ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere() throws Exception {
         buildSealableRoom(CX_NO_FLUID);
@@ -97,6 +99,7 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
      *  vent never seals.
      * Pins INV-ATM-07 (a vent seals only with both oxygen and power).
      */
+    @Pins("INV-ATM-07")
     @Test
     public void ventWithoutPowerDoesNotSealEvenWhenFueled() throws Exception {
         buildSealableRoom(CX_NO_POWER);

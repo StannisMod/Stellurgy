@@ -26,6 +26,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The observatory's region survey, driven on a real server through the machine itself.
@@ -303,14 +305,12 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
                 done.addressesOnCrystal() >= 1);
     }
 
-    /**
-     * <p>red-witnessed: with the survey written into NEITHER of the two places a save takes it from —
-     * {@code TileObservatory#writeToNBT} at {@code nbt.setTag("regionScan", scan)} and
-     * {@code TileObservatory#writeNetworkData} at {@code nbt.setTag("regionScan", scan)},
-     * which {@code TileMultiBlock.writeToNBT} also calls: "the survey did not come back with the
-     * chunk: … scanning:false", 2026-09-28. Dropping only the {@code writeToNBT} copy stays GREEN —
-     * the network copy lands in the same save compound.</p>
-     */
+    @RedWitness(prose = "with the survey written into NEITHER of the two places a save takes it from —"
+            + " {@code TileObservatory#writeToNBT} at {@code nbt.setTag(\"regionScan\", scan)} and"
+            + " {@code TileObservatory#writeNetworkData} at {@code nbt.setTag(\"regionScan\", scan)},"
+            + " which {@code TileMultiBlock.writeToNBT} also calls: \"the survey did not come back with the"
+            + " chunk: … scanning:false\", 2026-09-28. Dropping only the {@code writeToNBT} copy stays GREEN —"
+            + " the network copy lands in the same save compound.")
     @Test
     public void aSurveyInFlightSurvivesItsChunkBeingUnloaded() throws Exception {
         final int x = 4540;
@@ -695,23 +695,22 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * <p>Sees the survey a running observatory performs once aimed; does NOT see the GUI's aim
      * buttons (the probe aims), the research-paced sweep (switched off here), or a sky other than the
      * shipped procedural one.</p>
-     *
-     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
-     * {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} reading
-     * {@code if (false)}, this fails with "a sun-like star 2.98… ly away must be NAMED by the shipped
-     * telescope"; with {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading
-     * {@code magnitude <= limitMagnitude}, with "one 32.79… ly away must be a point of light - its
-     * address alone"; with {@code limitMagnitude += 5d;} inserted after
-     * {@code double resolveLimit = limitMagnitude - resolveMarginMagnitudes();}, with "and one 283.19…
-     * ly away, past the shipped reach, must not be seen at all"; with
-     * {@code TelescopeScan#resolveMarginMagnitudes} at
-     * {@code return Math.max(0d, StellurgyConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes);}
-     * answering the shipped default, with "with a resolve margin of zero the star that was only a light
-     * must be named"; with {@code TelescopeScan#limitMagnitude} at
-     * {@code return StellurgyConfiguration.getCurrentConfig().telescopeLimitingMagnitude;} answering the
-     * shipped default, with "an aperture one magnitude deeper must register the star the shipped one
-     * missed, as a light" — one inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code TelescopeScan#characterise} at"
+            + " {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} reading"
+            + " {@code if (false)}, this fails with \"a sun-like star 2.98… ly away must be NAMED by the shipped"
+            + " telescope\"; with {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading"
+            + " {@code magnitude <= limitMagnitude}, with \"one 32.79… ly away must be a point of light - its"
+            + " address alone\"; with {@code limitMagnitude += 5d;} inserted after"
+            + " {@code double resolveLimit = limitMagnitude - resolveMarginMagnitudes();}, with \"and one 283.19…"
+            + " ly away, past the shipped reach, must not be seen at all\"; with"
+            + " {@code TelescopeScan#resolveMarginMagnitudes} at"
+            + " {@code return Math.max(0d, StellurgyConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes);}"
+            + " answering the shipped default, with \"with a resolve margin of zero the star that was only a light"
+            + " must be named\"; with {@code TelescopeScan#limitMagnitude} at"
+            + " {@code return StellurgyConfiguration.getCurrentConfig().telescopeLimitingMagnitude;} answering the"
+            + " shipped default, with \"an aperture one magnitude deeper must register the star the shipped one"
+            + " missed, as a light\" — one inversion per run, 2026-10-02.")
     @Test
     public void theShippedApertureNamesANearSunSeesAFarOneAsALightAndMissesOneBeyondIt()
             throws Exception {
@@ -830,18 +829,17 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      *
      * <p>Does NOT see a look with no observer (no production caller makes one) or the obscured-look
      * count the operator is shown.</p>
-     *
-     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
-     * {@code !isObscuredAt(hit.extinctionMagnitudes())} comparing the column
-     * ({@code hit.extinctionMagnitudes() / Nebula.MAGNITUDES_PER_DENSITY_LIGHT_YEAR}), this fails with
-     * "behind dust thinner than the threshold the system must be named"; the same with
-     * {@code TelescopeScan#isObscuredAt} at {@code return threshold > 0d && extinctionMagnitudes >= threshold;}
-     * reading {@code extinctionMagnitudes > 0d}; with that line reading {@code return false;}, with
-     * "behind dust thicker than the threshold the system must still be written down - its address
-     * alone, never nothing" (it was named); with {@code TelescopeScan#characterise} at
-     * {@code if (!namedSomething)} also requiring the look unobscured, the same message (nothing was
-     * written) — one inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code TelescopeScan#characterise} at"
+            + " {@code !isObscuredAt(hit.extinctionMagnitudes())} comparing the column"
+            + " ({@code hit.extinctionMagnitudes() / Nebula.MAGNITUDES_PER_DENSITY_LIGHT_YEAR}), this fails with"
+            + " \"behind dust thinner than the threshold the system must be named\"; the same with"
+            + " {@code TelescopeScan#isObscuredAt} at {@code return threshold > 0d && extinctionMagnitudes >= threshold;}"
+            + " reading {@code extinctionMagnitudes > 0d}; with that line reading {@code return false;}, with"
+            + " \"behind dust thicker than the threshold the system must still be written down - its address"
+            + " alone, never nothing\" (it was named); with {@code TelescopeScan#characterise} at"
+            + " {@code if (!namedSomething)} also requiring the look unobscured, the same message (nothing was"
+            + " written) — one inversion per run, 2026-10-02.")
     @Test
     public void thickDustLeavesASystemItsAddressAndThinDustHidesNothing() throws Exception {
         FixtureSite site = site();
@@ -944,21 +942,20 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      *
      * <p>Sees the operator's toggle pressed through the machine's own button handler; does NOT see the
      * GUI that sends it, or the sync of what was taught to a client.</p>
-     *
-     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
-     * {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} dropping
-     * {@code wholeSystem}, this fails with "recording positions only writes the home system's address
-     * alone"; with every body of the system reported to {@code named} inside {@code if (!namedSomething)},
-     * with "and teaches the world it stands on nothing"; with the same report made only when
-     * {@code wholeSystem}, with "and a point of light teaches the world it stands on nothing"; with
-     * {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading
-     * {@code magnitude <= limitMagnitude}, with "a system registered but too faint to make out is an
-     * address alone"; at {@code if (memory.record(entryFor(body, observedTick, nameOf)))} skipping a
-     * body with a dimension, with "a look that made the home system out must name Earth on the
-     * crystal"; with {@code TileObservatory#teachThisBody} at {@code here.discoverPlanet(dimId);}
-     * removed, with "and must teach the world it stands on that Earth is there" — one inversion per
-     * run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code TelescopeScan#characterise} at"
+            + " {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} dropping"
+            + " {@code wholeSystem}, this fails with \"recording positions only writes the home system's address"
+            + " alone\"; with every body of the system reported to {@code named} inside {@code if (!namedSomething)},"
+            + " with \"and teaches the world it stands on nothing\"; with the same report made only when"
+            + " {@code wholeSystem}, with \"and a point of light teaches the world it stands on nothing\"; with"
+            + " {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading"
+            + " {@code magnitude <= limitMagnitude}, with \"a system registered but too faint to make out is an"
+            + " address alone\"; at {@code if (memory.record(entryFor(body, observedTick, nameOf)))} skipping a"
+            + " body with a dimension, with \"a look that made the home system out must name Earth on the"
+            + " crystal\"; with {@code TileObservatory#teachThisBody} at {@code here.discoverPlanet(dimId);}"
+            + " removed, with \"and must teach the world it stands on that Earth is there\" — one inversion per"
+            + " run, 2026-10-02.")
     @Test
     public void onlyWhatALookMadeOutTeachesTheWorldItStandsOn() throws Exception {
         int moon = homeMoon();
@@ -1098,16 +1095,17 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * client decision is involved), nor an authored system written by a pack file rather than seated by
      * the probe (the registry stores both through {@code UniverseRegistry#place}).</p>
      *
-     * <p>red-witnessed: with {@code UniverseRegistry#anchorsInTerritory} at
-     * {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with
-     * "expected:&lt;seated=[0 home=0]&gt; but was:&lt;seated=[1 home=5]&gt;" (the same reading the tree
-     * gave before the mask existed, 2026-10-02); with {@code TelescopeScan#characterise} at
-     * {@code if (!namedSomething)} reading {@code if (false)}, with "must have written both addresses"
-     * ("expected:&lt;seated=[true home=tru]e&gt; but was:&lt;seated=[false home=fals]e&gt;") — one
-     * inversion per run, 2026-10-03.</p>
      * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
      * Pins ADDR-25 (one seat, one system, one answer across attribution, territory and survey).
      */
+    @Pins({"ADDR-23", "ADDR-25"})
+    @RedWitness(prose = "with {@code UniverseRegistry#anchorsInTerritory} at"
+            + " {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with"
+            + " \"expected:&lt;seated=[0 home=0]&gt; but was:&lt;seated=[1 home=5]&gt;\" (the same reading the tree"
+            + " gave before the mask existed, 2026-10-02); with {@code TelescopeScan#characterise} at"
+            + " {@code if (!namedSomething)} reading {@code if (false)}, with \"must have written both addresses\""
+            + " (\"expected:&lt;seated=[true home=tru]e&gt; but was:&lt;seated=[false home=fals]e&gt;\") — one"
+            + " inversion per run, 2026-10-03.")
     @Test
     public void aSurveyWritesASystemOnceAndNoNeighbouringSeatUnderItsName() throws Exception {
         FixtureSite site = site();

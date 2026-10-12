@@ -10,6 +10,8 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Disableability contract for {@code rocketRequireFuel} at rocket-assembly time.
@@ -75,11 +77,12 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
      * is the control — it shows the reach check is live in this world (the overworld's line is its
      * body's, 100 000 blocks), so the ship's success is the exemption and not an empty check.</p>
      *
-     * <p>red-witnessed: 2026-10-05, with {@code TileRocketAssemblingMachine#scanRocket} at {@code scannedFlightComputerPos == null}
-     * dropped from the NOFUEL branch (the reach check asked of every build), this fails with "a ship must assemble with
-     * fuel required even though its tanks cannot reach orbit".</p>
      * Pins INV-RASM-13 (The burn-distance NOFUEL ("can its tanks carry it to orbit", hasEnoughFuel) is asked of a ROCKET only).
      */
+    @Pins("INV-RASM-13")
+    @RedWitness(prose = "2026-10-05, with {@code TileRocketAssemblingMachine#scanRocket} at {@code scannedFlightComputerPos == null}"
+            + " dropped from the NOFUEL branch (the reach check asked of every build), this fails with \"a ship must assemble with"
+            + " fuel required even though its tanks cannot reach orbit\".")
     @Test
     public void aShipIsNotHeldToTheClimbToOrbitThatARocketIs() throws Exception {
         try (ConfigFlag fuelRequired = ConfigFlag.set(this::cmd, "rocketRequireFuel", true)) {
@@ -102,6 +105,7 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
     }
 
     /** Pins INV-RASM-06 (with rocketRequireFuel off a valid structure still assembles). */
+    @Pins("INV-RASM-06")
     @Test
     public void validRocketAssemblesWhenFuelNotRequired() throws Exception {
         try (ConfigFlag restored = ConfigFlag.set(this::cmd, "rocketRequireFuel", true)) {

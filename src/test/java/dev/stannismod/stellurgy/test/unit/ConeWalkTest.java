@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.universe.ConeWalk;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The patch of sky one pointing covers: a cone with its apex at the instrument, walked shell by
@@ -72,15 +73,14 @@ public class ConeWalkTest {
      *
      * <p>Fails if {@code ConeWalk#lookAt} stops deciding that a look is placed inside the patch of sky
      * it was aimed at.</p>
-     *
-     * <p>red-witnessed: with {@code ConeWalk#radiusOfShell} at
-     * {@code double radius = s * Math.tan(halfAngleRadians);} doubled, this fails with "look 2 stands
-     * outside the patch: 18.43… degrees off the aim against a half-angle of 10"; with
-     * {@code ConeWalk#lookAt} at {@code double axial = (double) shell * strideCells;} reading
-     * {@code (shell + 1)}, with "look 5895 stands past the pointing's reach: 61000.33… > 60000"; reading
-     * {@code -shell}, with "look 0 stands behind or beside the instrument: -1000.33… cells along the
-     * aim" — one inversion per run, 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code ConeWalk#radiusOfShell} at"
+            + " {@code double radius = s * Math.tan(halfAngleRadians);} doubled, this fails with \"look 2 stands"
+            + " outside the patch: 18.43… degrees off the aim against a half-angle of 10\"; with"
+            + " {@code ConeWalk#lookAt} at {@code double axial = (double) shell * strideCells;} reading"
+            + " {@code (shell + 1)}, with \"look 5895 stands past the pointing's reach: 61000.33… > 60000\"; reading"
+            + " {@code -shell}, with \"look 0 stands behind or beside the instrument: -1000.33… cells along the"
+            + " aim\" — one inversion per run, 2026-10-02.")
     @Test
     public void everyLookOfAPointingLiesInsideItsCone() {
         double half = Math.toRadians(10d);
@@ -120,12 +120,11 @@ public class ConeWalkTest {
      * with the radius would read {@code tan 10deg / tan 5deg = 2.02}. The lattice floors every shell's
      * radius to a whole stride, so the measured ratio is neither exactly (measured 2026-10-02: 58 940
      * looks at five degrees, 250 404 at ten, ratio 4.25); the claim is that it sits nearer the square.</p>
-     *
-     * <p>red-witnessed: with {@code ConeWalk#discLooks} at
-     * {@code count += 2L * rowHalfWidth(radius, i) + 1L;} reading {@code count += 1L;} (a shell counted
-     * as a line across the disc), this fails with "… nearer the square of the radii (4.06…) than the
-     * radii (2.015…): 3518 -> 7084 looks, ratio 2.0136…", 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code ConeWalk#discLooks} at"
+            + " {@code count += 2L * rowHalfWidth(radius, i) + 1L;} reading {@code count += 1L;} (a shell counted"
+            + " as a line across the disc), this fails with \"… nearer the square of the radii (4.06…) than the"
+            + " radii (2.015…): 3518 -> 7084 looks, ratio 2.0136…\", 2026-10-02.")
     @Test
     public void aPatchTwiceAsWideIsAboutFourTimesTheSurvey() {
         ConeWalk narrow = aimed(5d, 200L);
@@ -148,12 +147,11 @@ public class ConeWalkTest {
      *
      * <p>Fails if {@code ConeWalk#lookAt} stops deciding the walk's order shell by shell from the
      * instrument outwards.</p>
-     *
-     * <p>red-witnessed: with {@code ConeWalk#lookAt} at {@code double axial = (double) shell * strideCells;}
-     * reading {@code (shells() + 1 - shell)} (the walk starting at the far shell), this fails with
-     * "look 0 of the deep pointing must be look 0 of the 1-shell one aimed the same way
-     * expected:<[7333_-2333_10333]> but was:<[20333_23667_-15667]>", 2026-10-02.</p>
      */
+    @RedWitness(prose = "with {@code ConeWalk#lookAt} at {@code double axial = (double) shell * strideCells;}"
+            + " reading {@code (shells() + 1 - shell)} (the walk starting at the far shell), this fails with"
+            + " \"look 0 of the deep pointing must be look 0 of the 1-shell one aimed the same way"
+            + " expected:<[7333_-2333_10333]> but was:<[20333_23667_-15667]>\", 2026-10-02.")
     @Test
     public void anAbortedPointingIsAShorterCone() {
         ConeWalk deep = aimed(10d, 40L);

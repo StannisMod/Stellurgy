@@ -23,6 +23,8 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The capture/release contract of the ship-frame crew - what makes a body ABOARD, what keeps it
@@ -454,16 +456,15 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     /**
      * A jump from the top deck keeps the capture and lands back on the same deck.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel#jump}
-     * adding 1.5 blocks a tick of ship-frame sideways motion to every
-     * aboard jump, flinging him off the deck: "the jumper was in the air when the key came up, so he
-     * must LAND on the deck he jumped from … no `deck_contact` carrying ship = …". THE JUMP LEAVES THE
-     * DECK — the same method ({@code ShipFrameTravel#jump} at {@code motion[1] = up}) giving the jump
-     * no upward motion: "the jump must actually leave the deck
-     * (apex=157.0 deckY=157.0)"; that one never airs him, so the conditional landing wait is skipped
-     * on it.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel#jump}"
+            + " adding 1.5 blocks a tick of ship-frame sideways motion to every"
+            + " aboard jump, flinging him off the deck: \"the jumper was in the air when the key came up, so he"
+            + " must LAND on the deck he jumped from … no `deck_contact` carrying ship = …\". THE JUMP LEAVES THE"
+            + " DECK — the same method ({@code ShipFrameTravel#jump} at {@code motion[1] = up}) giving the jump"
+            + " no upward motion: \"the jump must actually leave the deck"
+            + " (apex=157.0 deckY=157.0)\"; that one never airs him, so the conditional landing wait is skipped"
+            + " on it.")
     @Test
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
         final FixtureSite site = site();
@@ -769,13 +770,12 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     /**
      * A still crew member on a deck rolled past vertical is neither dragged sideways nor churned.
-     *
-     * <p>red-witnessed: with {@code ShipFrameTravel#travel} declining
-     * every tick on a deck whose up points below -0.5: "the client must be resolving the crew member
-     * through the stillness window — the ship frame's frame never committed a capture for this body",
-     * 2026-09-28. That is the verdict the wait rewrite touched; the drift and churn verdicts after it
-     * are not witnessed.</p>
      */
+    @RedWitness(prose = "with {@code ShipFrameTravel#travel} declining"
+            + " every tick on a deck whose up points below -0.5: \"the client must be resolving the crew member"
+            + " through the stillness window — the ship frame's frame never committed a capture for this body\","
+            + " 2026-09-28. That is the verdict the wait rewrite touched; the drift and churn verdicts after it"
+            + " are not witnessed.")
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
         final FixtureSite site = site();
@@ -968,6 +968,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     // ---- #47: WALKING and JUMPING on a hovering ship must not churn the capture -----------------
 
     /** Pins DECKSYNC-7 (the server bounds the region a captured body may declare). */
+    @Pins("DECKSYNC-7")
     @Test
     public void walkingAndJumpingOnAHoveringShipDoesNotChurnTheCapture() throws Exception {
         final FixtureSite site = site();
@@ -1233,14 +1234,15 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * to its deck point the next tick, so every position read afterwards is at the deck whatever the
      * bound did. It now shoves by a step vanilla lets through and reads the bound's own verdict.</p>
      *
-     * <p>red-witnessed: with {@code DeckMovementBound#accepts} at {@code return moved <= allowed}
-     * ratifying every step: "a 6-block step committed by the client's own travel must be REFUSED by
-     * the server's deck bound … refused 0, accepted 2", 2026-09-28. Healthy, the same run shape
-     * records {@code moved 6.0, accepted:false}. The step is taken from a WALKING body: from a
-     * standing one the bound accepted it on healthy production, because a standing client reports only
-     * every twenty ticks and the bound licenses up to ten ticks of movement per report.</p>
      * Pins DECKSYNC-7 (the server bounds the region a captured body may declare).
      */
+    @Pins("DECKSYNC-7")
+    @RedWitness(prose = "with {@code DeckMovementBound#accepts} at {@code return moved <= allowed}"
+            + " ratifying every step: \"a 6-block step committed by the client's own travel must be REFUSED by"
+            + " the server's deck bound … refused 0, accepted 2\", 2026-09-28. Healthy, the same run shape"
+            + " records {@code moved 6.0, accepted:false}. The step is taken from a WALKING body: from a"
+            + " standing one the bound accepted it on healthy production, because a standing client reports only"
+            + " every twenty ticks and the bound licenses up to ten ticks of movement per report.")
     @Test
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
         final FixtureSite site = site();
@@ -1375,16 +1377,15 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     /**
      * A pilot who dismounts and takes to creative flight is never pulled back down by the deck.
-     *
-     * <p>red-witnessed: only with BOTH defences removed — the dismount hold's exclusion of an excluded
-     * body ({@code EntityDummy#keepDismountedPilotOnDeck} at {@code logHold("pilotExcluded", exit)}) AND
-     * the seed's own excluded check ({@code ShipFrameTravel#tryApplyPendingSeed} at
-     * {@code excludedStateOf((EntityLivingBase) body) != null}) —
-     * does this fail: "a flying ex-pilot must never be yanked back down (maxDrop=5.1)", 2026-09-28.
-     * Either one removed alone leaves it green; each suffices. The verdict the wait rewrite touched
-     * is the premise that the double-tap started flight at all, which is vanilla's and no Stellurgy line
-     * decides.</p>
      */
+    @RedWitness(prose = "only with BOTH defences removed — the dismount hold's exclusion of an excluded"
+            + " body ({@code EntityDummy#keepDismountedPilotOnDeck} at {@code logHold(\"pilotExcluded\", exit)}) AND"
+            + " the seed's own excluded check ({@code ShipFrameTravel#tryApplyPendingSeed} at"
+            + " {@code excludedStateOf((EntityLivingBase) body) != null}) —"
+            + " does this fail: \"a flying ex-pilot must never be yanked back down (maxDrop=5.1)\", 2026-09-28."
+            + " Either one removed alone leaves it green; each suffices. The verdict the wait rewrite touched"
+            + " is the premise that the double-tap started flight at all, which is vanilla's and no Stellurgy line"
+            + " decides.")
     @Test
     public void aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold() throws Exception {
         final FixtureSite site = site();
@@ -1633,6 +1634,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " RE-ENABLE when the transition is taken once as an edge and then owned; the"
             + " acceptance is aboard 0/30 on a full tier, twice.")
     /** Pins DECKSYNC-6 (a body is never moved by a quantity only its own client derived). */
+    @Pins("DECKSYNC-6")
     public void aHullTopEncounterNeverEntersTheShipFrame() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -2130,13 +2132,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * A body that meets a deck after the craft manoeuvred with nobody aboard is carried by what the
      * craft is doing now, not by the average of what it did.
      *
-     * <p>red-witnessed: with the client's carry ({@code ShipFrameTravel#travel} at
-     * {@code remember(entity, shipId, sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ)}, the deck
-     * carry that call binds) raised by 0.1 a tick on a capture that follows more than 100
-     * ticks off the deck: "the carry installed when the body was captured must be what the craft SAYS
-     * it is doing (5.9E-19/tick …) … the largest carry any capture in this window was committed with
-     * is 0.1", 2026-09-28.</p>
-     *
      * <p>It could not be seen red before that day's fixes, because its ARRANGEMENT was red on healthy
      * production in four runs of five. Two test-side races, both measured: the stand-once wait
      * returned on a hull-stand capture the body fell into beside the hull BEFORE the teleport onto the
@@ -2147,6 +2142,13 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * shares the landing wait.</p>
      * Pins DECKSYNC-6 (a body is never moved by a quantity only its own client derived).
      */
+    @Pins("DECKSYNC-6")
+    @RedWitness(prose = "with the client's carry ({@code ShipFrameTravel#travel} at"
+            + " {@code remember(entity, shipId, sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ)}, the deck"
+            + " carry that call binds) raised by 0.1 a tick on a capture that follows more than 100"
+            + " ticks off the deck: \"the carry installed when the body was captured must be what the craft SAYS"
+            + " it is doing (5.9E-19/tick …) … the largest carry any capture in this window was committed with"
+            + " is 0.1\", 2026-09-28.")
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
         final FixtureSite site = site();
@@ -2385,12 +2387,11 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     /**
      * The mouse turns a walking crew member's aim in the deck frame, and the aim rides the deck.
-     *
-     * <p>red-witnessed: with {@code VSIntegration#flightComputerOf} at
-     * {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: "attitude hold must accept the roll", 2026-09-28. The other wait the rewrite
-     * touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts
-     * after the roll were not touched and are not witnessed.</p>
      */
+    @RedWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
+            + " {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: \"attitude hold must accept the roll\", 2026-09-28. The other wait the rewrite"
+            + " touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts"
+            + " after the roll were not touched and are not witnessed.")
     @Test
     public void theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck() throws Exception {
         final FixtureSite site = site();

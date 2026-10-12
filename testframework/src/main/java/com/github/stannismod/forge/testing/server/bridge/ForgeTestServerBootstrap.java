@@ -231,7 +231,12 @@ public final class ForgeTestServerBootstrap {
             return error("Interrupted while running: " + command);
         } catch (ExecutionException failure) {
             Throwable cause = failure.getCause() == null ? failure : failure.getCause();
-            return error("Command threw: " + cause);
+            // What threw, as DATA beside the rendering: a caller that must tell one refusal from any
+            // other failure reads the class and the message by name, never out of the error text.
+            JsonObject response = error("Command threw: " + cause);
+            response.addProperty("thrown", cause.getClass().getName());
+            response.addProperty("thrownMessage", cause.getMessage() == null ? "" : cause.getMessage());
+            return response;
         }
 
         JsonObject response = new JsonObject();

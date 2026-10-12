@@ -33,6 +33,11 @@ public abstract class TestClassScope {
     /** Release what {@link #open} started. Called once, after every {@link AutoCloseable} memory. */
     protected abstract void close() throws Exception;
 
+    /** The right to start the harness server or client this scope shares — see {@link HarnessBoot}. */
+    protected static HarnessBoot harnessBoot() {
+        return new HarnessBoot();
+    }
+
     /**
      * This class run's one instance of {@code type}, created on first use. A memory that is
      * {@link AutoCloseable} is closed when the class run ends, in reverse order of creation and

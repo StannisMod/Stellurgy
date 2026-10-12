@@ -28,6 +28,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Real-client end-to-end coverage for Free Flight Mode.
@@ -809,18 +810,16 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         exec("stellurgytest player dismount");
     }
 
-    /**
-     * <p>red-witnessed: with the client FF branch of {@code EntityRocket#onUpdate} at
-     * {@code this.setPosition(px, py, pz)} no longer called: "moved 0/8", 2026-09-28. And what it does NOT
-     * catch, measured the same day: a SNAP-ONLY client (no dead reckoning, the raw server position
-     * each tick) stays green, and stays green with the tracker's {@code updateFrequency} put back to
-     * 3 as well. Vanilla sends a position whenever the entity's data manager is dirty
-     * (vanilla {@code EntityTrackerEntry.updatePlayerList}, its {@code getDataManager().isDirty()}
-     * clause) and a flying rocket writes {@code FF_Q*} every tick, so
-     * a position arrives every tick whatever the frequency. The freeze-then-jump this test was
-     * written against cannot happen on this tree; what it pins is that the client moves the craft it
-     * draws at all.</p>
-     */
+    @RedWitness(prose = "with the client FF branch of {@code EntityRocket#onUpdate} at"
+            + " {@code this.setPosition(px, py, pz)} no longer called: \"moved 0/8\", 2026-09-28. And what it does NOT"
+            + " catch, measured the same day: a SNAP-ONLY client (no dead reckoning, the raw server position"
+            + " each tick) stays green, and stays green with the tracker's {@code updateFrequency} put back to"
+            + " 3 as well. Vanilla sends a position whenever the entity's data manager is dirty"
+            + " (vanilla {@code EntityTrackerEntry.updatePlayerList}, its {@code getDataManager().isDirty()}"
+            + " clause) and a flying rocket writes {@code FF_Q*} every tick, so"
+            + " a position arrives every tick whatever the frequency. The freeze-then-jump this test was"
+            + " written against cannot happen on this tree; what it pins is that the client moves the craft it"
+            + " draws at all.")
     @Test
     public void freeFlightClientRenderAdvancesEveryTickNoStutter() throws Exception {
         // Render smoothness: the rendered rocket must advance on (almost) every single client tick.
@@ -878,11 +877,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     private static final String FLIGHT_CAMERA =
             "dev.stannismod.stellurgy.test.trace.FlightCameraState";
 
-    /**
-     * <p>red-witnessed: with {@code assets/stellurgy/lang/en_US.lang#msg.ff.hud.active} losing its "FREE ":
-     * "FF HUD must show the active-mode indicator: FLIGHT    Flight Assist: ON …", 2026-09-28. The
-     * await before it is the in-flight link (ENGINES ON), which that inversion leaves green.</p>
-     */
+    @RedWitness(prose = "with {@code assets/stellurgy/lang/en_US.lang#msg.ff.hud.active} losing its \"FREE \":"
+            + " \"FF HUD must show the active-mode indicator: FLIGHT    Flight Assist: ON …\", 2026-09-28. The"
+            + " await before it is the in-flight link (ENGINES ON), which that inversion leaves green.")
     @Test
     public void freeFlightHudInFlightShowsIndicatorAndControlLegend() throws Exception {
         // Riding a FF rocket in flight: the HUD must render the mode indicator,
@@ -989,12 +986,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         return bot().reportState().get("screen").getAsString();
     }
 
-    /**
-     * <p>red-witnessed: with {@code KeyBindings#scopeSteeringKeysToCockpit} at
-     * {@code gs.keyBindInventory.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING)} giving
-     * the inventory key the PILOTING context instead of NOT_PILOTING: "pressing the inventory key on foot must open a screen — no
-     * `client_gui_opened` opening a screen was recorded within 200 ticks", 2026-09-28.</p>
-     */
+    @RedWitness(prose = "with {@code KeyBindings#scopeSteeringKeysToCockpit} at"
+            + " {@code gs.keyBindInventory.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING)} giving"
+            + " the inventory key the PILOTING context instead of NOT_PILOTING: \"pressing the inventory key on foot must open a screen — no"
+            + " `client_gui_opened` opening a screen was recorded within 200 ticks\", 2026-09-28.")
     @Test
     public void inventoryKeyOpensInventoryWhenNotPiloting() throws Exception {
         // On foot (not piloting any Stellurgy craft), pressing the inventory key must
@@ -1130,12 +1125,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         exec("stellurgytest player dismount");
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict in {@code FreeFlightPhysics#rampSetpoint} at
-     * {@code double u = sane(spUp)    + input.throttleVertical * SETPOINT_RAMP}, 2026-09-28. CLIMB — a positive vertical input ignored:
-     * "R must climb (y0=151.5999964 y1=151.5999964)". DESCENT — a negative one ignored: "F must reduce
-     * vertical velocity vs the climb (myUp=1.3499 myDown=1.3999)".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict in {@code FreeFlightPhysics#rampSetpoint} at"
+            + " {@code double u = sane(spUp)    + input.throttleVertical * SETPOINT_RAMP}, 2026-09-28. CLIMB — a positive vertical input ignored:"
+            + " \"R must climb (y0=151.5999964 y1=151.5999964)\". DESCENT — a negative one ignored: \"F must reduce"
+            + " vertical velocity vs the climb (myUp=1.3499 myDown=1.3999)\".")
     @Test
     public void verticalKeysClimbAndDescend() throws Exception {
         // R climbs (real altitude gain); F is the opposite vertical thrust, so it
@@ -1171,12 +1164,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         exec("stellurgytest player dismount");
     }
 
-    /**
-     * <p>red-witnessed: with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing
-     * the setpoint on a cut:
-     * "when the cut arrived 1.4499, twelve ticks later 2.0498", 2026-09-28. The precondition at its
-     * head is an arrangement and is not witnessed.</p>
-     */
+    @RedWitness(prose = "with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing"
+            + " the setpoint on a cut:"
+            + " \"when the cut arrived 1.4499, twelve ticks later 2.0498\", 2026-09-28. The precondition at its"
+            + " head is an arrangement and is not witnessed.")
     @Test
     public void throttleCutKeyNeutralisesThrust() throws Exception {
         // X (cut) with FA on zeroes the velocity setpoint even while R is held:
@@ -1215,11 +1206,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         exec("stellurgytest player dismount");
     }
 
-    /**
-     * <p>red-witnessed: with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing
-     * the setpoint on a cut:
-     * "cut must brake the climb into a hover (was 1.0999…, now 1.0999…)", 2026-09-28.</p>
-     */
+    @RedWitness(prose = "with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing"
+            + " the setpoint on a cut:"
+            + " \"cut must brake the climb into a hover (was 1.0999…, now 1.0999…)\", 2026-09-28.")
     @Test
     public void cutKeyBrakesToAGravityCancelledHover() throws Exception {
         // X with Flight Assist on: zero the velocity setpoint —
@@ -1296,16 +1285,14 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         return rocketId;
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. STILL LIT — the engines of a
-     * Space-started flight cut by {@code tickFreeFlight} twenty ticks in (a flag set beside
-     * {@code EntityRocket#useNetworkData} at {@code ffTrace("ENGINE_START accepted"); startFreeFlight()}):
-     * "3 s Space hold must start the engines
-     * (isInFlight=true): … isInFlight:false", with the start link before it green. HUD — the
-     * in-flight engine line ({@code KeyBindings#freeFlightHudLines} at
-     * {@code I18n.format("msg.ff.hud.engines.on")}) replaced by the ENGINES OFF text: "HUD must
-     * show the engines running: FREE FLIGHT … ENGINES OFF — hold SPACE to start".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. STILL LIT — the engines of a"
+            + " Space-started flight cut by {@code tickFreeFlight} twenty ticks in (a flag set beside"
+            + " {@code EntityRocket#useNetworkData} at {@code ffTrace(\"ENGINE_START accepted\"); startFreeFlight()}):"
+            + " \"3 s Space hold must start the engines"
+            + " (isInFlight=true): … isInFlight:false\", with the start link before it green. HUD — the"
+            + " in-flight engine line ({@code KeyBindings#freeFlightHudLines} at"
+            + " {@code I18n.format(\"msg.ff.hud.engines.on\")}) replaced by the ENGINES OFF text: \"HUD must"
+            + " show the engines running: FREE FLIGHT … ENGINES OFF — hold SPACE to start\".")
     @Test
     public void realSpaceHoldStartsEnginesAndHoversOneBlock() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
@@ -1361,19 +1348,17 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         exec("stellurgytest player dismount");
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. PROGRESS — the progress branch of
-     * {@code KeyBindings#freeFlightHudLines} at {@code if (engineStartHoldTicks > 0)} dropped: "HUD must
-     * show engine-start progress while holding - on screen
-     * now: … ENGINES OFF". PRE-LAUNCH HUD BACK — the release branch ({@code KeyBindings#onClientTick} at
-     * {@code kbTrace("engine-start hold released at " + pilot.engineStartHoldTicks)}) sending
-     * ENGINE_START: "releasing Space early must put the pre-launch HUD back". NEVER LIT — the same
-     * release start, with {@code EntityRocket#useNetworkData} at {@code ffTrace("ENGINE_START accepted")}
-     * then clearing the client's in-flight
-     * flag so the HUD stays pre-launch while the server flies: "early release must cancel the start
-     * … isInFlight:true". A start that also reaches the client fails the HUD verdict first; the
-     * never-lit verdict is reached only by one it does not.</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. PROGRESS — the progress branch of"
+            + " {@code KeyBindings#freeFlightHudLines} at {@code if (engineStartHoldTicks > 0)} dropped: \"HUD must"
+            + " show engine-start progress while holding - on screen"
+            + " now: … ENGINES OFF\". PRE-LAUNCH HUD BACK — the release branch ({@code KeyBindings#onClientTick} at"
+            + " {@code kbTrace(\"engine-start hold released at \" + pilot.engineStartHoldTicks)}) sending"
+            + " ENGINE_START: \"releasing Space early must put the pre-launch HUD back\". NEVER LIT — the same"
+            + " release start, with {@code EntityRocket#useNetworkData} at {@code ffTrace(\"ENGINE_START accepted\")}"
+            + " then clearing the client's in-flight"
+            + " flag so the HUD stays pre-launch while the server flies: \"early release must cancel the start"
+            + " … isInFlight:true\". A start that also reaches the client fails the HUD verdict first; the"
+            + " never-lit verdict is reached only by one it does not.")
     @Test
     public void spaceEarlyReleaseCancelsEngineStart() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
@@ -1435,17 +1420,15 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         exec("stellurgytest player dismount");
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. SHUTDOWN — the touchdown in
-     * {@code EntityRocket#tickFreeFlight} at {@code this.setInFlight(false); // touchdown = engines off}
-     * not writing the in-flight flag false: "no
-     * `rocket_flight_set` carrying e = … and inFlight = false was recorded within 240 ticks". HUD —
-     * the pre-launch engine lines ({@code KeyBindings#freeFlightHudLines} at
-     * {@code lines.add(I18n.format("msg.ff.engines.stopped"))} and the {@code msg.ff.hud.engines.off}
-     * line after it) not drawn: "HUD must reflect the
-     * shutdown (stopped flash or ENGINES OFF): Free Flight Mode | M Classic mode". The arming wait at
-     * its head is an arrangement link.</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. SHUTDOWN — the touchdown in"
+            + " {@code EntityRocket#tickFreeFlight} at {@code this.setInFlight(false); // touchdown = engines off}"
+            + " not writing the in-flight flag false: \"no"
+            + " `rocket_flight_set` carrying e = … and inFlight = false was recorded within 240 ticks\". HUD —"
+            + " the pre-launch engine lines ({@code KeyBindings#freeFlightHudLines} at"
+            + " {@code lines.add(I18n.format(\"msg.ff.engines.stopped\"))} and the {@code msg.ff.hud.engines.off}"
+            + " line after it) not drawn: \"HUD must reflect the"
+            + " shutdown (stopped flash or ENGINES OFF): Free Flight Mode | M Classic mode\". The arming wait at"
+            + " its head is an arrangement link.")
     @Test
     public void descendKeyLandsAndShutsEnginesOff() throws Exception {
         // Full cycle through real keys: start via probe (covered above), then
@@ -1518,13 +1501,11 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     private static final Pattern HUD_VRT =
             Pattern.compile("VRT ([+-][0-9.]+)/([+-][0-9.]+)");
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. PAIR — {@code KeyBindings#freeFlightHudLines}
-     * at {@code if (state.flightAssistOn)} drawing the Flight-Assist-off form (actual only) with assist
-     * on: "HUD must render the VRT setpoint/actual pair". CUT — {@code FreeFlightPhysics#rampSetpoint}
-     * at {@code if (input.cutActive)} no longer zeroing the setpoint: "no
-     * `ff_hud` drawing a VRT setpoint of zero was recorded within 200 ticks".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. PAIR — {@code KeyBindings#freeFlightHudLines}"
+            + " at {@code if (state.flightAssistOn)} drawing the Flight-Assist-off form (actual only) with assist"
+            + " on: \"HUD must render the VRT setpoint/actual pair\". CUT — {@code FreeFlightPhysics#rampSetpoint}"
+            + " at {@code if (input.cutActive)} no longer zeroing the setpoint: \"no"
+            + " `ff_hud` drawing a VRT setpoint of zero was recorded within 200 ticks\".")
     @Test
     public void hudVectorLineTracksSetpointAndVelocity() throws Exception {
         // The per-axis vector readout: holding R ramps the VRT setpoint and the
@@ -1571,15 +1552,13 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         exec("stellurgytest player dismount");
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. OFF REACHES THE HUD —
-     * {@code KeyBindings#freeFlightHudLines} at
-     * {@code state.flightAssistOn ? "msg.ff.hud.fa.on" : "msg.ff.hud.fa.off"} always naming the ON state: "no `ff_hud` drawing Flight Assist OFF".
-     * OFF IS LABELLED — {@code en_US.lang:743} reading just "OFF": "HUD must label the Newtonian mode
-     * when FA is off". ON REACHES THE HUD — the same line always naming OFF: "no `ff_hud` drawing
-     * Flight Assist ON". ON DROPS THE LABEL — {@code en_US.lang:742} reading "ON — Newtonian": "HUD
-     * must drop the Newtonian label when FA is back on".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. OFF REACHES THE HUD —"
+            + " {@code KeyBindings#freeFlightHudLines} at"
+            + " {@code state.flightAssistOn ? \"msg.ff.hud.fa.on\" : \"msg.ff.hud.fa.off\"} always naming the ON state: \"no `ff_hud` drawing Flight Assist OFF\"."
+            + " OFF IS LABELLED — {@code en_US.lang:743} reading just \"OFF\": \"HUD must label the Newtonian mode"
+            + " when FA is off\". ON REACHES THE HUD — the same line always naming OFF: \"no `ff_hud` drawing"
+            + " Flight Assist ON\". ON DROPS THE LABEL — {@code en_US.lang:742} reading \"ON — Newtonian\": \"HUD"
+            + " must drop the Newtonian label when FA is back on\".")
     @Test
     public void hudShowsNewtonianLabelWhenFlightAssistIsOff() throws Exception {
         // FA state is part of the perception contract: with FA off the HUD
@@ -1622,13 +1601,11 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         return Math.abs(((a - b + 540) % 360) - 180);
     }
 
-    /**
-     * <p>red-witnessed: with the four camera-pin lines of {@code KeyBindings#onClientTick} at
-     * {@code player.rotationYaw       = rocket.rotationYaw} (through {@code prevRotationPitch}) removed: "camera
-     * must never detach from the craft on any rendered frame (worst frame divergence 61.46°)",
-     * 2026-09-28. That is the verdict whose wait the tick-wait rewrite changed; the at-rest and
-     * convergence verdicts after it were outside that rewrite and are not witnessed here.</p>
-     */
+    @RedWitness(prose = "with the four camera-pin lines of {@code KeyBindings#onClientTick} at"
+            + " {@code player.rotationYaw       = rocket.rotationYaw} (through {@code prevRotationPitch}) removed: \"camera"
+            + " must never detach from the craft on any rendered frame (worst frame divergence 61.46°)\","
+            + " 2026-09-28. That is the verdict whose wait the tick-wait rewrite changed; the at-rest and"
+            + " convergence verdicts after it were outside that rewrite and are not witnessed here.")
     @Test
     public void cameraIsLockedToCraftYawAndPitchWhileManeuvering() throws Exception {
         // While actively maneuvering (climb + yaw key + mouse swipes), the
@@ -1839,12 +1816,11 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
      * camera actually pointed goes negative (points backwards) — a clamped attitude
      * can never do that (forward.z ≳ cos 85° ≈ 0.09). Also proves the client
      * survives rendering an inverted / looping craft.
-     *
-     * <p>red-witnessed: with the ±{@code PITCH_MAX} clamp put back into
-     * {@code FreeFlightPhysics#integrateBodyRates} at {@code return q.mul(dq).normalized()}, which the client's
-     * prediction shares with the server: "client min forward.z must go negative (was 0.1429)",
-     * 2026-09-28.</p>
      */
+    @RedWitness(prose = "with the ±{@code PITCH_MAX} clamp put back into"
+            + " {@code FreeFlightPhysics#integrateBodyRates} at {@code return q.mul(dq).normalized()}, which the client's"
+            + " prediction shares with the server: \"client min forward.z must go negative (was 0.1429)\","
+            + " 2026-09-28.")
     @Test
     public void sustainedPitchLoopsPastVerticalWithNoClamp() throws Exception {
         int rocketId = mountFreshFreeFlightRocket();
@@ -1989,11 +1965,10 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
      * client renders through it (the camera-roll mixin runs every frame) without
      * crashing. Pins the roll channel end-to-end; camera-bank direction/feel is
      * a manual-playtest perception check.
-     *
-     * <p>red-witnessed: with the roll rate in {@code EntityRocket#tickFreeFlight} at
-     * {@code double rollRate  = in.rollInput  * FreeFlightPhysics.MAX_ROLL_RATE} multiplied by zero: "commanded roll must integrate server-side (roll0=0.0 roll1=0.0)",
-     * 2026-09-28.</p>
      */
+    @RedWitness(prose = "with the roll rate in {@code EntityRocket#tickFreeFlight} at"
+            + " {@code double rollRate  = in.rollInput  * FreeFlightPhysics.MAX_ROLL_RATE} multiplied by zero: \"commanded roll must integrate server-side (roll0=0.0 roll1=0.0)\","
+            + " 2026-09-28.")
     @Test
     public void rollChannelIntegratesAndClientRendersWithoutCrash() throws Exception {
         int rocketId = mountFreshFreeFlightRocket();

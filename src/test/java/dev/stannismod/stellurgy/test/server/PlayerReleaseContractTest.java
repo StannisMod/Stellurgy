@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A player who is BOUND becomes UNBOUND, and the mod can say which of the two he is.
@@ -173,13 +174,12 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
      * released whether or not the login called the release, so it cannot tell the two apart; the
      * grace is let go by the release and by nothing else on that path. The login is the real
      * handler — the event a join fires once the save file has been read, posted for this player.</p>
-     *
-     * <p>red-witnessed: with the orphan branch of {@code SpaceEventHandler#onPlayerLoadFromFile} at
-     * {@code .playerRelease().toTheWorld(player)} releasing nothing instead of calling
-     * {@code playerRelease().toTheWorld}: "a player orphaned from
-     * a ship the server no longer knows must come back bound to nothing … {\"bound\":[\"rocket transfer
-     * grace\"]}", 2026-09-28.</p>
      */
+    @RedWitness(prose = "with the orphan branch of {@code SpaceEventHandler#onPlayerLoadFromFile} at"
+            + " {@code .playerRelease().toTheWorld(player)} releasing nothing instead of calling"
+            + " {@code playerRelease().toTheWorld}: \"a player orphaned from"
+            + " a ship the server no longer knows must come back bound to nothing … {\\\"bound\\\":[\\\"rocket transfer"
+            + " grace\\\"]}\", 2026-09-28.")
     @Test
     public void aReturningPlayerWhoseShipIsGoneIsReleasedFromEverything() throws Exception {
         ensurePlayer();

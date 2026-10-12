@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * station-controller tick behaviour contracts.
@@ -64,6 +65,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * impl — only that the walk is non-zero in the right direction.</p>
      * Pins INV-STN-10 (the altitude controller walks the station's orbital distance toward its target).
      */
+    @Pins("INV-STN-10")
     @Test
     public void altitudeControllerWalksStationOrbitalDistanceTowardTarget()
             throws Exception {
@@ -154,6 +156,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * and the walk eats it.</p>
      * Pins INV-STN-11 (the gravity controller walks the station's gravity toward its target).
      */
+    @Pins("INV-STN-11")
     @Test
     public void gravityControllerWalksStationGravityTowardTarget() throws Exception {
         exec("stellurgytest dim load " + SPACE_DIM);
@@ -207,6 +210,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * {@code targetRPH/72000}.</p>
      * Pins INV-STN-12 (the orientation controller walks the station's rotation toward its target).
      */
+    @Pins("INV-STN-12")
     @Test
     public void orientationControllerWalksStationRotationTowardTarget()
             throws Exception {

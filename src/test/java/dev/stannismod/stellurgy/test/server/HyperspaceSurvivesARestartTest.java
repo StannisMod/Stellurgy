@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -74,7 +75,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * mid-jump, stops it, and boots a second one over the same world root. A mechanics test (the jump is
  * arranged by probes), not a player's path, hence no {@code E2E} in its name.</p>
  */
-public class HyperspaceSurvivesARestartTest {
+public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
 
     /**
      * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
@@ -200,7 +201,7 @@ public class HyperspaceSurvivesARestartTest {
     @Test
     public void aShipParkedInHyperspaceIsStillThereAfterTheServerRestarts() throws Exception {
         // ── boot 1: put a real ship into hyperspace and shut the server down under it ────────────
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         // Marked before the fixture is built: the registry add awaited below happens INSIDE
         // `piloted`, so a mark taken after it would be waiting for a second ship.
@@ -251,7 +252,7 @@ public class HyperspaceSurvivesARestartTest {
         String boot1Serialisations = serialisationLines();
 
         // ── boot 2: a brand new server JVM, same world root ──────────────────────────────────────
-        harness = RealDedicatedServerHarness.startWith(root, false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is"
                 + " exercising it: " + status.raw(), status.registered);

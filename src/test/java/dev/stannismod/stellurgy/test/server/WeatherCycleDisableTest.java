@@ -16,6 +16,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Disableability contract for the custom planet weather CYCLE.
@@ -83,6 +84,7 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-WGEN-15 (with custom weather disabled the cycle defers to vanilla, and planet rain survives a restart). */
+    @Pins("INV-WGEN-15")
     @Test
     public void customWeatherCycleRunsOnlyWhenConfigEnabled() throws Exception {
 

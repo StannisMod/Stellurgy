@@ -17,6 +17,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Interior boarding of a non-upright ship - the enclosed-interior capture, and the flying-aboard
@@ -198,16 +199,15 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A pilot dismounted inside an inverted ship and moved about inside it stays held by that ship
      * with deck semantics, at his deck spot, with the ship camera engaged.
-     *
-     * <p>red-witnessed: 2026-09-28. THE INVERSION IS ACCEPTED — {@code VSIntegration#flightComputerOf}
-     * at {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: "attitude hold must accept the inversion". THE
-     * CONTRACT — the dismount seed installing the hull-stand mode with no hand-over to the deck: "the
-     * client camera must engage for the re-seated interior body (shipCamActive=false)". The other
-     * verdicts the wait rewrite touched are the arrangement's: the ABOARD commit after the dismount
-     * (server-committed; the seed inversion left it green), the client applying the in-hull teleport
-     * and taking a census after it, and the region check that the teleport did not carry him out
-     * through the doorway.</p>
      */
+    @RedWitness(prose = "2026-09-28. THE INVERSION IS ACCEPTED — {@code VSIntegration#flightComputerOf}"
+            + " at {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: \"attitude hold must accept the inversion\". THE"
+            + " CONTRACT — the dismount seed installing the hull-stand mode with no hand-over to the deck: \"the"
+            + " client camera must engage for the re-seated interior body (shipCamActive=false)\". The other"
+            + " verdicts the wait rewrite touched are the arrangement's: the ABOARD commit after the dismount"
+            + " (server-committed; the seed inversion left it green), the client applying the in-hull teleport"
+            + " and taking a census after it, and the region check that the teleport did not carry him out"
+            + " through the doorway.")
     @Test
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
@@ -429,12 +429,11 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
 
     /**
      * A body unsupported mid-cavity of an enclosed, inverted cockpit is claimed by the deck below it.
-     *
-     * <p>red-witnessed: with {@code VSIntegration#flightComputerOf} at
-     * {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))}
-     * answering null: "attitude hold must accept the inversion", 2026-09-28 — the one verdict the wait
-     * rewrite touched here. The interior gate's own claim after it is not witnessed.</p>
      */
+    @RedWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
+            + " {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))}"
+            + " answering null: \"attitude hold must accept the inversion\", 2026-09-28 — the one verdict the wait"
+            + " rewrite touched here. The interior gate's own claim after it is not witnessed.")
     @Test
     public void aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -657,22 +656,21 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A crew member who starts creative flight on the deck stays captured, flies along the deck's
      * normal, and is put back on the deck when he turns flight off.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck
-     * gravity ({@code ShipFrameTravel#travel} at {@code motion[1] -= LIVING_GRAVITY}) withheld from any
-     * body that has flown aboard: "turning
-     * flight off must hand the body to deck gravity and put it in CONTACT with the ship's geometry …
-     * no `deck_contact` carrying ship = … was recorded within 240 ticks". THE ROLL IS ACCEPTED —
-     * {@code VSIntegration#flightComputerOf} answering null:
-     * "attitude hold must accept the roll". THE CAPTURE IS KEPT — {@code ShipFrameTravel#excludedStateOf}
-     * at {@code if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying())} treating a
-     * creative flyer as excluded even when aboard: "starting
-     * flight on the deck must NOT release the capture". THE DESCENT — the aboard fly impulse
-     * ({@code ShipFrameTravel#flyingAboardTravel} at {@code motion[1] += flyImpulse * fly}) dropped for
-     * descend: "holding descend must sink along the DECK
-     * NORMAL (subspace -Y): 131.0 -&gt; 132.0". The ABOARD commit after the dismount is the
-     * arrangement's link (server-committed).</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck"
+            + " gravity ({@code ShipFrameTravel#travel} at {@code motion[1] -= LIVING_GRAVITY}) withheld from any"
+            + " body that has flown aboard: \"turning"
+            + " flight off must hand the body to deck gravity and put it in CONTACT with the ship's geometry …"
+            + " no `deck_contact` carrying ship = … was recorded within 240 ticks\". THE ROLL IS ACCEPTED —"
+            + " {@code VSIntegration#flightComputerOf} answering null:"
+            + " \"attitude hold must accept the roll\". THE CAPTURE IS KEPT — {@code ShipFrameTravel#excludedStateOf}"
+            + " at {@code if (entity.hasNoGravity() || entity.isRiding() || entity.isElytraFlying())} treating a"
+            + " creative flyer as excluded even when aboard: \"starting"
+            + " flight on the deck must NOT release the capture\". THE DESCENT — the aboard fly impulse"
+            + " ({@code ShipFrameTravel#flyingAboardTravel} at {@code motion[1] += flyImpulse * fly}) dropped for"
+            + " descend: \"holding descend must sink along the DECK"
+            + " NORMAL (subspace -Y): 131.0 -&gt; 132.0\". The ABOARD commit after the dismount is the"
+            + " arrangement's link (server-committed).")
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
         final FixtureSite site = site();

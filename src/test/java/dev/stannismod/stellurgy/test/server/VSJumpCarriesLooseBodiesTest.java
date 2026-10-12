@@ -15,6 +15,7 @@ import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JU
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * <b>A jump carries what is lying on the deck, not only who is sitting on it.</b> The half of JUMP-11
@@ -50,6 +51,7 @@ public class VSJumpCarriesLooseBodiesTest extends AbstractSharedServerTest {
     private static final int PLACEMENT_TICKS = 300;
 
     /** Pins JUMP-11 (every body aboard is carried by its ship-relative point). */
+    @Pins("JUMP-11")
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
 

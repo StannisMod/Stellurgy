@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * MissionResourceCollection lifecycle contract.
@@ -93,6 +94,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
      *  drift between commands (~ few ms / 50ms per tick).
      * Pins INV-MSN-04 (progress is linear in world time, unbounded above one, and completion fires at one).
      */
+    @Pins("INV-MSN-04")
     @Test
     public void progressAdvancesLinearlyWithWorldTime() throws Exception {
         long mid = buildRocketAndStartGasMission(7000, 1000);
@@ -112,6 +114,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
      *  assertion.
      * Pins INV-MSN-04 (progress is linear in world time, unbounded above one, and completion fires at one).
      */
+    @Pins("INV-MSN-04")
     @Test
     public void progressIsUnboundedAboveOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7100, 1000);
@@ -135,6 +138,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
      *  call).
      * Pins INV-MSN-04 (progress is linear in world time, unbounded above one, and completion fires at one).
      */
+    @Pins("INV-MSN-04")
     @Test
     public void completionFiresAtProgressOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7300, 1000);

@@ -34,6 +34,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The full-path tier-2 flight e2e: a bot flies a real Valkyrien Skies ship with real keys, a real
@@ -281,27 +282,26 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * A seated pilot's throttle lifts the ship, his HUD shows its speed, and his flight cursor turns
      * it.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE HUD — {@code KeyBindings#freeFlightHudLines}
-     * returning no lines for a tier-2 craft: "a seated tier-2 pilot must get
-     * a Free Flight HUD at all — no `ff_hud` carrying a non-empty HUD line". THE LIFT — the linear
-     * force ({@code TileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code force.set(command.force()).mul(k);}) multiplied by 0: "must lift the ship: 155.0
-     * -&gt; 152.82" — taken on the pre-actuator form, when the controller was a mixin and its force
-     * was the wanted acceleration times the mass; the force is now the hull's allocated command, at the
-     * line cited. THE SPEED READOUT — the speed line ({@code KeyBindings#freeFlightHudLines} at
-     * {@code I18n.format("msg.ff.hud.speed", String.format("%.1f", state.speed() * 20.0))}) printing 0 for tier
-     * 2: "no `ff_hud` whose latest line carries a non-zero speed readout"; that inversion first left
-     * the test GREEN, because the check accepted any non-zero number anywhere in the HUD and the
-     * vector line supplied one — it now parses the speed line alone. THE CURSOR —
-     * {@code KeyBindings#acceptShipPilotMouseDelta} at {@code float degPerUnit = f * f * f * 8.0F * 0.15F}
-     * scaling every delta by 0: "must
-     * deflect the client's flight cursor (got 0.0)". THE TURN — {@code TileAdvancedFlightComputer}'s
-     * roll rate ({@code TileAdvancedFlightComputer#update} at
-     * {@code double rollRate = in.rollInput * FreeFlightPhysics.MAX_ROLL_RATE}) multiplied by 0: "largest omega over the window=0.0". The cursor-centred and brake
-     * verdicts the wave touched live in {@link #aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim}
-     * since this method was split.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE HUD — {@code KeyBindings#freeFlightHudLines}"
+            + " returning no lines for a tier-2 craft: \"a seated tier-2 pilot must get"
+            + " a Free Flight HUD at all — no `ff_hud` carrying a non-empty HUD line\". THE LIFT — the linear"
+            + " force ({@code TileAdvancedFlightComputer#onPhysicsTick} at"
+            + " {@code force.set(command.force()).mul(k);}) multiplied by 0: \"must lift the ship: 155.0"
+            + " -&gt; 152.82\" — taken on the pre-actuator form, when the controller was a mixin and its force"
+            + " was the wanted acceleration times the mass; the force is now the hull's allocated command, at the"
+            + " line cited. THE SPEED READOUT — the speed line ({@code KeyBindings#freeFlightHudLines} at"
+            + " {@code I18n.format(\"msg.ff.hud.speed\", String.format(\"%.1f\", state.speed() * 20.0))}) printing 0 for tier"
+            + " 2: \"no `ff_hud` whose latest line carries a non-zero speed readout\"; that inversion first left"
+            + " the test GREEN, because the check accepted any non-zero number anywhere in the HUD and the"
+            + " vector line supplied one — it now parses the speed line alone. THE CURSOR —"
+            + " {@code KeyBindings#acceptShipPilotMouseDelta} at {@code float degPerUnit = f * f * f * 8.0F * 0.15F}"
+            + " scaling every delta by 0: \"must"
+            + " deflect the client's flight cursor (got 0.0)\". THE TURN — {@code TileAdvancedFlightComputer}'s"
+            + " roll rate ({@code TileAdvancedFlightComputer#update} at"
+            + " {@code double rollRate = in.rollInput * FreeFlightPhysics.MAX_ROLL_RATE}) multiplied by 0: \"largest omega over the window=0.0\". The cursor-centred and brake"
+            + " verdicts the wave touched live in {@link #aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim}"
+            + " since this method was split.")
     @Test
     public void seatedPilotSeesLiveVelocityAndHisCursorTurnsTheShip() throws Exception {
         // IN THE AIR. This site was lifted before its neighbours were, as an EXPERIMENT with one
@@ -414,14 +414,13 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * the commanded rate falls and the attitude law follows it down, and inside the dead-zone the
      * reference is pinned where the ship is, which brakes any residue. Measured the same day: the rate
      * is already near zero on the tick the cursor reaches the dead-zone.</p>
-     *
-     * <p>red-witnessed: with the controller forbidden any angular acceleration against the current spin
-     * — spin-up allowed, braking not — this fails with "its worst rate over the hold was 1.9025…",
-     * every one of the ten readings the same: nothing else in a cell touches it. The identical
-     * inversion left the overworld form of this verdict GREEN — 2026-09-28. Taken on the pre-actuator
-     * form, when the controller was a mixin; the torque it applies now stands in
-     * {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code torque.set(command.torque()).mul(k);}.</p>
      */
+    @RedWitness(prose = "with the controller forbidden any angular acceleration against the current spin"
+            + " — spin-up allowed, braking not — this fails with \"its worst rate over the hold was 1.9025…\","
+            + " every one of the ten readings the same: nothing else in a cell touches it. The identical"
+            + " inversion left the overworld form of this verdict GREEN — 2026-09-28. Taken on the pre-actuator"
+            + " form, when the controller was a mixin; the torque it applies now stands in"
+            + " {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code torque.set(command.torque()).mul(k);}.")
     @Test
     public void aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim() throws Exception {
         scenarioDim = TransitSetup.empty(this::exec).originDim;
@@ -530,16 +529,15 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * An inverted ship turns its seated pilot's camera over with it, and his eye stays on the ship's
      * side of the deck.
-     *
-     * <p>red-witnessed: with the seated-ship camera roll ({@code RocketEventHandler#onFreeFlightCameraSetup}
-     * at {@code event.setRoll(e[2])}, the tier-2 seat branch's — taken on the pre-refactor form, when
-     * that branch slerped the attitude the client had sampled rather than asking
-     * {@code VSIntegration.getShipAttitude}) given an extra 30 degrees, this fails at the upright control: "an upright ship must leave the camera
-     * level (roll=30.0)", 2026-09-28. The other verdict the wave touched is the screenshot's
-     * existence — a check on the harness's own capture, which no production line decides. The
-     * camera verdicts after the roll are not witnessed: inverting the roll itself stops the test at
-     * "the ship must actually have rolled past vertical", an arrangement.</p>
      */
+    @RedWitness(prose = "with the seated-ship camera roll ({@code RocketEventHandler#onFreeFlightCameraSetup}"
+            + " at {@code event.setRoll(e[2])}, the tier-2 seat branch's — taken on the pre-refactor form, when"
+            + " that branch slerped the attitude the client had sampled rather than asking"
+            + " {@code VSIntegration.getShipAttitude}) given an extra 30 degrees, this fails at the upright control: \"an upright ship must leave the camera"
+            + " level (roll=30.0)\", 2026-09-28. The other verdict the wave touched is the screenshot's"
+            + " existence — a check on the harness's own capture, which no production line decides. The"
+            + " camera verdicts after the roll are not witnessed: inverting the roll itself stops the test at"
+            + " \"the ship must actually have rolled past vertical\", an arrangement.")
     @Test
     public void anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -766,13 +764,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
     /**
      * A body on a deck with world ground laid right under its feet is not handed to vanilla.
-     *
-     * <p>red-witnessed: {@code ShipFrameTravel#handles} at {@code if (isSupportedByWorldTerrain(entity) && !isSupportedByShipAt(entity, state.shipId, gate))}'s terrain release with its
-     * {@code !isSupportedByShipAt} half removed (the original defect) fails "laying world ground under
-     * the deck must not hand this body … to vanilla" with a {@code steppedOntoTerrain} release,
-     * 2026-09-30 — on the one-block floor this scenario now lays. Only the release verdict is
-     * witnessed by that break.</p>
      */
+    @RedWitness(prose = "{@code ShipFrameTravel#handles} at {@code if (isSupportedByWorldTerrain(entity) && !isSupportedByShipAt(entity, state.shipId, gate))}'s terrain release with its"
+            + " {@code !isSupportedByShipAt} half removed (the original defect) fails \"laying world ground under"
+            + " the deck must not hand this body … to vanilla\" with a {@code steppedOntoTerrain} release,"
+            + " 2026-09-30 — on the one-block floor this scenario now lays. Only the release verdict is"
+            + " witnessed by that break.")
     @Test
     public void aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -866,13 +863,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
     /**
      * A parked, unmanned ship holds its altitude instead of sinking.
-     *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code gx = g.x(); gy = g.y(); gz = g.z();}, the gravity feed-forward, multiplied
-     * by {@code 0.0} — the original defect — this fails with "its vertical velocity peaked at
-     * -0.1633 blk/s", drift -1.33 blocks over the window — 2026-09-28, taken on the pre-actuator form,
-     * when the same feed-forward line lived in the controller mixin.</p>
      */
+    @RedWitness(prose = "with {@code TileAdvancedFlightComputer#onPhysicsTick} at"
+            + " {@code gx = g.x(); gy = g.y(); gz = g.z();}, the gravity feed-forward, multiplied"
+            + " by {@code 0.0} — the original defect — this fails with \"its vertical velocity peaked at"
+            + " -0.1633 blk/s\", drift -1.33 blocks over the window — 2026-09-28, taken on the pre-actuator form,"
+            + " when the same feed-forward line lived in the controller mixin.")
     @Test
     public void aStationKeepingShipHoldsAltitudeInsteadOfSinking() throws Exception {
         final FixtureSite site = site();
@@ -1429,14 +1425,13 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      *
      * <p>Contract: this fails if production breaks the contract that a ship's readout is sent to its
      * pilot and to no passenger.</p>
-     *
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (the pilot-seat occupant left out of the
-     * audience) fails "seated at the helm, the pilot must receive his ship's readout" with no readout
-     * inside 200 ticks, 2026-09-30</p>
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (every player in the world made the
-     * audience) fails "standing on the deck, off the helm and with no console open, a passenger must
-     * receive none of his ship's readouts" with 4 received against the pilot's 4, 2026-09-30</p>
      */
+    @RedWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (the pilot-seat occupant left out of the"
+            + " audience) fails \"seated at the helm, the pilot must receive his ship's readout\" with no readout"
+            + " inside 200 ticks, 2026-09-30")
+    @RedWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (every player in the world made the"
+            + " audience) fails \"standing on the deck, off the helm and with no console open, a passenger must"
+            + " receive none of his ship's readouts\" with 4 received against the pilot's 4, 2026-09-30")
     @Test
     public void aShipsReadoutReachesItsPilotAndNotAPassenger() throws Exception {
         FixtureSite site = site();

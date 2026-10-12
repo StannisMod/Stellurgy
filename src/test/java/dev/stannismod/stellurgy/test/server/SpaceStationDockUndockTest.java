@@ -10,6 +10,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * dock / undock contract on
@@ -79,6 +80,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-23 (a new pad starts free with auto-land off and de-dups on position). */
+    @Pins("INV-STN-23")
     @Test
     public void addPadGrowsListWithExpectedDefaults() throws Exception {
         int id = createStation();
@@ -101,6 +103,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-07 (a dock claims only free pads that opted into auto-land). */
+    @Pins("INV-STN-07")
     @Test
     public void dockRejectsPadWithoutAutoLandOptIn() throws Exception {
         // Critical: getNextLandingPad gates on BOTH not-occupied AND
@@ -121,6 +124,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
      * Pins INV-STN-07 (a dock claims only free pads that opted into auto-land).
      * Pins INV-STN-24 (dock claims the pad and marks it occupied and undock frees it).
      */
+    @Pins({"INV-STN-07", "INV-STN-24"})
     @Test
     public void dockClaimsAutoLandPadAndMarksOccupied() throws Exception {
         int id = createStation();
@@ -148,6 +152,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-24 (dock claims the pad and marks it occupied and undock frees it). */
+    @Pins("INV-STN-24")
     @Test
     public void undockReturnsPadToFreePool() throws Exception {
         int id = createStation();
@@ -191,6 +196,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-23 (a new pad starts free with auto-land off and de-dups on position). */
+    @Pins("INV-STN-23")
     @Test
     public void addPadIsIdempotentForSamePosition() throws Exception {
         // Production gate: spawnLocations.contains(pos) check uses
@@ -225,6 +231,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-25 (pad ownership is per station). */
+    @Pins("INV-STN-25")
     @Test
     public void multipleStationsTrackPadsIndependently() throws Exception {
         // Per-station pad state must not bleed across stations. A regression

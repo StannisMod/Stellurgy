@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
@@ -117,7 +118,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * Valkyrien Skies is absent - the production subsystem declines to register without it, so the
  * wiring under test would not exist at all.</p>
  */
-public abstract class AbstractSpaceLoginRestoreClientTest {
+public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechanicsTest {
 
     /**
      * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
@@ -383,7 +384,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         keepBootLog("boot1");
 
         // --- boot 2: a brand new server JVM and a brand new client JVM, same world root ----------
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+        serverHarness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
         SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is "
                 + "exercising it: " + statusAfter.raw(), statusAfter.registered);
@@ -1379,7 +1380,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * unable to distinguish from "it was there all along".</p>
      */
     protected int seatThePilotBeforeHeLeavesTheGround() throws Exception {
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+        serverHarness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
@@ -1634,7 +1635,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * the class run's server instead.
      */
     protected void bringUpTheServer() throws Exception {
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+        serverHarness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
     }
 
     /**
@@ -1649,7 +1650,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     /** Start the client against the live server, never leaking the server JVM if the client fails. */
     protected void startClient() throws Exception {
         try {
-            clientHarness = RealClientHarness.start(serverHarness);
+            clientHarness = RealClientHarness.start(harnessBoot(), serverHarness);
         } catch (Exception startupFailure) {
             try {
                 serverHarness.close();

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -14,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * weather state persists across a server restart
@@ -34,7 +36,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class WeatherPersistenceTest {
+public class WeatherPersistenceTest extends AbstractMechanicsTest {
 
     private static final int FIXTURE_DIM = 9301;
 
@@ -89,10 +91,11 @@ public class WeatherPersistenceTest {
     }
 
     /** Pins INV-WGEN-15 (with custom weather disabled the cycle defers to vanilla, and planet rain survives a restart). */
+    @Pins("INV-WGEN-15")
     @Test
     public void planetRainSurvivesRestartOnSameWorkDir() throws Exception {
         // First boot: set rain on the planet, verify the wrapper is in place.
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         firstBoot.client().execute("stellurgytest weather set " + FIXTURE_DIM + " rain 12000");
         DimWeather beforeStop = weather(firstBoot, FIXTURE_DIM);
         assertTrue("rain didn't take effect on first boot: " + beforeStop.raw(),
@@ -107,7 +110,7 @@ public class WeatherPersistenceTest {
         // Second boot on the same workdir. The planet weather wrapper
         // re-reads state from stellurgy_planet_weather saved-data on
         // the overworld MapStorage.
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         DimWeather after = weather(secondBoot, FIXTURE_DIM);
         assertTrue("planet rain DID NOT persist across restart: " + after.raw(), after.raining);
         assertTrue("wrapper should still be installed after restart: " + after.raw(),

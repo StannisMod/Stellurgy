@@ -8,6 +8,7 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TilePump drains an adjacent
@@ -46,6 +47,7 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
 
 
     /** Pins INV-INFRA-22 (A pump above an adjacent water source fills its tank ( 0 mB) within ~60 ticks). */
+    @Pins("INV-INFRA-22")
     @Test
     public void poweredPumpDrainsAdjacentFluidSource() throws Exception {
         // Place pump.

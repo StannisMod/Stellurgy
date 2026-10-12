@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.test.WarShip;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A shot that meets a SHIP — the case the whole substrate exists for, and the one its world-block
@@ -92,17 +93,14 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
         ask("stellurgytest config set " + key + " " + value).requireOk("set " + key);
     }
 
-    /**
-     * red-witnessed: with {@code StructureCrossing#firstAlong} at {@code for (Map.Entry<String, AxisAlignedBB> ship : ships.entrySet())}'s loop over candidate ships skipped (only
-     * the world frame traversed), this fails with "the shot is still in the air with its budget
-     * untouched after a step that crossed the hull ... {...present:true,energy:60,hull:null...}". The
-     * block-damaged and crossing-point verdicts were not separately witnessed. 2026-09-30.
-     *
-     * <p>red-witnessed: with {@code StructureCrossing#visit} at {@code worldPoint = new Vec3d(w[0], w[1], w[2]);} leaving a ship-frame crossing point in
-     * the ship's frame instead of mapping it back out, this fails at "after crossing the hull the shot
-     * is at (1.9200001E7,126.99770000005135,51200.0), 1.919364683222029E7 blocks off the vertical line it
-     * was fired down through" (2026-09-30). The block-damaged verdict before it passed on that run.</p>
-     */
+    @RedWitness(prose = "with {@code StructureCrossing#firstAlong} at {@code for (Map.Entry<String, AxisAlignedBB> ship : ships.entrySet())}'s loop over candidate ships skipped (only"
+            + " the world frame traversed), this fails with \"the shot is still in the air with its budget"
+            + " untouched after a step that crossed the hull ... {...present:true,energy:60,hull:null...}\". The"
+            + " block-damaged and crossing-point verdicts were not separately witnessed. 2026-09-30.")
+    @RedWitness(prose = "with {@code StructureCrossing#visit} at {@code worldPoint = new Vec3d(w[0], w[1], w[2]);} leaving a ship-frame crossing point in"
+            + " the ship's frame instead of mapping it back out, this fails at \"after crossing the hull the shot"
+            + " is at (1.9200001E7,126.99770000005135,51200.0), 1.919364683222029E7 blocks off the vertical line it"
+            + " was fired down through\" (2026-09-30). The block-damaged verdict before it passed on that run.")
     @Test
     public void aShotFindsAMovedShipsHullInItsOwnFrameAndDamagesTheRightBlock() throws Exception {
         ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
@@ -179,24 +177,22 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code ShotFrame#worldPosition} at {@code double[] w = VSIntegration.toWorldFrameFor(world, shot.getHullId(), local.x, local.y, local.z);} answering, for a lodged round, the world point it
-     * was embedded at instead of mapping its plate coordinates through the hull's CURRENT pose, this
-     * fails with "the round left the hull when the ship moved: {...z:8800.0...hull:null}" — the round
-     * left behind where the ship used to be. 2026-09-30. (Witnessed on the earlier, single-read form
-     * of this method, whose message that is; not re-run against the two-read form below.)
-     *
-     * <p>red-witnessed: with {@code ShotFrame.worldPosition} ({@code ShotFrame#worldPosition} at {@code double[] w = VSIntegration.toWorldFrameFor(world, shot.getHullId(), local.x, local.y, local.z);}) mapping a lodged
-     * round's Z to where the ship used to stand (z 8800) instead of through the hull's current pose,
-     * this fails at "the round left the hull once the ship moved, in the pass the teleport answered in:
-     * {...z:8800.0...}" (2026-09-30). The hull-frame and position verdicts after it were not reached by
-     * that inversion.</p>
-     *
      * <p>What this test used to be red on, 2026-09-30, and why it is not any more: the round flew at
      * 0.2 a tick, came out of the one-block seat's underside inside the read window, and the damage
      * walk then reported that it had got nowhere — see
      * {@code ShotBoresOverTimeTest#aRoundTooPoorForAStageComesOutOfTheFarSide}, which pins that
      * defect on its own. The teleport was only ever coincident with the exit.</p>
      */
+    @RedWitness(prose = "with {@code ShotFrame#worldPosition} at {@code double[] w = VSIntegration.toWorldFrameFor(world, shot.getHullId(), local.x, local.y, local.z);} answering, for a lodged round, the world point it"
+            + " was embedded at instead of mapping its plate coordinates through the hull's CURRENT pose, this"
+            + " fails with \"the round left the hull when the ship moved: {...z:8800.0...hull:null}\" — the round"
+            + " left behind where the ship used to be. 2026-09-30. (Witnessed on the earlier, single-read form"
+            + " of this method, whose message that is; not re-run against the two-read form below.)")
+    @RedWitness(prose = "with {@code ShotFrame.worldPosition} ({@code ShotFrame#worldPosition} at {@code double[] w = VSIntegration.toWorldFrameFor(world, shot.getHullId(), local.x, local.y, local.z);}) mapping a lodged"
+            + " round's Z to where the ship used to stand (z 8800) instead of through the hull's current pose,"
+            + " this fails at \"the round left the hull once the ship moved, in the pass the teleport answered in:"
+            + " {...z:8800.0...}\" (2026-09-30). The hull-frame and position verdicts after it were not reached by"
+            + " that inversion.")
     @Test
     public void aRoundDrillingAHullGoesWhereTheShipGoes() throws Exception {
         ask("stellurgytest shot clear 0").requireOk("clear the air");

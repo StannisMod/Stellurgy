@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TileSatelliteBuilder real-construction path.
@@ -74,6 +75,7 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
      *  primary, observe slot transitions match {@code assembleSatellite}.
      * Pins INV-SAT-05 (Builder stamps the same fresh satelliteId into both the chassis item (satId) and the id chip (satelliteId)).
      */
+    @Pins("INV-SAT-05")
     @Test
     public void pressBuildAssemblesOpticalSatellite() throws Exception {
         int x = CX_OPTICAL, y = CY, z = CZ;
@@ -134,6 +136,7 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
      *  silently accept any type.
      * Pins INV-SAT-06 (a chip-overriding type rejects the default id chip).
      */
+    @Pins("INV-SAT-06")
     @Test
     public void pressBuildRejectsDefaultChipForChipOverridingType() throws Exception {
         int x = CX_WEATHER, y = CY, z = CZ;

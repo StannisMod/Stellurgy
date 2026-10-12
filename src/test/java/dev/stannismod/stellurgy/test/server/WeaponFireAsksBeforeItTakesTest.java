@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A promise a server owner has to be able to rely on, which the mechanic did not make on its own.
@@ -39,16 +40,13 @@ public class WeaponFireAsksBeforeItTakesTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    /**
-     * red-witnessed: with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}
-     * ({@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}) disabled, this fails at "a guarded block was destroyed
-     * by weapon fire anyway" (2026-09-29).
-     *
-     * <p>red-witnessed: with the refused-centre stop in {@code StructureDamageEngine.Walk#visit}
-     * ({@code StructureDamageEngine#visit} at {@code if (axisRemovalRefused)}) disabled, this fails at
-     * "a claimed block let the round through: the block behind it was reached" on a
-     * {@code block_stage_set} at 9804,82,9800 from 0 to 4 and that block gone to air (2026-10-04).</p>
-     */
+    @RedWitness(prose = "with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}"
+            + " ({@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}) disabled, this fails at \"a guarded block was destroyed"
+            + " by weapon fire anyway\" (2026-09-29).")
+    @RedWitness(prose = "with the refused-centre stop in {@code StructureDamageEngine.Walk#visit}"
+            + " ({@code StructureDamageEngine#visit} at {@code if (axisRemovalRefused)}) disabled, this fails at"
+            + " \"a claimed block let the round through: the block behind it was reached\" on a"
+            + " {@code block_stage_set} at 9804,82,9800 from 0 to 4 and that block gone to air (2026-10-04).")
     @Test
     public void aGuardedBlockSurvivesTheHitThatTakesTheUnguardedOneBesideIt() throws Exception {
         prepare();

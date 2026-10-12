@@ -9,6 +9,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A planet dimension's chunk generator is chosen by its {@code terrainSource}, while in every mode the
@@ -137,6 +138,7 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
      * honest — the two must now DIFFER, which is only meaningful because both name a real type.</p>
      * Pins INV-WGEN-22 (A planet's published world type is its own, never the save's).
      */
+    @Pins("INV-WGEN-22")
     @Test
     public void planetPublishesItsOwnWorldTypeThroughWorldInfo() throws Exception {
         int planet = firstTemplateStellurgyDimOrSkip();

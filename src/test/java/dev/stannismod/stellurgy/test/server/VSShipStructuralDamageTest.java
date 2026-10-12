@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.WarShip;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Damaging a block that belongs to a SHIP — the case the whole damage engine exists for, and the one
@@ -54,15 +55,13 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
         System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
     }
 
-    /**
-     * red-witnessed: with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked
-     * instead), this fails with "an impact at the ship's world position struck nothing — the world
-     * point was not mapped into the frame the ship's blocks live in: {...outcome:NOTHING_STRUCK...}";
-     * with {@code ShipDamageService#toWorld} at {@code if (shipId == null)} returning the report's points unmapped, it fails with
-     * "the entry point came back at (1.9200001E7,130.0,51200.0), 1.9192845083520055E7 blocks off the
-     * vertical line it was fired down through". The "subspace block damaged" verdict was not separately
-     * witnessed. 2026-09-30.
-     */
+    @RedWitness(prose = "with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked"
+            + " instead), this fails with \"an impact at the ship's world position struck nothing — the world"
+            + " point was not mapped into the frame the ship's blocks live in: {...outcome:NOTHING_STRUCK...}\";"
+            + " with {@code ShipDamageService#toWorld} at {@code if (shipId == null)} returning the report's points unmapped, it fails with"
+            + " \"the entry point came back at (1.9200001E7,130.0,51200.0), 1.9192845083520055E7 blocks off the"
+            + " vertical line it was fired down through\". The \"subspace block damaged\" verdict was not separately"
+            + " witnessed. 2026-09-30.")
     @Test
     public void aBlockOfAMovedShipIsDamagedThroughItsWorldPosition() throws Exception {
         Reply.of(exec("stellurgytest damage clear-impacts")).requireOk("forget earlier impacts");

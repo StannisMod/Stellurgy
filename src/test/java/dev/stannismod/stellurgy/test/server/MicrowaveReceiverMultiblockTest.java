@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Microwave Receiver multiblock validation.
@@ -28,6 +29,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
     private static final int CZ = 7000;
 
     /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
+    @Pins("INV-MBM-11")
     @Test
     public void microwaveReceiverMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
         String fixture = join(client().execute(
@@ -49,6 +51,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
+    @Pins("INV-MBM-11")
     @Test
     public void microwaveReceiverMultiblockInvalidatesWhenCornerPanelRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
@@ -71,6 +74,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
+    @Pins("INV-MBM-11")
     @Test
     public void microwaveReceiverMultiblockInvalidatesWhenAdjacentPanelRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;

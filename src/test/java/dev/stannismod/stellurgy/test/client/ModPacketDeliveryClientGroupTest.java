@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.Reply;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * How the mod's own network channel delivers a packet to the code that executes it, on a real client.
@@ -56,14 +57,13 @@ public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientTest {
      * <p>What it does not see: the decode on the network thread (the packet is handed to the handler,
      * not sent), and the server's handler, which is the same shape on the other side and needs a
      * server-side respawn to exercise.</p>
-     *
-     * <p>red-witnessed: with {@code BasePacketHandlerClient#onMessage} at
-     * {@code mc.addScheduledTask(() -> message.executeClient(mc.player));} put back to the shape it had
-     * — the player read into a local on arrival and that local handed to the task — this fails at "a
-     * mod packet queued behind a respawn ran for the player the client had when it ARRIVED, in the
-     * world he was leaving ... expected:playerDim=-1 current=true but was:playerDim=0 current=false"
-     * (2026-10-03).</p>
      */
+    @RedWitness(prose = "with {@code BasePacketHandlerClient#onMessage} at"
+            + " {@code mc.addScheduledTask(() -> message.executeClient(mc.player));} put back to the shape it had"
+            + " — the player read into a local on arrival and that local handed to the task — this fails at \"a"
+            + " mod packet queued behind a respawn ran for the player the client had when it ARRIVED, in the"
+            + " world he was leaving ... expected:playerDim=-1 current=true but was:playerDim=0 current=false\""
+            + " (2026-10-03).")
     @Test
     public void aModPacketQueuedBehindARespawnRunsForTheNewPlayer() throws Exception {
         Events client = clientEvents();

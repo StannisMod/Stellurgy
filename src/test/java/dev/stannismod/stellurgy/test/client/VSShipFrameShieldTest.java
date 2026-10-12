@@ -15,6 +15,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * P3 (§4.3): the shield must ride an assembled Valkyrien Skies ship. A ship's blocks live in a
@@ -114,15 +115,14 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
      * <p>Its stillness before the drive is the craft's own Flight-Assist hold, and the move is a
      * velocity command the hold obeys; a never-flown craft is simulated, so nothing here relies on
      * it being inert.</p>
-     *
-     * <p>red-witnessed: with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}
-     * replaced by {@code WorldFieldFrame.INSTANCE}, this fails "the ship's emitter must resolve a SHIP
-     * frame and report it ready … no `field_frame_resolved` carrying shipFramed:true AND ready:true
-     * was recorded within 200 ticks" — 2026-10-06. With {@code ShipFieldFrame#surfaceVelocityAt} at
-     * {@code new Vec3d(v[0], v[1], v[2])} replaced by {@code ZERO}, it passes the hull-moved gate and
-     * fails "the shell's surface velocity stayed zero on a moving ship (speed=0.0)" — 2026-10-06. The
-     * two tracking verdicts between them (shell moved, shell still on the hull) are not witnessed.</p>
      */
+    @RedWitness(prose = "with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}"
+            + " replaced by {@code WorldFieldFrame.INSTANCE}, this fails \"the ship's emitter must resolve a SHIP"
+            + " frame and report it ready … no `field_frame_resolved` carrying shipFramed:true AND ready:true"
+            + " was recorded within 200 ticks\" — 2026-10-06. With {@code ShipFieldFrame#surfaceVelocityAt} at"
+            + " {@code new Vec3d(v[0], v[1], v[2])} replaced by {@code ZERO}, it passes the hull-moved gate and"
+            + " fails \"the shell's surface velocity stayed zero on a moving ship (speed=0.0)\" — 2026-10-06. The"
+            + " two tracking verdicts between them (shell moved, shell still on the hull) are not witnessed.")
     @Test
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
 

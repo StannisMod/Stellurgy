@@ -42,10 +42,26 @@ public final class ShipDrive {
 
     private final World world;
     private final BlockPos flightComputerPos;
+    /** Whether resolving this drive links an unlinked machine standing in the ship's claim (see below). */
+    private final boolean adoptsUnlinked;
 
     public ShipDrive(World world, BlockPos flightComputerPos) {
+        this(world, flightComputerPos, true);
+    }
+
+    private ShipDrive(World world, BlockPos flightComputerPos, boolean adoptsUnlinked) {
         this.world = world;
         this.flightComputerPos = flightComputerPos;
+        this.adoptsUnlinked = adoptsUnlinked;
+    }
+
+    /**
+     * The drive as it stands, for an OBSERVER: resolved like {@link #ShipDrive(World, BlockPos)} except that
+     * an unlinked machine in the claim is not adopted — it is simply not this ship's yet. Every answer is
+     * then about the machines the ship already holds, and asking writes nothing.
+     */
+    public static ShipDrive observedFrom(World world, BlockPos flightComputerPos) {
+        return new ShipDrive(world, flightComputerPos, false);
     }
 
     // ─── The machines ──────────────────────────────────────────────────────────
@@ -296,7 +312,7 @@ public final class ShipDrive {
             // aboard" while the player is looking straight at one, and the only cure is rebuilding
             // the whole craft. The claim is the ownership test; a block outside it was already
             // skipped above, so nothing on a planet or on a neighbouring ship can be adopted.
-            if (!component.isLinked() && !world.isRemote) {
+            if (adoptsUnlinked && !component.isLinked() && !world.isRemote) {
                 component.linkToFlightComputer(flightComputerPos);
             }
             if (component.belongsTo(flightComputerPos)) {

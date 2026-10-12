@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * One round, one fresh wall, and it marks it.
@@ -47,12 +48,10 @@ public class FirstShotIntoAFreshWallTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    /**
-     * red-witnessed: with {@code ShotSubstrate#step} at {@code boolean structureFirst = first.isStructure();}'s {@code structureFirst} forced false (a round
-     * that never sees a wall), this fails with "a round fired once into a wall it flew down the middle
-     * of marked nothing ... no `block_stage_set` on the wall's row was recorded within 600 ticks".
-     * 2026-09-30.
-     */
+    @RedWitness(prose = "with {@code ShotSubstrate#step} at {@code boolean structureFirst = first.isStructure();}'s {@code structureFirst} forced false (a round"
+            + " that never sees a wall), this fails with \"a round fired once into a wall it flew down the middle"
+            + " of marked nothing ... no `block_stage_set` on the wall's row was recorded within 600 ticks\"."
+            + " 2026-09-30.")
     @Test
     public void theFirstRoundFiredIntoAFreshWallDamagesIt() throws Exception {
         // A PRECEDING scenario, because two standalone versions of this test went green without one:

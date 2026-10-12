@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * P6, the harness-observable half of "the interesting limiter binds": in an ordinary build the
@@ -28,6 +29,7 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
     private static final int Y = FixtureSite.OPEN_AIR_Y;
 
     /** Pins INV-SHD-12 (a single cable carries more than a single emitter can absorb). */
+    @Pins("INV-SHD-12")
     @Test
     public void cableCarriesMoreThanASingleEmitterAbsorbs() throws Exception {
         int x = 1070, z = 900;

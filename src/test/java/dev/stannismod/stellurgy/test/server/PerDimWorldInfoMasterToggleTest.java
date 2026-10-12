@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Disableability contract for the {@code perDimWorldInfo} MASTER switch
@@ -117,6 +118,7 @@ public class PerDimWorldInfoMasterToggleTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-WGEN-14 (with perDimWorldInfo on one dimension's weather does not leak to another). */
+    @Pins("INV-WGEN-14")
     @Test
     public void masterOffLeavesPlanetOnVanillaWorldInfo() throws Exception {
         assertDimRegistered(MASTER_OFF_DIM);

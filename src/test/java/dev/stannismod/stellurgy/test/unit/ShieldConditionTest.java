@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * What a shield block's condition is allowed to do to it.
@@ -83,6 +84,7 @@ public class ShieldConditionTest {
      * It shrinks; it does not switch off. Losing the field entirely is what destruction is for.
      * Pins INV-SHD-22 (a standing emitter still projects something and a mended one its whole field).
      */
+    @Pins("INV-SHD-22")
     @Test
     public void aStandingEmitterAlwaysProjectsSomething() {
         for (int declared = 1; declared <= 16; declared++) {
@@ -98,6 +100,7 @@ public class ShieldConditionTest {
      * Repair is a re-read, so the same declared radius and no damage gives the field back whole.
      * Pins INV-SHD-22 (a standing emitter still projects something and a mended one its whole field).
      */
+    @Pins("INV-SHD-22")
     @Test
     public void repairRestoresTheWholeFieldBecauseNothingIsAccumulated() {
         int declared = 10;

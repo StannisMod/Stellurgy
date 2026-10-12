@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * terraformer powered cycle on a Stellurgy-native planet.
@@ -126,6 +127,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  can hold the full 18000×40 = 720000 mB single-step requirement.</p>
      * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
      */
+    @Pins("INV-MBM-06")
     @Test
     public void nativePlanetTerraformerWithFuelAndPowerStepsDensity() throws Exception {
         assertDimIsNativeStellurgyPlanet();
@@ -184,6 +186,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  no progress, no density mutation. Pins the fuel-required branch.
      * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
      */
+    @Pins("INV-MBM-06")
     @Test
     public void nativePlanetTerraformerWithoutFuelDoesNotStep() throws Exception {
         assertDimIsNativeStellurgyPlanet();
@@ -218,6 +221,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  exercise the no-power branch without the explicit clear.</p>
      * Pins INV-MBM-06 (on a native planet the density moves with power and fuel and does not without either).
      */
+    @Pins("INV-MBM-06")
     @Test
     public void nativePlanetTerraformerWithoutPowerDoesNotStep() throws Exception {
         assertDimIsNativeStellurgyPlanet();

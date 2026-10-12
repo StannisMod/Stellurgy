@@ -19,6 +19,7 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * The progression the hyperdrive family is built around: <b>size buys POWER, the generation buys
@@ -53,6 +54,7 @@ public class DriveLadderTest {
     // ── the ladder ────────────────────────────────────────────────────────────
 
     /** Pins HYPER-5 (a generation buys efficiency and size buys power). */
+    @Pins("HYPER-5")
     @Test
     public void aFullBuildOfEachGenerationCrossesITSOWNBandInTheSameTime() {
         // THE defining property, and the reason a generation's efficiency is derived rather than
@@ -98,6 +100,7 @@ public class DriveLadderTest {
     }
 
     /** Pins HYPER-6 (a route's total energy does not read drive power). */
+    @Pins("HYPER-6")
     @Test
     public void aRoutesENERGYdoesNotDependOnHowBigTheDriveIs() {
         // The property that makes "size buys power, the tier buys efficiency" literal: ticks go as

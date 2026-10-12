@@ -23,6 +23,8 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The two open tier-2 playtest bugs, pinned against a REAL CLIENT PLAYER on a REAL assembled ship -
@@ -1778,13 +1780,12 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     /**
      * A body standing on a ship stands on the surface the renderer draws: parked (the control), and
      * hull-standing on a hovering, inverted ship (the subject).
-     *
-     * <p>red-witnessed: with the hull-stand sweep's box ({@code ShipFrameTravel#hullStandTravel} at
-     * {@code feet[0] - half, feet[1], feet[2] - half}) centred on the SHIP's up rather than the world's — the subspace-aligned phantom: "the largest
-     * gap between the swept solid and the body's own box was 1.77 over 95 sweeps (… upY=-0.93)",
-     * 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the
-     * body starts falling).</p>
      */
+    @RedWitness(prose = "with the hull-stand sweep's box ({@code ShipFrameTravel#hullStandTravel} at"
+            + " {@code feet[0] - half, feet[1], feet[2] - half}) centred on the SHIP's up rather than the world's — the subspace-aligned phantom: \"the largest"
+            + " gap between the swept solid and the body's own box was 1.77 over 95 sweeps (… upY=-0.93)\","
+            + " 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the"
+            + " body starts falling).")
     @Test
     public void theSurfaceABodyStandsOnIsTheSurfaceTheRendererDraws() throws Exception {
         final FixtureSite site = site();
@@ -2216,17 +2217,16 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     /**
      * A pilot who stands up and is taken onto his deck stays on it while the deck falls.
-     *
-     * <p>red-witnessed: NOT YET — three attempts, all GREEN. (1) {@code ShipFrameTravel.FLOOR_PROBE_DEPTH}
-     * at 0, 2026-09-29: with no floor in reach a body still touching the hull goes to HULL-STAND
-     * ({@code ShipFrameTravel#handles} at {@code state.hullStand = true;}), which keeps the episode open, so no release is recorded.
-     * (2) {@code ShipFrameTravel#travel} at {@code String shipId = anchored.shipId;} handing every aboard body to vanilla's world-frame travel,
-     * 2026-09-30. (3) that, plus Valkyrien Skies' own carry off ({@code EntityDraggable#tickAddedVelocityForWorld} at {@code if (!e.isDead)}),
-     * 2026-09-30. So the body is kept by more than one mechanism — the ship-frame resolver and the
-     * substrate's world-frame collision — and none of the three drove the resolver to a release, which
-     * is the only thing this verdict reads. What would turn it red is a release on a falling deck; the
-     * production line that decides one there is not yet identified.</p>
      */
+    @NotYetRed(prose = "NOT YET — three attempts, all GREEN. (1) {@code ShipFrameTravel.FLOOR_PROBE_DEPTH}"
+            + " at 0, 2026-09-29: with no floor in reach a body still touching the hull goes to HULL-STAND"
+            + " ({@code ShipFrameTravel#handles} at {@code state.hullStand = true;}), which keeps the episode open, so no release is recorded."
+            + " (2) {@code ShipFrameTravel#travel} at {@code String shipId = anchored.shipId;} handing every aboard body to vanilla's world-frame travel,"
+            + " 2026-09-30. (3) that, plus Valkyrien Skies' own carry off ({@code EntityDraggable#tickAddedVelocityForWorld} at {@code if (!e.isDead)}),"
+            + " 2026-09-30. So the body is kept by more than one mechanism — the ship-frame resolver and the"
+            + " substrate's world-frame collision — and none of the three drove the resolver to a release, which"
+            + " is the only thing this verdict reads. What would turn it red is a release on a falling deck; the"
+            + " production line that decides one there is not yet identified.")
     @Test
     public void yABodyTakenOntoADeckIsKeptWhileTheDeckFalls() throws Exception {
         buildAndBoardShip(site());

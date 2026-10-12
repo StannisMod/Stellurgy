@@ -11,6 +11,7 @@ import java.util.Arrays;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Poisoned air, in the open: a world whose air carries a poison past its limit is SAID to be
@@ -38,13 +39,11 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
     /** EXPERIMENT: how long the golem breathes each air — the dose is this time. Ten seconds. */
     private static final int EXPOSURE_TICKS = 200;
 
-    /**
-     * red-witnessed: with {@code Poisoning#tick} at {@code if (damage > 0.0F)} made unreachable (the
-     * dose kept, the harm never dealt): "health 100.0 -> 100.0"; with {@code AtmosphereAssertions#holdsAt}
-     * at {@code return around != null && around.isToxic();} reading the zone's air only: "air with carbon
-     * monoxide past its limit is said to be poisonous, outdoors too". Run apart: the statement is
-     * asserted first and would have hidden the harm.
-     */
+    @RedWitness(prose = "with {@code Poisoning#tick} at {@code if (damage > 0.0F)} made unreachable (the"
+            + " dose kept, the harm never dealt): \"health 100.0 -> 100.0\"; with {@code AtmosphereAssertions#holdsAt}"
+            + " at {@code return around != null && around.isToxic();} reading the zone's air only: \"air with carbon"
+            + " monoxide past its limit is said to be poisonous, outdoors too\". Run apart: the statement is"
+            + " asserted first and would have hidden the harm.")
     @Test
     public void aLivingThingBreathingPoisonedAirIsHurtByTheDoseAndNotInCleanAir() throws Exception {
         PlanetAir.Probe probe = this::exec;

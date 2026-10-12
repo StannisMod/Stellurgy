@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The assembler links a built navigation computer to the ship it is part of.
@@ -46,11 +47,10 @@ public class VSNavComputerAssemblyTest extends AbstractSharedServerTest {
 
     /**
      * The assembler links the navigation computer it found in the build, read on the ship it built.
-     *
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);} (the navigation computer's
-     * {@code linkToFlightComputer}) skipped fails "the assembler must link the navigation computer it
-     * found in the build" with {@code "linked":false}, 2026-09-30.</p>
      */
+    @RedWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);} (the navigation computer's"
+            + " {@code linkToFlightComputer}) skipped fails \"the assembler must link the navigation computer it"
+            + " found in the build\" with {@code \"linked\":false}, 2026-09-30.")
     @Test
     public void aBuiltNavigationComputerIsLinkedToItsShipByTheAssembler() throws Exception {
 

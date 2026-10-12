@@ -7,6 +7,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Tier 4: a central plant regenerating a room it does not stand in, through ducts.
@@ -38,15 +40,14 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
 
     /**
      * Regeneration arrives from three blocks away, over ducts the plant never has to know about.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CLEARS — {@code TileOxygenVent#receive} at {@code long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));}
-     * regenerating nothing: "the plant must clear the room's CO2 through the ducts (removed 0)". ONE
-     * FOR ONE — the same method drawing back half the oxygen it returned: "and every unit of CO2 it
-     * took must come back to the room as oxygen". DUST IN THE PLANT — {@code TileLifeSupportPlant#extract} at {@code emitDust();}
-     * no longer turning the carbon into dust: "`slots` holds no element whose `item` is
-     * stellurgy:carbondust — it holds 0". The three network premises are arrangements and are not
-     * witnessed.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. CLEARS — {@code TileOxygenVent#receive} at {@code long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));}"
+            + " regenerating nothing: \"the plant must clear the room's CO2 through the ducts (removed 0)\". ONE"
+            + " FOR ONE — the same method drawing back half the oxygen it returned: \"and every unit of CO2 it"
+            + " took must come back to the room as oxygen\". DUST IN THE PLANT — {@code TileLifeSupportPlant#extract} at {@code emitDust();}"
+            + " no longer turning the carbon into dust: \"`slots` holds no element whose `item` is"
+            + " stellurgy:carbondust — it holds 0\". The three network premises are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aCentralPlantRegeneratesARoomItDoesNotStandIn() throws Exception {
         int cxPlant = stand("a stale room ducted to a plant that stands outside it");
@@ -108,17 +109,17 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * vent's half is first required to BE a network — a sink with its duct — before "no source on its
      * side" says anything about the cable.</p>
      *
-     * <p>red-witnessed: with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);} letting other domains' cables into
-     * the life-support graph: "the vent's ventilation network must end at the shield cable, with no
-     * source on its side: … \"sources\":1", 2026-09-30. The sink premise is an arrangement and is not
-     * witnessed. Taken on the pre-merge form {@code SubsystemNetworkRegistry.snapshot(domain)}, the
-     * same per-domain snapshot read from the static registry.</p>
-     *
      * <p>Not asserted: the room's carbon dioxide and oxygen after a solve, because with no source on
      * the vent's network nothing can regenerate the room or draw from it through the network, so
      * neither reading could go red while the verdict above holds.</p>
      * Pins INV-NET-01 (domains are isolated: a shield cable in a duct run carries no air).
      */
+    @Pins("INV-NET-01")
+    @RedWitness(prose = "with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);} letting other domains' cables into"
+            + " the life-support graph: \"the vent's ventilation network must end at the shield cable, with no"
+            + " source on its side: … \\\"sources\\\":1\", 2026-09-30. The sink premise is an arrangement and is not"
+            + " witnessed. Taken on the pre-merge form {@code SubsystemNetworkRegistry.snapshot(domain)}, the"
+            + " same per-domain snapshot read from the static registry.")
     @Test
     public void aShieldCableIsNotADuctAndCarriesNoAir() throws Exception {
         int cxIsolation = stand("a stale room whose duct run is broken by a shield cable");
@@ -142,12 +143,11 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * screen, every zone equal by default). Two rooms on one plant, and deliberately less supply
      * than either of them alone could absorb: under a real deficit the high-priority room must be
      * served and the normal one must not, rather than both getting half.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SERVED — {@code ComponentTopology#solve} at {@code requested, sink.sink.getPriority()} negating each sink's priority: "the prioritised room must be
-     * served (before=149526317 after=149526317)". NOT A SHARE — a pass before the priority tiers
-     * ({@code ComponentTopology#solve} at {@code int maxFlow = 0;}) that opens every sink to a small fixed share: "and under a
-     * deficit the normal-priority room must get nothing, not a share: … \"airCO2\":133579125".</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. SERVED — {@code ComponentTopology#solve} at {@code requested, sink.sink.getPriority()} negating each sink's priority: \"the prioritised room must be"
+            + " served (before=149526317 after=149526317)\". NOT A SHARE — a pass before the priority tiers"
+            + " ({@code ComponentTopology#solve} at {@code int maxFlow = 0;}) that opens every sink to a small fixed share: \"and under a"
+            + " deficit the normal-priority room must get nothing, not a share: … \\\"airCO2\\\":133579125\".")
     @Test
     public void underADeficitTheHigherPriorityZoneIsServedFirst() throws Exception {
         int roomA = stand("two stale rooms on one plant, one of them prioritised");

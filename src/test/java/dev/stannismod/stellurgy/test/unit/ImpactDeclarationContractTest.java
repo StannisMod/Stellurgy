@@ -15,6 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * What a declared impact promises before any world is involved — the half of the damage seam that a
@@ -28,6 +29,7 @@ import static org.junit.Assert.assertTrue;
 public class ImpactDeclarationContractTest {
 
     /** Pins INV-DMG-05 (every ImpactKind declares how a shell bills it). */
+    @Pins("INV-DMG-05")
     @Test
     public void everyHullImpactKindDeclaresHowAShellBillsIt() {
         for (ImpactKind kind : ImpactKind.values()) {

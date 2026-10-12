@@ -16,6 +16,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * <b>A procedural planet becomes somewhere you can stand, and it is the planet the scan described.</b>
@@ -235,12 +236,11 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
      *
      * <p>Positive half on the same read: the moon's parent IS listed, so an empty or unread list cannot
      * pass the verdict.</p>
-     *
-     * <p>red-witnessed: 2026-10-01, on the code as it stood before the fix — {@code PlanetRealizer#materialize}
-     * at {@code props.setStar(star)} called before the parent was set, plus a second
-     * {@code star.addPlanet(props)} after registration: "moon 15 must be listed under its planet 14,
-     * not among its star's planets [14, 15]".</p>
      */
+    @RedWitness(prose = "2026-10-01, on the code as it stood before the fix — {@code PlanetRealizer#materialize}"
+            + " at {@code props.setStar(star)} called before the parent was set, plus a second"
+            + " {@code star.addPlanet(props)} after registration: \"moon 15 must be listed under its planet 14,"
+            + " not among its star's planets [14, 15]\".")
     @Test
     public void aRealizedMoonIsNotListedAmongItsStarsPlanets() throws Exception {
         String installed = exec(GEN_INSTALL);

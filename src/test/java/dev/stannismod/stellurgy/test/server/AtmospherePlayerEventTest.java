@@ -10,6 +10,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What the per-entity atmosphere gate answers for a player, and that the answer is the one belonging
@@ -144,19 +145,17 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /**
      * The overworld is breathable, and the gate says so for a player standing in it.
-     *
-     * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType} at
-     * {@code if (StellurgyConfiguration.getCurrentConfig().enableOxygen)} preceded by a return of
-     * VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own
-     * dimension check instead stays GREEN — no other world's handler exists in this scenario to
-     * answer for the overworld.</p>
-     *
-     * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType(Entity)} at
-     * {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}
-     * answering VACUUM for dimension 0: "overworld baseline: cache must be empty or non-Stellurgy;
-     * hasCached=true atmos=vacuum", 2026-09-28 (taken on the other line of this test before the two
-     * were merged).</p>
      */
+    @RedWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType} at"
+            + " {@code if (StellurgyConfiguration.getCurrentConfig().enableOxygen)} preceded by a return of"
+            + " VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own"
+            + " dimension check instead stays GREEN — no other world's handler exists in this scenario to"
+            + " answer for the overworld.")
+    @RedWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType(Entity)} at"
+            + " {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}"
+            + " answering VACUUM for dimension 0: \"overworld baseline: cache must be empty or non-Stellurgy;"
+            + " hasCached=true atmos=vacuum\", 2026-09-28 (taken on the other line of this test before the two"
+            + " were merged).")
     @Test
     public void aPlayerInTheOverworldResolvesBreathableAir() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);
@@ -174,12 +173,11 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /**
      * An airless planet resolves as unbreathable for a player standing on it.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: "the gate must answer
-     * SOMETHING for a player on a Stellurgy planet: … \"hasAtmosphere\":false". UNBREATHABLE — the
-     * same line answering {@code AIR} for every dimension: "a planet declared with zero atmosphere
-     * must resolve as unbreathable … \"breathable\":true".</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: \"the gate must answer"
+            + " SOMETHING for a player on a Stellurgy planet: … \\\"hasAtmosphere\\\":false\". UNBREATHABLE — the"
+            + " same line answering {@code AIR} for every dimension: \"a planet declared with zero atmosphere"
+            + " must resolve as unbreathable … \\\"breathable\\\":true\".")
     @Test
     public void aPlayerOnAnAirlessPlanetResolvesUnbreathableAir() throws Exception {
         startFromTheOverworld();
@@ -194,18 +192,17 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     /**
      * Dim change clears the entry; the new dim repopulates with its own.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}.
-     * SOMETHING BEFORE — answering nothing for an unbreathable dimension: "the airless planet must
-     * resolve to SOMETHING before the move". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:
-     * "the airless planet must resolve as unbreathable before the move: … \"breathable\":true".
-     * BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: "the breathable planet must
-     * resolve as breathable after the move: … \"NoO2\"".</p>
-     *
      * <p>Not asserted: which dimension's handler resolved him after the move, because the wait
      * selects its record by that very field, so reading it back could not disagree; and that the
      * airless planet's atmosphere does not survive the move, because it is implied by the two
      * breathability verdicts either side of it.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}."
+            + " SOMETHING BEFORE — answering nothing for an unbreathable dimension: \"the airless planet must"
+            + " resolve to SOMETHING before the move\". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:"
+            + " \"the airless planet must resolve as unbreathable before the move: … \\\"breathable\\\":true\"."
+            + " BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: \"the breathable planet must"
+            + " resolve as breathable after the move: … \\\"NoO2\\\"\".")
     @Test
     public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
         startFromTheOverworld();

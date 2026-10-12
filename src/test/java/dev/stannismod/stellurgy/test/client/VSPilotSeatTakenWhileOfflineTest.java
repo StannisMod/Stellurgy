@@ -17,6 +17,7 @@ import org.junit.runners.MethodSorters;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A pilot seat TAKEN while its pilot was OFFLINE stays with the occupant. The returning pilot is
@@ -95,6 +96,7 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
     private static final double ABOARD_EPSILON = 6.0;
 
     /** Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain). */
+    @Pins("SHIPCTL-16")
     @Test
     public void aSeatTakenWhileThePilotWasOfflineStaysWithTheOccupant() throws Exception {
 

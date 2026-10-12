@@ -15,6 +15,7 @@ import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * What a cell's sky is told about: the bodies around it, which belong to the CELL and not to a ship's
@@ -85,6 +86,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
     }
 
     /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
+    @Pins("CON-C14-06")
     @Test
     public void aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt() throws Exception {
         authoredOnlySky();
@@ -115,6 +117,7 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
     }
 
     /** Pins CON-C14-06 (the sky feed is cell-keyed, not ship-keyed). */
+    @Pins("CON-C14-06")
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt() throws Exception {
         authoredOnlySky();

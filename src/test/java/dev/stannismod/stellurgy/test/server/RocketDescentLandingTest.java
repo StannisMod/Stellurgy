@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.test.Events;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * descent + landing under the REAL server
@@ -112,12 +113,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         }
     }
 
-    /**
-     * <p>red-witnessed: with the descent gate, {@code EntityRocket#onUpdate} at
-     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}, losing the
-     * {@code setInFlight(true)} it guards: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
-     * ticks", 2026-09-28.</p>
-     */
+    @RedWitness(prose = "with the descent gate, {@code EntityRocket#onUpdate} at"
+            + " {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}, losing the"
+            + " {@code setInFlight(true)} it guards: \"no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100"
+            + " ticks\", 2026-09-28.")
     @Test
     public void descentTimerGateFlipsInFlightUnderRealTicks_realTick() throws Exception {
         // Production gate (EntityRocket.onUpdate line 1047):
@@ -151,15 +150,13 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 info.inFlight);
     }
 
-    /**
-     * <p>red-witnessed: with {@code EntityRocket#onUpdate} at
-     * {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())} made to fire past
-     * tick 3 and to clear the flag again at once — early, and gone before any state read could see it —
-     * this fails with "and nothing may have set it in flight before its counter passed the timer
-     * (DESCENT_TIMER=40): {… "inFlight":true,"ticksExisted":6 …}" (2026-10-01). The verdict it replaced
-     * was red here only under full-tier load, when the timer had legitimately run out before the log
-     * was read. The two premises before it are arrangements and are not witnessed.</p>
-     */
+    @RedWitness(prose = "with {@code EntityRocket#onUpdate} at"
+            + " {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())} made to fire past"
+            + " tick 3 and to clear the flag again at once — early, and gone before any state read could see it —"
+            + " this fails with \"and nothing may have set it in flight before its counter passed the timer"
+            + " (DESCENT_TIMER=40): {… \"inFlight\":true,\"ticksExisted\":6 …}\" (2026-10-01). The verdict it replaced"
+            + " was red here only under full-tier load, when the timer had legitimately run out before the log"
+            + " was read. The two premises before it are arrangements and are not witnessed.")
     @Test
     public void tickBeforeDescentTimerKeepsFlightOff_realTick() throws Exception {
         // Counter-test under real ticking: with ticksExisted well below
@@ -238,11 +235,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 posYAfter < posYBefore);
     }
 
-    /**
-     * <p>red-witnessed: with the landing branch's post, {@code EntityRocket#onUpdate} at
-     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this));}, removed: "no `rocket_landed` carrying e = … was recorded within 100
-     * ticks", 2026-09-28.</p>
-     */
+    @RedWitness(prose = "with the landing branch's post, {@code EntityRocket#onUpdate} at"
+            + " {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this));}, removed: \"no `rocket_landed` carrying e = … was recorded within 100"
+            + " ticks\", 2026-09-28.")
     @Test
     public void landedEventFiresOnGroundCollisionUnderRealTicks_realTick() throws Exception {
         // Drive the line-1284 landed branch via REAL ticking with the

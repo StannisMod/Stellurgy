@@ -14,6 +14,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * The two assemblers diverge: distinct tile classes, and distinct entity classes out of
@@ -58,6 +59,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     private static final int CX_UV     = 5700;
 
     /** Pins INV-RASM-04 (The pad assembler spawns EntityRocket (never EntityStationDeployedRocket)). */
+    @Pins("INV-RASM-04")
     @Test
     public void rocketAssemblerProducesEntityRocketNotStationDeployed() throws Exception {
         // FIRST link, ASSERTING where the pair it replaces DUG — and the comment that stood here
@@ -84,6 +86,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-RASM-04 (The pad assembler spawns EntityRocket (never EntityStationDeployedRocket)). */
+    @Pins("INV-RASM-04")
     @Test
     public void uvAssemblerProducesEntityStationDeployedRocket() throws Exception {
         String fixture = exec("stellurgytest fixture uv-rocket 0 " + CX_UV + " " + CY + " " + CZ);

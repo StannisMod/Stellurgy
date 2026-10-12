@@ -18,6 +18,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * XML planet definitions — deep parsing path that needs
@@ -124,13 +125,11 @@ public class XMLPlanetLoaderTest {
 
     // ---- the procedural galaxy ----------------------------------------------
 
-    /**
-     * red-witnessed: with {@code DimensionPropertyCoupling#galaxyGenConfig} at
-     * {@code GalaxyGenConfig.defaults()} replaced by {@code GalaxyGenConfig.nonProcedural()}, the first
-     * verdict fails with "no <galaxyGen> is the shipped procedural galaxy, not an empty one"; replaced by
-     * the defaults with one more reserved galaxy, the second fails with "and the shipped configuration,
-     * knob for knob expected:<[54856f457186f8ee]> but was:<[d2ed657bccc48b66]>", 2026-10-05.
-     */
+    @RedWitness(prose = "with {@code DimensionPropertyCoupling#galaxyGenConfig} at"
+            + " {@code GalaxyGenConfig.defaults()} replaced by {@code GalaxyGenConfig.nonProcedural()}, the first"
+            + " verdict fails with \"no <galaxyGen> is the shipped procedural galaxy, not an empty one\"; replaced by"
+            + " the defaults with one more reserved galaxy, the second fails with \"and the shipped configuration,"
+            + " knob for knob expected:<[54856f457186f8ee]> but was:<[d2ed657bccc48b66]>\", 2026-10-05.")
     @Test
     public void aPackThatStatesNoGalaxyGenIsGivenTheShippedConfiguration() throws Exception {
         XMLPlanetLoader.DimensionPropertyCoupling read =
@@ -142,11 +141,9 @@ public class XMLPlanetLoaderTest {
                 GalaxyGenConfig.defaults().fingerprint(), read.galaxyGenConfig.fingerprint());
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#readGalaxyGen}'s branch at
-     * {@code if ("false".equalsIgnoreCase(value))} removed, this fails with "procedural="false" must be
-     * read as a galaxy with nothing between its anchors", 2026-10-05.
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s branch at"
+            + " {@code if (\"false\".equalsIgnoreCase(value))} removed, this fails with \"procedural=\"false\" must be"
+            + " read as a galaxy with nothing between its anchors\", 2026-10-05.")
     @Test
     public void proceduralFalseIsAGalaxyOfAuthoredAnchorsOnly() throws Exception {
         XMLPlanetLoader.DimensionPropertyCoupling read = load("opt-out.xml",
@@ -156,12 +153,10 @@ public class XMLPlanetLoaderTest {
                 read.galaxyGenConfig.procedural);
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#nonProcedural}'s {@code if (!knobs.isEmpty())} made
-     * never true, this fails with "a density beside procedural="false" tunes a population the pack asked
-     * not to have — it must be refused, not ignored"; with its message's {@code "; remove " + knobs}
-     * dropped, with "the refusal must name the knob the pack must remove", 2026-10-05.
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#nonProcedural}'s {@code if (!knobs.isEmpty())} made"
+            + " never true, this fails with \"a density beside procedural=\"false\" tunes a population the pack asked"
+            + " not to have — it must be refused, not ignored\"; with its message's {@code \"; remove \" + knobs}"
+            + " dropped, with \"the refusal must name the knob the pack must remove\", 2026-10-05.")
     @Test
     public void proceduralFalseBesideAKnobIsRefusedAndTheKnobNamed() throws Exception {
         try {
@@ -175,12 +170,10 @@ public class XMLPlanetLoaderTest {
         }
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#readGalaxyGen}'s {@code if (!"true".equalsIgnoreCase(value))}
-     * made never true, this fails with "procedural="no" is neither answer — reading it as either would be
-     * a guess"; with that refusal's message not naming the attribute, with "the refusal must name the
-     * attribute", 2026-10-05.
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s {@code if (!\"true\".equalsIgnoreCase(value))}"
+            + " made never true, this fails with \"procedural=\"no\" is neither answer — reading it as either would be"
+            + " a guess\"; with that refusal's message not naming the attribute, with \"the refusal must name the"
+            + " attribute\", 2026-10-05.")
     @Test
     public void aProceduralValueThatIsNotTrueOrFalseIsRefused() throws Exception {
         try {

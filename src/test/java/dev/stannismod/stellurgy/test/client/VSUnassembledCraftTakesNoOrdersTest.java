@@ -18,6 +18,7 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A craft that never became a ship takes NO orders from the player sitting in it: not steering, not
@@ -104,6 +105,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
     private static final String BOT = "ForgeTestClient";
 
     /** Pins SHIPCTL-9 (an unassembled craft takes no pilot input and the refusal is surfaced). */
+    @Pins("SHIPCTL-9")
     @Test
     public void aCraftThatNeverBecameAShipTakesNoOrdersFromItsPilot() throws Exception {
 

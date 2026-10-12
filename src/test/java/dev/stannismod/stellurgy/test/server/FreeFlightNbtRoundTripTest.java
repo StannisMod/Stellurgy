@@ -12,6 +12,8 @@ import dev.stannismod.stellurgy.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Save-compat contract for {@code EntityRocket} Free Flight state.
@@ -145,13 +147,14 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
      * not arrange mod state. No client e2e: the factory has no caller inside Stellurgy and no player
      * surface; it is offered to dependent mods through the API package.</p>
      *
-     * red-witnessed: with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}
-     * handed the unwrapped {@code nbt.getCompoundTag(TAGNAME)} instead — the shipped defect — this
-     * fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and
-     * {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},
-     * {@code weight:7.049999f} and the seat (2026-10-02).
      * Pins INV-API-10 (writeToNBT wraps in rocketStats).
      */
+    @Pins("INV-API-10")
+    @RedWitness(prose = "with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}"
+            + " handed the unwrapped {@code nbt.getCompoundTag(TAGNAME)} instead — the shipped defect — this"
+            + " fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and"
+            + " {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},"
+            + " {@code weight:7.049999f} and the seat (2026-10-02).")
     @Test
     public void statsReadThroughTheApiFactoryWriteWhatTheRocketWrote() throws Exception {
         String assemble = RocketFixture.assembleAt(site(), cmd -> ok(client().execute(cmd)),

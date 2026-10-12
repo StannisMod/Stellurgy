@@ -61,7 +61,7 @@ public final class SharedClientScope extends TestClassScope {
         long startedNanos = System.nanoTime();
         java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-client-");
         String seeded = seed.writeInto(root);
-        server = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
+        server = RealDedicatedServerHarness.startWith(harnessBoot(), root, /*cleanupOnClose=*/true);
         // The client's start-time options come from system properties the harness reads as it
         // launches the child, so a class that needs one sets it HERE, around the boot, and the value
         // it displaced goes back in close(). Set, not assumed: a scenario that measures pixels
@@ -72,7 +72,7 @@ public final class SharedClientScope extends TestClassScope {
             System.setProperty(CLIENT_FBO_PROPERTY, "true");
         }
         try {
-            client = RealClientHarness.start(server);
+            client = RealClientHarness.start(harnessBoot(), server);
         } catch (Exception startupFailure) {
             try {
                 server.close();

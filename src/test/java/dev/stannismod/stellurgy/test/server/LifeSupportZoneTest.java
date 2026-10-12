@@ -9,6 +9,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Life support as a placed machine rather than as arithmetic.
@@ -41,13 +43,13 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     /** A maintained zone starts as sea-level air, and reports the pressure the mod has always
      *  reported for a pressurised room. This is the probe's own grounding: if it lied, the two
      *  tests below would be measuring nothing.
-     *
-     *  <p>red-witnessed: one inversion per verdict, 2026-09-30. OXYGEN — {@code AirState#earthLike} at {@code return new AirState(790_000 * PER_PPM, 210_000 * PER_PPM, 0L);}
-     *  ({@code earthLike}) at 200 000 ppm oxygen: "a fresh maintained zone must hold sea-level
-     *  oxygen: … \"airO2\":200000000". NO CO2 — the same line with 1 000 ppm of carbon dioxide: "and
-     *  no carbon dioxide at all: … \"airCO2\":1000000". ONE ATMOSPHERE — {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));}
-     *  dividing by a hundred-and-first of an atmosphere: "its pressure must read as one atmosphere:
-     *  … \"airPressure\":101".</p> */
+     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. OXYGEN — {@code AirState#earthLike} at {@code return new AirState(790_000 * PER_PPM, 210_000 * PER_PPM, 0L);}"
+            + " ({@code earthLike}) at 200 000 ppm oxygen: \"a fresh maintained zone must hold sea-level"
+            + " oxygen: … \\\"airO2\\\":200000000\". NO CO2 — the same line with 1 000 ppm of carbon dioxide: \"and"
+            + " no carbon dioxide at all: … \\\"airCO2\\\":1000000\". ONE ATMOSPHERE — {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));}"
+            + " dividing by a hundred-and-first of an atmosphere: \"its pressure must read as one atmosphere:"
+            + " … \\\"airPressure\\\":101\".")
     @Test
     public void aSealedPoweredRoomHoldsBreathableAir() throws Exception {
         int cx = stand("a sealed room with a powered vent");
@@ -69,10 +71,10 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  for life support to act on. The probe reports -1 for "no zone", which is the distinction
      *  that matters: an unmaintained room is not a room full of stale air, it is a room the system
      *  has no opinion about.
-     *
-     *  <p>red-witnessed: with {@code TileOxygenVent#notEnoughEnergyForFunction} at {@code if (handler != null)} no longer clearing the zone when the vent
-     *  has too little energy to run: "an unpowered vent must not be maintaining a zone: …
-     *  \"airO2\":210000000", 2026-09-30.</p> */
+     */
+    @RedWitness(prose = "with {@code TileOxygenVent#notEnoughEnergyForFunction} at {@code if (handler != null)} no longer clearing the zone when the vent"
+            + " has too little energy to run: \"an unpowered vent must not be maintaining a zone: …"
+            + " \\\"airO2\\\":210000000\", 2026-09-30.")
     @Test
     public void anUnpoweredRoomHasNoZoneForLifeSupportToTouch() throws Exception {
         int cx = stand("a sealed room with an unpowered vent");
@@ -90,18 +92,17 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     /** MECH-ATM-20 end to end: a powered recirculator standing in a stale room turns that room's
      *  CO2 back into oxygen and leaves solid carbon in its own slot.
      *
-     *  <p>red-witnessed: one inversion per verdict, 2026-09-30. CONSUMES — {@code TileAirRecirculator#performFunction} at {@code long regenerated = air.regenerate(StellurgyConfiguration.getCurrentConfig().lifeSupportRecirculatorRate);} regenerating nothing: "the recirculator must consume its room's CO2
-     *  (before=150000 after=150000000)". PRESSURE — {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning twice the oxygen
-     *  it took: "regeneration must not change the room's pressure: … \"airPressure\":112". BREATHABLE
-     *  — {@code TileAirRecirculator#performFunction} at {@code handler.refreshDerivedAtmosphereAt(cell);} no longer refreshing the published atmosphere: "a
-     *  regenerated room must read as breathable, not merely contain oxygen: … \"lowO2\"". DUST —
-     *  {@code TileAirRecirculator#performFunction} at {@code emitDust();} no longer making dust: "`slots` holds no element whose `item`
-     *  is stellurgy:carbondust". The stale-room premise is an arrangement and is not witnessed.</p>
-     *
      *  <p>Not asserted here: that the oxygen comes back, because this room's vent tops it up toward
      *  sea level the whole time, so a rise in oxygen cannot be credited to the recirculator. That is
      *  {@link #aRecirculatorGivesBackOneOxygenForEachCarbonDioxideItTakes}, in a room the vent has
      *  nothing to add to.</p> */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. CONSUMES — {@code TileAirRecirculator#performFunction} at {@code long regenerated = air.regenerate(StellurgyConfiguration.getCurrentConfig().lifeSupportRecirculatorRate);} regenerating nothing: \"the recirculator must consume its room's CO2"
+            + " (before=150000 after=150000000)\". PRESSURE — {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning twice the oxygen"
+            + " it took: \"regeneration must not change the room's pressure: … \\\"airPressure\\\":112\". BREATHABLE"
+            + " — {@code TileAirRecirculator#performFunction} at {@code handler.refreshDerivedAtmosphereAt(cell);} no longer refreshing the published atmosphere: \"a"
+            + " regenerated room must read as breathable, not merely contain oxygen: … \\\"lowO2\\\"\". DUST —"
+            + " {@code TileAirRecirculator#performFunction} at {@code emitDust();} no longer making dust: \"`slots` holds no element whose `item`"
+            + " is stellurgy:carbondust\". The stale-room premise is an arrangement and is not witnessed.")
     @Test
     public void aRecirculatorClearsItsRoomsCarbonDioxideAndDropsDust() throws Exception {
         int cx = stand("a stale room with a recirculator in it");
@@ -150,11 +151,11 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  carbon dioxide on top, and regeneration only ever raises its oxygen, so the vent has nothing to
      *  add at any point. That is measured before the machine arrives, not assumed: a window with the
      *  vent alone must leave the oxygen where it was.</p>
-     *
-     *  <p>red-witnessed: with {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} ({@code regenerate}) taking the carbon dioxide and
-     *  returning no oxygen: "the oxygen must come back, one for one with the carbon dioxide the
-     *  recirculator took (took 60000000, oxygen rose 0)", 2026-09-30. The vent-alone premise is an
-     *  arrangement and is not witnessed.</p> */
+     */
+    @RedWitness(prose = "with {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} ({@code regenerate}) taking the carbon dioxide and"
+            + " returning no oxygen: \"the oxygen must come back, one for one with the carbon dioxide the"
+            + " recirculator took (took 60000000, oxygen rose 0)\", 2026-09-30. The vent-alone premise is an"
+            + " arrangement and is not witnessed.")
     @Test
     public void aRecirculatorGivesBackOneOxygenForEachCarbonDioxideItTakes() throws Exception {
         int cx = stand("a room at sea-level oxygen plus carbon dioxide, with a recirculator in it");
@@ -195,12 +196,12 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     /** MECH-ATM-21 split: a separator standing in a stale room draws its CO2 into its own tank.
      *  The unit tests prove the arithmetic; this proves the machine finds the room at all, which
      *  is precisely what the recirculator got wrong twice.
-     *
-     *  <p>red-witnessed: one inversion per verdict, 2026-09-30. PULLS CO2 — {@code TileGasSeparator#split} at {@code if (!moveToTank(air, cell, StellurgyFluids.fluidCarbonDioxide, rate))} going straight to nitrogen: "the separator must pull CO2 out of the room
-     *  (before=150000 after=150000000)". SPARES OXYGEN — {@code TileGasSeparator#moveToTank} at {@code ? air.drawCarbonDioxide(take)} drawing oxygen
-     *  alongside the carbon dioxide: "and must not touch the oxygen the crew are breathing: …
-     *  \"airO2\":52631". INTO ITS TANK — {@code TileGasSeparator#moveToTank} at {@code fill(new FluidStack(gas, Math.min(accepted, volumeFor(taken, cell))), true);} never filling the tank: "`tanks`
-     *  holds no element whose `fluid` is carbon_dioxide".</p> */
+     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. PULLS CO2 — {@code TileGasSeparator#split} at {@code if (!moveToTank(air, cell, StellurgyFluids.fluidCarbonDioxide, rate))} going straight to nitrogen: \"the separator must pull CO2 out of the room"
+            + " (before=150000 after=150000000)\". SPARES OXYGEN — {@code TileGasSeparator#moveToTank} at {@code ? air.drawCarbonDioxide(take)} drawing oxygen"
+            + " alongside the carbon dioxide: \"and must not touch the oxygen the crew are breathing: …"
+            + " \\\"airO2\\\":52631\". INTO ITS TANK — {@code TileGasSeparator#moveToTank} at {@code fill(new FluidStack(gas, Math.min(accepted, volumeFor(taken, cell))), true);} never filling the tank: \"`tanks`"
+            + " holds no element whose `fluid` is carbon_dioxide\".")
     @Test
     public void aSeparatorDrawsItsRoomsCarbonDioxideIntoItsTank() throws Exception {
         int cx = stand("a stale room with a separator in it");
@@ -236,15 +237,14 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  its tank back into the room — which is what makes a stripped cabin habitable again, and is
      *  the half of the machine no test had ever driven in a world.
      *
-     *  <p>red-witnessed: one inversion per verdict, 2026-09-30. BREATHABLE AGAIN — {@code TileGasSeparator#performFunction} at {@code handler.refreshDerivedAtmosphereAt(cell);} no longer refreshing the published atmosphere: "and the room must become
-     *  breathable again: … \"lowO2\" … \"airO2\":260368417". LEFT ITS TANK — {@code TileGasSeparator#combine} at {@code drain(volumeFor(admitted, cell), true);} admitting oxygen without draining it: "the oxygen it gave the room must
-     *  have left its tank: … \"tankAmount\":8000". The three premises are arrangements and are not
-     *  witnessed.</p>
-     *
      *  <p>Not asserted here: that the room's oxygen rises, because this room's vent tops it up toward
      *  sea level meanwhile, so a rise cannot be credited to the separator. The separator's own
      *  delivery is pinned by {@link #theCombinerRefusesToPushOxygenPastTheSafeCeiling}, whose room
      *  starts above what the vent tops up to.</p> */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. BREATHABLE AGAIN — {@code TileGasSeparator#performFunction} at {@code handler.refreshDerivedAtmosphereAt(cell);} no longer refreshing the published atmosphere: \"and the room must become"
+            + " breathable again: … \\\"lowO2\\\" … \\\"airO2\\\":260368417\". LEFT ITS TANK — {@code TileGasSeparator#combine} at {@code drain(volumeFor(admitted, cell), true);} admitting oxygen without draining it: \"the oxygen it gave the room must"
+            + " have left its tank: … \\\"tankAmount\\\":8000\". The three premises are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aSeparatorInCombineModeGivesItsOxygenBackToTheRoom() throws Exception {
         int cx = stand("a stripped room with a combining separator in it");
@@ -290,18 +290,19 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  piped at it. Pinned as "climbs, then stops exactly at the ceiling with gas to spare": a
      *  machine that simply did nothing would satisfy "never exceeds" without governing anything.
      *
-     *  <p>red-witnessed: one inversion per verdict, 2026-09-30. AT THE CEILING — {@code TileGasSeparator#combine} at {@code long admitted = Math.min(available, air.oxygenHeadroom());} admitting without the headroom cap: "oxygen must stop exactly at the
-     *  ceiling … \"airO2\":660000000"; and, the separator's delivery at all, {@code TileGasSeparator#combine} at {@code air.addOxygen(admitted, fromTheTank);} draining the tank without adding the oxygen to the room: "… climbing from
-     *  260000000 and no further than 300000000: … expected:&lt;300000000&gt; but
-     *  was:&lt;260000000&gt;" — the room starts above what its vent tops up to, so nothing but the
-     *  separator could have moved it. STAYS BREATHABLE — {@code AirState#oxygenRung} at {@code if (oxidiser > config.lifeSupportMaxPartialO2)} calling the ceiling
-     *  itself oxygen-rich (taken on the pre-move form, when this statement stood verbatim in
-     *  {@code deriveAtmosphere}): "and the room must stay breathable rather than turn oxygen-toxic: …
-     *  \"highO2\"". NOT DRY — {@code TileGasSeparator#combine} at {@code if (admitted <= 0L)} emptying the tank once it can admit
-     *  nothing: "it must have stopped because of the ceiling, not because the tank ran dry: …
-     *  \"tankAmount\":0".</p>
      * Pins INV-ATM-21 (fire and lungs are two different questions about the same gas).
      */
+    @Pins("INV-ATM-21")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. AT THE CEILING — {@code TileGasSeparator#combine} at {@code long admitted = Math.min(available, air.oxygenHeadroom());} admitting without the headroom cap: \"oxygen must stop exactly at the"
+            + " ceiling … \\\"airO2\\\":660000000\"; and, the separator's delivery at all, {@code TileGasSeparator#combine} at {@code air.addOxygen(admitted, fromTheTank);} draining the tank without adding the oxygen to the room: \"… climbing from"
+            + " 260000000 and no further than 300000000: … expected:&lt;300000000&gt; but"
+            + " was:&lt;260000000&gt;\" — the room starts above what its vent tops up to, so nothing but the"
+            + " separator could have moved it. STAYS BREATHABLE — {@code AirState#oxygenRung} at {@code if (oxidiser > config.lifeSupportMaxPartialO2)} calling the ceiling"
+            + " itself oxygen-rich (taken on the pre-move form, when this statement stood verbatim in"
+            + " {@code deriveAtmosphere}): \"and the room must stay breathable rather than turn oxygen-toxic: …"
+            + " \\\"highO2\\\"\". NOT DRY — {@code TileGasSeparator#combine} at {@code if (admitted <= 0L)} emptying the tank once it can admit"
+            + " nothing: \"it must have stopped because of the ceiling, not because the tank ran dry: …"
+            + " \\\"tankAmount\\\":0\".")
     @Test
     public void theCombinerRefusesToPushOxygenPastTheSafeCeiling() throws Exception {
         long ceiling = configValue("lifeSupportMaxPartialO2");
@@ -348,14 +349,13 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      * <p>The assertion is deliberately about the WORLD and not about the slot: an emptied slot is
      * equally consistent with a port that simply voided its cargo, and "the dust was deleted" is
      * not the contract. {@code ejected} counts loose item entities beside the port.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NO OBSTRUCTION — {@code EjectionPort#obstructionDistance} at {@code return HullClearance.obstructionDistance(world, pos, facing, clearance);} never reporting a clear exit: "a port with a clear exit must report no
-     * obstruction: … expected:&lt;0&gt; but was:&lt;1&gt;". SLOT EMPTY — {@code TileJettisonPort#update} at {@code setInventorySlotContents(0, ItemStack.EMPTY);}
-     * no longer emptying the slot after firing: "and its slot must be empty afterwards: …
-     * expected:&lt;0&gt; but was:&lt;1&gt;". IN THE WORLD — {@code EjectionPort#eject} at {@code return world.spawnEntity(item);} reporting a
-     * launch without spawning anything: "the dust must exist in the world as a jettisoned item … \"ejected\":0".
-     * The load premise is an arrangement and is not witnessed.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NO OBSTRUCTION — {@code EjectionPort#obstructionDistance} at {@code return HullClearance.obstructionDistance(world, pos, facing, clearance);} never reporting a clear exit: \"a port with a clear exit must report no"
+            + " obstruction: … expected:&lt;0&gt; but was:&lt;1&gt;\". SLOT EMPTY — {@code TileJettisonPort#update} at {@code setInventorySlotContents(0, ItemStack.EMPTY);}"
+            + " no longer emptying the slot after firing: \"and its slot must be empty afterwards: …"
+            + " expected:&lt;0&gt; but was:&lt;1&gt;\". IN THE WORLD — {@code EjectionPort#eject} at {@code return world.spawnEntity(item);} reporting a"
+            + " launch without spawning anything: \"the dust must exist in the world as a jettisoned item … \\\"ejected\\\":0\"."
+            + " The load premise is an arrangement and is not witnessed.")
     @Test
     public void aJettisonPortThrowsItsCargoOverboard() throws Exception {
         int cx = stand("a jettison port with a clear exit");
@@ -379,14 +379,13 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     /**
      * The counter-test, and the one that makes the port safe to build badly: a port whose exit is
      * blocked HOLDS its cargo instead of firing into the wall or quietly voiding it.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OBSTRUCTION — {@code EjectionPort#obstructionDistance} at {@code return HullClearance.obstructionDistance(world, pos, facing, clearance);}
-     * reporting every exit clear: "a walled-in port must report where the obstruction is: …
-     * \"obstruction\":0". HELD — {@code TileJettisonPort#update} at {@code if (obstruction != 0 || held.isEmpty())} firing whether or not the exit is
-     * blocked: "and it must still be holding the dust: … expected:&lt;1&gt; but was:&lt;0&gt;".
-     * NOTHING JETTISONED — the same line ejecting a copy of the cargo while still holding it: "with
-     * nothing jettisoned: … expected:&lt;0&gt; but was:&lt;1&gt;".</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. OBSTRUCTION — {@code EjectionPort#obstructionDistance} at {@code return HullClearance.obstructionDistance(world, pos, facing, clearance);}"
+            + " reporting every exit clear: \"a walled-in port must report where the obstruction is: …"
+            + " \\\"obstruction\\\":0\". HELD — {@code TileJettisonPort#update} at {@code if (obstruction != 0 || held.isEmpty())} firing whether or not the exit is"
+            + " blocked: \"and it must still be holding the dust: … expected:&lt;1&gt; but was:&lt;0&gt;\"."
+            + " NOTHING JETTISONED — the same line ejecting a copy of the cargo while still holding it: \"with"
+            + " nothing jettisoned: … expected:&lt;0&gt; but was:&lt;1&gt;\".")
     @Test
     public void aBlockedJettisonPortHoldsItsCargo() throws Exception {
         int cx = stand("a jettison port walled in on every side");

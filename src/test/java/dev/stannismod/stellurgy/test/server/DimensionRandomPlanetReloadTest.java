@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -42,7 +43,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class DimensionRandomPlanetReloadTest {
+public class DimensionRandomPlanetReloadTest extends AbstractMechanicsTest {
 
     private static final String AR_DIMS = "stellurgyDimensions";
 
@@ -85,7 +86,7 @@ public class DimensionRandomPlanetReloadTest {
 
     @Test
     public void randomPlanetsAreNotRegeneratedOnReload() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         int count0 = stellurgyDimCount(firstBoot);
         Path xmlPath = planetDefsPath(firstBoot);
         firstBoot.close();
@@ -110,7 +111,7 @@ public class DimensionRandomPlanetReloadTest {
         assertNotEquals("edit must change the XML", content, edited);
         Files.write(xmlPath, edited.getBytes(StandardCharsets.UTF_8));
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         int count1 = stellurgyDimCount(secondBoot);
 
         assertEquals("random planets must NOT be regenerated on reload (C130); "

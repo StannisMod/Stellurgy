@@ -1,5 +1,6 @@
 package com.github.stannismod.forge.testing.client;
 
+import com.github.stannismod.forge.testing.junit.HarnessBoot;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.sun.jna.*;
 import com.sun.jna.ptr.IntByReference;
@@ -64,14 +65,20 @@ public final class RealClientHarness implements AutoCloseable {
         this.clientLogFile = clientLogFile;
     }
 
-    public static RealClientHarness start(RealDedicatedServerHarness serverHarness) throws Exception {
-        return start(serverHarness, CLIENT_USERNAME);
+    /**
+     * The default client. Every start takes a {@link HarnessBoot}: the right to a client of one's own,
+     * which the mechanics bases make and an e2e cannot (see that class).
+     */
+    public static RealClientHarness start(HarnessBoot boot, RealDedicatedServerHarness serverHarness)
+            throws Exception {
+        return start(boot, serverHarness, CLIENT_USERNAME);
     }
 
     /** The default client, with the framebuffer object on from the first frame — see the overload below. */
-    public static RealClientHarness startWithFramebuffer(RealDedicatedServerHarness serverHarness)
+    public static RealClientHarness startWithFramebuffer(HarnessBoot boot,
+                                                         RealDedicatedServerHarness serverHarness)
             throws Exception {
-        return start(serverHarness, CLIENT_USERNAME, true);
+        return start(boot, serverHarness, CLIENT_USERNAME, true);
     }
 
     /**
@@ -89,9 +96,9 @@ public final class RealClientHarness implements AutoCloseable {
      * and also seeds the deterministic offline-mode UUID
      * ({@code OfflinePlayer:<username>} → {@code UUID.nameUUIDFromBytes}).</p>
      */
-    public static RealClientHarness start(RealDedicatedServerHarness serverHarness,
+    public static RealClientHarness start(HarnessBoot boot, RealDedicatedServerHarness serverHarness,
                                           String clientUsername) throws Exception {
-        return start(serverHarness, clientUsername,
+        return start(boot, serverHarness, clientUsername,
                 "true".equalsIgnoreCase(System.getProperty("forge.test.client.fbo")));
     }
 
@@ -109,9 +116,30 @@ public final class RealClientHarness implements AutoCloseable {
      * minimal for driver safety, and the render path the rest of the tier runs is not one test's to
      * change. {@code -Dforge.test.client.fbo=true} still turns it on for every client.</p>
      */
-    public static RealClientHarness start(RealDedicatedServerHarness serverHarness,
+    public static RealClientHarness start(HarnessBoot boot, RealDedicatedServerHarness serverHarness,
                                           String clientUsername,
                                           boolean framebufferAtLaunch) throws Exception {
+        HarnessBoot.require(boot);
+        return startInternal(serverHarness, clientUsername, framebufferAtLaunch, /*e2e=*/false);
+    }
+
+    /**
+     * The default client in E2E MODE ({@link com.github.stannismod.forge.testing.E2EMode}): its bridge
+     * refuses, at the call, every command whose kind an e2e does not admit, and a static call on anything
+     * but an instrument the consuming project names. The framebuffer follows {@code -Dforge.test.client.fbo},
+     * as for every other client.
+     */
+    public static RealClientHarness startE2E(HarnessBoot boot, RealDedicatedServerHarness serverHarness)
+            throws Exception {
+        HarnessBoot.require(boot);
+        return startInternal(serverHarness, CLIENT_USERNAME,
+                "true".equalsIgnoreCase(System.getProperty("forge.test.client.fbo")), /*e2e=*/true);
+    }
+
+    private static RealClientHarness startInternal(RealDedicatedServerHarness serverHarness,
+                                                   String clientUsername,
+                                                   boolean framebufferAtLaunch,
+                                                   boolean e2e) throws Exception {
         Path root = Files.createTempDirectory("forge-client-");
         Files.createDirectories(root.resolve("resourcepacks"));
         bootstrapClientFiles(root, framebufferAtLaunch);
@@ -125,9 +153,10 @@ public final class RealClientHarness implements AutoCloseable {
         try (java.net.ServerSocket controlSocket = openControlSocket()) {
             int controlPort = controlSocket.getLocalPort();
             process = launchClient(root, serverHarness.port(), controlPort, clientLogFile,
-                    clientUsername);
+                    clientUsername, e2e);
 
-            ClientBot bot = awaitClientBot(controlSocket);
+            // An e2e's player input tells ITS server when his walk begins: from then on no build is admitted.
+            ClientBot bot = awaitClientBot(controlSocket, e2e ? serverHarness.client() : null);
             bot.waitForWorld();
             return new RealClientHarness(root, process, bot, clientLogFile);
         } catch (Exception exception) {
@@ -242,15 +271,19 @@ public final class RealClientHarness implements AutoCloseable {
     public static final String PROP_CLIENT_ENV_PREFIX = "forge.test.client.env.";
 
     private static Process launchClient(Path root, int serverPort, int controlPort, Path clientLogFile,
-                                        String clientUsername) throws IOException {
+                                        String clientUsername, boolean e2e) throws IOException {
         Path javaBinary = resolveJavaBinary();
         String assetsDirProp = System.getProperty(PROP_ASSETS_DIR);
         Path assetsDir = assetsDirProp != null
                 ? Paths.get(assetsDirProp)
                 : gradleUserHome().resolve("caches").resolve("retro_futura_gradle").resolve("assets");
         Path nativesDir = soundlessNativesDir(resolveNativesDir());
-        String launcherClass = System.getProperty(PROP_LAUNCHER_CLASS, "GradleStart");
-        boolean legacyArgs = Boolean.parseBoolean(System.getProperty(PROP_LEGACY_ARGS, "true"));
+        String launcherClass = e2e ? E2E_LAUNCHER : System.getProperty(PROP_LAUNCHER_CLASS, E2E_LAUNCHER);
+        boolean legacyArgs = e2e || Boolean.parseBoolean(System.getProperty(PROP_LEGACY_ARGS, "true"));
+        if (e2e) {
+            refuseAnotherSetting(PROP_LAUNCHER_CLASS, E2E_LAUNCHER);
+            refuseAnotherSetting(PROP_LEGACY_ARGS, "true");
+        }
 
         String currentClassPath = Objects.requireNonNull(System.getProperty("java.class.path"), "java.class.path");
         Path libDir = Files.createTempDirectory(root, "client-libs-");
@@ -292,6 +325,9 @@ public final class RealClientHarness implements AutoCloseable {
         // while recording nothing. A normal game never sets this property, never discovers the
         // class (it is compiled into the test source set only) and pays nothing for any of it.
         javaArgs.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
+        if (e2e) {
+            javaArgs.addAll(com.github.stannismod.forge.testing.E2EMode.childArguments());
+        }
         // Every `mixin.*` property set on the test JVM is forwarded to the child. Queuing a
         // configuration is not the same as WEAVING a class, and nothing reports the difference: a
         // mixin whose target was already loaded is silently skipped, and its silence then reads as
@@ -379,7 +415,7 @@ public final class RealClientHarness implements AutoCloseable {
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(root.toFile());
         builder.redirectErrorStream(true);
-        applyClientEnvOverrides(builder);
+        applyClientEnvOverrides(builder, e2e);
         Process process = builder.start();
         startWindowSuppressor(process, windowsProcessId(process));
         return new LoggedProcess(process, clientLogFile);
@@ -397,11 +433,17 @@ public final class RealClientHarness implements AutoCloseable {
      * them into {@code forge.test.client.env.JAVA_TOOL_OPTIONS}, which then
      * cleanly replaces the inherited (server) {@code JAVA_TOOL_OPTIONS}.</p>
      */
-    private static void applyClientEnvOverrides(ProcessBuilder builder) {
+    private static void applyClientEnvOverrides(ProcessBuilder builder, boolean e2e) {
         Map<String, String> childEnv = builder.environment();
         for (String name : System.getProperties().stringPropertyNames()) {
             if (name.startsWith(PROP_CLIENT_ENV_PREFIX)) {
                 String envName = name.substring(PROP_CLIENT_ENV_PREFIX.length());
+                if (e2e && !displayVariable(envName)) {
+                    throw new IllegalStateException("REFUSED: an e2e client takes only the display's variables"
+                            + " (DISPLAY, XAUTHORITY, LIBGL_ALWAYS_SOFTWARE) from " + PROP_CLIENT_ENV_PREFIX
+                            + "*, and this JVM sets " + name + " -- an environment variable such as"
+                            + " JAVA_TOOL_OPTIONS reaches the child's JVM before its gate exists");
+                }
                 if (!envName.isEmpty()) {
                     childEnv.put(envName, System.getProperty(name));
                 }
@@ -409,10 +451,32 @@ public final class RealClientHarness implements AutoCloseable {
         }
     }
 
-    private static ClientBot awaitClientBot(java.net.ServerSocket serverSocket) throws IOException {
+    /** The variables a client needs to find its display, the only ones an e2e client is handed. */
+    private static boolean displayVariable(String name) {
+        return "DISPLAY".equals(name) || "XAUTHORITY".equals(name) || "LIBGL_ALWAYS_SOFTWARE".equals(name);
+    }
+
+    /**
+     * The launcher an e2e's client child runs, FIXED: RFG's {@code GradleStart}. See the server harness's
+     * own: a launcher named by a property is one the test JVM could have pointed at a class of its own.
+     */
+    private static final String E2E_LAUNCHER = "GradleStart";
+
+    /** Refuses an e2e launch while {@code property} names something other than the fixed {@code value}. */
+    private static void refuseAnotherSetting(String property, String value) {
+        String set = System.getProperty(property);
+        if (set != null && !set.equals(value)) {
+            throw new IllegalStateException("REFUSED: an e2e child launches with " + property + "=" + value
+                    + ", fixed, and this JVM asks for " + set + " -- a launcher an e2e child runs is not a setting");
+        }
+    }
+
+    private static ClientBot awaitClientBot(java.net.ServerSocket serverSocket,
+                                            com.github.stannismod.forge.testing.server.TestClient walkServer)
+            throws IOException {
         serverSocket.setSoTimeout((int) TimeUnit.MINUTES.toMillis(2));
         java.net.Socket socket = serverSocket.accept();
-        return new ClientBot(socket);
+        return new ClientBot(socket, walkServer);
     }
 
     private static Path resolveJavaBinary() throws IOException {

@@ -19,6 +19,7 @@ import dev.stannismod.stellurgy.test.SeatCarry;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Ground-assembled tier-2 ships, flown: four scenarios that used to be four classes and four client
@@ -254,15 +255,14 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * FIRST ship's base after the second one has been parked closer to it, must be shown answering
      * with the WRONG ship: without that leg "the id form was right" would be indistinguishable from
      * "any form would have been right here".</p>
-     *
-     * <p>red-witnessed: with the teleport's transform write skipped ({@code VSBridge#teleportShip} at
-     * {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}), LEG 1
-     * fails at "…and it must report where A IS now, not where it was built (posY=153.76)", 2026-09-28.
-     * The wave removed the advance before LEG 1's reads, and what that removal risks is a STALE read —
-     * the posY verdict's claim; the "still answers" verdict before it stayed green on that inversion,
-     * the ship being loaded either way. Refusing the adoption instead left the test green: the rigid
-     * teleport never re-assembles, so there is no adoption on this path.</p>
      */
+    @RedWitness(prose = "with the teleport's transform write skipped ({@code VSBridge#teleportShip} at"
+            + " {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}), LEG 1"
+            + " fails at \"…and it must report where A IS now, not where it was built (posY=153.76)\", 2026-09-28."
+            + " The wave removed the advance before LEG 1's reads, and what that removal risks is a STALE read —"
+            + " the posY verdict's claim; the \"still answers\" verdict before it stayed green on that inversion,"
+            + " the ship being loaded either way. Refusing the adoption instead left the test green: the rigid"
+            + " teleport never re-assembles, so there is no adoption on this path.")
     @Test
     public void aShipQuestionKeyedOnIdNamesItsOwnShipAndTheNearestFormDoesNot() throws Exception {
 
@@ -381,21 +381,20 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * Migrated verbatim from {@code VSShipClientLoadE2ETest}. Every {@code ship-info} in the body
      * was a positional nearest query about a ship this scenario had just built; each is now keyed on
      * the id this scenario's own assembly recorded. Nothing else changed.
-     *
-     * <p>red-witnessed: one inversion per rung, 2026-09-28, each red at its own verdict with the rungs
-     * before it green. LIFT — {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by
-     * {@code 0.0}: "maxClimb=0.0". YAW — its raw-rate branch ({@code MixinTileAdvancedFlightComputer#onPhysicsTick}
-     * at {@code angAccel = new double[]}) leaving {@code angAccel} null: "min |quat
-     * dot| over the window=1.0". ATTITUDE HOLD — the attitude error passed to
-     * {@code attitudeHoldAngAccel} ({@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code angAccel = FreeFlightPhysics.attitudeHoldAngAccel(aa.x, aa.y, aa.z, angle,}) as
-     * {@code 0.0}, a hold that only brakes: "|dot to target|
-     * before=0.707… after 120 ticks=0.7986…". FREE FLIGHT — {@code TileAdvancedFlightComputer#setPilotInput}
-     * at {@code this.pilotInput = input} discarding its input: "max climb over the window=0.0, last=-92.2". That last
-     * inversion first left the method GREEN: the rung accepted any displacement, and a hull with no
-     * throttle falls. It asserts a climb now.</p>
      */
+    @RedWitness(prose = "one inversion per rung, 2026-09-28, each red at its own verdict with the rungs"
+            + " before it green. LIFT — {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at"
+            + " {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by"
+            + " {@code 0.0}: \"maxClimb=0.0\". YAW — its raw-rate branch ({@code MixinTileAdvancedFlightComputer#onPhysicsTick}"
+            + " at {@code angAccel = new double[]}) leaving {@code angAccel} null: \"min |quat"
+            + " dot| over the window=1.0\". ATTITUDE HOLD — the attitude error passed to"
+            + " {@code attitudeHoldAngAccel} ({@code MixinTileAdvancedFlightComputer#onPhysicsTick} at"
+            + " {@code angAccel = FreeFlightPhysics.attitudeHoldAngAccel(aa.x, aa.y, aa.z, angle,}) as"
+            + " {@code 0.0}, a hold that only brakes: \"|dot to target|"
+            + " before=0.707… after 120 ticks=0.7986…\". FREE FLIGHT — {@code TileAdvancedFlightComputer#setPilotInput}"
+            + " at {@code this.pilotInput = input} discarding its input: \"max climb over the window=0.0, last=-92.2\". That last"
+            + " inversion first left the method GREEN: the rung accepted any displacement, and a hull with no"
+            + " throttle falls. It asserts a climb now.")
     @Test
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
 
@@ -640,11 +639,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
     /**
      * Migrated from {@code VSShipSeatDriveE2ETest}: the server-side bisection of the seat &rarr; AFC
      * &rarr; force path. Body unchanged apart from the ship oracle.
-     *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#setPilotInput} at
-     * {@code this.pilotInput = input} discarding its input, this fails at the climb with "maxClimb=0.0" (the seat still reports {@code afcResolved:true}, so
-     * the red names the computer's intake, not the seat's link) — 2026-09-28.</p>
      */
+    @RedWitness(prose = "with {@code TileAdvancedFlightComputer#setPilotInput} at"
+            + " {@code this.pilotInput = input} discarding its input, this fails at the climb with \"maxClimb=0.0\" (the seat still reports {@code afcResolved:true}, so"
+            + " the red names the computer's intake, not the seat's link) — 2026-09-28.")
     @Test
     public void seatPathResolvesAfcAndFliesTheShip() throws Exception {
 
@@ -722,16 +720,15 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * over the registry. This paragraph claimed it "resolves the seat inside the ship at a given
      * world anchor", which is the guarantee the first {@code @Test} of this very class exists to
      * disprove. The identity-keyed form is {@code find-seat <dim> id <shipUuid>}.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat
-     * dummy no longer glued to its ship ({@code EntityDummy#onUpdate} at
-     * {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} made server-only): "the
-     * CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25". THE CAMERA STAYS
-     * LOCKED — the ship camera-pin lines ({@code KeyBindings#handleShipPilotInput} at
-     * {@code player.rotationYaw = euler[0]} through {@code prevRotationPitch}) removed: "camYawBefore=0.0
-     * camYawAfter=180.0". The two waits before them are arrangement links (the spawn, the client
-     * standing at the build site).</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat"
+            + " dummy no longer glued to its ship ({@code EntityDummy#onUpdate} at"
+            + " {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} made server-only): \"the"
+            + " CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25\". THE CAMERA STAYS"
+            + " LOCKED — the ship camera-pin lines ({@code KeyBindings#handleShipPilotInput} at"
+            + " {@code player.rotationYaw = euler[0]} through {@code prevRotationPitch}) removed: \"camYawBefore=0.0"
+            + " camYawAfter=180.0\". The two waits before them are arrangement links (the spawn, the client"
+            + " standing at the build site).")
     @Test
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {
 

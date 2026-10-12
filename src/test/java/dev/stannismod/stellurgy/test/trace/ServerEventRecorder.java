@@ -102,6 +102,26 @@ public final class ServerEventRecorder {
     }
 
     /**
+     * A command something CANCELLED before it ran — {@code command_refused}, with the command's name,
+     * the sender's class and whether a failure was handed back to it ({@code thrown}) or it was only told.
+     *
+     * <p>{@code LOWEST} with cancelled events received: the verdict read is the one every listener above
+     * left, and a command nobody cancelled is not recorded at all — the log sees a refusal, never the
+     * stream of commands a test sends.</p>
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+    public static void onCommand(net.minecraftforge.event.CommandEvent event) {
+        if (!event.isCanceled()) {
+            return;
+        }
+        net.minecraft.command.ICommandSender sender = event.getSender();
+        record(sender.getEntityWorld(), "command_refused",
+                "\"command\":\"" + TestTrace.json(event.getCommand().getName()) + "\""
+                        + ",\"sender\":\"" + TestTrace.json(sender.getClass().getName()) + "\""
+                        + ",\"thrown\":" + (event.getException() != null));
+    }
+
+    /**
      * A right-click that REACHED the server. Its absence is the signal: the reach check upstream
      * drops a click from too far away before this event is ever fired.
      */

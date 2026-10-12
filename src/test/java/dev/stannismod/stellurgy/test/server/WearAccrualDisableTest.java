@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Disableability contract for the parts-wear system.
@@ -57,6 +58,7 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-RASM-07 (Wear accrual is single-gated by partsWearSystem). */
+    @Pins("INV-RASM-07")
     @Test
     public void wearAccruesOnlyWhenSystemEnabled() throws Exception {
         try {

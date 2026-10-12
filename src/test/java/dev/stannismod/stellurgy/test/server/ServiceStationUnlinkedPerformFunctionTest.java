@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Regression guard for the standalone-repair null-deref invariant (PR #23
@@ -36,6 +37,7 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
     private static final int Z = 15900;
 
     /** Pins INV-INFRA-06 (performFunction on an unlinked powered service station is a safe no-op). */
+    @Pins("INV-INFRA-06")
     @Test
     public void performFunctionOnUnlinkedPoweredStationIsSafeNoOp() throws Exception {
         int cx = X >> 4, cz = Z >> 4;

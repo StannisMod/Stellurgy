@@ -1,0 +1,694 @@
+package dev.stannismod.stellurgy.test.contract;
+
+import com.github.stannismod.forge.testing.junit.AbstractPlayerE2ETest;
+import com.google.gson.GsonBuilder;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Writer;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * The build's check of what binds a test to the contract, read off the COMPILED test classes by
+ * reflection -- never off their source text. Run by the {@code checkTestBindings} task, which EVERY test
+ * task (the fast tiers, the harness tiers, the milestone tier) and {@code check} depend on, so it holds
+ * inside {@code gradle build} and every tier run, for every executor and with nothing but the main
+ * repository checked out.
+ *
+ * <p><b>What pins.</b> A method counts toward a PINNED clause only if a test task RUNS it as a test: a
+ * public {@code @Test} not {@code @Ignore}d, declared in a concrete public class one of the tasks' includes
+ * ({@code --included}) matches and that is not {@code @Ignore}d — or in an abstract class such a class
+ * inherits. A clause names a test by its simple name; a simple name two compiled classes share is refused,
+ * never merged.</p>
+ *
+ * <p>It fails the build on:</p>
+ * <ul>
+ *   <li>a BROKEN clause ({@link PinMap});</li>
+ *   <li>a mixin of the test configuration that {@code StellurgyTestMixinPlugin} declares neither an
+ *       observation nor a behaviour, or both;</li>
+ *   <li>a {@link Pins} or {@link Regions} anchor no doc defines, a {@link Regions} for an anchor its
+ *       method does not pin;</li>
+ *   <li>a {@link RedWitness} that is neither exactly the replayable form nor exactly the prose form, a
+ *       {@link NotYetRed} with nothing in it;</li>
+ *   <li>THE KIND OF A CLASS, which is the base it extends and never its name: a concrete class named
+ *       {@code *E2ETest} that does not extend {@link AbstractPlayerE2ETest}, a class that does, outside
+ *       the {@code test.client} and {@code test.milestone} packages (an e2e boots a client), and a class
+ *       with tests in {@code test.milestone} that does not (a milestone is a player's whole loop);</li>
+ *   <li>a compiled test class it cannot read, and a clause order git cannot give -- each is a failure,
+ *       never a skip.</li>
+ * </ul>
+ * <p>It reports, never fails on: OWED clauses, and the {@code @Test} methods that pin no anchor.</p>
+ *
+ * <p>It writes every record and pin, with the method and source file it belongs to, to
+ * {@code build/reports/test-bindings/test-bindings.json}: the tools that resolve and replay red
+ * witnesses read that, not the source.</p>
+ *
+ * <p>Usage: {@code TestBindingsCheck [--root DIR] [--list STATE ...]} -- the root holds
+ * {@code docs/system} and the git history; the classes are the ones this class was loaded beside.</p>
+ */
+public final class TestBindingsCheck {
+
+    /** A constant: a compiled {@link Pattern} is immutable (every matcher holds its own state). */
+    private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+    /** A constant: a compiled {@link Pattern} is immutable. */
+    private static final Pattern MEMBER = Pattern.compile(
+            "[A-Za-z_$][\\w$]*#[A-Za-z_$][\\w$]*|[\\w./-]+\\.(?:lang|json|cfg|xml|txt)#[\\w.:-]+");
+    /** A constant: a compiled {@link Pattern} is immutable. */
+    private static final Pattern ADDED_DEF = Pattern.compile("^\\+[ \\t]*-[ \\t]*\\*\\*(" + PinMap.ANCHOR + ")\\b");
+    private static final String E2E_NAME = "E2ETest";
+
+    private TestBindingsCheck() {
+    }
+
+    public static void main(String[] args) throws Exception {
+        Path root = Paths.get(".").toAbsolutePath().normalize();
+        List<String> listed = new ArrayList<>();
+        List<String> included = new ArrayList<>();
+        for (int i = 0; i < args.length; i++) {
+            if ("--root".equals(args[i])) {
+                root = Paths.get(args[++i]).toAbsolutePath().normalize();
+            } else if ("--list".equals(args[i])) {
+                while (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                    listed.add(args[++i].toUpperCase());
+                }
+            } else if ("--included".equals(args[i])) {
+                while (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                    included.add(args[++i]);
+                }
+            }
+        }
+        System.exit(run(root, listed, included));
+    }
+
+    /**
+     * @param included the class-file patterns of every test task ({@code dev/x/test/unit/**}, Ant style): a
+     *                 method runs only in a class one of them includes. None given is a failure — which
+     *                 methods run would otherwise be a guess.
+     */
+    static int run(Path root, List<String> listed, List<String> included) throws IOException {
+        List<String> failures = new ArrayList<>();
+        if (included.isEmpty()) {
+            System.out.println("FAIL: no test task's includes were given (--included) -- which methods any task"
+                    + " runs cannot be decided, so no clause can be judged pinned");
+            return 1;
+        }
+        Map<String, String> docs = readDocs(root.resolve("docs").resolve("system"));
+        if (docs.isEmpty()) {
+            System.out.println("FAIL: no docs under " + root.resolve("docs/system") + " -- nothing was measured");
+            return 1;
+        }
+        Map<String, PinMap.Clause> defs = PinMap.parse(docs);
+        // A malformed region list fails wherever it is written, not only once a test pins the clause: an
+        // OWED clause's list is the list its first pin will be held to.
+        for (PinMap.Clause c : defs.values()) {
+            if (PinMap.regions(c.body) == null) {
+                failures.add(c.anchor + " (" + c.doc + "): REGIONS: is not a list of code spans (`a`, `b`, `c`)");
+            }
+        }
+
+        Corpus corpus = Corpus.read(classesRoot(), included, failures);
+        if (corpus.classes == 0) {
+            System.out.println("FAIL: no compiled test class beside " + TestBindingsCheck.class.getName()
+                    + " -- nothing was measured");
+            return 1;
+        }
+        corpus.checkAnchors(defs.keySet(), failures);
+        corpus.checkKinds(failures);
+        checkTestMixinClassification(failures);
+        System.out.println(E2EConfinement.check(root, classesRoot(), TestBindingsCheck.class.getClassLoader(), failures,
+                serverInstruments(failures),
+                com.github.stannismod.forge.testing.client.bridge.ClientInstruments.rows(),
+                dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.OBSERVATION));
+
+        Map<String, Integer> ages = new HashMap<>();
+        String gitProblem = clauseAges(root, ages);
+        if (gitProblem != null) {
+            failures.add("the order of the clauses could not be read from git (" + gitProblem + "); a FOR: "
+                    + "that cites a younger clause cannot be told apart -- run inside the repository's checkout");
+        }
+        Map<String, PinMap.Verdict> state = gitProblem == null
+                ? PinMap.classify(defs, corpus, ages) : Collections.<String, PinMap.Verdict>emptyMap();
+
+        Map<PinMap.State, Integer> counts = new TreeMap<>();
+        for (PinMap.Verdict v : state.values()) {
+            counts.merge(v.state, 1, Integer::sum);
+        }
+        if (gitProblem != null) {
+            System.out.println("clauses: NOT CLASSIFIED, so there is no state to count");
+        } else {
+            for (PinMap.State s : PinMap.State.values()) {
+                System.out.println(String.format("%-9s %4d", s, counts.getOrDefault(s, 0)));
+            }
+        }
+        System.out.println(String.format("test methods: %d @Test, %d of them pin no anchor (reported, not failed);"
+                        + " %d run by a test task", corpus.testMethods, corpus.testMethodsWithoutPins,
+                corpus.testMethodsRun));
+        System.out.println(String.format("records: %d @RedWitness (%d replayable), %d @NotYetRed; %d @Pins anchors",
+                corpus.witnesses, corpus.replayable, corpus.notYet, corpus.pinCount));
+        for (String kind : listed) {
+            new TreeMap<>(state).forEach((anchor, v) -> {
+                if (v.state.name().equals(kind)) {
+                    System.out.println(String.format("  %s %-16s %s%s", kind, anchor, v.doc,
+                            v.why == null ? "" : " -- " + v.why));
+                }
+            });
+        }
+        new TreeMap<>(state).forEach((anchor, v) -> {
+            if (v.state == PinMap.State.BROKEN) {
+                failures.add("BROKEN " + anchor + " (" + v.doc + "): " + v.why);
+            }
+        });
+
+        Path dump = root.resolve("build").resolve("reports").resolve("test-bindings").resolve("test-bindings.json");
+        Files.createDirectories(dump.getParent());
+        try (Writer w = Files.newBufferedWriter(dump, StandardCharsets.UTF_8)) {
+            new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(corpus.dump(root), w);
+        }
+        System.out.println("bindings written to " + root.relativize(dump));
+
+        for (String f : failures) {
+            System.out.println("FAIL " + f);
+        }
+        System.out.println(failures.isEmpty() ? "test bindings: OK" : "test bindings: " + failures.size() + " failure(s)");
+        return failures.isEmpty() ? 0 : 1;
+    }
+
+    /** {@code docs/system/**}{@code .md} outside {@code tools/}, by path relative to it, in path order. */
+    static Map<String, String> readDocs(Path sysroot) throws IOException {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (!Files.isDirectory(sysroot)) {
+            return out;
+        }
+        List<Path> files;
+        try (Stream<Path> walk = Files.walk(sysroot)) {
+            files = walk.filter(p -> p.toString().endsWith(".md"))
+                    .filter(p -> !sysroot.relativize(p).toString().replace('\\', '/').matches("(.*/)?tools/.*"))
+                    .sorted().collect(Collectors.toList());
+        }
+        for (Path p : files) {
+            String text = new String(Files.readAllBytes(p), StandardCharsets.UTF_8).replace("\r\n", "\n");
+            out.put(sysroot.relativize(p).toString().replace('\\', '/'), text);
+        }
+        return out;
+    }
+
+    /**
+     * Fills {@code ages} with the index of the commit that first ADDS each anchor's bold definition under
+     * docs/system (0 = the oldest such commit); answers why not, when git cannot say.
+     */
+    static String clauseAges(Path root, Map<String, Integer> ages) {
+        ProcessBuilder pb = new ProcessBuilder("git", "log", "--reverse", "-p", "--format=COMMIT %H", "--", "docs/system")
+                .directory(root.toFile()).redirectError(ProcessBuilder.Redirect.INHERIT);
+        int commits = 0;
+        try {
+            Process p = pb.start();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                int index = -1;
+                while ((line = r.readLine()) != null) {
+                    if (line.startsWith("COMMIT ")) {
+                        index++;
+                        commits++;
+                        continue;
+                    }
+                    Matcher m = ADDED_DEF.matcher(line);
+                    if (m.find()) {
+                        ages.putIfAbsent(m.group(1), index);
+                    }
+                }
+            }
+            int exit = p.waitFor();
+            if (exit != 0) {
+                return "git log exited " + exit;
+            }
+        } catch (IOException e) {
+            return "git could not be run: " + e.getMessage();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "interrupted";
+        }
+        return commits == 0 ? "git knows no commit touching docs/system (a shallow or foreign checkout)" : null;
+    }
+
+    /** What is wrong with a red-witness record's form, or null when it is exactly one of the two forms. */
+    public static String recordProblem(String verdict, String member, String at, String replacedBy, String fails,
+                                String on, String prose) {
+        boolean structured = !member.isEmpty() || !at.isEmpty() || !RedWitness.NOT_GIVEN.equals(replacedBy)
+                || !fails.isEmpty() || !on.isEmpty() || !verdict.isEmpty();
+        if (!prose.trim().isEmpty()) {
+            return structured ? "a prose record carries replayable elements too -- it is one form or the other" : null;
+        }
+        if (!structured) {
+            return "an empty record";
+        }
+        List<String> missing = new ArrayList<>();
+        if (!MEMBER.matcher(member).matches()) {
+            missing.add("member as Class#member or a resource path#key");
+        }
+        if (at.trim().isEmpty()) {
+            missing.add("at");
+        }
+        if (RedWitness.NOT_GIVEN.equals(replacedBy)) {
+            missing.add("replacedBy (\"\" to drop the fragment)");
+        }
+        if (fails.trim().isEmpty()) {
+            missing.add("fails");
+        }
+        if (!DATE.matcher(on).matches()) {
+            missing.add("on as yyyy-mm-dd");
+        }
+        return missing.isEmpty() ? null : "a replayable record without " + String.join(", ", missing);
+    }
+
+    private static Path classesRoot() {
+        try {
+            return Paths.get(TestBindingsCheck.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException("the compiled test classes have no file location", e);
+        }
+    }
+
+    /** The compiled test classes, as {@link PinMap.Tests}, with what the dump and the kind checks need. */
+    static final class Corpus implements PinMap.Tests {
+        /** Simple name -> the qualified names that carry it: a clause names the first, never merges them. */
+        private final Map<String, List<String>> bySimpleName = new HashMap<>();
+        /** Qualified name -> method name -> the facts of each declared method of that name. */
+        private final Map<String, Map<String, List<PinMap.MethodFacts>>> byClass = new HashMap<>();
+        private final List<Class<?>> loaded = new ArrayList<>();
+        private final List<Pattern> included = new ArrayList<>();
+        private final List<Map<String, Object>> records = new ArrayList<>();
+        private final Map<String, Set<String>> citedBy = new TreeMap<>();
+        private final List<String> regionProblems = new ArrayList<>();
+        int classes;
+        int testMethods;
+        int testMethodsRun;
+        int testMethodsWithoutPins;
+        int witnesses;
+        int replayable;
+        int notYet;
+        int pinCount;
+
+        static Corpus read(Path classesRoot, List<String> includes, List<String> failures) throws IOException {
+            Corpus c = new Corpus();
+            for (String include : includes) {
+                c.included.add(antPattern(include));
+            }
+            List<String> names;
+            try (Stream<Path> walk = Files.walk(classesRoot)) {
+                names = walk.filter(p -> p.toString().endsWith(".class"))
+                        .map(p -> classesRoot.relativize(p).toString().replace(File.separatorChar, '.'))
+                        .map(n -> n.substring(0, n.length() - ".class".length()))
+                        .filter(n -> !n.endsWith("package-info") && !n.endsWith("module-info"))
+                        .sorted().collect(Collectors.toList());
+            }
+            ClassLoader loader = TestBindingsCheck.class.getClassLoader();
+            for (String name : names) {
+                try {
+                    c.loaded.add(Class.forName(name, false, loader));
+                } catch (Throwable t) {
+                    failures.add("a compiled test class could not be read, so its bindings are unknown: " + name
+                            + " (" + t + ")");
+                }
+            }
+            // Every class is loaded before any is judged: whether a method of an abstract class runs depends
+            // on the classes that inherit it.
+            for (Class<?> k : c.loaded) {
+                c.add(k, failures);
+            }
+            return c;
+        }
+
+        /** An Ant-style include ({@code **}, {@code *}, {@code ?}) as a pattern over a class file's path. */
+        static Pattern antPattern(String include) {
+            StringBuilder regex = new StringBuilder();
+            String glob = include.replace('\\', '/');
+            for (int i = 0; i < glob.length(); i++) {
+                char ch = glob.charAt(i);
+                if (ch == '*' && i + 1 < glob.length() && glob.charAt(i + 1) == '*') {
+                    boolean slash = i + 2 < glob.length() && glob.charAt(i + 2) == '/';
+                    regex.append(slash ? "(?:.*/)?" : ".*");
+                    i += slash ? 2 : 1;
+                } else if (ch == '*') {
+                    regex.append("[^/]*");
+                } else if (ch == '?') {
+                    regex.append("[^/]");
+                } else {
+                    regex.append(Pattern.quote(String.valueOf(ch)));
+                }
+            }
+            return Pattern.compile(regex.toString());
+        }
+
+        /** Whether a test task runs {@code k} itself as a test class: concrete, included, not ignored. */
+        private boolean taskRuns(Class<?> k) {
+            if (Modifier.isAbstract(k.getModifiers()) || k.isInterface() || k.isAnonymousClass()
+                    || k.isLocalClass() || !Modifier.isPublic(k.getModifiers())
+                    || k.isAnnotationPresent(org.junit.Ignore.class)) {
+                return false;
+            }
+            String file = k.getName().replace('.', '/') + ".class";
+            for (Pattern p : included) {
+                if (p.matcher(file).matches()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Whether the methods DECLARED in {@code k} are run: {@code k} is run itself, or (abstract) a class a
+         * task runs inherits from it.
+         */
+        private boolean declaredMethodsRun(Class<?> k) {
+            if (taskRuns(k)) {
+                return true;
+            }
+            if (!Modifier.isAbstract(k.getModifiers())) {
+                return false;
+            }
+            for (Class<?> other : loaded) {
+                if (other != k && k.isAssignableFrom(other) && taskRuns(other)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void add(Class<?> k, List<String> failures) {
+            classes++;
+            for (RedWitness w : k.getAnnotationsByType(RedWitness.class)) {
+                witness(k, null, w, failures);
+            }
+            for (NotYetRed n : k.getAnnotationsByType(NotYetRed.class)) {
+                attempt(k, null, n, failures);
+            }
+            if (k.isAnonymousClass() || k.isSynthetic()) {
+                return;
+            }
+            bySimpleName.computeIfAbsent(k.getSimpleName(), s -> new ArrayList<>()).add(k.getName());
+            Map<String, List<PinMap.MethodFacts>> methods = byClass.computeIfAbsent(k.getName(), s -> new HashMap<>());
+            boolean classRuns = declaredMethodsRun(k);
+            for (Method m : k.getDeclaredMethods()) {
+                if (m.isSynthetic() || m.isBridge()) {
+                    continue;
+                }
+                Set<String> pins = new LinkedHashSet<>();
+                Pins p = m.getAnnotation(Pins.class);
+                if (p != null) {
+                    pins.addAll(Arrays.asList(p.value()));
+                    if (p.value().length == 0) {
+                        failures.add(where(k, m) + ": @Pins names no anchor");
+                    }
+                    for (String a : p.value()) {
+                        pinCount++;
+                        citedBy.computeIfAbsent(a, x -> new TreeSet<>()).add(where(k, m));
+                    }
+                }
+                boolean runs = classRuns && m.isAnnotationPresent(org.junit.Test.class)
+                        && !m.isAnnotationPresent(org.junit.Ignore.class) && Modifier.isPublic(m.getModifiers())
+                        && !Modifier.isStatic(m.getModifiers());
+                if (m.isAnnotationPresent(org.junit.Test.class)) {
+                    testMethods++;
+                    if (pins.isEmpty()) {
+                        testMethodsWithoutPins++;
+                    }
+                    if (runs) {
+                        testMethodsRun++;
+                    }
+                }
+                int seen = 0;
+                for (RedWitness w : m.getAnnotationsByType(RedWitness.class)) {
+                    witness(k, m, w, failures);
+                    seen++;
+                }
+                for (NotYetRed n : m.getAnnotationsByType(NotYetRed.class)) {
+                    attempt(k, m, n, failures);
+                }
+                Map<String, Set<String>> regions = new HashMap<>();
+                for (Regions r : m.getAnnotationsByType(Regions.class)) {
+                    citedBy.computeIfAbsent(r.of(), x -> new TreeSet<>()).add(where(k, m));
+                    if (!pins.contains(r.of())) {
+                        regionProblems.add(where(k, m) + ": @Regions(of = \"" + r.of() + "\") on a method that does "
+                                + "not @Pins it");
+                    }
+                    regions.computeIfAbsent(r.of(), x -> new LinkedHashSet<>()).addAll(Arrays.asList(r.value()));
+                }
+                if (!pins.isEmpty()) {
+                    Map<String, Object> row = base(k, m, "Pins");
+                    row.put("anchors", new ArrayList<>(pins));
+                    records.add(row);
+                }
+                methods.computeIfAbsent(m.getName(), s -> new ArrayList<>())
+                        .add(new PinMap.MethodFacts(pins, seen, regions, runs));
+            }
+        }
+
+        private void witness(Class<?> k, Method m, RedWitness w, List<String> failures) {
+            witnesses++;
+            String problem = recordProblem(w.verdict(), w.member(), w.at(), w.replacedBy(), w.fails(), w.on(), w.prose());
+            if (problem != null) {
+                failures.add(where(k, m) + ": @RedWitness: " + problem);
+            }
+            Map<String, Object> row = base(k, m, "RedWitness");
+            if (w.prose().isEmpty()) {
+                replayable++;
+                row.put("verdict", w.verdict());
+                row.put("member", w.member());
+                row.put("at", w.at());
+                row.put("replacedBy", RedWitness.NOT_GIVEN.equals(w.replacedBy()) ? null : w.replacedBy());
+                row.put("fails", w.fails());
+                row.put("on", w.on());
+            } else {
+                row.put("prose", w.prose());
+            }
+            records.add(row);
+        }
+
+        private void attempt(Class<?> k, Method m, NotYetRed n, List<String> failures) {
+            notYet++;
+            if (n.prose().trim().isEmpty()) {
+                failures.add(where(k, m) + ": @NotYetRed says nothing");
+            }
+            Map<String, Object> row = base(k, m, "NotYetRed");
+            row.put("prose", n.prose());
+            records.add(row);
+        }
+
+        private static Map<String, Object> base(Class<?> k, Method m, String kind) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("kind", kind);
+            row.put("class", k.getName());
+            row.put("method", m == null ? null : m.getName());
+            return row;
+        }
+
+        private static String where(Class<?> k, Method m) {
+            return k.getName() + (m == null ? "" : "#" + m.getName());
+        }
+
+        void checkAnchors(Set<String> defined, List<String> failures) {
+            citedBy.forEach((anchor, sites) -> {
+                if (!defined.contains(anchor)) {
+                    failures.add("an anchor no doc defines: " + anchor + ", cited by " + String.join(", ", sites));
+                }
+            });
+            failures.addAll(regionProblems);
+        }
+
+        /** The kind of a class is the base it extends: checked against its name and its package. */
+        void checkKinds(List<String> failures) {
+            for (Class<?> k : loaded) {
+                if (Modifier.isAbstract(k.getModifiers()) || k.isInterface() || k.isAnonymousClass()) {
+                    continue;
+                }
+                boolean onBase = AbstractPlayerE2ETest.class.isAssignableFrom(k);
+                if (k.getSimpleName().endsWith(E2E_NAME) && !onBase) {
+                    failures.add(k.getName() + " is named an e2e and does not extend "
+                            + AbstractPlayerE2ETest.class.getSimpleName() + ": the base, not the name, makes an "
+                            + "e2e -- extend it, or drop E2E from the name");
+                }
+                String pkg = k.getPackage() == null ? "" : k.getPackage().getName();
+                boolean milestone = pkg.endsWith(".test.milestone") || pkg.contains(".test.milestone.");
+                if (onBase && !(pkg.endsWith(".test.client") || pkg.contains(".test.client.") || milestone)) {
+                    failures.add(k.getName() + " extends " + AbstractPlayerE2ETest.class.getSimpleName()
+                            + " outside test.client / test.milestone: an e2e boots a client, and only those "
+                            + "tiers start one");
+                }
+                if (milestone && !onBase && hasTests(k)) {
+                    failures.add(k.getName() + " runs in the milestone tier and does not extend "
+                            + AbstractPlayerE2ETest.class.getSimpleName() + ": a milestone is a player's whole "
+                            + "loop, so it is an e2e, and only the base starts its children in e2e mode");
+                }
+            }
+        }
+
+        private static boolean hasTests(Class<?> k) {
+            for (Method m : k.getMethods()) {
+                if (m.isAnnotationPresent(org.junit.Test.class)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        List<Map<String, Object>> dump(Path root) {
+            for (Map<String, Object> row : records) {
+                String top = ((String) row.get("class")).split("\\$", 2)[0];
+                String rel = top.replace('.', '/') + ".java";
+                String file = null;
+                for (String r : new String[]{"src/test/java", "testframework/src/main/java"}) {
+                    if (Files.isRegularFile(root.resolve(r).resolve(rel))) {
+                        file = r + "/" + rel;
+                        break;
+                    }
+                }
+                row.put("file", file);
+            }
+            return records;
+        }
+
+        @Override
+        public List<String> classesNamed(String simpleName) {
+            List<String> named = bySimpleName.get(simpleName);
+            return named == null ? Collections.<String>emptyList() : named;
+        }
+
+        @Override
+        public List<PinMap.MethodFacts> methods(String qualifiedName, String method) {
+            Map<String, List<PinMap.MethodFacts>> m = byClass.get(qualifiedName);
+            if (m == null || !m.containsKey(method)) {
+                return Collections.emptyList();
+            }
+            return m.get(method);
+        }
+    }
+
+    /** The test mixin configuration whose every mixin the plugin must declare. */
+    private static final String TEST_MIXIN_CONFIG = "mixins.stellurgy.test.json";
+
+    /**
+     * Every mixin of the test configuration is declared, in {@code StellurgyTestMixinPlugin}, an OBSERVATION
+     * (applied in an e2e's child) or a BEHAVIOUR (not) — exactly one, and nothing is declared that the
+     * configuration does not hold. An undeclared mixin is not applied in an e2e at all; this is what keeps
+     * that default from being where a new mixin silently ends up.
+     */
+    static void checkTestMixinClassification(List<String> failures) throws IOException {
+        Set<String> configured = new TreeSet<>();
+        try (java.io.InputStream in = TestBindingsCheck.class.getClassLoader().getResourceAsStream(TEST_MIXIN_CONFIG)) {
+            if (in == null) {
+                failures.add("the test mixin configuration " + TEST_MIXIN_CONFIG + " is not on the test classpath");
+                return;
+            }
+            com.google.gson.JsonObject config = new com.google.gson.JsonParser()
+                    .parse(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+            for (String side : new String[]{"mixins", "client", "server"}) {
+                if (config.has(side)) {
+                    for (com.google.gson.JsonElement name : config.getAsJsonArray(side)) {
+                        configured.add(name.getAsString());
+                    }
+                }
+            }
+        }
+        Set<String> observation = dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.OBSERVATION;
+        Set<String> behaviour = dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.BEHAVIOUR;
+        for (String mixin : configured) {
+            boolean obs = observation.contains(mixin);
+            boolean beh = behaviour.contains(mixin);
+            if (obs == beh) {
+                failures.add("the test mixin " + mixin + " is declared " + (obs ? "BOTH" : "NEITHER")
+                        + " an OBSERVATION and a BEHAVIOUR in StellurgyTestMixinPlugin -- say which it is");
+            }
+        }
+        Set<String> declared = new TreeSet<>(observation);
+        declared.addAll(behaviour);
+        declared.removeAll(configured);
+        for (String stray : declared) {
+            failures.add("StellurgyTestMixinPlugin declares " + stray + ", which " + TEST_MIXIN_CONFIG + " does not hold");
+        }
+        checkTheOnlyTestMixinConfig(failures);
+    }
+
+    /**
+     * The test JVM's children weave exactly two configurations: the harness's own and
+     * {@value #TEST_MIXIN_CONFIG}, whose every mixin is classified above. So the harness coremod names that
+     * one (and only it), the configuration names {@code StellurgyTestMixinPlugin} as its plugin — the plugin
+     * that keeps BEHAVIOUR mixins out of an e2e's children — and no other mixin configuration is on the
+     * test classpath.
+     */
+    static void checkTheOnlyTestMixinConfig(List<String> failures) throws IOException {
+        if (!TEST_MIXIN_CONFIG.equals(com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod.CONSUMER_CONFIG)) {
+            failures.add("the harness coremod queues " + com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod.CONSUMER_CONFIG
+                    + ", not the classified test configuration " + TEST_MIXIN_CONFIG);
+        }
+        try (java.io.InputStream in = TestBindingsCheck.class.getClassLoader().getResourceAsStream(TEST_MIXIN_CONFIG)) {
+            if (in != null) {
+                com.google.gson.JsonObject config = new com.google.gson.JsonParser()
+                        .parse(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+                String plugin = config.has("plugin") ? config.get("plugin").getAsString() : null;
+                if (!dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.class.getName().equals(plugin)) {
+                    failures.add(TEST_MIXIN_CONFIG + " names the plugin " + plugin + ", not StellurgyTestMixinPlugin,"
+                            + " which alone keeps its BEHAVIOUR mixins out of an e2e's children");
+                }
+            }
+        }
+        Path resources = Paths.get(System.getProperty("user.dir")).resolve("build").resolve("resources").resolve("test");
+        if (Files.isDirectory(resources)) {
+            try (Stream<Path> walk = Files.walk(resources)) {
+                for (Path p : (Iterable<Path>) walk::iterator) {
+                    String name = p.getFileName().toString();
+                    if (name.startsWith("mixins.") && name.endsWith(".json") && !TEST_MIXIN_CONFIG.equals(name)
+                            && !"mixins.forgetestframework.json".equals(name)) {
+                        failures.add("a mixin configuration nobody classified is on the test classpath: "
+                                + resources.relativize(p) + " -- the children weave the harness's own and "
+                                + TEST_MIXIN_CONFIG + " only");
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The server's instrument table, {@code E2EInstrument} — a package-private enum of the mod, read here by
+     * reflection: this is the build's check, not a test, and the table has no other reader to ask.
+     */
+    static List<String[]> serverInstruments(List<String> failures) {
+        List<String[]> rows = new ArrayList<>();
+        try {
+            Class<?> table = Class.forName("dev.stannismod.stellurgy.command.test.E2EInstrument", true,
+                    TestBindingsCheck.class.getClassLoader());
+            java.lang.reflect.Field className = table.getDeclaredField("className");
+            java.lang.reflect.Field methodName = table.getDeclaredField("methodName");
+            className.setAccessible(true);
+            methodName.setAccessible(true);
+            for (Object row : table.getEnumConstants()) {
+                rows.add(new String[]{(String) className.get(row), (String) methodName.get(row)});
+            }
+        } catch (ReflectiveOperationException e) {
+            failures.add("the server's instrument table could not be read, so its instruments' bodies are unchecked: " + e);
+        }
+        return rows;
+    }
+}

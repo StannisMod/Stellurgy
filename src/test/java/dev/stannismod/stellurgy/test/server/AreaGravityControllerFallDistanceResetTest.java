@@ -7,6 +7,7 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TileAreaGravityController resets the fallDistance
@@ -58,6 +59,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private static final int CZ = 5560;
 
     /** Pins INV-MBM-23 (the area gravity controller zeroes fallDistance inside its radius only). */
+    @Pins("INV-MBM-23")
     @Test
     public void controllerResetsFallDistanceInsideRadiusOnly() throws Exception {
         // 0) Hold the controller + out-of-radius chunks hot so spawned

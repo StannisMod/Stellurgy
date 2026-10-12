@@ -15,6 +15,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * planet XML config integration test.
@@ -81,15 +82,14 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
     /**
      * The fixture's fields as the running server holds them, and — its last verdicts — that a file
      * stating no {@code <galaxyGen>} runs the shipped procedural galaxy.
-     *
-     * <p>red-witnessed, the last two verdicts (the field reads above predate the record form): with
-     * {@code DimensionPropertyCoupling#galaxyGenConfig} at {@code GalaxyGenConfig.defaults()} replaced
-     * by {@code GalaxyGenConfig.nonProcedural()}, it fails
-     * with "a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy:
-     * {"generator":"EmptyGalaxyGenerator","config":null}"; with {@code UniverseSchemaV0#generator}'s
-     * {@code new ClusteredGalaxyGenerator(reports, config, …)} built at half the config's density, with
-     * "built from the shipped configuration: … "density":0.175", 2026-10-05.</p>
      */
+    @RedWitness(prose = "the last two verdicts (the field reads above predate the record form): with"
+            + " {@code DimensionPropertyCoupling#galaxyGenConfig} at {@code GalaxyGenConfig.defaults()} replaced"
+            + " by {@code GalaxyGenConfig.nonProcedural()}, it fails"
+            + " with \"a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy:"
+            + " {\"generator\":\"EmptyGalaxyGenerator\",\"config\":null}\"; with {@code UniverseSchemaV0#generator}'s"
+            + " {@code new ClusteredGalaxyGenerator(reports, config, …)} built at half the config's density, with"
+            + " \"built from the shipped configuration: … \"density\":0.175\", 2026-10-05.")
     @Test
     public void fixtureXmlRoundTripsThroughServerStart() throws Exception {
 

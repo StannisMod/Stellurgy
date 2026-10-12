@@ -9,6 +9,8 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Contract tests for {@link CellSeam} — the arithmetic of flying THROUGH a cell face.
@@ -45,6 +47,7 @@ public class CellSeamTest {
     }
 
     /** Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis). */
+    @Pins("ADDR-10")
     @Test
     public void aShipPastTheMarginIsCarriedIntoTheNeighbourItLeftThrough() {
         double[] out = poseOfLocal(GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN + 1L, 0L, 0L);
@@ -95,6 +98,7 @@ public class CellSeamTest {
      * test exists to catch, with the return trip cut by a factor of ten.</p>
      * Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis).
      */
+    @Pins("ADDR-10")
     @Test
     public void aCarriedShipCannotPingPongBackAcrossTheFace() {
         double[] out = poseOfLocal(GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN + 1L, 0L, 0L);
@@ -135,11 +139,10 @@ public class CellSeamTest {
      * cell. Reading the in-cell offset alone would put every craft at most half a cell from the body
      * however far across the zone it had flown — which for Earth's zone is an error of millions of
      * blocks and always in the direction of "you have not left yet".</p>
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code CellSeam#distanceFromZoneBody} at {@code double dx = (double) coord.sectorX() * width + coord.localX()} reading the in-cell
-     * offset alone (the {@code sector * width} term dropped), this fails with "expected:&lt;5547882.0&gt;
-     * but was:&lt;0.0&gt;" — a craft three cells out read as standing on the body.</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code CellSeam#distanceFromZoneBody} at {@code double dx = (double) coord.sectorX() * width + coord.localX()} reading the in-cell"
+            + " offset alone (the {@code sector * width} term dropped), this fails with \"expected:&lt;5547882.0&gt;"
+            + " but was:&lt;0.0&gt;\" — a craft three cells out read as standing on the body.")
     @Test
     public void distanceIsMeasuredFromTheBodyAndNotFromTheCell() {
         // The body's own cell, a third of a cell out: the offset IS the distance. The 1-block
@@ -163,11 +166,10 @@ public class CellSeamTest {
      * <p>Between them a craft stays where it is. Without the gap a craft drifting on the boundary
      * re-decides its frame every tick and pays a full cut-and-paste each time — the same failure the
      * cube's two margins exist for, one level down, and the same ratio: ten to one.</p>
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code && distanceBlocks < zoneRadiusBlocks * (1d - SPHERE_REENTRY_FRACTION)} entering at the sphere itself
-     * (the {@code 1 - SPHERE_REENTRY_FRACTION} factor dropped), this fails with "but a whisker inside
-     * is not — that is the gap"; every other test in the class stays green on that inversion.</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code && distanceBlocks < zoneRadiusBlocks * (1d - SPHERE_REENTRY_FRACTION)} entering at the sphere itself"
+            + " (the {@code 1 - SPHERE_REENTRY_FRACTION} factor dropped), this fails with \"but a whisker inside"
+            + " is not — that is the gap\"; every other test in the class stays green on that inversion.")
     @Test
     public void theSphereThresholdsAreAHysteresisAndNotOneBoundaryReadTwice() {
         double r = 264_000d; // Luna's sphere, in blocks
@@ -197,14 +199,13 @@ public class CellSeamTest {
      * "yes, you have left" for a radius of zero would carry every craft in deep space out of a zone
      * it was never in; one that answered "entered" for the {@code -1} that
      * {@link CellSeam#distanceFromZoneBody} returns for a galactic coordinate would take it into one.</p>
-     *
-     * <p>red-witnessed: 2026-09-29, twice. With {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} stripped of its
-     * {@code zoneRadiusBlocks > 0} guard, this fails (then with a bare {@code AssertionError}; the
-     * assertions carry messages since). With {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} stripped of the same
-     * guard, it fails with "with no sphere there is nothing to enter, even for the -1 a galactic
-     * coordinate's distance is" — the assertion that read {@code (0, 0)} before could not see that
-     * guard at all, since {@code 0 < 0} is false without it.</p>
      */
+    @RedWitness(prose = "2026-09-29, twice. With {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} stripped of its"
+            + " {@code zoneRadiusBlocks > 0} guard, this fails (then with a bare {@code AssertionError}; the"
+            + " assertions carry messages since). With {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} stripped of the same"
+            + " guard, it fails with \"with no sphere there is nothing to enter, even for the -1 a galactic"
+            + " coordinate's distance is\" — the assertion that read {@code (0, 0)} before could not see that"
+            + " guard at all, since {@code 0 < 0} is false without it.")
     @Test
     public void noSphereMeansNoSphereAnswerRatherThanZero() {
         // The POSITIVE half first, in this method (STEP 7): the same distance against a real sphere
@@ -230,13 +231,12 @@ public class CellSeamTest {
      * not arithmetic there: both fire, and only the ORDER inside
      * {@code CellCrossingController.carryDestination} decides where the craft goes. Asked of the
      * cube, it would be the +X neighbour — a cube face nowhere near the sphere it crossed.</p>
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code CellCrossingController#carryDestination} at {@code if (bySphere != null)} asking the cube
-     * BEFORE the sphere, this fails with "where both fire the carry must be aimed by the sphere
-     * (20_0_0), not at the cube's neighbour: got 2_0_0". (The version before that date asserted
-     * {@code past < 2R/2 + CARRY_MARGIN} on a cube of the test's own making, which production never
-     * consults.)</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code CellCrossingController#carryDestination} at {@code if (bySphere != null)} asking the cube"
+            + " BEFORE the sphere, this fails with \"where both fire the carry must be aimed by the sphere"
+            + " (20_0_0), not at the cube's neighbour: got 2_0_0\". (The version before that date asserted"
+            + " {@code past < 2R/2 + CARRY_MARGIN} on a cube of the test's own making, which production never"
+            + " consults.)")
     @Test
     public void theSphereFiresBeforeTheCubeWhereBothApply() {
         double radius = GalacticCoord.HALF_CELL;           // the widest sphere production realizes

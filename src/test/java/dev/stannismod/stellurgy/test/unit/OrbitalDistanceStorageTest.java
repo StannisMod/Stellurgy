@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.universe.UniverseScale;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * An orbital distance the universe model can NAME survives every NBT form it is saved in — a planet's
@@ -21,14 +22,13 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>That reach is 5 000 AU, which is 7.5 billion units of 100 km: past what an {@code int} holds.
  * Each method's red names the one class whose storage narrowed the value.</p>
- *
- * <p>red-witnessed: 2026-09-30, with each of the three writers —
- * {@code StellarBody#writeToNBT} at {@code nbt.setLong("companionOrbit", orbitalDistance)},
- * {@code SystemBody#writeToNBT} at {@code nbt.setLong("orbitalDist", orbitalDistance)} and
- * {@code DimensionProperties#writeToNBT} at {@code nbt.setLong("orbitalDist", orbitalDist)} — put back
- * to {@code setInteger(key, (int) value)}: all three fail "expected:&lt;7479895000&gt; but
- * was:&lt;-1110039592&gt;".</p>
  */
+@RedWitness(prose = "2026-09-30, with each of the three writers —"
+        + " {@code StellarBody#writeToNBT} at {@code nbt.setLong(\"companionOrbit\", orbitalDistance)},"
+        + " {@code SystemBody#writeToNBT} at {@code nbt.setLong(\"orbitalDist\", orbitalDistance)} and"
+        + " {@code DimensionProperties#writeToNBT} at {@code nbt.setLong(\"orbitalDist\", orbitalDist)} — put back"
+        + " to {@code setInteger(key, (int) value)}: all three fail \"expected:&lt;7479895000&gt; but"
+        + " was:&lt;-1110039592&gt;\".")
 public class OrbitalDistanceStorageTest {
 
     /** The widest orbit the model names — read from production, not restated here. */

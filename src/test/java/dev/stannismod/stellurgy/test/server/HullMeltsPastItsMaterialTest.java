@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The failure ladder's last rung: past its material's own limit a block stops being damaged and is
@@ -107,12 +108,10 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
         }
     }
 
-    /**
-     * red-witnessed: with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting nothing until 1000 K past a material's
-     * ceiling: "past its own limit the block is not damaged, it is gone - and rock leaves lava
-     * behind: … expected:&lt;minecraft:[lava]&gt; but was:&lt;minecraft:[stone]&gt;", 2026-09-30. The
-     * two premises at its head are arrangements and are not witnessed.
-     */
+    @RedWitness(prose = "with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting nothing until 1000 K past a material's"
+            + " ceiling: \"past its own limit the block is not damaged, it is gone - and rock leaves lava"
+            + " behind: … expected:&lt;minecraft:[lava]&gt; but was:&lt;minecraft:[stone]&gt;\", 2026-09-30. The"
+            + " two premises at its head are arrangements and are not witnessed.")
     @Test
     public void aLoopPastTheMaterialsCeilingTakesTheBlockAndLeavesLava() throws Exception {
         int xMelt = stand("a coolant loop with a block of stone against it, cooked past stone's limit");
@@ -130,11 +129,9 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
                 + " behind: " + after, "minecraft:lava", after.text("block"));
     }
 
-    /**
-     * red-witnessed: with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting from 300 K below a material's ceiling:
-     * "below the limit the rung must not fire at all - a block is lost at a temperature, not at a
-     * mood: … expected:&lt;minecraft:[stone]&gt; but was:&lt;minecraft:[lava]&gt;", 2026-09-30.
-     */
+    @RedWitness(prose = "with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting from 300 K below a material's ceiling:"
+            + " \"below the limit the rung must not fire at all - a block is lost at a temperature, not at a"
+            + " mood: … expected:&lt;minecraft:[stone]&gt; but was:&lt;minecraft:[lava]&gt;\", 2026-09-30.")
     @Test
     public void theSameRigBelowTheCeilingLeavesTheBlockStanding() throws Exception {
         int xCold = stand("a coolant loop with a block of stone against it, kept below stone's limit");
@@ -157,14 +154,13 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      * block that was placed must be gone. The premise reads the same position before the cook, so the
      * block compared against is the one that actually stood there.</p>
      *
-     * <p>red-witnessed: with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting nothing until 1000 K past a material's
-     * ceiling: "a loop hotter than its own pipes has no pipes - the pipe that stood there must be gone:
-     * … Actual: stellurgy:heatpipe", 2026-09-30. The premise at its head is an arrangement and is not
-     * witnessed.</p>
-     *
      * <p>Whether the position is still in a network is not asserted: a pipe that stood there and was
      * solved into a loop is in one exactly while it stands, so that reading is this one again.</p>
      */
+    @RedWitness(prose = "with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting nothing until 1000 K past a material's"
+            + " ceiling: \"a loop hotter than its own pipes has no pipes - the pipe that stood there must be gone:"
+            + " … Actual: stellurgy:heatpipe\", 2026-09-30. The premise at its head is an arrangement and is not"
+            + " witnessed.")
     @Test
     public void aLoopPastItsOwnMaterialConsumesItself() throws Exception {
         int xSelf = stand("a coolant loop cooked past its own pipes' limit");
@@ -192,12 +188,11 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      * <p>The premise reads that ceiling off the block itself, so the verdict cannot pass on a block the
      * table merely fails to name: that case would never cross a threshold at all, and would say
      * nothing about the rule.</p>
-     *
-     * <p>red-witnessed: with {@code HullMelting#meltIfPast} at {@code if (block.getBlockHardness(state, world, pos) < 0.0F)} no longer sparing a block the world will not
-     * break: "a block the world refuses to let be broken is never taken by heat, even past its own
-     * material's ceiling: … expected:&lt;minecraft:[bedrock]&gt; but was:&lt;minecraft:[lava]&gt;",
-     * 2026-09-30. The two premises are arrangements and are not witnessed.</p>
      */
+    @RedWitness(prose = "with {@code HullMelting#meltIfPast} at {@code if (block.getBlockHardness(state, world, pos) < 0.0F)} no longer sparing a block the world will not"
+            + " break: \"a block the world refuses to let be broken is never taken by heat, even past its own"
+            + " material's ceiling: … expected:&lt;minecraft:[bedrock]&gt; but was:&lt;minecraft:[lava]&gt;\","
+            + " 2026-09-30. The two premises are arrangements and are not witnessed.")
     @Test
     public void aBlockTheWorldWillNotLetBeBrokenIsNeverMelted() throws Exception {
         int xBedrock = stand("a coolant loop with a block of bedrock against it");

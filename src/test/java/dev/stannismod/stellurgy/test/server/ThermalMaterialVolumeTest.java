@@ -7,6 +7,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * How much substance a block IS, read off the block itself.
@@ -45,16 +46,14 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
         return read;
     }
 
-    /**
-     * red-witnessed: one inversion per verdict, 2026-09-30. A CUBIC METRE —
-     * {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);}
-     * measuring every block at twice its collision volume: "a full block is a cubic metre: …
-     * expected:&lt;1000000&gt; but was:&lt;2000000&gt;". A CAPACITY — {@code ThermalMaterials#slugCapacity}
-     * at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} answering zero for
-     * every slug: "and iron is a substance the table knows,
-     * so it has a capacity: … \"capacity\":0". The placement premise is an arrangement and is not
-     * witnessed.
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. A CUBIC METRE —"
+            + " {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);}"
+            + " measuring every block at twice its collision volume: \"a full block is a cubic metre: …"
+            + " expected:&lt;1000000&gt; but was:&lt;2000000&gt;\". A CAPACITY — {@code ThermalMaterials#slugCapacity}"
+            + " at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} answering zero for"
+            + " every slug: \"and iron is a substance the table knows,"
+            + " so it has a capacity: … \\\"capacity\\\":0\". The placement premise is an arrangement and is not"
+            + " witnessed.")
     @Test
     public void aWholeBlockIsAWholeCubicMetreOfItsSubstance() throws Exception {
         Reply iron = placeAndRead("minecraft:iron_block");
@@ -65,11 +64,9 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
                 iron.longInteger("capacity") > 0);
     }
 
-    /**
-     * red-witnessed: with {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);} measuring every block at twice its collision
-     * volume: "half the shape is half the substance: … expected:&lt;500000&gt; but
-     * was:&lt;1000000&gt;", 2026-09-30. The placement premise is an arrangement and is not witnessed.
-     */
+    @RedWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);} measuring every block at twice its collision"
+            + " volume: \"half the shape is half the substance: … expected:&lt;500000&gt; but"
+            + " was:&lt;1000000&gt;\", 2026-09-30. The placement premise is an arrangement and is not witnessed.")
     @Test
     public void aSlabIsHalfABlockOfIt() throws Exception {
         Reply slab = placeAndRead("minecraft:stone_slab");
@@ -80,17 +77,16 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
 
     /**
      * The discriminator: the outline of a staircase is a full cube, and its substance is not.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOT A WHOLE BLOCK —
-     * {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);}
-     * measuring every block at twice its collision volume: "a staircase must
-     * not read as a whole block … \"volumeMilliLitres\":1500000". THREE QUARTERS —
-     * {@code ThermalMaterials#volumeMillilitres} at
-     * {@code cubicMetres += (box.maxX - box.minX) * (box.maxY - box.minY) * (box.maxZ - box.minZ);}
-     * summing only the first collision box: "it is the half slab plus the
-     * quarter step: … expected:&lt;750000&gt; but was:&lt;500000&gt;". The placement premise is an
-     * arrangement and is not witnessed.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NOT A WHOLE BLOCK —"
+            + " {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);}"
+            + " measuring every block at twice its collision volume: \"a staircase must"
+            + " not read as a whole block … \\\"volumeMilliLitres\\\":1500000\". THREE QUARTERS —"
+            + " {@code ThermalMaterials#volumeMillilitres} at"
+            + " {@code cubicMetres += (box.maxX - box.minX) * (box.maxY - box.minY) * (box.maxZ - box.minZ);}"
+            + " summing only the first collision box: \"it is the half slab plus the"
+            + " quarter step: … expected:&lt;750000&gt; but was:&lt;500000&gt;\". The placement premise is an"
+            + " arrangement and is not witnessed.")
     @Test
     public void stairsAreThreeQuartersBecauseTheirCOLLISIONSaysSoAndTheirOutlineDoesNot()
             throws Exception {
@@ -107,11 +103,10 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * The same half-block, held rather than placed. Nothing in the ore dictionary describes a stone
      * slab, so without this the thing in your hand is nothing at all - while the identical block on
      * the ground is half a cubic metre.
-     *
-     * <p>red-witnessed: with {@code ThermalMaterials#volumeMillilitres} at {@code return fromBlock * stack.getCount();} doubling the volume an item's block
-     * answers for: "an item the ore dictionary cannot name still has the shape of what it places: …
-     * expected:&lt;500000&gt; but was:&lt;1000000&gt;", 2026-09-30.</p>
      */
+    @RedWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code return fromBlock * stack.getCount();} doubling the volume an item's block"
+            + " answers for: \"an item the ore dictionary cannot name still has the shape of what it places: …"
+            + " expected:&lt;500000&gt; but was:&lt;1000000&gt;\", 2026-09-30.")
     @Test
     public void aSlabInTheHandIsTheSameHalfBlockAsASlabOnTheGround() throws Exception {
         Reply held = arrange("stellurgytest heat item minecraft:stone_slab");
@@ -124,12 +119,11 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * The substance chain's second link. Vanilla names no stone in the ore dictionary, so without the
      * block's own {@code Material} a stone slab has a size and no identity - and a size alone answers
      * nothing, because capacity is the two multiplied.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. STONE — {@code ThermalMaterials#byVanillaMaterial} at {@code return byName(VANILLA_MATERIAL_NAMES.get(vanilla));}
-     * answering no material for any vanilla {@code Material}: "stone must resolve through the block's
-     * own vanilla material: … expected:&lt;[stone]&gt; but was:&lt;[]&gt;". A CAPACITY — {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} answering zero for every slug: "and having both halves, it must have a
-     * capacity: … \"capacity\":0". The placement premise is an arrangement and is not witnessed.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. STONE — {@code ThermalMaterials#byVanillaMaterial} at {@code return byName(VANILLA_MATERIAL_NAMES.get(vanilla));}"
+            + " answering no material for any vanilla {@code Material}: \"stone must resolve through the block's"
+            + " own vanilla material: … expected:&lt;[stone]&gt; but was:&lt;[]&gt;\". A CAPACITY — {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} answering zero for every slug: \"and having both halves, it must have a"
+            + " capacity: … \\\"capacity\\\":0\". The placement premise is an arrangement and is not witnessed.")
     @Test
     public void aBlockTheOreDictionaryNeverNamedStillKnowsWhatItIsMadeOf() throws Exception {
         Reply slab = placeAndRead("minecraft:stone_slab");
@@ -145,12 +139,11 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * it. A gold block is {@code blockGold} in the ore dictionary and {@code Material.IRON} to vanilla,
      * because that material means "metal-looking" and nothing finer. Asked on an IRON block this
      * assertion would pass whichever source won, which is a test that cannot fail.
-     *
-     * <p>red-witnessed: with {@code ThermalMaterials#of} at {@code if (found != null)} passing over every ore-dictionary match:
-     * "the specific name must win over the coarse one: … expected:&lt;[gold]&gt; but
-     * was:&lt;[iron]&gt;", 2026-09-30. The placement premise is an arrangement and is not
-     * witnessed.</p>
      */
+    @RedWitness(prose = "with {@code ThermalMaterials#of} at {@code if (found != null)} passing over every ore-dictionary match:"
+            + " \"the specific name must win over the coarse one: … expected:&lt;[gold]&gt; but"
+            + " was:&lt;[iron]&gt;\", 2026-09-30. The placement premise is an arrangement and is not"
+            + " witnessed.")
     @Test
     public void theOreDictionaryOutranksTheBlocksCoarseVanillaMaterial() throws Exception {
         Reply gold = placeAndRead("minecraft:gold_block");
@@ -160,13 +153,12 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code ThermalMaterials#volumeMillilitres} at {@code double cubicMetres = 0.0D;} measuring a block with no collision boxes as
-     * a whole cube: "air is not a small lump of something: … expected:&lt;0&gt; but
-     * was:&lt;1000000&gt;", 2026-09-30. The placement premise is an arrangement and is not witnessed.
-     *
      * <p>Its capacity is not asserted: a capacity is material times volume, and with no volume it is
      * zero whatever the material — so "it can hold no heat" is this verdict again.</p>
      */
+    @RedWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code double cubicMetres = 0.0D;} measuring a block with no collision boxes as"
+            + " a whole cube: \"air is not a small lump of something: … expected:&lt;0&gt; but"
+            + " was:&lt;1000000&gt;\", 2026-09-30. The placement premise is an arrangement and is not witnessed.")
     @Test
     public void thereIsNoSubstanceInEmptySpace() throws Exception {
         Reply air = placeAndRead("minecraft:air");

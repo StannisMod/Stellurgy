@@ -13,6 +13,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Contract tests for the space controller's pure bookkeeping and policy: coord&harr;cell resolution,
@@ -220,6 +221,7 @@ public class SpaceManagerTest {
      * just as well mean the LRU picked the other cell for an unrelated reason.</p>
      * Pins JUMP-5 (a world is not evicted under an occupant).
      */
+    @Pins("JUMP-5")
     @Test
     public void aCellWithSomebodyStandingInItIsNotEvictedUnderHim() {
         FakeBinder binder = new FakeBinder(10, 11);
@@ -245,6 +247,7 @@ public class SpaceManagerTest {
      * The control for the leg above: with nobody in it, that same cell IS the victim.
      * Pins JUMP-5 (a world is not evicted under an occupant).
      */
+    @Pins("JUMP-5")
     @Test
     public void aCellWithNobodyInItIsEvictedByTheSameArrangement() {
         FakeBinder binder = new FakeBinder(10, 11);

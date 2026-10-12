@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A mirror does not swallow a beam — it sends it somewhere, and somewhere is a place with blocks in it.
@@ -50,18 +51,16 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
      * and the mirror is an absorber with extra steps. And the iron behind the mirror must be untouched
      * over the same window, or the plating is not reflecting but merely being slow to break. Either
      * half alone passes for the wrong reason.</p>
-     *
-     * <p>red-witnessed: with {@code HeldBeam.emit}'s deflection branch ({@code HeldBeam#emit} at {@code if (answer.isDeflected())})
-     * made to end the beam at the plating — the answer thrown away, as it once was — this fails at
-     * "the gun that fired into a mirror took nothing at all" (2026-09-29).</p>
-     *
-     * <p>red-witnessed: with {@code BlockMirrorPlating#onContact} at {@code return ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));} answering "passed through, carrying
-     * everything" on nineteen ticks in twenty and deflecting on the twentieth, this fails at "the iron
-     * BEHIND the mirror was damaged before the reflection reached the gun ... [{...pos:9713,84,9560,
-     * from:0,to:1...}...]" (2026-09-30). One tick in four was not enough: the gun's controller was
-     * staged by the reflected quarter before the iron by the rest, and the run stayed green — so this
-     * verdict catches a mirror that leaks most of a beam, not one that leaks some of it.</p>
      */
+    @RedWitness(prose = "with {@code HeldBeam.emit}'s deflection branch ({@code HeldBeam#emit} at {@code if (answer.isDeflected())})"
+            + " made to end the beam at the plating — the answer thrown away, as it once was — this fails at"
+            + " \"the gun that fired into a mirror took nothing at all\" (2026-09-29).")
+    @RedWitness(prose = "with {@code BlockMirrorPlating#onContact} at {@code return ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));} answering \"passed through, carrying"
+            + " everything\" on nineteen ticks in twenty and deflecting on the twentieth, this fails at \"the iron"
+            + " BEHIND the mirror was damaged before the reflection reached the gun ... [{...pos:9713,84,9560,"
+            + " from:0,to:1...}...]\" (2026-09-30). One tick in four was not enough: the gun's controller was"
+            + " staged by the reflected quarter before the iron by the rest, and the run stayed green — so this"
+            + " verdict catches a mirror that leaks most of a beam, not one that leaks some of it.")
     @Test
     public void aBeamHeldOnAMirrorComesBackToTheGunThatFiredIt() throws Exception {
         buildSite();

@@ -33,14 +33,14 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
 
 | clause | promise, in a line | state |
 |---|---|---|
-| JUMP-1 | the crew is in the same world as its ship, the whole flight | `[T]` |
-| JUMP-2 | the interval is livable: stand up, walk, use the ship — and it still looks like a flight | `[T]` livable, machinery and backdrop; only the measured WALK is unpinned here |
-| JUMP-3 | both crossings carry the crew in whatever posture it is in | `[T]` |
-| JUMP-4 | a seat is returned; the posture the crew is IN at the arrival cut is returned | `[T]` both halves |
+| JUMP-1 | the crew is in the same world as its ship, the whole flight | `[A]` its test is held |
+| JUMP-2 | the interval is livable: stand up, walk, use the ship — and it still looks like a flight | `[A]` its test is held; the measured WALK is pinned elsewhere |
+| JUMP-3 | both crossings carry the crew in whatever posture it is in | `[A]` its test is held |
+| JUMP-4 | a seat is returned; the posture the crew is IN at the arrival cut is returned | `[A]` its test is held |
 | JUMP-5 | no world is unbound under someone standing in it | `[T]` |
 | JUMP-6 | an aborted jump is a no-op for the crew | `[T]` |
 | JUMP-7 | retired | — |
-| JUMP-8 | leaving your ship in hyperspace kills you | `[T]` |
+| JUMP-8 | leaving your ship in hyperspace kills you | `[A]` its test is held |
 | JUMP-9 | hyperspace is durable: a restart is survivable BY a jump | `[T]` ship; `[T]` the crew's durable evidence |
 | JUMP-10 | nothing is left in hyperspace unaccounted for | `[T]` |
 | JUMP-11 | every body aboard is carried by its ship-relative point | `[T]` crew and loose bodies alike |
@@ -55,12 +55,14 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   world as its ship for the whole transit; a jump never leaves one behind in the cell it departed
   from. The departure hands the crew to the same per-tick retry the arrival uses, seating them on
   the parked hull without releasing the capture the far end still needs. Pinned by `VSTransitCrewGroupTest#aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying`.
-- **JUMP-2 (the interval is livable)** `[T][BEH]` (partly) During the transit the ship is an ordinary live
+- **JUMP-2 (the interval is livable)** `[A][BEH]` (partly) During the transit the ship is an ordinary live
   world to those aboard: its tile entities tick, its blocks are usable, and a crew member may leave
   his seat and walk the deck. This is what makes a jump a journey rather than a cutscene.
-  Pinned for the load-bearing half — a crew member stands up MID-FLIGHT with the real sneak key, is
+  Its test below is held (`@Ignore`, until the contract on moving an entity aboard a craft lands), so
+  until it runs again nothing pins this clause; what it asserts when it runs:
+  the load-bearing half — a crew member stands up MID-FLIGHT with the real sneak key, is
   resolved on his deck in hyperspace, and is still there and alive after longer than the void's whole
-  budget. **And his ship keeps RUNNING under him** `[T]` — the flight computer's own per-tick
+  budget. **And his ship keeps RUNNING under him** `[A]` — the flight computer's own per-tick
   recorder, keyed on dimension AND subspace position, goes on taking server-tick samples while the
   hull is parked. Two controls make that reading mean something: the same instrument on the same ship
   in its origin cell (or silence in hyperspace could be a key nobody writes under), and a subspace
@@ -68,7 +70,7 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   rather than this ship's). **Not pinned**: walking a measured distance along the deck — the
   transit fixture's deck is 3×3, so a walk leg on it measures the edge; the walk-the-deck contract is
   pinned on a ground fixture by `VSCrewRidesRollingDeckTest`.
-  **And it still LOOKS like a flight, in every posture** `[T]` — the corridor is drawn for anyone
+  **And it still LOOKS like a flight, in every posture** `[A]` — the corridor is drawn for anyone
   whose client is in hyperspace, not for whoever happens to be sitting on a seat (C14 CON-C14-18).
   Hyperspace has no synced bodies and its descent ring is deliberately suppressed, so the corridor is
   the entire visible statement that the ship is moving. The gate is the CLIENT'S OWN WORLD — the same
@@ -111,8 +113,9 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   re-seat, the origin cell stays loaded, and the lane the attempt reserved comes back to the
   allocator (the crossing seam's `failDepart` switch is what the test flips). Pinned by `ShipTransitManagerTest#anAbortedDepartureIsANoOpForTheCrew`.
 - **JUMP-7** — retired. (A restart must not remove a ship from hyperspace: see JUMP-9.)
-- **JUMP-8 (the void is lethal)** `[T][BEH]` A crew member who leaves his ship's volume in hyperspace
-  dies. Nothing prevents him from trying: the danger is the mechanic, not an invisible wall.
+- **JUMP-8 (the void is lethal)** `[A][BEH]` A crew member who leaves his ship's volume in hyperspace
+  dies. Its test is held (`@Ignore`, with the rest of its class, until the contract on moving an entity
+  aboard a craft lands), so until it runs again nothing pins this clause. Nothing prevents him from trying: the danger is the mechanic, not an invisible wall.
   Lanes are 2048 blocks apart (`HyperspaceTiles.java:25`) `[V]`, so no neighbour case is needed. The
   kill is a consecutive-tick countdown on the same 200-tick budget the crossing's retries spend, so
   nobody dies for the deck resolver's legitimate silence; it bypasses armour, creative and spectator

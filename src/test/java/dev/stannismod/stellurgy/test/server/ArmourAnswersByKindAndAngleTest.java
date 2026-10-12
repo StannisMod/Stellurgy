@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.Weapons;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What a hull does about WHAT hit it and HOW, rather than only about how much.
@@ -68,11 +69,10 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * The same energy, the same body, the same wall — only the KIND differs, and the depths must not
      * be the same. Priced off the wall rather than asserted as a number: what is claimed is that
      * boiling material away costs more per joule than pushing through it, not by how much.
-     *
-     * <p>red-witnessed (taken on the pre-merge form, where the table was reached through a static instance): with {@code StructureDamageEngine.stageCost} ({@code StructureDamageEngine#stageCost} at {@code double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);})
-     * pricing every kind from the kinetic column, this fails at "a beam dug as deep as a slug carrying the
-     * same energy (beam=10 slug=10, budget=20000)" (2026-09-29).</p>
      */
+    @RedWitness(prose = "(taken on the pre-merge form, where the table was reached through a static instance): with {@code StructureDamageEngine.stageCost} ({@code StructureDamageEngine#stageCost} at {@code double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);})"
+            + " pricing every kind from the kinetic column, this fails at \"a beam dug as deep as a slug carrying the"
+            + " same energy (beam=10 slug=10, budget=20000)\" (2026-09-29).")
     @Test
     public void aBeamBuysFarLessDepthThanASlugOfTheSameEnergy() throws Exception {
         prepare(SLUG_Z);
@@ -108,12 +108,11 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * turns out to live already: a stage is bought whole or not at all, so a beam that cannot afford
      * one buys nothing this tick and — carrying its energy onward rather than banking it — nothing on
      * any later tick either.</p>
-     *
-     * <p>red-witnessed (taken on the pre-merge form, where the table was reached through a static instance): with the kinetic column used for every kind ({@code StructureDamageEngine#stageCost} at {@code double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);})
-     * AND the intensity gate disabled ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))}) — either alone leaves it
-     * green, because the faint beam is refused by both — this fails at "a beam removed material with a
-     * slug's price for it" (2026-09-29).</p>
      */
+    @RedWitness(prose = "(taken on the pre-merge form, where the table was reached through a static instance): with the kinetic column used for every kind ({@code StructureDamageEngine#stageCost} at {@code double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);})"
+            + " AND the intensity gate disabled ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))}) — either alone leaves it"
+            + " green, because the faint beam is refused by both — this fails at \"a beam removed material with a"
+            + " slug's price for it\" (2026-09-29).")
     @Test
     public void aBeamCarryingABlocksWorthOfEnergyDoesNotScratchIt() throws Exception {
         prepare(FAINT_Z);
@@ -143,11 +142,10 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * than a tuning note is where the weak beam's energy goes: it is absorbed by the plate. Without
      * the threshold that beam does not warm the hull, it passes clean through it carrying everything
      * it arrived with.</p>
-     *
-     * <p>red-witnessed: with {@code StructureDamageEngine.tooFaintToDrill} ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))})
-     * answering false for every kind, this fails at "a beam below the intensity threshold removed material
-     * anyway" (2026-09-29).</p>
      */
+    @RedWitness(prose = "with {@code StructureDamageEngine.tooFaintToDrill} ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))})"
+            + " answering false for every kind, this fails at \"a beam below the intensity threshold removed material"
+            + " anyway\" (2026-09-29).")
     @Test
     public void aBeamBelowTheIntensityThresholdRemovesNothingWhileAStrongerOneDigs() throws Exception {
         prepare(FAINT_Z);
@@ -191,11 +189,10 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * <p>The law is an energy per unit of volume removed, and a voxel is a cubic metre only when
      * something fills it. Panes and solid glass are the same material — the same row of the same
      * table — so the only thing separating these two walls is that one of them is mostly air.</p>
-     *
-     * <p>red-witnessed: with {@code StructureDamageEngine#occupancyOf} at {@code if (world == null || pos == null)}'s {@code occupancyOf} answering 1.0
-     * for every block, this fails with "a wall of panes cost the same to bore as a wall of solid glass
-     * (panes=3 solid=3)". 2026-09-30.</p>
      */
+    @RedWitness(prose = "with {@code StructureDamageEngine#occupancyOf} at {@code if (world == null || pos == null)}'s {@code occupancyOf} answering 1.0"
+            + " for every block, this fails with \"a wall of panes cost the same to bore as a wall of solid glass"
+            + " (panes=3 solid=3)\". 2026-09-30.")
     @Test
     public void aRoundGoesFurtherThroughWhatIsMostlyAir() throws Exception {
         prepare(SOLID_Z);
@@ -226,17 +223,15 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      *
      * <p>The evidence is the contact seam's own ricochet decision at each plate — not the plate being
      * unmarked, which a round that missed it entirely would also leave.</p>
-     *
-     * <p>red-witnessed (taken on the pre-merge form, where the table was reached through a static instance): with the metal test in {@code ContactResolver.ricochet} ({@code ContactResolver#ricochet} at {@code if (!dev.stannismod.stellurgy.Stellurgy.weights().isMetal(world, contact.getPos()))})
-     * disabled, this fails at "the same round at the same angle skipped off WOOD" (2026-09-29).</p>
-     *
-     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code ContactResolver.ricochet}'s
-     * deflection ({@code ContactResolver.java:142}) answering null, this fails at "a round grazing a
-     * steel plate never skipped ... {...incidence:82.4...skipped:false}"; with the skip at
-     * {@code ContactResolver.java:106-110} also spending the round into the plate through the default
-     * law, at "the steel plate took damage from a round that skipped off it: [{...pos:1703,70,1090,
-     * from:0,to:4...}]".</p>
      */
+    @RedWitness(prose = "(taken on the pre-merge form, where the table was reached through a static instance): with the metal test in {@code ContactResolver.ricochet} ({@code ContactResolver#ricochet} at {@code if (!dev.stannismod.stellurgy.Stellurgy.weights().isMetal(world, contact.getPos()))})"
+            + " disabled, this fails at \"the same round at the same angle skipped off WOOD\" (2026-09-29).")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30: with {@code ContactResolver.ricochet}'s"
+            + " deflection ({@code ContactResolver.java:142}) answering null, this fails at \"a round grazing a"
+            + " steel plate never skipped ... {...incidence:82.4...skipped:false}\"; with the skip at"
+            + " {@code ContactResolver.java:106-110} also spending the round into the plate through the default"
+            + " law, at \"the steel plate took damage from a round that skipped off it: [{...pos:1703,70,1090,"
+            + " from:0,to:4...}]\".")
     @Test
     public void aGrazingRoundSkipsOffSteelAndDigsIntoWood() throws Exception {
         prepare(STEEL_Z);

@@ -26,6 +26,8 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A pilot who RELOGS in the middle of a hyperspace transit regains control ON ARRIVAL: after the
@@ -86,15 +88,16 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
     /**
      * A pilot who relogs while his ship is in transit is re-seated on it at the far end and flies it.
      *
-     * <p>red-witnessed: the regains-control verdict, the one contract verdict the wait rewrite touched
-     * — the others it touched are arrangement reads (the ship's id, the cell entry, the transit
-     * beginning); the re-seat and placement verdicts are not witnessed. With
-     * {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} replacing every input by an idle one once the
-     * craft is in a world other than the one it was first flown in, this fails with "held input must
-     * MOVE THE ARRIVED SHIP", every one of the client's gate readings open and his inputs sent — the
-     * fault named as the computer's, not the wire's — 2026-09-28.</p>
      * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
+    @Pins("SHIPCTL-16")
+    @RedWitness(prose = "the regains-control verdict, the one contract verdict the wait rewrite touched"
+            + " — the others it touched are arrangement reads (the ship's id, the cell entry, the transit"
+            + " beginning); the re-seat and placement verdicts are not witnessed. With"
+            + " {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} replacing every input by an idle one once the"
+            + " craft is in a world other than the one it was first flown in, this fails with \"held input must"
+            + " MOVE THE ARRIVED SHIP\", every one of the client's gate readings open and his inputs sent — the"
+            + " fault named as the computer's, not the wire's — 2026-09-28.")
     @Test
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {
 

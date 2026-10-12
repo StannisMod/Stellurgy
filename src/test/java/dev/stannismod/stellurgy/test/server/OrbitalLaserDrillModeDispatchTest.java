@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Orbital Laser Drill MINING-mode dispatch.
@@ -36,6 +37,7 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
     private static final int Z = 6400;
 
     /** Pins INV-MBM-04 (mining mode breaks the target block and yields its drop). */
+    @Pins("INV-MBM-04")
     @Test
     public void miningModeBreaksTargetBlockAndYieldsItsDrop() throws Exception {
         String resp = exec("stellurgytest infra laserdrill-mine 0 "

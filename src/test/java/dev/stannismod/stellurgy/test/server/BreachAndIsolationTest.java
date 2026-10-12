@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What happens when a hull is opened, and what the ship can do about it (D127-9 / D127-6).
@@ -39,18 +40,17 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
     /**
      * D127-9: the air leaves through the hole, over seconds, and it is really gone.
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: "a breached room is no
-     * longer a zone — its cells are gone: … expected:&lt;0&gt; but was:&lt;19&gt;". IN NO ZONE —
-     * {@code AtmosphereHandler#getBlobContaining} at {@code if (blob instanceof AtmosphereBlob && blob.contains(pos))} also answering the zone of a vent standing next to the
-     * position: "the position is in no zone any more — that is what the breach did: …
-     * \"airSource\":\"zone\"". STILL REACHABLE — {@code AtmosphereHandler#getAirState} at {@code return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).getAirState() : null;} handing back no air
-     * for a zone with no cells: "but the air must still be reachable from the VENT … \"ventHasAir\":false".
-     * LEAVES — {@code TileOxygenVent#ventBreachedAir} at {@code air.drawNitrogen(ratePerSecond);} venting nothing: "the air must actually leave (before=100
-     * after=100)". UNTIL VACUUM — {@code TileOxygenVent#ventBreachedAir} at {@code if (air == null || air.getTotalPressure() <= 0L)} stopping at half an atmosphere: "and keep
-     * leaving until the room is vacuum: … expected:&lt;0&gt; but was:&lt;49&gt;". The two premises
-     * at its head are arrangements and are not witnessed.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: \"a breached room is no"
+            + " longer a zone — its cells are gone: … expected:&lt;0&gt; but was:&lt;19&gt;\". IN NO ZONE —"
+            + " {@code AtmosphereHandler#getBlobContaining} at {@code if (blob instanceof AtmosphereBlob && blob.contains(pos))} also answering the zone of a vent standing next to the"
+            + " position: \"the position is in no zone any more — that is what the breach did: …"
+            + " \\\"airSource\\\":\\\"zone\\\"\". STILL REACHABLE — {@code AtmosphereHandler#getAirState} at {@code return blob instanceof AtmosphereBlob ? ((AtmosphereBlob) blob).getAirState() : null;} handing back no air"
+            + " for a zone with no cells: \"but the air must still be reachable from the VENT … \\\"ventHasAir\\\":false\"."
+            + " LEAVES — {@code TileOxygenVent#ventBreachedAir} at {@code air.drawNitrogen(ratePerSecond);} venting nothing: \"the air must actually leave (before=100"
+            + " after=100)\". UNTIL VACUUM — {@code TileOxygenVent#ventBreachedAir} at {@code if (air == null || air.getTotalPressure() <= 0L)} stopping at half an atmosphere: \"and keep"
+            + " leaving until the room is vacuum: … expected:&lt;0&gt; but was:&lt;49&gt;\". The two premises"
+            + " at its head are arrangements and are not witnessed.")
     @Test
     public void aBreachedRoomLosesItsAirToSpaceInsteadOfLosingItToBookkeeping() throws Exception {
         int cx = stand("a sealed room about to be breached");
@@ -92,15 +92,14 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * <p>The probe answers {@code sinkRequested: 0} for a position that is in NO network at all, so
      * "requests nothing" is only a reading about the breached zone once {@code inNetwork} says the
      * vent is still a node — without it, a breach that tore the network apart would pass here.</p>
-     *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, both read at the vent. STILL A NODE —
-     * {@code TileOxygenVent#performFunction} at {@code breached = true;} also leaving the ventilation network when it marks itself breached:
-     * "the vent must still be a node on the network after the breach: … \"inNetwork\":false". STOPS
-     * ASKING — {@code TileOxygenVent#zoneAirForNetwork} at {@code if (world == null || world.isRemote || !isMaintainingAtmosphere()} no longer withholding the zone's air from the network once
-     * the vent stops maintaining it: "a breached zone must stop asking the plant for air …
-     * \"sinkRequested\":124105". The two premises at its head are arrangements and are not
-     * witnessed.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30, both read at the vent. STILL A NODE —"
+            + " {@code TileOxygenVent#performFunction} at {@code breached = true;} also leaving the ventilation network when it marks itself breached:"
+            + " \"the vent must still be a node on the network after the breach: … \\\"inNetwork\\\":false\". STOPS"
+            + " ASKING — {@code TileOxygenVent#zoneAirForNetwork} at {@code if (world == null || world.isRemote || !isMaintainingAtmosphere()} no longer withholding the zone's air from the network once"
+            + " the vent stops maintaining it: \"a breached zone must stop asking the plant for air …"
+            + " \\\"sinkRequested\\\":124105\". The two premises at its head are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aBreachedZoneStopsDrawingFromThePlant() throws Exception {
         int cx = stand("a sealed room on a ventilation network, about to be breached");
@@ -140,12 +139,11 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * added for life support: a closed airlock door counts as a sealing block, so it divides a hull
      * into separately-maintained volumes. Pinned because the whole isolation story rests on it, and
      * nothing said so.
-     *
-     * <p>red-witnessed: with {@code SealableBlockHandler#isBlockSealed} at {@code boolean doorIsSealed = checkDoorIsSealed(world, pos, state);} answering an airlock door as never
-     * sealed: "a closed bulkhead must divide the hall … (51 → 51)", 2026-09-30. The two readings
-     * before it (the open hall, the hall through the doorway) are arrangements and are not
-     * witnessed.</p>
      */
+    @RedWitness(prose = "with {@code SealableBlockHandler#isBlockSealed} at {@code boolean doorIsSealed = checkDoorIsSealed(world, pos, state);} answering an airlock door as never"
+            + " sealed: \"a closed bulkhead must divide the hall … (51 → 51)\", 2026-09-30. The two readings"
+            + " before it (the open hall, the hall through the doorway) are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aClosedBulkheadDividesTheHullIntoTwoZones() throws Exception {
         int west = stand("one long hall about to be divided by a bulkhead");

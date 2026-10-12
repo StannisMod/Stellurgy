@@ -15,6 +15,8 @@ import dev.stannismod.stellurgy.test.StationInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The space-dim "outside-any-station" teleport guard, both branches.
@@ -145,13 +147,14 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
      * With a registered station, a player who lands in the space dim outside the station's bounds
      * gets teleported to the station's spawn location — not back to the overworld.
      *
-     * <p>red-witnessed: with the guard's call ({@code PlanetEventHandler#spaceDimensionGuard} at
-     * {@code evictIfOffStation(player)}) moved back into {@code PlanetEventHandler.playerTick}
-     * (the living update, inside the network handler's update) and {@code spaceDimensionGuard}
-     * disabled, this fails with "the guard must move a body off a given point ONCE … origin=206,64,154"
-     * (2026-09-24, run alone).</p>
      * Pins INV-EVT-07 (a server-side teleport of a PLAYER is never made from a handler that runs inside NetHandlerPlayServer.update).
      */
+    @Pins("INV-EVT-07")
+    @RedWitness(prose = "with the guard's call ({@code PlanetEventHandler#spaceDimensionGuard} at"
+            + " {@code evictIfOffStation(player)}) moved back into {@code PlanetEventHandler.playerTick}"
+            + " (the living update, inside the network handler's update) and {@code spaceDimensionGuard}"
+            + " disabled, this fails with \"the guard must move a body off a given point ONCE … origin=206,64,154\""
+            + " (2026-09-24, run alone).")
     @Test
     public void registeredStationTeleportTargetsStationSpawn() throws Exception {
         scenario().arranging("create a station orbiting the overworld")

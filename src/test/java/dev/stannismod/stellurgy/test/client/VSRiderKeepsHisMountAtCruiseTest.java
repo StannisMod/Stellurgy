@@ -18,6 +18,7 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A player riding a mount aboard a CRUISING ship never loses that mount.
@@ -143,13 +144,12 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
     /**
      * The rider keeps his mount through a coasting horizontal cruise faster than the mount's
      * tracking headroom.
-     *
-     * <p>red-witnessed: with {@code MixinEntityTrackerRiderSeesVehicle#ar$aRiderNeverLosesItsVehicle} at
-     * {@code cir.setReturnValue(true);} removed — no longer forcing the mount visible to its own rider —
-     * this fails with "the client threw the rider off his mount 24 of 40
-     * samples", worst anchor lag 40.0 blocks against a 16-block range — 2026-09-28, on the stimulus as
-     * it stands after the settle became a dose and a two-speed window.</p>
      */
+    @RedWitness(prose = "with {@code MixinEntityTrackerRiderSeesVehicle#ar$aRiderNeverLosesItsVehicle} at"
+            + " {@code cir.setReturnValue(true);} removed — no longer forcing the mount visible to its own rider —"
+            + " this fails with \"the client threw the rider off his mount 24 of 40"
+            + " samples\", worst anchor lag 40.0 blocks against a 16-block range — 2026-09-28, on the stimulus as"
+            + " it stands after the settle became a dose and a two-speed window.")
     @Ignore("RED IN ITS ARRANGEMENT, NEVER IN ITS VERDICT: in some full-suite runs the cruise is not"
             + " steady CRUISE_RAMP_TICKS after the command - two twenty-tick readings of 1.90 then"
             + " 2.13 blocks/tick, identical to the last digit in two failing runs, while the class"

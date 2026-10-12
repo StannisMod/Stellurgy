@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A player who SITS DOWN IN THE PILOT SEAT BEFORE HIS SHIP IS ASSEMBLED must still be flying that
@@ -238,6 +239,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * the passing post-assembly flight test - which is why the probe variant below exists.
      * Pins SHIPCTL-8 (a player who boards before assembly stays seated and controls the ship immediately after assembly).
      */
+    @Pins("SHIPCTL-8")
     @Test
     public void aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip() throws Exception {
         runPreAssemblyBoardingScenario(site(), Boarding.RIGHT_CLICK);
@@ -249,6 +251,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * config, control key, thresholds, polling shape - is the passing test's.
      * Pins SHIPCTL-8 (a player who boards before assembly stays seated and controls the ship immediately after assembly).
      */
+    @Pins("SHIPCTL-8")
     @Test
     public void aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip() throws Exception {
         // ITS OWN PLOT, and it is the allocator that says so rather than a second coordinate typed

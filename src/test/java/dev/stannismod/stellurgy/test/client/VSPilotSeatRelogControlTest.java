@@ -16,6 +16,8 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A pilot who logs out SEATED logs back in SEATED — with a WORKING control chain: after the relog,
@@ -85,16 +87,17 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
     /**
      * A pilot who logs out in his seat comes back in it, and his keys still fly the ship.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. BACK ON HIS MOUNT — the seat dummy
-     * refusing to be saved with its rider (a {@code writeToNBTOptional} override on
-     * {@code EntityDummy} returning false): "no `mount` … within 400 ticks". CONTROL AFTER THE RELOG —
-     * the client's ship-input send ({@code KeyBindings#handleShipPilotInput} at
-     * {@code PacketHandler.sendToServer(new PacketMachine(seat, TilePilotSeat.PACKET_PILOT_INPUT))}) gated to the first
-     * {@code WorldClient} the session built: "after the relog the CLIENT's own pilot gate must re-open
-     * against the restored mount and put input on the wire". The first wait the wave touched is the control leg's link before the relog, which
-     * says the key reached the ship at all.</p>
      * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
+    @Pins("SHIPCTL-16")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. BACK ON HIS MOUNT — the seat dummy"
+            + " refusing to be saved with its rider (a {@code writeToNBTOptional} override on"
+            + " {@code EntityDummy} returning false): \"no `mount` … within 400 ticks\". CONTROL AFTER THE RELOG —"
+            + " the client's ship-input send ({@code KeyBindings#handleShipPilotInput} at"
+            + " {@code PacketHandler.sendToServer(new PacketMachine(seat, TilePilotSeat.PACKET_PILOT_INPUT))}) gated to the first"
+            + " {@code WorldClient} the session built: \"after the relog the CLIENT's own pilot gate must re-open"
+            + " against the restored mount and put input on the wire\". The first wait the wave touched is the control leg's link before the relog, which"
+            + " says the key reached the ship at all.")
     @Test
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {
 

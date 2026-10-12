@@ -13,6 +13,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.openGuiByRightClick;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The one human act in the tier-1/tier-2 knowledge loop: a player standing at an observatory presses
@@ -46,14 +47,12 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientTest {
         return "knowledge-deposit";
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —
-     * {@code TileObservatory#useNetworkData} at {@code int[] result = uploadCrystalHere()} answering the
-     * button without calling {@code uploadCrystalHere}: "no
-     * `crystal_deposited` carrying pos = … was recorded within 200 ticks". THE WORLD LEARNS —
-     * {@code TileObservatory#uploadCrystalHere} at {@code teachThisBody(landed)} skipped: "after the click a pad here must
-     * be offered that world: … known:false".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —"
+            + " {@code TileObservatory#useNetworkData} at {@code int[] result = uploadCrystalHere()} answering the"
+            + " button without calling {@code uploadCrystalHere}: \"no"
+            + " `crystal_deposited` carrying pos = … was recorded within 200 ticks\". THE WORLD LEARNS —"
+            + " {@code TileObservatory#uploadCrystalHere} at {@code teachThisBody(landed)} skipped: \"after the click a pad here must"
+            + " be offered that world: … known:false\".")
     @Test
     public void pressingDepositTeachesTheWorldTheCrystalsAddresses() throws Exception {
         String where = "0 " + X + " " + Y + " " + Z;

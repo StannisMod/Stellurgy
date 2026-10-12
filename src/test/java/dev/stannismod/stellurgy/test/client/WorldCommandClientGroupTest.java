@@ -18,6 +18,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The player types an {@code /ar} command into the real client chat, and reads the answer there.
@@ -260,19 +261,17 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
      * Forge's registry in the client JVM still holds the id once the client is done with it. The
      * harness client is always remote (a separate server JVM), so this does not see the single-player
      * branch, where the registration is the integrated server's and must be left alone.</p>
-     *
-     * <p>red-witnessed: with {@code PacketDimInfo#executeClient} at
-     * {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every
-     * client only forgetting, the shape it shipped with — this fails with "the client forgot the
-     * deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,
-     * withdraw:false,forgeRegistered:true}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code PacketDimInfo#executeClient} at
-     * {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails
-     * at "the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14";
-     * with its {@code if (deleteDim)} branch never taken, at "the client was never told the planet was
-     * deleted — no `client_dim_forgotten` carrying dim = 14" (2026-10-06).</p>
      */
+    @RedWitness(prose = "with {@code PacketDimInfo#executeClient} at"
+            + " {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every"
+            + " client only forgetting, the shape it shipped with — this fails with \"the client forgot the"
+            + " deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,"
+            + " withdraw:false,forgeRegistered:true}\" (2026-10-06).")
+    @RedWitness(prose = "with {@code PacketDimInfo#executeClient} at"
+            + " {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails"
+            + " at \"the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14\";"
+            + " with its {@code if (deleteDim)} branch never taken, at \"the client was never told the planet was"
+            + " deleted — no `client_dim_forgotten` carrying dim = 14\" (2026-10-06).")
     @Test
     public void aDeletedPlanetLeavesNoForgeDimensionOnARemoteClient() throws Exception {
         scenario().arranging("op the bot and generate a planet the client learns of");
@@ -413,12 +412,11 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
      * not the "same-dim no-op" this javadoc used to claim; the recorded placement below says so.)
      * Positive coverage of the whole resolve &rarr; transfer &rarr; placement path without a second
      * bot (the harness is single-client; fetching a DIFFERENT connected player stays out of scope).
-     *
-     * <p>red-witnessed: with {@code FetchCommand#execute} at {@code new
-     * BasicTeleporter(destPlayer.getPosition())} aimed 20 blocks east, the wait for the client's
-     * placement at the teleporter's target passes and this fails on the position assertion with
-     * "preX=4096.5 … postX=4116.5" (2026-09-30).</p>
      */
+    @RedWitness(prose = "with {@code FetchCommand#execute} at {@code new"
+            + " BasicTeleporter(destPlayer.getPosition())} aimed 20 blocks east, the wait for the client's"
+            + " placement at the teleporter's target passes and this fails on the position assertion with"
+            + " \"preX=4096.5 … postX=4116.5\" (2026-09-30).")
     @Test
     public void selfFetchCompletesAndPreservesPosition() throws Exception {
         scenario().arranging("op the bot and read its own username back");

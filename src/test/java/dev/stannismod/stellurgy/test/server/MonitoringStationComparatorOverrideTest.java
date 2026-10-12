@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * {@link
@@ -61,6 +62,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
      * of building a rocket.
      * Pins INV-INFRA-01 (a freshly placed unlinked monitor reports an unpowered state and comparator zero).
      */
+    @Pins("INV-INFRA-01")
     @Test
     public void unlinkedMonitorReportsZeroComparatorOverride() throws Exception {
         int mx = CX_NO_ROCKET, my = CY + 2, mz = CZ;

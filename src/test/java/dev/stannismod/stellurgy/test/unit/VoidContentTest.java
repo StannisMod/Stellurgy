@@ -24,6 +24,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Contract tests for what is out there in the INTERGALACTIC VOID: rogue worlds, rogue stars, and the
@@ -206,13 +207,12 @@ public class VoidContentTest {
     /**
      * A starless system is its world and the moons it kept — each moon named inside the rogue's own
      * zone — and nothing else.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code ClusteredGalaxyGenerator#rogueBodiesFor} at {@code SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,} naming a rogue's
-     * moon by the rogue's own cell (the shape before moons had cells of their own), this fails with
-     * "a rogue's moon is named in the rogue's own zone expected:&lt;81453062671_-27624664390_8507222761&gt;
-     * but was:&lt;null&gt;". The anchor is chosen to KEEP a moon, and the method asserts one was
-     * checked: on a moonless rogue the moon verdict ran on nothing.</p>
      */
+    @RedWitness(prose = "2026-09-29, with {@code ClusteredGalaxyGenerator#rogueBodiesFor} at {@code SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,} naming a rogue's"
+            + " moon by the rogue's own cell (the shape before moons had cells of their own), this fails with"
+            + " \"a rogue's moon is named in the rogue's own zone expected:&lt;81453062671_-27624664390_8507222761&gt;"
+            + " but was:&lt;null&gt;\". The anchor is chosen to KEEP a moon, and the method asserts one was"
+            + " checked: on a moonless rogue the moon verdict ran on nothing.")
     @Test
     public void aStarlessSystemIsTheWorldItsMoonsAndNothingElse() {
         // No belt and no companion, and neither is an omission: a belt is material that never accreted

@@ -15,6 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.DIRECT_JUMP_SPEED;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * E2E: a jump short enough to have no cruise moves a real VS ship between two cells in ONE crossing.
@@ -99,17 +100,15 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
      * descend-target body of the cell it stands in must be farther than the trigger's radius, by the
      * same centre distance the trigger compares. A cell with no body in it would make both trivially
      * true, so the body being there is required first.</p>
-     *
-     * <p>red-witnessed: with {@code SpaceSubsystem#SpaceSubsystem} at
-     * {@code arrivalStandoff(shipId, target, useClock.getAsLong())} — the direct crosser's argument to
-     * {@code requestDirectJump} — replaced by the raw {@code target}, this failed with "Nearest descend-target centre: 0" — the ship
-     * SETTLED in cell 19_0_0 at bearing [0,0,0] from the planet; 2026-09-23.</p>
-     *
-     * <p>red-witnessed: 2026-10-01, with {@code SpaceSubsystem#arrivalStandoff} at
-     * {@code clearance = Math.max(clearance, DescentShell.radiusAround(body))} and its ring line both
-     * dropped — the flat 1 024 ring the standoff used before it took the bodies' shells — this fails
-     * with "Tightest body … "distance":1023,"boundaryDistance":0,"shellRadius":25913".</p>
      */
+    @RedWitness(prose = "with {@code SpaceSubsystem#SpaceSubsystem} at"
+            + " {@code arrivalStandoff(shipId, target, useClock.getAsLong())} — the direct crosser's argument to"
+            + " {@code requestDirectJump} — replaced by the raw {@code target}, this failed with \"Nearest descend-target centre: 0\" — the ship"
+            + " SETTLED in cell 19_0_0 at bearing [0,0,0] from the planet; 2026-09-23.")
+    @RedWitness(prose = "2026-10-01, with {@code SpaceSubsystem#arrivalStandoff} at"
+            + " {@code clearance = Math.max(clearance, DescentShell.radiusAround(body))} and its ring line both"
+            + " dropped — the flat 1 024 ring the standoff used before it took the bodies' shells — this fails"
+            + " with \"Tightest body … \"distance\":1023,\"boundaryDistance\":0,\"shellRadius\":25913\".")
     @Test
     public void aShortJumpAtABodyArrivesOnItsStandoffRingAndStaysInSpace() throws Exception {
 

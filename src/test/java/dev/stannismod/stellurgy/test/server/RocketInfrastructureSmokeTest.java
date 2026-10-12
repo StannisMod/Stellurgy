@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * rocket infrastructure (loaders, unloaders, monitoring,
@@ -72,6 +73,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      * {@code TileFuelingStation#performFunction}, or the {@code canPerformFunction} guard breaks.
      * Pins INV-INFRA-12 (a powered fueling station next to a rocket drains its tank into the rocket).
      */
+    @Pins("INV-INFRA-12")
     @Test
     public void stationDrainsTankAndRocketFuelRisesAfterLinkAndTick() throws Exception {
         // The test's own bar on the ARRANGEMENT: a craft with no capacity or a station with an empty

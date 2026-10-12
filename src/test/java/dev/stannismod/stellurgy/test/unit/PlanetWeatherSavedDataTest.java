@@ -12,6 +12,7 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * {@link PlanetWeatherSavedData} stores state by dimension id
@@ -23,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 public class PlanetWeatherSavedDataTest {
 
     /** Pins INV-WGEN-13 (getOrCreate is idempotent and isolates dimensions). */
+    @Pins("INV-WGEN-13")
     @Test
     public void getOrCreateInsertsFreshStateAndIsIdempotent() {
         PlanetWeatherSavedData data = new PlanetWeatherSavedData();
@@ -36,6 +38,7 @@ public class PlanetWeatherSavedDataTest {
     }
 
     /** Pins INV-WGEN-13 (getOrCreate is idempotent and isolates dimensions). */
+    @Pins("INV-WGEN-13")
     @Test
     public void getOrCreateIsolatesDimensions() {
         PlanetWeatherSavedData data = new PlanetWeatherSavedData();

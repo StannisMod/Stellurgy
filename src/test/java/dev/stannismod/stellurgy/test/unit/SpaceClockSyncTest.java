@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.space.SpaceClockSync;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A client's copy of the space clock, as a contract rather than as an implementation.
@@ -23,6 +24,7 @@ public class SpaceClockSyncTest {
     private final SpaceClockSync clock = new SpaceClockSync();
 
     /** Pins CLOCK-3 (the space clock is readable on both sides, and an unsynced client says so). */
+    @Pins("CLOCK-3")
     @Test
     public void aClientNobodyHasToldIsDistinguishableFromOneToldItIsTickZero() {
         assertFalse("a client that has never been synced must say so", clock.hasSync());
@@ -37,6 +39,7 @@ public class SpaceClockSyncTest {
     }
 
     /** Pins CLOCK-3 (the space clock is readable on both sides, and an unsynced client says so). */
+    @Pins("CLOCK-3")
     @Test
     public void theAnswerIsTheBaselinePlusTheClientTicksSinceIt() {
         clock.accept(1_000L);
@@ -67,6 +70,7 @@ public class SpaceClockSyncTest {
     }
 
     /** Pins CLOCK-3 (the space clock is readable on both sides, and an unsynced client says so). */
+    @Pins("CLOCK-3")
     @Test
     public void aLaterBaselineWinsEvenWhenItMovesTheAnswerBackwards() {
         clock.accept(1_000L);

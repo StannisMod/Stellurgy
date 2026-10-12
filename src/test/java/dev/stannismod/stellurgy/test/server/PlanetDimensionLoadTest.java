@@ -13,6 +13,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * planet/dimension lifecycle smoke.
@@ -36,6 +37,7 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     private static final String ANGLE_PATTERN = "angle";
 
     /** Pins INV-DIM-16 (A registered planet uses WorldProviderPlanet). */
+    @Pins("INV-DIM-16")
     @Test
     public void providerClassIsWorldProviderPlanet() throws Exception {
         // Stellurgy registers Earth as dim 0 but keeps its vanilla WorldProviderSurface,

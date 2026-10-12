@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.Weapons;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A beam is HELD, and what that means is that dwell is the weapon.
@@ -56,12 +57,11 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
      * as long" would measure the capacitor rather than the dwell. Fed, what is left to vary is the
      * time on target, which is the thing being claimed. The dose starts only once the gun has LIT on
      * the wall, so the slew onto it is not billed to either leg.</p>
-     *
-     * <p>red-witnessed: with {@code HeldBeam#emit} at {@code TravellingBody body = new TravellingBody(ShotRegistry.get(world).nextImpactId(),} giving every tick of the beam the same impact
-     * identity (so the dedup memory refuses every tick after the first), this fails with "keeping the
-     * beam on the same spot four times as long got no further into the wall (short=1 long=1)".
-     * 2026-09-30.</p>
      */
+    @RedWitness(prose = "with {@code HeldBeam#emit} at {@code TravellingBody body = new TravellingBody(ShotRegistry.get(world).nextImpactId(),} giving every tick of the beam the same impact"
+            + " identity (so the dedup memory refuses every tick after the first), this fails with \"keeping the"
+            + " beam on the same spot four times as long got no further into the wall (short=1 long=1)\"."
+            + " 2026-09-30.")
     @Test
     public void holdingItLongerDigsDeeper() throws Exception {
         buildSite(DWELL_X);
@@ -97,17 +97,15 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
      * A starved beam goes DARK and saves up, rather than flickering at whatever rate its feed happens
      * to deliver. The distinction a fire control cannot be built without: "not shooting" and "cannot
      * shoot yet" are different answers, and only one of them means the gun is broken.
-     *
-     * <p>red-witnessed: with {@code beamRecharging = true} removed from {@code TileTurret.burnOneTick}'s
-     * starved branch ({@code TileTurret#burnOneTick} at {@code beamRecharging = true;}), this fails at "a beam with no feed never went dark
-     * to save up" (2026-09-29).</p>
-     *
-     * <p>red-witnessed: with that starved branch ({@code TileTurret#burnOneTick} at {@code return false;}) answering lit on the
-     * tick it goes dark, this fails at "the gun reports itself lit while it is recharging ...
-     * [{...lit:true,wanted:true,weapons:true,recharging:true,energy:0}]" (2026-09-30). The first form of
-     * this verdict read only the record the wait returned — the newest, dark one — and stayed GREEN
-     * under the same inversion; it now reads every recharging edge in the window.</p>
      */
+    @RedWitness(prose = "with {@code beamRecharging = true} removed from {@code TileTurret.burnOneTick}'s"
+            + " starved branch ({@code TileTurret#burnOneTick} at {@code beamRecharging = true;}), this fails at \"a beam with no feed never went dark"
+            + " to save up\" (2026-09-29).")
+    @RedWitness(prose = "with that starved branch ({@code TileTurret#burnOneTick} at {@code return false;}) answering lit on the"
+            + " tick it goes dark, this fails at \"the gun reports itself lit while it is recharging ..."
+            + " [{...lit:true,wanted:true,weapons:true,recharging:true,energy:0}]\" (2026-09-30). The first form of"
+            + " this verdict read only the record the wait returned — the newest, dark one — and stayed GREEN"
+            + " under the same inversion; it now reads every recharging edge in the window.")
     @Test
     public void aStarvedBeamGoesDarkAndSavesUpInsteadOfStuttering() throws Exception {
         buildSite(STARVED_X);
@@ -157,25 +155,22 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
      * <p>The extinguish must be the CLEAR's, not the feed's: a buffer that ran dry in the window would
      * put the beam out by the starved road ({@code turret_beam} lit:false), so the gun is fed just
      * before the clear and the window must hold no starved edge before the dark announcement.</p>
-     *
-     * <p>red-witnessed: with {@code TileTurret#update} at {@code extinguishBeam();} removed from the
-     * no-target branch (the shape it shipped with: {@code mechanism.clearCommand(); return;}), this
-     * fails at "the beam gun's target was cleared and its beam was never announced dark: the players
-     * watching keep drawing it — no `turret_beam_announced` carrying pos = 9730,84,9500 and lit = false
-     * was recorded within 600 ticks", with a lit {@code turret_beam_announced} in the same window, so
-     * the instrument ran (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code Channel#update} (in {@code BeamReplication}) at
-     * {@code final boolean burning = lit && path != null && path.size() >= 2;} answering false, this
-     * fails at the lit wait "the beam gun never announced itself lit ... no `turret_beam_announced`
-     * carrying pos = 9730,84,9500 and lit = true" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileTurret#update} at {@code spec = assembly.getSpec();} answering
-     * {@code GunSpec.EMPTY}, this fails at the assembly wait "the beam gun never assembled — no
-     * `turret_assembled` carrying pos = 9730,84,9500 and operable = true and parts = 5 was recorded
-     * within 600 ticks", with other `turret_assembled` records in the window, so the instrument ran
-     * (2026-10-06, logs/r1-assembled-witness.log).</p>
      */
+    @RedWitness(prose = "with {@code TileTurret#update} at {@code extinguishBeam();} removed from the"
+            + " no-target branch (the shape it shipped with: {@code mechanism.clearCommand(); return;}), this"
+            + " fails at \"the beam gun's target was cleared and its beam was never announced dark: the players"
+            + " watching keep drawing it — no `turret_beam_announced` carrying pos = 9730,84,9500 and lit = false"
+            + " was recorded within 600 ticks\", with a lit {@code turret_beam_announced} in the same window, so"
+            + " the instrument ran (2026-10-06).")
+    @RedWitness(prose = "with {@code Channel#update} (in {@code BeamReplication}) at"
+            + " {@code final boolean burning = lit && path != null && path.size() >= 2;} answering false, this"
+            + " fails at the lit wait \"the beam gun never announced itself lit ... no `turret_beam_announced`"
+            + " carrying pos = 9730,84,9500 and lit = true\" (2026-10-06).")
+    @RedWitness(prose = "with {@code TileTurret#update} at {@code spec = assembly.getSpec();} answering"
+            + " {@code GunSpec.EMPTY}, this fails at the assembly wait \"the beam gun never assembled — no"
+            + " `turret_assembled` carrying pos = 9730,84,9500 and operable = true and parts = 5 was recorded"
+            + " within 600 ticks\", with other `turret_assembled` records in the window, so the instrument ran"
+            + " (2026-10-06, logs/r1-assembled-witness.log).")
     @Test
     public void clearingTheTargetPutsTheBeamOut() throws Exception {
         buildSite(CLEARED_X);

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -16,6 +17,7 @@ import java.nio.file.Path;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * multi-boot harness for station landing-pad
@@ -48,7 +50,7 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class SpaceStationPadPersistenceTest {
+public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
 
     /** The pad this scenario claims, before and after the restart. The arrangement's own X. */
     private static final int PAD_B_X = 200;
@@ -77,11 +79,12 @@ public class SpaceStationPadPersistenceTest {
     }
 
     /** Pins INV-STN-06 (pads survive a save and reload with occupied, name and auto-land intact). */
+    @Pins("INV-STN-06")
     @Test
     public void padSetAndPerPadStateSurviveRestart() throws Exception {
         long stationId;
 
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         // --- Boot 1: create station with three pads, lock auto-land + dock B
         String createStation = String.join("\n",
@@ -114,7 +117,7 @@ public class SpaceStationPadPersistenceTest {
         firstBoot = null;
 
         // --- Boot 2 on the same workDir — every pad-level state must restore.
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String stations = String.join("\n",
                 secondBoot.client().execute("stellurgytest station list"));
@@ -202,9 +205,10 @@ public class SpaceStationPadPersistenceTest {
      * for pads that weren't docked at save time.
      * Pins INV-STN-06 (pads survive a save and reload with occupied, name and auto-land intact).
      */
+    @Pins("INV-STN-06")
     @Test
     public void autoLandFlagWithoutDockSurvivesRestart() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         String createStation = String.join("\n",
                 firstBoot.client().execute("stellurgytest station create 0"));
         Reply created = Reply.of("stellurgytest station create", createStation);
@@ -229,7 +233,7 @@ public class SpaceStationPadPersistenceTest {
         firstBoot.close();
         firstBoot = null;
 
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         StationPads.Pad lonelyAfter = pads(secondBoot, stationId).at(999, 999);
         assertTrue("padA allowAutoLand must be true after restart — "
                         + "SpaceStationObject:801 now reads from the same "

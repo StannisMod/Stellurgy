@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * commands smoke.
@@ -19,6 +20,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
     private static final String COMMANDS = "commands";
 
     /** Pins INV-CMD-07 (the primary command and its help survive registration). */
+    @Pins("INV-CMD-07")
     @Test
     public void primaryCommandsAreRegistered() throws Exception {
         String joined = String.join("\n", client().execute("stellurgytest commands list"));
@@ -34,6 +36,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-CMD-07 (the primary command and its help survive registration). */
+    @Pins("INV-CMD-07")
     @Test
     public void stellurgyHelpCommandPrintsUsageWithoutCrash() throws Exception {
         // Stellurgy's primary command must surface usage text without crashing

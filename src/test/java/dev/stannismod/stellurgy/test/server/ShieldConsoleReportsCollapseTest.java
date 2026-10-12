@@ -9,6 +9,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A console reports its network as dead once the network dies.
@@ -33,16 +35,17 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
     private int y;
 
     /**
-     * <p>red-witnessed: with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}
-     * once it has been true: "a console whose network lost its last source must stop reporting it as
-     * live: … \"networkConnected\":true", 2026-09-30, re-run under the battery arrangement.
-     * STATUS — {@code TileEntityShieldConsole#applyNetworkState} at {@code networkStatus = shieldState.getStatus();} keeping its previous
-     * status once the network is no longer connected: "and must report the disconnected status
-     * rather than the previous one (2): … \"networkStatus\":2 … expected:&lt;1&gt; but
-     * was:&lt;2&gt;", 2026-09-30. The two premises at its head are arrangements and are not
-     * witnessed.</p>
      * Pins INV-NET-04 (a component with no source reports DISCONNECTED to controllers).
      */
+    @Pins("INV-NET-04")
+    @RedWitness(prose = "with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}"
+            + " once it has been true: \"a console whose network lost its last source must stop reporting it as"
+            + " live: … \\\"networkConnected\\\":true\", 2026-09-30, re-run under the battery arrangement."
+            + " STATUS — {@code TileEntityShieldConsole#applyNetworkState} at {@code networkStatus = shieldState.getStatus();} keeping its previous"
+            + " status once the network is no longer connected: \"and must report the disconnected status"
+            + " rather than the previous one (2): … \\\"networkStatus\\\":2 … expected:&lt;1&gt; but"
+            + " was:&lt;2&gt;\", 2026-09-30. The two premises at its head are arrangements and are not"
+            + " witnessed.")
     @Test
     public void aConsoleStopsReportingANetworkThatLostItsLastSource() throws Exception {
         FixtureSite site = clearedSite(2, 2, "a shield source, sink and console in a row");

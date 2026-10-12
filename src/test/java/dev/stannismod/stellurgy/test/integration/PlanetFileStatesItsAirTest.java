@@ -22,6 +22,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A planet file may state a body's air outright — the gases, whole — or name another body of the same
@@ -82,11 +83,9 @@ public class PlanetFileStatesItsAirTest {
         return null;
     }
 
-    /**
-     * red-witnessed: with {@code DimensionProperties#authorAtmosphere} at {@code air = authored;} made
-     * {@code air = AirState.vacuum();}, this fails with "the carbon dioxide stated expected:&lt;965000000&gt;
-     * but was:&lt;0&gt;" (2026-10-03).
-     */
+    @RedWitness(prose = "with {@code DimensionProperties#authorAtmosphere} at {@code air = authored;} made"
+            + " {@code air = AirState.vacuum();}, this fails with \"the carbon dioxide stated expected:&lt;965000000&gt;"
+            + " but was:&lt;0&gt;\" (2026-10-03).")
     @Test
     public void aStatedCompositionIsExactlyTheWorldsAir() throws Exception {
         DimensionProperties venusia = named(read(planet("Venusia", stated(965_000L, 35_000L))), "Venusia");
@@ -98,11 +97,9 @@ public class PlanetFileStatesItsAirTest {
         assertEquals("nothing but what was stated", 2, air.composition().size());
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#resolveCopy} at {@code copy.body.authorAtmosphere(air);}
-     * commented out, this fails with "a forward copy holds the exemplar's air" — the copy kept the
-     * constructor's Earth air (2026-10-03).
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code copy.body.authorAtmosphere(air);}"
+            + " commented out, this fails with \"a forward copy holds the exemplar's air\" — the copy kept the"
+            + " constructor's Earth air (2026-10-03).")
     @Test
     public void aCopyTakesTheNamedBodysAirForwardAndThroughAnotherCopy() throws Exception {
         // The copies come FIRST in the file and the second copies the first: the name is resolved
@@ -118,42 +115,34 @@ public class PlanetFileStatesItsAirTest {
                 exemplar.getAir().composition(), named(read, "Second").getAir().composition());
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#resolveCopy} at {@code if (chain.contains(self))} made
-     * {@code if (false && …)}, this fails with a {@code StackOverflowError} (2026-10-03).
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (chain.contains(self))} made"
+            + " {@code if (false && …)}, this fails with a {@code StackOverflowError} (2026-10-03).")
     @Test
     public void aCircleOfCopiesRefusesTheLoad() throws Exception {
         assertRefused(planet("Ping", copyOf("Pong")) + planet("Pong", copyOf("Ping")), "Ping");
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#resolveCopy} at {@code if (named == null || named.isEmpty())}
-     * made {@code if (false && …)}, this fails with "the refusal must name the body whose air could not
-     * be resolved: null" — an NPE, not a refusal (2026-10-03).
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (named == null || named.isEmpty())}"
+            + " made {@code if (false && …)}, this fails with \"the refusal must name the body whose air could not"
+            + " be resolved: null\" — an NPE, not a refusal (2026-10-03).")
     @Test
     public void aCopyOfANameNoBodyHasRefusesTheLoad() throws Exception {
         assertRefused(planet("Orphan", copyOf("Nowhere")), "Orphan");
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#resolveCopy} at {@code if (named.size() > 1)} made
-     * {@code if (false && …)}, this fails with "the load must be refused, not completed with a default
-     * air for 'Reader'" (2026-10-03).
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (named.size() > 1)} made"
+            + " {@code if (false && …)}, this fails with \"the load must be refused, not completed with a default"
+            + " air for 'Reader'\" (2026-10-03).")
     @Test
     public void aCopyOfANameTwoBodiesShareRefusesTheLoad() throws Exception {
         assertRefused(planet("Twin", stated(1L, 1L)) + planet("Twin", stated(2L, 2L))
                 + planet("Reader", copyOf("Twin")), "Reader");
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code if ((statedAir != null || airCopyOf != null) && totalStated)} made {@code if (false && …)},
-     * this fails with "a body stating a composition AND a total must be refused" — `Both` loaded, the
-     * control passing (2026-10-03).
-     */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code if ((statedAir != null || airCopyOf != null) && totalStated)} made {@code if (false && …)},"
+            + " this fails with \"a body stating a composition AND a total must be refused\" — `Both` loaded, the"
+            + " control passing (2026-10-03).")
     @Test
     public void aCompositionBesideATotalRefusesThatBodyAndNoOther() throws Exception {
         DimensionPropertyCoupling read = read(
@@ -169,12 +158,11 @@ public class PlanetFileStatesItsAirTest {
      * What can be harvested from a body is what its air holds, so a planet-level {@code <gas>} — the
      * list a file once kept beside the air — would mean nothing; the body that carries one is refused
      * rather than loaded with the list quietly dropped.
-     *
-     * <p>red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at {@code throw new
-     * IllegalArgumentException("planet '" + properties.getName() + "' lists a <"} replaced by an empty
-     * branch, this fails with "a body listing harvestable gases of its own must be refused" — `Lister`
-     * loaded, the control passing.</p>
      */
+    @RedWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at {@code throw new"
+            + " IllegalArgumentException(\"planet '\" + properties.getName() + \"' lists a <\"} replaced by an empty"
+            + " branch, this fails with \"a body listing harvestable gases of its own must be refused\" — `Lister`"
+            + " loaded, the control passing.")
     @Test
     public void aPlanetLevelGasListRefusesThatBodyAndNoOther() throws Exception {
         DimensionPropertyCoupling read = read(

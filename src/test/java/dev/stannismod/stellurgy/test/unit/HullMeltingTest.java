@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.subsystem.heat.HullMelting;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
 import static org.junit.Assert.assertEquals;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The environment's half of the melting rung: how hot the outside alone can drive a block.
@@ -23,11 +24,9 @@ public class HullMeltingTest {
         MinecraftBootstrap.ensure();
     }
 
-    /**
-     * <p>red-witnessed: with {@code HullMelting#equilibriumKelvin} at {@code return 0.0D;} answering 1 K for no incident flux: "an unlit
-     * surface is not driven anywhere by the environment expected:&lt;0.0&gt; but was:&lt;1.0&gt;",
-     * 2026-09-30.</p>
-     */
+    @RedWitness(prose = "with {@code HullMelting#equilibriumKelvin} at {@code return 0.0D;} answering 1 K for no incident flux: \"an unlit"
+            + " surface is not driven anywhere by the environment expected:&lt;0.0&gt; but was:&lt;1.0&gt;\","
+            + " 2026-09-30.")
     @Test
     public void nothingArrivingIsNoTemperatureAtAll() {
         assertEquals("an unlit surface is not driven anywhere by the environment", 0.0D,

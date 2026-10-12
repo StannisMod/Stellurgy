@@ -8,6 +8,7 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Issue #61 ("[BUG] Railgun does not work") — source-side firing contract,
@@ -66,6 +67,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * the destination output, and the status reads FIRED.
      * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
      */
+    @Pins("INV-MBM-20")
     @Test
     public void railgunFiresCargoToLinkedRailgunInSameDimension() throws Exception {
         buildAndComplete(SX, SY, SZ);
@@ -103,6 +105,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
      * Pins INV-MBM-21 (a failed shot never destroys cargo).
      */
+    @Pins({"INV-MBM-20", "INV-MBM-21"})
     @Test
     public void railgunLoadsRegisteredButUnloadedDestinationDimension() throws Exception {
         int template = firstNonOverworldStellurgyDimOrSkip();
@@ -143,6 +146,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
      * Pins INV-MBM-20 (the railgun fires to a linked railgun, loads a registered but unloaded dimension and reports unavailable when it cannot).
      * Pins INV-MBM-21 (a failed shot never destroys cargo).
      */
+    @Pins({"INV-MBM-20", "INV-MBM-21"})
     @Test
     public void railgunReportsUnavailableForUnloadableDestination() throws Exception {
         buildAndComplete(UX, SY, XZ);

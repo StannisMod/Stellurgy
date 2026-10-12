@@ -8,6 +8,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Service-station observability + link contract.
@@ -65,6 +66,7 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
      *  on world load. Must not throw.
      * Pins INV-INFRA-07 (an unlinked service station reports no linked rocket and no parts to repair).
      */
+    @Pins("INV-INFRA-07")
     @Test
     public void serviceStationTicksWithoutLinkedRocketWithoutCrash() throws Exception {
         // Place service station in isolation (not adjacent to any rocket

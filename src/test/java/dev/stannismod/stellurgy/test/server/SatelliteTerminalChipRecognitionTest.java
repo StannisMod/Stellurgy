@@ -9,6 +9,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TileSatelliteTerminal chip recognition + power gate +
@@ -88,6 +89,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
      * Happy path — chip in slot + energy injected &rarr; status 3.
      * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
      */
+    @Pins("INV-SAT-07")
     @Test
     public void chippedTerminalWithPowerReachesStatus3() throws Exception {
         int x = CX_STATUS3, y = CY, z = CZ;
@@ -111,6 +113,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
      * Empty slot &rarr; status 0 even with power present.
      * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
      */
+    @Pins("INV-SAT-07")
     @Test
     public void unchippedTerminalReportsNoLink() throws Exception {
         int x = CX_NO_CHIP, y = CY, z = CZ;
@@ -127,6 +130,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
      * Chip loaded but zero energy &rarr; status 1.
      * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
      */
+    @Pins("INV-SAT-07")
     @Test
     public void chippedTerminalWithoutPowerReportsNoPower() throws Exception {
         int x = CX_NO_POWER, y = CY, z = CZ;
@@ -142,6 +146,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
      *  its dim's DimensionProperties AND blanks the chip NBT.
      * Pins INV-SAT-07 (the terminal status ladder from no chip to linked, and erase blanks the chip).
      */
+    @Pins("INV-SAT-07")
     @Test
     public void pressEraseRemovesSatelliteFromDimAndBlanksChip() throws Exception {
         int x = CX_ERASE, y = CY, z = CZ;

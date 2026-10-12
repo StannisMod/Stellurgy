@@ -26,6 +26,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.findSlotWithItem;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.screenOf;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A machine stands in the world, the player right-clicks it open, and drives it with nothing but
@@ -605,12 +608,11 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * into a machine slot — i.e. the click drove {@code Container.transferStackInSlot} on the server
      * and the result synced back. Slots are addressed by the container slot number the report gives,
      * never by guessed coordinates.
-     *
-     * <p>red-witnessed: with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:
-     * "`slots` holds no element whose `item` is stellurgy:planetidchip — it holds 0",
-     * 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's
-     * quick-move never asks it.</p>
      */
+    @RedWitness(prose = "with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:"
+            + " \"`slots` holds no element whose `item` is stellurgy:planetidchip — it holds 0\","
+            + " 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's"
+            + " quick-move never asks it.")
     @Test
     public void shiftClickingChipMovesItIntoTheGuidanceComputer() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:guidanceComputer");
@@ -731,18 +733,16 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * <p>The aim is read back from the SERVER after the clicks and the fixture system is placed at
      * whatever distance the clicks actually produced — so the arrangement follows the GUI rather
      * than assuming it worked.</p>
-     *
-     * <p>red-witnessed: with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger("d")))}) skipped:
-     * "clicking the distance button twice must move the aim out from 1: … aimDistance:1",
-     * 2026-09-28.</p>
-     *
-     * <p>red-witnessed: NOT YET, with {@code ClientEvents#placeOntoGroundItHolds} at
-     * {@code awaitPlacedNear(clientLog, placeMark, x, z, what, tickBudget);} for the stand wait in
-     * {@link #buildObservatoryAndStandBesideIt}: it links on the client's {@code chunk_data_applied}
-     * and {@code client_pos_look_applied}, both of which vanilla decides (the chunk send and the
-     * teleport's position packet) — no Stellurgy code sits on that path to invert, so the only red
-     * this wait can show is an arrangement failure, which is the outcome it exists to name.</p>
      */
+    @RedWitness(prose = "with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger(\"d\")))}) skipped:"
+            + " \"clicking the distance button twice must move the aim out from 1: … aimDistance:1\","
+            + " 2026-09-28.")
+    @NotYetRed(prose = "NOT YET, with {@code ClientEvents#placeOntoGroundItHolds} at"
+            + " {@code awaitPlacedNear(clientLog, placeMark, x, z, what, tickBudget);} for the stand wait in"
+            + " {@link #buildObservatoryAndStandBesideIt}: it links on the client's {@code chunk_data_applied}"
+            + " and {@code client_pos_look_applied}, both of which vanilla decides (the chunk send and the"
+            + " teleport's position packet) — no Stellurgy code sits on that path to invert, so the only red"
+            + " this wait can show is an arrangement failure, which is the outcome it exists to name.")
     @Test
     public void theOperatorAimsTheTelescopeAndObservesWithNothingButClicks() throws Exception {
         int dim = plot().dim;
@@ -844,12 +844,13 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * {@code /stellurgytest selector info} probe then confirms — the whole client&rarr;server selection
      * round-trip rather than just "the GUI opened".
      *
-     * <p>red-witnessed: with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:
-     * "clicking planet button 0 did not register a selection server-side: … hasSelection:false",
-     * 2026-09-28. The link before it records at the handler's RETURN and stays green by design —
-     * it says the packet arrived, not that it was applied.</p>
      * Pins INV-IVC-03 (clicking a planet button on the selector registers a server-side selection).
      */
+    @Pins("INV-IVC-03")
+    @RedWitness(prose = "with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:"
+            + " \"clicking planet button 0 did not register a selection server-side: … hasSelection:false\","
+            + " 2026-09-28. The link before it records at the handler's RETURN and stays green by design —"
+            + " it says the packet arrived, not that it was applied.")
     @Test
     public void selectingPlanetUpdatesServerSelection() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -905,13 +906,12 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * <p>What this does not see: the planetary view (a planet and its moons), pinned by
      * {@link #thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150}, and the rocket's own selector, which
      * opens the same module over a rocket.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit
-     * radius — back on the raw unit ({@code properties.getOrbitalDist() * distanceZoomMultiplier}):
-     * "Earth (1.0 AU) must be drawn 150.0 pixels from its star, slack 2.8284271247461903: … expected:
-     * &lt;150.0&gt; but was:&lt;1496028.93842148&gt;". The two {@code requireArranged} lines are
-     * arrangements.</p>
      */
+    @RedWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit"
+            + " radius — back on the raw unit ({@code properties.getOrbitalDist() * distanceZoomMultiplier}):"
+            + " \"Earth (1.0 AU) must be drawn 150.0 pixels from its star, slack 2.8284271247461903: … expected:"
+            + " &lt;150.0&gt; but was:&lt;1496028.93842148&gt;\". The two {@code requireArranged} lines are"
+            + " arrangements.")
     @Test
     public void theStarMapDrawsAPlanetAtAHundredPixelsPerAu() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -978,15 +978,14 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * <p>What this does not see: the rocket's own selector, which opens the same module; and a moon
      * at any distance but the one the world's moons stand at — the proportion is pinned in
      * {@code AstronomicalBodyHelperTest}.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at
-     * {@code AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT}
-     * back on the raw distance ({@code properties.orbitalDist}), this fails with "each moon must be
-     * drawn 0.5 x moonViewUnits + Earth's width (150) pixels from Earth, slack 2.8284271247461903:
-     * expected 2=225.0 drawn 2=2071.27907342299 …: arrays first differed at element [0];
-     * expected:&lt;225.0&gt; but was:&lt;2071.27907342299&gt;". The {@code requireArranged} lines are
-     * arrangements.</p>
      */
+    @RedWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at"
+            + " {@code AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT}"
+            + " back on the raw distance ({@code properties.orbitalDist}), this fails with \"each moon must be"
+            + " drawn 0.5 x moonViewUnits + Earth's width (150) pixels from Earth, slack 2.8284271247461903:"
+            + " expected 2=225.0 drawn 2=2071.27907342299 …: arrays first differed at element [0];"
+            + " expected:&lt;225.0&gt; but was:&lt;2071.27907342299&gt;\". The {@code requireArranged} lines are"
+            + " arrangements.")
     @Test
     public void thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150() throws Exception {
         int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
@@ -1306,37 +1305,31 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * subject — what the SERVER does with a press it did not see a screen for. What this does not see:
      * the screen's own button, which {@code WeaponGuiButtonsReachTheServerTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
-     *
-     * <p>red-witnessed: with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}
-     * answering {@code true} unconditionally (the shape it shipped with), this fails at "the console
-     * judged a press from 24 blocks away as within reach: {...weapon_console_press_judged,
-     * pos:4016,150,4016,player:ForgeTestClient,reachable:true}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}
-     * keeping its log line but not its {@code return}, this fails at "a press from beyond reach held the
-     * battery's fire anyway: {...network:true,...holdFire:true...}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}
-     * answering {@code false} unconditionally, this fails at "the console refused a press from the
-     * player standing on it: {...reachable:false}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}
-     * removed, this fails at "a press from the player standing on the console did not hold fire:
-     * {...holdFire:false...}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}
-     * removed, this fails at the arrangement wait "the console never joined a weapon network ... no
-     * `weapon_orders_seeded` carrying consoles = 4144,150,4016"; with {@code TileWeaponConsole#useNetworkData}
-     * returning before {@code if (!canInteractWithContainer(player))}, at the far wait "the console never
-     * judged the far press: it never reached the server" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: NOT YET, with {@code TileWeaponConsole#useNetworkData} at
-     * {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR
-     * {@code weapon_console_press_judged} wait and the two
-     * {@code awaitClientPlacedNear} waits, for the reasons given on
-     * {@link #aFireControlSensorPressFromBeyondReachChangesNothing}: a break silencing the near press
-     * silences the far one first, and the placement waits link on vanilla's teleport.</p>
      */
+    @RedWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
+            + " answering {@code true} unconditionally (the shape it shipped with), this fails at \"the console"
+            + " judged a press from 24 blocks away as within reach: {...weapon_console_press_judged,"
+            + " pos:4016,150,4016,player:ForgeTestClient,reachable:true}\" (2026-10-06).")
+    @RedWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
+            + " keeping its log line but not its {@code return}, this fails at \"a press from beyond reach held the"
+            + " battery's fire anyway: {...network:true,...holdFire:true...}\" (2026-10-06).")
+    @RedWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
+            + " answering {@code false} unconditionally, this fails at \"the console refused a press from the"
+            + " player standing on it: {...reachable:false}\" (2026-10-06).")
+    @RedWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}"
+            + " removed, this fails at \"a press from the player standing on the console did not hold fire:"
+            + " {...holdFire:false...}\" (2026-10-06).")
+    @RedWitness(prose = "with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}"
+            + " removed, this fails at the arrangement wait \"the console never joined a weapon network ... no"
+            + " `weapon_orders_seeded` carrying consoles = 4144,150,4016\"; with {@code TileWeaponConsole#useNetworkData}"
+            + " returning before {@code if (!canInteractWithContainer(player))}, at the far wait \"the console never"
+            + " judged the far press: it never reached the server\" (2026-10-06).")
+    @NotYetRed(prose = "NOT YET, with {@code TileWeaponConsole#useNetworkData} at"
+            + " {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR"
+            + " {@code weapon_console_press_judged} wait and the two"
+            + " {@code awaitClientPlacedNear} waits, for the reasons given on"
+            + " {@link #aFireControlSensorPressFromBeyondReachChangesNothing}: a break silencing the near press"
+            + " silences the far one first, and the placement waits link on vanilla's teleport.")
     @Test
     public void aWeaponConsolePressFromBeyondReachChangesNothing() throws Exception {
         int dim = plot().dim;
@@ -1407,28 +1400,26 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * rule, so a press from beyond a chest's reach leaves its mode alone, and the same press from the
      * player standing on it switches it to illuminating. Both presses are forged by the real client
      * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerTest}'s.
-     *
-     * <p>red-witnessed (2026-10-06, one inversion per run):
-     * {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering
-     * true fails "the sensor judged a press from 24 blocks away as within reach"; answering false fails
-     * "the sensor refused a press from the player standing on it";
-     * {@code TileFireControlSensor#useNetworkData} at {@code if (!canInteractWithContainer(player))}
-     * logging without its {@code return} fails "a press from beyond reach switched the sensor anyway
-     * {...mode:ACTIVE...}"; the same method at {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);}
-     * removed fails "a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}";
-     * the same method returning before {@code if (!canInteractWithContainer(player))} fails at the far
-     * wait, "the sensor never judged the far press: it never reached the server".</p>
-     *
-     * <p>red-witnessed: NOT YET, with {@code TileFireControlSensor#useNetworkData} at
-     * {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR
-     * {@code sensor_press_judged} wait and the two
-     * {@code awaitClientPlacedNear} waits. Any production break that silences the near press silences
-     * the far one first (one path, one seam), so it reds the far wait instead; the only break that
-     * reaches the near wait alone is one conditional on distance — the reach decision itself, which the
-     * near verdict after it pins. The placement waits link on vanilla's own position packet
-     * ({@code client_pos_look_applied} after {@code /tp}); no Stellurgy code decides it, so there is
-     * nothing of ours to break.</p>
      */
+    @RedWitness(prose = "(2026-10-06, one inversion per run):"
+            + " {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering"
+            + " true fails \"the sensor judged a press from 24 blocks away as within reach\"; answering false fails"
+            + " \"the sensor refused a press from the player standing on it\";"
+            + " {@code TileFireControlSensor#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
+            + " logging without its {@code return} fails \"a press from beyond reach switched the sensor anyway"
+            + " {...mode:ACTIVE...}\"; the same method at {@code setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);}"
+            + " removed fails \"a press from the player standing on the sensor did not switch it {...mode:PASSIVE...}\";"
+            + " the same method returning before {@code if (!canInteractWithContainer(player))} fails at the far"
+            + " wait, \"the sensor never judged the far press: it never reached the server\".")
+    @NotYetRed(prose = "NOT YET, with {@code TileFireControlSensor#useNetworkData} at"
+            + " {@code if (!canInteractWithContainer(player))} the seam both press waits link on, for the NEAR"
+            + " {@code sensor_press_judged} wait and the two"
+            + " {@code awaitClientPlacedNear} waits. Any production break that silences the near press silences"
+            + " the far one first (one path, one seam), so it reds the far wait instead; the only break that"
+            + " reaches the near wait alone is one conditional on distance — the reach decision itself, which the"
+            + " near verdict after it pins. The placement waits link on vanilla's own position packet"
+            + " ({@code client_pos_look_applied} after {@code /tp}); no Stellurgy code decides it, so there is"
+            + " nothing of ours to break.")
     @Test
     public void aFireControlSensorPressFromBeyondReachChangesNothing() throws Exception {
         int dim = plot().dim;
@@ -1541,6 +1532,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * redirect target is the exact vanilla signature the mixin pins.</p>
      * Pins INV-HLP-02 (a bypass player keeps a container open regardless of distance).
      */
+    @Pins("INV-HLP-02")
     @Test
     public void mixinRedirectKeepsContainerOpenAcrossDistance() throws Exception {
         int dim = plot().dim;

@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Non-player-sender guard contracts for the StellurgyCommandRoot subcommand tree.
@@ -26,6 +27,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
             "You must specify which player you wish to perform this action on";
 
     /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void addTorchRefusesConsoleSender() throws Exception {
         String resp = exec("ar addTorch");
@@ -33,6 +35,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void setGravityRefusesConsoleSenderWithUsage() throws Exception {
         // setGravity resolves the sender via getCommandSenderEntity() (null on
@@ -43,6 +46,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void fillDataRefusesConsoleSender() throws Exception {
         String resp = exec("ar fillData distance");
@@ -50,6 +54,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void gotoRefusesConsoleSender() throws Exception {
         // goto is now a tree; the dimension leaf carries the player guard.
@@ -58,6 +63,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-CMD-02 (a console sender is refused by player-requiring leaves rather than an NPE). */
+    @Pins("INV-CMD-02")
     @Test
     public void fetchRefusesConsoleSender() throws Exception {
         // fetch resolves the destination (the command sender) as a player first,

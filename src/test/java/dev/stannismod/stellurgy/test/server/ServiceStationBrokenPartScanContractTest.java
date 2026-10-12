@@ -8,6 +8,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * service-station broken-part scan contract.
@@ -85,6 +86,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
      *  monotonic baseline counter that drives the GUI progress bar).
      * Pins INV-INFRA-08 (the broken-part scan collects exactly the worn parts of the linked rocket).
      */
+    @Pins("INV-INFRA-08")
     @Test
     public void injectedBrokenPartAppearsInPartsToRepairAfterLink() throws Exception {
         AssembledRocket rf = buildAndAssembleRocket(CX_SINGLE);
@@ -113,6 +115,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
      *  so this is the maximum the fixture can support.
      * Pins INV-INFRA-08 (the broken-part scan collects exactly the worn parts of the linked rocket).
      */
+    @Pins("INV-INFRA-08")
     @Test
     public void multipleInjectionsAreAllScanned() throws Exception {
         AssembledRocket rf = buildAndAssembleRocket(CX_MULTI);

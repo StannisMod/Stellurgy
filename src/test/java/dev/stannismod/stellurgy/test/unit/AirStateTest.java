@@ -10,6 +10,8 @@ import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The gas contents of a life-support zone: what a room's air is made of, what pressure that
@@ -36,21 +38,21 @@ public class AirStateTest {
 
     /**
      * A vacuum is not a reservoir: there is no body there to warm.
-     *
-     * <p>red-witnessed: {@code AirState#addHeat} at {@code if (amount <= 0L || capacity <= 0L)} no
-     * longer refusing air with no heat capacity: "nothing to warm expected:&lt;0&gt; but
-     * was:&lt;1000000&gt;", 2026-09-30.</p>
      */
+    @RedWitness(prose = "{@code AirState#addHeat} at {@code if (amount <= 0L || capacity <= 0L)} no"
+            + " longer refusing air with no heat capacity: \"nothing to warm expected:&lt;0&gt; but"
+            + " was:&lt;1000000&gt;\", 2026-09-30.")
     @Test
     public void aVacuumCannotBeWarmed() {
         assertEquals("nothing to warm", 0L, AirState.vacuum().addHeat(1_000_000L, VOLUME));
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));} dividing by a fiftieth of an atmosphere:
-     * "expected:&lt;100&gt; but was:&lt;50&gt;", 2026-09-30.</p>
      * Pins INV-ATM-17 (an untouched zone reports 100 centi-atmospheres).
      */
+    @Pins("INV-ATM-17")
+    @RedWitness(prose = "with {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));} dividing by a fiftieth of an atmosphere:"
+            + " \"expected:&lt;100&gt; but was:&lt;50&gt;\", 2026-09-30.")
     @Test
     public void breathableAirReadsAsOneAtmosphere() {
         // The pressure a sealed zone reports is what the analyser turns into "1.00 atm"; it read
@@ -59,15 +61,16 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OXYGEN FALLS - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}
-     * removing half of what was drawn: "oxygen must fall by exactly what was breathed
-     * expected:&lt;200000000&gt; but was:&lt;205000000&gt;". SAME AMOUNT AS CO2 -
-     * {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);} adding twice the carbon dioxide: "the same amount must appear as CO2
-     * expected:&lt;10000000&gt; but was:&lt;20000000&gt;". PRESSURE UNCHANGED - {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);}
-     * followed by taking the converted amount out of the nitrogen too: "respiration rearranges air, it
-     * does not consume it expected:&lt;1000000000&gt; but was:&lt;990000000&gt;".</p>
      * Pins INV-ATM-16 (breathing converts oxygen into carbon dioxide at constant pressure and never below zero).
      */
+    @Pins("INV-ATM-16")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. OXYGEN FALLS - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}"
+            + " removing half of what was drawn: \"oxygen must fall by exactly what was breathed"
+            + " expected:&lt;200000000&gt; but was:&lt;205000000&gt;\". SAME AMOUNT AS CO2 -"
+            + " {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);} adding twice the carbon dioxide: \"the same amount must appear as CO2"
+            + " expected:&lt;10000000&gt; but was:&lt;20000000&gt;\". PRESSURE UNCHANGED - {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);}"
+            + " followed by taking the converted amount out of the nitrogen too: \"respiration rearranges air, it"
+            + " does not consume it expected:&lt;1000000000&gt; but was:&lt;990000000&gt;\".")
     @Test
     public void breathingConvertsOxygenIntoCarbonDioxideWithoutChangingPressure() {
         AirState air = AirState.earthLike();
@@ -81,14 +84,15 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -
-     * {@code AirState#draw} at {@code long taken = Math.min(Math.max(0L, amount), partialPressure(gas));} no longer clamping a draw to what is there: "only the oxygen present may be
-     * converted expected:&lt;5000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}
-     * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;2500000&gt;". AS CO2 -
-     * {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);} adding twice the carbon dioxide: "expected:&lt;5000000&gt; but
-     * was:&lt;10000000&gt;".</p>
      * Pins INV-ATM-16 (breathing converts oxygen into carbon dioxide at constant pressure and never below zero).
      */
+    @Pins("INV-ATM-16")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -"
+            + " {@code AirState#draw} at {@code long taken = Math.min(Math.max(0L, amount), partialPressure(gas));} no longer clamping a draw to what is there: \"only the oxygen present may be"
+            + " converted expected:&lt;5000000&gt; but was:&lt;50000000&gt;\". NONE LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}"
+            + " removing half of what was drawn: \"expected:&lt;0&gt; but was:&lt;2500000&gt;\". AS CO2 -"
+            + " {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);} adding twice the carbon dioxide: \"expected:&lt;5000000&gt; but"
+            + " was:&lt;10000000&gt;\".")
     @Test
     public void breathingCannotTakeOxygenThatIsNotThere() {
         AirState air = new AirState(ppm(790_000), ppm(5_000), 0L);
@@ -101,17 +105,18 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ALL BACK AS OXYGEN -
-     * {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning half of it: "all of it must come back as oxygen
-     * expected:&lt;210000000&gt; but was:&lt;195000000&gt;". NO CO2 LEFT - {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);}
-     * making twice the carbon dioxide while breathing, so regeneration leaves half behind:
-     * "expected:&lt;0&gt; but was:&lt;30000000&gt;". THE CARBON - {@code AirState#regenerate} at {@code return converted;} reporting half
-     * of what was converted: "the carbon that left the air is what the machine must now handle
-     * expected:&lt;30000000&gt; but was:&lt;15000000&gt;". PRESSURE UNCHANGED - {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);}
-     * followed by taking the converted amount out of the nitrogen too: "pressure is unchanged: the
-     * solid carbon never held any expected:&lt;1000000000&gt; but was:&lt;970000000&gt;".</p>
      * Pins INV-ATM-20 (regeneration is respiration run backwards and cannot process absent carbon dioxide).
      */
+    @Pins("INV-ATM-20")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. ALL BACK AS OXYGEN -"
+            + " {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning half of it: \"all of it must come back as oxygen"
+            + " expected:&lt;210000000&gt; but was:&lt;195000000&gt;\". NO CO2 LEFT - {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);}"
+            + " making twice the carbon dioxide while breathing, so regeneration leaves half behind:"
+            + " \"expected:&lt;0&gt; but was:&lt;30000000&gt;\". THE CARBON - {@code AirState#regenerate} at {@code return converted;} reporting half"
+            + " of what was converted: \"the carbon that left the air is what the machine must now handle"
+            + " expected:&lt;30000000&gt; but was:&lt;15000000&gt;\". PRESSURE UNCHANGED - {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);}"
+            + " followed by taking the converted amount out of the nitrogen too: \"pressure is unchanged: the"
+            + " solid carbon never held any expected:&lt;1000000000&gt; but was:&lt;970000000&gt;\".")
     @Test
     public void regenerationIsBreathingRunBackwards() {
         AirState air = AirState.earthLike();
@@ -127,14 +132,15 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -
-     * {@code AirState#draw} at {@code long taken = Math.min(Math.max(0L, amount), partialPressure(gas));} no longer clamping a draw to what is there: "only the CO2 present may be
-     * processed expected:&lt;10000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}
-     * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;5000000&gt;". AS OXYGEN -
-     * {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning half of it: "expected:&lt;210000000&gt; but
-     * was:&lt;205000000&gt;".</p>
      * Pins INV-ATM-20 (regeneration is respiration run backwards and cannot process absent carbon dioxide).
      */
+    @Pins("INV-ATM-20")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -"
+            + " {@code AirState#draw} at {@code long taken = Math.min(Math.max(0L, amount), partialPressure(gas));} no longer clamping a draw to what is there: \"only the CO2 present may be"
+            + " processed expected:&lt;10000000&gt; but was:&lt;50000000&gt;\". NONE LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}"
+            + " removing half of what was drawn: \"expected:&lt;0&gt; but was:&lt;5000000&gt;\". AS OXYGEN -"
+            + " {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning half of it: \"expected:&lt;210000000&gt; but"
+            + " was:&lt;205000000&gt;\".")
     @Test
     public void regenerationCannotInventCarbonDioxide() {
         AirState air = new AirState(ppm(790_000), ppm(200_000), ppm(10_000));
@@ -146,25 +152,21 @@ public class AirStateTest {
         assertEquals(ppm(210_000), air.getOxygen());
     }
 
-    /**
-     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer calling an empty zone a vacuum: "expected
-     * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
-     */
+    @RedWitness(prose = "with {@code AirState#deriveAtmosphere} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer calling an empty zone a vacuum: \"expected"
+            + " same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;\", 2026-09-30.")
     @Test
     public void aZoneWithNoGasInItIsVacuumWhateverItsComposition() {
         assertSame(Atmosphere.VACUUM, AirState.vacuum().deriveAtmosphere());
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CO2 TAKEN - {@code AirState#drawCarbonDioxide} at {@code long taken = draw(GasRegistry.CARBON_DIOXIDE, amount);} drawing
-     * half of what was asked: "expected:&lt;50000000&gt; but was:&lt;25000000&gt;". N2 TAKEN -
-     * {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing half of what was asked: "expected:&lt;40000000&gt; but
-     * was:&lt;20000000&gt;". OXYGEN UNTOUCHED - {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing the same amount of oxygen
-     * too: "splitting must not touch the oxygen the crew are breathing expected:&lt;210000000&gt; but
-     * was:&lt;170000000&gt;". CO2 LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was drawn:
-     * "expected:&lt;40000000&gt; but was:&lt;65000000&gt;". N2 LEFT - {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing half
-     * and reporting twice that: "expected:&lt;750000000&gt; but was:&lt;770000000&gt;".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. CO2 TAKEN - {@code AirState#drawCarbonDioxide} at {@code long taken = draw(GasRegistry.CARBON_DIOXIDE, amount);} drawing"
+            + " half of what was asked: \"expected:&lt;50000000&gt; but was:&lt;25000000&gt;\". N2 TAKEN -"
+            + " {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing half of what was asked: \"expected:&lt;40000000&gt; but"
+            + " was:&lt;20000000&gt;\". OXYGEN UNTOUCHED - {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing the same amount of oxygen"
+            + " too: \"splitting must not touch the oxygen the crew are breathing expected:&lt;210000000&gt; but"
+            + " was:&lt;170000000&gt;\". CO2 LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was drawn:"
+            + " \"expected:&lt;40000000&gt; but was:&lt;65000000&gt;\". N2 LEFT - {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing half"
+            + " and reporting twice that: \"expected:&lt;750000000&gt; but was:&lt;770000000&gt;\".")
     @Test
     public void aSeparatorTakesTheStaleGasAndLeavesTheBreathableOne() {
         AirState air = new AirState(ppm(790_000), ppm(210_000), ppm(90_000));
@@ -185,12 +187,10 @@ public class AirStateTest {
     // the model stores those with is an implementation choice, and these say what that choice has to
     // be good enough FOR — the two ends of the solar system at once, and an honest zero underneath.
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. 21% - {@code AirState#earthLike} at {@code return new AirState(790_000 * PER_PPM, 210_000 * PER_PPM, 0L);} making
-     * sea-level air 20% oxygen: "sea-level air is 21% oxygen expected:&lt;0.21&gt; but
-     * was:&lt;0.20202020202020202&gt;". ONE ATMOSPHERE - {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));} dividing by a fiftieth of
-     * an atmosphere: "and one whole atmosphere of it expected:&lt;100&gt; but was:&lt;50&gt;".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. 21% - {@code AirState#earthLike} at {@code return new AirState(790_000 * PER_PPM, 210_000 * PER_PPM, 0L);} making"
+            + " sea-level air 20% oxygen: \"sea-level air is 21% oxygen expected:&lt;0.21&gt; but"
+            + " was:&lt;0.20202020202020202&gt;\". ONE ATMOSPHERE - {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));} dividing by a fiftieth of"
+            + " an atmosphere: \"and one whole atmosphere of it expected:&lt;100&gt; but was:&lt;50&gt;\".")
     @Test
     public void aRoomIsItsFractionsAndNotTheNumbersUnderneathThem() {
         AirState air = AirState.earthLike();
@@ -203,13 +203,11 @@ public class AirStateTest {
         assertEquals("and one whole atmosphere of it", 100, air.getPressureCentiAtm());
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. THE FRACTION SURVIVES -
-     * {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} storing whole parts per million only: "the oxygen fraction survives being
-     * stored expected:&lt;0.0013&gt; but was:&lt;0.0011824324324324325&gt;". THINNER READS THINNER -
-     * {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} rounding every amount to 150 units: "a trace 1% thinner must read as
-     * thinner, not as the same integer: 7650 vs 7650".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. THE FRACTION SURVIVES -"
+            + " {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} storing whole parts per million only: \"the oxygen fraction survives being"
+            + " stored expected:&lt;0.0013&gt; but was:&lt;0.0011824324324324325&gt;\". THINNER READS THINNER -"
+            + " {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} rounding every amount to 150 units: \"a trace 1% thinner must read as"
+            + " thinner, not as the same integer: 7650 vs 7650\".")
     @Test
     public void aTraceOnAThinWorldKeepsItsDigits() {
         // Mars: six millibars of air, of which 0.13% is oxygen. That trace is what decides whether a
@@ -230,14 +228,12 @@ public class AirStateTest {
                 poorer.getOxygen() < mars.getOxygen());
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOT SATURATED - {@code AirState#set} at {@code long clamped = Math.max(0L, amount);}
-     * capping every amount at a thousand atmospheres: "five thousand atmospheres is a number, not a
-     * saturated ceiling expected:&lt;5000000000000&gt; but was:&lt;1000000000000&gt;". THE TRACE -
-     * {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} dropping anything under ten units: "and three parts per billion of ammonia
-     * is still there beside it expected:&lt;3&gt; but was:&lt;0&gt;". THE TOTAL - {@code AirState#getTotalPressure} at {@code total += amount;}
-     * summing through an int: "expected:&lt;5000000000003&gt; but was:&lt;658067459&gt;".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NOT SATURATED - {@code AirState#set} at {@code long clamped = Math.max(0L, amount);}"
+            + " capping every amount at a thousand atmospheres: \"five thousand atmospheres is a number, not a"
+            + " saturated ceiling expected:&lt;5000000000000&gt; but was:&lt;1000000000000&gt;\". THE TRACE -"
+            + " {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} dropping anything under ten units: \"and three parts per billion of ammonia"
+            + " is still there beside it expected:&lt;3&gt; but was:&lt;0&gt;\". THE TOTAL - {@code AirState#getTotalPressure} at {@code total += amount;}"
+            + " summing through an int: \"expected:&lt;5000000000003&gt; but was:&lt;658067459&gt;\".")
     @Test
     public void oneCompositionHoldsAGasGiantAndATraceAtTheSameTime() {
         // The two ends the model has to span at once: a giant's depths in one gas and a few parts per
@@ -255,15 +251,14 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING LEFT -
-     * {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was drawn: "nothing is left of it expected:&lt;0&gt;
-     * but was:&lt;500&gt;". NOT IN THE COMPOSITION - {@code AirState#set} at {@code if (clamped == 0L)} keeping an entry that reached
-     * zero: "and it is not in the composition either: {... carbondioxide [WASTE]]=0}".</p>
-     *
      * <p>Not asserted: that the gone gas is not counted in the pressure, because the pressure is the
      * sum of the entries' amounts, so once "nothing is left of it" holds a gone gas adds nothing - the
      * check could not fail without the first one failing first.</p>
      */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NOTHING LEFT -"
+            + " {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was drawn: \"nothing is left of it expected:&lt;0&gt;"
+            + " but was:&lt;500&gt;\". NOT IN THE COMPOSITION - {@code AirState#set} at {@code if (clamped == 0L)} keeping an entry that reached"
+            + " zero: \"and it is not in the composition either: {... carbondioxide [WASTE]]=0}\".")
     @Test
     public void whatIsGoneIsAbsentEverywhereRatherThanKeptAsAZero() {
         AirState air = new AirState(ppm(790_000), ppm(210_000), ppm(1));
@@ -279,12 +274,10 @@ public class AirStateTest {
                         dev.stannismod.stellurgy.atmosphere.gas.GasRegistry.CARBON_DIOXIDE));
     }
 
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each at {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing one
-     * gas at half its amount. NITROGEN: "expected:&lt;700000000&gt; but was:&lt;350000000&gt;". OXYGEN:
-     * "expected:&lt;180000000&gt; but was:&lt;90000000&gt;". CARBON DIOXIDE: "expected:&lt;40000000&gt;
-     * but was:&lt;20000000&gt;".</p>
-     */
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each at {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing one"
+            + " gas at half its amount. NITROGEN: \"expected:&lt;700000000&gt; but was:&lt;350000000&gt;\". OXYGEN:"
+            + " \"expected:&lt;180000000&gt; but was:&lt;90000000&gt;\". CARBON DIOXIDE: \"expected:&lt;40000000&gt;"
+            + " but was:&lt;20000000&gt;\".")
     @Test
     public void gasesSurviveASaveAndReload() {
         AirState air = new AirState(ppm(700_000), ppm(180_000), ppm(40_000));

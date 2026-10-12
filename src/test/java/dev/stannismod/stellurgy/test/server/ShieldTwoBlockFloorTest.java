@@ -17,6 +17,8 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * P1 floor for the vendored AFFS shield: a shield network needs no cable.
@@ -43,6 +45,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private static final int FE_PER_ITERATION = 4000;
 
     /** Pins INV-SHD-02 (two adjacent shield blocks form a network with no cable and a one-block gap forms none). */
+    @Pins("INV-SHD-02")
     @Test
     public void twoBlockShieldPowersWithoutCable() throws Exception {
         // Generator at G, emitter directly adjacent along +X. No cable, console or accumulator.
@@ -60,6 +63,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-SHD-02 (two adjacent shield blocks form a network with no cable and a one-block gap forms none). */
+    @Pins("INV-SHD-02")
     @Test
     public void nonAdjacentPairNeverPowers() throws Exception {
         // Same two blocks, but a one-block gap and no cable: two disconnected components.
@@ -94,23 +98,20 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * which no single-server tier can watch.</p>
      *
      * <p>One inversion per verdict, 2026-10-03:</p>
-     *
-     * <p>red-witnessed: with {@code SubsystemNetworkRegistry#nodesIn} at
-     * {@code if (type.isInstance(node) && node.getNodeWorld() == world)} dropping the world conjunct,
-     * this fails at "the overworld does not answer for exactly its own emitter
-     * expected:[4020,151,4020] but was:[4020,151,4020, 4022,151,4020]".</p>
-     *
-     * <p>red-witnessed: with {@code TileEntityFieldGenerator#loadedIn} at
-     * {@code nodesIn(ShieldNetworkManager.DOMAIN, world,} asking for the overworld whatever world it is
-     * given, this fails at "the nether does not answer for exactly its own emitter
-     * expected:[4022,151,4020] but was:[4020,151,4020]".</p>
-     *
-     * <p>red-witnessed: with {@code TileEntityFieldGenerator#onChunkUnload} at
-     * {@code SubsystemNetworkManager.of(world).unregister(this);} removed, this fails at "after its chunk
-     * unloaded, the emitter at 4020,151,4020 never left the overworld's shield registry" with no
-     * {@code subsystem_node_unregistered} for that position, while a {@code subsystem_network_rebuilt}
-     * WAS recorded in the window (2026-10-04).</p>
      */
+    @RedWitness(prose = "with {@code SubsystemNetworkRegistry#nodesIn} at"
+            + " {@code if (type.isInstance(node) && node.getNodeWorld() == world)} dropping the world conjunct,"
+            + " this fails at \"the overworld does not answer for exactly its own emitter"
+            + " expected:[4020,151,4020] but was:[4020,151,4020, 4022,151,4020]\".")
+    @RedWitness(prose = "with {@code TileEntityFieldGenerator#loadedIn} at"
+            + " {@code nodesIn(ShieldNetworkManager.DOMAIN, world,} asking for the overworld whatever world it is"
+            + " given, this fails at \"the nether does not answer for exactly its own emitter"
+            + " expected:[4022,151,4020] but was:[4020,151,4020]\".")
+    @RedWitness(prose = "with {@code TileEntityFieldGenerator#onChunkUnload} at"
+            + " {@code SubsystemNetworkManager.of(world).unregister(this);} removed, this fails at \"after its chunk"
+            + " unloaded, the emitter at 4020,151,4020 never left the overworld's shield registry\" with no"
+            + " {@code subsystem_node_unregistered} for that position, while a {@code subsystem_network_rebuilt}"
+            + " WAS recorded in the window (2026-10-04).")
     @Test
     public void aWorldAnswersForTheEmittersLoadedInItAndNoOthers() throws Exception {
         FixtureSite here = site();
@@ -177,16 +178,17 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * address that no ship will ever claim.</p>
      *
      * <p>One inversion per verdict, 2026-10-07, after a healthy run:</p>
-     * <p>red-witnessed: with {@code FieldFrames#forBlock} at {@code return
-     * VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;}
-     * answering the world frame whatever the position, this fails at "an emitter in the shipyard that no
-     * ship claims projected a shell over its shipyard address".</p>
-     * <p>red-witnessed: with {@code TileEntityFieldGenerator#update} at {@code if
-     * (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at "an emitter in the
-     * shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but
-     * was:&lt;10453&gt;".</p>
      * Pins INV-SHD-25 (A charged emitter in the shipyard that no ship claims projects no shell and spends nothing from its coil, beside a control at).
      */
+    @Pins("INV-SHD-25")
+    @RedWitness(prose = "with {@code FieldFrames#forBlock} at {@code return"
+            + " VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;}"
+            + " answering the world frame whatever the position, this fails at \"an emitter in the shipyard that no"
+            + " ship claims projected a shell over its shipyard address\".")
+    @RedWitness(prose = "with {@code TileEntityFieldGenerator#update} at {@code if"
+            + " (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at \"an emitter in the"
+            + " shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but"
+            + " was:&lt;10453&gt;\".")
     @Test
     public void anEmitterInTheShipyardThatNoShipClaimsProjectsNothing() throws Exception {
         FixtureSite here = site();

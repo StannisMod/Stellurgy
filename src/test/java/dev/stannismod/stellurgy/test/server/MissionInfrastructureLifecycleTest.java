@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * mission &harr; infrastructure lifecycle contract.
@@ -100,6 +101,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  the just-started mission. Pins the link half of the lifecycle.
      * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
      */
+    @Pins("INV-MSN-08")
     @Test
     public void startLinksInfrastructureToMission() throws Exception {
         int baseX = 9000;
@@ -134,6 +136,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  {@code rocket-relink-state} probe.
      * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
      */
+    @Pins("INV-MSN-08")
     @Test
     public void completionUnlinksInfrastructureFromMission() throws Exception {
         int baseX = 9100;
@@ -183,6 +186,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  and finds the rocket regardless of position.
      * Pins INV-MSN-08 (Completion unlinks all infrastructure from the mission and links it to the respawned rocket).
      */
+    @Pins("INV-MSN-08")
     @Test
     public void completionLinksInfrastructureToRespawnedRocket() throws Exception {
         int baseX = 9200;

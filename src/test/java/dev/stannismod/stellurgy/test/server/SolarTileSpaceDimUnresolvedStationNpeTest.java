@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.StationInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Regression guard for findings
@@ -127,21 +128,20 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * it is unpacked) — no probe registers an uncreated station, and both forms reach the same
      * branch; and the two other consumers of this decision, the solar array and the microwave
      * receiver.</p>
-     *
-     * red-witnessed: with {@code SpaceStationObject#getInsolationMultiplier} at
-     * {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}
-     * made to dereference the planet unguarded, this fails at the tick step: the world's own tick of
-     * the panel threw, the shared server went down, and the force-tick exchange failed with "Server
-     * bridge exchange failed" (2026-10-02).
-     * red-witnessed: with {@code SpaceStationObject#getInsolationMultiplier} at
-     * {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}
-     * answering 1.0 on its unresolved branch, this fails at the made-nothing verdict with "expected:<0> but was:<10>"
-     * (2026-10-02).
-     * red-witnessed: with {@code SpaceStationObject#getInsolationMultiplier} at
-     * {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}
-     * answering 0.0 on its resolved branch, this fails at the
-     * control verdict, the panel on the overworld's station storing 0 (2026-10-02).
      */
+    @RedWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
+            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
+            + " made to dereference the planet unguarded, this fails at the tick step: the world's own tick of"
+            + " the panel threw, the shared server went down, and the force-tick exchange failed with \"Server"
+            + " bridge exchange failed\" (2026-10-02).")
+    @RedWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
+            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
+            + " answering 1.0 on its unresolved branch, this fails at the made-nothing verdict with \"expected:<0> but was:<10>\""
+            + " (2026-10-02).")
+    @RedWitness(prose = "with {@code SpaceStationObject#getInsolationMultiplier} at"
+            + " {@code return (orbiting != null) ? orbiting.getPeakInsolationMultiplierWithoutAtmosphere() : 0.0}"
+            + " answering 0.0 on its resolved branch, this fails at the"
+            + " control verdict, the panel on the overworld's station storing 0 (2026-10-02).")
     @Test
     public void aSolarPanelOnAStationWithNoResolvedPlanetTicksWithoutThrowingAndMakesNothing()
             throws Exception {
@@ -186,13 +186,12 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * <p>The sliver is asked of the reverse lookup DIRECTLY as well as through the panel's power: on
      * this shared server a sibling scenario may have put a station orbiting the overworld into the
      * neighbouring cell, and then a regressed lookup would still hand the panel sunlight.</p>
-     *
-     * <p>red-witnessed: 2026-10-04, with {@code SpaceObjectManager#getSpaceStationFromBlockCoords} at
-     * {@code int x = Math.round((pos.getX() - stationSize / 2) / (2f * stationSize));} put back to its
-     * pre-fix form without the offset, this fails with "the +X perimeter sliver (worldX=-1020) must map
-     * back to its own station 1 — the reverse lookup subtracts the stationSize/2 spawn offset: …
-     * expected:&lt;1&gt; but was:&lt;null&gt;".</p>
      */
+    @RedWitness(prose = "2026-10-04, with {@code SpaceObjectManager#getSpaceStationFromBlockCoords} at"
+            + " {@code int x = Math.round((pos.getX() - stationSize / 2) / (2f * stationSize));} put back to its"
+            + " pre-fix form without the offset, this fails with \"the +X perimeter sliver (worldX=-1020) must map"
+            + " back to its own station 1 — the reverse lookup subtracts the stationSize/2 spawn offset: …"
+            + " expected:&lt;1&gt; but was:&lt;null&gt;\".")
     @Test
     public void perimeterSliverSolarOnRealStationGeneratesPower() throws Exception {
         client().execute("stellurgytest dim load " + SPACE_DIM);

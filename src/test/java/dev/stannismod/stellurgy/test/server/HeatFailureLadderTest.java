@@ -9,6 +9,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What being too hot COSTS: the two rungs of the failure ladder that a ship can reach today.
@@ -73,13 +75,14 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * also be true of a build that reported VeryHot for every room, and of one that latched on the
      * first hazard it ever saw - which is a real failure mode this very code path has had.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HOSTILE — {@code AirState#deriveAtmosphere} at {@code if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)} raising
-     * the rung 1000 K: "past the threshold the room itself is the hazard … expected:&lt;[VeryHot]&gt;
-     * but was:&lt;[PressurizedAir]&gt;". BACK — {@code AreaBlob#setData} at {@code data = obj;} refusing to publish over a VeryHot
-     * zone: "and the room must come BACK when it is cooled … expected:&lt;[PressurizedAir]&gt; but
-     * was:&lt;[VeryHot]&gt;". The two premises at its head are arrangements and are not witnessed.</p>
      * Pins INV-HEAT-22 (A compartment past the crew threshold presents a hostile atmosphere, and cooling it gives the room back).
      */
+    @Pins("INV-HEAT-22")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. HOSTILE — {@code AirState#deriveAtmosphere} at {@code if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)} raising"
+            + " the rung 1000 K: \"past the threshold the room itself is the hazard … expected:&lt;[VeryHot]&gt;"
+            + " but was:&lt;[PressurizedAir]&gt;\". BACK — {@code AreaBlob#setData} at {@code data = obj;} refusing to publish over a VeryHot"
+            + " zone: \"and the room must come BACK when it is cooled … expected:&lt;[PressurizedAir]&gt; but"
+            + " was:&lt;[VeryHot]&gt;\". The two premises at its head are arrangements and are not witnessed.")
     @Test
     public void anOverheatedCompartmentTurnsHostileAndCoolingItGivesTheRoomBack() throws Exception {
         buildRoomWithVent();
@@ -109,13 +112,14 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * existing atmosphere types say both at once. Asserting the plain variant alongside is what
      * stops this passing on a build that simply always answers with the NoO2 one.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BOTH HAZARDS — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;}
-     * always answering the breathable variant: "a suffocating room that is also lethally hot must say
-     * so expected:&lt;Superheated[NoOxygen]&gt; but was:&lt;Superheated[]&gt;". THE PLAIN ONE — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;} always answering the NoO2 variant: "and the same temperature with air to breathe
-     * is the plain lethal one expected:&lt;Superheated[]&gt; but was:&lt;Superheated[NoOxygen]&gt;".
-     * The premise at its head is an arrangement and is not witnessed.</p>
      * Pins INV-HEAT-23 (Temperature picks the rung and the gases pick the variant).
      */
+    @Pins("INV-HEAT-23")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. BOTH HAZARDS — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;}"
+            + " always answering the breathable variant: \"a suffocating room that is also lethally hot must say"
+            + " so expected:&lt;Superheated[NoOxygen]&gt; but was:&lt;Superheated[]&gt;\". THE PLAIN ONE — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;} always answering the NoO2 variant: \"and the same temperature with air to breathe"
+            + " is the plain lethal one expected:&lt;Superheated[]&gt; but was:&lt;Superheated[NoOxygen]&gt;\"."
+            + " The premise at its head is an arrangement and is not witnessed.")
     @Test
     public void hotAirWithNothingToBreatheIsBothHazardsAtOnce() throws Exception {
         buildRoomWithVent();
@@ -140,21 +144,21 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * pilot nothing, and the whole reason this check lives at the gate rather than at the burst is
      * that a paid refusal is the failure the jump sequence is built to prevent.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MUST NOT FIRE — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null}
-     * raising the refusal 10000 K: "a drive whose coolant is past the threshold must not fire: …
-     * \"allowed\":true". WHICH REFUSAL — {@code JumpGate#check} at {@code : new Objection(Severity.HARD, MSG_DRIVE_OVERHEATED);} raising the no-drive message instead:
-     * "and the pilot must be told which of the refusals this is: … \"message\":\"msg.jumpgate.nodrive\"".
-     * NOT WOUND UP — {@code JumpTrigger#press} at {@code if (!verdict.allowed())} ignoring the verdict: "a refused jump must not wind the
-     * drive up: {\"ok\":true,\"spooling\":true}". COSTS NOTHING — {@code JumpTrigger#press} at {@code spool.clearWarning();} firing the
-     * burst before refusing: "and must cost the pilot nothing … \"charge\":720000". REMEMBERS NOTHING
-     * — {@code JumpTrigger#press} at {@code spool.clearWarning();} clearing the aim on a refusal: "cooling the ship is the whole of the
-     * fix - the gate is read-only and remembers nothing: … \"allowed\":false". The premises at its
-     * head and the two after the cook and the cool are arrangements and are not witnessed.</p>
-     *
      * <p>What the gate read is not asserted beside the message: the overheated refusal is raised only
      * when the same coolant reading is past the threshold, so it would be WHICH REFUSAL again.</p>
      * Pins INV-HEAT-25 (A drive whose loop is past the refusal threshold does not fire, says which refusal it is, and costs the pilot nothing).
      */
+    @Pins("INV-HEAT-25")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. MUST NOT FIRE — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null}"
+            + " raising the refusal 10000 K: \"a drive whose coolant is past the threshold must not fire: …"
+            + " \\\"allowed\\\":true\". WHICH REFUSAL — {@code JumpGate#check} at {@code : new Objection(Severity.HARD, MSG_DRIVE_OVERHEATED);} raising the no-drive message instead:"
+            + " \"and the pilot must be told which of the refusals this is: … \\\"message\\\":\\\"msg.jumpgate.nodrive\\\"\"."
+            + " NOT WOUND UP — {@code JumpTrigger#press} at {@code if (!verdict.allowed())} ignoring the verdict: \"a refused jump must not wind the"
+            + " drive up: {\\\"ok\\\":true,\\\"spooling\\\":true}\". COSTS NOTHING — {@code JumpTrigger#press} at {@code spool.clearWarning();} firing the"
+            + " burst before refusing: \"and must cost the pilot nothing … \\\"charge\\\":720000\". REMEMBERS NOTHING"
+            + " — {@code JumpTrigger#press} at {@code spool.clearWarning();} clearing the aim on a refusal: \"cooling the ship is the whole of the"
+            + " fix - the gate is read-only and remembers nothing: … \\\"allowed\\\":false\". The premises at its"
+            + " head and the two after the cook and the cool are arrangements and are not witnessed.")
     @Test
     public void anOverheatedDriveRefusesToFireAndTheRefusalIsFree() throws Exception {
         standShip("an armed ship with coolant laid against its drive");
@@ -207,11 +211,12 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * accident nor as "too hot" by defaulting the safe way: a ship built before anyone laid a pipe
      * has to keep flying.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING TO READ — {@code ShipDrive#coolantKelvin} at {@code double hottest = 0.0D;} starting the reading at ambient: "with nothing bolted to the drive there is
-     * nothing to read: … \"driveCoolantMilliK\":293000". ALLOWED — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} refusing an
-     * unmeasured drive: "and an unmeasured drive must still be allowed to jump: … \"allowed\":false".</p>
      * Pins INV-HEAT-26 (A drive with no coolant against it reads zero and is NOT refused).
      */
+    @Pins("INV-HEAT-26")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NOTHING TO READ — {@code ShipDrive#coolantKelvin} at {@code double hottest = 0.0D;} starting the reading at ambient: \"with nothing bolted to the drive there is"
+            + " nothing to read: … \\\"driveCoolantMilliK\\\":293000\". ALLOWED — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} refusing an"
+            + " unmeasured drive: \"and an unmeasured drive must still be allowed to jump: … \\\"allowed\\\":false\".")
     @Test
     public void aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused() throws Exception {
         standShip("an armed ship with nothing against its drive");

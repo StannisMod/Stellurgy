@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.client.StellurgyKeyConflictContext;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Pins the conflict-resolution contract of {@link StellurgyKeyConflictContext} that the
@@ -21,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 public class StellurgyKeyConflictContextTest {
 
     /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
+    @Pins("INV-CLR-08")
     @Test
     public void eachContextConflictsWithItself() {
         // A binding only conflicts with another binding in the SAME context —
@@ -30,6 +32,7 @@ public class StellurgyKeyConflictContextTest {
     }
 
     /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
+    @Pins("INV-CLR-08")
     @Test
     public void pilotingAndNotPilotingNeverConflict() {
         // The whole point: a steering key (PILOTING) and the vanilla key it
@@ -39,6 +42,7 @@ public class StellurgyKeyConflictContextTest {
     }
 
     /** Pins INV-CLR-08 (PILOTING and NOT_PILOTING conflict only with themselves and never with the vanilla contexts). */
+    @Pins("INV-CLR-08")
     @Test
     public void doesNotClaimConflictWithForgeBuiltInContexts() {
         // Our contexts must not over-claim conflicts against IN_GAME/GUI, or the

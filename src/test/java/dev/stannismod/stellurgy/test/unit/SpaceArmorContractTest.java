@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * ItemSpaceArmor / ItemSpaceChest unit-tier contracts.
@@ -79,10 +80,8 @@ public class SpaceArmorContractTest {
 
     // ───────────────────── the protection matrix ─────────────────────────
 
-    /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: "space armor must
-     * protect from HEAT", 2026-09-30.</p>
-     */
+    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"space armor must"
+            + " protect from HEAT\", 2026-09-30.")
     @Test
     public void protectsFromEveryHazardTheModelCanRaise() {
         ItemSpaceArmor armor = chest();
@@ -97,10 +96,8 @@ public class SpaceArmorContractTest {
         }
     }
 
-    /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: "air that raises
-     * no hazard needs no protecting from", 2026-09-30.</p>
-     */
+    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that raises"
+            + " no hazard needs no protecting from\", 2026-09-30.")
     @Test
     public void protectsFromNothingWhereThereIsNoHazard() {
         ItemSpaceArmor armor = chest();
@@ -112,12 +109,10 @@ public class SpaceArmorContractTest {
                 armor.protectsFrom(Collections.<AtmosphereHazard>emptySet(), false, stack, false));
     }
 
-    /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes whenever it is acted on: "protect
-     * decision must be commit-invariant for [] expected:&lt;true&gt; but was:&lt;false&gt;",
-     * 2026-09-30. This asks the base piece, whose answer never read the commit flag; the chest that
-     * does spend on commit ({@code ItemSpaceChest#protectsFrom} at {@code if (!super.protectsFrom(hazards, needsSuppliedOxygen, stack, commitProtection))}) is not what it calls.</p>
-     */
+    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes whenever it is acted on: \"protect"
+            + " decision must be commit-invariant for [] expected:&lt;true&gt; but was:&lt;false&gt;\","
+            + " 2026-09-30. This asks the base piece, whose answer never read the commit flag; the chest that"
+            + " does spend on commit ({@code ItemSpaceChest#protectsFrom} at {@code if (!super.protectsFrom(hazards, needsSuppliedOxygen, stack, commitProtection))}) is not what it calls.")
     @Test
     public void theProtectionDecisionIsTheSameWhetherOrNotItIsActedOn() {
         // Asking must not change the answer: the commit flag exists so that speculative callers

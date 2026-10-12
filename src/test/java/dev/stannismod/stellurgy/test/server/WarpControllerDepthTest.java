@@ -11,6 +11,8 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * REAL warp-controller behavioural depth.
@@ -267,13 +269,14 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
      * <p>What this does not see: the price reaching the GUI's fuel line, and a warp actually spending
      * it — stations no longer depart (see {@link #aFullyFuelledStationStillDoesNotDepart}).</p>
      *
-     * <p>red-witnessed: 2026-09-30, with {@code TileWarpController#intraSystemCost} at {@code double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} converting by
-     * the old hundredth of an AU ({@code 1d / 100d}), i.e. pricing the raw separation in units: "a warp
-     * from WarpPriceOrigin (11.998453186842863 AU) to WarpPriceTarget (18.432117696839327 AU), priced
-     * 643.3664509998781 .. 643.3664510005907 at 100 fuel per AU, slack 1.4125960214058866: … expected:
-     * &lt;643.3664510002344&gt; but was:&lt;9624626.0&gt;".</p>
      * Pins INV-STN-17 (a same-star warp is priced by the in-plane separation in AU).
      */
+    @Pins("INV-STN-17")
+    @RedWitness(prose = "2026-09-30, with {@code TileWarpController#intraSystemCost} at {@code double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} converting by"
+            + " the old hundredth of an AU ({@code 1d / 100d}), i.e. pricing the raw separation in units: \"a warp"
+            + " from WarpPriceOrigin (11.998453186842863 AU) to WarpPriceTarget (18.432117696839327 AU), priced"
+            + " 643.3664509998781 .. 643.3664510005907 at 100 fuel per AU, slack 1.4125960214058866: … expected:"
+            + " &lt;643.3664510002344&gt; but was:&lt;9624626.0&gt;\".")
     @Test
     public void aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu() throws Exception {
         DimList.Probe probe = command -> ok(client().execute(command));

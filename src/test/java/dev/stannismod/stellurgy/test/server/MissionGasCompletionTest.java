@@ -17,6 +17,8 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * MissionGasCollection.onMissionComplete contract.
@@ -107,6 +109,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      *  line 46). Counter-test pinning the gate.
      * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
      */
+    @Pins("INV-MSN-07")
     @Test
     public void gasCompletionDoesNotFillFluidWhenIntakePowerZero() throws Exception {
         int rid = buildAndAssembleRocket(8100);
@@ -149,6 +152,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      *  non-empty.
      * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
      */
+    @Pins("INV-MSN-07")
     @Test
     public void gasCompletionFillsRocketFluidTilesWithConfiguredFluid() throws Exception {
         int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");
@@ -176,10 +180,10 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      *  {@code planet info} reports it. Does NOT see the rocket's selector or the mission it plans — only
      *  the offer they both read. Hydrogen and oxygen are used because Stellurgy itself registers their
      *  fluids; a gas no mod has bottled is measured and not offered, and that half is unpinned here.</p>
-     *
-     *  <p>red-witnessed: with {@code DimensionProperties#getHarvestableGases} at
-     *  {@code air.partialPressure(gas) > 0L} widened to {@code >= 0L}, empty air was offered every
-     *  bottled gas; with the method answering an empty list, the hydrogen trace was not offered.</p> */
+     */
+    @RedWitness(prose = "with {@code DimensionProperties#getHarvestableGases} at"
+            + " {@code air.partialPressure(gas) > 0L} widened to {@code >= 0L}, empty air was offered every"
+            + " bottled gas; with the method answering an empty list, the hydrogen trace was not offered.")
     @Test
     public void aHarvesterIsOfferedExactlyTheGasesTheAirHolds() throws Exception {
         final int dim = 0;

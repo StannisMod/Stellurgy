@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.space.ShipEntryController;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The range a pilot is shown counts down to the surface he crosses.
@@ -140,11 +141,10 @@ public class DescentShellTest {
      * different atmospheres. The two lengths are in two metrics (a chart block is 250 m, a world block
      * one), so the comparison converts the shell's depth and allows the half chart block the shell is
      * rounded to; Earth's line is checked against the Kármán line it is defined from.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code double depthWorldBlocks = depthChartBlocks * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;}
-     * left in chart blocks (the multiplication removed), this fails with "the takeoff line must be the
-     * descent shell's depth in world blocks (r=0.2727)".</p>
      */
+    @RedWitness(prose = "2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code double depthWorldBlocks = depthChartBlocks * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;}"
+            + " left in chart blocks (the multiplication removed), this fails with \"the takeoff line must be the"
+            + " descent shell's depth in world blocks (r=0.2727)\".")
     @Test
     public void theTakeoffLineIsTheDescentShellSeenFromInsideTheWorld() {
         int metresPerChartBlock = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;
@@ -164,10 +164,9 @@ public class DescentShellTest {
      * A line a ship could cross while parked is the floor, not an atmosphere: a body small enough that
      * its derived line would sit inside the block band takes the top of the band, and a body with no
      * radius has no line to derive.
-     *
-     * <p>red-witnessed: 2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code return (int) Math.max(TerrainHeightFinder.MAX_BUILD_Y, Math.round(depthWorldBlocks));}
-     * returning the bare rounded depth, this fails with "expected:&lt;255&gt; but was:&lt;100&gt;".</p>
      */
+    @RedWitness(prose = "2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code return (int) Math.max(TerrainHeightFinder.MAX_BUILD_Y, Math.round(depthWorldBlocks));}"
+            + " returning the bare rounded depth, this fails with \"expected:&lt;255&gt; but was:&lt;100&gt;\".")
     @Test
     public void aTakeoffLineNeverSitsInsideTheBlockBand() {
         assertEquals(dev.stannismod.stellurgy.space.TerrainHeightFinder.MAX_BUILD_Y,

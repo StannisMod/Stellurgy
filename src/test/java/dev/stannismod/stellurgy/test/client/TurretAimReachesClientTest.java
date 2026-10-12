@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Whether a player can see which way a turret is pointing.
@@ -46,16 +47,13 @@ public class TurretAimReachesClientTest extends AbstractClientE2ETest {
 
     private static final int X = 120, Y = 79, Z = 120;
 
-    /**
-     * red-witnessed: with {@code TileTurret.getUpdateTag} ({@code TileTurret#getUpdateTag} at {@code NBTTagCompound mount = new NBTTagCompound();}) no longer
-     * writing the mount, this fails at "the client's turret never turned onto its command: the server
-     * commanded a bearing -90.0 and the client is still where it started (0.0)" (2026-09-29).
-     *
-     * <p>red-witnessed: with {@code TurretMechanism.isOnTarget} ({@code TurretMechanism#isOnTarget} at {@code return dYaw <= AIM_TOLERANCE_DEGREES && dPitch <= AIM_TOLERANCE_DEGREES;})
-     * answering true for any commanded mount, this fails at "the client reports itself on target yet
-     * points elsewhere than its command: {...onTarget:true...yaw:-4.0...commandedYaw:-90.0...remote:true}"
-     * (2026-09-30).</p>
-     */
+    @RedWitness(prose = "with {@code TileTurret.getUpdateTag} ({@code TileTurret#getUpdateTag} at {@code NBTTagCompound mount = new NBTTagCompound();}) no longer"
+            + " writing the mount, this fails at \"the client's turret never turned onto its command: the server"
+            + " commanded a bearing -90.0 and the client is still where it started (0.0)\" (2026-09-29).")
+    @RedWitness(prose = "with {@code TurretMechanism.isOnTarget} ({@code TurretMechanism#isOnTarget} at {@code return dYaw <= AIM_TOLERANCE_DEGREES && dPitch <= AIM_TOLERANCE_DEGREES;})"
+            + " answering true for any commanded mount, this fails at \"the client reports itself on target yet"
+            + " points elsewhere than its command: {...onTarget:true...yaw:-4.0...commandedYaw:-90.0...remote:true}\""
+            + " (2026-09-30).")
     @Test
     public void theBearingTheServerCommandsArrivesAtTheClient() throws Exception {
         Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);

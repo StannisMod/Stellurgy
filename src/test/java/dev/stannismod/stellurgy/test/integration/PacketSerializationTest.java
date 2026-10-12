@@ -34,6 +34,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Network packet wire-format round-trip — the four packets
@@ -95,6 +96,7 @@ public class PacketSerializationTest {
     // ---- PacketDimInfo --------------------------------------------------------
 
     /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetDimInfoNullPropertiesIsDeleteSignal() {
         // ctor with null DimensionProperties -> wire format collapses to
@@ -132,6 +134,7 @@ public class PacketSerializationTest {
     }
 
     /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetSatelliteRoundTrip() {
         SatelliteProperties props =
@@ -182,6 +185,7 @@ public class PacketSerializationTest {
     // ---- PacketConfigSync -----------------------------------------------------
 
     /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetConfigSyncRoundTrip() {
         // Start from a current-config copy (matches what production StellurgyConfiguration
@@ -254,6 +258,7 @@ public class PacketSerializationTest {
     // ---- PacketAsteroidInfo --------------------------------------------------
 
     /** Pins INV-NW-04 (NBT-envelope packets round-trip through writeCompoundTag and readCompoundTag). */
+    @Pins("INV-NW-04")
     @Test
     public void packetAsteroidInfoRoundTrip() {
         Asteroid original = new Asteroid();

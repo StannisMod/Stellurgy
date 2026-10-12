@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * P4 control layer (D134-5 / D134-6): priority groups are a domain-level SSOT and consoles are stateless
@@ -33,6 +34,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     private static final int Y = FixtureSite.OPEN_AIR_Y;
 
     /** Pins INV-SHD-09 (deleting a priority group does not change any member emitter's priority). */
+    @Pins("INV-SHD-09")
     @Test
     public void groupPushesPriorityIntoMemberEmitters() throws Exception {
         int base = 1040, z = 840;
@@ -65,6 +67,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-SHD-10 (a group created at one console is editable at another and survives that console's destruction). */
+    @Pins("INV-SHD-10")
     @Test
     public void anyConsoleEditsTheSameDomainConfig() throws Exception {
         int base = 1040, z = 852;
@@ -101,6 +104,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-SHD-11 (rotating the access code changes the credential and leaves grouping and priority untouched). */
+    @Pins("INV-SHD-11")
     @Test
     public void rotatingAccessCodeChangesCredentialButNotGrouping() throws Exception {
         int base = 1040, z = 864;

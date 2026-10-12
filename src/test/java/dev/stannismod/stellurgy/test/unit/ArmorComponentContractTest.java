@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Unit-tier contract for the
@@ -50,6 +51,7 @@ public class ArmorComponentContractTest {
     }
 
     /** Pins INV-ITM-09 (the jetpack and the pressure tank fit the chest slot only). */
+    @Pins("INV-ITM-09")
     @Test
     public void jetpackIsAllowedOnlyInChestSlot() {
         ItemJetpack jetpack = new ItemJetpack();
@@ -63,6 +65,7 @@ public class ArmorComponentContractTest {
     }
 
     /** Pins INV-ITM-09 (the jetpack and the pressure tank fit the chest slot only). */
+    @Pins("INV-ITM-09")
     @Test
     public void pressureTankIsAllowedOnlyInChestSlot() {
         ItemPressureTank tank = new ItemPressureTank(1, 8000);
@@ -76,6 +79,7 @@ public class ArmorComponentContractTest {
     }
 
     /** Pins INV-ITM-07 (the pressure tank capacity is base times two to the damage). */
+    @Pins("INV-ITM-07")
     @Test
     public void pressureTankCapacityScalesAsPowerOfTwoWithItemDamage() {
         // capacity formula: baseCapacity * 2^itemDamage
@@ -92,6 +96,7 @@ public class ArmorComponentContractTest {
     }
 
     /** Pins INV-ITM-08 (the jetpack enabled flag is written when on and cleared when off). */
+    @Pins("INV-ITM-08")
     @Test
     public void jetpackEnabledStateToggleStoresAndClearsNbtFlag() {
         // Production toggle stored under NBT key "enabled" via

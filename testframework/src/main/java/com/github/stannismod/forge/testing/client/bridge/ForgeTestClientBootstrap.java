@@ -49,6 +49,14 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ForgeTestClientBootstrap {
 
     private final AtomicBoolean bridgeStarted = new AtomicBoolean(false);
+    /** This client's keyboard and mouse as the game reads them — see {@link VirtualInput}. */
+    private final VirtualInput virtualInput = new VirtualInput();
+    /**
+     * Whether this client serves an e2e — read ONCE, when the bridge is made with {@code Minecraft}, and
+     * held for the client's life. A property cleared or set afterwards, by anything running in this
+     * client, does not change which mode the bridge judges in.
+     */
+    private final boolean servesAnE2E = com.github.stannismod.forge.testing.E2EMode.launchedForAnE2E();
     private final AtomicLong clientTicks = new AtomicLong(0L);
     /**
      * The client ticks on which the world was live ({@link #publishWorldLiveness}) — the ticks on
@@ -172,6 +180,9 @@ public final class ForgeTestClientBootstrap {
      */
     private static final int CHUNK_DATA_CAP = 2048;
 
+    /** {@code Entity.turn} multiplies a mouse delta by this before adding it to the rotation (vanilla). */
+    private static final double TURN_SCALE = 0.15D;
+
     private int capOf(String type) {
         return "chunk_data_applied".equals(type) ? CHUNK_DATA_CAP : EVENT_LOG_CAP_PER_TYPE;
     }
@@ -223,7 +234,7 @@ public final class ForgeTestClientBootstrap {
      *
      * <p>The harness owns the log and the honesty flag; what is worth recording is the consuming
      * project's business, and it says so through its own mixin config (see
-     * {@code ForgeTestCoreMod.CONSUMER_INDEX}). Self-gating: dropped until the bridge has started,
+     * {@code ForgeTestCoreMod.CONSUMER_CONFIG}). Self-gating: dropped until the bridge has started,
      * so a caller never has to ask first.</p>
      *
      * @param payload a JSON fragment WITHOUT braces, or empty
@@ -439,9 +450,26 @@ public final class ForgeTestClientBootstrap {
         throw new IOException("Timed out connecting Forge test bridge", last);
     }
 
+    /**
+     * One request, answered. What the command IS comes from {@link BridgeCommand} before anything runs:
+     * a name it does not hold is unknown, and in e2e mode a kind it does not admit is refused here, at
+     * the call — whatever wrote the request, by whatever route.
+     */
     private JsonObject handleCommand(JsonObject request) {
         String command = request.has("command") ? request.get("command").getAsString() : "";
+        BridgeCommand known = BridgeCommand.byWireName(command);
+        if (known == null) {
+            return error("Unknown command: " + command);
+        }
+        if (servesAnE2E) {
+            JsonObject refusal = refusedInE2E(known, request);
+            if (refusal != null) {
+                return refusal;
+            }
+        }
         switch (command) {
+            case "input":
+                return deliverInput(request);
             case "wait_world":
                 waitForWorld();
                 return ok();
@@ -857,27 +885,40 @@ public final class ForgeTestClientBootstrap {
                     }
                     return response;
                 });
-            case "set_look":
+            case "set_look": {
+                // Where he looks, given as a world yaw and pitch, and TURNED there the way his mouse turns
+                // him: through Entity.turn, the method the game's own mouse handler feeds its deltas into,
+                // so every hook on the turn runs (aboard a deck the mod turns his look in the DECK frame)
+                // and vanilla clamps the pitch. The delta is the shortest one to the asked yaw; turn()
+                // multiplies what it is given by 0.15 and subtracts the pitch, so it is handed the inverse.
+                // A head is turned to a finite direction only: NaN or an infinity is refused, and a pitch
+                // past straight up or down is clamped to vanilla's -90..90 before the delta is taken.
+                float askedYaw = request.get("yaw").getAsFloat();
+                float askedPitch = request.get("pitch").getAsFloat();
+                if (Float.isNaN(askedYaw) || Float.isInfinite(askedYaw)
+                        || Float.isNaN(askedPitch) || Float.isInfinite(askedPitch)) {
+                    return refusedArguments(BridgeCommand.SET_LOOK, "yaw " + askedYaw + " / pitch " + askedPitch
+                            + " is no direction a head can face");
+                }
+                final float pitch = net.minecraft.util.math.MathHelper.clamp(askedPitch, -90.0F, 90.0F);
                 return runOnClientThread(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
-                    float yaw = request.get("yaw").getAsFloat();
-                    float pitch = request.get("pitch").getAsFloat();
                     JsonObject response = ok();
                     if (mc.player != null) {
-                        // Set both current and prev so the look snaps without a
-                        // render-interpolation sweep — mirrors an instantaneous aim.
-                        mc.player.rotationYaw = yaw;
-                        mc.player.prevRotationYaw = yaw;
-                        mc.player.rotationPitch = pitch;
-                        mc.player.prevRotationPitch = pitch;
+                        float dYaw = net.minecraft.util.math.MathHelper.wrapDegrees(askedYaw - mc.player.rotationYaw);
+                        float dPitch = pitch - mc.player.rotationPitch;
+                        mc.player.turn((float) (dYaw / TURN_SCALE), (float) (-dPitch / TURN_SCALE));
                         response.addProperty("applied", true);
+                        response.addProperty("yaw", mc.player.rotationYaw);
+                        response.addProperty("pitch", mc.player.rotationPitch);
                     } else {
                         response.addProperty("applied", false);
                     }
-                    response.addProperty("yaw", yaw);
-                    response.addProperty("pitch", pitch);
+                    response.addProperty("askedYaw", askedYaw);
+                    response.addProperty("askedPitch", askedPitch);
                     return response;
                 });
+            }
             case "reconnect":
                 return runOnClientThread(() -> {
                     // A REAL relog: quit the server connection and reconnect to the same
@@ -988,11 +1029,20 @@ public final class ForgeTestClientBootstrap {
                     response.addProperty("port", lastServerPort);
                     return response;
                 });
-            case "turn_look":
+            case "turn_look": {
+                // A mouse moves the head by a finite delta: NaN or an infinity is no movement a hand makes,
+                // and Entity.turn would write it straight into the rotation.
+                float askedDeltaYaw = request.get("deltaYaw").getAsFloat();
+                float askedDeltaPitch = request.get("deltaPitch").getAsFloat();
+                if (Float.isNaN(askedDeltaYaw) || Float.isInfinite(askedDeltaYaw)
+                        || Float.isNaN(askedDeltaPitch) || Float.isInfinite(askedDeltaPitch)) {
+                    return refusedArguments(BridgeCommand.TURN_LOOK, "delta yaw " + askedDeltaYaw + " / pitch "
+                            + askedDeltaPitch + " is no movement a mouse makes");
+                }
                 return runOnClientThread(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
-                    float dYaw = request.get("deltaYaw").getAsFloat();
-                    float dPitch = request.get("deltaPitch").getAsFloat();
+                    float dYaw = askedDeltaYaw;
+                    float dPitch = askedDeltaPitch;
                     JsonObject response = ok();
                     if (mc.player != null) {
                         // The REAL mouse path: Entity.turn is exactly what the game's own
@@ -1008,6 +1058,7 @@ public final class ForgeTestClientBootstrap {
                     }
                     return response;
                 });
+            }
             case "set_key":
                 return runOnClientThread(() -> {
                     int keyCode = requireInt(request, "keyCode");
@@ -1612,6 +1663,13 @@ public final class ForgeTestClientBootstrap {
                 // back, exactly as set_framebuffer does - the render path every other test runs is
                 // unchanged. The distance also sets the sky projection's far plane (farPlaneDistance * 2),
                 // so it must clear whatever radius the sky geometry is drawn at.
+                {
+                    String offTheSlider = offTheSlider(net.minecraft.client.settings.GameSettings.Options.RENDER_DISTANCE,
+                            request.get("chunks").getAsInt());
+                    if (offTheSlider != null) {
+                        return refusedArguments(BridgeCommand.SET_RENDER_DISTANCE, offTheSlider);
+                    }
+                }
                 return runOnClientThread(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
                     int chunks = request.get("chunks").getAsInt();
@@ -1645,6 +1703,13 @@ public final class ForgeTestClientBootstrap {
                 // - so this takes effect on the next frame with no other call needed. Vsync is reported
                 // because it overrides the cap at the driver: a caller that raised the limit and still
                 // sees 60 has learned why here rather than by guessing.
+                {
+                    String offTheSlider = offTheSlider(net.minecraft.client.settings.GameSettings.Options.FRAMERATE_LIMIT,
+                            request.get("fps").getAsInt());
+                    if (offTheSlider != null) {
+                        return refusedArguments(BridgeCommand.SET_FRAME_RATE, offTheSlider);
+                    }
+                }
                 return runOnClientThread(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
                     int fps = request.get("fps").getAsInt();
@@ -1794,8 +1859,249 @@ public final class ForgeTestClientBootstrap {
                     return response;
                 });
             default:
-                return error("Unknown command: " + command);
+                return error("no handler for the command " + command + ": BridgeCommand names it and the"
+                        + " bridge's dispatch does not");
         }
+    }
+
+    /**
+     * The e2e mode's answer to {@code command}, or {@code null} when it is admitted.
+     *
+     * <p>A refusal is a reply of its own shape — {@code refused:true} with the command, its kind and why —
+     * so a caller reads it as data. A static call is admitted only on a (class, method) the instrument
+     * table names ({@link ClientInstruments}), compared as the exact strings the call will resolve, before
+     * any class is loaded — so no spelling reaches a member the table does not name, and a refused class is
+     * never initialised by being judged.</p>
+     */
+    private JsonObject refusedInE2E(BridgeCommand command, JsonObject request) {
+        if (!command.kind().admittedInE2E()) {
+            return refusal(command, command.reason());
+        }
+        if (command.kind() == BridgeCommand.Kind.STATIC_TARGET) {
+            String className = request.has("className") ? request.get("className").getAsString() : "";
+            String methodName = request.has("methodName") ? request.get("methodName").getAsString() : "";
+            if (ClientInstruments.kindOf(className, methodName) == null) {
+                return refusal(command, className + "#" + methodName + " is no e2e instrument of this client "
+                        + ClientInstruments.describe() + " — a static call that is not a named instrument calls a"
+                        + " decision the player never made");
+            }
+        }
+        return null;
+    }
+
+    private JsonObject refusal(BridgeCommand command, String why) {
+        JsonObject response = error("REFUSED in e2e mode: " + command.wireName() + " is "
+                + command.kind() + " — " + why);
+        response.addProperty("refused", true);
+        response.addProperty("refusedCommand", command.wireName());
+        response.addProperty("refusedKind", command.kind().name());
+        return response;
+    }
+
+    /** What a command's arguments are refused as, in every mode: no player's hand produces them. */
+    static final String REFUSED_ARGUMENTS = "ARGUMENTS";
+
+    /**
+     * A command refused for its ARGUMENTS, in every mode — the input no keyboard, mouse or head can
+     * produce. Same shape as an e2e refusal, with {@code refusedKind} {@value #REFUSED_ARGUMENTS}.
+     */
+    private JsonObject refusedArguments(BridgeCommand command, String why) {
+        JsonObject response = error("REFUSED: " + command.wireName() + " — " + why);
+        response.addProperty("refused", true);
+        response.addProperty("refusedCommand", command.wireName());
+        response.addProperty("refusedKind", REFUSED_ARGUMENTS);
+        return response;
+    }
+
+    /**
+     * The {@code input} command: the ONE way a player's input enters this client — {@link VirtualInput}.
+     *
+     * <p>{@code events} is an array, delivered in order. A mouse event names a {@code button} (0 left, 1
+     * right, 2 middle) with {@code down}, or {@code button:-1} for a cursor move; it may carry a point
+     * {@code x}/{@code y} in the OPEN SCREEN's own scaled coordinates, converted here to the display pixel
+     * whose cell it is (the round trip is checked, as {@code handleMouseInput} computes it back); a mouse
+     * event with no point is at the cursor where it already is. A key event names an LWJGL {@code key}
+     * (0 for a character alone), {@code down}, and an optional {@code character}.</p>
+     *
+     * <p>Answers once a client tick has READ every event — the screen or the key bindings have had them —
+     * and reports the cursor that leaves, in screen coordinates when a screen is open.</p>
+     */
+    private JsonObject deliverInput(JsonObject request) {
+        if (!request.has("events") || !request.get("events").isJsonArray()) {
+            return error("input: an array `events` is required");
+        }
+        final JsonArray events = request.getAsJsonArray("events");
+        String outOfHand = inputNoHandProduces(events);
+        if (outOfHand != null) {
+            return refusedArguments(BridgeCommand.INPUT, outOfHand);
+        }
+        List<VirtualInput.Event> parsed = runOnClientThread(() -> {
+            List<VirtualInput.Event> out = new ArrayList<>();
+            int[] cursor = virtualInput.cursor();
+            for (JsonElement element : events) {
+                JsonObject event = element.getAsJsonObject();
+                String device = requireString(event, "device");
+                if ("mouse".equals(device)) {
+                    int button = requireInt(event, "button");
+                    if (button < -1 || button > 15) {
+                        throw new IllegalArgumentException("input: mouse button " + button + " is not -1..15");
+                    }
+                    if (event.has("x") || event.has("y")) {
+                        GuiScreen screen = Minecraft.getMinecraft().currentScreen;
+                        if (screen == null) {
+                            throw new IllegalStateException("input: a mouse point is in screen coordinates and"
+                                    + " no screen is open");
+                        }
+                        cursor = displayPixel(screen, requireInt(event, "x"), requireInt(event, "y"));
+                    }
+                    boolean down = button >= 0 && event.has("down") && event.get("down").getAsBoolean();
+                    out.add(VirtualInput.Event.mouse(button, down, cursor[0], cursor[1]));
+                } else if ("key".equals(device)) {
+                    out.add(VirtualInput.Event.key(requireInt(event, "key"),
+                            event.has("down") && event.get("down").getAsBoolean(),
+                            event.has("character") ? event.get("character").getAsInt() : 0));
+                } else {
+                    throw new IllegalArgumentException("input: unknown device '" + device + "'");
+                }
+            }
+            return out;
+        });
+        if (parsed.isEmpty()) {
+            return error("input: no events");
+        }
+        long last = virtualInput.enqueue(parsed);
+        virtualInput.awaitDelivered(last, CLIENT_SIDE_BUDGET_MILLIS / 2L);
+        return runOnClientThread(() -> {
+            JsonObject response = ok();
+            response.addProperty("delivered", parsed.size());
+            int[] cursor = virtualInput.cursor();
+            response.addProperty("cursorDisplayX", cursor[0]);
+            response.addProperty("cursorDisplayY", cursor[1]);
+            Minecraft mc = Minecraft.getMinecraft();
+            GuiScreen screen = mc.currentScreen;
+            response.addProperty("screen", screen == null ? "" : screen.getClass().getName());
+            if (screen != null && mc.displayWidth > 0 && mc.displayHeight > 0) {
+                response.addProperty("cursorX", cursor[0] * screen.width / mc.displayWidth);
+                response.addProperty("cursorY", screen.height - cursor[1] * screen.height / mc.displayHeight - 1);
+            }
+            return response;
+        });
+    }
+
+    /**
+     * Why {@code events} is input no player's hands produce for one client tick, or {@code null}.
+     *
+     * <p><b>The cap is {@value VirtualInput#LWJGL_BUFFER_EVENTS} events PER DEVICE per call.</b> Derived from
+     * the devices, not chosen: LWJGL's {@code Mouse} and {@code Keyboard} each read their device into a
+     * buffer of that many events, the game drains each buffer once per client tick
+     * ({@code runTickMouse} / {@code runTickKeyboard} loop {@code next()} to its end), and a real device
+     * that produced more between two polls has the rest dropped by LWJGL itself. So one call — which
+     * answers once a tick has read it — can never carry more of one device than one tick of a real game
+     * could see. A key code is LWJGL's {@code 0..}{@value VirtualInput#KEY_COUNT}{@code -1} (its
+     * {@code Keyboard.KEYBOARD_SIZE}), a mouse button {@code -1..}{@value VirtualInput#BUTTON_COUNT}
+     * {@code -1} ({@code -1} a move), a typed character one UTF-16 unit.</p>
+     */
+    private static String inputNoHandProduces(JsonArray events) {
+        int mouse = 0;
+        int keys = 0;
+        for (JsonElement element : events) {
+            if (!element.isJsonObject()) {
+                return "an input event is an object, not " + element;
+            }
+            JsonObject event = element.getAsJsonObject();
+            String device = event.has("device") ? event.get("device").getAsString() : "";
+            if ("mouse".equals(device)) {
+                mouse++;
+                int button = event.has("button") ? event.get("button").getAsInt() : Integer.MIN_VALUE;
+                if (button < -1 || button >= VirtualInput.BUTTON_COUNT) {
+                    return "mouse button " + button + " is outside -1.." + (VirtualInput.BUTTON_COUNT - 1);
+                }
+            } else if ("key".equals(device)) {
+                keys++;
+                int key = event.has("key") ? event.get("key").getAsInt() : Integer.MIN_VALUE;
+                if (key < 0 || key >= VirtualInput.KEY_COUNT) {
+                    return "key code " + key + " is outside LWJGL's 0.." + (VirtualInput.KEY_COUNT - 1);
+                }
+                int character = event.has("character") ? event.get("character").getAsInt() : 0;
+                if (character < 0 || character > Character.MAX_VALUE) {
+                    return "typed character " + character + " is not one UTF-16 unit";
+                }
+            } else {
+                return "unknown device '" + device + "'";
+            }
+        }
+        if (mouse > VirtualInput.LWJGL_BUFFER_EVENTS || keys > VirtualInput.LWJGL_BUFFER_EVENTS) {
+            return mouse + " mouse and " + keys + " key events in one call: a client tick reads at most "
+                    + VirtualInput.LWJGL_BUFFER_EVENTS + " of each device, LWJGL's own buffer";
+        }
+        java.util.Map<String, Integer> presses = new java.util.HashMap<>();
+        for (JsonElement element : events) {
+            JsonObject event = element.getAsJsonObject();
+            if (!event.has("down") || !event.get("down").getAsBoolean()) {
+                continue;
+            }
+            String device = event.get("device").getAsString();
+            String binding = "mouse".equals(device) ? "mouse button " + event.get("button").getAsInt()
+                    : event.get("key").getAsInt() != 0 ? "key " + event.get("key").getAsInt()
+                    : "typed character " + (event.has("character") ? event.get("character").getAsInt() : 0);
+            if ("mouse button -1".equals(binding)) {
+                continue;
+            }
+            int count = presses.merge(binding, 1, Integer::sum);
+            if (count > HUMAN_PRESSES_PER_TICK) {
+                return count + " presses of " + binding + " in one call: one call is read by one client tick, and a"
+                        + " hand presses one binding at most " + HUMAN_PRESSES_PER_TICK + " times in a tick";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * How many times one key, button or typed character can go DOWN in one client tick of a real game: 2.
+     *
+     * <p>Derived: a client tick is 50 ms; the fastest sustained human tapping on one key or button is
+     * around 10 to 16 presses a second (60 to 100 ms each), so one whole press fits in a tick at most once,
+     * and a press that straddles the tick's start adds a second down edge. One {@code input} call is read by
+     * one client tick ({@link VirtualInput}: a call answers only once a tick that began after its events were
+     * handed over has ended, so the next call's events reach a later tick), so the bound is per call.</p>
+     */
+    private static final int HUMAN_PRESSES_PER_TICK = 2;
+
+    /**
+     * Why {@code value} is not a value the vanilla options slider {@code option} can be set to, or
+     * {@code null}: below its minimum, above its maximum (the render distance's maximum is the one this
+     * client's own {@code GameSettings} chose for its memory), or between two of its steps.
+     */
+    private static String offTheSlider(net.minecraft.client.settings.GameSettings.Options option, int value) {
+        float min = option.getValueMin();
+        float max = option.getValueMax();
+        if (value < min || value > max || option.snapToStepClamp(value) != value) {
+            return value + " is no position of the " + option.getTranslation() + " slider (" + (int) min + ".."
+                    + (int) max + " in its steps): a player sets the option in the menu";
+        }
+        return null;
+    }
+
+    /**
+     * The display pixel whose scaled cell is the screen point {@code (x, y)}: the centre of the cell,
+     * inverted from {@code GuiScreen.handleMouseInput}'s own arithmetic, with the round trip checked — a
+     * point that would not come back as itself is refused rather than clicked somewhere near it.
+     */
+    private int[] displayPixel(GuiScreen screen, int x, int y) {
+        Minecraft mc = Minecraft.getMinecraft();
+        int dw = mc.displayWidth, dh = mc.displayHeight, w = screen.width, h = screen.height;
+        if (w <= 0 || h <= 0 || dw <= 0 || dh <= 0) {
+            throw new IllegalStateException("Cannot place the cursor: screen " + w + "x" + h + ", display "
+                    + dw + "x" + dh);
+        }
+        int px = (int) (((2L * x + 1) * dw) / (2L * w));
+        int py = (int) (((2L * (h - 1 - y) + 1) * dh) / (2L * h));
+        if (px * w / dw != x || h - py * h / dh - 1 != y) {
+            throw new IllegalStateException("Cursor point " + x + "," + y + " does not survive the display"
+                    + " round trip (pixel " + px + "," + py + ", screen " + w + "x" + h + ", display " + dw
+                    + "x" + dh + ")");
+        }
+        return new int[] {px, py};
     }
 
     private JsonObject waitTicks(JsonObject request) {
@@ -2187,19 +2493,9 @@ public final class ForgeTestClientBootstrap {
      * own arithmetic; the round trip is checked, and a point that does not come back is refused.</p>
      */
     private void placeCursor(GuiScreen screen, int x, int y) {
-        Minecraft mc = Minecraft.getMinecraft();
-        int dw = mc.displayWidth, dh = mc.displayHeight, w = screen.width, h = screen.height;
-        if (w <= 0 || h <= 0 || dw <= 0 || dh <= 0) {
-            throw new IllegalStateException("Cannot place the cursor: screen " + w + "x" + h + ", display "
-                    + dw + "x" + dh);
-        }
-        int px = (int) (((2L * x + 1) * dw) / (2L * w));
-        int py = (int) (((2L * (h - 1 - y) + 1) * dh) / (2L * h));
-        if (px * w / dw != x || h - py * h / dh - 1 != y) {
-            throw new IllegalStateException("Cursor point " + x + "," + y + " does not survive the display"
-                    + " round trip (pixel " + px + "," + py + ", screen " + w + "x" + h + ", display " + dw
-                    + "x" + dh + ")");
-        }
+        int[] pixel = displayPixel(screen, x, y);
+        int px = pixel[0];
+        int py = pixel[1];
         try {
             for (String field : new String[] {"x", "event_x", "absolute_x"}) {
                 java.lang.reflect.Field f = org.lwjgl.input.Mouse.class.getDeclaredField(field);
@@ -2472,12 +2768,17 @@ public final class ForgeTestClientBootstrap {
     private final class TickCounter {
         @SubscribeEvent
         public void onClientTick(TickEvent.ClientTickEvent event) {
+            if (event.phase == TickEvent.Phase.START) {
+                virtualInput.tickStarted();
+            }
             if (event.phase == TickEvent.Phase.END) {
+                virtualInput.tickEnded();
                 if (clientTicks.get() == 0L) {
                     // First END-phase tick: Display.create() has returned and
                     // the LWJGL window is up. Honour the start-state override.
                     applyInitialWindowState();
                     installNonWarpingMouseHelper();
+                    virtualInput.install();
                 }
                 clientTicks.incrementAndGet();
                 if (publishWorldLiveness()) {

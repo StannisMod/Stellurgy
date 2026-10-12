@@ -104,11 +104,11 @@ public abstract class AbstractClientE2ETest {
 
         java.nio.file.Path gameDir = java.nio.file.Files.createTempDirectory("forge-client-e2e-");
         seedGameDir(gameDir);
-        serverHarness = RealDedicatedServerHarness.startWith(gameDir, /*cleanupOnClose=*/true);
+        serverHarness = RealDedicatedServerHarness.startWith(new HarnessBoot(), gameDir, /*cleanupOnClose=*/true);
         try {
             clientHarness = requiresFramebufferAtLaunch()
-                    ? RealClientHarness.startWithFramebuffer(serverHarness)
-                    : RealClientHarness.start(serverHarness);
+                    ? RealClientHarness.startWithFramebuffer(new HarnessBoot(), serverHarness)
+                    : RealClientHarness.start(new HarnessBoot(), serverHarness);
         } catch (Exception startupException) {
             // Don't leak a running server JVM if client startup fails.
             try {

@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * rocket item unloader active transfer contract.
@@ -53,6 +54,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
      * against, but driven directly from the test).</p>
      * Pins INV-INFRA-14 (the item unloader pulls items out of a rocket).
      */
+    @Pins("INV-INFRA-14")
     @Test
     public void unloaderPullsItemsFromRocketStorage() throws Exception {
         // THE PAIR MOVES TOGETHER: the unloader sat one block above the rocket's base, a RELATIVE

@@ -16,6 +16,7 @@ import static dev.stannismod.stellurgy.test.StellurgyTestConstants.DIRECT_JUMP_S
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * E2E: a craft leaves HYPERSPACE at rest, and keeps its cruise across every other kind of crossing.
@@ -63,6 +64,7 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
     private static final double CRUISE_EPSILON = 1e-9;
 
     /** Pins HYPER-31 (a craft leaves hyperspace at rest and keeps its cruise across a direct crossing). */
+    @Pins("HYPER-31")
     @Test
     public void aDirectCrossingKeepsTheCruise() throws Exception {
         Arrived arrived = jumpUnderCruise(DIRECT_JUMP_SPEED, "DIRECT");
@@ -77,6 +79,7 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
     }
 
     /** Pins HYPER-31 (a craft leaves hyperspace at rest and keeps its cruise across a direct crossing). */
+    @Pins("HYPER-31")
     @Test
     public void aHyperspaceJumpLeavesTheCraftAtRest() throws Exception {
         Arrived arrived = jumpUnderCruise(HYPERSPACE_JUMP_SPEED, "HYPERSPACE");

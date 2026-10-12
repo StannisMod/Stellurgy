@@ -7,6 +7,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The coolant loop as a physical body: a machine's waste heat goes into the pipes touching it, and
@@ -51,14 +53,14 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * A machine cooled by a loop heats it. Nothing rejects heat yet, so the only place the energy
      * can be is in the pipes — which is exactly what a ship with no radiators should experience.
      *
-     * <p>red-witnessed: with {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's pending heat: "the
-     * plant's waste heat must end up in the loop it touches (stored=0)", 2026-09-30. The three
-     * premises at its head are arrangements and are not witnessed.</p>
-     *
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "hotter than it started" is this same verdict read through a division.</p>
      * Pins INV-HEAT-01 (A machine's waste heat ends up in the loop touching it, and raises its temperature above ambient).
      */
+    @Pins("INV-HEAT-01")
+    @RedWitness(prose = "with {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's pending heat: \"the"
+            + " plant's waste heat must end up in the loop it touches (stored=0)\", 2026-09-30. The three"
+            + " premises at its head are arrangements and are not witnessed.")
     @Test
     public void aMachineOnACoolantLoopWarmsIt() throws Exception {
         int cxSolo = stand("a life-support plant with a short coolant loop welded to it");
@@ -93,13 +95,14 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * loop that simply collected less would also come out colder, and that would say nothing about
      * capacity at all.</p>
      *
-     * <p>red-witnessed: with {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(stored, capacity, temperature(stored, capacity),} publishing the temperature against one block's
-     * capacity instead of the loop's: "a loop with twice the thermal mass must warm markedly less on
-     * the same heat (short rose 226500 milliK, long rose 226500)", 2026-09-30. The four premises
-     * before it are arrangements and are not witnessed.</p>
      * Pins INV-HEAT-02 (Capacity is a real quantity: the same heat in a loop of twice the mass is a markedly smaller temperature rise).
      * Pins HEAT-3 (one connected network is one thermodynamic object: the same heat in a longer loop is a lower temperature).
      */
+    @Pins({"INV-HEAT-02", "HEAT-3"})
+    @RedWitness(prose = "with {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(stored, capacity, temperature(stored, capacity),} publishing the temperature against one block's"
+            + " capacity instead of the loop's: \"a loop with twice the thermal mass must warm markedly less on"
+            + " the same heat (short rose 226500 milliK, long rose 226500)\", 2026-09-30. The four premises"
+            + " before it are arrangements and are not witnessed.")
     @Test
     public void theSameHeatInALongerLoopIsALowerTemperature() throws Exception {
         int cxShort = stand("two plant rigs side by side, one loop twice the other's length");
@@ -145,20 +148,20 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * reads zero would pass on a rig that simply never ran, so the same rig is driven again with
      * the flag back on and required to warm up.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. STORES NO HEAT — {@code HeatNetwork#enabled} at {@code return StellurgyConfiguration.getCurrentConfig().shipHeat;} ignoring the flag: "with the thermal system off a loop must store no heat: …
-     * \"heatStored\":4530". NO CAPACITY — {@code HeatNetwork#tickThermodynamics} at {@code if (!enabled())} and {@code TileHeatPipe#getHeatCapacity} at {@code if (!HeatNetwork.enabled())} both
-     * ignoring the flag, the waste-heat guard left standing: "and must report no capacity to store it
-     * in: … \"heatCapacity\":60". HEATS AGAIN — {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's
-     * pending heat: "the same rig with the flag back on must heat, or the assertions above measured
-     * nothing: … \"heatStored\":0". AT AMBIENT — {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(0L, 0L, ambientKelvin(), 0);} writing
-     * 0 K instead of the ambient for a switched-off loop: "and must read the cabin's ambient, not a
-     * number of its own: … expected:&lt;293000&gt; but was:&lt;0&gt;".</p>
-     *
      * <p>The temperature IS asserted here, unlike the flag-on scenarios: with the flag off the loop's
      * temperature is not derived from stored heat at all, it is written directly, so neither stored
      * verdict implies it.</p>
      * Pins INV-HEAT-03 (With shipHeat off nothing stores heat, no loop reports capacity, and every loop reads ambient).
      */
+    @Pins("INV-HEAT-03")
+    @RedWitness(prose = "one inversion per verdict, 2026-09-30. STORES NO HEAT — {@code HeatNetwork#enabled} at {@code return StellurgyConfiguration.getCurrentConfig().shipHeat;} ignoring the flag: \"with the thermal system off a loop must store no heat: …"
+            + " \\\"heatStored\\\":4530\". NO CAPACITY — {@code HeatNetwork#tickThermodynamics} at {@code if (!enabled())} and {@code TileHeatPipe#getHeatCapacity} at {@code if (!HeatNetwork.enabled())} both"
+            + " ignoring the flag, the waste-heat guard left standing: \"and must report no capacity to store it"
+            + " in: … \\\"heatCapacity\\\":60\". HEATS AGAIN — {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's"
+            + " pending heat: \"the same rig with the flag back on must heat, or the assertions above measured"
+            + " nothing: … \\\"heatStored\\\":0\". AT AMBIENT — {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(0L, 0L, ambientKelvin(), 0);} writing"
+            + " 0 K instead of the ambient for a switched-off loop: \"and must read the cabin's ambient, not a"
+            + " number of its own: … expected:&lt;293000&gt; but was:&lt;0&gt;\".")
     @Test
     public void withTheThermalSystemOffNothingHeats() throws Exception {
         int cxOff = stand("a plant rig driven with the thermal system switched off, then on");
@@ -199,13 +202,12 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * The loop block's own neighbour notification is what closes it, and this is what would fail if
      * that were removed.</p>
      *
-     * <p>red-witnessed: with {@code HeatNetwork#onLoopNeighbourChanged} at {@code SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);} no longer marking the domain dirty when a loop's
-     * neighbour changes: "a machine placed against a finished loop must be found by it (stored=0)",
-     * 2026-09-30, taken on the pre-merge static form {@code SubsystemNetworkManager.markDirty(DOMAIN, world)}. The premise at its head is an arrangement and is not witnessed.</p>
-     *
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "it warms" is the stored verdict read through a division.</p>
      */
+    @RedWitness(prose = "with {@code HeatNetwork#onLoopNeighbourChanged} at {@code SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);} no longer marking the domain dirty when a loop's"
+            + " neighbour changes: \"a machine placed against a finished loop must be found by it (stored=0)\","
+            + " 2026-09-30, taken on the pre-merge static form {@code SubsystemNetworkManager.markDirty(DOMAIN, world)}. The premise at its head is an arrangement and is not witnessed.")
     @Test
     public void aMachineBuiltAfterTheLoopIsStillPickedUp() throws Exception {
         int cxLate = stand("a coolant loop that settles before its machine is built");

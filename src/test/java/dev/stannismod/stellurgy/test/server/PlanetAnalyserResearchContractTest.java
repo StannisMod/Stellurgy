@@ -7,6 +7,7 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Planet Analyser (TileAstrobodyDataProcessor) research
@@ -51,6 +52,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
      * pre-loaded with COMPOSITION, (4) researchingAtmosphere flag set.
      * Pins INV-MBM-16 (a powered analyser with data on its buses increments the chip's composition data).
      */
+    @Pins("INV-MBM-16")
     @Test
     public void poweredAnalyserIncrementsChipCompositionFromDataBus() throws Exception {
         // 1) Assemble the analyser via fixture.

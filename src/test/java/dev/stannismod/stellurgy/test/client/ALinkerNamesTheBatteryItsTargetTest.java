@@ -17,6 +17,7 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A player names his battery's target with a linker: he binds it to the battery's console, looks at
@@ -102,10 +103,8 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractClientE2ETest {
     /** A constant: a String. */
     private static final String ZOMBIE_UUID = new java.util.UUID(ZOMBIE_UUID_MOST, ZOMBIE_UUID_LEAST).toString();
 
-    /**
-     * red-witnessed: with {@code LinkerDesignation#bind} at {@code ItemLinker.setMasterCoords(linker, tile.getPos());} removed, fails at the bind: "the linker must carry the CONSOLE's position once he has clicked it … expected:<[x,y,z]> but was:<[0,0,0]>" (2026-10-04; again 2026-10-08 with every click a right-button press through the input pipeline).
-     * red-witnessed: with {@code TileWeaponConsole#onLinkAimed} at {@code state.clearTarget();} removed, legs 1 and 2 pass and leg 3 fails: "the gun must turn off the zombie and back onto the block — no `turret_aim` … onTarget true later than" the designation, the gun still firing on the zombie (2026-10-04; again 2026-10-08 through the input pipeline: "no `turret_aim` carrying [pos, …, onTarget, true] later than seq 1930 was recorded within 600 ticks").
-     */
+    @RedWitness(prose = "with {@code LinkerDesignation#bind} at {@code ItemLinker.setMasterCoords(linker, tile.getPos());} removed, fails at the bind: \"the linker must carry the CONSOLE's position once he has clicked it … expected:<[x,y,z]> but was:<[0,0,0]>\" (2026-10-04; again 2026-10-08 with every click a right-button press through the input pipeline).")
+    @RedWitness(prose = "with {@code TileWeaponConsole#onLinkAimed} at {@code state.clearTarget();} removed, legs 1 and 2 pass and leg 3 fails: \"the gun must turn off the zombie and back onto the block — no `turret_aim` … onTarget true later than\" the designation, the gun still firing on the zombie (2026-10-04; again 2026-10-08 through the input pipeline: \"no `turret_aim` carrying [pos, …, onTarget, true] later than seq 1930 was recorded within 600 ticks\").")
     @Test
     public void aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker() throws Exception {
         Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);

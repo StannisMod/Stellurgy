@@ -7,6 +7,7 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Station-controller tile smoke.
@@ -47,6 +48,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
     private static final int CX_ALT     = 9200;
 
     /** Pins INV-STN-13 (all three controllers place and tick without error). */
+    @Pins("INV-STN-13")
     @Test
     public void orientationControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(
@@ -55,6 +57,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-13 (all three controllers place and tick without error). */
+    @Pins("INV-STN-13")
     @Test
     public void gravityControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(
@@ -63,6 +66,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
     }
 
     /** Pins INV-STN-13 (all three controllers place and tick without error). */
+    @Pins("INV-STN-13")
     @Test
     public void altitudeControllerPlacesAndTicksWithoutCrash() throws Exception {
         assertPlacesTicksAndReportsCorrectTileClass(

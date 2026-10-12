@@ -13,6 +13,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What a real client is told about the planet worlds it joins, enters and leaves: each planet's own
@@ -231,14 +232,13 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
     /**
      * A player who crosses a dimension boundary has his client told the destination's spawn point,
      * rather than keeping a placeholder from a freshly constructed client world.
-     *
-     * <p>red-witnessed: taken on the pre-fix form, with {@code MixinPlayerList} cancelling
-     * {@code updateTimeAndWeatherForPlayer} for a copy that dropped vanilla's spawn packet; the mixin now
-     * stands as {@code MixinPlayerList#rainFlagInsteadOfLerpedStrength} at
-     * {@code return world.getWorldInfo().isRaining()}, redirecting one call instead of replacing the method:
-     * "the client must be TOLD the world spawn — no `client_spawn_set` carrying x = -2048 …" at the wait
-     * after the transfer, with the positive control before it green, 2026-09-28.</p>
      */
+    @RedWitness(prose = "taken on the pre-fix form, with {@code MixinPlayerList} cancelling"
+            + " {@code updateTimeAndWeatherForPlayer} for a copy that dropped vanilla's spawn packet; the mixin now"
+            + " stands as {@code MixinPlayerList#rainFlagInsteadOfLerpedStrength} at"
+            + " {@code return world.getWorldInfo().isRaining()}, redirecting one call instead of replacing the method:"
+            + " \"the client must be TOLD the world spawn — no `client_spawn_set` carrying x = -2048 …\" at the wait"
+            + " after the transfer, with the positive control before it green, 2026-09-28.")
     @Test
     public void transferredPlayerIsToldTheDestinationDimensionSpawnPoint() throws Exception {
         DimInfo original = DimInfo.forDim(this::exec, 0);
@@ -324,17 +324,16 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
     /**
      * Each planet keeps its own weather through a real client, and a fresh planet never inherits the
      * overworld's rain.
-     *
-     * <p>red-witnessed: the fresh-dim packet verdicts and the overworld control, 2026-09-28, one
-     * inversion per verdict. THE OVERWORLD CONTROL — dim C's wrap clearing the overworld's own rain flag:
-     * "overworld should still be raining". NEVER TOLD IT IS RAINING — {@code
-     * PlanetWeatherManager.wrapWorldInfoIfNeeded} no longer re-seeding the rain strength after wrapping:
-     * "client must never be told it is raining on fresh clear dim C". NEVER TOLD A STRENGTH — the re-seed
-     * ({@code PlanetWeatherManager#wrapWorldInfoIfNeeded} at {@code float rain = wrapped.isRaining() ? 1.0F : 0.0F})
-     * leaving dim C at 0.15: "client must never be told a rain strength above 0 on fresh dim C". The
-     * told-rain link on A has not been reddened: the rain reaches an arriving client by more paths than
-     * any one inversion removed.</p>
      */
+    @RedWitness(prose = "the fresh-dim packet verdicts and the overworld control, 2026-09-28, one"
+            + " inversion per verdict. THE OVERWORLD CONTROL — dim C's wrap clearing the overworld's own rain flag:"
+            + " \"overworld should still be raining\". NEVER TOLD IT IS RAINING — {@code"
+            + " PlanetWeatherManager.wrapWorldInfoIfNeeded} no longer re-seeding the rain strength after wrapping:"
+            + " \"client must never be told it is raining on fresh clear dim C\". NEVER TOLD A STRENGTH — the re-seed"
+            + " ({@code PlanetWeatherManager#wrapWorldInfoIfNeeded} at {@code float rain = wrapped.isRaining() ? 1.0F : 0.0F})"
+            + " leaving dim C at 0.15: \"client must never be told a rain strength above 0 on fresh dim C\". The"
+            + " told-rain link on A has not been reddened: the rain reaches an arriving client by more paths than"
+            + " any one inversion removed.")
     @Test
     public void weatherIsolatedAcrossDimsThroughRealClient() throws Exception {
         try {
@@ -422,14 +421,13 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      * overworld ({@code PlanetWeatherEventHandler.redirectWeatherCommand}). Vanilla {@code CommandWeather}
      * hard-codes {@code server.worlds[0]}; a console sender stands in the overworld, so this needs the
      * real chat path with the planet-standing player as sender.
-     *
-     * <p>red-witnessed: one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand#execute} at
-     * {@code worldinfo.setRaining(true)} not setting the flag: "no `planet_weather_changed` carrying dim =
-     * 9304 and raining = true". CLEAR — the clear branch ({@code WeatherCommand#execute} at
-     * {@code if ("clear".equals(action))}) writing nothing: "… raining = false was recorded within 200
-     * ticks". Dropping only its {@code setRaining(false)} stays GREEN: the {@code setRainTime(0)} beside it
-     * makes vanilla's weather cycle flip the flag off on the next tick.</p>
      */
+    @RedWitness(prose = "one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand#execute} at"
+            + " {@code worldinfo.setRaining(true)} not setting the flag: \"no `planet_weather_changed` carrying dim ="
+            + " 9304 and raining = true\". CLEAR — the clear branch ({@code WeatherCommand#execute} at"
+            + " {@code if (\"clear\".equals(action))}) writing nothing: \"… raining = false was recorded within 200"
+            + " ticks\". Dropping only its {@code setRaining(false)} stays GREEN: the {@code setRainTime(0)} beside it"
+            + " makes vanilla's weather cycle flip the flag off on the next tick.")
     @Test
     public void slashWeatherOnPlanetRainsThePlanetNotTheOverworld() throws Exception {
         // /weather (and the redirect target) require permission level 2 — granted as an admin would, and

@@ -12,6 +12,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * What a navigation computer promises when it aims at a moving destination: the ship is aimed at
@@ -75,6 +76,7 @@ public class TargetPredictionTest {
     }
 
     /** Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time). */
+    @Pins("ADDR-14")
     @Test
     public void theAimIsWhereTheBodyWillBeWhenTheFlightEnds() {
         TargetPrediction.Ephemeris body = slidingInsideItsCell(1_000L);
@@ -96,6 +98,7 @@ public class TargetPredictionTest {
      * the body happens to pass through.
      * Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time).
      */
+    @Pins("ADDR-14")
     @Test
     public void theAimedCellIsTheBodysDurableNameWhateverTheFlightCosts() {
         for (long flightTicks : new long[]{0L, 40L, 100_000L}) {
@@ -147,6 +150,7 @@ public class TargetPredictionTest {
      * exactly what the old {@code sameCell} convergence test did once names became durable.
      * Pins ADDR-14 (an aim resolves to the body's durable name and leads the body by the flight time).
      */
+    @Pins("ADDR-14")
     @Test
     public void aMovingFrameChangesTheAnswer() {
         TargetPrediction.Flight proportional = new TargetPrediction.Flight() {

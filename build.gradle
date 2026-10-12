@@ -328,17 +328,47 @@ def configureHeadlessTest = { Test t, String packageGlob ->
 
 tasks.register('testUnit', Test) {
     configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/unit/**')
-    dependsOn 'checkLangKeys'
+    dependsOn 'checkLangKeys', 'checkTestBindings'
 }
 
 tasks.register('testIntegration', Test) {
     configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/integration/**')
+    dependsOn 'checkTestBindings'
 }
 
 test {
     configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/unit/**')
     include 'dev/stannismod/stellurgy/test/integration/**'
-    dependsOn 'checkLangKeys'
+    dependsOn 'checkLangKeys', 'checkTestBindings'
+}
+
+// What binds a test to the contract -- @Pins, @RedWitness, @Regions, and the base an e2e extends -- read
+// off the COMPILED test classes by reflection, against the clauses in docs/system. The compiler attaches
+// each annotation to its own method, so no rule here rests on which comment sits above which method. A
+// check of the test corpus rather than a test: no decision of the code is its subject. It has no outputs
+// and runs every time; git must be able to give the order in which the clauses were written. EVERY test
+// task depends on it, the harness and milestone tiers included, and it is handed every test task's
+// includes: a method pins a clause only if one of those tasks runs it.
+//   ./gradlew checkTestBindings -PbindingsList=OWED,BROKEN   lists the clauses in those states
+tasks.register('checkTestBindings', JavaExec) {
+    group = 'verification'
+    description = 'Fails on a BROKEN contract clause, a malformed red-witness record, or an e2e not on the e2e base.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.stannismod.stellurgy.test.contract.TestBindingsCheck'
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(8)
+    })
+    workingDir = projectDir
+    if (project.hasProperty('bindingsList')) {
+        args(['--list'] + (project.property('bindingsList') as String).split(',').toList())
+    }
+    doFirst {
+        def includes = tasks.withType(Test).collectMany { it.includes as List }.unique()
+        args(['--included'] + includes)
+    }
+}
+tasks.named('check') {
+    dependsOn 'checkTestBindings'
 }
 
 // Every translation key the code hands to a localization call as a string literal must exist in a
@@ -608,6 +638,7 @@ tasks.register('testServer', Test) {
     description = 'Dedicated-server scenario e2e (src/test/.../test/server).'
     configureHarnessTest(it, false)
     include 'dev/stannismod/stellurgy/test/server/**'
+    dependsOn 'checkTestBindings'
     mustRunAfter 'testIntegration'
 }
 
@@ -615,6 +646,7 @@ tasks.register('testClient', Test) {
     description = 'Real-client + server e2e (src/test/.../test/client). Auto-skips headless.'
     configureHarnessTest(it, true)
     include 'dev/stannismod/stellurgy/test/client/**'
+    dependsOn 'checkTestBindings'
     mustRunAfter 'testServer'
 }
 
@@ -626,7 +658,41 @@ tasks.register('testMilestone', Test) {
     description = 'Milestone e2e — one full playable loop on the real client (src/test/.../test/milestone).'
     configureHarnessTest(it, true)
     include 'dev/stannismod/stellurgy/test/milestone/**'
+    dependsOn 'checkTestBindings'
     mustRunAfter 'testClient'
+    // AN E2E THAT DID NOT RUN IS NOT GREEN. A milestone skipped by an assumption (the harness or client
+    // switched off, an Assume in its base) and a filter that ran nothing both used to end in BUILD
+    // SUCCESSFUL, which reads exactly like a loop that was walked. So this tier fails on any skipped test
+    // and on zero executed ones, and names the count it did run. The one way to not run it is to say so:
+    //   ./gradlew testMilestone -PmilestoneDisabled="<why>"   -> the task is skipped, and says why.
+    // Never up to date: a result carried over from an earlier invocation is not a loop walked by this one.
+    outputs.upToDateWhen { false }
+    def disabledBecause = findProperty('milestoneDisabled')
+    onlyIf {
+        if (disabledBecause != null) {
+            logger.lifecycle("[e2e] testMilestone DISABLED by -PmilestoneDisabled: ${disabledBecause}")
+            return false
+        }
+        return true
+    }
+    def ran = [executed: 0, skipped: []]
+    afterTest { descriptor, result ->
+        if (result.resultType == TestResult.ResultType.SKIPPED) {
+            ran.skipped << "${descriptor.className}#${descriptor.name}"
+        } else {
+            ran.executed++
+        }
+    }
+    doLast {
+        logger.lifecycle("[e2e] testMilestone executed ${ran.executed} test(s), skipped ${ran.skipped.size()}")
+        if (!ran.skipped.isEmpty()) {
+            throw new GradleException("testMilestone SKIPPED ${ran.skipped}: an e2e that did not run walked no loop."
+                    + " Run it, or disable the tier explicitly with -PmilestoneDisabled=<why>.")
+        }
+        if (ran.executed == 0) {
+            throw new GradleException('testMilestone executed no test: an e2e tier that ran nothing walked no loop.')
+        }
+    }
 }
 
 String parserChangelog() {

@@ -40,7 +40,7 @@ public final class SharedServerScope extends TestClassScope {
         }
         java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-server-");
         String written = seed.writeInto(root);
-        harness = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, /*cleanupOnClose=*/true);
         // A scenario whose premise is a seeded galaxy must be able to show the galaxy was there.
         System.out.println("[shared-server] " + testClass.getSimpleName() + " seeded:" + written);
     }
