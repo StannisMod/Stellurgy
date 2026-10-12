@@ -477,7 +477,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         long thrustBipropellant = 0;
         long thrustNuclearNozzleLimit = 0;
         long thrustNuclearReactorLimit = 0;
-        int thrustNuclearTotalLimit;
+        long thrustNuclearTotalLimit;
         int monopropellantfuelUse = 0;
         int bipropellantfuelUse = 0;
         int nuclearWorkingFluidUseMax = 0;
@@ -865,8 +865,12 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                         status = ErrorCodes.SHIP_TOO_LARGE;
                         break;
                     case NO_FLIGHT_COMPUTER:
-                        status = ErrorCodes.FAIL_CUT;
-                        break;
+                        // Not a player's situation: this branch runs only after the scan above found the
+                        // computer in this region, in this same call, by the same tile test. Reaching it
+                        // means the scan and the assembly disagree about the craft, which no status
+                        // message can explain to anyone.
+                        throw new IllegalStateException("the scan found a flight computer at "
+                                + scannedFlightComputerPos + " but the assembly found none in " + rocketBB);
                     default:
                         throw new IllegalStateException("an assembly refusal with no status: " + refusal);
                 }
@@ -1294,7 +1298,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         thrustText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust") + ": ???") : String.format("%s: %.1fkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust"), getThrust() / 1000f));
         weightText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight") + ": ???") : String.format("%s: %.1fkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight"), stats.getWeightNewtons(getGravityMultiplier()) / 1000f));
         fuelText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fuel") + ": ???") : String.format("%s: %dmb/s", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fuel"), 20* getRocketStats().getFuelRate((stats.getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT) > 0) ? FuelType.LIQUID_MONOPROPELLANT : (stats.getFuelCapacity(FuelType.NUCLEAR_WORKING_FLUID) > 0) ? FuelType.NUCLEAR_WORKING_FLUID : FuelType.LIQUID_BIPROPELLANT)));
-        accelerationText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc") + ": ???") : String.format("%s: %.2fm/s\u00b2 (TWR %.2f)", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc"), getAcceleration(getGravityMultiplier()) * 20f, getThrustToWeightRatio()));
+        accelerationText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc") + ": ???") : String.format("%s: %.2fm/s\u00b2 (TWR %.2f)", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc"), getAcceleration(getGravityMultiplier()) * StatsRocket.STANDARD_GRAVITY / StatsRocket.GRAVITY_BLOCKS_PER_TICK_SQUARED, getThrustToWeightRatio()));
         if (!world.isRemote) {
             if (getRocketPadBounds(world, pos) == null)
                 setStatus(ErrorCodes.INCOMPLETESTRCUTURE.ordinal());

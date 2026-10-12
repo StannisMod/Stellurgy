@@ -1273,15 +1273,19 @@ public class TileAdvancedFlightComputer extends TileEntity
 
     /**
      * How much momentum each reaction wheel aboard has already given the hull. Durable state, owned
-     * by the wheels' own tiles: seeded from them the first time a wheel is surveyed, booked here by
-     * the physics step, and written back to them every tick.
+     * by the wheels' own tiles: seeded from a wheel's tile when that tile is first seen, booked here
+     * by the physics step, and written back to that same tile every tick.
      */
     private final dev.stannismod.stellurgy.ship.control.MomentumStore momentum =
             new dev.stannismod.stellurgy.ship.control.MomentumStore();
 
-    /** Stored-momentum actuators already seeded from their tiles. */
-    private final java.util.Set<dev.stannismod.stellurgy.ship.control.ActuatorId> seededWheels =
-            new java.util.HashSet<>();
+    /**
+     * The tile each stored-momentum actuator was seeded from. Keyed by the tile INSTANCE, not only by
+     * the position: a wheel broken and replaced at the same spot is a different wheel, and it starts
+     * from its own NBT rather than from the saturation of the one it replaced.
+     */
+    private final java.util.Map<dev.stannismod.stellurgy.ship.control.ActuatorId, TileReactionWheel> seededWheels =
+            new java.util.HashMap<>();
 
     private final dev.stannismod.stellurgy.ship.control.ControlScheme scheme =
             dev.stannismod.stellurgy.ship.control.ControlScheme.cleanAxes();
@@ -1334,12 +1338,20 @@ public class TileAdvancedFlightComputer extends TileEntity
             return;
         }
         surveyedConstruction = survey.constructionRevision();
+        java.util.Set<dev.stannismod.stellurgy.ship.control.ActuatorId> aboard = new java.util.HashSet<>();
         for (dev.stannismod.stellurgy.ship.control.Actuator a : survey.design()) {
-            if (!a.isSustained() && seededWheels.add(a.id())) {
-                TileEntity te = world.getTileEntity(new BlockPos(a.id().x(), a.id().y(), a.id().z()));
-                if (te instanceof TileReactionWheel) {
-                    momentum.restore(a.id(), ((TileReactionWheel) te).momentum(a.id().index()));
-                }
+            if (!a.isSustained()) {
+                aboard.add(a.id());
+                reconcileWheel(a.id());
+            }
+        }
+        java.util.Iterator<dev.stannismod.stellurgy.ship.control.ActuatorId> seeded =
+                seededWheels.keySet().iterator();
+        while (seeded.hasNext()) {
+            dev.stannismod.stellurgy.ship.control.ActuatorId id = seeded.next();
+            if (!aboard.contains(id)) {
+                seeded.remove();
+                momentum.restore(id, 0.0D);
             }
         }
         dev.stannismod.stellurgy.ship.control.ShipFlightModel model =
@@ -1354,12 +1366,36 @@ public class TileAdvancedFlightComputer extends TileEntity
     }
 
     private void writeWheelsBack() {
-        for (dev.stannismod.stellurgy.ship.control.ActuatorId id : seededWheels) {
-            TileEntity te = world.getTileEntity(new BlockPos(id.x(), id.y(), id.z()));
-            if (te instanceof TileReactionWheel) {
-                ((TileReactionWheel) te).setMomentum(id.index(), momentum.given(id));
+        for (dev.stannismod.stellurgy.ship.control.ActuatorId id :
+                new java.util.ArrayList<>(seededWheels.keySet())) {
+            TileReactionWheel wheel = reconcileWheel(id);
+            if (wheel != null) {
+                wheel.setMomentum(id.index(), momentum.given(id));
             }
         }
+    }
+
+    /**
+     * The wheel tile that now stands at {@code id}'s position, with the store agreeing with it. A tile
+     * not seen before — a replacement, or the same wheel reloaded from its chunk — is seeded from its
+     * own NBT, which holds what was last written back; a position with no wheel left is forgotten, its
+     * momentum leaving with the wheel that carried it.
+     *
+     * @return the wheel, or {@code null} when none stands there
+     */
+    private TileReactionWheel reconcileWheel(dev.stannismod.stellurgy.ship.control.ActuatorId id) {
+        TileEntity te = world.getTileEntity(new BlockPos(id.x(), id.y(), id.z()));
+        if (!(te instanceof TileReactionWheel)) {
+            seededWheels.remove(id);
+            momentum.restore(id, 0.0D);
+            return null;
+        }
+        TileReactionWheel wheel = (TileReactionWheel) te;
+        if (seededWheels.get(id) != wheel) {
+            seededWheels.put(id, wheel);
+            momentum.restore(id, wheel.momentum(id.index()));
+        }
+        return wheel;
     }
 
     /** Whether the last physics step delivered less than the flight law asked for. */

@@ -17,12 +17,12 @@ package dev.stannismod.stellurgy.util;
 public final class NuclearEngineLimit {
 
     /** Thrust the cluster may produce, newtons. */
-    public final int thrust;
+    public final long thrust;
 
     /** Working fluid the cluster actually consumes per tick, in the units the nozzles rate. */
     public final int workingFluidUse;
 
-    private NuclearEngineLimit(int thrust, int workingFluidUse) {
+    private NuclearEngineLimit(long thrust, int workingFluidUse) {
         this.thrust = thrust;
         this.workingFluidUse = workingFluidUse;
     }
@@ -43,6 +43,6 @@ public final class NuclearEngineLimit {
         // Re-derive the thrust from the fluid actually spent: `use` is truncated to whole units,
         // so a cluster is limited by the nozzles it can keep fully powered, not by the fraction.
         long thrust = (use * nozzleThrust) / workingFluidUseMax;
-        return new NuclearEngineLimit((int) Math.min(Integer.MAX_VALUE, Math.max(0L, thrust)), use);
+        return new NuclearEngineLimit(thrust, use);
     }
 }
