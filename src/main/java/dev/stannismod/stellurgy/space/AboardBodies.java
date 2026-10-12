@@ -82,7 +82,7 @@ public final class AboardBodies {
         if (world == null || afcPos == null) {
             return stowed;
         }
-        String vsShipId = VSIntegration.shipIdManagingBlock(world, afcPos);
+        String vsShipId = VSIntegration.registeredShipIdManagingBlock(world, afcPos);
         AxisAlignedBB stay = vsShipId == null
                 ? null : VSIntegration.subspaceStayRegion(world, vsShipId, ABOARD_MARGIN);
         if (stay == null) {
@@ -163,16 +163,23 @@ public final class AboardBodies {
                 afcPos.getX(), afcPos.getY(), afcPos.getZ()) == null) {
             return 0; // the ship is not rebuilt here yet; nothing is lost, the caller retries
         }
-        // The ship's IDENTITY, asked once and part of the same "is it up yet" question. A body is
-        // not merely put down on a deck, it is HELD to it (below), and a hold names its ship. The
-        // registry answered a point on this craft one line ago, so a null here is an inconsistency
-        // rather than a "not yet" — but it is treated as "not yet" deliberately: retrying is what
-        // the caller already does, while placing an UNHELD body would be the very defect this
-        // method exists to avoid, dressed as success.
-        String shipId = VSIntegration.shipIdManagingBlock(dstWorld, afcPos);
+        // The ship's IDENTITY, asked of the same registry record that answered the point above. A
+        // body is not merely put down on a deck, it is HELD to it (below), and a hold names its
+        // ship. A null here is an inconsistency rather than a "not yet" — but it is treated as "not
+        // yet" deliberately: retrying is what the caller already does, while placing an UNHELD body
+        // would be the very defect this method exists to avoid, dressed as success.
+        String shipId = VSIntegration.registeredShipIdManagingBlock(dstWorld, afcPos);
         if (shipId == null) {
             LOGGER.warn("[SPACE] the ship at {} answers for its own points but has no id to hold a "
                     + "carried body to; releasing nothing this pass", afcPos);
+            return 0;
+        }
+        // A MOTION question, asked separately from the identity above: the hold below needs the
+        // ship's live pose (the seed maps the deck point through it), and an arrival nobody is near
+        // has none until it is simulated. Placing now would leave every body placed and unheld, so
+        // this is "not up yet" and the caller retries, exactly like the registry point above.
+        if (VSIntegration.toWorldFrameFor(dstWorld, shipId,
+                afcPos.getX(), afcPos.getY(), afcPos.getZ()) == null) {
             return 0;
         }
         int placed = 0;

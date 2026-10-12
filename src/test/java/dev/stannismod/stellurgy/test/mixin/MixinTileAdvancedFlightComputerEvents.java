@@ -157,7 +157,7 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
         String dim = self.getWorld() == null ? "null"
                 : String.valueOf(self.getWorld().provider.getDimension());
         String vsShip = self.getWorld() == null || self.getPos() == null ? null
-                : VSIntegration.shipIdOwningBlock(self.getWorld(), self.getPos());
+                : VSIntegration.registeredShipIdManagingBlock(self.getWorld(), self.getPos());
         TestTrace.recordHere("pilot_input_set", stellurgyTest$posAndShip()
                 + ",\"dim\":" + dim + ",\"vsShip\":\"" + vsShip + "\""
                 + ",\"input\":\"" + what + "\"" + channels);

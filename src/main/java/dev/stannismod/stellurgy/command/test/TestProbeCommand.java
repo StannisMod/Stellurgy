@@ -2842,8 +2842,9 @@ public class TestProbeCommand extends CommandBase {
             // that NAMES a craft. A `near <x> <y> <z> [maxDist]` form stood here until 2026-09-14
             // and resolved through a nearest-ship lookup: a caller that meant one particular hull
             // was trusting a distance to a thing that has no extent in the world. The seat is
-            // matched through the ship's own chunk CLAIM (shipIdOwningBlock), so the seat found
-            // belongs to that hull or none is returned.
+            // matched through the ship's own chunk CLAIM on its registry record
+            // (registeredShipIdManagingBlock), so the seat found belongs to that hull or none is
+            // returned.
             if (args.length >= 4 && "id".equalsIgnoreCase(args[2])) {
                 wantShipId = args[3];
             }
@@ -2854,7 +2855,7 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 }
                 if (wantShipId.equals(dev.stannismod.stellurgy.integration.vs.VSIntegration
-                        .shipIdOwningBlock(world, candidate.getPos()))) {
+                        .registeredShipIdManagingBlock(world, candidate.getPos()))) {
                     seat = candidate;
                     break;
                 }

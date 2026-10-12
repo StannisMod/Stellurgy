@@ -11,7 +11,9 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -43,7 +45,8 @@ public class TurretStandaloneE2ETest extends AbstractSharedServerTest {
      * universe's cell bound, and the literal then named ordinary world coordinates: the gun placed
      * there was not aboard anything, it assembled and ticked exactly as a gun on the ground should,
      * and the test reported that as production having stopped waiting. Where the shipyard IS belongs
-     * to the allocator; what this test claims is only that a gun inside it does nothing.</p>
+     * to the allocator; what this test claims is only what a gun inside it, owned by no ship, may
+     * do.</p>
      * A constant: an int.
      */
     private static final int SHIPYARD_X =
@@ -317,26 +320,55 @@ public class TurretStandaloneE2ETest extends AbstractSharedServerTest {
     }
 
     /**
-     * A gun standing in the shipyard that no ship claims does NOTHING — it does not even count its
-     * own build.
+     * A gun standing in the shipyard that NO SHIP OWNS has no place in the world: it is a built gun
+     * that runs, and it neither turns toward a world target nor puts a round into the world.
      *
-     * <p>Valkyrien Skies keeps ship blocks in a far-off region (block X past ~5.12 million), and a
-     * ship's chunks load before its ship object exists. In that window every coordinate a machine
-     * aboard holds is a shipyard address rather than a place in the world, so there is no partial
-     * behaviour that is correct — only waiting. The control is built in the same method at ordinary
-     * coordinates: the same eight blocks, placed the same way, assemble and fire — which is also what
-     * proves the assembly and fire recorders were live for the silence at the shipyard.</p>
+     * <p>Valkyrien Skies keeps ship blocks in a far-off region (block X past ~19 million). A block
+     * there that no ship's registry record claims is not aboard anything — it is what a hull leaves
+     * behind when its record goes and its chunks stay — and its coordinates are a shipyard address.
+     * Read as world coordinates they would aim a bearing and launch a round inside the region every
+     * parked hull in the world sits in. The decision is {@code TurretFireControl}'s: such a block has
+     * no world position, so there is no bearing to command and no muzzle to fire from.</p>
      *
-     * <p>red-witnessed: with the {@code VSIntegration.isOnUnnamedShip} wait in {@code TileTurret.update}
-     * ({@code TileTurret#update} at {@code if (VSIntegration.isOnUnnamedShip(world, pos))}) skipped, this fails at "a gun aboard an unnamed ship counted its
-     * build" (2026-09-29).</p>
+     * <p>The control is built in the same method at ordinary coordinates: the same eight blocks,
+     * placed the same way, turn onto the same target and fire — which is also what proves the aim
+     * and fire recorders were live for the silence at the shipyard. The shipyard gun's own refusal
+     * to fire is read on the manual trigger, after the gun's own fire check PERMITTED the shot, so
+     * the refusal is the launch's and nothing earlier.</p>
+     *
+     * <p>red-witnessed, one inversion per verdict, 2026-10-07:</p>
+     * <ul>
+     *   <li>AIM: with {@code TurretFireControl#aimDirection} at {@code worldTarget == null ||
+     *       isRemnant(mountPos, shipId)} losing its {@code isRemnant} term, this fails at "a gun in the
+     *       shipyard that no ship owns was commanded onto a world target from its shipyard address";</li>
+     *   <li>FIRE: with {@code TurretFireControl#muzzleOf} at {@code if (isRemnant(mountPos, shipId))}
+     *       never taken, at "a gun in the shipyard that no ship owns put a round into the world:
+     *       {"ok":true,"fired":true}" (taken before the aim-window assertions were consolidated; the
+     *       fire half of the method is unchanged);</li>
+     *   <li>the fire check's positive half: with {@code TileTurret#canFireNow} at {@code return
+     *       !targetIsFriendly()} also refusing every manual shot, at "the shipyard gun's own fire check
+     *       did not permit the shot";</li>
+     *   <li>the control's command link: with {@code TurretFireControl#aimDirection} at {@code
+     *       worldTarget == null || isRemnant(mountPos, shipId)} made always true (null for every gun), at
+     *       "the control gun was never commanded onto its target";</li>
+     *   <li>the shipyard gun's build link: with the retired gate restored in {@code TileTurret#update}
+     *       just before {@code SubsystemNetworkManager.of(world).register(this);} (return while the
+     *       block is in the shipyard and no record claims it), at "the shipyard gun never counted its
+     *       build".</li>
+     * </ul>
      */
     @Test
-    public void aGunAboardAnUnnamedShipDoesNothingAtAll() throws Exception {
+    public void aGunInTheShipyardThatNoShipOwnsNeitherTurnsNorFires() throws Exception {
         int bx = SHIPYARD_X;
         int controlX = X + 600;
         buildSite(bx);
         buildSite(controlX);
+        // The subject is a REMNANT: a shipyard block no registry record claims. Measured, not assumed
+        // from the coordinate — a ship allocated over this address would make it a ship's block.
+        Reply owner = ask("stellurgytest vs managed-by 0 " + bx + " " + Y + " " + Z)
+                .requireOk("ask which ship owns the shipyard site");
+        requireArranged("the shipyard site is owned by a ship, so a gun there is aboard it and not a"
+                + " remnant: " + owner, !owner.bool("managed"));
         long placed = events.markInstrumented();
         buildGun(bx);
         buildGun(controlX);
@@ -345,26 +377,38 @@ public class TurretStandaloneE2ETest extends AbstractSharedServerTest {
         target(bx, (bx + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D));
         target(controlX, (controlX + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D));
 
-        // The control, and the window's closing link: the ordinary gun assembles and fires.
+        // Both guns RUN: each counts its own build. The shipyard gun is a gun like the control.
         Weapons.awaitAssembled(events, placed, controlX, Y, Z, PARTS, "the control gun never assembled");
+        Weapons.awaitAssembled(events, placed, bx, Y, Z, PARTS, "the shipyard gun never counted its"
+                + " build, so it is not running and its silence below would prove nothing");
+        // The control is commanded onto its target — the positive half of the aim verdict, on the
+        // same instrument — and then fires, which closes the window the shipyard gun is read over.
+        events.awaitRecordWithFields(placed, "turret_aim", "the control gun was never commanded onto"
+                        + " its target, so the shipyard gun's lack of a command would prove nothing",
+                Weapons.ARRANGEMENT_TICKS, "pos", Weapons.at(controlX, Y, Z), "commanded", "true");
         Weapons.awaitFired(events, placed, controlX, Y, Z, "the control gun never fired, so the"
                 + " silence at the shipyard below would prove nothing");
 
-        // The shipyard gun ticked the whole time — its mount recorded its first tick — and did
-        // nothing else.
+        // AIM: given the same target over the same window, the shipyard gun was never commanded.
         String aim = events.since(placed, "turret_aim");
-        Events.assertInstrumentRan(aim, "turret_aim_events", "the shipyard gun ticked");
-        assertTrue("the gun in the shipyard never ticked, so its silence proves nothing: " + aim,
-                !Events.recordsWhere(aim, "pos", Weapons.at(bx, Y, Z)).isEmpty());
-        String assembled = events.since(placed, "turret_assembled");
-        Events.assertInstrumentRan(assembled, "turret_assembly_events", "the shipyard gun counted nothing");
-        assertTrue("a gun aboard an unnamed ship counted its build: it is ticking when it should be"
-                + " waiting: " + assembled,
-                Events.recordsWhere(assembled, "pos", Weapons.at(bx, Y, Z)).isEmpty());
-        assertTrue("a gun aboard an unnamed ship fired",
-                Weapons.firedSince(events, placed, bx, Y, Z).isEmpty());
-        Reply state = read(bx);
-        assertEquals("a gun aboard an unnamed ship turned: " + state, 0.0D, state.number("yaw"), 0.0D);
+        Events.assertInstrumentRan(aim, "turret_aim_events", "which guns were commanded onto a target");
+        assertTrue("a gun in the shipyard that no ship owns was commanded onto a world target from its"
+                        + " shipyard address: " + aim,
+                Events.recordsWhereAll(aim, "pos", Weapons.at(bx, Y, Z), "commanded", "true").isEmpty());
+
+        // FIRE: under a hand, the trigger asks the gun's own fire check and then the launch.
+        ask("stellurgytest turret manual 0 " + bx + " " + Y + " " + Z + " true")
+                .requireOk("take the shipyard gun under a hand");
+        long trigger = events.markInstrumented();
+        Reply pulled = ask("stellurgytest turret fire 0 " + bx + " " + Y + " " + Z).requireOk("pull the trigger");
+        String decided = events.since(trigger, "turret_fire_decided");
+        Events.assertInstrumentRan(decided, "turret_fire_events", "whether the trigger was permitted");
+        assertTrue("the shipyard gun's own fire check did not permit the shot, so a refusal at the"
+                        + " launch could not be told from it: " + decided,
+                !Events.recordsWhereAll(decided, "pos", Weapons.at(bx, Y, Z), "permitted", "true",
+                        "caller", "manual").isEmpty());
+        assertFalse("a gun in the shipyard that no ship owns put a round into the world: " + pulled,
+                pulled.bool("fired"));
     }
 
     /**

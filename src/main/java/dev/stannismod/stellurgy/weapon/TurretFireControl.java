@@ -59,12 +59,29 @@ public final class TurretFireControl {
     }
 
     /**
+     * Whether a block with no ship ({@code shipId == null}) stands in the shipyard — a REMNANT, not a
+     * ship: blocks whose ship's record is gone. It has no place in the world. Its coordinates are a
+     * shipyard address, and read as world coordinates they put a bearing, a sweep or a live round in
+     * the region every parked hull in the world sits in.
+     *
+     * <p>Production makes them: a parked hyperspace lane is disposed of by declaring its hull finished
+     * ({@code VSShipCrosser.disposeParkedLane}), and a finished hull nothing has loaded leaves the
+     * registry with its shipyard chunks still on disk ({@code WorldServerShipManager.tick}'s record
+     * sweep deletes chunks only for a LOADED hull). Anything that loads such a chunk ticks its tiles
+     * with no ship to answer for them.</p>
+     */
+    private static boolean isRemnant(BlockPos pos, String shipId) {
+        return shipId == null && VSIntegration.isBlockInShipyard(pos);
+    }
+
+    /**
      * Turn a world-frame target into the direction the mount must take, in the mount's OWN frame.
-     * Null when the ship is not loaded and its transform therefore cannot be trusted — the caller
-     * holds its last bearing rather than swinging to a bearing computed from a stale pose.
+     * Null when the ship is not simulated and its transform therefore cannot be trusted, or when the
+     * mount is a remnant with no place in the world — the caller holds its last bearing rather than
+     * swinging to a bearing computed from a stale pose or a shipyard address.
      */
     public static Vec3d aimDirection(World world, BlockPos mountPos, String shipId, Vec3d worldTarget) {
-        if (world == null || mountPos == null || worldTarget == null) {
+        if (world == null || mountPos == null || worldTarget == null || isRemnant(mountPos, shipId)) {
             return null;
         }
         Vec3d mount = center(mountPos);
@@ -83,11 +100,12 @@ public final class TurretFireControl {
      * Where a block of a gun's installation actually is, in WORLD coordinates. The block's own
      * position is its ship's if it has one, and a distance measured between a subspace address and a
      * world one is a number with no meaning — so anything comparing a mount against something out in
-     * the world converts first. Null when the ship's transform is unavailable, which is the caller's
-     * cue to do nothing rather than to fall back on the unconverted position.
+     * the world converts first. Null when the ship's transform is unavailable, or when the block is a
+     * remnant with no ship at all, which is the caller's cue to do nothing rather than to fall back on
+     * the unconverted position.
      */
     public static Vec3d worldPositionOf(World world, BlockPos pos, String shipId) {
-        if (world == null || pos == null) {
+        if (world == null || pos == null || isRemnant(pos, shipId)) {
             return null;
         }
         if (shipId == null) {
@@ -177,12 +195,7 @@ public final class TurretFireControl {
             return null;
         }
 
-        if (shipId == null && VSIntegration.isBlockInShipyard(mountPos)) {
-            // Depth, not the primary guard: a gun aboard an unnamed ship should never have reached a
-            // tick at all (its tile waits on VSIntegration.isOnUnnamedShip). This is here because
-            // this method is callable from anywhere, and the failure it prevents is severe out of all
-            // proportion to the check — treating a shipyard address as world coordinates puts a live
-            // round in the middle of the region every parked hull in the world sits in.
+        if (isRemnant(mountPos, shipId)) {
             return null;
         }
 

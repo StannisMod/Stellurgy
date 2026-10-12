@@ -77,8 +77,10 @@ public final class DeckHold {
 
     /**
      * One returning player's hold. It starts as a DURABLE ship id plus a flight-computer-relative
-     * deck point - the only shape that survives a re-assembly - and becomes a physics-mod ship id
-     * plus a subspace point once that ship is loaded and can be asked where its computer is.
+     * deck point - the only shape that survives a re-assembly - and becomes a ship id plus a
+     * subspace point once that ship's flight computer is live here and can be asked where it is.
+     * Being resolved says which deck; whether the deck can be pinned against depends on the ship
+     * being simulated, which the tick asks separately.
      */
     private static final class Hold {
         final UUID durableShipId;
@@ -272,7 +274,7 @@ public final class DeckHold {
         // aboard at his post and tell him who took the chair.
         player.dismountRidingEntity();
         respawned.setDead();
-        String shipId = VSIntegration.shipIdManagingBlock(player.world, seatPos);
+        String shipId = VSIntegration.registeredShipIdManagingBlock(player.world, seatPos);
         if (shipId != null) {
             double subX = seatPos.getX() + 0.5, subY = seatPos.getY(), subZ = seatPos.getZ() + 0.5;
             double[] deck = VSIntegration.toWorldFrameFor(player.world, shipId, subX, subY, subZ);
@@ -457,12 +459,16 @@ public final class DeckHold {
                         + "fall. Treat this as a bug report.",
                 player.getName(), HOLD_WINDOW_TICKS,
                 hold.durableShipId != null && !hold.resolved()
-                        ? "ship " + hold.durableShipId + " never became loaded and steppable, so no"
-                                + " load event for it ever arrived"
+                        ? "ship " + hold.durableShipId + " never had its flight computer live in this"
+                                + " world, so the hold never learned which deck to pin him to"
+                        : hold.resolved() && VSIntegration.toWorldFrameFor(player.world, hold.shipId,
+                                hold.subX, hold.subY, hold.subZ) == null
+                                ? "ship " + hold.shipId + " is named here but was never simulated, so"
+                                        + " it had no pose to pin him against"
                         : hold.resolved()
-                                ? "ship " + hold.shipId + " is loaded, but no capture on it ever took"
-                                        + " (the client was asked " + (hold.seedSent ? "and did not"
-                                        + " seed" : "for nothing yet") + ")"
+                                ? "ship " + hold.shipId + " is simulated, but no capture on it ever"
+                                        + " took (the client was asked " + (hold.seedSent ? "and did"
+                                        + " not seed" : "for nothing yet") + ")"
                                 : "the hold was a bare pin with no ship, and the crossing that should"
                                         + " have replaced it never boarded him");
         dev.stannismod.stellurgy.Stellurgy.serverState().actionBar.send(player,
@@ -616,7 +622,7 @@ public final class DeckHold {
         if (afcPos == null) {
             return;
         }
-        String shipId = VSIntegration.shipIdManagingBlock(player.world, afcPos);
+        String shipId = VSIntegration.registeredShipIdManagingBlock(player.world, afcPos);
         double[] sub = dev.stannismod.stellurgy.space.ShipRelativePoint.subspacePointOf(
                 afcPos, hold.dx, hold.dy, hold.dz);
         if (shipId != null && sub != null) {

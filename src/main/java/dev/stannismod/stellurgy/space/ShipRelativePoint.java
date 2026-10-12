@@ -98,7 +98,7 @@ public final class ShipRelativePoint {
             return null;
         }
         String vsShipId = ShipFrameTravel.aboardShipId(body);
-        if (vsShipId == null || !vsShipId.equals(VSIntegration.shipIdManagingBlock(world, afcPos))) {
+        if (vsShipId == null || !vsShipId.equals(VSIntegration.registeredShipIdManagingBlock(world, afcPos))) {
             return null;
         }
         double[] deckPoint = ShipFrameTravel.aboardShipFramePoint(body);
@@ -107,8 +107,8 @@ public final class ShipRelativePoint {
     }
 
     /**
-     * The subspace position of the flight computer of the loaded ship {@code vsShipId}, or
-     * {@code null} when that ship carries none / is not loaded.
+     * The subspace position of the flight computer of the ship {@code vsShipId}, or {@code null} when
+     * that ship carries none, or its computer's chunk is not loaded in this world.
      *
      * <p>A scan of the world's loaded tile entities filtered by type, NOT the shipyard block scan
      * {@link VSIntegration#flightComputerAt} performs: that one force-loads a chunk claim and reads
@@ -124,7 +124,7 @@ public final class ShipRelativePoint {
             if (!(te instanceof TileAdvancedFlightComputer)) {
                 continue;
             }
-            if (vsShipId.equals(VSIntegration.shipIdManagingBlock(world, te.getPos()))) {
+            if (vsShipId.equals(VSIntegration.registeredShipIdManagingBlock(world, te.getPos()))) {
                 return te.getPos();
             }
         }

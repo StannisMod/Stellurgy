@@ -9,9 +9,10 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  * shield configuration; it is never a credential and is never "entered". One hull = one shield domain,
  * so every console on a ship edits the same configuration and destroying one console loses nothing.
  *
- * <p>Two kinds exist. A block managed by a Valkyrien Skies ship belongs to that ship's domain, which
- * follows the hull wherever it flies (the same {@code shipIdManagingBlock} resolution the field frame
- * uses, so frame and domain can never disagree). Everything else — a planet base, an asteroid outpost —
+ * <p>Two kinds exist. A block a ship's registry record claims belongs to that ship's domain, which
+ * follows the hull wherever it flies (the same {@code registeredShipIdManagingBlock} resolution the
+ * field frame uses, so frame and domain can never disagree) — whether or not anybody is near enough
+ * for the hull to be simulated. Everything else — a planet base, an asteroid outpost —
  * belongs to its dimension's domain. Base identity has no first-class concept in Stellurgy yet, so a dimension
  * is the coarsest defensible bound: two bases in one dimension share a <em>group namespace</em> (their
  * group names appear in each other's consoles), which costs nothing physically because a group only
@@ -30,7 +31,7 @@ public final class ShieldDomains {
         if (world == null || pos == null) {
             return null;
         }
-        String shipId = VSIntegration.shipIdManagingBlock(world, pos);
+        String shipId = VSIntegration.registeredShipIdManagingBlock(world, pos);
         if (shipId != null) {
             return SHIP_PREFIX + shipId;
         }

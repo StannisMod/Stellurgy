@@ -1033,21 +1033,6 @@ final class VSBridge {
     }
 
     /**
-     * The IDENTITY of the ship that owns a SUBSPACE block position — its VS ship uuid as a string —
-     * or {@code null} when the position belongs to no loaded ship.
-     *
-     * <p>It answers from the ship's chunk CLAIM, which
-     * contains the block or does not, rather than from a distance that is merely small. A caller
-     * holding a block of a ship (a seat, a controller, a hatch) uses this to say WHICH ship it is a
-     * block of, on a world where several ships exist and their subspace yards sit side by side.</p>
-     */
-    static String shipIdOwningBlock(World world, net.minecraft.util.math.BlockPos pos) {
-        return ValkyrienUtils.getPhysoManagingBlock(world, pos)
-                .map(physo -> physo.getShipData().getUuid().toString())
-                .orElse(null);
-    }
-
-    /**
      * State of the loaded ship with this uuid, as
      * {@code [posX,posY,posZ, qw,qx,qy,qz, velX,velY,velZ]}, or
      * {@code null} when the id names no ship that is loaded here (unloaded, deleted, another world,
@@ -1412,35 +1397,15 @@ final class VSBridge {
     }
 
     /**
-     * UUID string of the ship whose SUBSPACE claim manages the block at {@code pos}, or {@code null}.
-     * Subspace claims of distinct ships never overlap ({@code ShipChunkAllocator} spaces them), so —
-     * unlike world-AABB containment — this resolution is unambiguous. The seed/anchor resolver for a
-     * capture that starts from a ship block (the pilot seat).
-     */
-    static String shipIdManagingBlock(World world, BlockPos pos) {
-        try {
-            Optional<PhysicsObject> managing = ValkyrienUtils.getPhysoManagingBlock(world, pos);
-            return managing.isPresent()
-                    ? managing.get().getShipData().getUuid().toString() : null;
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
-    /**
-     * The same claim lookup, answered off the ship's REGISTRY RECORD instead of its loaded physics
-     * object: the uuid of the ship whose subspace claim owns {@code pos}, whether or not that ship is
-     * currently simulated.
+     * The uuid of the ship whose REGISTRY RECORD claims the subspace chunk {@code pos} is in, whether
+     * or not that ship is currently simulated; {@code null} when no record claims it. Subspace claims
+     * of distinct ships never overlap ({@code ShipChunkAllocator} spaces them), so the answer is
+     * unambiguous.
      *
-     * <p>The two are not interchangeable and the difference is not a detail. A ship is given a
-     * physics object only while a player stands within the physics mod's load distance of it (or on
-     * the tick it is first assembled); everywhere else its chunks may be loaded and ticking with no
-     * physics object at all. Asking the physics object therefore answers "is anybody near this
-     * ship", which is the right question for anything that touches its MOTION and the wrong one for
-     * anything that touches its IDENTITY - identity lives on the record.</p>
-     *
-     * <p>Deliberately a separate method: {@link #shipIdManagingBlock}'s callers use its null as
-     * "this ship is not live", and widening that under them would change what they gate on.</p>
+     * <p>Asked of the record and never of a physics object: a ship has a physics object only while a
+     * player stands within the substrate's load distance of it, so the physics object answers "is
+     * anybody near this ship" — a question about its motion — and not which ship a block belongs to.
+     * The facade's {@code registeredShipIdManagingBlock} is the one entry point to this.</p>
      */
     static String registeredShipIdManagingBlock(World world, BlockPos pos) {
         try {

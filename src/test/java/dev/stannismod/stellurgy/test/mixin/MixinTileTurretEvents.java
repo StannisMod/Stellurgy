@@ -32,7 +32,7 @@ import dev.stannismod.stellurgy.tile.weapon.TileTurret;
  *       {@code parts} and {@code beam} are the spec the walk just produced. One record per re-walk,
  *       so a gun whose parts land one probe command at a time records a partial build before the
  *       whole one; a reader waits for the part count it placed. SILENT about a gun that is never
- *       re-walked — a controller aboard a ship nobody has named returns before the walk.</li>
+ *       re-walked.</li>
  *   <li><b>{@code turret_aim}</b> — the RETURN of {@code update}, on either side, EDGE-ONLY per tile
  *       on {@code (onTarget, manual, commanded, drive)}: the mount's own answer to "am I pointing where
  *       I was told", with the bearing it reached, the one it was told, and the drive state it is in

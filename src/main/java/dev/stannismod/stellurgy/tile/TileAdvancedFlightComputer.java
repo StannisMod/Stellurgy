@@ -468,7 +468,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // for the physics mod to simulate it. Left after the gate, a craft that is parked, unattended
         // or merely far from a player could never bind its durable id - and a jump, a login restore
         // and every aboard tag resolve a ship BY that id, falling back to "whichever craft is nearest"
-        // exactly where the world holds more than one. Costs one claim test per tick until it takes.
+        // exactly where the world holds more than one.
         bindDurableIdToThisShip();
         announceLiveOnce();
         FreeFlightPhysics.Quat attitude = VSIntegration.getShipAttitude(world, getPos());
@@ -1168,11 +1168,11 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     }
 
     /**
-     * Whether this craft's ship record already carries our durable id. Not persisted on purpose: a
-     * tile is re-created whenever its ship is re-assembled, and that is exactly when the binding has
-     * to be made again, against a possibly NEW ship record.
+     * Whether this instance has made its one binding attempt. Not persisted on purpose: a tile is
+     * re-created whenever its ship is re-assembled, and that is exactly when the binding has to be
+     * made again, against a possibly NEW ship record.
      */
-    private boolean durableIdBound;
+    private boolean durableIdBindAttempted;
 
     /** Server ticks this computer has actually been given, and naming attempts made inside them.
      *  Two counters rather than one because "this tile is never ticked" and "it is ticked and the
@@ -1195,29 +1195,29 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      * exact while the world holds one craft, and silently a stranger's craft once it holds two.
      * Binding here puts the answer on the ship's own record, where it is indexed.</p>
      *
-     * <p>Runs on the update path, so it costs a boolean test on every tick after the first successful
-     * one, and retries until it takes: the ship is not queryable for the first few ticks after an
-     * asynchronous assembly, which is precisely when this cannot succeed yet.</p>
-     *
-     * <p>Asked of the ship's RECORD, not of a loaded physics object. The record is where the name
-     * belongs and is always there; a physics object exists only while a player is near enough for the
-     * craft to be simulated, so binding through one meant that a ship parked with nobody aboard - the
-     * ordinary state of a hull mid-jump - could never be named at all.</p>
+     * <p>ONE attempt per tile instance, on its first server tick, and no retry — because there is
+     * nothing to wait for. The attempt is asked of the ship's RECORD, and the record is in place
+     * before this tile can run: a spawn injects the claim's chunks and registers the record in one
+     * synchronous pass on the game thread ({@code WorldServerShipManager.spawnNewShips}), and a load
+     * finds the record in the world's saved data before the ship's chunks arrive. A tile whose block
+     * no record claims on its first tick is a computer standing on the ground, and it stays one for
+     * as long as this instance lives: assembling it into a ship re-creates the tile in the shipyard,
+     * and that new instance makes its own attempt.</p>
      */
     private void bindDurableIdToThisShip() {
         bindAttempts++;
-        if (durableIdBound) {
+        if (durableIdBindAttempted) {
             return;
         }
+        durableIdBindAttempted = true;
         String vsShipId = VSIntegration.registeredShipIdManagingBlock(world, getPos());
         if (vsShipId == null) {
-            return; // not queryable yet; try again next tick
+            return; // not aboard a ship: a computer on the ground has no record to bind
         }
         try {
-            durableIdBound = VSIntegration.bindDurableShipId(
-                    world, java.util.UUID.fromString(vsShipId), getOrCreateShipId());
+            VSIntegration.bindDurableShipId(world, java.util.UUID.fromString(vsShipId), getOrCreateShipId());
         } catch (IllegalArgumentException notAUuid) {
-            durableIdBound = true; // nothing here will ever parse; stop asking
+            // a record id that is not a uuid names nothing this binding could be written to
         }
     }
 

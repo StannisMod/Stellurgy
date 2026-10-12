@@ -776,19 +776,6 @@ public final class VSIntegration {
      * and {@link #shipBlockHeight}.
      */
     /**
-     * The identity (VS ship uuid, as a string) of the ship that OWNS a subspace block position, or
-     * {@code null} when the position belongs to no loaded ship.
-     *
-     * <p>Answered from the ship's chunk claim — which contains the block or does not — so it is an
-     * identity and not a proximity. A caller holding one block of a ship (a pilot seat, a hatch) uses
-     * this to say which ship that block belongs to on a world where several ships are loaded at once
-     * and their subspace yards are neighbours.</p>
-     */
-    public static String shipIdOwningBlock(World world, net.minecraft.util.math.BlockPos pos) {
-        return VSBridge.shipIdOwningBlock(world, pos);
-    }
-
-    /**
      * A single subspace block position of the VS ship whose world BB contains {@code (x,y,z)}, or
      * {@code null} when no ship is there / its shipyard is empty. Located through the
      * queryable ship registry (headless-reliable, unlike a loaded-TE scan), so a test harness can hand
@@ -1073,34 +1060,6 @@ public final class VSIntegration {
     // world-AABB containment mid-episode. Each returns null when THAT ship is not
     // loaded, so callers release/fall back to vanilla. Only Stellurgy-core/MC types cross the gate.
 
-    /** UUID string of the ship whose SUBSPACE claim manages {@code pos} (unambiguous — claims of
-     *  distinct ships never overlap), or {@code null}. The anchor resolver for a seat-based seed. */
-    public static String shipIdManagingBlock(World world, BlockPos pos) {
-        return (world == null || pos == null)
-                ? null : VSBridge.shipIdManagingBlock(world, pos);
-    }
-
-    /**
-     * Whether this block sits in the shipyard and NO ship claims it — the window in which a machine
-     * aboard a ship must do nothing at all.
-     *
-     * <h3>Why the window exists</h3>
-     * <p>A ship's chunks and its ship object do not arrive together. The manager queues a background
-     * load and the chunks come into memory before the {@code PhysicsObject} exists, and a shipyard
-     * chunk can also be pulled in by anything that force-loads a region. In that window the blocks
-     * are there, their tiles tick, and every coordinate they hold is a SHIPYARD address — millions
-     * of blocks from where the ship actually is. A machine that acts on those numbers is acting on a
-     * position no player can reach.</p>
-     *
-     * <h3>The rule</h3>
-     * <p>Nothing aboard a ship runs until the ship is named. Not "runs carefully", not "runs with a
-     * fallback": a subsystem that cannot say where it is has nothing correct to do, and the cheapest
-     * correct behaviour is to wait. This is the one question it has to ask to know that.</p>
-     */
-    public static boolean isOnUnnamedShip(World world, BlockPos pos) {
-        return isBlockInShipyard(pos) && registeredShipIdManagingBlock(world, pos) == null;
-    }
-
     /**
      * Whether {@code pos} is inside the shipyard region — the far-off block range VS keeps ship
      * blocks in. Answered from the allocator's constants, so unlike every other method here it is
@@ -1112,10 +1071,24 @@ public final class VSIntegration {
         return VSBridge.isBlockInShipyard(pos);
     }
 
-    /** UUID string of the ship whose subspace claim manages {@code pos} as the REGISTRY knows it —
-     *  answered whether or not that ship is currently simulated. Use this for questions about a
-     *  ship's IDENTITY; {@link #shipIdManagingBlock} answers about its live physics and is null for
-     *  every ship nobody is standing near. */
+    /**
+     * THE answer to "which ship is this block part of": the id of the ship whose registry record
+     * claims the subspace chunk {@code pos} is in, or {@code null} when no record claims it.
+     *
+     * <p>The id is the craft's durable name — one value, not a substrate id beside a Stellurgy one —
+     * and it is read off the RECORD, never off a physics object. The record is present for every
+     * block of a real ship from the first tick that block's tile can run: a spawn injects the claim's
+     * chunks and registers the record in one synchronous pass on the game thread
+     * ({@code WorldServerShipManager.spawnNewShips}), and a load finds the record already in the
+     * world's saved data before any of the ship's chunks arrive. So {@code null} here means exactly
+     * "no ship owns this block" — a block in ordinary world terrain, or a shipyard block whose record
+     * is gone — and never "nobody is standing near the ship".</p>
+     *
+     * <p>Whether the ship is SIMULATED right now is a different question with a different answer
+     * (it has a physics object only while a player is within the substrate's load distance). Ask it
+     * of the id, through the id-keyed operations below ({@link #toWorldFrameFor} and its family),
+     * which answer {@code null} while the ship has no physics object.</p>
+     */
     public static String registeredShipIdManagingBlock(World world, BlockPos pos) {
         return (world == null || pos == null)
                 ? null : VSBridge.registeredShipIdManagingBlock(world, pos);

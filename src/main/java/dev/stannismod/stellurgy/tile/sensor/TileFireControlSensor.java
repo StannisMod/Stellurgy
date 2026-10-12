@@ -20,7 +20,6 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.sensor.SensorMode;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.sensor.TacticalScan;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
@@ -118,12 +117,6 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
     @Override
     public void update() {
         if (world == null || world.isRemote) {
-            return;
-        }
-        if (VSIntegration.isOnUnnamedShip(world, pos)) {
-            // The same rule a gun follows: aboard a ship nobody has named yet, this block's position
-            // is a shipyard address rather than a place in the world, so every contact it produced
-            // would be measured from the wrong point. Waiting is the only correct behaviour.
             return;
         }
         if (!StellurgyConfiguration.getCurrentConfig().enableFireControlSensor) {

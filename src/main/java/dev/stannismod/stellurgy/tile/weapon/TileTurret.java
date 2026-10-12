@@ -123,13 +123,6 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
             mechanism.tick(clientTraverseRate);
             return;
         }
-        if (VSIntegration.isOnUnnamedShip(world, pos)) {
-            // The blocks are loaded but the ship they belong to is not named yet, so every coordinate
-            // this gun holds is a shipyard address rather than a place in the world. It does not aim,
-            // does not fire, does not cool, and does not join a network: a subsystem that cannot say
-            // where it is has nothing correct to do, and waiting is the cheapest correct behaviour.
-            return;
-        }
         if (!registered) {
             SubsystemNetworkManager.of(world).register(this);
             SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);

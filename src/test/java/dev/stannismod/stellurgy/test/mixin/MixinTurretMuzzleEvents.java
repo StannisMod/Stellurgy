@@ -25,8 +25,8 @@ import dev.stannismod.stellurgy.weapon.TurretFireControl;
  * the inherited motion against what the hull was measured doing. Server log. Read by
  * {@code TurretOnAShipE2ETest#aRoundFromAMovingHullCarriesTheHullsMotionPerTick}.</p>
  *
- * <p>SILENT about a gun that may not fire at all (a null muzzle: no clear line of fire, an unnamed ship,
- * an inoperable build).</p>
+ * <p>SILENT about a gun that may not fire at all (a null muzzle: no clear line of fire, a gun in the
+ * shipyard that no ship owns, an inoperable build).</p>
  */
 @Mixin(value = TurretFireControl.class, remap = false)
 public abstract class MixinTurretMuzzleEvents {

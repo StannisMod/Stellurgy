@@ -246,6 +246,15 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * The SAME boarding mechanism the passing post-assembly flight test uses, moved to BEFORE
      * assembly. This isolates the boarding MOMENT: everything else - fixture, coordinates, seeded
      * config, control key, thresholds, polling shape - is the passing test's.
+     *
+     * <p>red-witnessed: with {@code SpaceSubsystemEvents#onFlightComputerLive} at {@code if (live ==
+     * null || event.world == null || event.world.isRemote)} made to return unconditionally (the queued
+     * rebind never hears that its craft is live), this fails with "a player who sat in the pilot seat
+     * before assembling his ship must be left seated by the assembly, and his own client must perform
+     * the re-seat. boarding=PROBE — no `mount` a chain that ENDS in a mount … was recorded within 100
+     * ticks"; the sibling method's run then failed as an ARRANGEMENT ("the bot never took the seat"),
+     * behind this one's red on the shared client, and witnesses nothing. Both green on the same tree
+     * with the subscription live. 2026-10-07.</p>
      */
     @Test
     public void aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip() throws Exception {

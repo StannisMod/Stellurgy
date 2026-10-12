@@ -20,7 +20,6 @@ import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkController;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
@@ -99,11 +98,6 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     @Override
     public void update() {
         if (world == null || world.isRemote) {
-            return;
-        }
-        if (VSIntegration.isOnUnnamedShip(world, pos)) {
-            // Same rule as a gun's: aboard a ship nobody has named, this console's own position is a
-            // shipyard address, so it must not join a network or command anything.
             return;
         }
         if (!registered) {

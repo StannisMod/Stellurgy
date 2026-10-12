@@ -97,8 +97,9 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
     }
 
     /**
-     * Whether a physics ship actually manages this seat's block right now — i.e. whether the craft
-     * this seat belongs to exists as a ship, as opposed to still being a pile of blocks.
+     * Whether a ship's registry record claims this seat's block — i.e. whether the craft this seat
+     * belongs to exists as a ship, as opposed to still being a pile of blocks. An identity question,
+     * answered whether or not anybody is near enough for the ship to be simulated.
      *
      * <p><b>Why this is not {@link #isLinked()}.</b> The link is a BUILD-TIME INTENTION: the
      * assembler records it before the physics mod has confirmed anything, and it persists in NBT
@@ -114,7 +115,7 @@ public class TilePilotSeat extends TileEntity implements INetworkMachine {
     public boolean isManagedByShip(World seatWorld) {
         return seatWorld != null
                 && dev.stannismod.stellurgy.integration.vs.VSIntegration
-                        .shipIdManagingBlock(seatWorld, pos) != null;
+                        .registeredShipIdManagingBlock(seatWorld, pos) != null;
     }
 
     /** Client-side: the linked computer's Flight-Assist state, as last synced from the server.

@@ -14,13 +14,23 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Carries a pre-assembly boarding across the asynchronous ship assembly. The launch-pad assembler
- * relocates a tier-2 craft's blocks into the ship's subspace on the physics mod's own schedule, so
- * at the moment {@code assembleRocket} returns there is nothing to rebind a seated pilot to yet.
- * The assembler enqueues each seated pilot here; every server tick each entry retries
- * {@link CrewTransfer#rebindAcrossAssembly} until the relocated seat resolves or the budget runs
- * out (after which the pilot is left on his stale mount and the failure is logged - never held in
- * limbo, and never silently dropped).
+ * Carries a pre-assembly boarding across the ship assembly. The launch-pad assembler only QUEUES the
+ * relocation of a tier-2 craft's blocks into the ship's subspace; the physics mod drains that queue
+ * at the end of a later world tick, so at the moment {@code assembleRocket} returns there is nothing
+ * to rebind a seated pilot to yet. The assembler enqueues each seated pilot here.
+ *
+ * <p><b>An entry waits for the craft, not for a clock.</b> The fact it needs — the craft named by the
+ * entry's durable id is assembled in this world, with its tiles live — is published as
+ * {@code FlightComputerLiveEvent}, posted from the relocated flight computer's first tick
+ * ({@link #onFlightComputerLive}). Only from then on does the per-tick pass try
+ * {@link CrewTransfer#rebindAcrossAssembly} for that entry; before it there is nothing the attempt
+ * could find. The pass keeps trying after the event because the event can arrive from the craft's
+ * computer while it still stands on the pad (the assembly's own paste re-creates it there, under the
+ * name it was just given) and because a pilot read off his mount once is debounced over consecutive
+ * ticks. The give-up budget still counts every tick an entry exists: a refused assembly (over-size,
+ * bedrock) is dropped by the physics mod and announces nothing, so for that case only a clock can
+ * end the wait - after which the pilot is left on his stale mount and the failure is logged, never
+ * held in limbo and never silently dropped.</p>
  *
  * <p>The queue is server state: it belongs to the {@link SpaceSubsystem} of the running server,
  * which builds one at server start and drops it at stop, and {@link SpaceSubsystemEvents} drives it.
@@ -32,11 +42,10 @@ public final class AssemblyCrewRebind {
     /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy.assemblycrewrebind");
 
-    /** Retry budget in server ticks (~60 s at 20 TPS). Giving up strands the pilot on a mount
-     *  bound to vacated coordinates - a dead cockpit - so the budget errs long: the physics mod
-     *  relocates on its own thread, and on a heavily loaded server (many ships, many worlds) that
-     *  thread can lag far behind the server tick that counts these attempts. A 15 s budget was
-     *  measured expiring under an 8-fork test load. */
+    /** Give-up budget in server ticks (~60 s at 20 TPS), counted from the enqueue. Giving up strands
+     *  the pilot on a mount bound to vacated coordinates - a dead cockpit - so the budget errs long.
+     *  A 15 s budget was measured expiring under an 8-fork test load, at a time when the wait it
+     *  bounds was a per-tick poll rather than an event. */
     private static final int MAX_ATTEMPTS = 1200;
 
     /** How many CONSECUTIVE ticks the pilot must be observed off his stale mount before the entry
@@ -82,6 +91,9 @@ public final class AssemblyCrewRebind {
         int attempts;
         /** Consecutive ticks the pilot was observed NOT riding the stale mount (see debounce). */
         int notOnMountStreak;
+        /** Whether the craft {@link #shipId} names has announced its flight computer live in
+         *  {@link #dimension}; until it has, there is no relocated seat to rebind to. */
+        boolean craftLive;
 
         Pending(int dimension, UUID playerId, int staleDummyId, BlockPos anchor,
                 int afcDx, int afcDy, int afcDz, UUID shipId) {
@@ -109,7 +121,24 @@ public final class AssemblyCrewRebind {
                 staleDummyId, anchor, afcDx, afcDy, afcDz, shipId));
     }
 
-    /** One retry pass over every queued pilot. Server main thread, once per server tick. */
+    /**
+     * The craft named {@code durableShipId} has its flight computer live in {@code dimension}: every
+     * entry waiting for that craft there may now try its rebind. Server main thread — the event is
+     * posted from the computer's own tick.
+     */
+    void onFlightComputerLive(int dimension, String durableShipId) {
+        if (durableShipId == null) {
+            return;
+        }
+        for (Pending pending : queue) {
+            if (pending.dimension == dimension && pending.shipId != null
+                    && durableShipId.equals(pending.shipId.toString())) {
+                pending.craftLive = true;
+            }
+        }
+    }
+
+    /** One pass over every queued pilot. Server main thread, once per server tick. */
     void tick(MinecraftServer server) {
         if (queue.isEmpty()) {
             return;
@@ -126,6 +155,15 @@ public final class AssemblyCrewRebind {
                     noteRebindQueue("cancelled(playerGone)", pending.playerId,
                             pending.staleDummyId, pending.anchor, pending.attempts);
                     it.remove(); // logged out mid-assembly; the login-restore path owns him now
+                }
+                continue;
+            }
+            if (!pending.craftLive) {
+                // The craft has not announced itself here yet, so there is no relocated seat to
+                // find; only the give-up clock runs.
+                if (++pending.attempts > MAX_ATTEMPTS) {
+                    expire(pending, player);
+                    it.remove();
                 }
                 continue;
             }
@@ -146,15 +184,21 @@ public final class AssemblyCrewRebind {
                 }
                 continue;
             }
-            pending.notOnMountStreak = 0; // still on the stale mount, ship just not up yet
+            pending.notOnMountStreak = 0; // still on the stale mount, the seat not resolvable yet
             if (++pending.attempts > MAX_ATTEMPTS) {
-                noteRebindQueue("expired", pending.playerId, pending.staleDummyId,
-                        pending.anchor, pending.attempts);
-                LOGGER.warn("gave up rebinding {} onto the ship assembled at {} after {} ticks - "
-                        + "the relocated seat never resolved; he keeps the stale mount",
-                        player.getName(), pending.anchor, MAX_ATTEMPTS);
+                expire(pending, player);
                 it.remove();
             }
         }
+    }
+
+    /** Say that an entry ran out of budget; the caller removes it. */
+    private static void expire(Pending pending, EntityPlayerMP player) {
+        noteRebindQueue("expired", pending.playerId, pending.staleDummyId,
+                pending.anchor, pending.attempts);
+        LOGGER.warn("gave up rebinding {} onto the ship assembled at {} after {} ticks - {}; he keeps"
+                        + " the stale mount", player.getName(), pending.anchor, MAX_ATTEMPTS,
+                pending.craftLive ? "the relocated seat never resolved"
+                        : "the craft never announced its flight computer live in this world");
     }
 }

@@ -7,8 +7,8 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import dev.stannismod.stellurgy.Stellurgy;
 
 /**
- * The Forge subscriptions that drive the space subsystem: the per-tick advance and the world-save
- * staging.
+ * The Forge subscriptions that drive the space subsystem: the per-tick advance, the world-save
+ * staging, and the ship-lifecycle announcements a queued service waits on.
  *
  * <p>A class of handlers that reaches into the STATE OBJECT ({@link SpaceSubsystem}) rather than an
  * object pretending to be a handler. That split is the point: the subsystem owns its five services
@@ -60,6 +60,21 @@ public final class SpaceSubsystemEvents {
         }
     }
 
+    /**
+     * A craft's flight computer is live in a world: the pilots queued to be re-seated on that craft
+     * after its assembly may now look for their relocated seat. Posted on the server thread from the
+     * computer's own tick.
+     */
+    @SubscribeEvent
+    public void onFlightComputerLive(
+            dev.stannismod.stellurgy.api.event.ShipEvent.FlightComputerLiveEvent event) {
+        SpaceSubsystem live = Stellurgy.spaceSubsystem();
+        if (live == null || event.world == null || event.world.isRemote) {
+            return;
+        }
+        live.crewRebind.onFlightComputerLive(event.world.provider.getDimension(), event.shipId);
+    }
+
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
@@ -91,7 +106,8 @@ public final class SpaceSubsystemEvents {
         live.descent.tick();
         // Advance in-flight CELL-SEAM carries (a ship that flew out of its cell into the next one).
         live.cellCrossings.tick();
-        // Retry the pilots waiting to be re-seated on a ship still being assembled.
+        // The pilots waiting to be re-seated on a ship being assembled: a rebind for each whose craft
+        // has announced itself (onFlightComputerLive), the give-up clock for every one.
         live.crewRebind.tick(FMLCommonHandler.instance().getMinecraftServerInstance());
         // Rebroadcast the per-slot render bodies (throttled) so the slot-world sky (BoundarySky)
         // tracks each settled ship's direction to the bodies of its cell.
