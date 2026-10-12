@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.Fluid;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

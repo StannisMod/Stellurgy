@@ -1,18 +1,9 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.fml.common.FMLCommonHandler;
+
+import java.util.*;
 
 /**
  * An ORDERED log of things that HAPPENED on one server, so a test can wait for an event instead of

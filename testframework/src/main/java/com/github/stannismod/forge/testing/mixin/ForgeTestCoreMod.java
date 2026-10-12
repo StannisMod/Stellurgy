@@ -1,13 +1,12 @@
 package com.github.stannismod.forge.testing.mixin;
 
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
+import zone.rong.mixinbooter.IEarlyMixinLoader;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
-
-import zone.rong.mixinbooter.IEarlyMixinLoader;
 
 /**
  * The harness's own coremod, whose entire job is to get {@code mixins.forgetestframework.json}

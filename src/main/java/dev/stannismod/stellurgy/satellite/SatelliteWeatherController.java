@@ -1,46 +1,32 @@
 package dev.stannismod.stellurgy.satellite;
-import net.minecraft.block.BlockLiquid;
-import net.minecraft.init.Blocks;
-import net.minecraft.network.play.server.SPacketChangeGameState;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagIntArray;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentString;
-import net.minecraft.world.World;
-import net.minecraft.world.biome.Biome;
-import net.minecraft.world.chunk.Chunk;
-import net.minecraftforge.fluids.IFluidBlock;
-import net.minecraftforge.fluids.capability.wrappers.FluidBlockWrapper;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyBiomes;
+
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import net.minecraft.world.WorldServer;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.item.ItemBiomeChanger;
 import dev.stannismod.stellurgy.item.ItemWeatherController;
-import dev.stannismod.stellurgy.world.weather.PlanetWeatherManager;
-import dev.stannismod.stellurgy.network.PacketAirParticle;
-import dev.stannismod.stellurgy.network.PacketFluidParticle;
-import dev.stannismod.stellurgy.util.BiomeHandler;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.network.PacketAirParticle;
+import dev.stannismod.stellurgy.network.PacketFluidParticle;
+import dev.stannismod.stellurgy.world.weather.PlanetWeatherManager;
+import net.minecraft.block.BlockLiquid;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.Blocks;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 
 import javax.annotation.Nonnull;
-import java.util.*;
-import java.util.logging.Logger;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 import static org.apache.commons.lang3.RandomUtils.nextInt;
-import static dev.stannismod.stellurgy.Stellurgy.logger;
 
 public class SatelliteWeatherController extends SatelliteBase {
 

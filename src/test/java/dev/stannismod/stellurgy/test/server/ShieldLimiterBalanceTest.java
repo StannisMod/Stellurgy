@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.List;
 
-import dev.stannismod.stellurgy.test.ShieldTile;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * P6, the harness-observable half of "the interesting limiter binds": in an ordinary build the

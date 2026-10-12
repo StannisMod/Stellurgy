@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
-import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -18,7 +18,6 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A body in the planet file that states no mass and no radius is REFUSED, never loaded with a size

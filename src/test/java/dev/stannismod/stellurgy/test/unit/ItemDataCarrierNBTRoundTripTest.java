@@ -1,25 +1,22 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.item.ItemStack;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.item.ItemData;
 import dev.stannismod.stellurgy.item.ItemMultiData;
 import dev.stannismod.stellurgy.item.ItemSpaceElevatorChip;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.DimensionBlockPosition;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.DimensionBlockPosition;
+import net.minecraft.item.ItemStack;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * data-carrying items NBT round-trip pins.

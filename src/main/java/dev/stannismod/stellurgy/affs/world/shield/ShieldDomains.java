@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.affs.world.shield;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * Resolves a shield block's <b>domain</b> — D134-6 Layer 1 (identity). A domain <em>bounds</em> the

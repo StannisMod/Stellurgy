@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
+import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 
 import java.util.Objects;
 

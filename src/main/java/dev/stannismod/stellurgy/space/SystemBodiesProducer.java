@@ -1,26 +1,20 @@
 package dev.stannismod.stellurgy.space;
 
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.server.MinecraftServer;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync;
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderBody;
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderNebula;
 import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Server-side producer for the {@link PacketSystemBodiesSync} render channel: turns the set of

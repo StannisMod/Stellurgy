@@ -1,22 +1,15 @@
 package dev.stannismod.stellurgy.test.client;
 
-import java.util.Locale;
-
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import java.util.Locale;
 
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A player who SITS DOWN IN THE PILOT SEAT BEFORE HIS SHIP IS ASSEMBLED must still be flying that

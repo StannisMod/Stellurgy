@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader.DimensionPropertyCoupling;
 import org.junit.BeforeClass;
@@ -17,12 +18,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * A planet file may state a body's air outright — the gases, whole — or name another body of the same

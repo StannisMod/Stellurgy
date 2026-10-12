@@ -1,19 +1,12 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.function.LongSupplier;
-
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
+import java.util.*;
+import java.util.function.LongSupplier;
 
 /**
  * The transit state machine for tier-2 ships. A ship jumping between bubble

@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.LinkedHashSet;
-
+import dev.stannismod.stellurgy.test.trace.SpawnMemory;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -14,11 +16,7 @@ import org.valkyrienskies.mod.common.ships.block_relocation.SpatialDetector;
 import org.valkyrienskies.mod.common.ships.ship_world.WorldServerShipManager;
 import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraft.world.WorldServer;
-
-import dev.stannismod.stellurgy.test.trace.SpawnMemory;
+import java.util.LinkedHashSet;
 
 /**
  * Reads WHERE a queued tier-2 ship dies inside Valkyrien Skies' own spawn pass — from the tests,

@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.client;
 
-import java.io.IOException;
-
 import com.github.stannismod.forge.testing.client.ClientBot;
+
+import java.io.IOException;
 
 /**
  * The space clock as the CLIENT holds it — production's own {@code ServerView.current().clock()}, read in the

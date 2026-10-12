@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Step;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Contract pinning for the FF body-frame attitude quaternion

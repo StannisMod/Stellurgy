@@ -1,17 +1,17 @@
 package dev.stannismod.stellurgy.tile.infrastructure;
 
 
+import dev.stannismod.stellurgy.api.IInfrastructure;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
+import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ITickable;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
-import dev.stannismod.stellurgy.api.IInfrastructure;
-import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
-import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.util.List;
 

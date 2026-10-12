@@ -1,20 +1,15 @@
 package dev.stannismod.stellurgy.test.client;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.test.LedgerEntry;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.SubsystemStatus;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.LedgerEntry;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * The leg where the restore must NOT put anybody on a ship across a server restart: the player who was

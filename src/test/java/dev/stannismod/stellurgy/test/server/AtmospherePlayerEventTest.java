@@ -1,16 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
-
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * What the per-entity atmosphere gate answers for a player, and that the answer is the one belonging

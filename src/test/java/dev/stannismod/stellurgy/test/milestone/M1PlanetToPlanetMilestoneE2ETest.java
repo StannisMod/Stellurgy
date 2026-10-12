@@ -1,44 +1,23 @@
 package dev.stannismod.stellurgy.test.milestone;
 
-import dev.stannismod.stellurgy.test.contract.NewPath;
-
-import dev.stannismod.stellurgy.test.EvictionReports;
-import java.util.Locale;
-
 import com.github.stannismod.forge.testing.junit.AbstractPlayerE2ETest;
 import com.github.stannismod.forge.testing.junit.PlayerStart;
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.space.TerrainHeightFinder;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.client.ClientEvents;
+import dev.stannismod.stellurgy.test.client.SeatDelivery;
+import dev.stannismod.stellurgy.test.contract.NewPath;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.Before;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
-import dev.stannismod.stellurgy.space.TerrainHeightFinder;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Chains;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.LedgerEntry;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.CellInfo;
-import dev.stannismod.stellurgy.test.DriveInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.TelescopeReading;
-import dev.stannismod.stellurgy.test.client.ClientEvents;
-import dev.stannismod.stellurgy.test.client.SeatDelivery;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
+import java.util.Locale;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * The first milestone loop, walked the way a player walks it: build a jump-capable craft, turn it

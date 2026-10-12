@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.integration;
 
-import matteroverdrive.entity.*;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import matteroverdrive.entity.EntityDrone;
 import matteroverdrive.entity.monster.EntityMeleeRougeAndroidMob;
 import matteroverdrive.entity.monster.EntityRangedRogueAndroidMob;
 import matteroverdrive.entity.player.MOPlayerCapabilityProvider;
 import matteroverdrive.init.OverdriveBioticStats;
 import net.minecraft.entity.EntityLivingBase;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 
 public class MatterOvedriveIntegration {
     public static boolean isAndroidNeedNoOxygen(EntityLivingBase player) {

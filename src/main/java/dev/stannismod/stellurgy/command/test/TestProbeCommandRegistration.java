@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.command.test;
 
-import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import dev.stannismod.stellurgy.Stellurgy;
+import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 
 /**
  * Conditional registration entry-point for the test-only {@code /stellurgytest} command

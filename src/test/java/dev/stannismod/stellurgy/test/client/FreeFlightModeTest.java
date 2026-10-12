@@ -2,6 +2,9 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -10,25 +13,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ConfigFlag;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * Real-client end-to-end coverage for Free Flight Mode.

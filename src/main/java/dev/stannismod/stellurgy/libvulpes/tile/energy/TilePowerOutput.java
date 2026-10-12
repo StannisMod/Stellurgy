@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.tile.energy;
 
+import dev.stannismod.stellurgy.libvulpes.energy.IPower;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
-import dev.stannismod.stellurgy.libvulpes.energy.IPower;
 
 import javax.annotation.Nonnull;
 

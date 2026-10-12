@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
-import java.util.List;
-
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import java.util.List;
 
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A promise a server owner has to be able to rely on, which the mechanic did not make on its own.

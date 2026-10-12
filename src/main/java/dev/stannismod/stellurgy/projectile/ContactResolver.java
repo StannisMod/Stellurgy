@@ -1,21 +1,14 @@
 package dev.stannismod.stellurgy.projectile;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.damage.*;
+import dev.stannismod.stellurgy.damage.ShipDamageService;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.block.Block;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.damage.Contact;
-import dev.stannismod.stellurgy.api.damage.ContactResult;
-import dev.stannismod.stellurgy.api.damage.IContactResponder;
-import dev.stannismod.stellurgy.api.damage.DamageReport;
-import dev.stannismod.stellurgy.api.damage.ImpactRequest;
-import dev.stannismod.stellurgy.api.damage.TravellingBody;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.damage.ImpactKind;
-import dev.stannismod.stellurgy.damage.ShipDamageService;
-import dev.stannismod.stellurgy.util.WeightEngine;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * Asks the block a shot just met what happens, and answers for it when it has nothing to say.

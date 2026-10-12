@@ -1,12 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 import com.github.stannismod.forge.testing.server.TestClient;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import org.junit.Test;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 /**

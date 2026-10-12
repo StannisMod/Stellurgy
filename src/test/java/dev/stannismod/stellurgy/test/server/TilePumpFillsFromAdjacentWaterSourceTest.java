@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.FluidStored;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * TilePump drains an adjacent

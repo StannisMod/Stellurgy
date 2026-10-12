@@ -1,27 +1,21 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
-import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
-
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.SubsystemStatus;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Reply;
-
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * The space subsystem's clock is <b>its own</b>: it advances by itself and at the tick rate, no

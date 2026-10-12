@@ -1,20 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.NavStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.FixtureSite;
-
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The assembler links a built navigation computer to the ship it is part of.

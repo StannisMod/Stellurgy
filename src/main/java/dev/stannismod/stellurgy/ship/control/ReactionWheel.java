@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.ship.control;
 
+import org.joml.Vector3d;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import org.joml.Vector3d;
 
 /**
  * A reaction wheel as the physics system sees it: three pure torques, one per axis of the ship's

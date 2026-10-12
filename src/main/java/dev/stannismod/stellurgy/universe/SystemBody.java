@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.universe;
 
-import net.minecraft.nbt.NBTTagCompound;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * One addressable object inside a star system (universe-model.md &sect;4): a star, planet, moon, or a POI

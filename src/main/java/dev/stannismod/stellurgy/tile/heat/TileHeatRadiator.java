@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.tile.heat;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.block.BlockHeatRadiator;
 import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
 import dev.stannismod.stellurgy.subsystem.heat.IHeatExchanger;
 import dev.stannismod.stellurgy.subsystem.hull.HullClearance;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
 
 /**
  * One cell of radiating surface: the only way heat gets off a ship for good.

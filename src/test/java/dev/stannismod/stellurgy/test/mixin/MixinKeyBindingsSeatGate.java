@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.client.KeyBindings;
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.test.trace.SeatGateWindow;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.client.KeyBindings;
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.test.trace.SeatGateWindow;
 
 /**
  * The CLIENT half of the pilot-input chain: whether this client even tried to send.

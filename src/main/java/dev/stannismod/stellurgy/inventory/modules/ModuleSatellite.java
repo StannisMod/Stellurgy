@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IContainerListener;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
-import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 public class ModuleSatellite extends ModuleSlotArray {
 

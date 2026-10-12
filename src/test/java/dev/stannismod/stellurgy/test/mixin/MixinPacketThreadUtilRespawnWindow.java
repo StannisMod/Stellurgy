@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.test.trace.PlayerProbePacket;
+import dev.stannismod.stellurgy.test.trace.RespawnPacketArming;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.network.INetHandler;
@@ -7,16 +11,10 @@ import net.minecraft.network.Packet;
 import net.minecraft.network.PacketThreadUtil;
 import net.minecraft.network.play.server.SPacketRespawn;
 import net.minecraft.util.IThreadListener;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
-import dev.stannismod.stellurgy.test.trace.PlayerProbePacket;
-import dev.stannismod.stellurgy.test.trace.RespawnPacketArming;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * Opens the window between a client respawn being QUEUED and being APPLIED, and hands a mod packet

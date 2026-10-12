@@ -1,19 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Before;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.WarShip;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A shot that meets a SHIP — the case the whole substrate exists for, and the one its world-block

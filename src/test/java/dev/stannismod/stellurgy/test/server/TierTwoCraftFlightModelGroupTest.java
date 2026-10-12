@@ -1,36 +1,19 @@
 package dev.stannismod.stellurgy.test.server;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.AssembledCraft;
-import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.DriveInfo;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ServerWindow;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.ShipLift;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The flight model of a tier-2 craft, in a running game: what it WEIGHS, the field it FALLS in, and the

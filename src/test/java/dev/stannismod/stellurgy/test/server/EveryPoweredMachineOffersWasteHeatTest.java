@@ -2,12 +2,12 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A powered machine offers a coolant loop the heat its work leaves behind — and not only the one

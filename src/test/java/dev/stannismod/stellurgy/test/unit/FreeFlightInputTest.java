@@ -1,15 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.FreeFlightInput;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.FreeFlightInput;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * {@link FreeFlightInput} contract: clamping at construction, ByteBuf wire round-trip,

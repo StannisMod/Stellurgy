@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -7,12 +10,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-import dev.stannismod.stellurgy.test.Reply;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * An impact arriving at an ANGLE must not leave blocks it passed through untouched.

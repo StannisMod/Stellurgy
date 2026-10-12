@@ -1,21 +1,19 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.api.IShipActuatorBlock;
+import dev.stannismod.stellurgy.ship.control.Actuator;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.util.datastructures.IBlockPosSet;
 
-import dev.stannismod.stellurgy.api.IShipActuatorBlock;
-import dev.stannismod.stellurgy.ship.control.Actuator;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Everything the flight model is derived from, read off a hull in one visit: what it weighs and

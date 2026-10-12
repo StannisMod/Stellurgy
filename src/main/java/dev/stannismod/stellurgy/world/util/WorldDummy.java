@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.world.util;
 
+import dev.stannismod.stellurgy.api.StellurgyBiomes;
+import dev.stannismod.stellurgy.util.StorageChunk;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.multiplayer.ChunkProviderClient;
 import net.minecraft.entity.Entity;
@@ -17,8 +19,6 @@ import net.minecraftforge.common.capabilities.CapabilityDispatcher;
 import net.minecraftforge.event.ForgeEventFactory;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyBiomes;
-import dev.stannismod.stellurgy.util.StorageChunk;
 
 import javax.annotation.Nullable;
 

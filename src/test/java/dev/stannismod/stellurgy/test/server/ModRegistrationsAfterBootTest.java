@@ -1,29 +1,21 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
-import net.minecraft.util.SoundEvent;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.AudioRegistry;
-
-import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.event.RegistryEvent;
-import net.minecraftforge.registries.IForgeRegistry;
-
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import dev.stannismod.stellurgy.test.EntityState;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.util.AudioRegistry;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundEvent;
+import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.registries.IForgeRegistry;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 /**
  * The mod's registrations as a really booted game sees them: sounds in the live Forge registry, and

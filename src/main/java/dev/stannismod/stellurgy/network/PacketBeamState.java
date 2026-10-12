@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -9,8 +11,6 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
-import dev.stannismod.stellurgy.client.ClientWorldDrawings;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
  * Server&rarr;client: a gun's beam is burning between these two points, or it has gone out.

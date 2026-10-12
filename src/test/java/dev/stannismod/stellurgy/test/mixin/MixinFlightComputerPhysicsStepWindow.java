@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.PhysicsStepWindow;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import org.joml.Vector3d;
@@ -10,10 +13,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.physics.PhysicsCalculations;
 import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
-
-import dev.stannismod.stellurgy.test.trace.PhysicsStepWindow;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 /**
  * Feeds {@link PhysicsStepWindow} from the one place a tier-2 craft's motion is decided: the flight

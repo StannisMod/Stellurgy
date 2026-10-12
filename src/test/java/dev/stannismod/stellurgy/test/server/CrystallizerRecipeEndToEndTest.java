@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 /**
  * Crystallizer end-to-end recipe contract.

@@ -1,15 +1,9 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+
+import java.util.*;
 
 /**
  * The plugin of {@code mixins.stellurgy.test.json}, and the one place each of its mixins is declared an

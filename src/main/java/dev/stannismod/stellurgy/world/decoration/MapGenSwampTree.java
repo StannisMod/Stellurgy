@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.world.decoration;
 
+import dev.stannismod.stellurgy.world.biome.BiomeGenDeepSwamp;
 import net.minecraft.block.BlockLeaves;
 import net.minecraft.block.BlockLog;
 import net.minecraft.block.state.IBlockState;
@@ -8,7 +9,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.MapGenBase;
-import dev.stannismod.stellurgy.world.biome.BiomeGenDeepSwamp;
 
 import java.util.HashMap;
 import java.util.Map;

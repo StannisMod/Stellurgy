@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import net.minecraft.entity.Entity;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
-
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.test.trace.SideTrace;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 import dev.stannismod.stellurgy.test.trace.TravelPassMemory;
+import net.minecraft.entity.Entity;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
  * How far each re-seat moves a body, measured at the move itself.

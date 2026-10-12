@@ -1,21 +1,19 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
+import dev.stannismod.stellurgy.tile.weapon.TileTurret;
+import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
-import dev.stannismod.stellurgy.tile.weapon.TileTurret;
-import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 
 /**
  * A linker naming a target for a weapon, as events: the linker being bound to a gun or a console,

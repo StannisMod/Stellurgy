@@ -1,17 +1,11 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import java.util.*;
 
 /**
  * Production {@link ShipTransitManager.Crosser}: carries the transit state machine's depart/arrive

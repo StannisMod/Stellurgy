@@ -1,24 +1,16 @@
 package dev.stannismod.stellurgy.test.client;
 
 
-import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Weapons;
 
 import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A player names his battery's target with a linker: he binds it to the battery's console, looks at

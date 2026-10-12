@@ -1,21 +1,10 @@
 package dev.stannismod.stellurgy.tile.station;
 
-import io.netty.buffer.ByteBuf;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.ITickable;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.math.MathHelper;
-import net.minecraftforge.fml.relauncher.Side;
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
@@ -27,14 +16,7 @@ import dev.stannismod.stellurgy.inventory.modules.ModuleData;
 import dev.stannismod.stellurgy.inventory.modules.ModulePlanetImage;
 import dev.stannismod.stellurgy.inventory.modules.ModulePlanetSelector;
 import dev.stannismod.stellurgy.item.IDataItem;
-import dev.stannismod.stellurgy.item.ItemData;
 import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
-import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.util.IDataInventory;
-import dev.stannismod.stellurgy.world.util.MultiData;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
 import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
@@ -44,11 +26,27 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import dev.stannismod.stellurgy.util.IDataInventory;
+import dev.stannismod.stellurgy.world.util.MultiData;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.ITickable;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
+import net.minecraftforge.fml.relauncher.Side;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
-import dev.stannismod.stellurgy.Stellurgy;
 
 public class TileWarpController extends TileEntity implements ITickable, IModularInventory, ISelectionNotify, INetworkMachine, IButtonInventory, IProgressBar, IDataSync, IGuiCallback, IDataInventory, IPlanetDefiner {
 

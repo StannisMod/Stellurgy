@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.world.weather.StellurgyDimensionWorldInfo;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Issue #66 — pure-math unit pins for

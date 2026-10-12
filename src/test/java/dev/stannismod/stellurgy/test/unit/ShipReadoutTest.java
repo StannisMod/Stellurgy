@@ -1,36 +1,22 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.joml.Vector3d;
-import org.junit.Test;
-
-import dev.stannismod.stellurgy.ship.control.Actuator;
-import dev.stannismod.stellurgy.ship.control.ActuatorId;
-import dev.stannismod.stellurgy.ship.control.ControlDirection;
-import dev.stannismod.stellurgy.ship.control.ControlFrame;
-import dev.stannismod.stellurgy.ship.control.Endurance;
-import dev.stannismod.stellurgy.ship.control.ShipFlightModel;
-import dev.stannismod.stellurgy.ship.control.ShipReadout;
+import dev.stannismod.stellurgy.ship.control.*;
 import dev.stannismod.stellurgy.ship.control.ShipReadout.View;
 import dev.stannismod.stellurgy.ship.control.ShipReadout.Warning;
 import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.joml.Vector3d;
+import org.junit.Test;
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.Assert.*;
 
 /**
  * The readout is what every surface draws — console, HUD, assembler — so these pin what it promises

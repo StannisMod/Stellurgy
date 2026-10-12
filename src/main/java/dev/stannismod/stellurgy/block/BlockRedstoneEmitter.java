@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyBool;
@@ -16,16 +20,12 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
-
-import java.util.List;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNullableByDefault;
-import dev.stannismod.stellurgy.Stellurgy;
+import java.util.List;
+
 // Atmosphere Detector that emits redstone signal when a specific atmosphere is detected
 public class BlockRedstoneEmitter extends Block {
 

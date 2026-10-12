@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.init.MobEffects;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 
 /**
  * Resolves an aboard living entity's movement in its ship's frame, where the deck is axis-aligned,

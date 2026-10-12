@@ -1,17 +1,13 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-
 import org.apache.logging.log4j.Logger;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
@@ -27,8 +23,10 @@ import org.valkyrienskies.mod.common.ships.ship_world.WorldServerShipManager;
 import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 import valkyrienwarfare.api.TransformType;
 
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * The Valkyrien Skies-facing side of the integration. Every reference to an

@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.IFuelTank;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.IFuelTank;
 
 public class BlockBipropellantFuelTank extends BlockFuelTank implements IFuelTank {
     public BlockBipropellantFuelTank(Material mat) {

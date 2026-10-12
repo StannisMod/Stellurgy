@@ -1,15 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.SpacePosition;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.util.SpacePosition;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * Space position and astronomy helpers.

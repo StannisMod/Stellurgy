@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.client;
 
+import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
-import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -11,7 +11,6 @@ import java.util.regex.Pattern;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * {@code /ar star *}, {@code /ar dumpBiomes},

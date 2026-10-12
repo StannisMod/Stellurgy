@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameBody;
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import net.minecraft.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameBody;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 
 /**
  * Gives every entity its own ship-frame capture slot. A field of the object, so the client's and the

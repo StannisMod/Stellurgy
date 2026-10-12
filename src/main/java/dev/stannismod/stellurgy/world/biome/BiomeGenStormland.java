@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.world.gen.WorldGenCharredTree;
+import dev.stannismod.stellurgy.world.gen.WorldGenElectricMushroom;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -7,9 +10,6 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.gen.feature.WorldGenAbstractTree;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.world.gen.WorldGenCharredTree;
-import dev.stannismod.stellurgy.world.gen.WorldGenElectricMushroom;
 
 import java.util.Random;
 

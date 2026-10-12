@@ -1,26 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.After;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.UniverseRegistry;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the registry half of realization — the half that decides whether a body has a

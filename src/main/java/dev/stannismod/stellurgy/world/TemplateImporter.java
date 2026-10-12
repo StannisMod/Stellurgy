@@ -1,17 +1,17 @@
 package dev.stannismod.stellurgy.world;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.dimension.TerrainSource;
+import net.minecraft.world.World;
+
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-
-import net.minecraft.world.World;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.dimension.TerrainSource;
 
 /**
  * Copies pre-generated WorldPainter / pregen region files into a {@link TerrainSource#TEMPLATE} planet's

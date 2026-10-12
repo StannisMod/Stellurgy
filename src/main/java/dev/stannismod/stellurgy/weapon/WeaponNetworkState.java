@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.weapon;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.Vec3d;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.Vec3d;
 
 /**
  * What a weapons network agrees on: where it is pointing, and whether it may shoot.

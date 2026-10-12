@@ -2,21 +2,18 @@ package dev.stannismod.stellurgy.test.unit;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * The material table a player can edit, read back after the mod has grown.

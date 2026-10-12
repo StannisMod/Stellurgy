@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.HyperspaceTiles;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import org.junit.Test;
-
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.space.HyperspaceTiles;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

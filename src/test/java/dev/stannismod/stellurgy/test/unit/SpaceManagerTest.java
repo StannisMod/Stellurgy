@@ -1,19 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.SlotBinder;
 import dev.stannismod.stellurgy.space.SpaceManager;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the space controller's pure bookkeeping and policy: coord&harr;cell resolution,

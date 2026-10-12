@@ -1,8 +1,7 @@
 package dev.stannismod.stellurgy.universe;
 
-import net.minecraft.nbt.NBTTagCompound;
-
 import dev.stannismod.stellurgy.space.BlockDelta;
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * A body's ORBITAL LAW, frozen as elements rather than as a position.

@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.tile.heat;
 
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 
 import javax.annotation.Nullable;
-
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 
 /**
  * The air-intake duct: what gives a chiller a cold side made of COMPARTMENT AIR instead of coolant.

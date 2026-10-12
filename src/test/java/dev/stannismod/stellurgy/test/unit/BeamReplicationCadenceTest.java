@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.client.ClientBeamTracker;
+import dev.stannismod.stellurgy.projectile.BeamReplication;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.client.ClientBeamTracker;
-import dev.stannismod.stellurgy.projectile.BeamReplication;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * When a burning beam is worth a packet, and when silence is the right answer.

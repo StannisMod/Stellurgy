@@ -2,13 +2,13 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * What happens when a hull is opened, and what the ship can do about it (D127-9 / D127-6).

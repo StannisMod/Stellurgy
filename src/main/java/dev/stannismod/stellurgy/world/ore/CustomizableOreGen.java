@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.world.ore;
 
 import com.google.common.base.Predicate;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.util.OreGenProperties;
 import net.minecraft.block.BlockStone;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
@@ -10,8 +12,6 @@ import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.gen.IChunkGenerator;
 import net.minecraft.world.gen.feature.WorldGenMinable;
 import net.minecraftforge.fml.common.IWorldGenerator;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.util.OreGenProperties;
 
 import java.util.Random;
 

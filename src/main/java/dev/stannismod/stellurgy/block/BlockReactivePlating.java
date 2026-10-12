@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.block;
 
-import net.minecraft.block.material.Material;
-import net.minecraft.init.Blocks;
-import dev.stannismod.stellurgy.damage.StructureDamageEngine;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.damage.Contact;
 import dev.stannismod.stellurgy.api.damage.ContactResult;
+import dev.stannismod.stellurgy.damage.StructureDamageEngine;
+import net.minecraft.block.material.Material;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 /**
  * Reactive plating — a charge that spends ITSELF to eat part of a hit, and takes nothing else with it.

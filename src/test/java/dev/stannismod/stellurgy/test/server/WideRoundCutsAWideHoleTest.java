@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What a calibre BUYS, inside the hull rather than on a tooltip.

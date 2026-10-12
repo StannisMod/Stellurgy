@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
 import net.minecraft.world.WorldServer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
 
 /**
  * Keep every server world ticking its entities and tile entities while the harness is running.

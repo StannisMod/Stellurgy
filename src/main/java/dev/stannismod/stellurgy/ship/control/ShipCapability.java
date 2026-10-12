@@ -1,18 +1,13 @@
 package dev.stannismod.stellurgy.ship.control;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Matrix3dc;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import java.util.*;
 
 /**
  * What one hull can do: for each of the twelve signed directions, the largest CLEAN force or angular

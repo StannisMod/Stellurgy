@@ -1,19 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.ship.mass.MassContributor;
+import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.joml.Matrix3d;
 import org.joml.Matrix3dc;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.ship.mass.MassContributor;
-import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The mass frame is what every flight characteristic is derived from, so these pin the properties

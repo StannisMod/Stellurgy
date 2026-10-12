@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.tile.weapon.TileTurret;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.tile.weapon.TileTurret;
 
 /**
  * Draws the barrel a turret cannot have as blocks.

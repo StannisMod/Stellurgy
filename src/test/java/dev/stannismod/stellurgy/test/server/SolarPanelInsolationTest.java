@@ -2,12 +2,11 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.EnergyStore;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Assume;
 import org.junit.Test;
 
-
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * REAL solar-panel behavioural depth (vs the

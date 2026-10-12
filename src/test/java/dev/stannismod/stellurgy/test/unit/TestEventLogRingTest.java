@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.trace.ServerEventLog;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.trace.ServerEventLog;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

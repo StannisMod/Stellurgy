@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.inventory;
 
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.ResourceLocation;
 import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.

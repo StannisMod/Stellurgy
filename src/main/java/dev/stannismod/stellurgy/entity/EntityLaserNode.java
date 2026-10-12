@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.entity;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.util.AudioRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
@@ -9,9 +12,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.util.AudioRegistry;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 public class EntityLaserNode extends Entity {
 

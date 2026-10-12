@@ -1,20 +1,19 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.UniverseScale;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * An orbital distance the universe model can NAME survives every NBT form it is saved in — a planet's

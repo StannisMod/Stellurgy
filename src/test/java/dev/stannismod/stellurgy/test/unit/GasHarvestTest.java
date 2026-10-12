@@ -2,12 +2,10 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.mission.GasHarvest;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * A gas-collection mission is drawn at the rate the chosen gas presses on the intake: the same harvest

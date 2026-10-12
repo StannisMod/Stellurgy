@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
 /**
  * One round, one fresh wall, and it marks it.

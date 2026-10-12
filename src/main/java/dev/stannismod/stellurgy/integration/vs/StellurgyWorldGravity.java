@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.integration.vs;
 
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.space.WorldProviderSpaceSlot;
 import net.minecraft.world.World;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.valkyrienskies.mod.common.config.VSConfig;
-
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.space.WorldProviderSpaceSlot;
 
 /**
  * The gravity vector a ship feels in a given world, in the units the physics solver spends.

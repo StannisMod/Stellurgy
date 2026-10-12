@@ -1,20 +1,15 @@
 package dev.stannismod.stellurgy.test.client;
 
 
-import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
-import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Weapons;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
+import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Whether a player can see which way a turret is pointing.

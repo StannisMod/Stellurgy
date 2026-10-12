@@ -1,19 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.TestTrace;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import net.minecraft.world.World;
-
 import org.valkyrienskies.mod.common.ships.ShipData;
-import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
-
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 
 /**
  * A server physics object ADOPTING a pose that was written over it — the tick on which a teleport

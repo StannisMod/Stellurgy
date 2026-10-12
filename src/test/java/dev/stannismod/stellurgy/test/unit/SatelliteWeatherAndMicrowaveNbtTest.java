@@ -1,17 +1,17 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.satellite.SatelliteMicrowaveEnergy;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Persistent state on two satellite subtypes.

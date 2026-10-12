@@ -1,16 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * A sector triple means nothing without the lattice it is expressed in.

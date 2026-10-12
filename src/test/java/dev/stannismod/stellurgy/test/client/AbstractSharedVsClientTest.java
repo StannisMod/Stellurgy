@@ -1,25 +1,9 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
 
-
-
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.DeckCapture;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.TransitStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
-import dev.stannismod.stellurgy.test.Plot;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The shared-client base for the Valkyrien Skies / tier-2 ship scenarios.

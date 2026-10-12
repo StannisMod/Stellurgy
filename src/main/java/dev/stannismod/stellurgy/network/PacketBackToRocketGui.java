@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.math.BlockPos;
-import dev.stannismod.stellurgy.util.RocketGuiNavigation;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 public class PacketBackToRocketGui extends BasePacket {
 

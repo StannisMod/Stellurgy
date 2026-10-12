@@ -1,24 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.test.CellInfo;
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.CellInfo;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * <b>A procedural planet becomes somewhere you can stand, and it is the planet the scan described.</b>

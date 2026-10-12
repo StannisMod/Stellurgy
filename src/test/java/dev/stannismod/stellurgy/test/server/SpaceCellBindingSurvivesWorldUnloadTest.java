@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.MaterializedCell;
-
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

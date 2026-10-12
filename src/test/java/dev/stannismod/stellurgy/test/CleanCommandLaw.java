@@ -1,17 +1,11 @@
 package dev.stannismod.stellurgy.test;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.ship.control.*;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 
-import dev.stannismod.stellurgy.ship.control.Actuator;
-import dev.stannismod.stellurgy.ship.control.ActuatorCommand;
-import dev.stannismod.stellurgy.ship.control.ActuatorId;
-import dev.stannismod.stellurgy.ship.control.ControlAxis;
-import dev.stannismod.stellurgy.ship.control.MomentumStore;
-import dev.stannismod.stellurgy.ship.control.ShipCapability;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

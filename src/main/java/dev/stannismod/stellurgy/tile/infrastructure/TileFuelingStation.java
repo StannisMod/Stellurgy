@@ -1,5 +1,24 @@
 package dev.stannismod.stellurgy.tile.infrastructure;
 
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.block.BlockTileRedstoneEmitter;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
+import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumerTank;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -20,31 +39,11 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.block.BlockTileRedstoneEmitter;
-import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
-import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
-import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
-import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumerTank;
-import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
-import dev.stannismod.stellurgy.libvulpes.util.IconResource;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import dev.stannismod.stellurgy.api.*;
 
 public class TileFuelingStation extends TileInventoriedRFConsumerTank implements IModularInventory, IMultiblock, IInfrastructure, ILinkableTile, INetworkMachine, IButtonInventory {
 

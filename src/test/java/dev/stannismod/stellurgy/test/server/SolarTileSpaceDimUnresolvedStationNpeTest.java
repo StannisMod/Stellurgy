@@ -1,17 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.EnergyStore;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.StationInfo;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Regression guard for findings

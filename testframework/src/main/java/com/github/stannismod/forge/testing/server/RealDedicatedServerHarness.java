@@ -1,20 +1,19 @@
 package com.github.stannismod.forge.testing.server;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import com.github.stannismod.forge.testing.junit.HarnessBoot;
+
+import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
-import com.github.stannismod.forge.testing.junit.HarnessBoot;
 
 public final class RealDedicatedServerHarness implements AutoCloseable {
 

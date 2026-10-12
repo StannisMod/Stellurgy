@@ -1,19 +1,17 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
+import dev.stannismod.stellurgy.affs.world.ForceFieldExplosionHandler;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.ExplosionEvent;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
-import dev.stannismod.stellurgy.affs.world.ForceFieldExplosionHandler;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The shield's answer to a real explosion, as two events around the one handler that decides it.

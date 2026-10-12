@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.client;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
-import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.ClientCommandRefused;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerCommandFailed;
 import com.github.stannismod.forge.testing.server.ServerRoot;
@@ -17,18 +15,18 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A run in E2E MODE refuses, at the call, every act an e2e may not perform — whatever form the test wrote

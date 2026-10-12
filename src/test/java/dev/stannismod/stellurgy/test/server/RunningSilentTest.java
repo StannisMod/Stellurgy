@@ -2,15 +2,13 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.*;
 
 /**
  * Going dark: what shutting every sink does to a ship, and what it cannot do.

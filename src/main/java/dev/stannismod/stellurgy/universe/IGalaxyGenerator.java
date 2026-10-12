@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.universe;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
 
 /**
  * The addon-replaceable galaxy-generation seam (universe-model.md &sect;3). Given the world seed and an

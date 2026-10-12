@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
-import java.util.List;
-
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A beam is HELD, and what that means is that dwell is the weapon.

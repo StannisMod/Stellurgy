@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.projectile;
 
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import dev.stannismod.stellurgy.api.Constants;
 
 /**
  * When the substrate runs, and nothing else. Every decision it makes lives in {@link ShotSubstrate}

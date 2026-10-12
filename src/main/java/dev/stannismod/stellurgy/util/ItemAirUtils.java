@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.api.StellurgyAPI;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.armor.IFillableArmor;
+import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyAPI;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.api.armor.IFillableArmor;
-import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 
 import javax.annotation.Nonnull;
 

@@ -1,16 +1,16 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.SealableBlockHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.init.Blocks;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.SealableBlockHandler;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * SealableBlockHandler — pure list-management logic.

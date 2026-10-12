@@ -1,5 +1,18 @@
 package dev.stannismod.stellurgy.item.components;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyFluids;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.client.HudLayout;
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.util.ITooltipFlag;
@@ -19,23 +32,9 @@ import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyFluids;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.client.HudLayout;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
-import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
-import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
-import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
-import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
-import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import java.util.List;
 
 public class ItemJetpack extends Item implements IArmorComponent, IJetPack {

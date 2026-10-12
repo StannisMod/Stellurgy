@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.item;
 
+import dev.stannismod.stellurgy.api.DataStorage;
+import dev.stannismod.stellurgy.world.util.MultiData;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.Item;
@@ -9,8 +11,6 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.DataStorage;
-import dev.stannismod.stellurgy.world.util.MultiData;
 
 import javax.annotation.Nonnull;
 import java.util.List;

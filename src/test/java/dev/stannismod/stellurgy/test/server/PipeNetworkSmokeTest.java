@@ -1,12 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
+
 import dev.stannismod.stellurgy.test.EnergyStore;
-import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

@@ -2,13 +2,13 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The coolant loop as a physical body: a machine's waste heat goes into the pipes touching it, and

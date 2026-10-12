@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.util.GravityHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityFallingBlock;
 import net.minecraft.entity.item.EntityMinecart;
@@ -8,7 +9,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import dev.stannismod.stellurgy.util.GravityHandler;
 
 /**
  * Applies Stellurgy's per-dimension gravity multiplier to entities that otherwise

@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.api;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.ship.control.Actuator;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
-import dev.stannismod.stellurgy.ship.control.Actuator;
+import java.util.List;
 
 /**
  * A block that can push or turn the ship it is built into.

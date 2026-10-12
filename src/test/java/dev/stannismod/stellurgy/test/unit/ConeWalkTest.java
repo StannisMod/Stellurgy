@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ConeWalk;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The patch of sky one pointing covers: a cone with its apex at the instrument, walked shell by

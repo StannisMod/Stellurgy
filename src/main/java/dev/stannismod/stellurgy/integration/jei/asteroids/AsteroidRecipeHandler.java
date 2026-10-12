@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.asteroids;
 
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import mezz.jei.api.recipe.IRecipeHandler;
 import mezz.jei.api.recipe.IRecipeWrapper;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 
 public class AsteroidRecipeHandler implements IRecipeHandler<AsteroidWrapper> {
     @Override public Class<AsteroidWrapper> getRecipeClass() { return AsteroidWrapper.class; }

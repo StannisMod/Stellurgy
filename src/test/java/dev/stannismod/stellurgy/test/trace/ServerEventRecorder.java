@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.util.Locale;
-
+import dev.stannismod.stellurgy.api.RocketEvent;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.item.EntityXPOrb;
@@ -20,7 +19,7 @@ import net.minecraftforge.event.entity.player.PlayerWakeUpEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
-import dev.stannismod.stellurgy.api.RocketEvent;
+import java.util.Locale;
 
 /**
  * The Forge-bus half of the server's {@link ServerEventLog}: events the game already posts, turned

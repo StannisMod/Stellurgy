@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -14,7 +15,6 @@ import java.util.stream.Stream;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Pins the physics-substrate boundary: the physics engine is a SWAPPABLE substrate that Stellurgy reaches

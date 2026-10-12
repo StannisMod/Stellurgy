@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.api.event;
 
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 import net.minecraftforge.event.entity.EntityEvent;
 import net.minecraftforge.fml.common.eventhandler.Cancelable;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 
 public class AtmosphereEvent extends EntityEvent {
 

@@ -1,10 +1,6 @@
 package dev.stannismod.stellurgy.test.contract;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
 /**
  * The contract clauses this test method pins, by anchor: {@code @Pins("INV-SFM-12")}.

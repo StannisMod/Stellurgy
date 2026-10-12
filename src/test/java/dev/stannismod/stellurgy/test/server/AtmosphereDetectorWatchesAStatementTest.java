@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
-
-import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The atmosphere detector watches a STATEMENT about the air, not a name.

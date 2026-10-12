@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import static org.junit.Assert.assertFalse;
-
+import dev.stannismod.stellurgy.space.HyperspaceWorld;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.space.HyperspaceWorld;
+import static org.junit.Assert.assertFalse;
 
 /**
  * <b>Which dimension hyperspace is has two answers, and they are not interchangeable.</b> The server

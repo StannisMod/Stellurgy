@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.world.type;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.world.ChunkProviderPlanet;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.biome.BiomeProvider;
 import net.minecraft.world.gen.IChunkGenerator;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.world.ChunkProviderPlanet;
 
 public class WorldTypePlanetGen extends WorldType {
 

@@ -1,22 +1,20 @@
 package dev.stannismod.stellurgy.tile.infrastructure;
 
+import dev.stannismod.stellurgy.api.IInfrastructure;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
-import dev.stannismod.stellurgy.api.IInfrastructure;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
-import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
-
-import java.util.List;
 
 import javax.annotation.Nullable;
+import java.util.List;
 
 public class TileRocketFluidUnloader extends TileRocketFluidLoader implements IInfrastructure, ITickable, IButtonInventory, INetworkMachine {
 

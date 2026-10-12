@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.mission.MissionOreMining;
 import dev.stannismod.stellurgy.mission.MissionResourceCollection;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 /**
  *

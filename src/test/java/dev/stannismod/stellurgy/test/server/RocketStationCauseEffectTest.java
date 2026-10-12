@@ -1,17 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.StationPads;
+
+import dev.stannismod.stellurgy.test.*;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * REAL rocket&rarr;station cause-effect for pad state.

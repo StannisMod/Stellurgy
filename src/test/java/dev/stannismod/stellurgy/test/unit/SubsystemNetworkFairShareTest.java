@@ -1,28 +1,21 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.lang.reflect.Field;
-
+import dev.stannismod.stellurgy.subsystem.network.*;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.DimensionType;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.WorldServer;
-
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
 import sun.misc.Unsafe;
 
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemCable;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertArrayEquals;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * How one network's solve splits a supply among its sinks: priority tiers in order, and within a

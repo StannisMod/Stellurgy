@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.api.atmosphere;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 
 /**
  * A named atmosphere: what the rest of the mod passes around when it means "the air here".

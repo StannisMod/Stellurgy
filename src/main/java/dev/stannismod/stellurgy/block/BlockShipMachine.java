@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.tileentity.TileEntity;
@@ -7,8 +8,6 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
-import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 /**
  * A ship machine that carries a tile entity but has nothing to say to a player who right-clicks it.

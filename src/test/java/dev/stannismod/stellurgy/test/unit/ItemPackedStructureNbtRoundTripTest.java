@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.item.ItemPackedStructure;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.item.ItemPackedStructure;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * {@link ItemPackedStructure} unit-tier contract pins.

@@ -1,17 +1,16 @@
 package dev.stannismod.stellurgy.test.client;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.ClientCommandRefused;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
+import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerCommandFailed;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;

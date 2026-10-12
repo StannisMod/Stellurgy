@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.StellarMagnitude;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The photometry a telescope is bounded by: how bright a star is, and how bright it LOOKS from

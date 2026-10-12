@@ -1,21 +1,20 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
+import dev.stannismod.stellurgy.universe.ReportOnce;
+import dev.stannismod.stellurgy.universe.TelescopeScan;
+import org.junit.Test;
+
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import org.junit.Test;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.ReportOnce;
-import dev.stannismod.stellurgy.universe.TelescopeScan;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What one look of a survey owes the direction it is pointed in: every system its star TERRITORY

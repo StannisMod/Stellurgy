@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
+
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import dev.stannismod.stellurgy.test.StationPads;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * dock / undock contract on

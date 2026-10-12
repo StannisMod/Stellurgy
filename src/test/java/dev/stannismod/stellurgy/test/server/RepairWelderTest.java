@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The bottom rung of the repair ladder: one use of the welder takes one stage of damage off a block,

@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.ship.control;
 
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 
 /**
  * The pilot's frame, expressed in the ship's own frame: which way is forward, right and up for the

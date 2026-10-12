@@ -1,32 +1,23 @@
 package dev.stannismod.stellurgy.test.integration;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-
+import dev.stannismod.stellurgy.ship.control.*;
+import dev.stannismod.stellurgy.ship.mass.MassContributor;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import dev.stannismod.stellurgy.test.CleanCommandLaw;
+import dev.stannismod.stellurgy.test.ShipMotionCases;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.ship.control.Actuator;
-import dev.stannismod.stellurgy.ship.control.ActuatorCommand;
-import dev.stannismod.stellurgy.ship.control.ControlDirection;
-import dev.stannismod.stellurgy.ship.control.ControlScheme;
-import dev.stannismod.stellurgy.ship.control.Endurance;
-import dev.stannismod.stellurgy.ship.control.MomentumStore;
-import dev.stannismod.stellurgy.ship.control.ShipCapability;
-import dev.stannismod.stellurgy.ship.control.ShipFlightModel;
-import dev.stannismod.stellurgy.ship.control.ShipReadout;
-import dev.stannismod.stellurgy.ship.mass.MassContributor;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
-import dev.stannismod.stellurgy.test.CleanCommandLaw;
-import dev.stannismod.stellurgy.test.ShipMotionCases;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Integration: the joints of ship-flight-model's kernel — where one contract's promise is another's

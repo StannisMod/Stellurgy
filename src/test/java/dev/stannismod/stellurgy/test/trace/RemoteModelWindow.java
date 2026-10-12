@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import net.minecraft.entity.EntityLivingBase;
+
 import java.util.List;
 import java.util.Locale;
-
-import net.minecraft.entity.EntityLivingBase;
 
 /**
  * What the model-rotation gate decided, over a window a test opens and closes.

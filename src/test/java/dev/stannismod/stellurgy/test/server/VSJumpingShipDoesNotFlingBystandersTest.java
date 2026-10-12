@@ -1,18 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
 import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 

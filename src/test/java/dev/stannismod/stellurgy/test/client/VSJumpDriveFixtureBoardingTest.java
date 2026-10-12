@@ -1,25 +1,17 @@
 package dev.stannismod.stellurgy.test.client;
 
-import java.util.Locale;
-
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
-import dev.stannismod.stellurgy.test.DriveInfo;
-import dev.stannismod.stellurgy.test.NavStatus;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import java.util.Locale;
 
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A jump-capable craft assembles WHOLE, and a pilot standing on its deck can reach both of the

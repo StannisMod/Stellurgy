@@ -1,6 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.block;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyBool;
 import net.minecraft.block.state.BlockStateContainer;
@@ -17,13 +20,10 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 
 import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Random;
-import dev.stannismod.stellurgy.api.Constants;
 
 public class RotatableMachineBlock extends RotatableBlock {
 	protected final Random random = new Random();

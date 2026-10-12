@@ -4,15 +4,13 @@ import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * REAL warp-controller behavioural depth.

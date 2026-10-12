@@ -1,13 +1,9 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+
+import java.util.*;
 
 /**
  * Whether a ship may jump, and what the pilot should be told if it may not.

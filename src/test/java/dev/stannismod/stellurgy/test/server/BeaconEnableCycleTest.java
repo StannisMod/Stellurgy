@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Before;
@@ -8,8 +9,6 @@ import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.Set;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;

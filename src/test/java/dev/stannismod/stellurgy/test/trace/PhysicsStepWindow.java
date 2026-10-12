@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.util.List;
-
 import net.minecraft.world.World;
+
+import java.util.List;
 
 /**
  * What ONE flight computer's craft did on the PHYSICS clock between a test's {@code open} and its

@@ -1,33 +1,20 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.space.CellSeam;
+import dev.stannismod.stellurgy.space.CellWorldMapper;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import dev.stannismod.stellurgy.space.CellSeam;
-import dev.stannismod.stellurgy.space.CellWorldMapper;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.EntryStatus;
-import dev.stannismod.stellurgy.test.TransitStatus;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A pilot who RELOGS in the middle of a hyperspace transit regains control ON ARRIVAL: after the

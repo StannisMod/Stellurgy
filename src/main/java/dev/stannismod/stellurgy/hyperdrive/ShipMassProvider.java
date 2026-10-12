@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
-import java.util.OptionalLong;
-import java.util.UUID;
-
-import net.minecraft.world.World;
-
 import dev.stannismod.stellurgy.integration.vs.FlightComputerMassSource;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import net.minecraft.world.World;
+
+import java.util.OptionalLong;
+import java.util.UUID;
 
 /**
  * How heavy a ship is, for the drive — the one number the speed formula needs from the hull.

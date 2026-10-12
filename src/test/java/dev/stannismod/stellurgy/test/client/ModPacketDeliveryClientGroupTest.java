@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * How the mod's own network channel delivers a packet to the code that executes it, on a real client.

@@ -1,16 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for {@link CellSeam} — the arithmetic of flying THROUGH a cell face.

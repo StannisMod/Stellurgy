@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
 
+import dev.stannismod.stellurgy.libvulpes.api.IToggleableMachine;
+import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.item.ItemStack;
@@ -11,8 +13,6 @@ import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ITickable;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.api.IToggleableMachine;
-import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
 
 import javax.annotation.Nonnull;
 

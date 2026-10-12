@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.weapon.TurretFireControl;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.IGravityManager;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.util.GravityHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import sun.misc.Unsafe;
-import dev.stannismod.stellurgy.api.IGravityManager;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.GravityHandler;
 
 import java.lang.reflect.Field;
 

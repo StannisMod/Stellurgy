@@ -1,5 +1,13 @@
 package dev.stannismod.stellurgy.satellite;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.DataStorage;
+import dev.stannismod.stellurgy.api.SatelliteRegistry;
+import dev.stannismod.stellurgy.api.satellite.IDataHandler;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
+import dev.stannismod.stellurgy.util.IDataInventory;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IContainerListener;
@@ -9,14 +17,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.DataStorage;
-import dev.stannismod.stellurgy.api.SatelliteRegistry;
-import dev.stannismod.stellurgy.api.satellite.IDataHandler;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
-import dev.stannismod.stellurgy.util.IDataInventory;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 

@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.entity;
 
 import com.google.common.base.Optional;
-
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
@@ -12,10 +14,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.

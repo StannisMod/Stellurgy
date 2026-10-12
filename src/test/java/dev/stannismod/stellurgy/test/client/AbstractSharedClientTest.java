@@ -1,13 +1,10 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.junit.ClassScope;
-import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
-import com.github.stannismod.forge.testing.junit.ScopedTest;
+import com.github.stannismod.forge.testing.junit.*;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.FixMethodOrder;
@@ -19,15 +16,7 @@ import org.junit.runner.Description;
 import org.junit.runner.RunWith;
 import org.junit.runners.MethodSorters;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.EvictionReports;
-
 import java.util.Locale;
-
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.PlayerState;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

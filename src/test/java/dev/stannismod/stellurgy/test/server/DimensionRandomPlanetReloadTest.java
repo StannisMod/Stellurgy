@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
-import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -15,9 +14,9 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * MED batch pack 4 — C130 reproduction + regression guard.

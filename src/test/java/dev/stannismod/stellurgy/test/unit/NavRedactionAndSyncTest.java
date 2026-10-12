@@ -1,23 +1,20 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.navigation.CrystalEntry;
 import dev.stannismod.stellurgy.navigation.CrystalMemory;
 import dev.stannismod.stellurgy.navigation.CrystalSync;
 import dev.stannismod.stellurgy.navigation.NavInfoRedaction;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.PlanetInfoField;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the two navigation rules a pilot can feel: how much a body tells you depends on

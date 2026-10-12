@@ -1,5 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.hyperdrive.DriveTier;
+import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
+import dev.stannismod.stellurgy.space.CellFrames;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
+import dev.stannismod.stellurgy.universe.PlanetarySystem;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -7,19 +17,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import dev.stannismod.stellurgy.hyperdrive.DriveTier;
-import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
-import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
-import dev.stannismod.stellurgy.space.CellFrames;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * The progression the hyperdrive family is built around: <b>size buys POWER, the generation buys

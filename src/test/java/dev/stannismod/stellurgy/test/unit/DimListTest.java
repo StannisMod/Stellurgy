@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.test.DimList;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The {@code dim list} reader's one DERIVED answer: which dimensions a command registered between

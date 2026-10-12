@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.DeckCameraState;
+import dev.stannismod.stellurgy.test.trace.DeckReference;
+import dev.stannismod.stellurgy.test.trace.FrameStepWindow;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.entity.Entity;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.test.trace.DeckReference;
-import dev.stannismod.stellurgy.test.trace.DeckCameraState;
-import dev.stannismod.stellurgy.test.trace.FrameStepWindow;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * Where the renderer put the eye this frame, and how the camera path moved between frames.

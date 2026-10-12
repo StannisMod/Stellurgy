@@ -1,17 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.EmptyGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.PlanetTypes;
-import dev.stannismod.stellurgy.universe.ReportOnce;
-import dev.stannismod.stellurgy.universe.UniverseSchemaV0;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Which generator the world model hands a pack's galaxy configuration: the pack states whether space

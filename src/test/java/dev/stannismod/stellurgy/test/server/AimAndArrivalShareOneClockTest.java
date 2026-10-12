@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.CellInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A recorded defect's contract, at the server tier: <b>a jump's aim moves with the SPACE clock and with

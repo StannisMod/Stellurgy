@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.client.KeyBindings;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.client.KeyBindings;
-import dev.stannismod.stellurgy.test.trace.SideTrace;
 
 /**
  * One flight-recorder sample per CLIENT TICK.

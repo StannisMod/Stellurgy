@@ -1,22 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.init.Items;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.item.ItemAsteroidChip;
 import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * chip-item NBT round-trip pins.

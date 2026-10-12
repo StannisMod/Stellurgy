@@ -1,23 +1,21 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.network.PacketAtmSync;
 import dev.stannismod.stellurgy.network.PacketOxygenState;
 import dev.stannismod.stellurgy.network.PacketStellarInfo;
 import dev.stannismod.stellurgy.network.PacketSyncKnownPlanets;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import org.junit.Test;
 
 import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * Network packet round-trip — write/readClient symmetry.

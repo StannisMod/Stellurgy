@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.command.sub;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import net.minecraft.block.Block;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
@@ -7,7 +8,6 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentTranslation;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 
 import java.util.Collections;
 import java.util.List;

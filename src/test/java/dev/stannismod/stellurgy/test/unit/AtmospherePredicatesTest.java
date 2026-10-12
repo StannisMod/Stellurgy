@@ -1,23 +1,17 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import net.minecraft.nbt.NBTTagCompound;
-
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRole;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * What air IS, asked of the air.

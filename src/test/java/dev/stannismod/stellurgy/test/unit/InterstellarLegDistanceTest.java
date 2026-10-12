@@ -1,12 +1,5 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
 import dev.stannismod.stellurgy.hyperdrive.DriveTier;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
 import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
@@ -17,6 +10,12 @@ import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.PlanetarySystem;
 import dev.stannismod.stellurgy.universe.UniverseScale;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertTrue;
 

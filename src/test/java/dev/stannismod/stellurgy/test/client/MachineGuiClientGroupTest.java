@@ -3,6 +3,10 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import org.junit.Before;
@@ -10,25 +14,9 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import dev.stannismod.stellurgy.test.NavStatus;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.TelescopeReading;
-import dev.stannismod.stellurgy.test.Weapons;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.findSlotWithItem;
 import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.screenOf;
-import dev.stannismod.stellurgy.test.contract.NotYetRed;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * A machine stands in the world, the player right-clicks it open, and drives it with nothing but

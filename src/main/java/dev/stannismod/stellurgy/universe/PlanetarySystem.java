@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.universe;
 
-import java.util.Optional;
-
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+
+import java.util.Optional;
 
 /**
  * An immutable query-time handle to what stands at one anchor cell, returned by the

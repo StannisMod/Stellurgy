@@ -1,32 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.PlanetDerivation;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.PlanetTypes;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.*;
+import org.junit.Test;
+
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for a system's RETINUE — how many bodies it has, where they sit, and what it always

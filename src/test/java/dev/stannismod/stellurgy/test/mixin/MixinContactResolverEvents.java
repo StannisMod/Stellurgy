@@ -1,22 +1,20 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
 import dev.stannismod.stellurgy.api.damage.Contact;
 import dev.stannismod.stellurgy.api.damage.ContactResult;
 import dev.stannismod.stellurgy.api.damage.IContactResponder;
 import dev.stannismod.stellurgy.api.damage.TravellingBody;
 import dev.stannismod.stellurgy.projectile.ContactResolver;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * The contact seam's two decisions about a body meeting a block, as events. Both are where

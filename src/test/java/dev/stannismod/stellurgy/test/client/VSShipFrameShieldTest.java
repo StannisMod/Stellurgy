@@ -1,21 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import dev.stannismod.stellurgy.test.EntityState;
-import dev.stannismod.stellurgy.test.ShieldTile;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * P3 (§4.3): the shield must ride an assembled Valkyrien Skies ship. A ship's blocks live in a

@@ -1,19 +1,17 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.api.weapon.GunSpec;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
+import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Random;
-
-import dev.stannismod.stellurgy.api.weapon.GunSpec;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
-import dev.stannismod.stellurgy.weapon.TurretFireControl;
 
 /**
  * Where a body leaves a gun and what motion it inherits, as an event: {@code turret_muzzle}.

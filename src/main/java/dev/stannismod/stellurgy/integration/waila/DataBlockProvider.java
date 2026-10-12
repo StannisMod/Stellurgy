@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.integration.waila;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.api.DataStorage;
+import dev.stannismod.stellurgy.api.DataStorage.DataType;
+import dev.stannismod.stellurgy.integration.dataloaders.*;
+import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
 import mcp.mobius.waila.api.IWailaConfigHandler;
 import mcp.mobius.waila.api.IWailaDataAccessor;
 import mcp.mobius.waila.api.IWailaDataProvider;
@@ -11,14 +13,8 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.DataStorage;
-import dev.stannismod.stellurgy.api.DataStorage.DataType;
-import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
-import dev.stannismod.stellurgy.integration.dataloaders.DataBlockDataLoader;
-import dev.stannismod.stellurgy.integration.dataloaders.DataBlockDataLoaderServer;
-import dev.stannismod.stellurgy.integration.dataloaders.WirelessTransceiverDataLoader;
-import dev.stannismod.stellurgy.integration.dataloaders.WirelessTransceiverDataLoaderServer;
-import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
+
+import java.util.List;
 
 public class DataBlockProvider implements IWailaDataProvider {
 

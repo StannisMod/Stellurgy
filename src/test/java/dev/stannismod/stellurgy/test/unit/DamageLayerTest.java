@@ -1,19 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
 import dev.stannismod.stellurgy.damage.DamageLayer;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
 
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The bookkeeping a relocation's damage carry is built out of, at the tier where it is cheap to check.

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.compat;
 
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 

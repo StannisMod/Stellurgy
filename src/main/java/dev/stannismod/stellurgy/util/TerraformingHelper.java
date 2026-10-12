@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.dimension.TerraformingRecord;
+import dev.stannismod.stellurgy.world.ChunkManagerPlanet;
+import dev.stannismod.stellurgy.world.ChunkProviderPlanet;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
@@ -8,12 +14,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.biome.BiomeProvider;
 import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraftforge.common.BiomeManager;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.dimension.TerraformingRecord;
-import dev.stannismod.stellurgy.world.ChunkManagerPlanet;
-import dev.stannismod.stellurgy.world.ChunkProviderPlanet;
-import dev.stannismod.stellurgy.world.WorldRuntime;
 
 import java.util.*;
 

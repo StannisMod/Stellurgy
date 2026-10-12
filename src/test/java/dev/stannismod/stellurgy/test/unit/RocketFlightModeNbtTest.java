@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.RocketFlightMode;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.RocketFlightMode;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Contract for {@link RocketFlightMode} NBT round-trip and back-compat.

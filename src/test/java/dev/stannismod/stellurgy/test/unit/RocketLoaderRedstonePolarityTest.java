@@ -1,20 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.tile.infrastructure.TileRocketLoader;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import sun.misc.Unsafe;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.tile.infrastructure.TileRocketLoader;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * TileRocketLoader's redstone-output polarity logic.

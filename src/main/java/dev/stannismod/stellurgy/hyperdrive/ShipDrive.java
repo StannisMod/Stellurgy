@@ -1,18 +1,5 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraftforge.energy.CapabilityEnergy;
-import net.minecraftforge.energy.IEnergyStorage;
-
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
 import dev.stannismod.stellurgy.subsystem.heat.HeatNetworkState;
@@ -24,6 +11,18 @@ import dev.stannismod.stellurgy.tile.hyperdrive.TileGravityDampener;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileHyperdriveGenerator;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpFieldEmitter;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraftforge.energy.CapabilityEnergy;
+import net.minecraftforge.energy.IEnergyStorage;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * One real ship's drive: which machines it actually has aboard, and what they are worth together.

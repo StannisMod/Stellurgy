@@ -1,30 +1,20 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.Optional;
 
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.space.BlockDelta;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.SystemContent;
-import dev.stannismod.stellurgy.universe.UniverseRegistry;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * Authored system content, where a system is an anchored NEIGHBOURHOOD of cells rather than one cell:

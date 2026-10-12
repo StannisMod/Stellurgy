@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
+import dev.stannismod.stellurgy.client.ClientShotTracker;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.Vec3d;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
-import dev.stannismod.stellurgy.client.ClientShotTracker;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The client being handed a round to draw, and being told it ended, as events:

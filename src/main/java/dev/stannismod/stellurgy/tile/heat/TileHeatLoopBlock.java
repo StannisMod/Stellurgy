@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.tile.heat;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
 import dev.stannismod.stellurgy.subsystem.heat.IHeatNode;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemCable;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 /**
  * What every block of a coolant loop has in common: it is part of the loop's thermal mass, it

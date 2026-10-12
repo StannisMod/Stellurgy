@@ -1,17 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
 
-import net.minecraft.nbt.NBTTagCompound;
-
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * What the star model can EXPRESS: a single star, a close pair, a wide pair, and a hierarchy three

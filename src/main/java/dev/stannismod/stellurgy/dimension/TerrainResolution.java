@@ -1,11 +1,7 @@
 package dev.stannismod.stellurgy.dimension;
 
-import net.minecraft.world.WorldType;
 import dev.stannismod.stellurgy.Stellurgy;
-
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import net.minecraft.world.WorldType;
 
 /**
  * Resolves what a planet dimension's terrain is ACTUALLY produced by, after the fallbacks: an

@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.projectile.Shot;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.projectile.Shot;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A thrown round paying energy, as an event: {@code shot_energy_spent}.

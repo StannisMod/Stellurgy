@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.subsystem.ejection;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.subsystem.hull.HullClearance;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.subsystem.hull.HullClearance;
 
 /**
  * Throwing matter out of a hull, done once for everyone who needs to.

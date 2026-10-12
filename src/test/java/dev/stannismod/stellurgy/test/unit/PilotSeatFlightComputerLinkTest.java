@@ -1,15 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract for how a {@link TilePilotSeat} remembers its Advanced Flight Computer.

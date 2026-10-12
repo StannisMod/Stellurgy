@@ -1,7 +1,8 @@
 package dev.stannismod.stellurgy.test;
 
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+
+import static org.junit.Assert.assertTrue;
 
 /**
  * One tier-2 craft a weapon scenario builds, addressed by IDENTITY for its whole life.

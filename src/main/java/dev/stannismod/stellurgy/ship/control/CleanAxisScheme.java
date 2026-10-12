@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.ship.control;
 
-import java.util.List;
-
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
+
+import java.util.List;
 
 /**
  * The default scheme: split the wanted motion along the pilot's six axes, deliver each with that

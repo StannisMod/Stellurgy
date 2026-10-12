@@ -1,16 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.CellFrames;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * The frame seam: a cell NAME plus a tick resolves to a position — a cell holding a body rides that

@@ -1,29 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.Test;
-
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.HyperspaceTiles;
-import dev.stannismod.stellurgy.space.OfflineProgress;
-import dev.stannismod.stellurgy.space.ShipCrossingService;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.ShipTransitManager;
-import dev.stannismod.stellurgy.space.SlotBinder;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.TransitRecord;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the transit state machine's WIRING - the depart/advance/arrive lifecycle, the

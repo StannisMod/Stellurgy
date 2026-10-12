@@ -1,24 +1,14 @@
 package dev.stannismod.stellurgy.test.client;
 
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * A player riding a mount aboard a CRUISING ship never loses that mount.

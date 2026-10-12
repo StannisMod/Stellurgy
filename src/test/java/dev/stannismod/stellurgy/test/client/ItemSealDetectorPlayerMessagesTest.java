@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import java.util.Locale;
-
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-
-import dev.stannismod.stellurgy.test.Plot;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

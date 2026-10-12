@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
+import dev.stannismod.stellurgy.network.PacketShipReadout;
+import dev.stannismod.stellurgy.ship.control.ShipReadout;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
@@ -7,11 +10,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
-
-import dev.stannismod.stellurgy.network.PacketShipReadout;
-import dev.stannismod.stellurgy.ship.control.ShipReadout;
 
 /**
  * A ship readout ARRIVED at this client — {@code client_ship_readout_received}.

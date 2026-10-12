@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.space.SpaceClockSync;
+import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
-
-import dev.stannismod.stellurgy.space.SpaceClockSync;
-import dev.stannismod.stellurgy.space.SpaceSubsystem;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
  * Server&rarr;client baseline for the space clock — one {@code long}, the value

@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * The {@code TileOxygenVent} blob is

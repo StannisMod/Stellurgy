@@ -1,20 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.joml.Matrix3d;
-import org.joml.Vector3d;
-import org.junit.Test;
-import org.valkyrienskies.mod.common.ships.physics_data.ShipInertiaData;
 import dev.stannismod.stellurgy.integration.vs.ShipInertiaWriter;
 import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.joml.Matrix3d;
+import org.joml.Vector3d;
+import org.junit.Test;
+import org.valkyrienskies.mod.common.ships.physics_data.ShipInertiaData;
+
+import static org.junit.Assert.*;
 
 /**
  * The rules the mass seam owes the physics engine, pinned against the engine's own record — which is a

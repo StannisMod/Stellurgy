@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.universe.PlanetInfoField;
 import dev.stannismod.stellurgy.universe.SystemBody;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Everything the server knows about a body, as the nav computer would phrase it — before

@@ -1,22 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.SeatCarry;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * SPIKE e2e: is a tier-2 ship CONTROLLABLE — and does the real client keep tracking it — at extreme

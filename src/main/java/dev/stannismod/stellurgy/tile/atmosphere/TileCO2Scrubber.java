@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.tile.atmosphere;
 
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
 import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import net.minecraft.item.ItemStack;
 
 public class TileCO2Scrubber extends TileInventoryHatch implements IComparatorOverride {
     public TileCO2Scrubber() {

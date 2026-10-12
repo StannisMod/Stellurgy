@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.api.event;
 
-import java.util.UUID;
-
-import javax.annotation.Nullable;
-
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.eventhandler.Event;
+
+import javax.annotation.Nullable;
+import java.util.UUID;
 
 /**
  * The life of a tier-2 craft as a ship: it is NAMED, it becomes USABLE, and it is UNNAMED — every

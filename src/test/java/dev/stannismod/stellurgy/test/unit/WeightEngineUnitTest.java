@@ -2,21 +2,14 @@ package dev.stannismod.stellurgy.test.unit;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fluids.Fluid;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.util.WeightEngine;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import dev.stannismod.stellurgy.util.WeightEngine;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -24,12 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * MC-free unit coverage for {@link WeightEngine}: the parts that don't need a

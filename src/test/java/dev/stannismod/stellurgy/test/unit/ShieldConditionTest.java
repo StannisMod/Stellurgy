@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.affs.world.shield.ShieldCondition;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * What a shield block's condition is allowed to do to it.

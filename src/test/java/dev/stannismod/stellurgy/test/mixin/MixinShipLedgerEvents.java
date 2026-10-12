@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.space.ShipLedger;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.UUID;
 
 /**
  * The durable ledger's three writes as events — the one commit every kind of crossing ends in.

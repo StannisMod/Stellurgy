@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.subsystem.heat;
 
-import net.minecraft.util.math.BlockPos;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
+import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.Collections;

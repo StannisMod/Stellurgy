@@ -1,36 +1,19 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderBody;
-import dev.stannismod.stellurgy.space.AbsolutePos;
-import dev.stannismod.stellurgy.space.CellFrames;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.SystemBodiesProducer;
+import dev.stannismod.stellurgy.space.*;
 import dev.stannismod.stellurgy.space.SystemBodiesProducer.BodyLookup;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * Pure contract of the render-body producer {@link SystemBodiesProducer#buildByDim}: it maps every

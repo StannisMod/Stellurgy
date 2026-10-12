@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.space;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-
-import dev.stannismod.stellurgy.Stellurgy;
 
 /**
  * The Forge subscriptions that drive the space subsystem: the per-tick advance and the world-save

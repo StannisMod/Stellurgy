@@ -1,5 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.item.ItemBiomeChanger;
+import dev.stannismod.stellurgy.item.ItemThermite;
+import dev.stannismod.stellurgy.item.ItemWeatherController;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.item.ItemStack;
@@ -7,14 +12,9 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.fml.relauncher.Side;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.item.ItemBiomeChanger;
-import dev.stannismod.stellurgy.item.ItemThermite;
-import dev.stannismod.stellurgy.item.ItemWeatherController;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * special-purpose item contracts (unit tier).

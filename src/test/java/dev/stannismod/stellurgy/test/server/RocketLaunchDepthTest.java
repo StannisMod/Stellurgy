@@ -1,7 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
-import dev.stannismod.stellurgy.test.Reply;
+
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
@@ -11,22 +16,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.NotYetRed;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * REAL rocket launch path.

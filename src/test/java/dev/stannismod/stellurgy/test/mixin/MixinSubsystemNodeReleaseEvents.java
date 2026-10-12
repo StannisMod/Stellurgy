@@ -1,19 +1,17 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.Set;
-
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.Set;
 
 /**
  * A node leaving the server's network registry, as an event: {@code subsystem_node_unregistered}.

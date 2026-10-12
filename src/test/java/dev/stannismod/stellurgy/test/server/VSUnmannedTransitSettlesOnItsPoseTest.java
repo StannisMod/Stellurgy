@@ -1,14 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.TransitStatus;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-
+import dev.stannismod.stellurgy.test.*;
 import org.junit.Test;
-
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;

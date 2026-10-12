@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShieldTile;
 import org.junit.Test;
 
 import java.util.List;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 

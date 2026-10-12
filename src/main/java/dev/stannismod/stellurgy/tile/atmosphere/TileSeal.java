@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.tile.atmosphere;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.block.BlockSeal;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.block.BlockSeal;
 
 public class TileSeal extends TileEntity implements ITickable {
 

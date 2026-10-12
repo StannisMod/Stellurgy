@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.affs.config.ModConfig;
 import dev.stannismod.stellurgy.affs.gui.NetworkMapMarker;
 import dev.stannismod.stellurgy.affs.world.contour.ContourFrameGeometry;
 import dev.stannismod.stellurgy.affs.world.shield.*;
+import dev.stannismod.stellurgy.subsystem.network.*;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.NetworkManager;
@@ -18,11 +19,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 
 public class TileEntityShieldConsole extends TileEntity implements ITickable, IShieldNetworkController, dev.stannismod.stellurgy.affs.gui.INetworkMapSource {
 

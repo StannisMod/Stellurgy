@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The CARRY — the ship's own velocity at the body's point, which is the second term of every velocity

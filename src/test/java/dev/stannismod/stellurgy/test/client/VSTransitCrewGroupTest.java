@@ -1,6 +1,9 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -9,25 +12,10 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dev.stannismod.stellurgy.test.DeckCapture;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.TransitStatus;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.FIXTURE_CELL_SPACING_BLOCKS;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Hyperspace transit with a crew member aboard: four scenarios that used to be four classes and four

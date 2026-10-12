@@ -1,15 +1,11 @@
 package dev.stannismod.stellurgy.integration.theoneprobe;
 
-import mcjty.theoneprobe.api.IEntityDisplayOverride;
-import mcjty.theoneprobe.api.IProbeHitEntityData;
-import mcjty.theoneprobe.api.IProbeInfo;
-import mcjty.theoneprobe.api.ProbeMode;
-import mcjty.theoneprobe.api.TextStyleClass;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import mcjty.theoneprobe.api.*;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.entity.EntityRocket;
 
 public class RocketEntityDisplayOverride implements IEntityDisplayOverride {
 

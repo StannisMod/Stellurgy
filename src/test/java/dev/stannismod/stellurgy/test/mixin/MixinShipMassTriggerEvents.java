@@ -1,17 +1,15 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
+import dev.stannismod.stellurgy.integration.vs.ShipMassTrigger;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
-import dev.stannismod.stellurgy.integration.vs.ShipMassTrigger;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.UUID;
 
 /**
  * A ship's mass was MEASURED from its hull and handed to the physics record — {@code ship_mass_measured}.

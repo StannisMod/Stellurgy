@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
-import org.junit.Assume;
 
 import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
+import org.junit.Assume;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;

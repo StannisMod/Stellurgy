@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.atmosphere.hazard.Poisoning;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The poison dose law, second by second: air exactly at its limit harms from the thirtieth second and

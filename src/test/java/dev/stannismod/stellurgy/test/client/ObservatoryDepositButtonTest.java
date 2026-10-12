@@ -1,19 +1,16 @@
 package dev.stannismod.stellurgy.test.client;
 
-import org.junit.FixMethodOrder;
-import org.junit.Test;
-import org.junit.runners.MethodSorters;
-
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.TelescopeReading;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.openGuiByRightClick;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.FixMethodOrder;
+import org.junit.Test;
+import org.junit.runners.MethodSorters;
+
+import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.openGuiByRightClick;
+import static org.junit.Assert.*;
 
 /**
  * The one human act in the tier-1/tier-2 knowledge loop: a player standing at an observatory presses

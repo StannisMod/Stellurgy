@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.network;
 
-import java.io.IOException;
-
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.ship.control.ShipReadout;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
@@ -13,8 +13,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
-import dev.stannismod.stellurgy.ship.control.ShipReadout;
+import java.io.IOException;
 
 /**
  * A ship's readout, sent to one player: the pilot at its helm, someone with its flight computer's

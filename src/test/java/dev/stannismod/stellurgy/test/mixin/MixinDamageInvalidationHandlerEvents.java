@@ -1,17 +1,15 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.damage.DamageInvalidationHandler;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.BlockEvent;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.damage.DamageInvalidationHandler;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The damage map being told that a PLAYER changed a block, as an event:

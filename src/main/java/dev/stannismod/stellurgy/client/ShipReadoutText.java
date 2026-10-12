@@ -1,17 +1,16 @@
 package dev.stannismod.stellurgy.client;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import net.minecraft.client.resources.I18n;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
-
 import dev.stannismod.stellurgy.ship.control.ControlDirection;
 import dev.stannismod.stellurgy.ship.control.Endurance;
 import dev.stannismod.stellurgy.ship.control.ShipReadout;
 import dev.stannismod.stellurgy.ship.control.ShipReadout.View;
+import net.minecraft.client.resources.I18n;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * The words a ship's readout is drawn in: the full console, and the flight slice the pilot's HUD

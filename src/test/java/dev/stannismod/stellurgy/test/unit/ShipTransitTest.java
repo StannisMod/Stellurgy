@@ -1,14 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipTransit;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the automatic transit integrator. A flight is a SCALAR — origin name, target

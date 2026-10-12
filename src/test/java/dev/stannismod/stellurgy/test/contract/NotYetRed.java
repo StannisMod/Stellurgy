@@ -1,11 +1,6 @@
 package dev.stannismod.stellurgy.test.contract;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
 /**
  * A break of production that was tried and left a verdict GREEN: an attempt, never a witness. It is a

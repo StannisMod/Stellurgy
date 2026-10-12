@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.space.ShipEntryController;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * The range a pilot is shown counts down to the surface he crosses.

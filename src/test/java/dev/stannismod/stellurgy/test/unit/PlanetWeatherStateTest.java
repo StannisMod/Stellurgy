@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
-import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Pure-Java unit tests for the per-dimension weather state

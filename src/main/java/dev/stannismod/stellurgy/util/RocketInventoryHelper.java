@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.inventory.Container;
-
-import dev.stannismod.stellurgy.Stellurgy;
 
 import java.util.Collections;
 import java.util.Set;

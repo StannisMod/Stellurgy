@@ -1,12 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.DeckCapture;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.ClassScope;
 import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
@@ -14,24 +8,14 @@ import com.github.stannismod.forge.testing.junit.ScopedTest;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
 import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import dev.stannismod.stellurgy.space.CellWorldMapper;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.PlayerPosition;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.*;
 
 /**
  * A crew member's login into a space cell while the server keeps RUNNING: a plain relog, aboard his

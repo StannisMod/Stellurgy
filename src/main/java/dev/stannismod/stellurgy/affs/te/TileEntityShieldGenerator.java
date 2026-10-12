@@ -3,6 +3,9 @@ package dev.stannismod.stellurgy.affs.te;
 import dev.stannismod.stellurgy.affs.config.ModConfig;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldCondition;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
@@ -16,9 +19,6 @@ import net.minecraftforge.energy.EnergyStorage;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 
 public class TileEntityShieldGenerator extends TileEntity implements ITickable, ISubsystemSource {
 

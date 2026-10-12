@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -7,24 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.BodyProfile;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.Galaxy;
-import dev.stannismod.stellurgy.universe.GalaxyField;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.PlanetDerivation;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.StarCluster;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.UniverseScale;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for what is out there in the INTERGALACTIC VOID: rogue worlds, rogue stars, and the

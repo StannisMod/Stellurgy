@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.List;
 
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * P1 trim (c): the shield <em>accumulator</em> — a bulk reserve that is BOTH a shield source and a

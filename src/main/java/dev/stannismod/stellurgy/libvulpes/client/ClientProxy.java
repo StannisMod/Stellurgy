@@ -1,9 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.client;
 
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
+import dev.stannismod.stellurgy.libvulpes.common.CommonProxy;
+import dev.stannismod.stellurgy.libvulpes.entity.fx.FxErrorBlock;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.ITickableSound;
-import net.minecraft.client.audio.SoundHandler;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.Item;
@@ -14,11 +17,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.client.model.ModelLoader;
 import net.minecraftforge.client.model.obj.OBJLoader;
 import net.minecraftforge.common.MinecraftForge;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
-import dev.stannismod.stellurgy.libvulpes.common.CommonProxy;
-import dev.stannismod.stellurgy.libvulpes.entity.fx.FxErrorBlock;
 
 import java.util.LinkedList;
 

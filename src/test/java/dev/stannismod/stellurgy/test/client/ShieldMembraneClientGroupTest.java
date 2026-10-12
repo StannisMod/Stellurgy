@@ -1,22 +1,16 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.PlayerPosition;
-import dev.stannismod.stellurgy.test.PlayerState;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShieldTile;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * A player meeting a shield's membrane: the shield holds him on the side of ITS shell he came from.

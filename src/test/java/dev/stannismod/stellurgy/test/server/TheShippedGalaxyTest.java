@@ -3,11 +3,11 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The galaxy a fresh install is given: no {@code planetDefs.xml}, so the catalogue the code declares,

@@ -4,18 +4,9 @@ import dev.stannismod.stellurgy.test.contract.PinMap;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * How the build judges a contract clause from what the compiled tests carry: a clause is pinned only

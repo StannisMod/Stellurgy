@@ -1,5 +1,28 @@
 package dev.stannismod.stellurgy.tile.station;
 
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.api.RocketEvent.RocketDismantleEvent;
+import dev.stannismod.stellurgy.api.RocketEvent.RocketLandedEvent;
+import dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleTextBox;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.util.StationLandingLocation;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
@@ -16,35 +39,11 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
-import dev.stannismod.stellurgy.api.RocketEvent;
-import dev.stannismod.stellurgy.api.RocketEvent.RocketDismantleEvent;
-import dev.stannismod.stellurgy.api.RocketEvent.RocketLandedEvent;
-import dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent;
-import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import dev.stannismod.stellurgy.util.StationLandingLocation;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
-import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleTextBox;
-import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import dev.stannismod.stellurgy.api.*;
 
 public class TileLandingPad extends TileInventoryHatch implements ILinkableTile, IGuiCallback, INetworkMachine {
 

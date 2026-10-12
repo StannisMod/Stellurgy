@@ -1,5 +1,15 @@
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.AreaBlob;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.util.IBlobHandler;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.network.PacketAirParticle;
 import net.minecraft.block.BlockTorch;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.item.EntityItem;
@@ -7,16 +17,6 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.AreaBlob;
-import dev.stannismod.stellurgy.api.util.IBlobHandler;
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.network.PacketAirParticle;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.*;

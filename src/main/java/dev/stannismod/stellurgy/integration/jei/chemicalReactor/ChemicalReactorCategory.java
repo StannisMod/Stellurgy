@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.integration.jei.chemicalReactor;
 
+import dev.stannismod.stellurgy.integration.jei.MachineCategoryTemplate;
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import mezz.jei.api.IGuiHelper;
 import mezz.jei.api.gui.IGuiFluidStackGroup;
 import mezz.jei.api.gui.IGuiItemStackGroup;
@@ -8,10 +12,6 @@ import mezz.jei.api.ingredients.IIngredients;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
-import dev.stannismod.stellurgy.integration.jei.MachineCategoryTemplate;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import java.util.LinkedList;
 import java.util.List;

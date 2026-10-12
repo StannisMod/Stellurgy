@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.client.render.multiblocks;
 
+import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 public class RendererRollingMachine extends TileEntitySpecialRenderer {
     WavefrontObject model;

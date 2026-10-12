@@ -1,7 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.space.AbsolutePos;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import net.minecraft.nbt.NBTTagCompound;
-import org.junit.After;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -9,35 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.space.AbsolutePos;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalacticAnchor;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.IUniverseLaws;
-import dev.stannismod.stellurgy.universe.UniverseLawsV0;
-import dev.stannismod.stellurgy.universe.UniverseRegistry;
-import dev.stannismod.stellurgy.universe.UniverseSchema;
-import dev.stannismod.stellurgy.universe.UniverseSchemaMismatchException;
-import dev.stannismod.stellurgy.universe.UniverseSchemas;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the Layer-1 universe registry: the cell-keyed coord&harr;system placement

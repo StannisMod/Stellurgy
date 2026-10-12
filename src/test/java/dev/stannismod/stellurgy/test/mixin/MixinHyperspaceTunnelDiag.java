@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.client.render.planet.HyperspaceTunnel;
+import dev.stannismod.stellurgy.test.trace.RenderFrameWindow;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.client.render.planet.HyperspaceTunnel;
-import dev.stannismod.stellurgy.test.trace.RenderFrameWindow;
 
 /**
  * Counts the corridor's drawn frames into every open {@link RenderFrameWindow}.

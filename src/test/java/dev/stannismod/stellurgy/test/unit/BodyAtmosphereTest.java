@@ -1,19 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import java.util.Arrays;
-import java.util.Set;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.Set;
+
+import static org.junit.Assert.*;
 
 /**
  * The rule that shares an unauthored body's pressure between gases: one rule for every body, taken

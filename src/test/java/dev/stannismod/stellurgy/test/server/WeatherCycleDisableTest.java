@@ -1,24 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.client.GameDirSeed;
-
 import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.DimWeather;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Disableability contract for the custom planet weather CYCLE.

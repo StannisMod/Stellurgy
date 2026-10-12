@@ -2,27 +2,14 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.EntrySlots;
-import dev.stannismod.stellurgy.test.EntryStatus;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * The sphere seam on a live ship: a craft crossing a MOON's sphere of influence changes lattice

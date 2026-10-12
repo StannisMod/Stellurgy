@@ -1,24 +1,15 @@
 package com.github.stannismod.forge.testing.mixin;
 
+import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.item.ItemStack;
-import net.minecraft.network.play.server.SPacketChangeGameState;
-import net.minecraft.network.play.server.SPacketChunkData;
-import net.minecraft.network.play.server.SPacketJoinGame;
-import net.minecraft.network.play.server.SPacketPlayerPosLook;
-import net.minecraft.network.play.server.SPacketRespawn;
-import net.minecraft.network.play.server.SPacketSetSlot;
-import net.minecraft.network.play.server.SPacketSpawnPosition;
-import net.minecraft.network.play.server.SPacketUpdateHealth;
-
+import net.minecraft.network.play.server.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap;
 
 /**
  * Records the moments the client actually HAS a fact the server sent it — a chunk's blocks, its

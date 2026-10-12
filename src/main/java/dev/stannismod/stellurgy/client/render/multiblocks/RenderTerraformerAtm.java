@@ -1,5 +1,10 @@
 package dev.stannismod.stellurgy.client.render.multiblocks;
 
+import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
@@ -7,11 +12,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 
 public class RenderTerraformerAtm extends TileEntitySpecialRenderer {
 

@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.tile;
 
+import dev.stannismod.stellurgy.api.capability.CapabilityWear;
+import dev.stannismod.stellurgy.api.capability.IPartWear;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
-import dev.stannismod.stellurgy.api.capability.CapabilityWear;
-import dev.stannismod.stellurgy.api.capability.IPartWear;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

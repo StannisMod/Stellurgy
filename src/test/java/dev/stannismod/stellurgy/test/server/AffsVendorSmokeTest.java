@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 

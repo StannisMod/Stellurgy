@@ -1,17 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import org.junit.After;
-
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * An arrival's seat lookup must answer for the ship it is ASKING ABOUT, however close another craft

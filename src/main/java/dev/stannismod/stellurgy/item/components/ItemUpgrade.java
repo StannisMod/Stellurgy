@@ -1,5 +1,10 @@
 package dev.stannismod.stellurgy.item.components;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -12,11 +17,6 @@ import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.fml.relauncher.ReflectionHelper;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
-import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
-import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
 
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;

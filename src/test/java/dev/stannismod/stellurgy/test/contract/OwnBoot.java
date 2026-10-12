@@ -1,10 +1,6 @@
 package dev.stannismod.stellurgy.test.contract;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
 /**
  * Why a mechanics class runs on a boot of its own rather than as a method of a group: one or more reasons

@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-import dev.stannismod.stellurgy.util.StationLandingLocation;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.util.StationLandingLocation;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;

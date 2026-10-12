@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.subsystem.heat;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 
 import java.util.Set;
 

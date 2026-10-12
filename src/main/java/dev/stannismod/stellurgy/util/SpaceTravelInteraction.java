@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.util;
 
-import net.minecraft.entity.Entity;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import net.minecraft.entity.Entity;
 
 public class SpaceTravelInteraction {
 

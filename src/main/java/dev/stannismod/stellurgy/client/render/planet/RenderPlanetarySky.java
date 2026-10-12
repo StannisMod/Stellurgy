@@ -1,5 +1,15 @@
 package dev.stannismod.stellurgy.client.render.planet;
 
+import dev.stannismod.stellurgy.api.IPlanetaryProvider;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.*;
@@ -13,17 +23,6 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.client.IRenderHandler;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.IPlanetaryProvider;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
-import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 import java.util.LinkedList;
 import java.util.List;

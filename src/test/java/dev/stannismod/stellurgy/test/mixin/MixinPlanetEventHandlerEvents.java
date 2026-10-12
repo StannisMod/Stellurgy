@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.event.PlanetEventHandler;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.player.EntityPlayer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-
-import dev.stannismod.stellurgy.event.PlanetEventHandler;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /** Events of {@link PlanetEventHandler}: the space-dimension guard's station relocation. */
 @Mixin(PlanetEventHandler.class)

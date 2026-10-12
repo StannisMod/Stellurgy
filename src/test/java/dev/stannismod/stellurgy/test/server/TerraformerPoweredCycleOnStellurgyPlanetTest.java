@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.DimInfo;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -9,12 +11,7 @@ import org.junit.Test;
 import java.util.HashSet;
 import java.util.Set;
 
-import dev.stannismod.stellurgy.test.FixtureSite;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * terraformer powered cycle on a Stellurgy-native planet.

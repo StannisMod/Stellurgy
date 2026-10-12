@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.subsystem.heat.HeatNetwork;
 
 import javax.annotation.Nullable;
 

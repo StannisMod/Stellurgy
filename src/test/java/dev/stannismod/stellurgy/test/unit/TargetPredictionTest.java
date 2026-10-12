@@ -1,18 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.navigation.TargetPrediction;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.CellFrames;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * What a navigation computer promises when it aims at a moving destination: the ship is aimed at

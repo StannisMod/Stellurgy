@@ -1,17 +1,14 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.ShipTeleportMemory;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
-
-import dev.stannismod.stellurgy.test.trace.ShipTeleportMemory;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A ship's world-frame POSE was rewritten in one rigid write — the physics mod was told where the

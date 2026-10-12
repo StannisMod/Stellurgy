@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.api;
 
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
+import dev.stannismod.stellurgy.util.Asteroid;
+import dev.stannismod.stellurgy.util.SealableBlockHandler;
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
@@ -15,13 +21,6 @@ import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.oredict.OreDictionary;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
-import dev.stannismod.stellurgy.util.Asteroid;
-import dev.stannismod.stellurgy.util.SealableBlockHandler;
 
 import java.io.IOException;
 import java.io.InvalidClassException;

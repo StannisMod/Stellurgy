@@ -1,16 +1,19 @@
 package dev.stannismod.stellurgy.integration.jei.asteroids;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.item.ItemAsteroidChip;
+import dev.stannismod.stellurgy.util.Asteroid;
 import mezz.jei.api.ingredients.IIngredients;
 import mezz.jei.api.recipe.IRecipeWrapper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.item.ItemAsteroidChip;
-import dev.stannismod.stellurgy.util.Asteroid;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 
 public class AsteroidWrapper implements IRecipeWrapper {
 

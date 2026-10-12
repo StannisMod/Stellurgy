@@ -1,20 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.MachineInfo;
-import dev.stannismod.stellurgy.test.Plot;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * The two assemblers diverge: distinct tile classes, and distinct entity classes out of

@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.api;
 
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagFloat;
 import net.minecraft.nbt.NBTTagInt;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

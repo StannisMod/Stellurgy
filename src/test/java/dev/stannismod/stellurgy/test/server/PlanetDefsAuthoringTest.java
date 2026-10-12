@@ -1,32 +1,24 @@
 package dev.stannismod.stellurgy.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.*;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
-import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.ClassScope;
-import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
-import com.github.stannismod.forge.testing.junit.ScopedTest;
-import com.github.stannismod.forge.testing.junit.TestClassScope;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What the game DECIDES about a pack's {@code planetDefs.xml} — the structure, the bounds, the

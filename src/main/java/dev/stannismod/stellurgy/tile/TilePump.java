@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.tile;
 
+import dev.stannismod.stellurgy.libvulpes.cap.FluidCapability;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.tile.TileEntityRFConsumer;
+import dev.stannismod.stellurgy.network.PacketFluidParticle;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.material.Material;
@@ -11,23 +17,10 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockPos.MutableBlockPos;
 import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.FluidTank;
-import net.minecraftforge.fluids.FluidRegistry;
-import net.minecraftforge.fluids.IFluidBlock;
+import net.minecraftforge.fluids.*;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
-import dev.stannismod.stellurgy.network.PacketFluidParticle;
-import dev.stannismod.stellurgy.libvulpes.cap.FluidCapability;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.tile.TileEntityRFConsumer;
-
-
-
 
 import java.util.*;
 

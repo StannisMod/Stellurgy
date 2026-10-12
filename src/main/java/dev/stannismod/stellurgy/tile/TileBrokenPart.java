@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.tile;
 
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.util.IBrokenPartBlock;
+import net.minecraft.item.ItemStack;
 
 import java.util.Random;
 

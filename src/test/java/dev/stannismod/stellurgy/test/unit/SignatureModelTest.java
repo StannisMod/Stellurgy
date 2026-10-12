@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.sensor.SignatureModel;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The one claim this model exists to make: <b>how far away a thing can be noticed and how well it

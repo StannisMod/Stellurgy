@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Assume;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Issue #61 ("[BUG] Railgun does not work") — source-side firing contract,

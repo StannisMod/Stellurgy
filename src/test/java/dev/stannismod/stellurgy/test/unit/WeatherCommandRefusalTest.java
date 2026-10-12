@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.command.sub.redirect.WeatherCommand;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Decision table for {@code /stellurgy weather} refusals — the

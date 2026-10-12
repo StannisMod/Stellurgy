@@ -1,14 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.navigation.JumpGate;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for whether a ship may jump. The gate promises four things to the rest of the game:

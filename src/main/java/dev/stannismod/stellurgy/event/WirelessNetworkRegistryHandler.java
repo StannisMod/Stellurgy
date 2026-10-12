@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.event;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.Stellurgy;
 
 public class WirelessNetworkRegistryHandler {
 

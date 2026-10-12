@@ -1,26 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.client.GameDirSeed;
-
 import dev.stannismod.stellurgy.test.DimList;
+import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.DimWeather;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * weather baseline / B1 regression.

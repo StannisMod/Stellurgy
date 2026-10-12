@@ -1,30 +1,16 @@
 package dev.stannismod.stellurgy.test.client;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.space.CellWorldMapper;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.space.CellWorldMapper;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.LedgerEntry;
-import dev.stannismod.stellurgy.test.PlayerPosition;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.DeckCapture;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.*;
 
 /**
  * Login restore for a pilot who was ABOARD when he left: seated in a cell, seated on the ground

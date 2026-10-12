@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.block;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 import javax.annotation.Nonnull;
 import java.util.List;

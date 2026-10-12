@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.ShipRelativePoint;
 import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
-import dev.stannismod.stellurgy.space.ShipRelativePoint;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;

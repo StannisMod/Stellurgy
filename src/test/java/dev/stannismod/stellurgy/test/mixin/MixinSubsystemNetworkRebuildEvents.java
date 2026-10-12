@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.world.World;
-
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -11,8 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
 
 /**
  * A subsystem network's topology being rebuilt, as an event: {@code subsystem_network_rebuilt}.

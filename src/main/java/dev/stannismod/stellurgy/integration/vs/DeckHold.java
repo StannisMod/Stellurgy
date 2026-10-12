@@ -1,20 +1,18 @@
 package dev.stannismod.stellurgy.integration.vs;
 
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
 
 /**
  * Holds a body on the deck it belongs on while nothing else can: the server pins it every tick and

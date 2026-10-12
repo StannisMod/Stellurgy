@@ -1,20 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.EnergyStore;
-import dev.stannismod.stellurgy.test.MachineInfo;
-import dev.stannismod.stellurgy.test.PlanetAir;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * machine-domain smoke suite.

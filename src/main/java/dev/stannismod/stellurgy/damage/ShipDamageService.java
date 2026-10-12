@@ -1,18 +1,12 @@
 package dev.stannismod.stellurgy.damage;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.capability.CapabilityDamageAware;
+import dev.stannismod.stellurgy.api.damage.*;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.capability.CapabilityDamageAware;
-import dev.stannismod.stellurgy.api.damage.DamageOccurrence;
-import dev.stannismod.stellurgy.api.damage.DamageOutcome;
-import dev.stannismod.stellurgy.api.damage.IDamageAware;
-import dev.stannismod.stellurgy.api.damage.DamageReport;
-import dev.stannismod.stellurgy.api.damage.ImpactRequest;
-import dev.stannismod.stellurgy.api.damage.SelectionMode;
-import dev.stannismod.stellurgy.api.damage.StopReason;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

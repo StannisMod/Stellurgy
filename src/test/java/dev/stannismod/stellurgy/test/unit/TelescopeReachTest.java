@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.ConeWalk;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.RegionScan;
 import dev.stannismod.stellurgy.universe.UniverseLawsV0;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * What an instrument does with a reach it cannot afford to walk.

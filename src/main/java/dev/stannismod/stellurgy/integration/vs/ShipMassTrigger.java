@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.integration.vs;
 
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.physics_data.ShipInertiaData;
-
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 
 /**
  * Recomputes a ship's mass from its hull at the moments where the incremental path cannot be trusted

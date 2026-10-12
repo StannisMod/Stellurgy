@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test;
 
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * One craft laid by {@code stellurgytest fixture rocket}, assembled by its own assembler, and resolved

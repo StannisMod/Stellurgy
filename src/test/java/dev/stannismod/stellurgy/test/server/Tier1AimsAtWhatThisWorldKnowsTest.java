@@ -1,18 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.RealizedBody;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.TelescopeReading;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 
-import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.RealizedBody;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.TelescopeReading;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The loop the two discovery systems exist to close, driven on a real server: an address is carried

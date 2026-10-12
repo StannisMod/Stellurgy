@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import net.minecraft.util.math.BlockPos;
-
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,10 +16,6 @@ import org.valkyrienskies.mod.common.physics.IPhysicsBlockController;
 import org.valkyrienskies.mod.common.physics.PhysicsCalculations;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
-
-import dev.stannismod.stellurgy.test.trace.MotionTrace;
-import dev.stannismod.stellurgy.test.trace.SideTrace;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 /**
  * One flight-recorder sample per PHYSICS STEP of a flight computer — the clock the ship's velocity

@@ -1,12 +1,11 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.client.ClientProxy;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.client.ClientProxy;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The client proxy's lifecycle seams as client events. The test client's mute, which used to be a

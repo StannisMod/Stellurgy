@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.client.render.planet.ApparentSize;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * A fed body is drawn at an apparent size that RISES with the angle it subtends — its own radius over

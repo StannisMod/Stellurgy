@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.mixin.StellurgyMixinPlugin;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Disableability contract for the per-dimension WorldInfo MIXINS.

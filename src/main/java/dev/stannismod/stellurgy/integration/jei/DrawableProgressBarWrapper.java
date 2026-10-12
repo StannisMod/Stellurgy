@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei;
 
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import mezz.jei.api.gui.IDrawableAnimated;
 import net.minecraft.client.Minecraft;
-import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 
 public class DrawableProgressBarWrapper implements IDrawableAnimated {
 

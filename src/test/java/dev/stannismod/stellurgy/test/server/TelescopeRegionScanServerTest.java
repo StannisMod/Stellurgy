@@ -1,33 +1,21 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.GameTicks;
-
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
+import dev.stannismod.stellurgy.universe.Nebula;
+import dev.stannismod.stellurgy.universe.StellarMagnitude;
+import dev.stannismod.stellurgy.universe.UniverseScale;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.NavStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.TelescopeReading;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.Nebula;
-import dev.stannismod.stellurgy.universe.StellarMagnitude;
-import dev.stannismod.stellurgy.universe.UniverseScale;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * The observatory's region survey, driven on a real server through the machine itself.

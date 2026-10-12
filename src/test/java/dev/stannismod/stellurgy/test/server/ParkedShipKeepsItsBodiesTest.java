@@ -1,13 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.CellInfo;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * A recorded defect's own repro, at the server tier, against the real universe registry: <b>a body does not

@@ -1,20 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.test.CellInfo;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.TelescopeReading;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * An observatory built ON a moon surveys from the moon's system, in the galactic lattice a survey

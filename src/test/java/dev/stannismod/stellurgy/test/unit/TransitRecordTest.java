@@ -1,20 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.TransitRecord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * Pure NBT round-trip of {@link TransitRecord} — the durable snapshot of one in-flight ship. The logical

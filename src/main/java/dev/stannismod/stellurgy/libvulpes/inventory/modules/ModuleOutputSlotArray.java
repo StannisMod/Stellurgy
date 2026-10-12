@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
-import java.util.List;
-
 import dev.stannismod.stellurgy.libvulpes.gui.SlotMachineOutput;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
+
+import java.util.List;
 
 public class ModuleOutputSlotArray extends ModuleSlotArray {
 

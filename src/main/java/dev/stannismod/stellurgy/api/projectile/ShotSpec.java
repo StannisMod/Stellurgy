@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.api.projectile;
 
-import net.minecraft.util.math.Vec3d;
 import dev.stannismod.stellurgy.api.damage.ImpactKind;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.UUID;
 

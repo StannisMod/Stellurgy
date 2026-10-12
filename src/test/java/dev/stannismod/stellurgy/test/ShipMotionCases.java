@@ -1,24 +1,14 @@
 package dev.stannismod.stellurgy.test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-
-import org.joml.Vector3d;
-
-import dev.stannismod.stellurgy.ship.control.Actuator;
-import dev.stannismod.stellurgy.ship.control.ActuatorId;
-import dev.stannismod.stellurgy.ship.control.ChemicalMotor;
-import dev.stannismod.stellurgy.ship.control.ControlAxis;
-import dev.stannismod.stellurgy.ship.control.ControlDirection;
-import dev.stannismod.stellurgy.ship.control.ControlFrame;
-import dev.stannismod.stellurgy.ship.control.Endurance;
-import dev.stannismod.stellurgy.ship.control.MomentumStore;
-import dev.stannismod.stellurgy.ship.control.ReactionWheel;
-import dev.stannismod.stellurgy.ship.control.ShipCapability;
+import dev.stannismod.stellurgy.ship.control.*;
 import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import org.joml.Vector3d;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 /**
  * Instrument: the cases the ship motion kernel's fast tests are run over — hulls built from production's

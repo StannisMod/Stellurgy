@@ -1,18 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.Test;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.world.weather.PlanetWeatherSavedData;
 import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
+import static org.junit.Assert.*;
 
 /**
  * {@link PlanetWeatherSavedData} stores state by dimension id

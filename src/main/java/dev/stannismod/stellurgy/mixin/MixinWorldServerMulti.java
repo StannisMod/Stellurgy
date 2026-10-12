@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.world.weather.PlanetWeatherManager;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.WorldServer;
@@ -9,7 +10,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import dev.stannismod.stellurgy.world.weather.PlanetWeatherManager;
 
 /**
  * Primary B1 wrap point. After every secondary {@link WorldServerMulti}

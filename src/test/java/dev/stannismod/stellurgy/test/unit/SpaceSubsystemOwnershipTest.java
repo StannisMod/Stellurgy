@@ -1,21 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.*;
+import org.junit.Test;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
-import org.junit.Test;
-
-import dev.stannismod.stellurgy.space.CellCrossingController;
-import dev.stannismod.stellurgy.space.DescentController;
-import dev.stannismod.stellurgy.space.ShipEntryController;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.ShipTransitManager;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.SpaceSubsystem;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;

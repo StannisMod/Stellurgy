@@ -1,24 +1,21 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Set;
-
-import org.junit.BeforeClass;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
 import dev.stannismod.stellurgy.atmosphere.hazard.HazardEffect;
 import dev.stannismod.stellurgy.atmosphere.hazard.HazardExposure;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.junit.Assert.*;
 
 /**
  * The hazard table against the fourteen hand-written methods it replaced.

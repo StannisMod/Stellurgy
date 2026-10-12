@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.subsystem.heat.HullMelting;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.subsystem.heat.HullMelting;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-
 import static org.junit.Assert.assertEquals;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * The environment's half of the melting rung: how hot the outside alone can drive a block.

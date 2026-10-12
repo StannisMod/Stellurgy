@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Test;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

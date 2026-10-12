@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.integration.vs.ShipInertiaWriter;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.valkyrienskies.mod.common.ships.physics_data.ShipInertiaData;
-
-import dev.stannismod.stellurgy.integration.vs.ShipInertiaWriter;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * The authoritative hull pass was COMPARED with the running total — {@code ship_mass_compared}, with

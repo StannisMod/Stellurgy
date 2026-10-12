@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.energy;
 
-import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
+import net.minecraft.util.EnumFacing;
 
 public interface IPower extends IUniversalEnergy {
 	

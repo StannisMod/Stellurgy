@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.affs;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.affs.block.*;
 import dev.stannismod.stellurgy.affs.config.ModConfig;
 import dev.stannismod.stellurgy.affs.entity.EntityLaserBolt;
@@ -7,6 +8,8 @@ import dev.stannismod.stellurgy.affs.item.ItemCodeDevice;
 import dev.stannismod.stellurgy.affs.item.ItemLaserGun;
 import dev.stannismod.stellurgy.affs.network.*;
 import dev.stannismod.stellurgy.affs.te.*;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.network.EntityNetworkIds;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
@@ -31,9 +34,6 @@ import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.network.EntityNetworkIds;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;

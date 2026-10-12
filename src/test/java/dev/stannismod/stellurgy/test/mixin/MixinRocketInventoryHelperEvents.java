@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.lang.ref.WeakReference;
-
+import dev.stannismod.stellurgy.test.trace.EntityTrace;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
+import dev.stannismod.stellurgy.util.RocketInventoryHelper;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.test.trace.EntityTrace;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
-import dev.stannismod.stellurgy.util.RocketInventoryHelper;
+import java.lang.ref.WeakReference;
 
 /**
  * The rocket-inventory distance gate's decision as an event: whether vanilla's per-tick

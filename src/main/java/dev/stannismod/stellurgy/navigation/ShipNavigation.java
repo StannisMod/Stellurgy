@@ -1,21 +1,16 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.UUID;
-
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
-import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
-import dev.stannismod.stellurgy.hyperdrive.JumpWindow;
-import dev.stannismod.stellurgy.hyperdrive.ShipDrive;
-import dev.stannismod.stellurgy.hyperdrive.ShipDriveStats;
-import dev.stannismod.stellurgy.hyperdrive.ShipMassProvider;
+import dev.stannismod.stellurgy.hyperdrive.*;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipLedger;
 import dev.stannismod.stellurgy.space.ShipTransitManager;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.tile.TileNavigationComputer;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+
+import java.util.UUID;
 
 /**
  * What one real ship can answer about its ability to jump — the production side of

@@ -1,8 +1,7 @@
 package dev.stannismod.stellurgy.ship.mass;
 
-import java.util.UUID;
-
 import javax.annotation.Nullable;
+import java.util.UUID;
 
 /**
  * Where anything that needs to know a ship's mass asks for it.

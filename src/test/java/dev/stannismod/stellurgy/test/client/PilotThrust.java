@@ -2,11 +2,9 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.server.TestClient;
-
-import org.lwjgl.input.Keyboard;
-
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
+import org.lwjgl.input.Keyboard;
 
 /**
  * A seated pilot's vertical-up key, driven as a DOSE of thrust: held until the flight computer has

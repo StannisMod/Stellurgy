@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.hyperdrive.CapacitorCharge;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.tile.hyperdrive.TileJumpCapacitor;
-
 import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * What the jump bank promises now that it holds real energy.

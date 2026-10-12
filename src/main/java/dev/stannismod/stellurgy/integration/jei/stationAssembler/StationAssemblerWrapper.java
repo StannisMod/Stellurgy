@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.integration.jei.stationAssembler;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyItems;
 import mezz.jei.api.ingredients.IIngredients;
 import mezz.jei.api.recipe.IRecipeWrapper;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.api.StellurgyItems;
 
 /**
  * JEI wrapper for the Station Assembler flow shown in TileStationAssembler.

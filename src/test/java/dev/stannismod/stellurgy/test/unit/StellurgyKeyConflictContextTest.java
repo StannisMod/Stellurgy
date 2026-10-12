@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.client.StellurgyKeyConflictContext;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import net.minecraftforge.client.settings.KeyConflictContext;
 import org.junit.Test;
-import dev.stannismod.stellurgy.client.StellurgyKeyConflictContext;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * Pins the conflict-resolution contract of {@link StellurgyKeyConflictContext} that the

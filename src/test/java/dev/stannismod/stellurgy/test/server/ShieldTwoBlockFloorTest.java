@@ -1,6 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -8,17 +11,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShieldTile;
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * P1 floor for the vendored AFFS shield: a shield network needs no cable.

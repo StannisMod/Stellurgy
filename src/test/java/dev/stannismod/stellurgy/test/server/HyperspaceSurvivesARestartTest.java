@@ -1,33 +1,23 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.contract.OwnBoot;
-
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
-import dev.stannismod.stellurgy.test.EvictionReports;
+import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import com.github.stannismod.forge.testing.server.ServerRoot;
-
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.TransitStatus;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.GameTicks;
-
-import org.junit.Test;
-
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * <b>A restart is something a jump survives.</b> A ship parked in hyperspace is still parked in

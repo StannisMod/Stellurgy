@@ -1,8 +1,18 @@
 package dev.stannismod.stellurgy.command.test;
 
 import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.satellite.SatelliteSpyTelescope;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
@@ -21,24 +31,10 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Test-only {@code /stellurgytest} command tree.

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
+import net.minecraft.util.math.BlockPos;
+
 import java.util.ArrayList;
 import java.util.List;
-
-import net.minecraft.util.math.BlockPos;
 
 /**
  * The hyperspace window a ship's drive can open, and whether the hull fits inside it.

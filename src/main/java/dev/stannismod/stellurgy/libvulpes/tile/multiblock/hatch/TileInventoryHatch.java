@@ -1,5 +1,12 @@
 package dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch;
 
+import dev.stannismod.stellurgy.libvulpes.interfaces.IInventoryUpdateCallback;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
+import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.item.ItemStack;
@@ -8,13 +15,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.items.CapabilityItemHandler;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IInventoryUpdateCallback;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
-import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
-import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;

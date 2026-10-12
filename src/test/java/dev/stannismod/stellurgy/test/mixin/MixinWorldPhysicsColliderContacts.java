@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.PhysicsStepWindow;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -8,9 +10,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.collision.WorldPhysicsCollider;
 import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
-
-import dev.stannismod.stellurgy.test.trace.PhysicsStepWindow;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * Tells {@link PhysicsStepWindow} whether a craft was touched: the physics mod's world collider is

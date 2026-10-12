@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
+import dev.stannismod.stellurgy.libvulpes.api.material.Material;
+import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
-import dev.stannismod.stellurgy.libvulpes.api.material.Material;
-import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
 
 public class TileMaterial extends TilePointer {
 

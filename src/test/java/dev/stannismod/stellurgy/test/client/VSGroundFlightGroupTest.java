@@ -1,25 +1,16 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.SeatCarry;
-
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Ground-assembled tier-2 ships, flown: four scenarios that used to be four classes and four client

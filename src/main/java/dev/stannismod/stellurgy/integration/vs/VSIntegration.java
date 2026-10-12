@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.integration.vs;
 
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.entity.IFlightBackend;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.entity.IFlightBackend;
 
 /**
  * Soft-dependency gate for Valkyrien Skies.

@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.api.event;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.eventhandler.Event;
-import dev.stannismod.stellurgy.space.GalacticCoord;
 
 import java.util.Collections;
 import java.util.List;

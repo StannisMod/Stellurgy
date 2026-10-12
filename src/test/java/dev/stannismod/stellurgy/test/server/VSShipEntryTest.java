@@ -1,32 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.EntrySlots;
-import dev.stannismod.stellurgy.test.EntryStatus;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
+import static org.junit.Assert.*;
 
 /**
  * E2E: does the tier-2 ENTRY ON-RAMP take a piloted ship from a planet dimension into space through the

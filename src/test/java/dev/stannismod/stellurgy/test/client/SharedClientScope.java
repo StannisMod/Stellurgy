@@ -4,11 +4,10 @@ import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Plot;
 
 import java.util.HashMap;
 import java.util.Map;
-
-import dev.stannismod.stellurgy.test.Plot;
 
 /**
  * One class run of an {@link AbstractSharedClientTest}: the ONE server JVM and ONE client JVM its

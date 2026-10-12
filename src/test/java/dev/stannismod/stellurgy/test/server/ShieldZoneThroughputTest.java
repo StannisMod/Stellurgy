@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.List;
 
-import dev.stannismod.stellurgy.test.FixtureSite;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.Pins;
 
 /**
  * P2 (D134-3/D134-4): the emitter is the shield's per-zone regeneration organ, with a finite,

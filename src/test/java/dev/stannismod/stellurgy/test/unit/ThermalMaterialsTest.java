@@ -1,22 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.io.File;
-
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
+import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
-import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import java.io.File;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * What a material is worth thermally, and why it is worth that.

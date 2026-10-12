@@ -1,23 +1,21 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.DamageSource;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.FMLCommonHandler;
-
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Leaving your ship in hyperspace kills you.

@@ -1,12 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.weapon.TurretDriveState;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * What a mount's own condition does to it, and what it is not allowed to do.

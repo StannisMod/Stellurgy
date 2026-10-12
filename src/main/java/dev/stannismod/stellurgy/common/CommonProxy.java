@@ -1,26 +1,25 @@
 package dev.stannismod.stellurgy.common;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPanYOnly;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.network.PacketLaserGun;
+import dev.stannismod.stellurgy.network.PacketStationUpdate;
+import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
 import net.minecraft.entity.Entity;
 import net.minecraft.profiler.Profiler;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.common.FMLCommonHandler;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPanYOnly;
-import dev.stannismod.stellurgy.network.PacketLaserGun;
-import dev.stannismod.stellurgy.network.PacketStationUpdate;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
-import java.util.List;
 import java.util.LinkedList;
+import java.util.List;
 
 public class CommonProxy {
 

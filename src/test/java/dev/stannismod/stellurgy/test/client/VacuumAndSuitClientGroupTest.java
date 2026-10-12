@@ -1,31 +1,23 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import dev.stannismod.stellurgy.atmosphere.gas.Gas;
-import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.PlanetAir;
-import dev.stannismod.stellurgy.test.Reply;
-
-import dev.stannismod.stellurgy.test.Plot;
-
+import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.test.contract.NotYetRed;
-import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * Vacuum, suits, and the air a player breathes, on one client.

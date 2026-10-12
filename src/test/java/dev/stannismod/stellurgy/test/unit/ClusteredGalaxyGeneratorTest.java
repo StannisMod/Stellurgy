@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -7,40 +11,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.BodyDerivationV0;
-import dev.stannismod.stellurgy.universe.BodyProfile;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.Cosmology;
-import dev.stannismod.stellurgy.universe.Galaxy;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.IBodyDerivation;
-import dev.stannismod.stellurgy.universe.PlanetDerivation;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.UniverseScale;
-import dev.stannismod.stellurgy.universe.UniverseSchemas;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the deterministic clustered galaxy generator. Pure-JUnit; no MC bootstrap.

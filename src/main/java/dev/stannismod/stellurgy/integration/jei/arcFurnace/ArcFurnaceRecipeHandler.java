@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.arcFurnace;
 
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import mezz.jei.api.recipe.IRecipeHandler;
 import mezz.jei.api.recipe.IRecipeWrapper;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

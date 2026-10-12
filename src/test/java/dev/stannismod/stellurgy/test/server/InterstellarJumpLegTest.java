@@ -1,28 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-
+import dev.stannismod.stellurgy.test.*;
 import org.junit.After;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.EntrySlots;
-import dev.stannismod.stellurgy.test.EntryStatus;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.*;
 
 /**
  * Does a jump to ANOTHER STAR SYSTEM fly, and how long does it take?

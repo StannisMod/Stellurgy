@@ -1,13 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.SpaceClockSync;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  * A client's copy of the space clock, as a contract rather than as an implementation.

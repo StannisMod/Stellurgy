@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.space;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
 import net.minecraft.entity.player.EntityPlayer;
@@ -12,9 +12,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.WorldServer;
 
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Carries the bodies aboard a ship that are NOT its crew — a mob on the deck, a dropped item, a

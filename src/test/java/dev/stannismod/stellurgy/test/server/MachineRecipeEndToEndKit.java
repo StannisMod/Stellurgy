@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.server.TestClient;
+import dev.stannismod.stellurgy.test.Reply;
 
 import java.util.ArrayList;
 import java.util.List;

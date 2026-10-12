@@ -1,14 +1,9 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
+
+import java.util.*;
 
 /**
  * How a machine of this family measures itself: it walks outward from its controller through the

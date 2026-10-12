@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.client;
 
-import java.io.IOException;
-
 import com.github.stannismod.forge.testing.client.ClientBot;
+
+import java.io.IOException;
 
 /**
  * What Forge's dimension registry holds in the CLIENT JVM — the registrations a client connected to a

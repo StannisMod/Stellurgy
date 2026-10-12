@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.item;
 
+import dev.stannismod.stellurgy.entity.EntityHoverCraft;
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -15,7 +16,6 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.entity.EntityHoverCraft;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;

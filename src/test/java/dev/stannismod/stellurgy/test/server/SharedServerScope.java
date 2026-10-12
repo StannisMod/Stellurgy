@@ -4,13 +4,12 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Assume;
 
 import java.util.HashMap;
 import java.util.Map;
-
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.client.GameDirSeed;
 
 /**
  * One class run of an {@link AbstractSharedServerTest}: the ONE dedicated server every method of the

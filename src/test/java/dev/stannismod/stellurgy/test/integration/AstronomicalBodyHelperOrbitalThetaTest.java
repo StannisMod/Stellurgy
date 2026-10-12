@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 
 /**
  * {@code orbitalAngleWrapsCorrectly}.
