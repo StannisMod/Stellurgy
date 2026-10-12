@@ -6,6 +6,7 @@ import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -55,7 +56,7 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
     private static final String IS_SOURCE = "isSource";
     private static final String IS_SINK = "isSink";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -71,7 +72,7 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-wireless-restart-");
+        workDir = ServerRoot.fresh("forge-server-wireless-restart-");
     }
 
     @After

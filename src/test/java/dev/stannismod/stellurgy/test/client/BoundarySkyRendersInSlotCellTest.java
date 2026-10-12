@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import com.github.stannismod.forge.testing.TestArtefacts;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.client.render.planet.ApparentSize;
 import dev.stannismod.stellurgy.test.NebulaSearch;
@@ -305,15 +306,18 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
     /** Capture altitude inside the slot cell (well clear of the void-death floor). */
     private static final int CELL_CAPTURE_Y = 200;
 
-    private Path outDir;
+    /** The folder under {@code build/} the captured frames are kept in, for a reader of a red. */
+    private static final String SCREENSHOTS = "test-screenshots";
+
     private String botName;
+
+    /** Where the kept frame {@code name} is, for a failure message. */
+    private static Path kept(String name) {
+        return TestArtefacts.where(SCREENSHOTS, name);
+    }
 
     @Test
     public void aPilotInASlotCellSeesTheBodiesAndStars() throws Exception {
-        outDir = Paths.get(System.getProperty("forge.test.client.screenshotDir", "build/test-screenshots"))
-                .toAbsolutePath();
-        Files.createDirectories(outDir);
-
         // Command feedback must not reach the player's chat overlay: a chat line appearing between two
         // captures would be a difference this test did not cause.
         exec("gamerule sendCommandFeedback false");
@@ -377,7 +381,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
                     + " sky at altitude " + OVERWORLD_CAPTURE_Y + " must be a starfield, but only " + owSky
                     + "px differ from the background " + rgb(owBackground) + " " + describe(overworldZenith)
                     + ". Nothing below this line could mean anything. renderDistance=" + rd
-                    + " (" + outDir.resolve("overworld_zenith.png") + ")", owSky >= OVERWORLD_STARFIELD_PIXELS);
+                    + " (" + kept("overworld_zenith.png") + ")", owSky >= OVERWORLD_STARFIELD_PIXELS);
 
             // Arrange the space stack, then settle a ship in the cell. The settle MATERIALIZES the cell,
             // and the slot it lands in is the answer this test uses everywhere below: the feed is keyed
@@ -571,8 +575,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
                         + Math.round(distanceOf(NEAREST)) + " blocks)=" + nearArea + "px far("
                         + Math.round(distanceOf(FARTHEST)) + " blocks)=" + farArea + "px in a "
                         + (2 * sizeBox) + "px box ("
-                        + outDir.resolve("after_body" + NEAREST + ".png") + " vs "
-                        + outDir.resolve("after_body" + FARTHEST + ".png") + ")",
+                        + kept("after_body" + NEAREST + ".png") + " vs "
+                        + kept("after_body" + FARTHEST + ".png") + ")",
                 nearArea > farArea);
 
         // ------------------------------------------------- Leg 3: the empty bearing gains nothing.
@@ -585,8 +589,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         double emptyFrame = diffFraction(emptyBefore, emptyAfter, 0, w, 0, (int) (0.62 * h));
         assertTrue("a bearing with no body within 100 degrees must not gain one; centre="
                 + pct(emptyCentre) + " frame=" + pct(emptyFrame)
-                + " (" + outDir.resolve("before_empty.png") + " vs "
-                + outDir.resolve("after_empty.png") + ")", emptyCentre <= EMPTY_BEARING_CENTRE_CHANGE);
+                + " (" + kept("before_empty.png") + " vs "
+                + kept("after_empty.png") + ")", emptyCentre <= EMPTY_BEARING_CENTRE_CHANGE);
 
         // ------------------------------------------------------------------------ Leg 4: the starfield.
         // The empty-bearing frame holds no body and nothing else is drawn in a cell sky, so anything
@@ -596,7 +600,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         long stars = differsCount(emptyAfter, 0, w, 0, starTop, starBackground);
         assertTrue("an orbit cell must not be an empty void - the sky must carry stars; differing="
                 + stars + "px against background " + rgb(starBackground) + " " + describe(emptyAfter)
-                + " (" + outDir.resolve("after_empty.png") + ")", stars >= ORBIT_CELL_STAR_PIXELS);
+                + " (" + kept("after_empty.png") + ")", stars >= ORBIT_CELL_STAR_PIXELS);
 
         // ------------------------------------------ Leg 5: every body says what it is - the sky
         // writes each body's name and its distance under the billboard, one label per body, on by
@@ -901,8 +905,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         long minBillboard = Math.round(0.25 * Math.PI * Math.pow(discRadius * h, 2));
         assertTrue("registering the cell's bodies must change what the client draws towards " + where
                 + "; changed=" + appeared + "px, required>=" + minBillboard + " ("
-                + outDir.resolve("before_body" + index + ".png") + " vs "
-                + outDir.resolve("after_body" + index + ".png") + ")", appeared >= minBillboard);
+                + kept("before_body" + index + ".png") + " vs "
+                + kept("after_body" + index + ".png") + ")", appeared >= minBillboard);
 
         int box = (int) (sampleRadius * h);
         double centreChanged = diffFraction(beforeFrame, afterFrame,
@@ -1072,8 +1076,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         assertTrue("screenshot must land on disk: " + shot, shot.get("exists").getAsBoolean());
         assertTrue("screenshot must come from the framebuffer, not an undefined back buffer: " + shot,
                 shot.get("framebuffer").getAsBoolean());
-        Path dst = outDir.resolve(name + ".png");
-        Files.copy(Paths.get(shot.get("path").getAsString()), dst, StandardCopyOption.REPLACE_EXISTING);
+        Path dst = TestArtefacts.keepCopy(SCREENSHOTS, name + ".png", Paths.get(shot.get("path").getAsString()));
         BufferedImage image = ImageIO.read(new File(dst.toString()));
         assertTrue("screenshot must decode: " + dst, image != null);
         return image;

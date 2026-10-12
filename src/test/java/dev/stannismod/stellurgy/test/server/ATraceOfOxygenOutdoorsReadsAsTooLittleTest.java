@@ -8,14 +8,12 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -30,8 +28,9 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  *
  * <p>The world is a carbon-dioxide planet from the planet file (no oxygen of its own). The trace
  * arrives through the planet's own gas exchange — the one a terraformer step uses — so the arrangement
- * supplies gas, never the reading. Manual harness lifecycle: the planet file must be on disk before the
- * first boot, and the second boot runs against the same directory.</p>
+ * supplies gas, never the reading. Manual harness lifecycle: the planet file is the start of the first
+ * boot (a {@link GameDirSeed} the harness writes before it), and the second boot runs against the same
+ * directory.</p>
  */
 @OwnBoot(reason = OwnBoot.Reason.STARTUP_FILE)
 public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanicsTest {
@@ -42,7 +41,7 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
     /** Outdoors, well above any terrain, where no sealed zone can contain the point. */
     private static final String OUTDOORS = "0 220 0";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -51,10 +50,6 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-trace-oxygen-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
 
         String xml =
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
@@ -71,7 +66,8 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
                 "    </star>\n" +
                 "</galaxy>\n";
 
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+        workDir = ServerRoot.fresh("forge-server-trace-oxygen-")
+                .seed(new GameDirSeed().planetDefs(xml, getClass()));
     }
 
     @After
@@ -103,8 +99,7 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
         assertEquals("a trace of oxygen outdoors must read as too little oxygen, not as none: " + after,
                 "lowO2", after.text("type"));
 
-        harness.close();
-        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
+        harness.close();        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         Reply restarted = outdoors();
         assertEquals("after a restart the world must still hold its trace, and read it the same way: "

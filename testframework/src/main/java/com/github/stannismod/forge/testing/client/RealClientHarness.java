@@ -183,10 +183,6 @@ public final class RealClientHarness implements AutoCloseable {
         }
     }
 
-    public Path root() {
-        return root;
-    }
-
     public ClientBot bot() {
         return bot;
     }

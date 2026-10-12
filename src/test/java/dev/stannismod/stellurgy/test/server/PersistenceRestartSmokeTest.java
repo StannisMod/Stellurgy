@@ -8,6 +8,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -39,7 +40,7 @@ public class PersistenceRestartSmokeTest extends AbstractMechanicsTest {
     private static final String SAT_ID_FALLBACK = "id";
     private static final String ATM_DENSITY = "atmosphereDensity";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -49,7 +50,7 @@ public class PersistenceRestartSmokeTest extends AbstractMechanicsTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-persistence-restart-");
+        workDir = ServerRoot.fresh("forge-server-persistence-restart-");
     }
 
     @After

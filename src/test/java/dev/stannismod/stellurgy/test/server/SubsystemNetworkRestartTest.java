@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.FixtureSite;
@@ -70,7 +71,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
     /** Not the default rule, so a network that came back with a fresh default would not look like a pass. */
     private static final String WEAPON_RULE = "NONE";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -81,7 +82,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
                         + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-subnet-restart-");
+        workDir = ServerRoot.fresh("forge-server-subnet-restart-");
     }
 
     @After

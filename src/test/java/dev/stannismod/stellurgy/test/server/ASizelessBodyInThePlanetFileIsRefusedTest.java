@@ -7,14 +7,13 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertFalse;
@@ -33,7 +32,8 @@ import dev.stannismod.stellurgy.test.contract.RedWitness;
  * <p>The witness is the dimension REGISTRY, not {@code planet info}: that verb answers an unknown id
  * with the overworld's properties, so it cannot tell a refused body from a loaded one.</p>
  *
- * <p>Manual harness lifecycle: the planet file has to be on disk before the server boots.</p>
+ * <p>Manual harness lifecycle: the planet file is the START this boot reads, stated as a
+ * {@link GameDirSeed} the harness writes before the server boots.</p>
  */
 @OwnBoot(reason = OwnBoot.Reason.STARTUP_FILE)
 public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanicsTest {
@@ -44,7 +44,7 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanics
     /** The CONTROL: the same planet, stating its bulk. */
     private static final int SIZED_DIM = 3;
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -53,10 +53,6 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanics
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-sizeless-body-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
 
         String xml =
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
@@ -75,8 +71,8 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanics
                 "    </star>\n" +
                 "</galaxy>\n";
 
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-    }
+        workDir = ServerRoot.fresh("forge-server-sizeless-body-")
+                .seed(new GameDirSeed().planetDefs(xml, getClass()));    }
 
     /**
      * An AIRLESS planet: a body with air could not be realized without its size anyway, so only an

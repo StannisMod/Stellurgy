@@ -7,6 +7,7 @@ import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import com.google.gson.JsonObject;
 
 import org.junit.After;
@@ -303,7 +304,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
     protected String arrangedAfcPos;
     protected String arrangedCellKey;
 
-    protected Path root;
+    protected ServerRoot root;
     protected RealDedicatedServerHarness serverHarness;
     protected RealClientHarness clientHarness;
 
@@ -318,7 +319,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
                 Boolean.parseBoolean(System.getProperty(
                         AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
 
-        root = Files.createTempDirectory("forge-client-space-login-restore-");
+        root = ServerRoot.fresh("forge-client-space-login-restore-");
     }
 
     @After
@@ -1594,30 +1595,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      * pilot before he was written to disk - is destroyed by the second boot.
      */
     protected void keepBootLog(String label) {
-        try {
-            java.nio.file.Path live = root.resolve("logs").resolve("latest.log");
-            if (java.nio.file.Files.exists(live)) {
-                java.nio.file.Files.copy(live, root.resolve("logs").resolve(label + ".log"),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            }
-            // The player file too: the SECOND boot's own logout rewrites it, so by the time anyone
-            // inspects the world directory afterwards, what the FIRST boot persisted - the actual
-            // input to the restore - is already gone.
-            java.nio.file.Path live_pd = root.resolve("world").resolve("playerdata");
-            java.nio.file.Path kept = root.resolve("world").resolve("playerdata-" + label);
-            if (java.nio.file.Files.isDirectory(live_pd)) {
-                java.nio.file.Files.createDirectories(kept);
-                try (java.util.stream.Stream<java.nio.file.Path> files =
-                             java.nio.file.Files.list(live_pd)) {
-                    for (java.nio.file.Path f : files.collect(java.util.stream.Collectors.toList())) {
-                        java.nio.file.Files.copy(f, kept.resolve(f.getFileName().toString()),
-                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-            // Diagnostics only - never fail a test because a log could not be copied.
-        }
+        // The player file too: the SECOND boot's own logout rewrites it, so by the time anyone
+        // inspects the world directory afterwards, what the FIRST boot persisted - the actual
+        // input to the restore - is already gone. Diagnostics only: the harness never fails a test
+        // over the copy, and says what it kept.
+        System.out.println("[space-login-restore] " + label + ": " + root.keepAside(label));
     }
 
     // THERE IS NO `assumeProductionSubsystemAvailable()` ANY MORE. It skipped the scenario when the

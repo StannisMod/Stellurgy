@@ -3,11 +3,12 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
@@ -85,16 +86,23 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
     /** {@code /ar dumpBiomes} writes {@code ./BiomeDump.txt} relative to
      *  the server JVM's CWD, which is the harness workdir. The file's
      *  first column is the vanilla biome id; pin its presence + the
-     *  known {@code minecraft:plains} biome name (id=1 in vanilla 1.12.2). */
+     *  known {@code minecraft:plains} biome name (id=1 in vanilla 1.12.2).
+     *  The control is a read of the same file BEFORE the command: absent,
+     *  so a file found after it was written by it. */
+    @RedWitness(member = "DumpBiomesCommand#execute", at = "String fileName = \"./BiomeDump.txt\";",
+            replacedBy = "String fileName = \"./BiomeDumpElsewhere.txt\";",
+            fails = "BiomeDump.txt must exist after the command", on = "2026-10-12")
+    @RedWitness(member = "DumpBiomesCommand#execute", at = "for (Biome biome : Biome.REGISTRY) {",
+            replacedBy = "for (Biome biome : java.util.Collections.<Biome>emptyList()) {",
+            fails = "dump must contain minecraft:plains", on = "2026-10-12")
     @Test
     public void dumpBiomesWritesBiomeDumpFileWithVanillaPlainsBiome() throws Exception {
-        Path root = harness().root();
-        Path dump = root.resolve("BiomeDump.txt");
-        Files.deleteIfExists(dump);
+        ServerRoot root = harness().root();        requireArranged("BiomeDump.txt must not exist before the command, or its presence after proves"
+                + " nothing", !root.exists("BiomeDump.txt"));
         exec("ar dev dumpBiomes");
         assertTrue("BiomeDump.txt must exist after the command",
-                Files.exists(dump));
-        String body = new String(Files.readAllBytes(dump));
+                root.exists("BiomeDump.txt"));
+        String body = root.readText("BiomeDump.txt");
         assertTrue("dump must contain minecraft:plains — got: " + body,
                 body.contains("minecraft:plains"));
     }

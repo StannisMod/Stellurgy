@@ -10,6 +10,7 @@ import java.util.List;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -112,7 +113,7 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
      */
     private static final long EMPTY_REGISTRY_BYTES = 200L;
 
-    private Path root;
+    private ServerRoot root;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -121,7 +122,7 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
                 "Server harness disabled - set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        root = Files.createTempDirectory("forge-server-hyperspace-durability-");
+        root = ServerRoot.fresh("forge-server-hyperspace-durability-");
     }
 
     @After
@@ -292,27 +293,23 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
      * instead of guessed at from its size.
      */
     private String capabilityFilesOnDisk() {
-        Path space = root.resolve("world").resolve("advRocketry");
-        if (!Files.isDirectory(space)) {
+        String space = ServerRoot.LEVEL_NAME + "/advRocketry";
+        if (!root.exists(space)) {
             return "no " + space + " on disk at all";
         }
         StringBuilder out = new StringBuilder();
         int empty = 0;
-        try (java.util.stream.Stream<Path> tree = Files.walk(space)) {
-            java.util.List<Path> dats = tree
-                    .filter(p -> p.getFileName().toString().equals("capabilities.dat"))
-                    .sorted()
-                    .collect(java.util.stream.Collectors.toList());
-            for (Path p : dats) {
+        try {
+            for (java.util.Map.Entry<String, Long> dat : root.sizesUnder(space, "capabilities.dat").entrySet()) {
                 // Every space dim writes one of these and almost all of them are the empty payload;
                 // listing a hundred of those buries the two that carry a ship. The count is kept so
                 // "nothing was written at all" stays distinguishable from "everything was empty".
-                if (Files.size(p) <= EMPTY_REGISTRY_BYTES) {
+                if (dat.getValue() <= EMPTY_REGISTRY_BYTES) {
                     empty++;
                     continue;
                 }
-                out.append("\n    ").append(space.relativize(p)).append(" = ")
-                        .append(Files.size(p)).append(" bytes");
+                out.append("\n    ").append(dat.getKey()).append(" = ")
+                        .append(dat.getValue()).append(" bytes");
             }
         } catch (Exception e) {
             return "could not be read: " + e;

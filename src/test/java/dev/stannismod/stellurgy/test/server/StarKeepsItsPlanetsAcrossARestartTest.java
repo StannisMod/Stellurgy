@@ -6,14 +6,12 @@ import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -57,7 +55,7 @@ public class StarKeepsItsPlanetsAcrossARestartTest extends AbstractMechanicsTest
     /** Two authored planets under Sol, well clear of the ids the stock world uses. */
     private static final int DIM_A = 480, DIM_B = 481;
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -67,9 +65,6 @@ public class StarKeepsItsPlanetsAcrossARestartTest extends AbstractMechanicsTest
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-star-planets-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
         String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<galaxy>\n"
                 + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\""
@@ -79,7 +74,8 @@ public class StarKeepsItsPlanetsAcrossARestartTest extends AbstractMechanicsTest
                 + planetXml("Probe Beta", DIM_B)
                 + "    </star>\n"
                 + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+        workDir = ServerRoot.fresh("forge-server-star-planets-")
+                .seed(new GameDirSeed().planetDefs(xml, getClass()));
     }
 
     @After

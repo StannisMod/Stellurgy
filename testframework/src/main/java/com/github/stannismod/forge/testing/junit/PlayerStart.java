@@ -118,10 +118,11 @@ public final class PlayerStart {
     }
 
     /**
-     * Check every entry against the project's allowlist, then write the config settings into
-     * {@code gameDir}. Refuses, before anything is written, an entry the list does not grant.
+     * Check every entry against the project's allowlist, and answer the config settings as files of the game
+     * directory. Refuses, before anything is booted, an entry the list does not grant.
      */
-    void writeSettings(Path gameDir) throws IOException {
+    Map<String, String> settingFiles() throws IOException {
+        Map<String, String> out = new LinkedHashMap<>();
         List<Grant> allowed = grants();
         Map<String, Map<String, List<String>>> byFile = new LinkedHashMap<>();
         for (String[] s : settings) {
@@ -150,27 +151,28 @@ public final class PlayerStart {
                 }
                 text.append("}\n");
             }
-            Path target = underConfig(gameDir, file.getKey());
-            Files.createDirectories(target.getParent());
-            Files.write(target, text.toString().getBytes(StandardCharsets.UTF_8));
+            out.put(underConfig(file.getKey()), text.toString());
         }
+        return out;
     }
 
     /**
-     * Copy every harvested file out of {@code harvestedWorld} (the world directory of a server booted on
-     * the game as it ships) into {@code gameDir}'s config, after its insertion.
+     * Every harvested file, read out of the world of {@code shipped} (a server booted on the game as it
+     * ships, and stopped), as a file of the game directory's config, after its insertion.
      */
-    void writeHarvests(Path harvestedWorld, Path gameDir) throws Exception {
+    Map<String, String> harvestFiles(com.github.stannismod.forge.testing.server.ServerRoot shipped)
+            throws Exception {
+        Map<String, String> out = new LinkedHashMap<>();
         List<Grant> allowed = grants();
         for (Harvest h : harvests) {
             String target = harvestGrant(allowed, h).target;
-            Path source = harvestedWorld.resolve(h.worldFile).normalize();
-            if (!source.startsWith(harvestedWorld.normalize()) || !Files.isRegularFile(source)) {
+            String source = com.github.stannismod.forge.testing.server.ServerRoot.LEVEL_NAME + "/" + h.worldFile;
+            if (!shipped.exists(source)) {
                 throw new IllegalStateException("the server booted on the game as it ships wrote no " + h.worldFile
-                        + " in its world (" + source + ")");
+                        + " in its world (" + shipped + ")");
             }
             Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
-                    .parse(source.toFile());
+                    .parse(new org.xml.sax.InputSource(new java.io.StringReader(shipped.readText(source))));
             NodeList candidates = doc.getElementsByTagName(h.insertion.element);
             Element only = null;
             for (int i = 0; i < candidates.getLength(); i++) {
@@ -193,23 +195,25 @@ public final class PlayerStart {
             Element added = doc.createElement(h.insertion.child);
             added.setTextContent(h.insertion.text);
             only.appendChild(added);
-            Path out = underConfig(gameDir, target);
-            Files.createDirectories(out.getParent());
+            java.io.StringWriter rendered = new java.io.StringWriter();
             javax.xml.transform.TransformerFactory.newInstance().newTransformer().transform(
                     new javax.xml.transform.dom.DOMSource(doc),
-                    new javax.xml.transform.stream.StreamResult(out.toFile()));
+                    new javax.xml.transform.stream.StreamResult(rendered));
+            out.put(underConfig(target), rendered.toString());
             System.out.println("[player start] " + h.worldFile + " of the game as it ships, with " + h.insertion
                     + ", as config/" + target);
         }
+        return out;
     }
 
-    private static Path underConfig(Path gameDir, String file) {
-        Path config = gameDir.resolve("config").normalize();
+    /** {@code config/<file>}, refused unless it names a file under {@code config/}. */
+    private static String underConfig(String file) {
+        Path config = Paths.get("config");
         Path target = config.resolve(file).normalize();
         if (Paths.get(file).isAbsolute() || !target.startsWith(config) || target.equals(config)) {
             throw new IllegalArgumentException("REFUSED: config/" + file + " is not a file under config/");
         }
-        return target;
+        return target.toString().replace('\\', '/');
     }
 
     private static void requireTyped(String type, String value, String key) {

@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
@@ -15,9 +17,6 @@ import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -152,13 +151,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                             + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                     Boolean.parseBoolean(System.getProperty(
                             AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-            Path workDir = Files.createTempDirectory("forge-server-planetdefs-authoring-");
-            // Where production looks for a pack's file: "./config/" + configFolder, relative to the
-            // server's working directory — which the harness sets to the root it is handed.
-            Path configDir = workDir.resolve("config").resolve(
-                    dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder);
-            Files.createDirectories(configDir);
-            Files.write(configDir.resolve("planetDefs.xml"), authoredFile().getBytes(StandardCharsets.UTF_8));
+            // The pack's file, where production looks for it ("./config/" + configFolder, relative to the
+            // server's working directory — the game directory), written by the harness before the boot.
+            ServerRoot workDir = ServerRoot.fresh("forge-server-planetdefs-authoring-")
+                    .seed(new GameDirSeed().planetDefs(authoredFile(), testClass));
             harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         }
 

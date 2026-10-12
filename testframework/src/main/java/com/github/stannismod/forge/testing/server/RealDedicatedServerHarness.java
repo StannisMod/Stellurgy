@@ -7,7 +7,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +18,7 @@ import com.github.stannismod.forge.testing.junit.HarnessBoot;
 
 public final class RealDedicatedServerHarness implements AutoCloseable {
 
-    private final Path root;
+    private final ServerRoot root;
     private final int port;
     private final TestClient client;
     private final Thread readerThread;
@@ -32,7 +31,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     private final java.net.ServerSocket controlSocket;
 
-    private RealDedicatedServerHarness(Path root, int port, TestClient client, Thread readerThread,
+    private RealDedicatedServerHarness(ServerRoot root, int port, TestClient client, Thread readerThread,
                                        boolean cleanupOnClose, java.net.ServerSocket controlSocket) {
         this.root = root;
         this.port = port;
@@ -52,26 +51,23 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     public static RealDedicatedServerHarness start(HarnessBoot boot) throws IOException, InterruptedException {
         HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
-        Path root = Files.createTempDirectory("forge-dedicated-server-");
-        return startInternal(root, /*bootstrap=*/true, /*cleanupOnClose=*/true,
+        return startInternal(ServerRoot.fresh("forge-dedicated-server-"), /*cleanupOnClose=*/true,
                 /*flatTerrain=*/false, /*e2e=*/false);
     }
 
     /**
-     * A server in E2E MODE ({@link com.github.stannismod.forge.testing.E2EMode}), in the supplied work
+     * A server in E2E MODE ({@link com.github.stannismod.forge.testing.E2EMode}), on the supplied game
      * directory, deleted on {@link #close()}.
      *
      * <p>The child is told it serves an e2e, so the consuming mod's own gate refuses, at the call, every
      * command an e2e may not send. Generated terrain, like {@link #start}: a player's start is the world
-     * a fresh game gives him. The directory may already hold files written before the boot — a mod
+     * a fresh game gives him. The directory may already hold its start ({@link ServerRoot#seed}) — a mod
      * reads its config once, at load.</p>
      */
-    public static RealDedicatedServerHarness startE2E(HarnessBoot boot, Path root)
+    public static RealDedicatedServerHarness startE2E(HarnessBoot boot, ServerRoot root)
             throws IOException, InterruptedException {
         HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.E2E);
-        Files.createDirectories(root);
-        return startInternal(root, !Files.exists(root.resolve("eula.txt")), /*cleanupOnClose=*/true,
-                /*flatTerrain=*/false, /*e2e=*/true);
+        return startInternal(root, /*cleanupOnClose=*/true, /*flatTerrain=*/false, /*e2e=*/true);
     }
 
     /**
@@ -85,49 +81,69 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     public static RealDedicatedServerHarness startWithFlatTerrain(HarnessBoot boot)
             throws IOException, InterruptedException {
         HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
-        Path root = Files.createTempDirectory("forge-dedicated-server-");
-        return startInternal(root, /*bootstrap=*/true, /*cleanupOnClose=*/true,
+        return startInternal(ServerRoot.fresh("forge-dedicated-server-"), /*cleanupOnClose=*/true,
                 /*flatTerrain=*/true, /*e2e=*/false);
     }
 
     /**
-     * Starts a server using the supplied work directory.
+     * Starts a server on the supplied game directory.
      *
      * <p>Useful for persistence-restart scenarios: start a fresh server, mutate
-     * world state, close it, then start again with the same {@code root} to
+     * world state, close it, then start again on the same {@code root} to
      * verify the state survived save/load.</p>
      *
-     * @param root           directory to use as the server's gameDir / world root.
-     *                       If empty, framework files (eula.txt, server.properties)
-     *                       are bootstrapped automatically. If it contains a
-     *                       {@code server.properties} from a previous run, the
-     *                       file is rewritten with a fresh port; the rest of the
-     *                       directory (world, config, mods) is preserved.
-     * @param cleanupOnClose if {@code true}, recursively deletes {@code root} on
+     * @param root           the server's game directory. On its first boot the
+     *                       framework files (eula.txt, server.properties) are
+     *                       written; on a later one {@code server.properties} is
+     *                       rewritten with a fresh port and the rest of the
+     *                       directory (world, config) is preserved. What a test
+     *                       puts there is typed: {@link ServerRoot#seed} before the
+     *                       first boot, {@link ServerRoot#editWhileDown} between two.
+     * @param cleanupOnClose if {@code true}, deletes {@code root} on
      *                       {@link #close()}. Pass {@code false} when you intend
      *                       to restart against the same dir.
      */
-    public static RealDedicatedServerHarness startWith(HarnessBoot boot, Path root, boolean cleanupOnClose)
+    public static RealDedicatedServerHarness startWith(HarnessBoot boot, ServerRoot root, boolean cleanupOnClose)
             throws IOException, InterruptedException {
         return startWith(boot, root, cleanupOnClose, /*flatTerrain=*/false);
     }
 
-    /** @see #startWith(HarnessBoot, Path, boolean) and {@link #startWithFlatTerrain} */
-    public static RealDedicatedServerHarness startWith(HarnessBoot boot, Path root, boolean cleanupOnClose,
+    /** @see #startWith(HarnessBoot, ServerRoot, boolean) and {@link #startWithFlatTerrain} */
+    public static RealDedicatedServerHarness startWith(HarnessBoot boot, ServerRoot root, boolean cleanupOnClose,
                                                        boolean flatTerrain)
             throws IOException, InterruptedException {
         HarnessBoot.require(boot, com.github.stannismod.forge.testing.ChildMode.MECHANICS);
-        Files.createDirectories(root);
-        boolean bootstrap = !Files.exists(root.resolve("eula.txt"));
-        return startInternal(root, bootstrap, cleanupOnClose, flatTerrain, /*e2e=*/false);
+        return startInternal(root, cleanupOnClose, flatTerrain, /*e2e=*/false);
     }
 
-    private static RealDedicatedServerHarness startInternal(Path root, boolean bootstrap,
+    /** One boot on {@code serverRoot}, which is the server's from the moment it is up until {@link #close()}. */
+    private static RealDedicatedServerHarness startInternal(ServerRoot serverRoot,
                                                             boolean cleanupOnClose,
                                                             boolean flatTerrain,
                                                             boolean e2e)
             throws IOException, InterruptedException {
-        if (bootstrap) {
+        serverRoot.bootStarting();
+        boolean up = false;
+        try {
+            RealDedicatedServerHarness harness = launchOn(serverRoot, cleanupOnClose, flatTerrain, e2e);
+            serverRoot.booted(harness);
+            up = true;
+            return harness;
+        } finally {
+            if (!up) {
+                serverRoot.bootEnded();
+            }
+        }
+    }
+
+    private static RealDedicatedServerHarness launchOn(ServerRoot serverRoot,
+                                                       boolean cleanupOnClose,
+                                                       boolean flatTerrain,
+                                                       boolean e2e)
+            throws IOException, InterruptedException {
+        Path root = serverRoot.dir();
+        Files.createDirectories(root);
+        if (!Files.exists(root.resolve("eula.txt"))) {
             writeEula(root);
         }
         IOException lastFailure = null;
@@ -166,7 +182,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
                     addChildRefusals(bridgeFailure, transcript);
                     throw bridgeFailure;
                 }
-                return new RealDedicatedServerHarness(root, port, client, readerThread, cleanupOnClose,
+                return new RealDedicatedServerHarness(serverRoot, port, client, readerThread, cleanupOnClose,
                         controlSocket);
             }
             destroyAndJoin(process, readerThread);
@@ -286,7 +302,8 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         }
     }
 
-    public Path root() {
+    /** The game directory this server runs on: a handle that reads, never a path to write through. */
+    public ServerRoot root() {
         return root;
     }
 
@@ -318,7 +335,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             // has already stopped the child (TestClient.close sends `stop` and waits), so the log
             // is flushed by the time we copy.
             try {
-                Path serverLog = root.resolve("logs").resolve("latest.log");
+                Path serverLog = root.dir().resolve("logs").resolve("latest.log");
                 if (Files.isRegularFile(serverLog)) {
                     Files.copy(serverLog, preservedLogPath(), StandardCopyOption.REPLACE_EXISTING);
                 } else {
@@ -331,8 +348,9 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             } catch (IOException ignored) {
                 // Best-effort only — never block close on preserve failure.
             }
+            root.bootEnded();
             if (cleanupOnClose) {
-                deleteRecursively(root);
+                root.delete();
             }
         }
     }
@@ -743,7 +761,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         builder.append("force-gamemode=").append(e2e).append(newline);
         builder.append("generate-structures=false").append(newline);
         builder.append("hardcore=false").append(newline);
-        builder.append("level-name=world").append(newline);
+        builder.append("level-name=").append(ServerRoot.LEVEL_NAME).append(newline);
         builder.append("level-seed=").append(levelSeed()).append(newline);
         boolean flat = flatTerrain || flatTerrainForced();
         builder.append("level-type=").append(flat ? "FLAT" : "DEFAULT").append(newline);
@@ -764,25 +782,6 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         builder.append("use-native-transport=false").append(newline);
         builder.append("view-distance=4").append(newline);
         return builder.toString();
-    }
-
-    private static void deleteRecursively(Path root) throws IOException {
-        if (root == null || !Files.exists(root)) {
-            return;
-        }
-        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                Files.deleteIfExists(file);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                Files.deleteIfExists(dir);
-                return FileVisitResult.CONTINUE;
-            }
-        });
     }
 }
 

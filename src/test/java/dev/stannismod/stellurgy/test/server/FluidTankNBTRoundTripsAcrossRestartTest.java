@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FluidStored;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -53,7 +54,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest extends AbstractMechanicsTe
      *  so {@code fluid inject} doesn't clamp and we can read it back exactly. */
     private static final int INJECT_AMOUNT = 7500;
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -64,7 +65,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest extends AbstractMechanicsTe
                         + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-fluidtank-nbt-restart-");
+        workDir = ServerRoot.fresh("forge-server-fluidtank-nbt-restart-");
     }
 
     @After

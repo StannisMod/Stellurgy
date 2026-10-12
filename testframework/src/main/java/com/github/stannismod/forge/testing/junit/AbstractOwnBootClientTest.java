@@ -90,8 +90,8 @@ public abstract class AbstractOwnBootClientTest {
                 "Client harness disabled — set -D" + PROP_CLIENT_ENABLED + "=true to enable",
                 Boolean.parseBoolean(System.getProperty(PROP_CLIENT_ENABLED, "false")));
 
-        java.nio.file.Path gameDir = java.nio.file.Files.createTempDirectory("forge-client-e2e-");
-        serverHarness = RealDedicatedServerHarness.startWith(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), gameDir, /*cleanupOnClose=*/true);
+        serverHarness = RealDedicatedServerHarness.startWith(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS),
+                com.github.stannismod.forge.testing.server.ServerRoot.fresh("forge-client-own-boot-"), /*cleanupOnClose=*/true);
         try {
             clientHarness = requiresFramebufferAtLaunch()
                     ? RealClientHarness.startWithFramebuffer(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), serverHarness)

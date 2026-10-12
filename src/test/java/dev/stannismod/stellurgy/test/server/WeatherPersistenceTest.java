@@ -11,10 +11,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.DimWeather;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 
 import static org.junit.Assert.assertTrue;
 import dev.stannismod.stellurgy.test.contract.Pins;
@@ -43,7 +41,7 @@ public class WeatherPersistenceTest extends AbstractMechanicsTest {
 
     private static final int FIXTURE_DIM = 9301;
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -53,12 +51,8 @@ public class WeatherPersistenceTest extends AbstractMechanicsTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-weather-persistence-");
-
-        // Stage the planet XML BEFORE the first boot so the dim id is stable
+        // The planet XML is the START of the first boot, so the dim id is stable
         // across both lifecycles.
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
         String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<galaxy>\n"
                 + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
@@ -84,7 +78,8 @@ public class WeatherPersistenceTest extends AbstractMechanicsTest {
                 + "        </planet>\n"
                 + "    </star>\n"
                 + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+        workDir = ServerRoot.fresh("forge-server-weather-persistence-")
+                .seed(new GameDirSeed().planetDefs(xml, getClass()));
     }
 
     @After

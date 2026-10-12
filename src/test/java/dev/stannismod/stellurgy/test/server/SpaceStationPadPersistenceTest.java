@@ -6,6 +6,7 @@ import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -62,7 +63,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
      *  to match some other `id`; reading by name needs no such anchor. */
     private static final String STATION_ID = "id";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -72,7 +73,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-pad-persistence-");
+        workDir = ServerRoot.fresh("forge-server-pad-persistence-");
     }
 
     @After

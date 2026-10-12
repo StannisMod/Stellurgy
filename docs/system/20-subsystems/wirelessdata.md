@@ -95,7 +95,7 @@ transient wire field in `readDataFromNetwork` (never written to disk).
   swaps and clears the prior role. `TileWirelessTransceiver.java:272-281` (`removeFromAll`
   then the one add).
 - **INV-WDT-05 [A][BEH]** `mode`, `enabled`, `networkID` survive an NBT round-trip and the tile
-  re-registers its role on `onLoad`. `WirelessTransceiverRestartTest.java:75-109` Pinned by `WirelessTransceiverRestartTest#modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration`.
+  re-registers its role on `onLoad`. `WirelessTransceiverRestartTest.java:76-110` Pinned by `WirelessTransceiverRestartTest#modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration`.
 - **INV-WDT-06 [V]** Server-authoritative writes: GUI/`useNetworkData` mutations apply only when
   `side.isServer()`. `TileWirelessTransceiver.java:536`
 - **INV-WDT-07 [V][BEH]** Within a `DataType` tick, committed inserted == committed extracted (paired
@@ -153,7 +153,7 @@ priority (0) are `tunable` compile-time constants, not pinned.
 | invariant | test |
 |-----------|------|
 | INV-WDT-02..04 | none — `[V]` above |
-| INV-WDT-05 | `WirelessTransceiverRestartTest#modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration:75` |
+| INV-WDT-05 | `WirelessTransceiverRestartTest#modeEnabledAndNetworkIdSurviveRestartWithRoleReRegistration:76` |
 | transmit smoke | none — `PipeNetworkSmokeTest` pins only `forgeEnergyStorageContractMatches` (`PipeNetworkSmokeTest.java:27`) |
 
 ## Open questions

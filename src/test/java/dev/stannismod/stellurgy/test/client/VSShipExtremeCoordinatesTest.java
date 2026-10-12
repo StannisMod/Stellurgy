@@ -969,9 +969,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */
     private static void writeSpikeReport(String name, String text) {
         try {
-            java.nio.file.Path dir = java.nio.file.Paths.get("build", "spike-reports").toAbsolutePath();
-            java.nio.file.Files.createDirectories(dir);
-            java.nio.file.Files.write(dir.resolve(name), text.getBytes("UTF-8"));
+            com.github.stannismod.forge.testing.TestArtefacts.writeText("spike-reports", name, text);
         } catch (Exception e) {
             System.out.println("[SPIKE] could not write the report file: " + e);
         }

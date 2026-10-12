@@ -8,6 +8,7 @@ import java.nio.file.Path;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -67,7 +68,7 @@ public class SpaceClockIsTheSubsystemsOwnTest extends AbstractMechanicsTest {
      */
     private static final long ELAPSED_SLACK_TICKS = 20_000L;
 
-    private Path root;
+    private ServerRoot root;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -76,7 +77,7 @@ public class SpaceClockIsTheSubsystemsOwnTest extends AbstractMechanicsTest {
                 "Server harness disabled — set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        root = Files.createTempDirectory("forge-server-space-clock-");
+        root = ServerRoot.fresh("forge-server-space-clock-");
     }
 
     @After
@@ -91,30 +92,10 @@ public class SpaceClockIsTheSubsystemsOwnTest extends AbstractMechanicsTest {
             // directory to outlive a close — so nobody else deletes it. A whole dedicated-server
             // save per method, times the fork count, times every rerun of a flake hunt, is not
             // something to leave in the system temp dir.
-            deleteRecursively(root);
-        }
-    }
-
-    private static void deleteRecursively(Path dir) throws Exception {
-        if (dir == null || !Files.exists(dir)) {
-            return;
-        }
-        Files.walkFileTree(dir, new java.nio.file.SimpleFileVisitor<Path>() {
-            @Override
-            public java.nio.file.FileVisitResult visitFile(Path file,
-                                                           java.nio.file.attribute.BasicFileAttributes a)
-                    throws java.io.IOException {
-                Files.deleteIfExists(file);
-                return java.nio.file.FileVisitResult.CONTINUE;
+            if (root != null) {
+                root.delete();
             }
-
-            @Override
-            public java.nio.file.FileVisitResult postVisitDirectory(Path d, java.io.IOException failed)
-                    throws java.io.IOException {
-                Files.deleteIfExists(d);
-                return java.nio.file.FileVisitResult.CONTINUE;
-            }
-        });
+        }
     }
 
     private String exec(String cmd) throws Exception {

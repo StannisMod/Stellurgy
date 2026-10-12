@@ -4,13 +4,15 @@ import com.github.stannismod.forge.testing.client.ClientReads;
 import com.github.stannismod.forge.testing.client.PlayerInput;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import com.github.stannismod.forge.testing.server.StartFiles;
 import com.github.stannismod.forge.testing.server.TestClient;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * The base of an E2E: a player's path, walked on a fresh server and client of its own, both in E2E MODE.
@@ -70,11 +72,22 @@ public abstract class AbstractPlayerE2ETest {
                 Boolean.parseBoolean(System.getProperty(AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
 
         PlayerStart start = playerStart();
-        Path gameDir = Files.createTempDirectory("forge-player-e2e-");
-        start.writeSettings(gameDir);
+        final Map<String, String> files = new LinkedHashMap<>(start.settingFiles());
         if (start.needsHarvest()) {
-            harvestFromTheGameAsItShips(start, gameDir);
+            files.putAll(harvestFromTheGameAsItShips(start));
         }
+        ServerRoot gameDir = ServerRoot.fresh("forge-player-e2e-");
+        gameDir.seed(new StartFiles() {
+            @Override
+            public Map<String, String> files() {
+                return files;
+            }
+
+            @Override
+            public String describe() {
+                return " the player's start " + files.keySet();
+            }
+        });
         serverHarness = RealDedicatedServerHarness.startE2E(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.E2E), gameDir);
         try {
             clientHarness = RealClientHarness.startE2E(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.E2E), serverHarness);
@@ -93,16 +106,13 @@ public abstract class AbstractPlayerE2ETest {
      * Boot a throwaway server on the game as it ships — the same seed every harness world has — let it save
      * and stop, and take the start's harvested files out of its world. Its directory is deleted after.
      */
-    private static void harvestFromTheGameAsItShips(PlayerStart start, Path gameDir)
-            throws Exception {
-        Path harvestRoot = Files.createTempDirectory("forge-player-e2e-shipped-");
+    private static Map<String, String> harvestFromTheGameAsItShips(PlayerStart start) throws Exception {
+        ServerRoot shipped = ServerRoot.fresh("forge-player-e2e-shipped-");
         try {
-            RealDedicatedServerHarness.startWith(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), harvestRoot, /*cleanupOnClose=*/false).close();
-            start.writeHarvests(harvestRoot.resolve("world"), gameDir);
+            RealDedicatedServerHarness.startWith(new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS), shipped, /*cleanupOnClose=*/false).close();
+            return start.harvestFiles(shipped);
         } finally {
-            try (java.util.stream.Stream<Path> walk = Files.walk(harvestRoot)) {
-                walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-            }
+            shipped.delete();
         }
     }
 

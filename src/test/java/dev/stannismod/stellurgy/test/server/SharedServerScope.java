@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import org.junit.Assume;
 
 import java.util.HashMap;
@@ -62,11 +63,11 @@ public final class SharedServerScope extends TestClassScope {
             try {
                 GameDirSeed seed = GameDirSeed.forTheSharedHarness();
                 asking.seedGameDirectory(seed);
-                java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-server-");
-                String written = seed.writeInto(root);
+                ServerRoot root = ServerRoot.fresh("forge-shared-server-").seed(seed);
                 harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, /*cleanupOnClose=*/true);
                 // A scenario whose premise is a seeded galaxy must be able to show the galaxy was there.
-                System.out.println("[shared-server] " + asking.getClass().getSimpleName() + " seeded:" + written);
+                System.out.println("[shared-server] " + asking.getClass().getSimpleName() + " seeded:"
+                        + seed.describe());
             } catch (Exception e) {
                 bootFailure = new IllegalStateException("the shared server of "
                         + asking.getClass().getSimpleName() + " did not boot", e);

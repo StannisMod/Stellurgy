@@ -6,20 +6,16 @@ import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
@@ -50,7 +46,7 @@ public class DimensionRandomPlanetReloadTest extends AbstractMechanicsTest {
 
     private static final String AR_DIMS = "stellurgyDimensions";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -60,7 +56,7 @@ public class DimensionRandomPlanetReloadTest extends AbstractMechanicsTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-c130-planet-regen-");
+        workDir = ServerRoot.fresh("forge-server-c130-planet-regen-");
     }
 
     @After
@@ -80,21 +76,23 @@ public class DimensionRandomPlanetReloadTest extends AbstractMechanicsTest {
         return listed.intArray(AR_DIMS).length;
     }
 
-    private static Path planetDefsPath(RealDedicatedServerHarness h) throws Exception {
+    /**
+     * Save the galaxy now, and require that the file the save wrote is the one {@code edit} changes: the
+     * edit names the file by type, the save reports where it wrote, and the two must agree or the edit
+     * below would change a file the next boot never reads.
+     */
+    private static void saveTheGalaxyWhereTheEditLands(RealDedicatedServerHarness h, SavedWorldEdit edit)
+            throws Exception {
         String save = ok(h.client().execute("stellurgytest server save-dimensions"));
         assertTrue("save-dimensions failed: " + save, Reply.of(save).bool("xmlExists"));
-        String xmlPath = Reply.of("stellurgytest server save-dimensions", save).text("xmlPath");
-        return Paths.get(xmlPath.replace("\\\\", "\\"));
+        String xmlPath = Reply.of("stellurgytest server save-dimensions", save).text("xmlPath")
+                .replace("\\\\", "/").replace('\\', '/');
+        requireArranged("the galaxy must be saved to the file the edit names (" + edit.file() + "): " + xmlPath,
+                xmlPath.endsWith("/" + edit.file()));
     }
 
     @Test
     public void randomPlanetsAreNotRegeneratedOnReload() throws Exception {
-        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
-        int count0 = stellurgyDimCount(firstBoot);
-        Path xmlPath = planetDefsPath(firstBoot);
-        firstBoot.close();
-        firstBoot = null;
-
         // Ask the first star for MORE planets than the world holds, so a reload would (buggily)
         // regenerate random ones for it.
         //
@@ -104,15 +102,22 @@ public class DimensionRandomPlanetReloadTest extends AbstractMechanicsTest {
         // fixed to write star.getMaxRetinueBodies(), this ARRANGEMENT failed and took a healthy
         // subject down with it. Nothing about the contract cares what number is written, only that
         // a number asking for more than exists regenerates nothing.
-        String content = new String(Files.readAllBytes(xmlPath), StandardCharsets.UTF_8);
-        Matcher want = Pattern.compile("numPlanets=\"(\\d+)\"").matcher(content);
-        requireArranged("the saved world XML must record a planet count to bump: " + xmlPath,
-                want.find());
-        String edited = content.substring(0, want.start())
-                + "numPlanets=\"" + (Integer.parseInt(want.group(1)) + 3) + "\""
-                + content.substring(want.end());
-        assertNotEquals("edit must change the XML", content, edited);
-        Files.write(xmlPath, edited.getBytes(StandardCharsets.UTF_8));
+        SavedWorldEdit moreRandomPlanets = SavedWorldEdit.planetDefs(content -> {
+            // NOT-A-PROBE-REPLY: the saved planet catalogue (XML on disk), not a reply
+            Matcher want = Pattern.compile("numPlanets=\"(\\d+)\"").matcher(content);
+            requireArranged("the saved world XML must record a planet count to bump", want.find());
+            return content.substring(0, want.start())
+                    + "numPlanets=\"" + (Integer.parseInt(want.group(1)) + 3) + "\""
+                    + content.substring(want.end());
+        });
+
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
+        int count0 = stellurgyDimCount(firstBoot);
+        saveTheGalaxyWhereTheEditLands(firstBoot, moreRandomPlanets);        firstBoot.close();
+        firstBoot = null;
+
+        // Applied while no server runs on the directory; an edit that changed nothing is refused there.
+        workDir.editWhileDown(moreRandomPlanets);
 
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
         int count1 = stellurgyDimCount(secondBoot);

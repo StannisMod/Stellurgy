@@ -846,6 +846,12 @@ final class E2EConfinement {
         while (!todo.isEmpty()) {
             String at = todo.poll();
             ClassNode node = testNodes.get(at);
+            for (String implemented : (List<String>) node.interfaces) {
+                String typeRefusal = gameDirectoryTypeRefusal(at, implemented);
+                if (typeRefusal != null && reported.add(typeRefusal)) {
+                    failures.add(typeRefusal);
+                }
+            }
             List<Ref> refs = new ArrayList<>(classLevelRefs(node));
             for (MethodNode m : (List<MethodNode>) node.methods) {
                 refs.addAll(methodRefs(node, m));
@@ -952,7 +958,109 @@ final class E2EConfinement {
             return "REFLECTION (java.lang.reflect / invoke, Class members, forName, getDeclared*, setAccessible,"
                     + " class loading): a test reaches the game through the harness, never around a type";
         }
+        if (fileWrite(r)) {
+            return "A FILE WRITE (java.nio.file / java.io): a game directory is written by the harness alone --"
+                    + " a start through ServerRoot#seed, a change between two boots through ServerRoot#editWhileDown"
+                    + " -- and a test's own report through TestArtefacts";
+        }
         return null;
+    }
+
+    /**
+     * Why the test-source class {@code at} may not implement {@code implemented}, or {@code null}. The harness
+     * writes a game directory only from a {@code StartFiles} (before the first boot) or a {@code BetweenBootsEdit}
+     * (between two), and what it writes is whatever the implementation renders -- so only the TYPED
+     * implementations, which render the mod's own vocabulary (config keys, a planet catalogue, the world's saved
+     * catalogue), may exist. A new kind of start or edit is a new typed class added here, never a test's own
+     * rendering of a file. (Neither interface can be a lambda: each has two abstract methods.)
+     */
+    private static String gameDirectoryTypeRefusal(String at, String implemented) {
+        boolean start = "com/github/stannismod/forge/testing/server/StartFiles".equals(implemented);
+        boolean edit = "com/github/stannismod/forge/testing/server/BetweenBootsEdit".equals(implemented);
+        if (!start && !edit) {
+            return null;
+        }
+        if (start && "dev/stannismod/stellurgy/test/client/GameDirSeed".equals(at)) {
+            return null;
+        }
+        if (edit && "dev/stannismod/stellurgy/test/server/SavedWorldEdit".equals(at)) {
+            return null;
+        }
+        return "confinement: " + at.replace('/', '.') + " implements " + implemented.replace('/', '.')
+                + " -- a game directory's start and its between-boots edits are TYPED: GameDirSeed and"
+                + " SavedWorldEdit are the implementations; a test states values through them, never a file";
+    }
+
+    /**
+     * Whether {@code r} creates, changes, moves or deletes a file or a directory. Reading is not refused: a
+     * test may read what a boot left on disk (the harness's {@code ServerRoot} reads hand it text, never a
+     * path to write through).
+     */
+    private static boolean fileWrite(Ref r) {
+        String o = r.owner;
+        String m = r.member;
+        switch (o) {
+            case "java/nio/file/Files":
+                switch (m) {
+                    case "write":
+                    case "writeString":
+                    case "copy":
+                    case "move":
+                    case "delete":
+                    case "deleteIfExists":
+                    case "createDirectory":
+                    case "createDirectories":
+                    case "createFile":
+                    case "createTempDirectory":
+                    case "createTempFile":
+                    case "createLink":
+                    case "createSymbolicLink":
+                    case "newOutputStream":
+                    case "newBufferedWriter":
+                    case "newByteChannel":
+                    case "setAttribute":
+                    case "setLastModifiedTime":
+                    case "setOwner":
+                    case "setPosixFilePermissions":
+                        return true;
+                    default:
+                        return false;
+                }
+            case "java/io/File":
+                switch (m) {
+                    case "delete":
+                    case "deleteOnExit":
+                    case "mkdir":
+                    case "mkdirs":
+                    case "renameTo":
+                    case "createNewFile":
+                    case "createTempFile":
+                    case "setWritable":
+                    case "setReadable":
+                    case "setExecutable":
+                    case "setLastModified":
+                    case "setReadOnly":
+                        return true;
+                    default:
+                        return false;
+                }
+            case "java/io/FileOutputStream":
+            case "java/io/FileWriter":
+            case "java/io/RandomAccessFile":
+            case "java/nio/channels/FileChannel":
+            case "java/nio/channels/AsynchronousFileChannel":
+            case "java/nio/file/spi/FileSystemProvider":
+                return !"<class>".equals(m);
+            case "java/io/PrintWriter":
+            case "java/io/PrintStream":
+            case "javax/xml/transform/stream/StreamResult":
+                return "<init>".equals(m) && r.desc != null
+                        && (r.desc.startsWith("(Ljava/lang/String;") || r.desc.startsWith("(Ljava/io/File;"));
+            case "javax/imageio/ImageIO":
+                return "write".equals(m);
+            default:
+                return false;
+        }
     }
 
     /** The members of {@code Thread} that neither start, stop nor pause a thread. */

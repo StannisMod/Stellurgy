@@ -13,6 +13,7 @@ import java.nio.file.Path;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -82,7 +83,7 @@ public class SpaceRestartPersistenceTest extends AbstractMechanicsTest {
      */
     private static final int AUTOSAVE_WAIT_TICKS = 3_000;
 
-    private Path root;
+    private ServerRoot root;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -92,7 +93,7 @@ public class SpaceRestartPersistenceTest extends AbstractMechanicsTest {
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
 
-        root = Files.createTempDirectory("forge-server-space-restart-");
+        root = ServerRoot.fresh("forge-server-space-restart-");
     }
 
     @After

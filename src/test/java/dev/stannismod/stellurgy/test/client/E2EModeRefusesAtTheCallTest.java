@@ -10,6 +10,7 @@ import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerCommandFailed;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.stannismod.stellurgy.test.Events;
@@ -135,7 +136,7 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
                 Boolean.parseBoolean(System.getProperty(AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         Assume.assumeTrue("Client harness disabled",
                 Boolean.parseBoolean(System.getProperty(AbstractOwnBootClientTest.PROP_CLIENT_ENABLED, "false")));
-        server = RealDedicatedServerHarness.startE2E(harnessBootInE2EMode(), Files.createTempDirectory("forge-e2e-mode-"));
+        server = RealDedicatedServerHarness.startE2E(harnessBootInE2EMode(), ServerRoot.fresh("forge-e2e-mode-"));
         try {
             client = RealClientHarness.startE2E(harnessBootInE2EMode(), server);
         } catch (Exception startFailed) {

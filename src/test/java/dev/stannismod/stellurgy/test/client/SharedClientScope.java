@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.TestClassScope;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -59,8 +60,8 @@ public final class SharedClientScope extends TestClassScope {
         test.seedGameDirectory(seed);
 
         long startedNanos = System.nanoTime();
-        java.nio.file.Path root = java.nio.file.Files.createTempDirectory("forge-shared-client-");
-        String seeded = seed.writeInto(root);
+        ServerRoot root = ServerRoot.fresh("forge-shared-client-").seed(seed);
+        String seeded = seed.describe();
         server = RealDedicatedServerHarness.startWith(harnessBoot(), root, /*cleanupOnClose=*/true);
         // The client's start-time options come from system properties the harness reads as it
         // launches the child, so a class that needs one sets it HERE, around the boot, and the value
