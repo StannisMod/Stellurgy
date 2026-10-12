@@ -12,30 +12,50 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import dev.stannismod.stellurgy.integration.vs.DeckFrameTick;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.test.trace.DeckGateWindow;
 import dev.stannismod.stellurgy.test.trace.EntityTrace;
 import dev.stannismod.stellurgy.test.trace.SideTrace;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 import dev.stannismod.stellurgy.test.trace.TravelPassMemory;
 
 /**
- * The deck frame's two episode edges, in the same vocabulary and on the same instrument as the
- * travel resolver's: {@code deck_entered} and {@code deck_released} on {@code deck_capture_events}.
+ * The deck frame's episode edges and per-tick hold: {@code deck_entered} and {@code deck_released} on
+ * {@code deck_capture_events}, marked {@code "by":"deckFrame"}.
  *
- * <p>"The deck took this body" and "the deck let it go" are what a scenario asks, whichever mechanism
- * holds it; a reader that had to know which one would be pinning an implementation. So the deck
- * frame answers in the same records, marked {@code "by":"deckFrame"} for a reader that does want to
- * know.</p>
+ * <p>"The deck took this body" and "the deck let it go" are what a scenario asks. An edge is a change
+ * of HOLDER: a different craft, or none, is an edge and carries {@code from}.</p>
  *
- * <p>An edge is a change of HOLDER: taking over a body the travel resolver already held on the same
- * craft changes nothing a scenario can see and records nothing, exactly as the resolver's own
- * re-install onto its current anchor records nothing. A different craft, or none, is an edge and
- * carries {@code from}.</p>
+ * <p>{@code deck_capture_events} is also declared where the deck frame DECIDES whether to take a body
+ * it does not hold ({@code admissionFor}), every tick that body is updated: a scenario whose subject
+ * is a body no deck ever takes — a bystander, a flyer, a body on the outer hull — needs the
+ * observation point that precedes every capture edge to have executed before an empty edge list
+ * means "not taken" rather than "nobody was looking".</p>
  */
 @Mixin(value = DeckFrameTick.class, remap = false)
 public abstract class MixinDeckFrameTickEvents {
 
     private static final String INSTRUMENT = "deck_capture_events";
     private static final String INSTRUMENT_MODE = "deck_mode_events";
+
+    /**
+     * The admission decision for a body no deck holds: the craft whose deck takes it now, or
+     * {@code null}. Declares the capture instrument (see the class note) and hands the decision to any
+     * {@link DeckGateWindow} armed for this body.
+     */
+    @Inject(method = "admissionFor", at = @At("RETURN"))
+    private static void stellurgyTest$admission(Entity entity, CallbackInfoReturnable<String> cir) {
+        TestTrace.instrument(entity, INSTRUMENT);
+        TestTrace.instrument(entity, "deck_gate_window_events");
+        DeckGateWindow.sample(entity, cir.getReturnValue());
+        if (entity != null) {
+            // The landing edge's memory follows the body while no deck holds it too: a body that falls
+            // onto a deck is airborne on the ticks before it is taken, and the first held tick that
+            // finds it grounded is the landing. Left at whatever an earlier hold wrote, a body that last
+            // stood on a deck reads as "already grounded" and its landing writes no `deck_contact`.
+            EntityTrace.memory(entity, EntityTrace.DeckGate.class, EntityTrace.DeckGate::new)
+                    .groundedAtLastTravel = entity.onGround;
+        }
+    }
 
     @Inject(method = "noteEntered", at = @At("HEAD"))
     private static void stellurgyTest$entered(Entity entity, String shipId, String from, CallbackInfo ci) {
@@ -45,8 +65,7 @@ public abstract class MixinDeckFrameTickEvents {
             return;
         }
         // The deck frame holds a body in one mode only - on the deck - so every opening commits that
-        // mode, the same craft included: taking over a body the resolver held on this craft's OUTER
-        // hull is a change of mode a scenario can see.
+        // mode.
         TestTrace.record(entity, "deck_mode_committed", "\"e\":" + entity.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\",\"ship\":\""
                 + TestTrace.json(shipId) + "\",\"mode\":\"aboard\",\"by\":\"deckFrame\"");
@@ -61,12 +80,9 @@ public abstract class MixinDeckFrameTickEvents {
     }
 
     /**
-     * Every tick the deck frame holds a body: the travel resolver's two per-tick records, in its
-     * vocabulary, so a reader of "the deck carried this body" or "it came down on this deck" need not
-     * know which mechanism held it. {@code deck_carry} on every held tick, with the deck's own velocity
-     * at the body's point; {@code deck_contact} on the EDGE only - grounded now, not at the previous
-     * held tick - and through the same per-body memory the resolver's edge uses, so a hand-over between
-     * the two is not read as a second landing.
+     * Every tick the deck frame holds a body: {@code deck_carry} on every held tick, with the deck's
+     * own velocity at the body's point; {@code deck_contact} on the EDGE only - grounded now, not at
+     * the previous held tick.
      */
     @Inject(method = "noteHeldTick", at = @At("HEAD"))
     private static void stellurgyTest$heldTick(Entity entity, String shipId, double localX, double localY,
@@ -98,7 +114,7 @@ public abstract class MixinDeckFrameTickEvents {
     }
 
     /** Where the body was in the world when the deck frame took up its update — read back below as
-     *  the point it was FOUND at, which the travel resolver's per-tick record carries. */
+     *  the point it was FOUND at. */
     @Inject(method = "runInDeckFrame", at = @At("HEAD"))
     private static void stellurgyTest$updateStart(Entity entity, Runnable ownUpdate,
                                                   CallbackInfoReturnable<Boolean> cir) {
@@ -113,18 +129,14 @@ public abstract class MixinDeckFrameTickEvents {
     }
 
     /**
-     * The travel resolver's per-tick record ({@code ship_frame_tick}), written for the player this
-     * client plays when the DECK FRAME resolved his tick — {@code path:"d"}, {@code "by":"deckFrame"},
-     * on the same per-side tick counter, so a reader windowing on {@code resolvedTick} sees one clock
-     * across a hand-over. The fields are the ones this mechanism can answer honestly: where he was
-     * FOUND (his world position at the update's start, through the craft's pose), the deck point the
-     * update left him at ({@code held*}), the walk input the update ran on, and whether it ended on
-     * something. The resolver's sweep fields (obstacles, per-axis clips, motion) are not written: the
-     * deck frame does not sweep, and an absent field reads as absent rather than as a zero.
+     * The per-tick record ({@code ship_frame_tick}) for the player this client plays, on a tick the
+     * DECK FRAME held him — {@code path:"d"}, {@code "by":"deckFrame"}, on a per-side tick counter
+     * ({@code resolvedTick}). Its fields: where he was FOUND (his world position at the update's
+     * start, through the craft's pose), the deck point the update left him at ({@code held*}), the
+     * walk input the update ran on, and whether it ended on something.
      *
-     * <p>The client player only: on the server the deck frame holds mobs and items too, and a test
-     * reading the resolver's records for a mob as "the resolver stood down" must keep reading
-     * silence.</p>
+     * <p>The client player only: on the server the deck frame holds mobs and items too, and this
+     * record is about the player a client steers.</p>
      */
     @Inject(method = "noteHeldTick", at = @At("HEAD"))
     private static void stellurgyTest$heldTickLine(Entity entity, String shipId, double localX, double localY,
@@ -155,12 +167,10 @@ public abstract class MixinDeckFrameTickEvents {
     }
 
     /**
-     * Render-vs-collision pose skew for a body the deck frame holds, in the travel resolver's record
-     * ({@code render_pose_skew}, mode {@code aboard}): the deck point the held update left it at, and
-     * the world position the deck frame has just mapped that point to through the GAME-TICK pose,
-     * against the same point through the client's interpolated RENDER pose. Without it a scenario
-     * asking how far the drawn deck is from the deck stood on was blind for every body the resolver no
-     * longer holds. Client only, as the resolver's is: a dedicated server has no render pose.
+     * Render-vs-collision pose skew for a body the deck frame holds ({@code render_pose_skew}, mode
+     * {@code aboard}): the deck point the held update left it at, and the world position the deck frame
+     * has just mapped that point to through the GAME-TICK pose, against the same point through the
+     * client's interpolated RENDER pose. Client only: a dedicated server has no render pose.
      */
     @Inject(method = "noteHeldTick", at = @At("HEAD"))
     private static void stellurgyTest$heldPoseSkew(Entity entity, String shipId, double localX, double localY,

@@ -14,7 +14,6 @@ import net.minecraft.world.WorldServer;
 
 import dev.stannismod.stellurgy.entity.EntityDummy;
 import dev.stannismod.stellurgy.integration.vs.DeckFrameTick;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**

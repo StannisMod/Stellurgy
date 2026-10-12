@@ -10,106 +10,70 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.math.AxisAlignedBB;
 
-import dev.stannismod.stellurgy.integration.vs.ShipFrameBody;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
+import dev.stannismod.stellurgy.integration.vs.DeckHeld;
 
 /**
- * What the client's deck-capture gate decided about ONE named body, per tick, over a window a test
+ * What the client's deck frame decided about taking ONE named body, per tick, over a window a test
  * opens and closes.
  *
- * <h2>The question, and why an existing record could not answer it</h2>
+ * <h2>The question</h2>
  *
- * <p>A body teleported to a ship's reported position + 4 is not taken by that ship's deck — but only
- * when a scenario ran in that world before it. The reading at the instant of the red is complete and
- * says nothing: {@code containingShipIds:[]}, {@code firstContactCandidate:null},
- * {@code supportedByWorldTerrain:false}, {@code verdict:false}. Every one of those is a NEGATIVE, and
- * a negative taken once cannot say whether the gate was asked, what it was asked about, or what it
- * was answering from.</p>
- *
- * <p><b>{@code deck_gate_decided} is the wrong record for it, and this class exists because that was
- * nearly not noticed.</b> That record is a HEARTBEAT: written on a verdict CHANGE and otherwise at
- * most once per hundred ticks ({@code MixinShipFrameTravelEvents.STELLURGYTEST_GATE_HEARTBEAT_TICKS}). The
- * failing window is the three or four ticks between the teleport and the capture read, which is far
- * shorter than the heartbeat, so a body whose verdict is STABLE across the scenario boundary — the
- * very thing under suspicion — writes nothing at all in it. An empty window then reads as "the frame
- * was never asked", which is a different finding entirely. The same record was chosen for the same
- * shape of question on 2026-09-08 and the choice was defended in a comment quoting its own javadoc;
- * it was about to be chosen a second time from a hand-off note.</p>
+ * <p>"No deck took this body" is a NEGATIVE, and a negative taken once cannot say whether the deck
+ * frame was asked, what it was asked about, or what it was answering from. A scenario whose subject is
+ * a body no deck should take — a walker on the ground beside a hull — needs the deck frame to have
+ * been ASKED about that body, tick after tick, before its "never taken" means anything; and a scenario
+ * whose body is unexpectedly NOT taken needs the decisions of the ticks between the stimulus and the
+ * read.</p>
  *
  * <h2>What it records</h2>
  *
- * <p>{@code deck_gate_explained}, once per world tick while the window is open, plus again
- * within a tick whenever {@code handled} CHANGES — three consumers ask {@code handles} in one tick
- * ({@code travel}, {@code jump}, {@code GravityHandler}) and they are not obliged to agree. Each
- * record carries three things that have to be read together and therefore have to be written
- * together:</p>
+ * <p>{@code deck_gate_explained}, once per world tick while the window is open, plus again within a
+ * tick whenever the answer CHANGES. It is taken at the deck frame's admission decision
+ * ({@code DeckFrameTick.admissionFor}), which runs on every update of a body no deck holds. Each record
+ * carries what has to be read together and therefore has to be written together:</p>
  *
  * <ul>
- *   <li><b>{@code handled}</b> — the gate's REAL return value on the call being observed;</li>
- *   <li><b>production's own breakdown</b>, every key of {@link ShipFrameTravel#explainHandles} verbatim,
- *       including its {@code verdict}. That is a SECOND evaluation, deliberately kept beside the
- *       first: {@code explainHandles} replicates the decision without the capture/release side
- *       effects, so {@code handled != verdict} is a reading in its own right and not a defect in
- *       either. It is also the entry point that documents which point it asks the support question
- *       at (the gate's own {@code gatePointFor}), which is why it is preferred to a hand-rolled
- *       invoker — this mixin already carried one that asked a NEIGHBOURING question for months;</li>
- *   <li><b>the second subject.</b> The verdict under examination is about a RELATION — "no ship holds
- *       this body" — so the record names the ships as well as the body: every LOADED hull on this
- *       side with its world box ({@code ships}, capped). {@code containingShipIds:[]} beside a box
- *       that does or does not cover the body's position is the difference between a geometry
- *       question and a registry question, and neither can be told from the other by the empty list
- *       alone.</li>
+ *   <li><b>{@code admitted}</b> — the decision's REAL return value on the call being observed: the
+ *       craft whose deck takes the body, or {@code null};</li>
+ *   <li><b>production's own breakdown</b>, every key of {@link DeckBoarding#explainDeckCapture}
+ *       verbatim, including its {@code verdict}. That is a SECOND evaluation, deliberately kept beside
+ *       the first: it asks the standing-support question its own way, so {@code admitted} and
+ *       {@code verdict} disagreeing is a reading in its own right and not a defect in either;</li>
+ *   <li><b>the second subject.</b> "No deck takes this body" is a RELATION, so the record names the
+ *       ships as well as the body: every LOADED hull on this side with its world box ({@code ships},
+ *       capped);</li>
+ *   <li><b>the body's own hold stamp</b> and the pending deck seeds of its world — this body's own
+ *       ({@code pendingSeed}) and how many that world holds in all ({@code pendingSeedsInWorld}).</li>
  * </ul>
  *
- * <p>And beside them, on the SAME record because two reads a tick apart attribute one to whatever
- * the other was: the body's own capture stamp ({@code captureEpoch}), the static
- * {@code ShipFrameTravel} holds ({@code clientLookSource}), and the pending deck
- * seeds of the body's world — this body's own ({@code pendingSeed}) and how many that world holds in
- * all ({@code pendingSeedsInWorld}). The seeds used to be one process-wide slot, which is why a seed
- * still naming a PREDECESSOR's player was the hypothesis this window was built for; they are now a
- * part of the world they place bodies in, so a predecessor's seed shows up, if at all, as a count
- * larger than this body accounts for.</p>
- *
- * <h2>The CLIENT's resolver only — and this class used to claim both</h2>
+ * <h2>The CLIENT's decision only</h2>
  *
  * <p>The window is armed by ENTITY ID, on the side it is opened on, and the only side a test can open
- * one on is the client: the harness's static-invoke bridge runs in the client JVM. Until 2026-09-23
- * this note said a client test runs against an INTEGRATED server, so one {@code open(id)} armed both
- * resolvers. It does not: the shared client base boots a dedicated server in a second JVM, nothing
- * there ever opened a window, and every server-side {@code deck_gate_explained} a failure message
- * printed was structurally empty — under a caption telling the reader an empty half meant "nobody
- * asked". The server's half of this question has no instrument; a server-side window would need a
- * server-side verb to open it, and none exists.</p>
+ * one on is the client: the harness's static-invoke bridge runs in the client JVM, and the shared
+ * client base boots a dedicated server in a second JVM. The server's half of this question has no
+ * window.</p>
  *
  * <h2>What it is SILENT about</h2>
  *
  * <ul>
- *   <li><b>Everything outside the window.</b> Nothing is recorded while closed — that is the point,
- *       and it means this record can never answer a question about what happened BEFORE
- *       {@link #open}. A reader wanting the standing verdict reads {@code deck_gate_decided}, which
- *       is what a heartbeat is for.</li>
- *   <li><b>Everything the SERVER's resolver decided</b> — see above.</li>
+ *   <li><b>Everything outside the window</b>, and every tick on which a deck already HOLDS the body —
+ *       admission is not asked then; the hold's own records ({@code deck_carry},
+ *       {@code deck_released}) answer for those ticks.</li>
  *   <li><b>It does not say WHY {@code shipIdsAt} answered as it did</b>, only what it answered, and
  *       it cannot see a hull the substrate does not report as loaded at all.</li>
- *   <li><b>The statics are read REFLECTIVELY</b> and a rename makes the read fail, not disappear:
- *       the failure is reported in the record's own {@code staticsRead} field. An instrument that
- *       cannot see something says so.</li>
+ *   <li><b>The pending seeds are read REFLECTIVELY</b> and a rename makes the read fail, not
+ *       disappear: the failure is reported in the record's own {@code seedsRead} field.</li>
  * </ul>
  *
- * <h2>Whose it is</h2>
- *
  * <p>An instance per window, created by the scenario that asks and registered with the client's
- * {@link SideTrace} under the handle {@link #open} returns. Two windows on two bodies can be open at
- * once and neither sees the other's decisions.</p>
- *
- * <p>The cost is one {@code explainHandles} per tick for ONE body while open, and otherwise a lookup
- * of the open windows on the gate's existing return hook.</p>
+ * {@link SideTrace} under the handle {@link #open} returns. The cost is one
+ * {@code explainDeckCapture} per tick for ONE body while open.</p>
  */
 public final class DeckGateWindow implements TraceWindow {
 
-    /** How many loaded hulls a record names before it stops. The failing arrangement holds one and
-     *  the question is whether that one covers the body; a class whose world has filled up with
-     *  craft is a different finding and the count below tells the reader which case this is. */
+    /** How many loaded hulls a record names before it stops; the count beside it says how many
+     *  there were. */
     private static final int SHIP_BUDGET = 6;
 
     /** The body this window is asked about. */
@@ -119,7 +83,7 @@ public final class DeckGateWindow implements TraceWindow {
     private final int recordBudget;
 
     private long lastTick = Long.MIN_VALUE;
-    private boolean lastHandled;
+    private String lastAdmitted;
     private long calls;
     private long records;
 
@@ -132,13 +96,12 @@ public final class DeckGateWindow implements TraceWindow {
      * Arm a window for one body; answers its handle.
      *
      * <p><b>The budget is not a convenience and there is no overload that picks one.</b> A window
-     * armed before a stimulus and left open records once a tick; the log's ring is 256 deep
-     * PER TYPE, so an unbounded window over a scenario that runs for minutes would turn its own
-     * history over and hand a reader the tail of it — the exact failure the ring's own size makes
-     * invisible. The caller states how many ticks of gate decisions its question is about, and when
-     * that many have been written the window writes one FINAL record saying it stopped
-     * ({@code budgetExhausted}) and then goes quiet. An instrument that runs out silently is
-     * indistinguishable from a subject that went quiet.</p>
+     * armed before a stimulus and left open records once a tick; the log's ring is 256 deep PER TYPE,
+     * so an unbounded window over a scenario that runs for minutes would turn its own history over.
+     * The caller states how many ticks of decisions its question is about, and when that many have
+     * been written the window writes one FINAL record saying it stopped ({@code budgetExhausted}) and
+     * then goes quiet. An instrument that runs out silently is indistinguishable from a subject that
+     * went quiet.</p>
      *
      * @param entityId    the subject's entity id on the client
      * @param recordsEach how many records the window may write before it stops
@@ -156,9 +119,7 @@ public final class DeckGateWindow implements TraceWindow {
         return SideTrace.client().close(handle, DeckGateWindow.class).summary("close");
     }
 
-    /** Write the window's counters without closing it — for a reader checking the gate is being
-     *  reached at all before it starts believing a silence. Same record type as {@link #close}: a
-     *  reader asks for the last one in its own window either way. */
+    /** Write the window's counters without closing it. Same record type as {@link #close}. */
     public static int peek(int handle) {
         return SideTrace.client().window(handle, DeckGateWindow.class).summary("peek");
     }
@@ -172,13 +133,13 @@ public final class DeckGateWindow implements TraceWindow {
     }
 
     /**
-     * One gate decision, from the injector on {@code ShipFrameTravel.handles}' RETURN, to every
-     * window open on this body on the side the decision was taken.
+     * One admission decision, from the injector on {@code DeckFrameTick.admissionFor}'s RETURN, to
+     * every window open on this body on the side the decision was taken.
      *
-     * @param entity  the body the gate was asked about
-     * @param handled what the gate actually returned for it on this call
+     * @param entity   the body the deck frame was asked about
+     * @param admitted what the decision returned for it on this call
      */
-    public static void sample(EntityLivingBase entity, boolean handled) {
+    public static void sample(Entity entity, String admitted) {
         if (entity == null || entity.world == null) {
             return;
         }
@@ -186,30 +147,26 @@ public final class DeckGateWindow implements TraceWindow {
         for (int i = 0; i < open.size(); i++) {
             DeckGateWindow w = open.get(i);
             if (w.entityId == entity.getEntityId()) {
-                w.decided(entity, handled);
+                w.decided(entity, admitted);
             }
         }
     }
 
-    private void decided(EntityLivingBase entity, boolean handled) {
+    private void decided(Entity entity, String admitted) {
         calls++;
         long tick = entity.world.getTotalWorldTime();
-        // Once per tick, plus any answer that CHANGES inside a tick: three consumers ask per tick
-        // and a disagreement between them is exactly the kind of thing this window exists to make
-        // visible. Bounded at three records per tick by construction.
-        if (tick == lastTick && handled == lastHandled) {
+        boolean same = admitted == null ? lastAdmitted == null : admitted.equals(lastAdmitted);
+        if (tick == lastTick && same) {
             return;
         }
         lastTick = tick;
-        lastHandled = handled;
+        lastAdmitted = admitted;
         int budget = recordBudget;
         if (records > budget) {
             return; // already said so, once, below
         }
         records++;
         if (records > budget) {
-            // The window stops HERE and says it stopped. Silence from an exhausted instrument and
-            // silence from a body nobody asked about are the same empty log otherwise.
             TestTrace.record(entity, "deck_gate_explained", "\"e\":" + entity.getEntityId()
                     + ",\"worldTick\":" + tick
                     + ",\"calls\":" + calls + ",\"budgetExhausted\":true,\"budget\":" + budget);
@@ -218,31 +175,27 @@ public final class DeckGateWindow implements TraceWindow {
         TestTrace.record(entity, "deck_gate_explained", "\"e\":" + entity.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(entity.getName())
                 // NOT `tick`, and NOT `side`: the log's ENVELOPE already carries both, and a payload
-                // key that collides with one silently OVERWRITES it. Measured on this recorder's own
-                // calibration run — the envelope's client tick 138 came out as 712, which is this
-                // body's world time, and nothing in the record said which clock a reader had. A
-                // recorder that corrupts the envelope it is written into is worse than one that
-                // omits a field, because both look like data.
+                // key that collides with one silently OVERWRITES it.
                 + "\",\"worldTick\":" + tick
                 + ",\"calls\":" + calls
-                + ",\"handled\":" + handled
+                + ",\"admitted\":" + (admitted == null ? "null" : "\"" + TestTrace.json(admitted) + "\"")
                 + ",\"bodyX\":" + TestTrace.fmt(entity.posX)
                 + ",\"bodyY\":" + TestTrace.fmt(entity.posY)
                 + ",\"bodyZ\":" + TestTrace.fmt(entity.posZ)
                 + "," + explained(entity)
                 + "," + shipsOn(entity)
-                + "," + statics(entity));
+                + "," + seeds(entity));
     }
 
-    /**
-     * Production's own breakdown, flattened. Every key {@link ShipFrameTravel#explainHandles}
-     * returns, under its own name — including {@code verdict}, which sits beside this record's
-     * {@code handled} rather than replacing it.
-     */
-    private static String explained(EntityLivingBase entity) {
+    /** Production's own breakdown, flattened: every key {@link DeckBoarding#explainDeckCapture}
+     *  returns, under its own name. */
+    private static String explained(Entity entity) {
+        if (!(entity instanceof EntityLivingBase)) {
+            return "\"gateRead\":\"notLiving\"";
+        }
         Map<String, Object> gate;
         try {
-            gate = ShipFrameTravel.explainHandles(entity);
+            gate = DeckBoarding.explainDeckCapture((EntityLivingBase) entity);
         } catch (Throwable t) {
             return "\"gateRead\":\"threw:" + TestTrace.json(String.valueOf(t)) + "\"";
         }
@@ -258,27 +211,14 @@ public final class DeckGateWindow implements TraceWindow {
     }
 
     /**
-     * Every loaded hull on the body's own side, with the world box the CONTAINMENT TEST uses — the
-     * RELATION's second subject. A body reported to be contained by nothing, beside the boxes of
-     * everything that is loaded, is a reading; the empty list on its own is not.
+     * Every loaded hull on the body's own side, with the world box the containment test uses — the
+     * RELATION's second subject. Asked of the same source the containment test is asked of
+     * ({@code ValkyrienUtils.getPhysosLoadedInWorld}, {@code PhysicsObject.getShipBB()}), which on the
+     * client is the only one that answers at all.
      *
-     * <p><b>Asked of the same source the gate's own {@code containingShipIds} is asked of, and that
-     * is not a detail.</b> {@code VSBridge.shipIdsAt} walks
-     * {@code ValkyrienUtils.getPhysosLoadedInWorld} and tests {@code PhysicsObject.getShipBB()};
-     * {@code VSIntegration.loadedShipBoxes} walks {@code getServerShipManager} and reads
-     * {@code getShipBoundingBox()} — a different accessor, from a different manager. This recorder
-     * was written against the second one first, and the calibration run said so out loud:
-     * {@code shipsRead:"threw: WorldClientShipManager cannot be cast to WorldServerShipManager"}.
-     * On the client — the side the question is about — it answered nothing at all, and had it been
-     * reading a merely NEIGHBOURING box instead of throwing, the record would have looked like
-     * evidence. (That production method promises "an empty map when the substrate is absent" and
-     * says nothing about a side; it is ledgered separately.)</p>
-     *
-     * <p><b>Blind spot, stated because the numbers invite the wrong subtraction:</b> the printed box
-     * is the RAW hull box, while the containment test grows it by a margin before asking. A body
-     * just outside a printed box may still be inside for the gate's purposes, so "the body is not in
-     * any of these boxes" is not by itself a contradiction of a non-empty {@code containingShipIds}
-     * — and a body far outside all of them is.</p>
+     * <p><b>Blind spot:</b> the printed box is the RAW hull box, while the containment test grows it
+     * by a margin before asking. A body just outside a printed box may still be inside for the
+     * decision's purposes; a body far outside all of them is not.</p>
      */
     private static String shipsOn(Entity entity) {
         StringBuilder out = new StringBuilder();
@@ -317,33 +257,17 @@ public final class DeckGateWindow implements TraceWindow {
                 + ",\"ships\":[" + out + "]";
     }
 
-    // ---- the resolver's process-wide statics, read (not re-derived) ------------------------------
-
-    private static Field declared(String name) {
-        try {
-            Field f = ShipFrameTravel.class.getDeclaredField(name);
-            f.setAccessible(true);
-            return f;
-        } catch (Throwable t) {
-            return null; // reported per record as `staticsRead`, never silently omitted
-        }
-    }
-
     /**
-     * The resolver's static and the world's pending seeds, as they stand at this decision. A field that
-     * could not be resolved is named in {@code staticsRead} rather than left out — a missing key and
-     * a null value are the same character on the wire, and the whole point of reading these is to
-     * tell "there is no stale seed" from "nobody looked".
+     * The body's hold stamp and its world's pending deck seeds, as they stand at this decision. A
+     * read that could not be made is named in {@code seedsRead} rather than left out.
      */
-    private static String statics(EntityLivingBase entity) {
+    private static String seeds(Entity entity) {
         StringBuilder missing = new StringBuilder();
         Map<?, ?> seeds = pendingSeedsOf(entity, missing);
         Object seed = seeds == null ? null : seeds.get(entity);
-        long epoch = ((ShipFrameBody) entity).stellurgy$captureEpoch();
-        Object look = read(declared("clientLookSource"), "clientLookSource", missing);
-        return "\"staticsRead\":\"" + (missing.length() == 0 ? "ok" : missing.toString()) + "\""
-                + ",\"captureEpoch\":\"" + epoch + "\""
-                + ",\"clientLookSource\":" + (look != null)
+        long stamp = entity instanceof DeckHeld ? ((DeckHeld) entity).stellurgy$holdStamp() : -1L;
+        return "\"seedsRead\":\"" + (missing.length() == 0 ? "ok" : missing.toString()) + "\""
+                + ",\"holdStamp\":" + stamp
                 + ",\"pendingSeedsInWorld\":" + (seeds == null ? "null" : String.valueOf(seeds.size()))
                 + ",\"pendingSeed\":" + (seed == null ? "null" : seedOf(seed));
     }
@@ -353,7 +277,7 @@ public final class DeckGateWindow implements TraceWindow {
      * seeded has no such part, and that reads as an empty index, not as a failure. Reflective because
      * both the part and the runtime's part map are private to production.
      */
-    private static Map<?, ?> pendingSeedsOf(EntityLivingBase entity, StringBuilder missing) {
+    private static Map<?, ?> pendingSeedsOf(Entity entity, StringBuilder missing) {
         try {
             Field capField = dev.stannismod.stellurgy.world.WorldRuntime.class.getDeclaredField("capability");
             capField.setAccessible(true);
@@ -367,7 +291,7 @@ public final class DeckGateWindow implements TraceWindow {
             }
             Field partsField = runtime.getClass().getDeclaredField("parts");
             partsField.setAccessible(true);
-            Class<?> partType = Class.forName(ShipFrameTravel.class.getName() + "$PendingSeeds");
+            Class<?> partType = Class.forName(DeckBoarding.class.getName() + "$PendingSeeds");
             Object part = ((Map<?, ?>) partsField.get(runtime)).get(partType);
             if (part == null) {
                 return java.util.Collections.emptyMap();
@@ -381,25 +305,9 @@ public final class DeckGateWindow implements TraceWindow {
         }
     }
 
-    private static Object read(Field f, String name, StringBuilder missing) {
-        if (f == null) {
-            missing.append(missing.length() == 0 ? "" : "+").append("noField:").append(name);
-            return null;
-        }
-        try {
-            return f.get(null);
-        } catch (Throwable t) {
-            missing.append(missing.length() == 0 ? "" : "+").append("threw:").append(name);
-            return null;
-        }
-    }
-
-    /**
-     * The pending seed's own fields. {@code PendingSeed} is a private nested class the test source
-     * set cannot name, so this reads it reflectively too — and the body it names is the field that
-     * decides the hypothesis: a seed still pointing at the PREDECESSOR's player is a predecessor
-     * crossing the scenario boundary, in one field, visible.
-     */
+    /** The pending seed's own fields, read reflectively ({@code PendingSeed} is a private nested
+     *  class), including the body it names — a seed pointing at another body is visible in one
+     *  field. */
     private static String seedOf(Object seed) {
         StringBuilder out = new StringBuilder("{");
         appendSeedField(out, seed, "shipId", true);
@@ -440,10 +348,8 @@ public final class DeckGateWindow implements TraceWindow {
         }
     }
 
-    // ---- wire helpers ---------------------------------------------------------------------------
-
     /** One value as JSON. Numbers stay numbers: a number answered through a quoted matcher is
-     *  indistinguishable from absent, which has cost this suite a defect before. */
+     *  indistinguishable from absent. */
     private static String value(Object v) {
         if (v == null) {
             return "null";

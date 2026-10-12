@@ -259,7 +259,7 @@ public class ClientProxy extends CommonProxy {
         // static initialiser of the class that answers them: the port must exist before the first
         // aboard tick, and a port that appears when something happens to class-load its implementor
         // is absent exactly when nothing has needed it yet.
-        dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.installClientLookSource(
+        dev.stannismod.stellurgy.integration.vs.DeckBoarding.installClientLookSource(
                 new dev.stannismod.stellurgy.client.DeckLook.Port());
         bootstrapTestClientBridge();
     }

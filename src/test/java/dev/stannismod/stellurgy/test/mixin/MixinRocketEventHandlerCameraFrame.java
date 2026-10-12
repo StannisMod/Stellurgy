@@ -177,7 +177,7 @@ public abstract class MixinRocketEventHandlerCameraFrame {
     /**
      * The crosshair this frame: what it resolved, and where its ray started.
      *
-     * <p>Anchored on the {@code ShipFrameTravel.isResolvingAboard} call — the first production call
+     * <p>Anchored on the {@code DeckBoarding.isResolvingAboard} call — the first production call
      * after the two pilot branches have returned, on every frame of the walking path, for whatever
      * body is being viewed. That is where production sampled the crosshair, and where this hook
      * always fired.</p>
@@ -194,7 +194,7 @@ public abstract class MixinRocketEventHandlerCameraFrame {
      */
     @Inject(method = "onFreeFlightCameraSetup",
             at = @At(value = "INVOKE",
-                    target = "Ldev/stannismod/stellurgy/integration/vs/ShipFrameTravel;"
+                    target = "Ldev/stannismod/stellurgy/integration/vs/DeckBoarding;"
                             + "isResolvingAboard(Lnet/minecraft/entity/Entity;)Z"),
             allow = 1,
             remap = false)

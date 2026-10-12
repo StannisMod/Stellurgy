@@ -12,8 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.event.ShipEvent;
+import dev.stannismod.stellurgy.integration.vs.DeckFrameTick;
 import dev.stannismod.stellurgy.integration.vs.DeckHold;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.space.ShipAboardTag;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 
@@ -29,11 +29,10 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>The three are separated by the {@code HOLDS.remove} they go through, in source order:</p>
  *
  * <ul>
- *   <li>{@code resolving} — the capture is on the hold's OWN ship and a seed has gone out. The test
- *       used to be {@code ShipFrameTravel.isResolving}, which answers whether ANY capture holds the
- *       body and never whether it is the one the hold is waiting for; this recorder is what measured
- *       it ending on a neighbour's hull, and the record still carries the ship so a future
- *       regression of the same shape names itself.</li>
+ *   <li>{@code resolving} — a deck of the hold's OWN ship holds him and a seed has gone out. "Some
+ *       capture holds the body" never says whether it is the one the hold is waiting for; this
+ *       recorder is what measured it ending on a neighbour's hull, and the record still carries the
+ *       ship so a future regression of the same shape names itself.</li>
  *   <li>{@code excluded} — the body entered a state that owns its own movement (riding, elytra,
  *       creative flight, water, a ladder). The seed would refuse anyway.</li>
  *   <li>{@code expired} — the window ran out. The ship never came back, and the body is handed to
@@ -170,6 +169,36 @@ public abstract class MixinDeckHoldEvents {
     }
 
     /**
+     * Each tick a live, resolved hold ASKS the client to take the body ({@code deck_hold_asked}) — the
+     * count of a hold's ticks on its deck point that does not depend on whether it teleported him on
+     * that tick. Beside {@code deck_hold_pin} it tells "the hold teleported him every tick it ran"
+     * from "it teleported him once and then asked".
+     */
+    @Inject(method = "onPlayerTick", require = 1, at = @At(value = "INVOKE",
+            target = "Ldev/stannismod/stellurgy/libvulpes/network/PacketHandler;sendToPlayer"
+                    + "(Ldev/stannismod/stellurgy/libvulpes/network/BasePacket;"
+                    + "Lnet/minecraft/entity/player/EntityPlayer;)V"),
+            remap = false)
+    private void stellurgyTest$asked(TickEvent.PlayerTickEvent event, CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        if (event.player instanceof EntityPlayerMP) {
+            TestTrace.record(event.player, "deck_hold_asked",
+                    "\"who\":\"" + TestTrace.json(event.player.getName()) + "\"");
+        }
+    }
+
+    /**
+     * A hold voided because its player was teleported after the hold's own teleport: the deck point
+     * it was asking for no longer describes where he is.
+     */
+    @Inject(method = "voidHold", require = 1, at = @At("HEAD"), remap = false)
+    private static void stellurgyTest$voided(EntityPlayerMP player, CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        TestTrace.record(player, "deck_hold_ended",
+                "\"who\":\"" + TestTrace.json(player.getName()) + "\",\"why\":\"teleported\"");
+    }
+
+    /**
      * The two removals that end a hold from OUTSIDE the tick handler, and both were silent.
      *
      * <p>Measured 2026-09-13: a hold armed at a relog pinned the body for ten ticks and then stopped
@@ -215,7 +244,7 @@ public abstract class MixinDeckHoldEvents {
                         + ",\"x\":" + TestTrace.fmt(player.posX)
                         + ",\"y\":" + TestTrace.fmt(player.posY)
                         + ",\"z\":" + TestTrace.fmt(player.posZ)
-                        + ",\"resolving\":" + ShipFrameTravel.isResolving(player));
+                        + ",\"deckHeld\":" + DeckFrameTick.holds(player));
     }
 
     private static void stellurgyTest$ended(TickEvent.PlayerTickEvent event, String why) {
@@ -224,18 +253,13 @@ public abstract class MixinDeckHoldEvents {
             return;
         }
         EntityPlayerMP player = (EntityPlayerMP) event.player;
-        // The ship the CAPTURE is on, in either mode — not `aboardShipId`, which is deliberately
-        // null in hull-stand and would report "nothing holds him" for a body clinging to the outside
-        // of a neighbour's hull, which is precisely one of the shapes this recorder exists to name.
-        String held = ShipFrameTravel.capturedShipId(player);
+        // The ship whose deck holds him as the hold ends, or none: a hold that ends with him on a
+        // NEIGHBOUR's deck is one of the shapes this recorder exists to name.
+        String held = DeckFrameTick.heldShipId(player);
         TestTrace.record(player, "deck_hold_ended",
                 "\"who\":\"" + TestTrace.json(player.getName()) + "\",\"why\":\"" + why
-                        + "\",\"resolving\":" + ShipFrameTravel.isResolving(player)
-                        + ",\"aboard\":" + (held == null ? "null"
+                        + "\",\"aboard\":" + (held == null ? "null"
                                 : "\"" + TestTrace.json(held) + "\"")
-                        + ",\"mode\":\""
-                        + (held == null ? "none"
-                                : ShipFrameTravel.isResolvingAboard(player) ? "aboard" : "hull")
-                        + "\"");
+                        + ",\"mode\":\"" + (held == null ? "none" : "aboard") + "\"");
     }
 }

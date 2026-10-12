@@ -227,15 +227,14 @@ public class RocketEventHandler extends Gui {
         // aimed them, so getLook(), and therefore which block he mines, is untouched. Composing a full
         // ship-frame look instead would silently aim his cursor somewhere the camera is not pointing.
         //
-        // Gate on the SAME "actually on a deck" truth the movement uses (ShipFrameTravel is resolving
-        // this body), not on mere containment in the ship's world AABB. That box is axis-aligned and
-        // overlaps a large air (and, for a grounded ship, terrain) volume around the hull; levelling the
-        // view for anyone inside it hijacks the camera of a player merely flying up through the airspace
-        // or standing on the ground beside the hull - he is not on the deck, so his view must be his own.
-        // ABOARD specifically: a HULL-STAND body - standing on the OUTER hull, where the ship frame
-        // has no floor beneath it - keeps world-frame semantics, so its camera is its own and is
-        // never levelled to a deck it is not standing on.
-        if (!dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isResolvingAboard(view)) {
+        // Gate on the SAME "actually on a deck" truth the movement uses (a deck holds this body), not
+        // on mere containment in the ship's world AABB. That box is axis-aligned and overlaps a large
+        // air (and, for a grounded ship, terrain) volume around the hull; levelling the view for anyone
+        // inside it hijacks the camera of a player merely flying up through the airspace or standing on
+        // the ground beside the hull - he is not on the deck, so his view must be his own. Nor is a body
+        // standing on the OUTER hull, where the ship frame has no floor beneath it: it keeps
+        // world-frame semantics, so its camera is its own and is never levelled to a deck it is not on.
+        if (!dev.stannismod.stellurgy.integration.vs.DeckBoarding.isResolvingAboard(view)) {
             return;
         }
         dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat shipQ =

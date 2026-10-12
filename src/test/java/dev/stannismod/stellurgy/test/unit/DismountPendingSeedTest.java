@@ -2,14 +2,14 @@ package dev.stannismod.stellurgy.test.unit;
 
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.PendingSeedDecision;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding.PendingSeedDecision;
 
 import static org.junit.Assert.assertEquals;
 
 /**
  * Contract pinning for the pending dismount seed's state machine
- * ({@link ShipFrameTravel#pendingSeedDecision}): the client half of the seat-dismount deck
+ * ({@link DeckBoarding#pendingSeedDecision}): the client half of the seat-dismount deck
  * capture. Pure function; no Minecraft state, so it runs under testUnit.
  *
  * <p>The player-visible contract behind these pins: standing up from a pilot seat puts the crew
@@ -23,8 +23,8 @@ public class DismountPendingSeedTest {
     private static PendingSeedDecision decide(boolean excluded, int ticksLeft,
                                               boolean captureExists, boolean captureIsThisSeed,
                                               boolean capturePredatesSlot) {
-        return ShipFrameTravel.pendingSeedDecision(
-                excluded, ticksLeft, captureExists, captureIsThisSeed, capturePredatesSlot);
+        return DeckBoarding.pendingSeedDecision(
+                excluded, ticksLeft, captureExists, captureIsThisSeed, capturePredatesSlot, false, false);
     }
 
     @Test
@@ -82,8 +82,8 @@ public class DismountPendingSeedTest {
     private static PendingSeedDecision restore(boolean excluded, int ticksLeft,
                                                boolean captureExists, boolean captureIsThisSeed,
                                                boolean capturePredatesSlot) {
-        return ShipFrameTravel.pendingSeedDecision(
-                excluded, ticksLeft, captureExists, captureIsThisSeed, capturePredatesSlot, true);
+        return DeckBoarding.pendingSeedDecision(
+                excluded, ticksLeft, captureExists, captureIsThisSeed, capturePredatesSlot, true, false);
     }
 
     @Test
@@ -115,6 +115,26 @@ public class DismountPendingSeedTest {
         // The default stays exactly as it was - this is the pin that would catch the override
         // leaking into the dismount path, where a body captured before the window is legitimate.
         assertEquals(PendingSeedDecision.KEEP_PREEXISTING,
-                ShipFrameTravel.pendingSeedDecision(false, 39, true, false, true, false));
+                DeckBoarding.pendingSeedDecision(false, 39, true, false, true, false, false));
+    }
+
+    // ---- A seed belongs to the body as it was when the seed was made ------------------------------
+
+    /**
+     * A seed whose body has since been teleported or has mounted something is VOID: never applied,
+     * and never waited out either — a seed that waits through a mount applies the moment he gets off
+     * it, on a deck he left.
+     *
+     * <p>red-witnessed: 2026-10-07, with {@code DeckBoarding#pendingSeedDecision} at
+     * {@code if (voided)} made {@code if (false)}: "expected:&lt;VOID&gt; but was:&lt;APPLY&gt;".</p>
+     */
+    @Test
+    public void aSeedWhoseBodyWasPutElsewhereOrMountedIsVoidAndNeverApplies() {
+        assertEquals(PendingSeedDecision.VOID,
+                DeckBoarding.pendingSeedDecision(false, 39, false, false, false, false, true));
+        assertEquals(PendingSeedDecision.VOID,
+                DeckBoarding.pendingSeedDecision(true, 20, false, false, false, false, true));
+        assertEquals(PendingSeedDecision.VOID,
+                DeckBoarding.pendingSeedDecision(false, 39, true, false, false, true, true));
     }
 }

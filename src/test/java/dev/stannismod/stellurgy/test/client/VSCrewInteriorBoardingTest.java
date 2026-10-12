@@ -116,8 +116,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * a shared client always has a neighbour in candidacy.
      */
     private String scenarioShipId;
-    private static final String SHIP_FRAME_TRAVEL =
-            "dev.stannismod.stellurgy.integration.vs.ShipFrameTravel";
 
     /**
      * How long one link of a deck-capture chain may take. A DEADLINE for a discrete event, not a
@@ -165,15 +163,8 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
 
     /**
      * The MODE production last committed for a captured body, from its own record — {@code "aboard"}
-     * (deck semantics: deck gravity, deck camera) or {@code "hull"} (world semantics on the outer
-     * hull), or {@code null} when it committed none since {@code mark}.
-     *
-     * <p>Every mode transition goes through one private method and this is the record taken there, so
-     * the distinction all three scenarios assert is read from production's own commit rather than
-     * inferred from a probe's dump of the state map. Its one blind spot is named in the mixin: a
-     * re-capture taken on the hull-stand travel path restores {@code hullStand} after the record, and
-     * reads {@code "aboard"} for a body that finishes the tick in hull-stand — which is why the
-     * server's own end-of-window verdict is still read beside it.</p>
+     * when a deck took it (deck semantics: deck gravity, deck camera) — or {@code null} when it
+     * committed none since {@code mark}.
      */
     private static String lastCommittedMode(String modeReply) {
         return Events.lastField(modeReply, "mode");
@@ -184,11 +175,9 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * {@code wanted} — or a failure here, carrying every mode production committed and in which
      * order.
      *
-     * <p><b>An {@code awaitMatching} and not an {@code await}</b>, because the mode is a state
-     * production can reach in two commits: a body may be taken in hull-stand and PROMOTED to aboard
-     * on a later tick, so what is waited for is the settled ANSWER rather than one edge. That is a
-     * condition over the records, which is what {@code awaitMatching} is for — and it is still the
-     * log, not a probe dump, so a failure narrates the sequence.</p>
+     * <p><b>An {@code awaitMatching} and not an {@code await}</b>: what is waited for is the LAST
+     * committed answer rather than one edge, a condition over the records — and it is still the log,
+     * not a probe dump, so a failure narrates the sequence.</p>
      */
     private String awaitCommittedMode(Events log, long mark, String wanted, String what)
             throws Exception {
@@ -274,7 +263,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 + " client={ship=" + censusField("ship")
                 + " tracked=" + censusField("tracked")
                 + " heldBy=" + censusField("heldBy")
-                + " resolverMoves=" + censusField("resolverMoves")
                 + " subPos=" + censusField("subPos")
                 + " chunkLoaded=" + censusField("chunkLoaded")
                 + " nonAir=" + censusField("nonAir")
@@ -396,14 +384,10 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // window holding hundreds of resolved ticks of a body that was aboard the entire time.
         // Measured 2026-09-16, both interior scenarios.
         //
-        // The claim was never about a transition. It is that the body ends up under DECK semantics
-        // rather than pinned to the cavity's world floor by the outer-hull fallback, and that is a
-        // STATE: `hullStand` false on a live capture. Read it, do not wait for an edge that says it.
+        // The claim was never about a transition. It is that this craft's deck still holds the body,
+        // and that is a STATE: read it, do not wait for an edge that says it.
         DeckCapture modesAfter = deckCaptureOfThisShip(scenarioShipId,
-                "the body in the cavity must still be held by THIS craft");
-        assertTrue("the body inside the hull must be held under DECK semantics, not demoted to the"
-                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter.raw(),
-                !modesAfter.hullStand);
+                "the body inside the hull must still be held by THIS craft's deck");
         // Since the TELEPORT, not since a re-claim that no longer happens: the window this leg cares
         // about is "did anything let go of him while he was being moved about inside the hull", and
         // the honest answer is that there should be nothing in it at all.
@@ -419,18 +403,13 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
 
         // The interior-boarding contract: the deck reclaims the released body - it is carried
         // back by SHIP-frame gravity (never lost through the world-down cockpit opening to the
-        // world below, never pinned by the outer-hull fallback), stays resolved ABOARD at its
-        // deck spot, and the client's ship camera engages.
+        // world below), stays held ABOARD at its deck spot, and the client's ship camera engages.
         // Read at the END of the settle, off the live capture, and NOT off the mode edge: the
         // episode is unbroken through this whole leg, so nothing transitions and no mode record is
-        // written. `hullStand` false IS "held with deck semantics"; it is production's own
-        // distinction, asked of the state rather than of a history of changes to it.
-        DeckCapture modesSettled = deckCaptureOfThisShip(scenarioShipId,
-                "the settled body must still be held by THIS craft");
-        assertTrue("a body moved about inside the ship must stay held with DECK semantics, not with"
-                + " world semantics on the outer hull (" + modesSettled.raw() + ", releases in this"
-                + " window: " + releasesAfter + "): " + trace,
-                !modesSettled.hullStand);
+        // written.
+        deckCaptureOfThisShip(scenarioShipId,
+                "a body moved about inside the ship must stay held by THIS craft's deck (releases in"
+                        + " this window: " + releasesAfter + "): " + trace);
         assertTrue("the body must stay WITH the inverted ship at its deck spot, not fall out "
                 + "(preY=" + preY + " settledY=" + settledY + ", cap=" + capEnd.raw() + "): " + trace,
                 Math.abs(settledY - preY) < STAYED_WITH_THE_SHIP_BLOCKS && capEnd.alreadyTracked);
@@ -618,16 +597,13 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // A live STATE read, not a wait on the mode edge — see the sibling scenario above for why
         // that edge no longer fires: the episode is never broken, so the mode never transitions.
         DeckCapture modesAfter = deckCaptureOfThisShip(scenarioShipId,
-                "the displaced cavity body must still be held by THIS craft");
-        assertTrue("the displaced body must be held under DECK semantics, not demoted to the"
-                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter.raw(),
-                !modesAfter.hullStand);
+                "the displaced cavity body must still be held by THIS craft's deck");
         boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
         double[] subEnd = parseSub(censusField("subPos"));
         DeckCapture capEnd = DeckCapture.read(this::exec);
         // Every release in the displacement window, each with the gate that performed it: a
-        // `noDeckBelow` or `noHullContact` here would say the enclosure term did NOT hold the body,
+        // `noDeckBelow` here would say the enclosure term did NOT hold the body,
         // which is the failure this scenario is about and is not visible in a height alone.
         String releasesAfter = clientEvents.since(releaseMark, "deck_released");
         System.out.println("[cavity] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
@@ -636,18 +612,14 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 + " releasesInWindow=" + releasesAfter + " :: " + trace);
 
         // The interior-boarding contract, positive half: the ENCLOSED unsupported body is the
-        // deck's - claimed ABOARD (not pinned by the outer-hull fallback on the cavity's
-        // world-floor), carried back against world gravity to its deck stand, ship camera on.
-        // The live state at the end of the settle, for the reason given at the sibling scenario:
-        // the episode never breaks here, so the mode edge never fires and a history of changes is
-        // the wrong instrument for a claim about where the body ENDED.
-        DeckCapture modesSettled = deckCaptureOfThisShip(scenarioShipId,
-                "the settled cavity body must still be held by THIS craft");
-        assertTrue("an unsupported body in an enclosed cavity must be held with DECK semantics, not"
-                + " pinned by the outer-hull fallback (" + modesSettled.raw() + ") | the releases in this"
-                + " window, each with the gate that performed it: " + releasesAfter
-                + " | server verdict " + capEnd.raw() + " :: " + trace,
-                !modesSettled.hullStand);
+        // deck's - claimed ABOARD, carried back against world gravity to its deck stand, ship
+        // camera on. The live state at the end of the settle, for the reason given at the sibling
+        // scenario: the episode never breaks here, so the mode edge never fires and a history of
+        // changes is the wrong instrument for a claim about where the body ENDED.
+        deckCaptureOfThisShip(scenarioShipId,
+                "an unsupported body in an enclosed cavity must be held by THIS craft's deck | the"
+                        + " releases in this window, each with the gate that performed it: "
+                        + releasesAfter + " :: " + trace);
         assertTrue("deck gravity must carry the body BACK to the deck, not let it settle on the "
                 + "roof ~3 world blocks below (preY=" + preY + " settledY=" + settledY + "): " + trace,
                 Math.abs(settledY - preY) < CARRIED_BACK_TO_DECK_BLOCKS && capEnd.alreadyTracked);
@@ -676,16 +648,18 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * normal, and is put back on the deck when he turns flight off.
      *
      * <p>red-witnessed: re-taken on the deck frame after the hand-built flight was deleted,
-     * 2026-10-06. THE CAPTURE IS KEPT — {@code ShipFrameTravel#excludedStateOf} at
-     * {@code boolean aboard = DeckFrameTick.holds(entity) || (st != null && !st.hullStand);} without its
-     * deck-frame disjunct, so a flyer the deck holds counts as excluded: "starting flight on the deck
-     * must NOT release the capture". THE ROLL IS ACCEPTED — {@code VSIntegration#flightComputerOf}
-     * answering null: "attitude hold must accept the roll" (2026-09-28, unchanged code). NOT YET for
-     * the ascent, the descent and the landing: with {@code DeckFrameTick#runInDeckFrame} at
-     * {@code !isFlying(entity) && !ShipFrameTravel.deckMayKeep(entity, shipId, local)} applying the
+     * 2026-10-06, taken on the pre-2026-10-07 form, when the exclusion stood in `ShipFrameTravel`. THE
+     * CAPTURE IS KEPT — the exclusion's deck-frame disjunct removed, so a flyer the deck holds counts as
+     * excluded: "starting flight on the deck must NOT release the capture"; that disjunct now stands as
+     * the first conjunct of {@code DeckBoarding#excludedStateOf} at
+     * {@code !DeckFrameTick.holds(entity) && !flyCaptureEligible(entity)}. THE ROLL IS ACCEPTED —
+     * {@code VSIntegration#flightComputerOf} answering null: "attitude hold must accept the roll"
+     * (2026-09-28, unchanged code). NOT YET for the ascent, the descent and the landing: with
+     * {@code DeckFrameTick#runInDeckFrame} at
+     * {@code !isFlying(entity) && !DeckBoarding.deckMayKeep(entity, shipId, local)} applying the
      * deck-keep test to a flyer as well, the method stays GREEN — its climb never leaves the reach of
      * that test, so the flyer's own keep rule is not exercised here. The records taken before named the
-     * deleted {@code ShipFrameTravel.flyingAboardTravel}.</p>
+     * deleted `ShipFrameTravel.flyingAboardTravel`.</p>
      */
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
@@ -782,7 +756,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 // one body keeping one ship's interior frame through the climb, and a sample taken
                 // against another hull in the same airspace is not evidence for it.
                 boolean tracked = cap.alreadyTracked
-                        && !cap.hullStand
                         && cap.anchoredOn(scenarioShipId);
                 if (tracked) trackedSeen++;
                 if (Boolean.parseBoolean(deckCameraText("active"))) {
@@ -904,14 +877,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // frames rather than two moments, and it is that comparison, not the flag, that decides
         // "he came back down onto the deck".
         boolean seated = capEnd.alreadyTracked
-                && !capEnd.hullStand
                 && capEnd.anchoredOn(scenarioShipId)
                 && subSeated[1] <= sub0[1] + 1.4;
         exec("gamemode survival @a"); // leave the shared world as the other tests expect it
         // WHERE it came to rest. The CONTACT is the link above; this is the geometry, and the two
-        // are different claims: a body can touch the hull and be held there by the outer-hull
-        // fallback (`hullStand`), or touch a neighbour's craft (hence the anchor check), or come
-        // down a metre high on the seat block. None of that is visible in the contact record.
+        // are different claims: a body can touch a neighbour's craft (hence the anchor check), or
+        // come down a metre high on the seat block. None of that is visible in the contact record.
         assertTrue("turning flight off must seat the body back on THIS ship's deck geometry "
                 + "(sub=" + subSeated[1] + " vs start " + sub0[1] + ", landing=" + landing + "): "
                 + (capEnd == null ? "the capture was never read" : capEnd.raw()), seated);
@@ -1083,7 +1054,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         return shipInfoById(scenarioShipId);
     }
 
-    /** One CLIENT-side subspace-census static (ShipFrameTravel.census*), as a plain string. */
     /**
      * One field of the CLIENT's most recent subspace census, as text.
      *

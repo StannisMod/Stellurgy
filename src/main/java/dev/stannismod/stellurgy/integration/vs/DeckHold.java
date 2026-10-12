@@ -15,8 +15,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Holds a body on the deck it belongs on while nothing else can: the server pins it every tick and
- * asks its client to capture, so it is never handed to world gravity during a window in which its
+ * Holds a body on the deck it belongs on while nothing else can: the server puts it on its deck point
+ * and asks its client to capture, so it is never handed to world gravity during a window in which its
  * ship is absent, unloaded or still being re-assembled.
  *
  * <h2>Who needs holding</h2>
@@ -45,13 +45,14 @@ import org.apache.logging.log4j.Logger;
  * starts unresolved, pins the body where it is, and re-tries until the ship answers.</p>
  *
  * <p>The hold mirrors the dismount deck hold ({@code EntityDummy}): crew movement is
- * client-authoritative, so the server cannot capture him directly - instead it pins the body
- * each tick (against vanilla gravity on both sides: the per-tick position set replicates to the
- * client) and re-sends the SUBSPACE deck point in {@code PacketDeckCapture}; the client maps it
- * through its own ship transform and seeds once its ship is loaded. The hold ends the moment the
+ * client-authoritative, so the server cannot capture him directly - instead it teleports the body
+ * ONCE onto the deck point and re-sends the SUBSPACE deck point in {@code PacketDeckCapture}; the
+ * client maps it through its own ship transform and seeds once its ship is loaded, and until then
+ * its pending restore seed keeps the body where the teleport put it. The hold ends the moment the
  * server sees the capture resolving (the client seeded and the server-side follow took over), on
- * an excluded state (the player relogs into creative flight - his movement is his own), or when
- * the window expires (ship gone: clean vanilla handover, never a half-capture).</p>
+ * an excluded state (the player relogs into creative flight - his movement is his own), when he is
+ * teleported after the hold's own teleport (he is somewhere the deck point no longer describes), or
+ * when the window expires (ship gone: clean vanilla handover, never a half-capture).</p>
  */
 public final class DeckHold {
 
@@ -94,6 +95,10 @@ public final class DeckHold {
         /** Non-null once the ship has been found; the pin and the capture packet need this shape. */
         String shipId;
         double subX, subY, subZ;
+        /** Whether this hold has made its one teleport onto the deck point. */
+        boolean pinned;
+        /** The player's teleport count right after that teleport; a different count voids the hold. */
+        int teleportsAtPin;
 
         Hold(UUID durableShipId, double dx, double dy, double dz) {
             this.durableShipId = durableShipId;
@@ -147,9 +152,9 @@ public final class DeckHold {
         }
 
         /**
-         * Hold {@code player} on a KNOWN ship's deck point: pin him to the current world image of the
-         * SUBSPACE point {@code (subX,subY,subZ)} on ship {@code vsShipId}, and keep asking his client
-         * to capture it until it does.
+         * Hold {@code player} on a KNOWN ship's deck point: put him once on the current world image of
+         * the SUBSPACE point {@code (subX,subY,subZ)} on ship {@code vsShipId}, and keep asking his
+         * client to capture it until it does.
          *
          * <p>This is the far side of a crossing. The caller has already resolved which ship arrived
          * and where on it the body belongs, so no lookup is needed — and re-arming an existing hold is
@@ -334,26 +339,26 @@ public final class DeckHold {
         if (hold == null) {
             return;
         }
-        // The server-side follow has taken the body - but that is the SERVER's own capture, and it
-        // says nothing about the client, which owns this body's movement. Concluding here before the
+        // A deck on the server has taken the body - but that is the SERVER's own hold, and it says
+        // nothing about the client, which owns this body's movement. Concluding here before the
         // client has even been asked to capture is what let its first-contact capture keep the
         // position AND VELOCITY vanilla restored, so a crew member who logged out walking skated on
         // across his own deck. The hold therefore may not end until at least one capture request has
         // gone out; the client's own pending slot then survives its ship streaming in.
-        // ...and it must be a follow onto THE SHIP THIS HOLD IS FOR. `isResolving` answers whether
-        // SOME craft holds this body and can never say which, so a first-contact capture taken by a
-        // neighbouring hull satisfied it and ended the hold on somebody else's deck: measured on the
-        // hyperspace arrival, where the crossing named one craft, put the body on its deck point,
-        // and the hold then let go with the capture anchored on a hull that merely overlapped it.
-        // Everything downstream — the deck frame, the carry, the camera — was then the wrong ship's.
+        // ...and it must be a deck of THE SHIP THIS HOLD IS FOR. "Some craft holds this body" cannot
+        // say which, so a hold taken by a neighbouring hull satisfied it and ended this one on
+        // somebody else's deck: measured on the hyperspace arrival, where the crossing named one
+        // craft, put the body on its deck point, and the hold then let go with the body held by a hull
+        // that merely overlapped it. Everything downstream — the carry, the camera — was then the
+        // wrong ship's.
         if (hold.seedSent && hold.shipId != null
-                && hold.shipId.equals(ShipFrameTravel.capturedShipId(player))) {
+                && hold.shipId.equals(DeckBoarding.aboardShipId(player))) {
             holds().remove(player.getUniqueID());
             return;
         }
         // An excluded state - riding, elytra, creative flight, water/ladder, levitation - owns its
         // own movement and ends any capture; the seed would refuse anyway.
-        if (ShipFrameTravel.isExcludedFromCapture(player)) {
+        if (DeckBoarding.isExcludedFromCapture(player)) {
             holds().remove(player.getUniqueID());
             return;
         }
@@ -366,9 +371,9 @@ public final class DeckHold {
         // capture yet, so what it holds is a stale point - and its world-tick mover then pulls the
         // body toward it, steadily, past the resolver. Measured on the walking-relog e2e: the body
         // sat exactly still for ten ticks and then slid ~0.04 blocks per tick along the walk it
-        // logged out on, with an external [FF-TRACE/MOVE] of (0, -0.76, +0.51) on the server. The
-        // resolved commit disarms this every tick for a body it owns (the same call); a body still
-        // being handed back needs it too, or the hold's own pin is what it fights.
+        // logged out on, with an external [FF-TRACE/MOVE] of (0, -0.76, +0.51) on the server. A deck
+        // disarms this every tick for a body it holds (the same call); a body still being handed
+        // back needs it too, or the hold's own pin is what it fights.
         VSIntegration.suppressShipDrag(player);
         double[] world = hold.resolved() ? VSIntegration.toWorldFrameFor(
                 player.world, hold.shipId, hold.subX, hold.subY, hold.subZ) : null;
@@ -376,15 +381,26 @@ public final class DeckHold {
             holdUnresolved(player, hold);
             return;
         }
-        // Pin to the CURRENT world image of the persisted deck point (the ship may sit at any
-        // attitude now) and ask the owning client to capture, exactly like the dismount hold:
-        // the deck point travels as a SUBSPACE triple; the client maps it through its OWN
-        // transform and seeds once; re-sends no-op after that.
-        player.setPositionAndUpdate(world[0], world[1], world[2]);
-        player.motionX = 0.0;
-        player.motionY = 0.0;
-        player.motionZ = 0.0;
-        player.fallDistance = 0.0f;
+        // ONE teleport: to the CURRENT world image of the persisted deck point (the ship may sit at
+        // any attitude now). After it the hold only asks, exactly like the dismount hold - the deck
+        // point travels as a SUBSPACE triple, the client maps it through its OWN transform and seeds
+        // once, and while it waits for the craft to stream in its pending restore seed keeps the body
+        // where this teleport put it. A pin repeated every tick armed a fresh teleport each time, and
+        // the server drops a player's every block click until his client confirms the newest one.
+        if (!hold.pinned) {
+            player.setPositionAndUpdate(world[0], world[1], world[2]);
+            player.motionX = 0.0;
+            player.motionY = 0.0;
+            player.motionZ = 0.0;
+            player.fallDistance = 0.0f;
+            hold.pinned = true;
+            hold.teleportsAtPin = ((DeckHeld) player).stellurgy$teleports();
+        } else if (((DeckHeld) player).stellurgy$teleports() != hold.teleportsAtPin) {
+            // Somebody put him somewhere since this hold's own teleport: the deck point it is asking
+            // for no longer describes where he is, and asking on would put him back.
+            voidHold(player);
+            return;
+        }
         // A RESTORE seed: it re-establishes what the durable record says, so it outranks whatever
         // capture the returning client made for itself out of the position and velocity vanilla
         // handed it. A dismount seed deliberately does not (contract note on PacketDeckCapture).
@@ -411,7 +427,7 @@ public final class DeckHold {
      * arrive; that half is fixed above, and this half must still be right for the ticks it does
      * spend here.</p>
      *
-     * <p>So: if the ship-frame resolver is already carrying this body ABOARD a deck, stand down
+     * <p>So: if a deck is already carrying this body in its own frame, stand down
      * entirely — it is doing the very job this branch is a stand-in for, and doing it in the frame
      * that moves. Otherwise cancel only what the stated reason names: the FALL. Downward motion and
      * fall damage go; anything the player is doing horizontally is his own.</p>
@@ -428,13 +444,23 @@ public final class DeckHold {
                     player.getName(), hold.durableShipId == null
                             ? "the craft a crossing will name" : "ship " + hold.durableShipId);
         }
-        if (ShipFrameTravel.isResolvingAboard(player)) {
+        if (DeckBoarding.isResolvingAboard(player)) {
             return; // already carried in the ship's own frame; a world-frame pin would fight it
         }
         if (player.motionY < 0.0) {
             player.motionY = 0.0;
         }
         player.fallDistance = 0.0f;
+    }
+
+    /**
+     * End a hold whose player was teleported after the hold's own teleport. Not a degradation: he is
+     * where whoever moved him wanted him, and the hold's deck point no longer describes that.
+     */
+    private static void voidHold(EntityPlayerMP player) {
+        holds().remove(player.getUniqueID());
+        LOGGER.info("[SPACE] the deck hold on {} ends: he was teleported after it put him on its deck"
+                + " point.", player.getName());
     }
 
     /**

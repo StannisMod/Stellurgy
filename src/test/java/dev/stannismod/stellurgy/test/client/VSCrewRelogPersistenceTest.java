@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.test.DeckCapture;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.PilotSeat;
 import dev.stannismod.stellurgy.test.RocketFixture;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 
@@ -482,7 +483,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
                 + "walked off the edge is measuring the edge, not the guard" + observed,
                 offDeckTicks == 0);
         scenario().requireArranged("he must still be captured ABOARD at the end" + observed,
-                capAfter.alreadyTracked && !capAfter.hullStand);
+                capAfter.alreadyTracked);
         scenario().requireArranged("...and ABOARD THE DECK HE WALKED ON — a body that ended the walk"
                 + " held by a neighbouring hull satisfies the line above, and the drop counts below"
                 + " would then be about a deck he is no longer on" + observed,
@@ -551,11 +552,13 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
      *
      * <p>red-witnessed: the CONTROL, 2026-09-28 — the verdict the wait rewrite touched. The guard this
      * javadoc describes was removed on 2026-09-16, so the count now asks whether ANY release happens
-     * during an ordinary walk. A flat 0.05-block step guard re-added to {@code ShipFrameTravel#travel}
-     * on the client, firing once: "CONTROL A: the guard must be quiet for the same walk without a
-     * stall". The same guard firing on every step instead failed the arrangement first ("the client
-     * must have resolved the body through every window") — a body released on every step is never
-     * resolved long enough to be measured.</p>
+     * during an ordinary walk. Taken on the pre-2026-10-06 form: a flat 0.05-block step guard re-added
+     * to the travel resolver's tick (`ShipFrameTravel.travel`, deleted with it) on the client, firing
+     * once: "CONTROL A: the guard must be quiet for the same walk without a stall". The same guard
+     * firing on every step instead failed the arrangement first ("the client must have resolved the
+     * body through every window") — a body released on every step is never resolved long enough to be
+     * measured. NOT re-taken against the deck frame, which holds the walker now and releases him only
+     * at {@code DeckFrameTick#release} at {@code noteReleased(entity, reason)}.</p>
      */
     @Test
     public void aCrewMemberIsNotReleasedWhenTheServerSkipsATickBurst() throws Exception {
@@ -883,6 +886,74 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
     }
 
     /**
+     * A deadline for a returning crew member's deck hold to END, in server ticks. Not a guess at how
+     * long a capture takes: the hold gives itself up at 200 ticks ({@code DeckHold#HOLD_WINDOW_TICKS})
+     * and writes an end record then too, so a healthy and a broken hold both end inside it.
+     */
+    private static final int HOLD_END_BUDGET_TICKS = 240;
+
+    /**
+     * How far above the deck the declared hold's point is, in blocks: past the 6 blocks of floor below
+     * the feet within which a deck keeps a body ({@code DeckBoarding#FLOOR_PROBE_DEPTH}), so neither
+     * side's deck takes him where the hold puts him — he has to fall to within reach of the deck
+     * first, about five blocks, and the hold runs and asks on every tick of that fall.
+     */
+    private static final double HOLD_POINT_ABOVE_DECK = 10.0;
+
+    /**
+     * A declared deck hold puts a crew member on its deck point by ONE teleport, and his
+     * client applies it ONCE. After that the hold only asks his client to take him, and his client
+     * treats every re-send as the request it already answered — so neither side ever teleports him
+     * again, and the hold never stands between him and his own clicks (a server that has sent a
+     * teleport drops the player's block clicks until his client confirms it).
+     *
+     * <p>Arranged with the hold a crossing arms at its arrival ({@code player hold-on-deck}), on a
+     * point the deck cannot take him at, so that the hold runs for as many ticks as he takes to fall
+     * into the deck's reach. That is the state a hold waiting for its craft is in; on a deck that takes
+     * him at once the hold ends on its second tick and can show nothing about the ones after.</p>
+     *
+     * <p>red-witnessed: 2026-10-07, THE SERVER — with {@code DeckHold#onPlayerTick} at
+     * {@code if (!hold.pinned)} made {@code if (true)}: "a declared hold must put him on its deck point
+     * by one teleport, then only ask: 199 teleports over the 199 ticks it asked". THE CLIENT — with
+     * {@code DeckBoarding#tryApplyPendingSeed} at {@code slot.ended = true;} (the APPLY branch) made
+     * {@code seeds.remove(body);}: "...and his client must apply it once, however many times it is
+     * asked: applied 198 times over 199 requests".</p>
+     */
+    @Test
+    public void aDeclaredHoldPutsHimOnItsDeckPointByOneTeleport() throws Exception {
+        buildShip(site());
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+                .requireFound("the seat names this ship's deck in its subspace");
+        Events events = serverEvents();
+        long holdMark = events.markInstrumented();
+        long clientHoldMark = clientEvents().mark();
+        Reply armed = Reply.of(exec("stellurgytest player hold-on-deck " + scenarioShipId + " "
+                + (seat.seatX + 0.5) + " " + (seat.seatY + HOLD_POINT_ABOVE_DECK) + " " + (seat.seatZ + 0.5)));
+        scenario().requireArranged("the hold must be armed on this ship: " + armed,
+                armed.bool("held") && scenarioShipId.equals(armed.text("heldFor")));
+
+        // LINK: the hold's own end, whichever way it ends.
+        String end = events.awaitRecordWithField(holdMark, "deck_hold_ended", "who", BOT,
+                "the hold must end", HOLD_END_BUDGET_TICKS);
+        int asked = Events.recordsWhere(events.since(holdMark, "deck_hold_asked"), "who", BOT).size();
+        // The hold must have spent more than one tick on its point — one that ended on its first tick
+        // keeps "one teleport" whatever it would have done on the next.
+        scenario().requireArranged("the hold must ask his client on more than one tick before it ends"
+                + " (asked " + asked + " times; it ended " + end + ")", asked > 1);
+        String pins = events.since(holdMark, "deck_hold_pin");
+        int teleports = Events.recordsWhereAll(pins, "who", BOT, "where", "deckPoint").size();
+        assertTrue("a declared hold must put him on its deck point by one teleport, then only ask: "
+                        + teleports + " teleports over the " + asked + " ticks it asked; " + pins,
+                teleports <= 1);
+        String seeds = clientEvents().since(clientHoldMark, "ship_frame_seed");
+        Events.assertInstrumentRan(seeds, "ship_frame_seed_events", "his client applied the hold's point");
+        int applied = Events.recordsWhereAll(seeds, "ship", scenarioShipId, "outcome", "applied").size();
+        scenario().requireArranged("his client must take the hold's point at all: " + seeds, applied >= 1);
+        assertTrue("...and his client must apply it once, however many times it is asked: applied "
+                + applied + " times over " + asked + " requests; " + seeds, applied <= 1);
+    }
+
+    /**
      * A crew member who logs out WHILE WALKING must come back STANDING STILL on the spot the durable
      * record names — not sliding on in the direction he was going.
      *
@@ -1068,28 +1139,19 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
                 + " blocks along the deck in 30 ticks; the same body before the relog moved "
                 + idleCreep + " over the same window)" + path, afterCreep < SHIP_FRAME_DRIFT_TOLERANCE);
 
-        // The two CLIENT-side pins, and the reason they exist alongside the sampled trace above.
+        // The CLIENT-side pin, and the reason it exists alongside the sampled trace above.
         //
-        // (1) ONE deck point. The client is where this body's movement is decided, and what it
+        // ONE deck point. The client is where this body's movement is decided, and what it
         // decides each tick is a ship-frame point. Held still, that point must not travel: a body
         // given a recorded position keeps it. The reading is the client's own committed point, so
         // it carries none of the ship-transform skew that contaminates any position re-derived from
         // world coordinates while the ship is moving - and the ship IS moving here, for the first
         // second or so after a rejoin, which is exactly when this used to break.
-        //
-        // (2) ONE capture mode. Standing on a deck is ABOARD (deck gravity, deck camera, deck walk
-        // basis); the world-frame HULL mode is for a body on the ship's outer skin. A body that
-        // alternates between them is in neither contract, and the alternation is what produced (1):
-        // the hull mode re-bases the held deck point onto the body's current world position, so
-        // every flip banked the skew and the crew member ratcheted along his own deck.
         String history = clientTickHistory();
-        assertTrue("the client's per-tick record must exist, or these pins measure nothing "
-                + "(is the client JVM in test mode?)", history.contains("|B="));
         double heldTravel = heldPointTravel(history, fromTick);
-        int hullTicks = hullStandTicks(history, fromTick);
         int covered = resolvedSince(history, fromTick);
         System.out.println("[walk-relog] CLIENT held-point travel along the deck = " + heldTravel
-                + " over " + covered + " resolved ticks, hullStand ticks = " + hullTicks);
+                + " over " + covered + " held ticks");
         // WITNESS: "it did not travel" and "nothing was recorded" are the same number otherwise.
         assertTrue("the client must have resolved the body through the observation window, or the "
                 + "two pins below cannot fail (" + covered + " ticks recorded)\n" + history,
@@ -1097,10 +1159,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         assertTrue("the deck point the client holds him at must not travel along the deck with no "
                 + "input (moved " + heldTravel + " blocks, bar " + SHIP_FRAME_DRIFT_TOLERANCE + ")\n"
                 + history, heldTravel < SHIP_FRAME_DRIFT_TOLERANCE);
-        assertTrue("a crew member standing on a deck must stay in ABOARD capture semantics - "
-                + "flipping to the world-frame hull mode re-bases his deck point onto wherever the "
-                + "world thinks he is (" + hullTicks + " hull-stand ticks)\n" + history,
-                hullTicks == 0);
 
         // Gross-misplacement bound: he has to come back on the deck spot he left, not somewhere
         // else on the ship. Loose on purpose - the reference is read one command before the logout
@@ -1300,16 +1358,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             }
         }
         return worst;
-    }
-
-    private int hullStandTicks(String history, long fromTick) {
-        int hull = 0;
-        for (String record : Events.records(history)) {
-            if (tickOf(record) > fromTick && "h".equals(Events.text(record, "path"))) {
-                hull++;
-            }
-        }
-        return hull;
     }
 
     /** How many ticks the window actually covers — a witness that the pins above had something to

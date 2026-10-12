@@ -31,6 +31,32 @@ public abstract class MixinEntityDeckHeld implements DeckHeld {
         stellurgy$deckEpisode = episode;
     }
 
+    @Unique
+    private long stellurgy$holdStamp;
+
+    @Override
+    public long stellurgy$holdStamp() {
+        return stellurgy$holdStamp;
+    }
+
+    @Override
+    public void stellurgy$setHoldStamp(long stamp) {
+        stellurgy$holdStamp = stamp;
+    }
+
+    @Unique
+    private int stellurgy$teleports;
+
+    @Override
+    public int stellurgy$teleports() {
+        return stellurgy$teleports;
+    }
+
+    @Override
+    public void stellurgy$countTeleport() {
+        stellurgy$teleports++;
+    }
+
     @Inject(method = "setPosition", at = @At("HEAD"))
     private void stellurgy$notePositionWrite(double x, double y, double z, CallbackInfo ci) {
         if (stellurgy$deckEpisode != null) {

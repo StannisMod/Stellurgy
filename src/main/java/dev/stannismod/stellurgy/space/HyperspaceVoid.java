@@ -17,7 +17,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 
 /**
  * Leaving your ship in hyperspace kills you.
@@ -32,7 +32,7 @@ import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
  *
  * <h3>Why this is a countdown and not an instant</h3>
  *
- * "Aboard" is answered by the deck resolver, and that answer is legitimately absent for a while
+ * "Aboard" is answered by the deck that holds him, and that answer is legitimately absent for a while
  * around a crossing: the ship is re-assembled asynchronously at the far end, the departure boarding
  * retries per tick until a seat resolves, and a player carried between worlds spends a moment in a
  * world whose ship has not caught up with him. Killing on the first tick that reads "not aboard"
@@ -49,7 +49,7 @@ import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
  * <h3>What counts as aboard</h3>
  *
  * Either shape of membership: riding a seat's dummy, or resolved on a deck by
- * {@link ShipFrameTravel#aboardShipId}. Those are the two postures the whole subsystem recognises,
+ * {@link DeckBoarding#aboardShipId}. Those are the two postures the whole subsystem recognises,
  * and this class deliberately asks the same question the aboard record asks rather than inventing a
  * second geometry that could disagree with it.
  *
@@ -171,7 +171,7 @@ public final class HyperspaceVoid {
         if (riding instanceof EntityDummy && ((EntityDummy) riding).getSeatPos() != null) {
             return true;
         }
-        return ShipFrameTravel.aboardShipId(player) != null;
+        return DeckBoarding.aboardShipId(player) != null;
     }
 
     /**

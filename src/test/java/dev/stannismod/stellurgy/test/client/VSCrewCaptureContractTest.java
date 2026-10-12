@@ -224,25 +224,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      */
     private static final int CAPTURE_CHURN_LIMIT = 5;
 
-    /**
-     * The same bound for a body standing on the HULL TOP of an inverted craft, tighter because the
-     * leg is shorter: nothing in it crosses a boundary that could release the body legitimately, so
-     * anything above a couple of releases is the defect.
-     */
-    private static final int HULL_TOP_CHURN_LIMIT = 3;
-
-    /**
-     * How far above the hull's own centre a body is RELEASED in the encounter legs, in blocks.
-     *
-     * <p>The TEST'S OWN arrangement fact — where this scenario drops its subject from. It is named
-     * because a BOUND is derived from it rather than chosen: a body that finishes further from the
-     * hull than the height it was released at did not land on anything, it was thrown. Those were
-     * two unrelated-looking {@code 7}s, one in the teleport and one in the assertion a hundred and
-     * fifty lines below, and nothing tied them together — so moving the drop would have silently
-     * loosened the check that exists to catch a body being flung.</p>
-     */
-    private static final int HULL_DROP_HEIGHT_BLOCKS = 7;
-
     /** How many mouse turns the deck-look sweep performs. The TEST'S OWN: it is the experiment. */
     private static final int DECK_LOOK_TURNS = 4;
 
@@ -454,14 +435,15 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * A jump from the top deck keeps the capture and lands back on the same deck.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel#jump}
-     * adding 1.5 blocks a tick of ship-frame sideways motion to every
-     * aboard jump, flinging him off the deck: "the jumper was in the air when the key came up, so he
-     * must LAND on the deck he jumped from … no `deck_contact` carrying ship = …". THE JUMP LEAVES THE
-     * DECK — the same method ({@code ShipFrameTravel#jump} at {@code motion[1] = up}) giving the jump
-     * no upward motion: "the jump must actually leave the deck
-     * (apex=157.0 deckY=157.0)"; that one never airs him, so the conditional landing wait is skipped
-     * on it.</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28, taken on the pre-2026-10-06 form against
+     * the travel resolver's own aboard jump (`ShipFrameTravel.jump`, deleted with the resolver) and NOT
+     * re-taken since: a jump on a deck is now vanilla's own, run in the deck's frame at
+     * {@code DeckFrameTick#runInDeckFrame} at {@code ownUpdate.run()}. THE LANDING — that jump adding
+     * 1.5 blocks a tick of ship-frame sideways motion to every aboard jump, flinging him off the deck:
+     * "the jumper was in the air when the key came up, so he must LAND on the deck he jumped from … no
+     * `deck_contact` carrying ship = …". THE JUMP LEAVES THE DECK — the same jump given no upward motion
+     * (`motion[1] = up`): "the jump must actually leave the deck (apex=157.0 deckY=157.0)"; that one
+     * never airs him, so the conditional landing wait is skipped on it.</p>
      */
     @Test
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
@@ -622,6 +604,18 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     // ---- Boarding vs bystanders: terra firma near a ship never captures -------------------------
 
+    /**
+     * A player walking on world terrain beside a tilted, parked ship is never taken by its deck.
+     *
+     * <p>red-witnessed: 2026-10-07, THE DECK WAS ASKED (the positive precondition) — with
+     * {@code DeckFrameTick#updateLocalPlayerLiving} at {@code if (!isLocalPlayer(body))} preceded by
+     * returning false for every body, so the client's deck frame is never asked about him: "the deck
+     * frame must have been ASKED about the walker, or \"never captured\" is a statement about the
+     * arrangement and not about the decision". The never-captured verdict: NOT YET — the admission
+     * inverted to take any containing craft before the terrain veto ({@code DeckFrameTick#admissionFor}
+     * at {@code candidates.add(0, declared);}) left it GREEN, the walker's position being in no
+     * craft's grown box on that run.</p>
+     */
     @Test
     public void walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame() throws Exception {
         final FixtureSite site = site();
@@ -691,20 +685,12 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
                 + " begins, or the excursion below is measured against a falling body (y="
                 + firstY + " then " + groundY + ")", Math.abs(groundY - firstY) < AT_REST_Y_CHANGE_BLOCKS);
 
-        // The gate's own decisions for THIS walk, from a mark taken before the first step. The
-        // negative below ("never captured") is satisfied by a walker the ship frame never looked at,
-        // and nothing in the old form could tell those apart: `deck_capture_events` announces itself
-        // only INSIDE a capture or a release, so on a body that was never captured it says nothing.
-        //
-        // The positive precondition is `deck_gate_explained`, NOT `deck_gate_decided`, and the
-        // sentence that used to stand here — "the frame was ASKED about this body, tick after tick"
-        // — was a claim about a record that does not behave that way. `deck_gate_decided` is a
-        // HEARTBEAT: written on a verdict CHANGE and otherwise at most once per hundred ticks. This
-        // walk is twelve four-tick steps, comfortably inside one heartbeat, and a walker beside a
-        // parked ship is the most stable verdict there is — so the window contained NOTHING and the
-        // assertion below read that as "the frame never asked". It went red exactly that way on
-        // 2026-09-16, with the record absent from `droppedByType`, which is the log saying it was
-        // never written rather than evicted.
+        // The deck frame's own admission decisions for THIS walk, from a mark taken before the first
+        // step. The negative below ("never captured") is satisfied by a walker the deck frame never
+        // looked at, so the positive precondition is a per-tick record of it asking about this body:
+        // `deck_gate_explained`, written at the admission decision while the window is armed for him.
+        // A record written only on a CHANGE would be empty here — a walker beside a parked ship is the
+        // most stable answer there is — and would read as "never asked".
         Events client = clientEvents();
         openDeckGateWindow(GATE_WINDOW_RECORDS_WALK);
         long walkMark = client.mark();
@@ -738,20 +724,16 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             closeDeckGateWindow();
         }
         String gate = client.since(walkMark, "deck_gate_explained");
-        // Kept BESIDE it rather than deleted: the heartbeat answers a different question — what the
-        // standing verdict is — and the two disagreeing would be a reading in its own right.
-        String heartbeat = client.since(walkMark, "deck_gate_decided");
         String captures = client.since(walkMark, "deck_carry");
         System.out.println("[crewcap] ground-walk groundY=" + groundY + " yMin=" + yMin + " yMax="
                 + yMax + " captured=" + captured + "/" + samples + " :: " + trace
-                + "\n[crewcap] ground-walk gate decisions :: " + gate
-                + "\n[crewcap] ground-walk standing verdict (heartbeat) :: " + heartbeat
+                + "\n[crewcap] ground-walk admission decisions :: " + gate
                 + "\n[crewcap] ground-walk captures in window :: " + captures);
 
         Events.assertInstrumentRan(gate, "deck_gate_window_events",
-                "the ship frame was or was not asked about this walker at all");
-        assertTrue("the ship frame must have been ASKED about the walker, or \"never captured\" is a"
-                + " statement about the arrangement and not about the gate: " + gate,
+                "the deck frame was or was not asked about this walker at all");
+        assertTrue("the deck frame must have been ASKED about the walker, or \"never captured\" is a"
+                + " statement about the arrangement and not about the decision: " + gate,
                 Events.countRecords(gate, "type", "deck_gate_explained") > 0);
         assertTrue("a player walking on world terrain beside a parked ship must NEVER be captured "
                 + "into its frame (" + captured + "/" + samples + " samples captured): " + trace
@@ -767,18 +749,18 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     // ---- #47: a still crew member on a steeply-rolled deck is not dragged sideways --------------
 
-    private static final String SHIP_FRAME_TRAVEL =
-            "dev.stannismod.stellurgy.integration.vs.ShipFrameTravel";
     private static final String DUMMY_ID = "dummyId";
 
     /**
      * A still crew member on a deck rolled past vertical is neither dragged sideways nor churned.
      *
-     * <p>red-witnessed: with {@code ShipFrameTravel#travel} declining
-     * every tick on a deck whose up points below -0.5: "the client must be resolving the crew member
-     * through the stillness window — the ship frame's frame never committed a capture for this body",
-     * 2026-09-28. That is the verdict the wait rewrite touched; the drift and churn verdicts after it
-     * are not witnessed.</p>
+     * <p>red-witnessed: taken on the pre-2026-10-06 form, with the travel resolver
+     * (`ShipFrameTravel.travel`, deleted with it) declining every tick on a deck whose up points below
+     * -0.5: "the client must be resolving the crew member through the stillness window — the ship
+     * frame's frame never committed a capture for this body", 2026-09-28. NOT re-taken against the deck
+     * frame, which holds him now from {@code DeckFrameTick#admissionFor} at
+     * {@code if (!admissible(entity))}. That is the verdict the wait rewrite touched; the drift and
+     * churn verdicts after it are not witnessed.</p>
      */
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
@@ -870,13 +852,10 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // the edge here, each reporting "the frame never resolved this body" over a window holding
         // hundreds of resolved ticks.
         //
-        // NOT `deck_gate_decided`, which was tried first and is wrong for THIS question. That record
-        // is a heartbeat — written on a verdict CHANGE and otherwise at most once every five seconds
-        // — so a window shorter than the heartbeat comes back empty however hard the frame worked.
-        // Measured: the activity leg failed with `count:0` while its instrument was registered and
-        // none of its records had been evicted, and the two legs that passed did so by where the
-        // heartbeat happened to fall. It remains the right instrument one scenario up, where the
-        // question is whether the frame was ASKED about a body at all.
+        // NOT a record written only when an answer CHANGES, which was tried first and is wrong for
+        // THIS question: a window shorter than its heartbeat comes back empty however hard the frame
+        // worked. Measured: the activity leg failed with `count:0` while its instrument was
+        // registered and none of its records had been evicted.
         assertTrue("the client must be resolving the crew member through the stillness window —"
                 + " the ship frame's frame never committed a capture for this body. Capture"
                 + " records since the mark: " + gate,
@@ -1282,9 +1261,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // shove from anywhere else is undone before the client sends anything — measured, a
         // forty-block external shove produced a movement packet identical to standing still. The
         // code that owns the position is the only thing that can declare an impossible one, which is
-        // exactly how it happened in play. Two codes can own it — the travel resolver's commit and
-        // the deck frame's held update — and the arming is taken by whichever holds him
-        // (MixinShipFrameTravelShove, MixinDeckFrameTickShove).
+        // exactly how it happened in play. The deck frame's held update owns it, and the arming is
+        // taken there (MixinDeckFrameTickShove).
         // FROM A WALKING BODY. The bound's region is scaled by the ticks since it last judged this
         // player, capped at ten — and a STANDING client sends a position packet only every twenty
         // ticks, so a standing body's next packet is licensed (2 + carry) x 10 + 1, about 21 blocks:
@@ -1405,8 +1383,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      *
      * <p>red-witnessed: only with BOTH defences removed — the dismount hold's exclusion of an excluded
      * body ({@code EntityDummy#keepDismountedPilotOnDeck} at {@code logHold("pilotExcluded", exit)}) AND
-     * the seed's own excluded check ({@code ShipFrameTravel#tryApplyPendingSeed} at
-     * {@code excludedStateOf((EntityLivingBase) body) != null}) —
+     * the seed's own excluded check ({@code DeckBoarding#tryApplyPendingSeed} at
+     * {@code excludedStateOf((EntityLivingBase) body) != null}; taken when it stood in
+     * `ShipFrameTravel`, moved verbatim on 2026-10-07) —
      * does this fail: "a flying ex-pilot must never be yanked back down (maxDrop=5.1)", 2026-09-28.
      * Either one removed alone leaves it green; each suffices. The verdict the wait rewrite touched
      * is the premise that the double-tap started flight at all, which is vanilla's and no Stellurgy line
@@ -1522,435 +1501,97 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     // ---- The OUTER hull of an inverted ship is walkable, with WORLD-frame semantics -------------
 
+    /**
+     * A player resting on the OUTER hull of an upside-down craft keeps world-frame semantics: no deck
+     * takes him, and the deck-levelled camera never engages for him.
+     *
+     * <p>The contract is the outer hull's, and it is a NEGATIVE about the deck: in the craft's own
+     * frame that face has no floor beneath him, so no deck may hold him there — the physics substrate
+     * collides him with the hull as with terrain, and his gravity, movement and view are the world's.
+     * Where he rests is pinned by the outer-hull scenarios below; this one pins whose he is while he
+     * rests there.</p>
+     *
+     * <p>The two observations, each a window on the CLIENT's log from a mark taken before he is put on
+     * the face, and each with a POSITIVE precondition on its own instrument in the same window:</p>
+     * <ul>
+     *   <li>no {@code deck_entered} naming him — the deck frame's capture edge — after the deck frame
+     *       was ASKED about him in the window: the gate window's per-tick record of its admission
+     *       decision ({@code deck_gate_explained}), so an empty edge list is the deck frame answering
+     *       "no" and not a deck frame that never looked;</li>
+     *   <li>no {@code deck_camera_changed} engage edge, and the standing camera value off — "never" is
+     *       a claim about the whole encounter, and the standing value alone is false both for a camera
+     *       that never ran and for one that turned on and off — after the camera hook ran in the window
+     *       (this scenario's {@code cameraHookCalls} grew).</li>
+     * </ul>
+     *
+     * <p>red-witnessed: 2026-10-07, THE DECK — with {@code DeckFrameTick#admissionFor} at
+     * {@code candidates.add(0, declared);} followed by returning the first containing craft, before
+     * the terrain veto and the standing probe: "no deck may take a player resting on the OUTER hull -
+     * in the craft's frame that face has no floor under him: every deck capture of him since he was
+     * put there: …". THE CAMERA — with {@code DeckBoarding#isResolvingAboard} at
+     * {@code return entity != null && DeckFrameTick.holds(entity);} and {@code DeckBoarding#aboardShipId}
+     * at {@code return entity == null ? null : DeckFrameTick.heldShipId(entity);} both answering by
+     * containment instead: "the deck camera must never engage for a player on the outer hull: 1 engage
+     * edge(s), standing value active=true". The first alone (the gate) left it green: the camera also
+     * asks which craft holds him. THE DECK WAS ASKED — with {@code DeckFrameTick#updateLocalPlayerLiving}
+     * at {@code if (!isLocalPlayer(body))} preceded by returning false for every body: "the deck frame
+     * must have been ASKED about him in the encounter". THE CAMERA RAN — with {@code ClientProxy#registerEventHandlers}
+     * at {@code MinecraftForge.EVENT_BUS.register(new RocketEventHandler())} removed: "the camera hook
+     * must have been asked about his view in the encounter … 0.0 calls".</p>
+     */
     @Test
-    public void standingOnTheWorldTopOfAnInvertedShipKeepsWorldFrameSemantics() throws Exception {
-        final FixtureSite site = site();
-        final int bx = site.x, by = site.y, bz = site.z;
-
-        // The round-15 playtest residue: standing on the world-facing top of an inverted hull (its
-        // former belly), the capture cycle chews - in subspace that surface has NO floor beneath
-        // the body (shipObstacles=0), so ship-frame capture is structurally impossible there (first
-        // contact demands standing support in the ship's OWN subspace), yet the post-drop
-        // re-capture takes unconditionally and ship-frame gravity fights the world's hull collision
-        // every tick. The outer-hull contract: that body is NOT ABOARD - it keeps world gravity and
-        // movement and stands on the hull as on terrain, never tunneling.
-        double[] ship = buildShip(site);
-        double h = Math.toRadians(160.0) / 2.0;
-        double upBeforeRoll = shipInfo().upY();
-        assertTrue("attitude hold must accept the past-vertical roll",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on; overshoot only brings the hull nearer the commanded roll, which is
-        // the premise.
-        advanceServerAndClient(200);
-        ShipInfo info = shipInfo();
-        double upY = info.upY();
-        scenario().requireArranged("the ship must be steeply inverted for the hull-top to exist (upY "
-                        + upBeforeRoll + " -> " + upY + ")",
-                upY < INVERTED_DECK_UP_Y);
-        double sx = info.x, sy = info.y, sz = info.z;
-
-        // Fall onto the world-top of the inverted hull from a few blocks up. The camera's own
-        // window opens BEFORE the teleport, so "never engages" below covers the whole encounter.
-        long cameraMark = clientEvents().mark();
-        exec("tp @a " + sx + " " + (sy + HULL_DROP_HEIGHT_BLOCKS) + " " + sz + " 0 0");
-        // The freshly-teleported client may not tick until its destination chunks stream in (the
-        // whole encounter would then sample a frozen body and prove nothing). The premise is that
-        // THIS CLIENT IS TICKING THIS BODY, and that is something the client DOES: its ship-frame
-        // resolver runs on the body and records the tick it resolved. Awaited here rather than
-        // inferred from half a block of fall — a displacement is a proxy, and a proxy for "is it
-        // alive" answers "not yet" identically to a body that is simply not falling fast.
+    public void aPlayerOnTheOuterHullKeepsWorldFrameSemantics() throws Exception {
+        PilotSeat seat = rollOver(180.0);
+        double face = seat.seatY - 1.0;
         Events client = clientEvents();
-        long tickingMark = client.mark();
-        client.awaitField(tickingMark, "ship_frame_tick","who", botName(),
-                "the teleported client must be ticking the falling body before the encounter window"
-                        + " opens, or every sample below is of a frozen body",
-                CAPTURE_LINK_BUDGET_TICKS);
-        // The encounter's own window on the client log: every capture, every mode commit and every
-        // release the hull-top meeting produces, in order. The churn below is read off it rather than
-        // off a lifetime counter's delta.
+        // The two positive preconditions' own instruments, armed before the stimulus: the deck frame's
+        // per-tick admission decisions about him (the gate window), and this scenario's count of
+        // frames the camera hook was asked (the camera window, opened by its first reading).
+        double hookCallsBefore = deckCamera("cameraHookCalls");
+        openDeckGateWindow(OUTER_HULL_GATE_RECORDS);
         long encounterMark = client.mark();
-        StringBuilder land = new StringBuilder();
-        double settledY = Double.NaN;
-        // WINDOW: where the body SETTLES is a value reached asymptotically rather than an instant
-        // anything commits; the trace is for the message. What it cannot see: a bounce between two
-        // 3-tick samples.
-        for (int i = 0; i < 30; i++) {
-            advanceServerAndClient(3);
-            double py = bot().reportState().get("playerY").getAsDouble();
-            if (i % 3 == 0) {
-                // No drop column: a release is a record with its own gate and sequence, printed in
-                // full below, so the last-write static has nothing left to add here.
-                land.append(String.format(java.util.Locale.ROOT,
-                        "[t%d y=%.2f res=%d] ", i * 3, py,
-                        Events.countRecords(client.since(encounterMark, "deck_carry"),
-                                "ship", scenarioShipId)));
-            }
-            settledY = py;
+        int playerId;
+        try {
+            playerId = putOnTheFace(seat, DECK_HALF_WIDTH, DECK_HALF_WIDTH, 0.1, 0.0f);
+            // STIMULUS: a tenth of a block at a player's 0.08 blocks/tick^2 lands in about two ticks;
+            // the window is the encounter, and a longer one only gives a deck more ticks to take him.
+            advanceServerAndClient(OUTER_HULL_LAND_TICKS);
+        } finally {
+            closeDeckGateWindow();
         }
-        String releases = client.since(encounterMark, "deck_released");
-        String modes = client.since(encounterMark, "deck_mode_committed");
+        Reply rest = Reply.of(exec("stellurgytest vs player-ship-data 0 " + playerId + " " + scenarioShipId));
+        scenario().requireArranged("the player must have come to rest on the hull's outer face before"
+                + " the encounter says anything about it (ship-frame Y of the face " + face + "): " + rest,
+                rest.bool("playerOnGround") && Math.abs(face - rest.number("bodyShipFrameY")) < ON_THE_FACE);
 
-        // (a) Never tunnels: he stands ON the hull-top, above the ship centre - not fallen through
-        // to the terrain far below (by+1) and not inside the hull volume oscillating.
-        assertTrue("the body must stand on the world-top of the inverted hull, not tunnel through "
-                + "(settledY=" + settledY + " shipY=" + sy + " terrainY~" + (by + 1) + "): " + land,
-                settledY > sy - 0.5);
-        // (b) NOT ABOARD: the hull-top stander is held in HULL-STAND mode - world semantics,
-        // ship-geometry collision - never in the deck frame.
-        //
-        // Read off the probe's own verdict and not off the `deck_mode_committed` records beside it,
-        // deliberately: that event reads the mode from the state AFTER production set it, and the
-        // hull-stand travel path re-captures through `remember` and only THEN restores `hullStand` —
-        // so a legitimate hull-stand re-capture records "aboard". The records are printed because
-        // their ORDER is worth reading; asserting "no aboard commit" on them would pin the recorder's
-        // known blind spot instead of the contract.
-        DeckCapture cap = DeckCapture.read(this::exec);
-        assertTrue("a body on the OUTER hull must keep world-frame semantics - held as HULL-STAND, "
-                + "never ABOARD: " + cap.raw() + " :: mode commits in the window: " + modes,
-                !cap.alreadyTracked || cap.hullStand);
-        // The disjunct above is satisfied by a body held on SOMEBODY ELSE's hull, in either arm. So
-        // where it IS held, say by whom: an aboard-mode capture on a neighbour would read here as a
-        // legitimate hull-stand on this one and the mode contract would go untested.
-        if (cap.alreadyTracked) {
-            cap.requireAnchoredOn( scenarioShipId,
-                    "the hull stand must be on the hull this scenario put him on");
-        }
-        // (c) His camera stays his own - the deck-levelled view never engages for a hull stander.
-        //
-        // "NEVER" is a claim about the whole encounter, so it is read off the engage EDGES since a
-        // mark taken before the teleport, not off the one standing value at the end: that value is
-        // false by default and false again after a camera that engaged and released, so on its own
-        // it passed both on a camera that never ran and on one that turned on and off mid-encounter.
-        // The instrument's own roster says the camera hook was being asked at all.
-        String cameraEdges = clientEvents().since(cameraMark, "deck_camera_changed");
-        Events.assertInstrumentRan(cameraEdges, "deck_camera_events",
-                "the deck camera did or did not engage for the hull-top stander");
-        int engaged = Events.countRecords(cameraEdges, "active", "true");
+        String asked = client.since(encounterMark, "deck_gate_explained");
+        String entered = client.since(encounterMark, "deck_entered");
+        String cameraEdges = client.since(encounterMark, "deck_camera_changed");
         boolean camActive = Boolean.parseBoolean(deckCameraText("active"));
-        assertTrue("the deck camera must never engage for a hull-top stander (the outer hull keeps "
-                + "world-frame semantics): " + engaged + " engage edge(s) in the encounter, standing"
-                + " value active=" + camActive + " :: " + cameraEdges, engaged == 0 && !camActive);
-        // (d) And the capture machinery must not churn against him — the client's own external-move
-        // releases in THIS window, each naming the gate that fired.
-        long churn = Events.countRecordsWithField(releases, "reason");
-        System.out.println("[crewcap] hull-top settledY=" + settledY + " shipY=" + sy
-                + " externalMoveReleases=" + churn + " camActive=" + camActive + " :: " + land
-                + "\n[crewcap] hull-top releases :: " + releases
-                + "\n[crewcap] hull-top mode commits :: " + modes);
-        Events.assertInstrumentRan(releases, "deck_capture_events",
-                "the capture machinery did or did not churn against the hull-top stander");
-        assertTrue("the capture must not churn against a hull-top stander (external-move releases="
-                + churn + "): " + releases + " :: " + land, churn < HULL_TOP_CHURN_LIMIT);
-    }
+        double hookCalls = deckCamera("cameraHookCalls") - hookCallsBefore;
+        System.out.println("[crewcap] outerHullSemantics asked=" + Events.countRecords(asked, "type",
+                "deck_gate_explained") + " entered=" + entered + " cameraEdges=" + cameraEdges
+                + " camActive=" + camActive + " cameraHookCalls=" + hookCalls);
 
-    @Test
-    public void aHullTopEncounterNeverEntersTheShipFrame() throws Exception {
-        final FixtureSite site = site();
-        final int bx = site.x, by = site.y, bz = site.z;
-
-        // The verified outer-hull half (the round-15 residue): a body meeting the world-facing
-        // surface of an inverted hull - where in subspace there is NO floor beneath it - must NEVER
-        // be captured into the ship frame. The old support probe counted PENETRATING boxes (top above
-        // the feet) as standing support, so a faller who punched slightly into the hull was
-        // captured, ship-frame gravity (world-up at inversion) flung him off, and the post-drop
-        // re-capture re-entered every tick: the round-15 log's obstacles=0 capture bursts.
-        double[] ship = buildShip(site);
-        double h = Math.toRadians(160.0) / 2.0;
-        double upBeforeRoll = shipInfo().upY();
-        assertTrue("attitude hold must accept the past-vertical roll",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on; overshoot only brings the hull nearer the commanded roll, which is
-        // the premise.
-        advanceServerAndClient(200);
-        ShipInfo info = shipInfo();
-        double upY = info.upY();
-        scenario().requireArranged("the ship must be steeply inverted for the hull-top to exist (upY "
-                        + upBeforeRoll + " -> " + upY + ")",
-                upY < INVERTED_DECK_UP_Y);
-        double sx = info.x, sy = info.y, sz = info.z;
-
-        // Mark the position-write recorder one statement before the drop. The landing trace showed
-        // this body 10.8 blocks away three ticks after it began falling, with its OWN motion and the
-        // substrate's added velocity BOTH reading zero on either side of the jump — nobody's velocity
-        // accounts for the move, so it is a position WRITE and the only question left is whose.
-        // Everything else this scenario can ask names candidates; a position write carries the
-        // caller trail that names one.
-        //
-        // markInstrumented, not mark: a position write is recorded by a test-only MIXIN, so an empty
-        // trace below has two innocent explanations besides "nothing wrote it" — an unsubscribed
-        // recorder and an unwoven mixin config. Both are asserted here, because the whole point of
-        // this reading is that its silence must mean something.
-        Events writers = serverEvents();
-        long dropMark = writers.markInstrumented();
-        // The CLIENT's own log, marked beside the server's. The two are deliberately separate —
-        // cross-side ordering inside a tick is undefined — and the server's half already answered
-        // this scenario's question with "the server is following": every packet position it accepts
-        // equals the one it accepted last tick plus the climb. So the writer that starts the climb
-        // is on this side, and only this log can name it.
-        long clientDropMark = clientEvents().mark();
-
-        // A CLEARING, not a pit. The shared fixture pre-clear opens `base±(2,7)` over ten blocks of
-        // height, and the bases here are hard-coded at y=64 while the surface at this plot is around
-        // y=72 — so what it actually digs is a ten-block shaft with terrain on every side, and the
-        // rim of that shaft sits ABOVE the hull a body is supposed to land on. Two consequences, both
-        // measured on this scenario: a body that drifts a few blocks while falling meets a wall
-        // instead of the hull, and one that ends up on the rim is standing on grass a metre above the
-        // deck it was aimed at, which reads as "the hold refused to engage".
-        //
-        // Cleared around the SHIP rather than the build base, because the ship is what the body is
-        // aimed at and it settles away from where it was assembled. Wide enough that the body cannot
-        // leave it while falling, and deep enough that a body which MISSES the hull keeps falling and
-        // fails this scenario loudly, instead of landing on terrain and failing it as a hold that did
-        // not engage.
-        String clearing = exec("stellurgytest fill 0 " + ((int) sx - 12) + " "
-                + ((int) sy - SHAFT_BELOW_HULL) + " "
-                + ((int) sz - 12) + " " + ((int) sx + 12) + " "
-                + ((int) sy + SHAFT_ABOVE_HULL) + " "
-                + ((int) sz + 12) + " minecraft:air");
-        assertTrue("the staging clearing was not cut, so this scenario would stage a drop inside the"
-                + " fixture's own pit: " + clearing, Reply.of(clearing).ok());
-
-        exec("tp @a " + sx + " " + (sy + HULL_DROP_HEIGHT_BLOCKS) + " " + sz + " 0 0");
-        // Same premise as the hull-top encounter above, and the same link: the client must be
-        // TICKING this body before any of the thirty samples below means anything, and its own
-        // ship-frame resolver records the tick it resolved. See that site for why a fall
-        // displacement was the wrong instrument for it.
-        Events client = clientEvents();
-        long tickingMark = client.mark();
-        client.awaitField(tickingMark, "ship_frame_tick","who", botName(),
-                "the teleported client must be ticking the falling body before the encounter window"
-                        + " opens, or every sample below is of a frozen body",
-                CAPTURE_LINK_BUDGET_TICKS);
-        // The encounter window on the client's own log, marked one statement before the samples
-        // begin: the capture's releases and its mode commits, in order, for exactly these thirty
-        // samples — where the drop counter this replaces could only say that something, some time,
-        // had happened.
-        long encounterMark = client.mark();
-        // The SERVER's per-tick resolution log, read as a rolling window inside the fine trace below.
-        long srvTickMark = serverEvents().mark();
-        int aboardSeen = 0, hullSeen = 0, samples = 0;
-        double settledY = Double.NaN;
-        StringBuilder enc = new StringBuilder();
-        StringBuilder fine = new StringBuilder();
-        // WINDOW: the split between aboard-mode and hull-stand samples is a ratio over the
-        // observation, which no record can carry. What it cannot see: a mode that flipped and
-        // flipped back inside 3 ticks.
-        for (int i = 0; i < 30; i++) {
-            advanceServerAndClient(3);
-            samples++;
-            DeckCapture cap = DeckCapture.read(this::exec);
-            // Counted only while the capture is anchored on THIS scenario's craft: the split between
-            // aboard-mode and hull-stand samples below is a statement about one body on one hull, and
-            // a sample taken against a neighbour's belongs in neither column.
-            boolean tracked = cap.alreadyTracked
-                    && cap.anchoredOn(scenarioShipId);
-            boolean hull = cap.hullStand;
-            if (tracked && !hull) aboardSeen++;
-            if (tracked && hull) hullSeen++;
-            settledY = bot().reportState().get("playerY").getAsDouble();
-            // The landing itself, sampled every iteration instead of every fifth, and with the two
-            // velocities that name WHO is moving the body: its own motion, and the added velocity
-            // the physics substrate holds for it. The coarse trace showed the body 10.8 blocks away
-            // by the first recorded sample after t0 — a gap that hides the entire event, and one in
-            // which "it slid off" and "something threw it" look identical.
-            if (i < 10) {
-                PlayerShipData psd = PlayerShipData.read(this::exec);
-                // The two terms the hull-stand arm adds together — `worldMotion[1] + carryY`. The
-                // carry is the ship's own velocity at the body's point; the rest is the body's. One
-                // of them is the +30, and this is what says which without a new instrument.
-                //
-                // The SERVER's own last resolved tick, as a record: a rolling window rather than a
-                // probe reply, so the two numbers below come from one tick of one named body instead
-                // of from whatever the server's resolver last left in a pair of statics.
-                String srvTick = null;
-                for (String tick : Events.records(serverEvents().since(srvTickMark, "ship_frame_tick"))) {
-                    srvTick = tick;
-                    srvTickMark = (long) Events.number(tick, "seq") + 1L;
-                }
-                fine.append(String.format(java.util.Locale.ROOT,
-                        // `touched` is the field that decides the branch, not just a label: the
-                        // packet path rebuilds a player's world position from the ship-subspace
-                        // coordinates his client sends, and it only does so while an association
-                        // exists. A non-null ship here at the moment of the launch says that branch
-                        // ran; a null one says the launch came from somewhere else entirely.
-                        "[t%d y=%.2f z=%.2f cap=%b hull=%b m=(%.2f,%.2f,%.2f) add=(%.2f,%.2f,%.2f)"
-                                // `since` is a TICK COUNT and the field is an int: `%f` on it throws
-                                // IllegalFormatConversionException from inside the trace itself, and
-                                // the throw replaces the failure the trace was assembled to report.
-                                + " since=%d touched=%s carryY=%.2f shipMotY=%.2f] ",
-                        i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
-                        tracked, hull,
-                        psd.motionX, psd.motionY, psd.motionZ,
-                        psd.addedVelX, psd.addedVelY, psd.addedVelZ,
-                        psd.ticksSinceTouchedShip,
-                        psd.lastTouchedShip() == null ? "null" : "a-ship",
-                        srvTick == null ? Double.NaN : Events.number(srvTick, "carryY"),
-                        srvTick == null ? Double.NaN : Events.number(srvTick, "motionShipY")));
-            }
-            if (i % 5 == 0) {
-                // The hull's own angular rate, sampled beside the body rather than assumed: this
-                // scenario waits a fixed 200 ticks after commanding the roll and then asserts the
-                // ATTITUDE it reached, never that the hull stopped turning. A body dropped onto a
-                // still-turning hull is thrown off it, and the whole encounter then measures a hold
-                // that was never offered a body to hold.
-                enc.append(String.format(java.util.Locale.ROOT,
-                        "[t%d y=%.2f z=%.1f cap=%b hull=%b w=%.3f] ",
-                        i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
-                        tracked, hull, shipInfo().omega));
-            }
-        }
-        // Read once and held, because each is asserted on below as well as printed: a diagnostic read
-        // twice can disagree with itself, and the assertion must be about the text the reader sees.
-        String clientVelocity = clientEvents().since(clientDropMark, "vel_jump");
-        String clientTransform = String.valueOf(
-                clientEvents().since(clientDropMark, "ship_transform_motion"));
-        String clientShipFrame = String.valueOf(
-                clientEvents().since(clientDropMark, "ship_frame_motion"));
-        String clientSweep = clientEvents().since(clientDropMark, "hull_sweep_big");
-        String clientCarry = String.valueOf(
-                clientEvents().since(clientDropMark, "ship_velocity_big"));
-        String releases = client.since(encounterMark, "deck_released");
-        String modes = client.since(encounterMark, "deck_mode_committed");
-        long churn = Events.countRecordsWithField(releases, "reason");
-        // Printed on the PASSING path too, and with the horizontal numbers: this scenario passes
-        // alone and fails when its class runs, so the only way to name the difference is to have the
-        // same readings from both. A message that exists only on the failing path can describe a
-        // defect but never a divergence.
-        System.out.println("[crewcap] hull-top-mode aboard=" + aboardSeen + " hull=" + hullSeen
-                + "/" + samples + " churn=" + churn + " settledY=" + settledY + " shipY=" + sy
-                + " builtAt=(" + bx + "," + bz + ") shipXZ=("
-                + String.format(java.util.Locale.ROOT, "%.1f,%.1f", sx, sz) + ")"
-                + " playerXZ=(" + String.format(java.util.Locale.ROOT, "%.1f,%.1f",
-                        bot().reportState().get("playerX").getAsDouble(),
-                        bot().reportState().get("playerZ").getAsDouble()) + ")"
-                + " :: " + enc + "\n[crewcap] hull-top landing :: " + fine
-                // The WHOLE chain since the mark, not just the position writes: order is the thing
-                // sampling cannot see, and a mount or a dismount landing between two writes is the
-                // difference between "he was thrown" and "something took him".
-                + "\n[crewcap] hull-top writers :: " + writers.since(dropMark)
-                + "\n[crewcap] hull-top client writers :: " + clientVelocity
-                + "\n[crewcap] hull-top client transform :: " + clientTransform
-                + "\n[crewcap] hull-top client shipframe :: " + clientShipFrame
-                + "\n[crewcap] hull-top client sweep :: " + clientSweep
-                + "\n[crewcap] hull-top client carry :: " + clientCarry
-                // The capture's own life through the encounter: the mode it was committed in, tick
-                // by tick, and every release with the gate that made it. (Two more reads used to sit
-                // here, for `measured_velocity_inputs` and `measured_velocity_first` — types NOTHING
-                // in this repository records. Every run printed two empty replies that read as "no
-                // derivations happened", which is the one thing an instrument must never be able to
-                // fake. Dead vocabulary, deleted.)
-                + "\n[crewcap] hull-top releases :: " + releases
-                + "\n[crewcap] hull-top mode commits :: " + modes);
-
-        // Before anything is concluded from a silence, the instrument that produced it must be shown
-        // to have run. Both of this scenario's client-side readings are about to be read that way.
-        Events.assertInstrumentRan(clientVelocity, "entity_velocity_writers",
-                "the client-side velocity of this body was or was not rewritten");
-        Events.assertInstrumentRan(clientTransform, "ship_transform_entity_writes",
-                "the ship transform did or did not rewrite this body's velocity");
-        Events.assertInstrumentRan(clientShipFrame, "ship_frame_travel",
-                "Stellurgy's ship-frame travel did or did not leave this body's velocity behind");
-        Events.assertInstrumentRan(clientSweep, "hull_sweep",
-                "the hull sweep was or was not asked for a large vertical move");
-        Events.assertInstrumentRan(clientCarry, "ship_velocity_at_point",
-                "the ship's velocity at the body's point was or was not large");
-
-        // WHAT HE IS STANDING ON, before anything is claimed about the hold.
-        //
-        // This scenario drops a body onto an inverted hull hanging a few blocks over the site it was
-        // built on — and that site still holds the fixture's own launchpad and structure tower. The
-        // drop can therefore land on WORLD BLOCKS instead of the hull, and nothing downstream can
-        // tell that apart from "the hold refused to engage": both read as
-        // `alreadyTracked=false, hullStand=false` for the whole window, so the run accuses a hold
-        // that was never offered a body to hold.
-        //
-        // The discriminator is what the WORLD holds under his feet. A ship's blocks live in its own
-        // subspace, so under a genuine hull-stander the world is AIR; under a body resting on the
-        // pad or the tower it is a block. Measured 2026-08-23 over six runs of this one scenario,
-        // and the two populations do not overlap:
-        //
-        //   on the hull (4 runs, hull-stand 29-30/30): settledY - shipY = 2.130 every time
-        //   on world blocks (2 runs, hull-stand 0/30): settledY - shipY = 3.00, at a round y=72.00
-        //
-        // The sibling scenario's check ("not fallen through to the terrain far below") does not
-        // separate these: 3.00 above the ship centre passes it comfortably. It is the right check for
-        // what that scenario claims and too weak for what this one claims.
-        int footX = (int) Math.floor(bot().reportState().get("playerX").getAsDouble());
-        int footZ = (int) Math.floor(bot().reportState().get("playerZ").getAsDouble());
-        com.google.gson.JsonObject under = bot().blockState(footX, (int) Math.floor(settledY) - 1, footZ);
-        String underBlock = under != null && under.has("block") ? under.get("block").getAsString() : "?";
-        // WHERE he came to rest, not only what he came to rest ON. The site is pre-cleared to air
-        // over a 10x10 column (assembleFixture: bx-2..bx+7, bz-2..bz+7, by+1..by+10), so a world
-        // block under his feet can only mean the drop happened outside that column — which separates
-        // "he slid off the hull" from "he was never over the hull at all because the ship drifted off
-        // its cleared plot during the roll". The message named the surface and left the reader to
-        // guess which, and the two want different fixes.
-        scenario().requireArranged("the body must come to rest ON THE HULL before the hold can be"
-                + " asked about at all, and the world block under his feet says which: it is \""
-                + underBlock + "\", so he is standing on world geometry (terrain, the fixture's pad"
-                + " or its tower), not on a hull whose blocks live in the ship's own subspace."
-                + " settledY=" + settledY + " shipY=" + sy + " (a hull stand measures ~2.13 above"
-                + " the ship centre; this one is "
-                + String.format(java.util.Locale.ROOT, "%.2f", settledY - sy) + ")"
-                + " foot=(" + footX + "," + footZ + ") shipXZ=("
-                + String.format(java.util.Locale.ROOT, "%.1f,%.1f", sx, sz) + ")"
-                + " builtAt=(" + bx + "," + bz + ")"
-                + " clearedColumn=x[" + (bx - 2) + ".." + (bx + 7) + "] z[" + (bz - 2) + ".."
-                + (bz + 7) + "] y[" + (by + 1) + ".." + (by + 10) + "]"
-                + " footInsideCleared=" + (footX >= bx - 2 && footX <= bx + 7
-                        && footZ >= bz - 2 && footZ <= bz + 7)
-                + " shipInsideCleared=" + (sx >= bx - 2 && sx <= bx + 7
-                        && sz >= bz - 2 && sz <= bz + 7)
-                + ": " + enc,
-                // The id, compared. `contains("air")` is satisfied by `stellurgy:airlock`
-                // and by anything else carrying those three letters, so a solid block under his
-                // feet could read as a cleared column — which is what this claim exists to deny.
-                underBlock.isEmpty() || "minecraft:air".equals(underBlock));
-
-        // The outer-hull mode contract: the hull encounter may be HELD (hull-stand), but it must
-        // NEVER read as ABOARD - no deck frame, no deck camera, no deck mouse for a hull stander.
-        //
-        // Still judged on the probe's per-sample verdict rather than on the `deck_mode_committed`
-        // records printed beside it, and that is a limit of the recorder and not a preference: the
-        // event reads the mode from the state AFTER production set it, and the hull-stand travel path
-        // re-captures through `remember` before restoring `hullStand`, so a legitimate hull-stand
-        // re-capture is recorded as "aboard". Asserting "no aboard commit" would pin that blind spot.
-        // The records still earn their place in the message: they carry the ORDER of the commits,
-        // which thirty three-tick samples cannot.
-        assertTrue("a body meeting the OUTER hull of an inverted ship must never enter ABOARD/deck "
-                + "mode: aboard " + aboardSeen + "/" + samples + " (hull-stand " + hullSeen
-                + ") :: " + enc + " :: mode commits in order: " + modes, aboardSeen == 0);
-        // The body must still BE at the hull when the window ends, and the bound is the drop itself:
-        // it was released `sy + 7`, so a body that finishes further from the hull than the height it
-        // was dropped from did not land on anything — it was thrown.
-        //
-        // This is the assertion whose absence made the scenario reportable as a pass while the body
-        // was a kilometre up. Every check around it is satisfiable from the sky: "the block under his
-        // feet is air" trivially, "never ABOARD" trivially, and "hull-stand seen at least once"
-        // by the single sample taken as he was launched. A negative check cannot tell resting on a
-        // hull from having left the world, and this scenario's whole subject is the resting.
-        assertTrue("a body that met the hull must still be AT it when the window ends, not thrown"
-                + " clear of it: it finished " + String.format(java.util.Locale.ROOT, "%.1f",
-                        Math.abs(settledY - sy)) + " blocks from the hull centre, having been"
-                + " released only " + HULL_DROP_HEIGHT_BLOCKS + " above it. settledY=" + settledY
-                + " shipY=" + sy
-                + " shipXZ=(" + String.format(java.util.Locale.ROOT, "%.1f,%.1f", sx, sz) + ")"
-                + " :: " + enc + " :: " + fine,
-                Math.abs(settledY - sy) <= HULL_DROP_HEIGHT_BLOCKS);
-
-        // The encounter must actually exercise the hull-stand hold, and SUSTAIN it: a body resting on
-        // a hull is held for the window, not for one sample of thirty. The one-sample form passed
-        // while the body was being launched THROUGH the hold.
-        assertTrue("the encounter must engage the HULL-STAND hold and keep it (hull-stand seen "
-                + hullSeen + "/" + samples + "): " + enc, hullSeen > samples / 2);
-        Events.assertInstrumentRan(releases, "deck_capture_events",
-                "the capture machinery did or did not churn against the hull-top encounter");
-        assertTrue("and the capture machinery must not churn against it (external-move releases="
-                + churn + "): " + releases, churn == 0);
+        Events.assertInstrumentRan(asked, "deck_gate_window_events",
+                "the deck frame was or was not asked about the player on the outer hull");
+        assertTrue("the deck frame must have been ASKED about him in the encounter, or \"no deck took"
+                + " him\" is a statement about the arrangement: " + asked,
+                Events.countRecords(asked, "type", "deck_gate_explained") > 0);
+        Events.assertInstrumentRan(entered, "deck_capture_events",
+                "a deck did or did not take the player on the outer hull");
+        assertTrue("no deck may take a player resting on the OUTER hull - in the craft's frame that face"
+                + " has no floor under him: every deck capture of him since he was put there: " + entered,
+                Events.countRecords(entered, "who", botName()) == 0);
+        assertTrue("the camera hook must have been asked about his view in the encounter, or \"it never"
+                + " engaged\" is a statement about a camera that did not run: " + hookCalls + " calls",
+                hookCalls > 0);
+        Events.assertInstrumentRan(cameraEdges, "deck_camera_events",
+                "the deck camera did or did not engage for the player on the outer hull");
+        assertTrue("the deck camera must never engage for a player on the outer hull: "
+                + Events.countRecords(cameraEdges, "active", "true") + " engage edge(s), standing value"
+                + " active=" + camActive + " :: " + cameraEdges,
+                Events.countRecords(cameraEdges, "active", "true") == 0 && !camActive);
     }
 
     // ---- The crosshair picks the block the camera looks at, at any attitude ---------------------
@@ -2143,12 +1784,13 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * A body that meets a deck after the craft manoeuvred with nobody aboard is carried by what the
      * craft is doing now, not by the average of what it did.
      *
-     * <p>red-witnessed: with the client's carry ({@code ShipFrameTravel#travel} at
-     * {@code remember(entity, shipId, sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ)}, the deck
-     * carry that call binds) raised by 0.1 a tick on a capture that follows more than 100
-     * ticks off the deck: "the carry installed when the body was captured must be what the craft SAYS
-     * it is doing (5.9E-19/tick …) … the largest carry any capture in this window was committed with
-     * is 0.1", 2026-09-28.</p>
+     * <p>red-witnessed: taken on the pre-2026-10-06 form, with the client's carry (the travel
+     * resolver's `remember(entity, shipId, sweep.x, …, carryX, carryY, carryZ)`, deleted with it)
+     * raised by 0.1 a tick on a capture that follows more than 100 ticks off the deck: "the carry
+     * installed when the body was captured must be what the craft SAYS it is doing (5.9E-19/tick …) …
+     * the largest carry any capture in this window was committed with is 0.1", 2026-09-28. NOT re-taken
+     * against the deck frame, whose carry is {@code DeckFrameTick#mapOut} at
+     * {@code VSIntegration.shipVelocityAtPointFor(world, shipId, pos[0], pos[1], pos[2])}.</p>
      *
      * <p>It could not be seen red before that day's fixes, because its ARRANGEMENT was red on healthy
      * production in four runs of five. Two test-side races, both measured: the stand-once wait
@@ -2764,6 +2406,412 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * on now; an empty string is a real answer (the ray hit nothing) and arrives as a record like
      * any other. Replaces a reflective read whose value could not say when it became true.</p>
      */
+    // -- a player on the OUTER hull stays where he landed -----------------------------------------
+
+    /**
+     * How long the attitude hold is given to roll the craft over, in ticks. A slew converges and
+     * nothing announces its end, so it is a WINDOW read once after, gated on the attitude it reached:
+     * a slow box fails as an arrangement. Measured 2026-10-07: the server deck-body group's roll to
+     * 180 deg on the same fixture was complete within 200 ticks in every run.
+     */
+    private static final int OUTER_HULL_SLEW_TICKS = 200;
+
+    /** How long the player is given to land after being put a tenth of a block above the face. */
+    private static final int OUTER_HULL_LAND_TICKS = 20;
+
+    /** The gate window's record budget for the outer-hull encounter: at most one record a tick, plus one
+     *  for each change of answer, over the landing window — so twice its length cannot run out on a body
+     *  whose answer flips no more often than every other tick. */
+    private static final int OUTER_HULL_GATE_RECORDS = 2 * OUTER_HULL_LAND_TICKS;
+
+    /** The window he is watched lying on the outer hull, in ticks. */
+    private static final int OUTER_HULL_WINDOW_TICKS = 100;
+
+    /**
+     * How far he may move ALONG the hull in a window and still be "where he stood". Derived 2026-10-07
+     * from the readings of a player and an armor stand lying still on the outer hull of this fixture,
+     * by either mechanism: the largest healthy along-movement was 8.5e-5, the smallest that was a real
+     * defect 0.0066 (a stand crept along the hull by the since-deleted hull-stand). The bound sits
+     * between them.
+     */
+    private static final double OUTER_HULL_AT_REST = 1.0e-3;
+
+    /**
+     * How far his distance from the face may change in a window. Not the along bound: the contact gap
+     * itself is what varies here - measured 2026-10-07, a body on this face rests 0.004 to 0.009 off it
+     * by either mechanism, tick to tick - so the bound is twice that range; a body that left the face
+     * is a tenth of a block or more off it.
+     */
+    private static final double OUTER_HULL_ACROSS = 0.01;
+
+    /**
+     * How long the craft is given to come to a stop after a motion, in ticks, before the second
+     * reading. Read once after, gated on the craft's own velocity: a craft still moving would put the
+     * reading back where the moving one was taken - his position on the server is the claim of his
+     * last packet, one or two ticks of the craft's motion behind its pose (measured 2026-10-07: 0.1 and
+     * 0.2 at 2 blocks/s), and that lag jitters between reads. 200 because the slowest stop is the
+     * spin's: commanded to zero from 0.5 rad/s it still turned at 0.32 forty ticks later (measured
+     * 2026-10-07), about 0.0045 rad/s shed a tick, so ~110 ticks to rest.
+     */
+    private static final int OUTER_HULL_STOP_TICKS = 200;
+
+    /**
+     * How far off the face a body "on the face" may lie. Measured 2026-10-07: either mechanism rests
+     * a body 0.004 to 0.007 off the face it touches; a tenth of a block is past any such contact gap
+     * and short of a step onto anything else, so a body further off is airborne or elsewhere.
+     */
+    private static final double ON_THE_FACE = 0.1;
+
+    /** Half the with-pilot-deck deck's side: 5x5 blocks with the seat at its centre. */
+    private static final double DECK_HALF_WIDTH = 2.5;
+
+    /**
+     * The fall onto the hull, in blocks. A player falling this far meets the face at about 1.6
+     * blocks a tick (vanilla's 0.08 per tick squared with 0.98 drag, summed over the ~25 ticks it
+     * takes), more than the one-block plate he lands on is thick: a collision that is late by one tick
+     * puts him on the far side of it.
+     */
+    private static final double FAST_FALL_HEIGHT = 20.0;
+
+    /** How long the fall from {@link #FAST_FALL_HEIGHT} is given, in ticks: ~25 to fall, the rest to settle. */
+    private static final int FAST_FALL_TICKS = 60;
+
+    /** How long he walks, in client ticks: at a walk of ~0.2 blocks a tick, about two blocks. */
+    private static final int HULL_WALK_TICKS = 10;
+
+    /** How far along the hull he must have got for the walk to count as one. Measured 2026-10-07: the
+     *  walk covered 2.15 blocks; a quarter of that refuses a walk that never happened. */
+    private static final double OUTER_HULL_WALKED_BLOCKS = 0.5;
+
+    /** How near the commanded roll the craft's deck-up world Y must sit, and how little it may change
+     *  across a window. Measured 2026-10-07: 1.1e-4 off at 180 deg, 0.0105 off at 137 deg. */
+    private static final double ROLL_HELD_UP_Y = 0.02;
+
+    /** A craft's speed (blocks a tick) that reads as stopped. Measured 2026-10-07 after a commanded
+     *  zero: 1.1e-17 and 2.1e-17. */
+    private static final double CRAFT_STOPPED_SPEED = 0.01;
+
+    /** A craft's angular rate (rad/s) that reads as stopped: its attitude hold hanging still reads
+     *  ~0.03 on its own (measured 2026-10-07: 0.029 hovering, 0.0014 after the spin's stop). */
+    private static final double CRAFT_STOPPED_OMEGA = 0.05;
+
+    /** How far the craft must fly while he stands on it: further than its deck is wide. Measured
+     *  2026-10-07: 10.1 blocks in the window at 2 blocks/s. */
+    private static final double OUTER_HULL_FLIGHT_MIN_TRAVEL = 2.0 * DECK_HALF_WIDTH;
+
+    /**
+     * The roll that tilts the inverted deck's underside 38 deg off level: steep, and within the ~40.4
+     * deg a face stands a body on ({@code VSMath#STANDING_TOLERANCE} = 0.42 is sin² of the limit;
+     * sin² 38 deg = 0.379).
+     */
+    private static final double STEEP_FACE_ROLL_DEG = 142.0;
+
+    /** The spin about world up that turns the inverted craft under him, rad/s: 2.5 rad in the window. */
+    private static final String SPIN_RATE = "0.0 0.5 0.0";
+
+    /**
+     * The stop for a spin: hold the attitude the craft has reached. A commanded zero rate is shed
+     * slowly - measured 2026-10-07, 0.5 rad/s fell only to 0.064 in 200 ticks - while an attitude hold
+     * at the current pose has only a small error to close.
+     */
+    private static final String HOLD_THE_ATTITUDE_REACHED = "hold-the-attitude-reached";
+
+    /**
+     * A player standing on the OUTER hull of an upside-down craft - the underside of its deck, which
+     * faces the sky - stays where he landed while the craft hovers. Which mechanism collides him with
+     * the hull is not asserted in any of these scenarios; the reading beside each verdict names it.
+     *
+     * <p>red-witnessed: 2026-10-07, THE LANDING — with {@code EntityCollisionInjector#alterEntityMovement}
+     * at {@code final double origDx = dx;} preceded by a {@code return null} (the game's own collision,
+     * which cannot see the hull): "a player put on the hull's outer face must come to rest on it
+     * (ship-frame Y 128.00000000000034, face 127.0, expected 0.0 off it)". THE ACROSS AND ALONG verdicts:
+     * NOT YET — that break stops at the landing verdict first, and no break was found that keeps him on
+     * the face but moves him off his point while the craft hovers.</p>
+     */
+    @Test
+    public void aPlayerOnTheOuterHullOfAnInvertedCraftStaysWhereHeLanded() throws Exception {
+        // R11-OK: the outer hull's hold of the player - the substrate's collision of a body no deck
+        // holds (EntityCollisionInjector, VSMath#canStandOnNormal); asserted in staysWhereHeLanded.
+        PilotSeat seat = rollOver(180.0);
+        int playerId = putOnTheFace(seat, DECK_HALF_WIDTH, DECK_HALF_WIDTH, 0.1, 0.0f);
+        // STIMULUS: a tenth of a block at a player's 0.08 blocks/tick^2 lands in about two ticks.
+        advanceServerAndClient(OUTER_HULL_LAND_TICKS);
+        staysWhereHeLanded(seat, playerId, "Static", 0.0, null, null);
+    }
+
+    /**
+     * As above, while the craft flies sideways under him.
+     *
+     * <p>red-witnessed: 2026-10-07, THE LANDING — the same break as the hovering scenario
+     * ({@code EntityCollisionInjector#alterEntityMovement} at {@code final double origDx = dx;}
+     * preceded by a {@code return null}): "a player put on the hull's outer face must come to rest on
+     * it (ship-frame Y 128.0000000000008, face 127.0, expected 0.0 off it)". THE ALONG verdict: NOT YET
+     * as a break of the current code — it went red on the pre-change tree, where the since-deleted
+     * hull-stand slipped him along the hull when the craft accelerated: "a player on the outer hull must
+     * not slide along it: 0.00311333364505719 blocks" (the pre-change baseline, HEAD fdc813556).</p>
+     */
+    @Test
+    public void aPlayerOnTheOuterHullOfAFlyingInvertedCraftRidesWithIt() throws Exception {
+        // R11-OK: as above, with the craft's carry of him in flight; asserted in staysWhereHeLanded.
+        PilotSeat seat = rollOver(180.0);
+        int playerId = putOnTheFace(seat, DECK_HALF_WIDTH, DECK_HALF_WIDTH, 0.1, 0.0f);
+        // STIMULUS: as above.
+        advanceServerAndClient(OUTER_HULL_LAND_TICKS);
+        staysWhereHeLanded(seat, playerId, "Flying", 0.0,
+                "force-vel-by-id 0 " + scenarioShipId + " 2.0 0.0 0.0",
+                "force-vel-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
+    }
+
+    /**
+     * As above, on a face 38 deg off level - steep, but within the ~40.4 deg the substrate stands a body
+     * on.
+     *
+     * <p>red-witnessed: 2026-10-07, THE LANDING — with {@code VSMath#STANDING_TOLERANCE} at
+     * {@code STANDING_TOLERANCE = 0.42} lowered to 0.35 (~36.3 deg): "a player put on the hull's outer
+     * face must come to rest on it (ship-frame Y 128.67710882962365, face 127.0, expected
+     * 0.1846984425976975 off it)" — he slid off. THE ACROSS AND ALONG verdicts: NOT YET, for the reason
+     * the hovering scenario gives.</p>
+     */
+    @Test
+    public void aPlayerOnASteepOuterHullFaceWithinTheStandingLimitStaysWhereHeLanded() throws Exception {
+        // R11-OK: the stand-or-slide decision on the outer hull - VSMath#canStandOnNormal at
+        // STANDING_TOLERANCE; asserted in staysWhereHeLanded.
+        PilotSeat seat = rollOver(STEEP_FACE_ROLL_DEG);
+        // Half a block up, not a tenth: on a face 38 deg off level the lower edge of his 0.6-wide box
+        // sits 0.3 * tan(38 deg) = 0.23 below its centre, so a tenth puts him inside the plate.
+        int playerId = putOnTheFace(seat, DECK_HALF_WIDTH, DECK_HALF_WIDTH, 0.5, 0.0f);
+        // STIMULUS: as above.
+        advanceServerAndClient(OUTER_HULL_LAND_TICKS);
+        staysWhereHeLanded(seat, playerId, "Steep", 180.0 - STEEP_FACE_ROLL_DEG, null, null);
+    }
+
+    /**
+     * As above, while the inverted craft spins about world up under him.
+     *
+     * <p>red-witnessed: 2026-10-07, THE LANDING — the same break as the hovering scenario
+     * ({@code EntityCollisionInjector#alterEntityMovement} at {@code final double origDx = dx;}
+     * preceded by a {@code return null}): "a player put on the hull's outer face must come to rest on
+     * it (ship-frame Y 128.00000000000006, face 127.0, expected 0.0 off it)". THE ALONG verdict: NOT YET
+     * as a break of the current code — it went red on the pre-change tree, where the since-deleted
+     * hull-stand slipped him along the hull when the craft turned: "a player on the outer hull must not
+     * slide along it: 0.0031401499240002644 blocks" (the pre-change baseline, HEAD fdc813556).</p>
+     */
+    @Test
+    public void aPlayerOnTheOuterHullOfASpinningCraftStaysWhereHeLanded() throws Exception {
+        // R11-OK: the outer hull's carry of the player through a rotation; asserted in staysWhereHeLanded.
+        PilotSeat seat = rollOver(180.0);
+        int playerId = putOnTheFace(seat, DECK_HALF_WIDTH, DECK_HALF_WIDTH, 0.1, 0.0f);
+        // STIMULUS: as above.
+        advanceServerAndClient(OUTER_HULL_LAND_TICKS);
+        staysWhereHeLanded(seat, playerId, "Spinning", 0.0,
+                "force-rot-by-id 0 " + scenarioShipId + " " + SPIN_RATE, HOLD_THE_ATTITUDE_REACHED);
+    }
+
+    /**
+     * A player who falls onto the outer hull fast - faster per tick than the plate he lands on is
+     * thick - ends ON its outer face, not on the far side of it.
+     *
+     * <p>red-witnessed: 2026-10-07, with {@code EntityCollisionInjector#alterEntityMovement} at
+     * {@code final double origDx = dx;} preceded by a {@code return null}: "a player falling fast onto
+     * the outer hull must land on its outer face, not pass through it; shipFrameY=131.0597092330113
+     * face=127.0 gap=-4.05970923301129".</p>
+     */
+    @Test
+    public void aPlayerFallingFastOntoTheOuterHullLandsOnIt() throws Exception {
+        // R11-OK: the outer hull's catch of a falling player - the substrate's swept collision
+        // (EntityCollisionInjector); asserted below.
+        PilotSeat seat = rollOver(180.0);
+        double face = seat.seatY - 1.0;
+        int playerId = putOnTheFace(seat, DECK_HALF_WIDTH, DECK_HALF_WIDTH, FAST_FALL_HEIGHT, 0.0f);
+        // STIMULUS: see FAST_FALL_TICKS.
+        advanceServerAndClient(FAST_FALL_TICKS);
+        Reply landed = Reply.of(exec("stellurgytest vs player-ship-data 0 " + playerId + " " + scenarioShipId));
+        double gap = face - landed.number("bodyShipFrameY");
+        String evidence = " shipFrameY=" + landed.number("bodyShipFrameY") + " face=" + face + " gap=" + gap
+                + " onGround=" + landed.bool("playerOnGround") + " deckHeldBy="
+                + landed.textOr("deckHeldBy", "none") + " " + landed;
+        System.out.println("[crewcap] outerHullFastFall gap=" + gap + evidence);
+        // On the inverted craft the outer side of the face is ship-frame BELOW it, so a body on the
+        // face has gap >= 0; through the plate, gap is negative.
+        assertTrue("a player falling fast onto the outer hull must land on its outer face, not pass"
+                + " through it;" + evidence, landed.bool("playerOnGround") && gap >= -ON_THE_FACE
+                && gap < ON_THE_FACE);
+    }
+
+    /**
+     * A player who walks across the outer hull stays on it: the face under his feet the whole way,
+     * on the ground at the end.
+     *
+     * <p>red-witnessed: 2026-10-07, with {@code EntityCollisionInjector#alterEntityMovement} at
+     * {@code final double origDx = dx;} preceded by a {@code return null} for any step with more than
+     * 0.05 of horizontal travel (a still body still collides, a walking one does not): "a player
+     * walking on the outer hull must still be on its face; walked=2.074821326881647
+     * gap=-1.0000000000002274" — he walked through the plate.</p>
+     */
+    @Test
+    public void aPlayerWalkingOnTheOuterHullStaysOnIt() throws Exception {
+        // R11-OK: the outer hull's hold of a walking player - the substrate's collision of a body no
+        // deck holds (EntityCollisionInjector); asserted below.
+        PilotSeat seat = rollOver(180.0);
+        double face = seat.seatY - 1.0;
+        // The row two cells off the seat's: plain below the deck in this fixture, so the walk crosses
+        // the deck's underside and nothing else. Facing world +X (yaw -90), which the roll about X
+        // leaves as the craft's +X: from the -2 cell toward the +2 one.
+        int playerId = putOnTheFace(seat, -DECK_HALF_WIDTH + 1.0, DECK_HALF_WIDTH, 0.1, -90.0f);
+        // STIMULUS: as above.
+        advanceServerAndClient(OUTER_HULL_LAND_TICKS);
+        Reply before = Reply.of(exec("stellurgytest vs player-ship-data 0 " + playerId + " " + scenarioShipId));
+        scenario().requireArranged("the player must be standing on the outer face before he walks: " + before,
+                before.bool("playerOnGround") && Math.abs(face - before.number("bodyShipFrameY")) < ON_THE_FACE);
+        // STIMULUS: the walk itself, held on his own client.
+        bot().holdKey(Keyboard.KEY_W);
+        try {
+            bot().waitWorldTicks(HULL_WALK_TICKS);
+        } finally {
+            bot().releaseKey(Keyboard.KEY_W);
+        }
+        // STIMULUS: his last steps reach the server and he comes to a stop.
+        advanceServerAndClient(OUTER_HULL_LAND_TICKS);
+        Reply after = Reply.of(exec("stellurgytest vs player-ship-data 0 " + playerId + " " + scenarioShipId));
+        double walked = after.number("bodyShipFrameX") - before.number("bodyShipFrameX");
+        double gap = face - after.number("bodyShipFrameY");
+        String evidence = " walked=" + walked + " gap=" + gap + " onGround=" + after.bool("playerOnGround")
+                + " deckHeldBy=" + after.textOr("deckHeldBy", "none") + " " + after;
+        System.out.println("[crewcap] outerHullWalk" + evidence);
+        scenario().requireArranged("he must actually have walked along the hull;" + evidence,
+                walked >= OUTER_HULL_WALKED_BLOCKS);
+        assertTrue("a player walking on the outer hull must still be on its face;" + evidence,
+                after.bool("playerOnGround") && gap >= -ON_THE_FACE && gap < ON_THE_FACE);
+    }
+
+    /** Build the scenario's craft, hold it at {@code rollDeg} of roll about X, and check it got there. */
+    private PilotSeat rollOver(double rollDeg) throws Exception {
+        buildShip(site());
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+                .requireFound("the seat locates the deck in the craft's frame");
+        double half = Math.toRadians(rollDeg) / 2.0;
+        scenario().requireArranged("the attitude hold must accept the roll command",
+                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + Math.cos(half)
+                        + " " + Math.sin(half) + " 0.0 0.0")).bool("commanded"));
+        // WINDOW: see OUTER_HULL_SLEW_TICKS.
+        advanceServerAndClient(OUTER_HULL_SLEW_TICKS);
+        double upY = shipUpFromInfo(shipInfo())[1];
+        scenario().requireArranged("the deck must be held at " + rollDeg + " deg of roll (deck-up world Y "
+                + upY + ")", Math.abs(upY - Math.cos(Math.toRadians(rollDeg))) <= ROLL_HELD_UP_Y);
+        return seat;
+    }
+
+    /**
+     * Put the player {@code above} blocks over the hull's outer face at the deck cell
+     * {@code (dx, dz)} from the seat, facing {@code yaw}, and answer his entity id. The outer face over
+     * a deck cell off the seat's row is the deck block's underside, ship-frame Y {@code seatY - 1}: in
+     * the with-pilot-deck fixture only the seat's row carries blocks below the deck.
+     */
+    private int putOnTheFace(PilotSeat seat, double dx, double dz, double above, float yaw) throws Exception {
+        Reply at = Reply.of(exec("stellurgytest vs to-world 0 id " + scenarioShipId + " "
+                + (seat.seatX + dx) + " " + (seat.seatY - 1.0) + " " + (seat.seatZ + dz)));
+        scenario().requireArranged("the face must map to the world through this craft: " + at, at.ok());
+        exec("tp " + botName() + " " + at.number("worldX") + " " + (at.number("worldY") + above) + " "
+                + at.number("worldZ") + " " + yaw + " 0");
+        return Reply.of(exec("stellurgytest vs player-ship-data")).integer("entityId");
+    }
+
+    /**
+     * The player put on the face has landed there, and stays where he landed through a window -
+     * while the craft does {@code motion} (a probe command) and then {@code stop}, or hovers when both
+     * are null. {@code tiltDeg} is the face's angle off level.
+     */
+    private void staysWhereHeLanded(PilotSeat seat, int playerId, String label, double tiltDeg,
+                                    String motion, String stop) throws Exception {
+        double face = seat.seatY - 1.0;
+        Reply rest = Reply.of(exec("stellurgytest vs player-ship-data 0 " + playerId + " " + scenarioShipId));
+        double gap = face - rest.number("bodyShipFrameY");
+        // An upright box standing on a tilted face rests on its lower edge, so its feet centre sits
+        // half its width times the sine of the tilt off the face: 0.185 for this 0.6-wide player at 38
+        // deg, nothing on a level face.
+        double standingOff = 0.3 * Math.sin(Math.toRadians(tiltDeg));
+        // A VERDICT, not an arrangement: he was put a tenth of a block over the face, so the hull taking
+        // him and holding him there is the subject - a face that sheds him has failed before the window.
+        assertTrue("a player put on the hull's outer face must come to rest on it (ship-frame Y "
+                + rest.number("bodyShipFrameY") + ", face " + face + ", expected " + standingOff
+                + " off it): " + rest,
+                rest.bool("playerOnGround") && Math.abs(gap - standingOff) < ON_THE_FACE);
+        double upYBefore = shipUpFromInfo(shipInfo())[1];
+        // Both readings are taken with the craft AT REST, so his server-side position (his last packet's
+        // claim) cannot carry a lag of the craft's motion into the difference: see OUTER_HULL_STOP_TICKS.
+        Reply first = Reply.of(exec("stellurgytest vs player-ship-data 0 " + playerId + " " + scenarioShipId));
+        double[] landed = {first.number("bodyShipFrameX"), first.number("bodyShipFrameY"),
+                first.number("bodyShipFrameZ"), first.integer("ticksExisted")};
+        ShipInfo shipBefore = shipInfo();
+        if (motion != null) {
+            Reply moving = Reply.of(exec("stellurgytest vs " + motion));
+            scenario().requireArranged("the craft must accept the motion command: " + moving,
+                    moving.bool("afcResolved"));
+        }
+        // WINDOW: between `landed` above and `later` below, whose difference is asserted; with a motion
+        // it is also the EXPERIMENT, the motion being the dose.
+        advanceServerAndClient(OUTER_HULL_WINDOW_TICKS);
+        ShipInfo shipMoved = shipInfo();
+        if (stop != null) {
+            // A commanded zero, not a cleared command: cleared, the craft's hold lets go and it falls or
+            // goes on turning (measured 2026-10-07: 17 blocks/s after a clear).
+            String stopCommand = stop;
+            if (HOLD_THE_ATTITUDE_REACHED.equals(stop)) {
+                ShipInfo reached = shipInfo();
+                stopCommand = "point-by-id 0 " + scenarioShipId + " " + reached.qw + " " + reached.qx + " "
+                        + reached.qy + " " + reached.qz;
+            }
+            Reply stopped = Reply.of(exec("stellurgytest vs " + stopCommand));
+            scenario().requireArranged("the craft must accept the stop command: " + stopped,
+                    stopped.boolOr("afcResolved", false) || stopped.boolOr("commanded", false));
+            // WINDOW: the craft coming to a stop converges and announces nothing; read once after,
+            // gated on its own velocity below.
+            advanceServerAndClient(OUTER_HULL_STOP_TICKS);
+        }
+        ShipInfo shipAfter = shipInfo();
+        Reply after = Reply.of(exec("stellurgytest vs player-ship-data 0 " + playerId + " " + scenarioShipId));
+        double[] later = {after.number("bodyShipFrameX"), after.number("bodyShipFrameY"),
+                after.number("bodyShipFrameZ"), after.integer("ticksExisted")};
+        scenario().requireArranged("the server must have been updating him across the window (ticked "
+                + (later[3] - landed[3]) + " of " + OUTER_HULL_WINDOW_TICKS + ")",
+                later[3] - landed[3] >= OUTER_HULL_WINDOW_TICKS / 2.0);
+        double along = Math.hypot(later[0] - landed[0], later[2] - landed[2]);
+        double across = Math.abs(later[1] - landed[1]);
+        double craftMoved = Math.hypot(shipMoved.x - shipBefore.x, shipMoved.z - shipBefore.z);
+        double qDot = Math.abs(shipBefore.qw * shipMoved.qw + shipBefore.qx * shipMoved.qx
+                + shipBefore.qy * shipMoved.qy + shipBefore.qz * shipMoved.qz);
+        double craftTurnedRad = 2.0 * Math.acos(Math.min(1.0, qDot));
+        double speedAfter = Math.sqrt(shipAfter.velX * shipAfter.velX + shipAfter.velY * shipAfter.velY
+                + shipAfter.velZ * shipAfter.velZ);
+        String evidence = " from=(" + landed[0] + "," + landed[1] + "," + landed[2] + ") to=(" + later[0]
+                + "," + later[1] + "," + later[2] + ") gap=" + gap + " craftMoved=" + craftMoved
+                + " craftTurnedRad=" + craftTurnedRad + " speedAfter=" + speedAfter + " omegaAfter="
+                + shipAfter.omega + " deckUpY=" + shipUpFromInfo(shipAfter)[1]
+                + " deckHeldBy=" + after.textOr("deckHeldBy", "none")
+                + " onGround=" + after.bool("playerOnGround");
+        System.out.println("[crewcap] outerHull" + label + " along=" + along + " across=" + across + evidence);
+        exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
+        scenario().requireArranged("the craft must have kept its attitude's up-axis (deck-up world Y "
+                + upYBefore + " -> " + shipUpFromInfo(shipAfter)[1] + ")",
+                Math.abs(shipUpFromInfo(shipAfter)[1] - upYBefore) <= ROLL_HELD_UP_Y);
+        if (motion != null) {
+            scenario().requireArranged("the craft must have come to rest before the second reading;"
+                    + evidence, speedAfter < CRAFT_STOPPED_SPEED && shipAfter.omega < CRAFT_STOPPED_OMEGA);
+        }
+        if ("Flying".equals(label)) {
+            scenario().requireArranged("the craft must have flown further than its deck is wide while he"
+                    + " stood on it;" + evidence, craftMoved > OUTER_HULL_FLIGHT_MIN_TRAVEL);
+        }
+        if ("Spinning".equals(label)) {
+            scenario().requireArranged("the craft must have turned well round under him;" + evidence,
+                    craftTurnedRad > 1.0);
+        }
+        assertTrue("a player on the outer hull must stay on it: " + across + " blocks nearer or further"
+                + " off it than where he stood;" + evidence, across <= OUTER_HULL_ACROSS);
+        assertTrue("a player on the outer hull must not slide along it: " + along + " blocks;" + evidence,
+                along <= OUTER_HULL_AT_REST);
+    }
+
     private String crosshairBlock(String what) throws Exception {
         return Events.text(crosshairRecord(what), "block");
     }

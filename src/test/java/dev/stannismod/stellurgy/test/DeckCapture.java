@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test;
 
 /**
- * One reading of {@code stellurgytest vs deck-capture} — the whole {@code ShipFrameTravel.handles}
- * decision for one body, read by field name.
+ * One reading of {@code stellurgytest vs deck-capture} — whether a deck holds one body and, when
+ * none does, whether one could take it where it stands — read by field name.
  *
  * <p>Measured 2026-09-17: eight classes spell this reply's field names as string literals of their
  * own, sixty times, and fifty of those are one needle — {@code contains("\"alreadyTracked\":true")}.
@@ -14,21 +14,19 @@ package dev.stannismod.stellurgy.test;
  * <p>A body the world does not hold answers {@code {"error":"entity not found"}}; a non-living
  * entity answers {@code {"error":"not a living entity"}}. Neither carries a gate, a count or a
  * verdict — so a caller reaching for {@code alreadyTracked} on either gets {@code false}, which is
- * indistinguishable from "the resolver is not holding this body". {@link #of} refuses both as
+ * indistinguishable from "no deck holds this body". {@link #of} refuses both as
  * {@link ArrangementFailure}: the subject this reading is about was never there.</p>
  *
  * <p>The two SUCCESS shapes differ by branch, and that is the second thing this class exists for.
- * A TRACKED body reports {@link #inStayRegion()} and its capture's own ship-frame position; an
- * UNTRACKED one reports {@link #firstContactCandidate()} instead. Reading either off the other
- * shape is absence, not a value, so each is an entry point that refuses.</p>
+ * A HELD body reports the deck's own held point and its live ship-frame position; an UNHELD one
+ * reports {@link #firstContactCandidate()} instead. Reading either off the other shape is absence,
+ * not a value, so each is an entry point that refuses.</p>
  *
- * <h2>{@code alreadyTracked} is not {@code verdict}, and neither is {@code hullStand}</h2>
+ * <h2>{@code alreadyTracked} is not {@code verdict}</h2>
  *
- * <p>Production keeps three separate facts and the tier routinely read the first as the third.
- * {@link #alreadyTracked} says the resolver holds state for this body. {@link #verdict} is what
- * {@code handles()} would answer THIS tick — a tracked body outside its stay region answers false.
- * {@link #hullStand} says the hold is the standing-on-the-hull mode rather than a deck capture, so
- * "captured on the deck" is {@code alreadyTracked && !hullStand} and never either half alone.</p>
+ * <p>{@link #alreadyTracked} says a deck holds this body. {@link #verdict} is true for a held body
+ * and, for an unheld one, says whether a deck could take it where it stands — so "held on the deck"
+ * is {@code alreadyTracked}, and a {@code verdict} alone may be about a body still in the air.</p>
  */
 public final class DeckCapture {
 
@@ -40,12 +38,10 @@ public final class DeckCapture {
 
     /** The entity this reading is about, as the reply echoed it back. */
     public final int entityId;
-    /** What {@code handles()} would answer for this body right now. See the class note. */
+    /** Held, or takeable where it stands. See the class note. */
     public final boolean verdict;
-    /** Whether the resolver holds capture state for this body at all. */
+    /** Whether a deck holds this body. */
     public final boolean alreadyTracked;
-    /** Whether that hold is the HULL-STAND mode rather than a deck capture. */
-    public final boolean hullStand;
     /** Whether a ship's world box contains the body — a claim about geometry, not about capture. */
     public final boolean aboardByContainment;
     /** Whether ordinary world terrain is what the body is standing on. */
@@ -69,7 +65,6 @@ public final class DeckCapture {
         this.entityId = reply.integer("entityId");
         this.verdict = reply.bool("verdict");
         this.alreadyTracked = reply.bool("alreadyTracked");
-        this.hullStand = reply.bool("hullStand");
         this.aboardByContainment = reply.bool("aboardByContainment");
         this.supportedByWorldTerrain = reply.bool("supportedByWorldTerrain");
         this.shipFrameResolved = reply.bool("shipFrameResolved");
@@ -96,7 +91,7 @@ public final class DeckCapture {
         }
         if (!reply.has("verdict")) {
             throw new AssertionError("this is not an `stellurgytest vs deck-capture` answer: it carries no"
-                    + " `verdict`, so nothing in it is the resolver's decision: " + text);
+                    + " `verdict`, so nothing in it is the deck's decision: " + text);
         }
         return new DeckCapture(reply, text);
     }
@@ -135,16 +130,6 @@ public final class DeckCapture {
         return of(probe.exec("stellurgytest vs deck-capture " + dim + " " + entityId));
     }
 
-    /**
-     * Captured ON THE DECK: held by the resolver, and not in hull-stand mode.
-     *
-     * <p>The pair fifty call sites wrote out by hand, usually as one half of it. See the class
-     * note for why either half alone is a different claim.</p>
-     */
-    public boolean capturedOnDeck() {
-        return alreadyTracked && !hullStand;
-    }
-
     /** The ship holding the capture, refusing when nothing holds this body. */
     public String requireAnchorShipId() {
         // absence is the answer: production writes `anchorShipId` as JSON null on the
@@ -158,7 +143,7 @@ public final class DeckCapture {
         return anchor;
     }
 
-    /** Whether the resolver names an anchor at all, for a caller whose subject is its absence. */
+    /** Whether the probe names an anchor at all, for a caller whose subject is its absence. */
     public boolean hasAnchor() {
         // absence is the answer: this verb's whole subject is whether an anchor is named.
         return alreadyTracked && reply.textOr("anchorShipId", null) != null;
@@ -225,17 +210,6 @@ public final class DeckCapture {
     }
 
     /**
-     * Whether the body is inside its capture's stay region, refusing when nothing holds it.
-     *
-     * <p>The TRACKED branch's own field: an untracked reply does not carry it, and a {@code false}
-     * read off that absence would say "it has drifted out" about a body that was never in.</p>
-     */
-    public boolean inStayRegion() {
-        requireTracked("inStayRegion");
-        return reply.bool("inStayRegion");
-    }
-
-    /**
      * The BODY's live position in its capture's ship frame — the only reading of "did it move along
      * the deck" that the deck's own motion cannot contaminate.
      */
@@ -276,8 +250,8 @@ public final class DeckCapture {
     }
 
     /**
-     * The capture's OWN committed position in the ship frame — bookkeeping that only moves when the
-     * resolver commits, which is what tells a still body from one being carried by something else.
+     * The deck's OWN held point in the ship frame — bookkeeping that only moves when the deck commits
+     * one, which is what tells a still body from one being carried by something else.
      */
     public double capturedShipFrameX() {
         return capturedShipFrame("shipFrameX");
@@ -311,7 +285,6 @@ public final class DeckCapture {
     @Override
     public String toString() {
         return "deck-capture entity=" + entityId + " verdict=" + verdict
-                + " tracked=" + alreadyTracked + " hullStand=" + hullStand
-                + " obstacles=" + shipSupportObstacles;
+                + " tracked=" + alreadyTracked + " obstacles=" + shipSupportObstacles;
     }
 }

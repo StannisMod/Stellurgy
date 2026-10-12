@@ -141,10 +141,14 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
         double[] p = deckPoint(craft, bodyId);
         if (Math.abs(p[1] - craft.seat.seatY) > AT_REST) {
             Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId));
+            // What it stands on, in the craft's subspace: a body grounded off the top face is standing
+            // on SOMETHING, and a thin block (a snow layer is 0.125) is the first thing to rule out.
+            String under = exec("stellurgytest block at 0 " + (int) Math.floor(p[0]) + " "
+                    + (int) Math.floor(p[1] - 0.01) + " " + (int) Math.floor(p[2]));
             requireArranged("the body must have landed ON " + deck + "'s top face (ship-frame Y " + p[1]
                     + ", deck top " + craft.seat.seatY + "; ticksExisted " + p[3] + "; ships containing it "
                     + exec("stellurgytest vs ships-at 0 " + r.number("playerX") + " " + r.number("playerY")
-                    + " " + r.number("playerZ")) + "; " + r + ")", false);
+                    + " " + r.number("playerZ")) + "; the block under its feet " + under + "; " + r + ")", false);
         }
         return p;
     }
@@ -182,14 +186,12 @@ public abstract class AbstractDeckBodyTest extends AbstractSharedServerTest {
 
     /**
      * The two readings and the deck's attitude, plus WHICH mechanism held the body at the second
-     * reading: the deck's own frame ({@code deckHeldBy}), the travel resolver ({@code resolverHeldBy}),
-     * or neither - the substrate's collision.
+     * reading: the deck's own frame ({@code deckHeldBy}), or none - the substrate's collision.
      */
     protected String evidence(double[] from, double[] to, Craft craft, int bodyId) throws Exception {
         Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + craft.shipId));
         return " from=(" + from[0] + "," + from[1] + "," + from[2] + ") to=(" + to[0] + "," + to[1]
-                + "," + to[2] + ") deckUpY=" + deckUpY(craft) + " deckHeldBy=" + r.textOr("deckHeldBy", "none")
-                + " resolverHeldBy=" + r.textOr("resolverHeldBy", "none");
+                + "," + to[2] + ") deckUpY=" + deckUpY(craft) + " deckHeldBy=" + r.textOr("deckHeldBy", "none");
     }
 
     /** A stretch of a scenario that may throw. */

@@ -1469,6 +1469,12 @@ private String hud() throws Exception {
      * his feet too … no `client_dimension_changed` carrying dim = 4 was recorded within 600 ticks",
      * 2026-09-28. Skipping it everywhere reddened the DEPARTURE first ("into dim 13"), which is why
      * the inversion was scoped. The wait before the verdict is the link that the ship arrived.</p>
+     *
+     * <p>red-witnessed: with the server's deck frame refusing every player
+     * ({@code DeckFrameTick#admissionFor} at {@code if (!admissible(entity))}, a {@code return null} for a
+     * server-side player put before it): "CONTROL: the server must hold a deck capture for him — that
+     * is what 'aboard on his feet' MEANS to the crossing …", 2026-10-07. The client half still took
+     * him, so the stand-up helper's own link passed and this line was the first to go red.</p>
      */
     @Test
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
@@ -1496,7 +1502,7 @@ private String hud() throws Exception {
         assertTrue("CONTROL: the server must hold a deck capture for him — that is what 'aboard on"
                 + " his feet' MEANS to the crossing, and without it this test would be about a"
                 + " player standing in a void cell: " + capture.raw(),
-                capture.alreadyTracked && !capture.hullStand);
+                capture.alreadyTracked);
         // ...on the ship that is about to JUMP. The crossing enumerates the bodies aboard ONE hull,
         // so a capture held by any other craft in the cell means the crew member is not in the set
         // under test at all, and every reading downstream would be about somebody it never carried.

@@ -356,41 +356,6 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         return true;
     }
 
-    /**
-     * Move a craft and EVERYONE aboard it — its mounts, their passengers, and the crew standing on
-     * its decks. The whole of what an in-world teleport owes.
-     *
-     * <p><b>Why this is not what a CROSSING calls.</b> A crossing owns its crew already: it captures
-     * them at the departure, stashes them, and re-seats them at the arrival, so the bodies are not
-     * standing on the deck while the pose is written. Carrying them here as well is a second writer
-     * of one position, and it is not a subtle one — measured 2026-09-11, the seam scenarios put the
-     * body 138 blocks under its own ship, {@code aboard:false}, because it received the delta twice.
-     * So the two operations are NAMED rather than switched: {@link #teleportShipAndItsMounts} is the
-     * crossing's half, this is the whole move, and no caller picks between them with a flag.</p>
-     *
-     * <p>The crew are carried only if the craft actually moved: a failed teleport must not leave
-     * bodies translated away from the hull they are standing on.</p>
-     */
-    public boolean teleportShipAndEveryoneAboard(WorldServer world, java.util.UUID vsShipUuid,
-                                                 double sx, double sy, double sz,
-                                                 double px, double py, double pz) {
-        // Resolved ONCE, and the resolved id is what goes down — not the caller's, which may be
-        // absent. Passing the original would have the move and the crew carry each run their own
-        // lookup, and two lookups are two answers: the craft that moved and the craft whose crew was
-        // carried could be different ones. That is the same defect this method's own callee had
-        // until today, one level up.
-        java.util.UUID shipId = vsShipUuid != null ? vsShipUuid
-                : VSIntegration.shipUuidAt(world, sx, sy, sz);
-        if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz)) {
-            return false;
-        }
-        int crew = dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.carryHeldBodies(
-                world, shipId == null ? null : shipId.toString(), px - sx, py - sy, pz - sz);
-        LOGGER.info("[SPACE] teleported ship {} in dim {} with {} aboard body/bodies carried.",
-                shipId, world.provider.getDimension(), crew);
-        return true;
-    }
-
     @Override
     public String settleDiagnostics() {
         return lastReseatBlock;

@@ -648,7 +648,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
         double[] afterRoll = localOf(crewId);
 
-        // Measured on a real client run - the frame ShipFrameTravel MOVES in (VS
+        // Measured on a real client run - the frame the deck MOVES a body in (VS
         // ShipTransform.rotate) and the frame the camera LEVELS to (the attitude quaternion) are ONE
         // rotation, so "keys/mouse feel inverted" is NOT a frame-source split - it is the world-frame aim
         // under a deck-levelled camera. Pin it: at 75 degrees the disagreement is ~0.
@@ -753,14 +753,18 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     // ---- Test 4: a body on a GROUNDED ship's deck stays on the deck, not through it -----------
 
     /**
-     * The subject is the PLAYER, because the playtest was a player's and a player is what the travel
-     * resolver still holds; an armor stand stood in for him until the deck's own frame began to hold
-     * stands, after which this scenario no longer reached the terrain gate at all.
+     * The subject is the PLAYER, because the playtest was a player's.
      *
-     * <p>Not witnessed red in this form (2026-09-30). The inversion owed is the resolver releasing a
-     * body standing on its deck when world terrain appears under it
-     * ({@code ShipFrameTravel.handles}, the {@code steppedOntoTerrain} branch without its
-     * ship-support clause).</p>
+     * <p>Its subject, since 2026-10-07, is the deck frame keeping a held player whose deck has world
+     * terrain right under it.</p>
+     *
+     * <p>red-witnessed: 2026-10-07, THE HOLD — with {@code DeckFrameTick#updatePlayer} at
+     * {@code release(player, "noDeckBelow");} followed by a release of any held player with world
+     * collision within 0.3 under his feet: "a player on the deck of a grounded ship must still be held
+     * by that deck, not be handed to vanilla because there is now ground below: before the floor
+     * 1bab92d4-…, after null". THE NO-RELEASE verdict: NOT YET — that break fires the hold verdict
+     * first, and none was found that releases him and takes him back inside the window, since the
+     * admission refuses a body standing on terrain.</p>
      */
     @Test
     public void aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck() throws Exception {
@@ -785,7 +789,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         onDeck.requireAboard(scenarioShipId,
                 "the player must have settled on the deck of the ship this scenario built");
         double deckY = onDeck.playerY;
-        String heldBefore = resolverHolding(botId);
+        String heldBefore = deckHolding(botId);
         scenario().requireArranged("before the floor goes in, THIS ship's deck must hold the player,"
                 + " or nothing below is about a deck letting go: " + heldBefore,
                 scenarioShipId.equals(heldBefore));
@@ -795,10 +799,9 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         int fy = (int) Math.floor(deckY) - 1;
         int sx = (int) Math.floor(ship[0]);
         int sz = (int) Math.floor(ship[2]);
-        // The regression is a RELEASE — the gate hands the body to vanilla the moment it sees world
-        // ground under its feet, and vanilla cannot see a subspace deck. So mark before the floor
-        // goes in and read the silence afterwards: production names its own reason at the release,
-        // and `steppedOntoTerrain` is that gate's word for exactly this.
+        // The regression is a RELEASE — a deck handing the body to vanilla the moment world ground
+        // appears under its feet, and vanilla cannot see a subspace deck. So mark before the floor
+        // goes in and read the silence afterwards.
         Events events = serverEvents();
         long floorMark = events.markInstrumented();
         assertTrue("must lay the world floor under the deck",
@@ -810,7 +813,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // Overshoot only lengthens the exposure — the strict direction for an absence.
         advanceServerAndClient(60);
 
-        String heldAfter = resolverHolding(botId);
+        String heldAfter = deckHolding(botId);
         String releases = events.since(floorMark, "deck_released");
         PlayerShipData afterFloor = PlayerShipData.byId(this::exec, 0, botId);
         System.out.println("[tier2] grounded-deck: deckY=" + deckY + " afterFloor y=" + afterFloor.playerY
@@ -818,14 +821,14 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         assertTrue("a player on the deck of a grounded ship must still be held by that deck, not be"
                 + " handed to vanilla because there is now ground below: before the floor " + heldBefore
                 + ", after " + heldAfter, scenarioShipId.equals(heldAfter));
-        // The resolver names its own reason at a release, and `steppedOntoTerrain` is that gate's
-        // word for exactly this regression. The recorder is asked first: "nothing was released" and
-        // "nobody was recording" are the same empty reply until it is.
+        // ANY release of him in the exposure is the regression, whatever reason production gave it:
+        // he is standing on his deck the whole time. The recorder is asked first: "nothing was
+        // released" and "nobody was recording" are the same empty reply until it is.
         Events.assertInstrumentRan(releases, DECK_INSTRUMENT,
-                "no terrain release means the player kept his deck when the ground appeared");
+                "no release means the player kept his deck when the ground appeared");
         assertTrue("laying world ground under the deck must not release the player (entity " + botId
-                        + ") naming the terrain: every release since the floor went in: " + releases,
-                matchingRecords(releases, "\"e\":" + botId + ",", "steppedOntoTerrain") == 0);
+                        + "): every release since the floor went in: " + releases,
+                Events.countRecords(releases, "e", String.valueOf(botId)) == 0);
         // Height and ground contact are NOT discriminators here: the floor is flush with the deck
         // (its top is at deckY), so a player handed to vanilla would stand on the stone at the same
         // height, on the ground. The two reads above are what can tell.
@@ -1152,9 +1155,18 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      *  supplies the ticks, so that taking a reading never adds one. */
     private double cursorXSince(long mark, String what) throws Exception {
         String rec = Events.lastRecord(clientEvents().since(mark, "flight_cursor"));
-        assertNotNull("no flight_cursor record " + what + " between client mark " + mark
-                + " and now — the client's flight-input path did not run in that window, so there is"
-                + " no cursor reading to act on", rec);
+        if (rec == null) {
+            // Which of the path's conditions failed, read only on this path: the gate's own answers
+            // (a seated tick that did not pilot says `open:false`; no answer at all means he was not
+            // on a seat mount, or a screen kept the tick from reaching it), the screens opened, and
+            // what he rides now.
+            throw new AssertionError("no flight_cursor record " + what + " between client mark " + mark
+                    + " and now — the client's flight-input path did not run in that window, so there is"
+                    + " no cursor reading to act on | the pilot gate's answers: "
+                    + clientEvents().since(mark, "ship_pilot_gate_decided")
+                    + " | screens opened: " + clientEvents().since(mark, "client_gui_opened")
+                    + " | riding now: " + bot().reportRidingEntity());
+        }
         return Events.number(rec, "x");
     }
 
@@ -1362,10 +1374,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 resting.onGround);
     }
 
-    /** The ship whose travel resolver holds {@code bodyId}, or {@code "null"}. */
-    private String resolverHolding(int bodyId) throws Exception {
+    /** The ship whose deck holds {@code bodyId}, or {@code "null"}. */
+    private String deckHolding(int bodyId) throws Exception {
+        // absence is the answer: the probe writes `deckHeldBy` as JSON null for a body no deck holds.
         return Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + scenarioShipId))
-                .textOr("resolverHeldBy", "null");
+                .textOr("deckHeldBy", "null");
     }
 
     private double readDouble(String json, String field) {

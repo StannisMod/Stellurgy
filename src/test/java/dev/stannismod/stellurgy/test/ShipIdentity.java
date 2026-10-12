@@ -13,12 +13,11 @@ import static org.junit.Assert.assertTrue;
  * therefore satisfied byte-identically by a body resolved against somebody else's craft, and no
  * amount of tightening the flag itself changes that: the flag is not the part that is ambiguous.</p>
  *
- * <p><b>The disambiguator was already in the reply.</b> {@code ShipFrameTravel.explainHandles} puts
- * {@code anchorShipId} — the id of the ship actually holding the capture — into every
- * {@code stellurgytest vs deck-capture} answer. Measured 2026-09-06: 0 of the suite's 103 {@code
- * deck-capture} call sites read it, against 52 that assert on {@code alreadyTracked} /
- * {@code verdict} / {@code hullStand}. So this is not a new capability; it is spending one that was
- * already being thrown away.</p>
+ * <p><b>The disambiguator was already in the reply.</b> The probe puts {@code anchorShipId} — the
+ * id of the ship actually holding the capture — into every {@code stellurgytest vs deck-capture}
+ * answer. Measured 2026-09-06: 0 of the suite's 103 {@code deck-capture} call sites read it, against
+ * 52 that asserted on the capture flags alone. So this is not a new capability; it is spending one
+ * that was already being thrown away.</p>
  *
  * <p><b>That reply is read by {@link DeckCapture}, not here</b> (2026-09-17): the anchor, the
  * containing hulls and the first-contact candidate are fields of ONE producer, and its reader owns

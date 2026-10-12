@@ -8,7 +8,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
@@ -58,7 +58,7 @@ public final class DeckLook {
      * then appear only once something happened to class-load {@code DeckLook}, and until then the
      * movement would fall back to the world-yaw projection with nothing saying so.</p>
      */
-    public static final class Port implements ShipFrameTravel.ClientLookSource {
+    public static final class Port implements DeckBoarding.ClientLookSource {
 
         /** The movement half of the one-transform rule: the walk basis consumes the SAME deck
          *  heading the mouse turns, instead of re-deriving it from the world-yaw projection
@@ -116,7 +116,7 @@ public final class DeckLook {
      * shows at any frame rate.
      */
     public static FreeFlightPhysics.Quat slerpedShipQuat(Entity player, float partialTicks) {
-        return VSIntegration.shipAttitudeForId(player.world, ShipFrameTravel.aboardShipId(player), partialTicks);
+        return VSIntegration.shipAttitudeForId(player.world, DeckBoarding.aboardShipId(player), partialTicks);
     }
 
     /**
@@ -160,7 +160,7 @@ public final class DeckLook {
         }
         EntityPlayerSP player = (EntityPlayerSP) entity;
         PilotInput input = PilotInput.of(player);
-        if (player.world == null || !ShipFrameTravel.isResolvingAboard(player)) {
+        if (player.world == null || !DeckBoarding.isResolvingAboard(player)) {
             input.deckActive = false;
             return false;
         }
@@ -172,7 +172,7 @@ public final class DeckLook {
         // Seed (fresh capture), or re-seed (a teleport / PosLook re-aimed the player in WORLD
         // terms): the deck look becomes the current world aim mapped into the deck, so the
         // hand-off is invisible - the player keeps looking exactly where he was looking.
-        String shipId = ShipFrameTravel.aboardShipId(player);
+        String shipId = DeckBoarding.aboardShipId(player);
         double[] fwd = lookVec(player.rotationYaw, player.rotationPitch);
         double[] deck = VSIntegration.rotateToShipFrameFor(
                 player.world, shipId, fwd[0], fwd[1], fwd[2]);
@@ -205,7 +205,7 @@ public final class DeckLook {
         double[] w = shipQuat != null
                 ? shipQuat.rotate(fwd[0], fwd[1], fwd[2])
                 : VSIntegration.rotateToWorldFrameFor(player.world,
-                        ShipFrameTravel.aboardShipId(player), fwd[0], fwd[1], fwd[2]);
+                        DeckBoarding.aboardShipId(player), fwd[0], fwd[1], fwd[2]);
         if (w == null) {
             return; // ship went away mid-tick; the next sync releases to vanilla
         }

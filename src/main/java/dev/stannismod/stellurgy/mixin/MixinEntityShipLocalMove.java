@@ -43,12 +43,6 @@ public abstract class MixinEntityShipLocalMove {
             ci.cancel();
             return;
         }
-        // A player on a ship's outer hull, his own step: replayed against the hull with the sweep
-        // his client collided it with.
-        if (dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.replayHullStandStep(self, type, x, y, z)) {
-            ci.cancel();
-            return;
-        }
         // Server-side only: the client keeps predicting with vanilla rules, so a mistake here cannot
         // strand a player, only desync him for a tick.
         if (self.world == null || self.world.isRemote) {

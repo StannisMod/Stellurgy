@@ -129,10 +129,13 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipFrameTravel#followShipPoses} (the pass that re-images a held
-     * body at its deck point after the craft moves) doing nothing: "the crew member must ride the
-     * deck, not the world: he moved 1.95 relative to the ship but only 0.37 in the world",
-     * 2026-09-28. The lines the wait rewrite touched are the arrangement links before the roll.</p>
+     * <p>red-witnessed: taken on the pre-2026-10-06 form, with the travel resolver's re-image pass
+     * (`ShipFrameTravel.followShipPoses`, deleted with it — the pass that re-images a held body at its
+     * deck point after the craft moves) doing nothing: "the crew member must ride the deck, not the
+     * world: he moved 1.95 relative to the ship but only 0.37 in the world", 2026-09-28. NOT re-taken
+     * against the deck frame's own pass, {@code DeckFrameTick#followShipPoses} at
+     * {@code entity.setPosition(pos[0], pos[1], pos[2])}. The lines the wait rewrite touched are the
+     * arrangement links before the roll.</p>
      *
      * <p>red-witnessed: with {@code MixinNetHandlerPlayerDeckFrame#stellurgy$claimOntoTheDeck} at
      * {@code DeckFrameTick.claimArrived(player)} removed, the every-replay ground claim fails with
@@ -240,10 +243,10 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
                 upAfterRoll < Math.cos(Math.toRadians(ROLL_DEG / 2.0)));
 
         PlayerShipData rolled = PlayerShipData.read(this::exec);
-        // Client-observed resolution state (the CLIENT owns a player's movement, so ITS ShipFrameTravel
-        // statics are the honest half; the server's are the competing resolution). Diagnostic printout
-        // for any failure below - which side captured, which side thrashed.
-        // The resolver's own capture records rather than a lifetime counter: `resolvedTicks` was
+        // Client-observed hold state (the CLIENT owns a player's movement, so ITS deck's records are
+        // the honest half). Diagnostic printout for any failure below - which side captured, which
+        // side thrashed.
+        // The deck's own capture records rather than a lifetime counter: `resolvedTicks` was
         // cumulative and JVM-global, so it had already been advanced by whatever ran before this
         // scenario and could not be read as "it resolved HIM". Each record names body and ship.
         // The drops, likewise, as the releases they are: the counter that used to be read here was a

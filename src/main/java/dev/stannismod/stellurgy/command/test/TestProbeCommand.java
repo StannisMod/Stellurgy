@@ -1351,9 +1351,10 @@ public class TestProbeCommand extends CommandBase {
             // the delta itself — the same recipe production carried, minus the seated player, so a
             // probe teleport and a crossing could carry different sets and only the crossing's was
             // ever fixed. The anchor it takes is a BlockPos, and the ship's current pose is the one
-            // point a caller can always name for a craft it has just looked up by identity.
+            // point a caller can always name for a craft it has just looked up by identity. A body
+            // standing on a deck is the deck's to carry, through the pose that now stands.
             boolean ok = new dev.stannismod.stellurgy.space.VSShipCrossingOps()
-                    .teleportShipAndEveryoneAboard(world, uuid, before[0], before[1], before[2],
+                    .teleportShipAndItsMounts(world, uuid, before[0], before[1], before[2],
                             dstX, dstY, dstZ);
             send(sender, "{\"ok\":" + ok
                     + ",\"fromX\":" + before[0] + ",\"fromY\":" + before[1]
@@ -2417,30 +2418,11 @@ public class TestProbeCommand extends CommandBase {
         // position mapped into the ship's subspace. That subspace position is the coordinate a
         // deck-aligned collision frame would treat as authoritative, so watching it while the ship
         // rolls says how much of such a frame the physics mod already supplies. Mutates nothing.
-        // would-take-over <dim> <entityId> - READ-ONLY. Whether ShipFrameTravel would resolve this
-        // living entity's movement in a ship frame. Pins the gate that keeps a body standing on world
-        // terrain near a ship (its box overlaps the ship's world AABB) from being dropped through the
-        // floor into the ship's empty subspace.
-        if (args.length >= 3 && "would-take-over".equalsIgnoreCase(args[0])) {
-            net.minecraft.server.MinecraftServer server = sender.getServer();
-            net.minecraft.world.WorldServer world = server == null ? null
-                    : server.getWorld(parseIntOr(args[1], 0));
-            net.minecraft.entity.Entity ent = world == null ? null
-                    : world.getEntityByID(parseIntOr(args[2], Integer.MIN_VALUE));
-            if (!(ent instanceof net.minecraft.entity.EntityLivingBase)) {
-                send(sender, "{\"error\":\"not a living entity\"}");
-                return;
-            }
-            boolean handles = dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.handles(
-                    (net.minecraft.entity.EntityLivingBase) ent);
-            send(sender, "{\"handles\":" + handles + "}");
-            return;
-        }
-        // deck-capture [<dim> <entityId>] - READ-ONLY. The full ShipFrameTravel.handles() decision tree
-        // for a living entity (defaults to the first player when no id is given): every gate, the number
-        // of ship-frame collision boxes under the feet, and the final verdict. Localizes WHY a body
-        // standing on a deck is or is not resolved in the ship frame - ship not found, found-but-nothing-
-        // solid-under-the-feet (a partial capture that drops it through), or captured. Mutates nothing.
+        // deck-capture [<dim> <entityId>] - READ-ONLY. Whether a deck holds a living entity and, when
+        // none does, whether one could take it where it stands (defaults to the first player when no
+        // id is given): every gate, the number of ship-frame collision boxes under the feet, and the
+        // verdict. Localizes WHY a body standing on a deck is or is not held - ship not found,
+        // found-but-nothing-solid-under-the-feet, or held. Mutates nothing.
         if (args.length >= 1 && "deck-capture".equalsIgnoreCase(args[0])) {
             net.minecraft.entity.Entity subject;
             if (args.length >= 3) {
@@ -2464,7 +2446,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             Map<String, Object> m = new LinkedHashMap<>(
-                    dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.explainHandles(
+                    dev.stannismod.stellurgy.integration.vs.DeckBoarding.explainDeckCapture(
                             (net.minecraft.entity.EntityLivingBase) subject));
             m.put("entityId", subject.getEntityId());
             send(sender, jsonMap(m));
@@ -2472,7 +2454,7 @@ public class TestProbeCommand extends CommandBase {
         }
         // subspace-census [<dim> <entityId>] - READ-ONLY. What the SERVER world holds at the subject's
         // position mapped into its ship's subspace: chunk loaded, non-air block count, collision boxes.
-        // The server-side control for the client's per-tick census statics (ShipFrameTravel.census*):
+        // The server-side control for the client's per-tick census (taken at DeckBoarding.clientCensusTick):
         // server rich + client empty = the client never received the ship's subspace chunks; both empty
         // = the subspace region itself is wrong; both rich = the collision sweep is at fault.
         if (args.length >= 1 && "subspace-census".equalsIgnoreCase(args[0])) {
@@ -2491,7 +2473,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             Map<String, Object> census =
-                    dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.subspaceCensusFor(
+                    dev.stannismod.stellurgy.integration.vs.DeckBoarding.subspaceCensusFor(
                             (net.minecraft.entity.EntityLivingBase) subject, true);
             if (census == null) {
                 send(sender, "{\"ok\":true,\"aboardShip\":false}");
@@ -2643,9 +2625,6 @@ public class TestProbeCommand extends CommandBase {
                 dev.stannismod.stellurgy.integration.vs.DeckFrameTick.Episode episode =
                         ((dev.stannismod.stellurgy.integration.vs.DeckHeld) subject).stellurgy$deckEpisode();
                 m.put("deckHeldBy", episode == null ? null : episode.shipId());
-                // ...or the travel resolver, which owns a living body's movement by its own sweep.
-                m.put("resolverHeldBy",
-                        dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.capturedShipId(subject));
                 if (local != null) {
                     m.put("bodyShipFrameX", local[0]);
                     m.put("bodyShipFrameY", local[1]);
@@ -2748,7 +2727,7 @@ public class TestProbeCommand extends CommandBase {
                 + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
                 + "|unpark-by-id <dim> <shipId>"
                 + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|arrival-trace"
-                + "|player-ship-data|would-take-over|deck-capture [<dim> <id>]"
+                + "|player-ship-data|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");
     }
 
@@ -23079,6 +23058,26 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"mounted\":" + mounted
                     + ",\"ridingEntityId\":" + (player.getRidingEntity() == null
                             ? -1 : player.getRidingEntity().getEntityId()) + "}");
+            return;
+        }
+        if ("hold-on-deck".equals(sub) && args.length >= 5) {
+            // /stellurgytest player hold-on-deck <shipUuid> <subX> <subY> <subZ> — arm the server's
+            // declared deck hold for the player on that ship's SUBSPACE point, the one a crossing arms
+            // at its arrival (DeckHold.Holds#holdOnDeck). An ARRANGEMENT verb: the hold's behaviour
+            // from the next tick on is production's. The reply reads the hold back through production's
+            // own answers.
+            double hx = parseDoubleOr(args[2], Double.NaN);
+            double hy = parseDoubleOr(args[3], Double.NaN);
+            double hz = parseDoubleOr(args[4], Double.NaN);
+            if (Double.isNaN(hx) || Double.isNaN(hy) || Double.isNaN(hz)) {
+                send(sender, "{\"error\":\"subspace point must be three numbers\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.holdOnDeck(player, args[1], hx, hy, hz);
+            String heldFor = dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.heldShipId(player);
+            send(sender, "{\"ok\":true"
+                    + ",\"held\":" + dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.isHeld(player)
+                    + ",\"heldFor\":" + (heldFor == null ? "null" : "\"" + heldFor + "\"") + "}");
             return;
         }
         if ("dismount".equals(sub)) {

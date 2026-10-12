@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.trace;
 
 import net.minecraft.entity.Entity;
 
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
@@ -33,7 +33,7 @@ public final class DeckReference {
 
     /** One engaged tick of {@code player}'s deck look: anchor the point if new, sample its image. */
     public void tick(Entity player) {
-        String shipId = ShipFrameTravel.aboardShipId(player);
+        String shipId = DeckBoarding.aboardShipId(player);
         if (!set) {
             double[] sub = VSIntegration.toShipFrameFor(player.world, shipId, player.posX, player.posY, player.posZ);
             if (sub != null) {

@@ -115,13 +115,12 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
         assertEquals("and it must still name the ship he is standing on: " + tag
                 + " (entered ship " + arrangedShipId + ")",
                 arrangedShipId, Reply.of(tag).text("shipId"));
-        // He must really be resolved on the DECK, in the ship's own frame, before the restart: that
-        // is what produces the record asserted above, and a hull-stand catch is not it.
+        // He must really be held on the DECK, in the ship's own frame, before the restart: that is
+        // what produces the record asserted above.
         DeckCapture capBefore = DeckCapture.read(this::exec);
         requireArranged("he must be captured ABOARD the deck after standing up, or the record "
                 + "above describes something other than a crew member on his feet: " + capBefore.raw(),
-                capBefore.alreadyTracked
-                        && !capBefore.hullStand);
+                capBefore.alreadyTracked);
         // The record asserted above names `arrangedShipId`; this line makes the capture name it too.
         // Without it the two claims are about possibly different craft and the sentence "the record
         // describes this crew member on this deck" is not established by either of them.

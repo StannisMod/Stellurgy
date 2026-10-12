@@ -69,13 +69,13 @@ public final class DeckFrameTick {
          */
         double writtenX, writtenY, writtenZ;
         /**
-         * When this hold began, on the travel resolver's install clock - so a deck point the server
-         * sends can tell a hold that predates it from one taken during its window. A hold that takes
-         * over the resolver's capture on the same craft continues that capture and keeps its stamp.
+         * When this hold began, on the body's own hold stamp ({@link DeckHeld#stellurgy$holdStamp}) -
+         * so a deck point the server sends can tell a hold that predates it from one taken during its
+         * window.
          */
         long installEpoch;
-        /** Opened by a server-sent deck point (or continues a capture that was): a re-sent copy of
-         *  that point must not put the body back on it. */
+        /** Opened by a server-sent deck point: a re-sent copy of that point must not put the body back
+         *  on it. */
         boolean seedAnchored;
 
         Episode(String shipId) {
@@ -213,7 +213,7 @@ public final class DeckFrameTick {
      * update is over. So the deck point is taken from where the client says he is, every time, and
      * what his update does to his position is thrown away here as it would be anyway. What the
      * update in the deck's frame buys is everything ELSE it does: the handlers that read where he is
-     * read his place on the craft, and the travel resolver never takes him a second time.</p>
+     * read his place on the craft.</p>
      *
      * <p>His velocity crosses by rotation alone, with no carry: on the server it is the network
      * handler's record of how far his client moved him, and its length is what the speed check
@@ -266,7 +266,7 @@ public final class DeckFrameTick {
             release(player, local == null || stay == null ? "shipUnloaded" : "leftShipRegion");
             return false;
         }
-        if (!isFlying(player) && !ShipFrameTravel.deckMayKeep(player, shipId, local)) {
+        if (!isFlying(player) && !DeckBoarding.deckMayKeep(player, shipId, local)) {
             release(player, "noDeckBelow");
             return false;
         }
@@ -441,12 +441,18 @@ public final class DeckFrameTick {
      * Run the living update of the player THIS client plays in his deck's frame, if a deck holds him
      * or takes him now. Called for the {@code onLivingUpdate} inside his entity update, so everything
      * after it - the step his limbs swing by, the position his client sends - reads him in the world.
+     * While no deck holds him and a restore seed waits for its craft, his living update is not run at
+     * all: the seed keeps him where it found him ({@link DeckBoarding#holdStillForRestore}).
      *
-     * @return {@code true} when his living update was run here and the caller must not run it again
+     * @return {@code true} when his living update was run here, or withheld, and the caller must not
+     *         run it again
      */
     public static boolean updateLocalPlayerLiving(EntityLivingBase body) {
         if (!isLocalPlayer(body)) {
             return false;
+        }
+        if (episodeOf(body) == null && DeckBoarding.holdStillForRestore(body)) {
+            return true;
         }
         return runInDeckFrame(body, () -> livingUpdateOnDeckHeading(body));
     }
@@ -462,7 +468,7 @@ public final class DeckFrameTick {
         Episode episode = episodeOf(body);
         float worldYaw = body.rotationYaw;
         if (episode != null) {
-            body.rotationYaw = ShipFrameTravel.deckYawDeg(body, episode.shipId);
+            body.rotationYaw = DeckBoarding.deckYawDeg(body, episode.shipId);
         }
         try {
             body.onLivingUpdate();
@@ -543,7 +549,7 @@ public final class DeckFrameTick {
             return false;
         }
         // Off the deck's edge, or out on the outer hull: the world's, not the deck's.
-        if (!isFlying(entity) && !ShipFrameTravel.deckMayKeep(entity, shipId, local)) {
+        if (!isFlying(entity) && !DeckBoarding.deckMayKeep(entity, shipId, local)) {
             release(entity, "noDeckBelow");
             return false;
         }
@@ -739,9 +745,9 @@ public final class DeckFrameTick {
      * Whether a deck may hold {@code entity} at all, as it is now - asked before taking it and on
      * every update while holding it, so the two can never disagree.
      *
-     * <p>A living body is the deck's in exactly the states the travel resolver would hold it in, by
-     * asking the resolver's own predicate; one that is riding or ridden belongs to its vehicle. A
-     * creative flyer is excluded by that predicate unless a deck already holds him or may claim him
+     * <p>A living body is the deck's in every state {@link DeckBoarding#isExcludedFromCapture} does
+     * not exclude; one that is riding or ridden belongs to its vehicle. A creative flyer is excluded
+     * by that predicate unless a deck already holds him or may claim him
      * where he is (standing contact, an enclosed interior), and a held one keeps flying in the deck's
      * frame (see {@link #isFlying}). An item in water or lava
      * is left to the world - which states exclude a body that is not living is an open question, and
@@ -760,7 +766,7 @@ public final class DeckFrameTick {
         // carried on a rolled deck was never drawn by the client once its update ran here. The local
         // player is the one body a client moves by its own update.
         return entity instanceof EntityLivingBase && (!entity.world.isRemote || isLocalPlayer(entity))
-                && !ShipFrameTravel.isExcludedFromCapture((EntityLivingBase) entity);
+                && !DeckBoarding.isExcludedFromCapture((EntityLivingBase) entity);
     }
 
     /**
@@ -776,19 +782,21 @@ public final class DeckFrameTick {
     private static void noteReleased(Entity entity, String reason) {
     }
 
-    /** Open an episode on {@code shipId} for {@code entity}, announcing the edge. */
+    /** Open an episode on {@code shipId} for {@code entity}, announcing the edge and stamping it. */
     private static Episode open(Entity entity, String shipId) {
-        noteEntered(entity, shipId, ShipFrameTravel.capturedShipId(entity));
+        noteEntered(entity, shipId, heldShipId(entity));
         Episode episode = new Episode(shipId);
-        ShipFrameTravel.stampEpisode(entity, episode);
-        ((DeckHeld) entity).stellurgy$setDeckEpisode(episode);
+        DeckHeld body = (DeckHeld) entity;
+        episode.installEpoch = body.stellurgy$holdStamp() + 1;
+        body.stellurgy$setHoldStamp(episode.installEpoch);
+        body.stellurgy$setDeckEpisode(episode);
         return episode;
     }
 
     /**
      * A deck point the server sent for the player this client plays - his dismount spot, or where a
      * relog put him back: the deck holds him there, at rest relative to it. Refused for any other
-     * body and for one the deck would not take, which the caller then hands to the travel resolver.
+     * body and for one the deck would not take, which the world then moves.
      *
      * @param world the deck point mapped into the world through the pose the caller read it at
      * @return whether the deck now holds him
@@ -870,7 +878,7 @@ public final class DeckFrameTick {
         AxisAlignedBB box = entity.getEntityBoundingBox();
         java.util.List<String> candidates = new java.util.ArrayList<>(
                 VSIntegration.shipIdsAt(world, entity.posX, entity.posY, entity.posZ));
-        // A DECLARED craft is asked first, as the travel resolver asks it: an arrival or a relog has
+        // A DECLARED craft is asked first: an arrival or a relog has
         // already said which craft this body belongs to, and where two hulls overlap a spatial pick
         // and that declaration differ - measured 2026-09-30, a crew member arriving from hyperspace
         // was taken by a hull that merely overlapped his, and the hold waiting for his own expired.
@@ -901,7 +909,7 @@ public final class DeckFrameTick {
             // its enclosure), not by the standing probe. Measured 2026-10-04: a crossing pinned a
             // crew member 0.5 above his deck, this probe refused him every tick, and the hold that
             // pinned him re-teleported him every tick waiting for a deck that would never take him.
-            if (shipId.equals(declared) && ShipFrameTravel.deckMayKeep(entity, shipId, local)) {
+            if (shipId.equals(declared) && DeckBoarding.deckMayKeep(entity, shipId, local)) {
                 return shipId;
             }
             double reach = SUPPORT_PROBE + Math.max(0.0, -motion[1]);
@@ -920,6 +928,6 @@ public final class DeckFrameTick {
         // frame - is the deck's even with nothing under the feet yet: the deck's gravity seats the
         // body there (a hatch entry, an inverted cockpit, a flyer who stops flying inside).
         return entity instanceof EntityLivingBase
-                ? ShipFrameTravel.interiorCandidate((EntityLivingBase) entity) : null;
+                ? DeckBoarding.interiorCandidate((EntityLivingBase) entity) : null;
     }
 }

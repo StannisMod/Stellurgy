@@ -86,8 +86,9 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
      * The deck rolls over while the stand is on it: past a right angle world-down points away from
      * the deck, so "falls toward the deck" and "falls toward the world" give different answers.
      *
-     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#update} at
-     * {@code entity.motionX - episode.writtenX} (and its Y, Z) taking the whole world motion into the
+     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#runInDeckFrame} at
+     * {@code entity.motionX - episode.writtenX} (taken when it stood in `DeckFrameTick.update`, moved
+     * verbatim since) (and its Y, Z) taking the whole world motion into the
      * deck frame each update instead of adding only what the world wrote - along 0.41; and with
      * {@code DeckFrameTick#admissible} at {@code return entity instanceof EntityLivingBase} answering
      * false (no living body admitted) - along 0.226, taken on the pre-player-admission form. The
@@ -278,6 +279,126 @@ public class VSLivingBodyOnADeckTest extends AbstractDeckBodyTest {
     private void panic(int cowId) throws Exception {
         Reply lit = Reply.of(exec("stellurgytest entity ignite 0 " + cowId + " " + PANIC_SECONDS));
         requireArranged("the cow must be burning: " + lit, lit.bool("burning"));
+    }
+
+    // -- a living body on the OUTER hull stays where it landed ------------------------------------
+
+    /**
+     * The craft's velocity while a body lies on its outer hull, blocks per second along world X: over
+     * the window the craft moves about ten blocks, twice the deck's width, so a body the hull does not
+     * carry ends up over nothing.
+     */
+    private static final String HULL_FLIGHT_VELOCITY = "2.0 0.0 0.0";
+
+    /** The window must have carried the craft further than its own deck is wide (5 blocks). */
+    private static final double HULL_FLIGHT_MIN_TRAVEL = 2.0 * DECK_HALF_WIDTH;
+
+    /** How far off the outer face a stand "on it" may lie. Measured 2026-10-07: 0.0036 resting on the
+     *  face; 1.0 with the substrate's ship collision broken (it fell to the next surface, a block on). */
+    private static final double ON_THE_OUTER_FACE_BLOCKS = 0.5;
+
+    /**
+     * How far a stand lying still on the OUTER hull may move in a window, along the face or across it.
+     * Not {@code AT_REST}: that bound is a deck's (the transform's round-trip error on a body the deck
+     * holds), and no deck holds a body on the outer hull — the physics substrate collides it, with its
+     * own noise. Measured 2026-10-07 on the substrate: along 7.8e-7 hovering and 1.56e-6 flying, across
+     * 3e-13; the smallest real defect, a stand crept along the hull by the since-deleted hull-stand,
+     * 0.0063. The bound sits about 60x above the first and 60x below the second.
+     */
+    private static final double OUTER_HULL_STILL = 1.0e-4;
+
+    /** Deck-up world Y below which the craft still counts as upside down. Measured 2026-10-07: -0.9999
+     *  held at the commanded 180 deg roll. */
+    private static final double UPSIDE_DOWN_UP_Y = -0.9;
+
+    /**
+     * An armor stand lying on the OUTER hull of an upside-down craft - the underside of its deck,
+     * which faces the sky - stays where it landed while the craft hovers.
+     *
+     * <p>Whatever holds it there is not asserted: on the outer hull a living body keeps world
+     * semantics (it is not the deck's), and which mechanism collides it with the hull is the
+     * question the readings printed beside the verdict answer.</p>
+     *
+     * <p>red-witnessed: 2026-10-07, THE LANDING — with {@code EntityCollisionInjector#alterEntityMovement}
+     * at {@code final double origDx = dx;} preceded by a {@code return null}: "a stand put on the hull's
+     * outer face must come to rest on it (ship-frame Y 128.0, face 127.0)". THE ALONG verdict: NOT YET as
+     * a break of the current code — it went red on the pre-change tree, where the since-deleted
+     * hull-stand crept the stand along the hull: "a living body on the outer hull must not slide along
+     * it: 0.009586752811068293 blocks" (the pre-change baseline, HEAD fdc813556).</p>
+     */
+    @Test
+    public void anArmorStandOnTheOuterHullOfAnInvertedCraftStaysWhereItLanded() throws Exception {
+        // R11-OK: the outer hull's hold of a living body - the substrate's
+        // EntityCollisionInjector#alterEntityMovement; asserted in standOnTheOuterHull.
+        standOnTheOuterHull(null);
+    }
+
+    /**
+     * As above, while the craft flies sideways under the stand.
+     *
+     * <p>red-witnessed: 2026-10-07, THE LANDING — the same break as the hovering scenario
+     * ({@code EntityCollisionInjector#alterEntityMovement} at {@code final double origDx = dx;}
+     * preceded by a {@code return null}): "a stand put on the hull's outer face must come to rest on it
+     * (ship-frame Y 127.9999999999998, face 127.0)". THE ALONG verdict: NOT YET as a break of the
+     * current code — on the pre-change tree: "a living body on the outer hull must not slide along it:
+     * 0.006340703694149852 blocks" (the pre-change baseline, HEAD fdc813556).</p>
+     */
+    @Test
+    public void anArmorStandOnTheOuterHullOfAFlyingInvertedCraftRidesWithIt() throws Exception {
+        // R11-OK: as above, with the craft's carry of the body in flight; asserted in standOnTheOuterHull.
+        standOnTheOuterHull(HULL_FLIGHT_VELOCITY);
+    }
+
+    private void standOnTheOuterHull(String velocity) throws Exception {
+        Craft craft = buildCraft();
+        rollTo(craft, 180.0);
+        // The deck's corner cell: in the with-pilot-deck fixture only the seat's row carries blocks
+        // below the deck, so on the inverted craft the outer face over this cell is the deck block's
+        // underside, at ship-frame Y seatY - 1.
+        double face = craft.seat.seatY - 1.0;
+        double[] at = toWorld(craft, DECK_HALF_WIDTH, -1.0, DECK_HALF_WIDTH);
+        Reply spawned = Reply.of(exec("stellurgytest vs drop-living 0 minecraft:armor_stand " + at[0] + " "
+                + (at[1] + 0.1) + " " + at[2]));
+        requireArranged("the armor stand must have been spawned: " + spawned, spawned.boolOr("found", false));
+        int standId = spawned.integer("entityId");
+        // STIMULUS: a tenth of a block at a living body's 0.08 blocks/tick^2 is about two ticks.
+        GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);
+        requireTicked(craft, standId);
+        double[] landed = deckPoint(craft, standId);
+        Reply rest = Reply.of(exec("stellurgytest vs player-ship-data 0 " + standId + " " + craft.shipId));
+        double gap = face - landed[1];
+        // On THIS face and no other: the next surface in any direction is a block away. A VERDICT, not
+        // an arrangement: it was spawned a tenth of a block over the face, so the hull taking it and
+        // holding it there is the subject - a face that lets it through has failed before the window.
+        assertTrue("a stand put on the hull's outer face must come to rest on it (ship-frame Y "
+                + landed[1] + ", face " + face + "): " + rest,
+                rest.bool("playerOnGround") && Math.abs(gap) < ON_THE_OUTER_FACE_BLOCKS);
+
+        double shipXBefore = ShipInfo.byId(this::exec, 0, craft.shipId).x;
+        if (velocity != null) {
+            Reply flown = Reply.of(exec("stellurgytest vs force-vel-by-id 0 " + craft.shipId + " " + velocity));
+            requireArranged("the craft must accept the flight command: " + flown, flown.bool("afcResolved"));
+        }
+        // WINDOW: between `landed` above and `later` below, whose difference is asserted; flying, it is
+        // also the EXPERIMENT, the flight being the dose.
+        GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);
+        double[] later = deckPoint(craft, standId);
+        simulatedBetween(landed, later, REST_WINDOW_TICKS);
+        double flownX = ShipInfo.byId(this::exec, 0, craft.shipId).x - shipXBefore;
+        String evidence = evidence(landed, later, craft, standId) + " gap=" + gap + " craftMovedX=" + flownX;
+        System.out.println("[deck-living] hull" + (velocity == null ? "Static" : "Flying") + " along="
+                + along(landed, later) + " across=" + across(landed, later) + evidence);
+        requireArranged("the craft must still be upside down (deck-up world Y " + deckUpY(craft) + ")",
+                deckUpY(craft) < UPSIDE_DOWN_UP_Y);
+        if (velocity != null) {
+            requireArranged("the craft must have flown further than its deck is wide while the stand lay"
+                    + " on it;" + evidence, Math.abs(flownX) > HULL_FLIGHT_MIN_TRAVEL);
+        }
+        exec("stellurgytest vs force-clear-by-id 0 " + craft.shipId);
+        assertTrue("a living body on the outer hull must stay on it: " + across(landed, later)
+                + " blocks off where it lay;" + evidence, across(landed, later) <= OUTER_HULL_STILL);
+        assertTrue("a living body on the outer hull must not slide along it: " + along(landed, later)
+                + " blocks;" + evidence, along(landed, later) <= OUTER_HULL_STILL);
     }
 
     /**

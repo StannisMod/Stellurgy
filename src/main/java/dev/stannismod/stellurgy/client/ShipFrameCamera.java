@@ -60,10 +60,10 @@ public final class ShipFrameCamera {
         // The LOCAL player's eye/camera/model gate on the MOVEMENT truth - resolved ABOARD a deck -
         // never on containment: a body is aboard when a deck carries its movement, not when it
         // merely sits inside the hull's volume. Containment overlaps a large air volume around the
-        // hull (the fly-through hijack), and a HULL-STAND body (standing on the OUTER hull, which
-        // keeps world-frame semantics) is inside it too while owning a world-frame view.
+        // hull (the fly-through hijack), and a body standing on the OUTER hull (which keeps
+        // world-frame semantics) is inside it too while owning a world-frame view.
         if (view == mc.player) {
-            if (!dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isResolvingAboard(view)) {
+            if (!dev.stannismod.stellurgy.integration.vs.DeckBoarding.isResolvingAboard(view)) {
                 return null;
             }
             return DeckLook.slerpedShipQuat(view, partialTicks);
@@ -124,7 +124,7 @@ public final class ShipFrameCamera {
         if (memo.probedTick != tick) {
             memo.probedTick = tick;
             String carrying =
-                    dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.standingOnShipIdFor(body);
+                    dev.stannismod.stellurgy.integration.vs.DeckBoarding.standingOnShipIdFor(body);
             if (carrying != null) {
                 memo.shipId = carrying;
                 memo.supportedTick = tick;

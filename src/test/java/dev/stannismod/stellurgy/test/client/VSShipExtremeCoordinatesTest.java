@@ -188,15 +188,15 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * extreme-Y move: "the second
      * teleport must leave the craft where it was sent: commanded X 53400 ship=… posX 3400.0". THE
      * SECOND TELEPORT —
-     * {@code teleportShipAndEveryoneAboard} refusing its second call only: "the second teleport must
+     * `teleportShipAndEveryoneAboard` refusing its second call only: "the second teleport must
      * succeed: {\"ok\":false,…}". THE RIDER STAYS WITH HIS SHIP — the server seat glue
      * ({@code EntityDummy#onUpdate} at {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])})
      * putting the mount 10 above its seat at extreme Y, and the mount's rider
      * offset lowered by 10 so the rider himself still arrives at the seat: "the CLIENT-rendered rider
      * must arrive WITH his ship … apart by 12.54 blocks". A client-side-only glue offset stayed green:
      * the client's mount is placed by the server's entity tracker, not by its own glue. THE TELEPORT —
-     * {@code VSShipCrossingOps#teleportShipAndEveryoneAboard} at
-     * {@code if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz))} refusing:
+     * `VSShipCrossingOps.teleportShipAndEveryoneAboard` at
+     * `if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz))` refusing:
      * "teleport-ship to extreme Y must succeed: {\"ok\":false,…}". THE UNPARK — the id-keyed
      * {@code VSBridge#unparkShip} at {@code ship.setPhysicsEnabled(true)} never taking: "the unpark must take:
      * {\"ok\":false}". THE RIDER ARRIVES — BOTH carriers off, the mount loop of
@@ -204,7 +204,11 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * {@code d.setPositionAndUpdate(d.posX + (px - sx), d.posY + (py - sy), d.posZ + (pz - sz))} and the
      * seat glue of {@code EntityDummy#onUpdate} at
      * {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} across a teleport-sized gap: "no `pos_jump` a jump
-     * of ForgeTestClient to within 3.0 of the ship's Y". Each carrier alone was not measured.</p>
+     * of ForgeTestClient to within 3.0 of the ship's Y". Each carrier alone was not measured. Since
+     * 2026-10-07 `teleportShipAndEveryoneAboard` is deleted and the {@code teleport-ship} probe calls
+     * {@code VSShipCrossingOps#teleportShipAndItsMounts} at {@code if (shipId == null || hull == null)}
+     * itself: the two TELEPORT witnesses above were taken on the pre-2026-10-07 form and are NOT
+     * re-taken at that refusal.</p>
      */
     @Test
     public void aSeatedPilotKeepsControlAtExtremeY() throws Exception {

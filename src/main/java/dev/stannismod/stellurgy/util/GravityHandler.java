@@ -12,7 +12,6 @@ import dev.stannismod.stellurgy.api.StellurgyAPI;
 import dev.stannismod.stellurgy.api.IGravityManager;
 import dev.stannismod.stellurgy.api.IPlanetaryProvider;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
 
 import java.lang.reflect.InvocationTargetException;
@@ -89,14 +88,6 @@ public class GravityHandler implements IGravityManager {
             // exactly the craft's ~1G. The dimension's gravity is not the craft's: scaling that pull
             // by it left an item let go above a deck in a world without gravity hanging where it was.
             if (dev.stannismod.stellurgy.integration.vs.DeckFrameTick.holds(entity)) {
-                return;
-            }
-
-            // A living body on a ship's outer hull has its whole movement - gravity included -
-            // resolved by ShipFrameTravel's hull-stand. The two call sites must agree on WHICH
-            // entities: both ask ShipFrameTravel.handles.
-            if (entity instanceof EntityLivingBase
-                    && ShipFrameTravel.handles((EntityLivingBase) entity)) {
                 return;
             }
 

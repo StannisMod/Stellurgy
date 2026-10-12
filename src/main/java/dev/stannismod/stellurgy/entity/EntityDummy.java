@@ -165,26 +165,32 @@ public class EntityDummy extends Entity {
 
     /** The pilot this dummy carried last server tick, so a dismount can be detected. */
     private Entity lastRider = null;
-    /** The just-dismounted pilot being held onto the deck, or null. */
+    /** The just-dismounted pilot whose client is being asked to stand him on the deck, or null. */
     private Entity dismountedPilot = null;
-    /** Ticks left in the hold window during which the ex-pilot is kept on the deck. */
+    /** Ticks left in the window during which the ex-pilot's client is asked. */
     private int dismountHoldTicks = 0;
-    /** How long (ticks) to keep re-seating a just-dismounted pilot onto the deck. One snap is not enough:
-     *  the seat block has no collision and the deck sits a fraction below the seat, so ShipFrameTravel's
-     *  support probe only barely overlaps it - a single tick where it just misses (thin margin, or the
-     *  client has not yet applied the server teleport) drops the pilot off a hovering ship. Re-seating
-     *  across a short window gives the capture many attempts, so it reliably sticks. */
+    /** The ex-pilot's teleport count when the window opened, after the dismount's own teleport. */
+    private int dismountTeleports = 0;
+    /** How long (ticks) to keep asking a just-dismounted pilot's client to stand him on the deck. One
+     *  request is not enough: the seat block has no collision and the deck sits a fraction below the
+     *  seat, so the deck's support probe only barely overlaps it - a single tick where it just misses
+     *  (thin margin, or the client has not yet applied the server teleport) drops the pilot off a
+     *  hovering ship. Asking across a short window gives the capture many attempts, so it sticks. */
     private static final int DISMOUNT_HOLD_TICKS = 20;
 
     /**
      * When the pilot stands up, keep him ON the deck. Vanilla's dismount searches for a non-colliding
      * spot around this dummy, but the ship's deck lives in a subspace it cannot see (and the seat block
      * has no collision), so it can drop the pilot beside or below the hull - off a hovering ship he then
-     * falls away entirely (the playtest: stood up, ended on the ground far below). This re-seats the
-     * just-dismounted rider onto the seat's live world position, where this dummy sits on the deck, every
-     * tick for a short window until {@link dev.stannismod.stellurgy.integration.vs.ShipFrameTravel}
-     * has captured him there. Only for a linked pilot seat on a loaded ship - a plain ground seat keeps
-     * vanilla's dismount untouched.
+     * falls away entirely (the playtest: stood up, ended on the ground far below). This asks the
+     * just-dismounted rider's client, every tick for a short window, to stand him on the seat's deck
+     * point, where {@link dev.stannismod.stellurgy.integration.vs.DeckFrameTick} then holds him. Only
+     * for a linked pilot seat on a loaded ship - a plain ground seat keeps vanilla's dismount untouched.
+     *
+     * <p>The window is made for the pilot where the dismount left him. A teleport after it opened -
+     * a command, a crossing, anything that sends him a position-look - puts him somewhere the deck
+     * point no longer describes, so the window closes at once; asking on would put him back on a
+     * deck he has been taken away from.</p>
      */
     private void keepDismountedPilotOnDeck() {
         Entity current = getPassengers().isEmpty() ? null : getPassengers().get(0);
@@ -195,25 +201,34 @@ public class EntityDummy extends Entity {
             return;
         }
         if (lastRider != null) {
-            // The seat emptied this tick: begin holding the ex-pilot on the deck.
+            // The seat emptied this tick: open the window. The dismount's own teleport is already
+            // counted - the server sends it inside dismountRidingEntity, before this tick ran.
             dismountedPilot = lastRider;
             lastRider = null;
             dismountHoldTicks = DISMOUNT_HOLD_TICKS;
+            dismountTeleports = ((dev.stannismod.stellurgy.integration.vs.DeckHeld) dismountedPilot)
+                    .stellurgy$teleports();
         }
         if (dismountedPilot == null) {
             return;
         }
         if (dismountHoldTicks <= 0) {
-            // The 20-tick hold window ran out before the client seeded the deck capture - at steep tilt the
-            // seed keeps failing and the pilot is handed back to vanilla's dismount. The give-up moment.
+            // The 20-tick window ran out. Where the client seeded, the deck holds him already; where it
+            // did not - at steep tilt the seed keeps failing - he is left to vanilla's dismount spot.
             logHold("holdExpired", dismountedPilot);
-            dismountedPilot = null;
+            endWindow("expired");
             return;
         }
         dismountHoldTicks--;
         Entity exit = dismountedPilot;
         if (exit.isDead || exit.world != world) {
-            dismountedPilot = null;
+            endWindow("gone");
+            return;
+        }
+        if (((dev.stannismod.stellurgy.integration.vs.DeckHeld) exit).stellurgy$teleports()
+                != dismountTeleports) {
+            logHold("teleported", exit);
+            endWindow("teleported");
             return;
         }
         TilePilotSeat seat = TilePilotSeat.forRider(this, world);
@@ -226,13 +241,12 @@ public class EntityDummy extends Entity {
                 // plain unlinked chair is expected and stays silent.
                 logHold("seatWorldPosLost", exit);
             }
-            dismountedPilot = null; // a plain seat, or off a loaded ship: leave vanilla's dismount alone
+            endWindow("noShipSeat"); // a plain seat, or off a loaded ship: leave vanilla's dismount alone
             return;
         }
-        // Deliberately NOT stopped by ShipFrameTravel.isResolving(exit): that reads THIS side's
-        // (the server's) capture state, which the server-held fallback satisfies within a tick or
-        // two of the dismount - long before the CLIENT (the side that owns a player's movement)
-        // has seeded anything. Stopping there starved the client of re-sends and the dismount
+        // Deliberately NOT stopped by a deck holding him on THIS side (the server): the server's
+        // deck takes him within a tick or two of the dismount - long before the CLIENT (the side
+        // that owns a player's movement) has seeded anything. Stopping there starved the client of re-sends and the dismount
         // degenerated to vanilla's world-frame spot. The seed packet is idempotent on the client
         // (a taken seed no-ops, a pending one just refreshes), so re-sending the whole short
         // window is harmless and is what actually delivers the deck point.
@@ -240,19 +254,17 @@ public class EntityDummy extends Entity {
         // refuses such a capture, so re-sending it every window tick is a packet-per-tick war for
         // nothing. He is moving under his own (world-frame) power; the deck hold is moot.
         if (exit instanceof net.minecraft.entity.EntityLivingBase
-                && dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isExcludedFromCapture(
+                && dev.stannismod.stellurgy.integration.vs.DeckBoarding.isExcludedFromCapture(
                         (net.minecraft.entity.EntityLivingBase) exit)) {
             logHold("pilotExcluded", exit);
-            dismountedPilot = null;
+            endWindow("excluded");
             return;
         }
-        // Not captured yet. Crew movement is client-authoritative, so we cannot capture him from the
-        // server - a server teleport of his body reads on his own client as an external move and drops the
-        // client-side capture that actually holds him (ShipFrameTravel's ~1mm external-move guard). Instead
-        // ASK his client to capture him, handing it the deck point in ship SUBSPACE (the seat column's
-        // centre at the deck top); the client maps that through its OWN ship transform, snaps there and
-        // holds it. A server-computed world position would differ here by more than the guard and drop
-        // instantly. Re-sent each tick of the window; the client seeds once and no-ops the rest.
+        // Not seeded yet. Crew movement is client-authoritative, so the server cannot place him on the
+        // deck itself. Instead ASK his client, handing it the deck point in ship SUBSPACE (the seat
+        // column's centre at the deck top); the client maps that through its OWN ship transform and
+        // its deck holds him there. Re-sent each tick of the window; the client seeds once and no-ops
+        // the rest.
         if (exit instanceof net.minecraft.entity.player.EntityPlayerMP) {
             // The anchor ship, resolved from the seat's SUBSPACE block - unambiguous (subspace claims
             // of distinct ships never overlap), unlike containment among overlapping world boxes.
@@ -266,8 +278,25 @@ public class EntityDummy extends Entity {
         }
     }
 
+    /** Close the dismount window, saying how it ended. */
+    private void endWindow(String how) {
+        noteWindowEnded(dismountedPilot, how);
+        dismountedPilot = null;
+    }
+
+    /**
+     * Seam: the dismount window for {@code pilot} has closed, and {@code how} — {@code expired} (its
+     * ticks ran out), {@code teleported} (he was sent a position-look after it opened), {@code gone}
+     * (dead, or in another world), {@code excluded} (in a state no deck takes), {@code noShipSeat}
+     * (the seat is not a linked seat of a loaded ship). Empty in production; it needs a method because
+     * the pilot is a field the closing line clears.
+     */
+    private static void noteWindowEnded(Entity pilot, String how) {
+    }
+
     /** [FF-TRACE/HOLD] server-side: the just-dismounted-pilot deck hold gave up before the client seeded
-     *  the capture (the 20-tick window expired, or a linked seat's ship transform vanished mid-window).
+     *  the capture (the 20-tick window expired, or a linked seat's ship transform vanished mid-window),
+     *  or was voided because the pilot was teleported away from it.
      *  Marks the moment the pilot is handed to vanilla's dismount and can free-fall off a hovering or
      *  inverted ship - the "never seeded" branch of the dismount deck-hold failure. Fired once per
      *  abandonment. Test-gated. */
@@ -280,8 +309,7 @@ public class EntityDummy extends Entity {
                 + " dummy=" + getEntityId()
                 + " pilot=" + pilot.getEntityId()
                 + " ticksLeft=" + dismountHoldTicks
-                + " resolving="
-                + dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isResolving(pilot)
+                + " deckHeld=" + dev.stannismod.stellurgy.integration.vs.DeckFrameTick.holds(pilot)
                 + " pilotPos=(" + pilot.posX + "," + pilot.posY + "," + pilot.posZ + ")");
     }
 

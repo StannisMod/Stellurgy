@@ -435,12 +435,12 @@ public class KeyBindings {
             // Pending dismount seed: apply the queued deck capture the moment the body's transient
             // exclusion (the post-dismount riding tail) clears. Driven here, per client tick, so
             // the seed does not depend on packet timing.
-            dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.clientTickPendingSeed(player);
+            dev.stannismod.stellurgy.integration.vs.DeckBoarding.clientTickPendingSeed(player);
             // Subspace census: record every tick what the CLIENT world holds at the nearby ship's
             // subspace coordinates. Sampled here, not in the travel hook, so it keeps reporting
             // through the phases where the client is NOT resolving (server-held fallback) - which
             // is exactly when the question "does this client even have the ship's chunks?" matters.
-            dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.clientCensusTick(player);
+            dev.stannismod.stellurgy.integration.vs.DeckBoarding.clientCensusTick(player);
         }
         // Don't steer while a GUI is open. (We intentionally do NOT require
         // inGameHasFocus — losing window focus shouldn't freeze the controls,

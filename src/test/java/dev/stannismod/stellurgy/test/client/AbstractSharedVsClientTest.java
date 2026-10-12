@@ -800,8 +800,8 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      *       deck-capture")} twice — once to build the failure message, once for the assertion — so
      *       the reply a reader diagnoses from is not the reply that decided the test. Under load
      *       they disagree, and the disagreement looks like the subject misbehaving.</li>
-     *   <li><b>A verdict with no subject.</b> {@code alreadyTracked} / {@code verdict} /
-     *       {@code hullStand} say a ship holds this body, never WHICH. On a world this class shares
+     *   <li><b>A verdict with no subject.</b> {@code alreadyTracked} / {@code verdict} say a ship
+     *       holds this body, never WHICH. On a world this class shares
      *       with its siblings a body resolved against a neighbour's hull answers identically, and
      *       the id was in the reply the whole time ({@code anchorShipId}, 0 readers across 103 call
      *       sites).</li>
@@ -929,10 +929,9 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
     }
 
     /**
-     * The deck-GATE window: what the CLIENT's {@code ShipFrameTravel.handles} decided about ONE body,
-     * per tick. Client only — the harness's static-invoke bridge runs in the client JVM and the
-     * server is a separate one. See {@code DeckGateWindow} for why {@code deck_gate_decided} (a
-     * hundred-tick heartbeat) cannot answer a question posed over three ticks.
+     * The deck-GATE window: what the CLIENT's deck frame decided, per tick, about taking ONE body it
+     * does not hold ({@code DeckFrameTick.admissionFor}). Client only — the harness's static-invoke
+     * bridge runs in the client JVM and the server is a separate one.
      */
     private static final String DECK_GATE_WINDOW =
             "dev.stannismod.stellurgy.test.trace.DeckGateWindow";
@@ -982,13 +981,13 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      * <p><b>The landing is counted from the teleport's own arrival, not from a mark before it.</b>
      * This used to take a stimulus and wait for "a capture episode opened on this ship since the
      * mark, and nothing ended it" — and a body left beside the hull by the scenario's own assembly
-     * falls into HULL-STAND on its own, AFTER the mark and BEFORE the teleport lands. Measured
+     * could be captured on its own, AFTER the mark and BEFORE the teleport lands. Measured
      * 2026-09-28, four red runs of five: the wait returned on that capture at the body's old spot, the
      * teleport then carried him off it (released, two blocks above the deck), and the server read the
      * next line found nothing — "the body must stand on the deck ONCE" reported as the fixture failing.
-     * So: the client applies the teleport (its own placement record, near the target), then the
-     * resolver puts him on a surface of THIS ship after that record ({@code deck_contact}), then the
-     * server has handled every movement packet up to it.</p>
+     * So: the client applies the teleport (its own placement record, near the target), then a deck of
+     * THIS ship puts him on its surface after that record ({@code deck_contact}), then the server has
+     * handled every movement packet up to it.</p>
      *
      * <p><b>The window is opened before the stimulus</b>, because the decisions in question are the
      * ones taken in the ticks the stimulus lands in. The failure this exists for reports a body in
@@ -1048,11 +1047,8 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
      *
      * <p><b>The two halves are different instruments, and the caption says so.</b> The client half is
      * the per-tick window this scenario opened. The server has no such window — nothing can open one
-     * in the server's JVM — so its half is the standing-verdict heartbeat {@code deck_gate_decided},
-     * written on a verdict change and otherwise once per hundred ticks: an empty server half means
-     * the verdict did not CHANGE in the window, never that the gate was not asked. Until 2026-09-23
-     * this printed a server {@code deck_gate_explained} that no code could ever write, under a caption
-     * reading an empty half as "nobody asked".</p>
+     * in the server's JVM — so its half is the server deck's EDGES since its mark: what it took and
+     * what it let go. An empty server half means no edge, never that the server was not asked.</p>
      */
     protected final String deckGateTrail(long clientMark, long serverMark) throws Exception {
         return "the client gate's per-tick decisions: " + clientEvents().since(clientMark,
@@ -1060,8 +1056,9 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientE2E
                 + " ||| the client window itself (a `records:0` here is the instrument saying"
                 + " nobody asked, not the gate saying no): " + clientEvents().since(clientMark,
                 "deck_gate_window")
-                + " ||| the SERVER's standing verdict, heartbeat only (empty = unchanged, not"
-                + " unasked): " + serverEvents().since(serverMark, "deck_gate_decided");
+                + " ||| the SERVER deck's edges, takes then releases (empty = no edge, not unasked): "
+                + serverEvents().since(serverMark, "deck_entered") + " :: "
+                + serverEvents().since(serverMark, "deck_released");
     }
 
     /** The client-side deck-camera window: poses, the eye, and the two per-client counters. */

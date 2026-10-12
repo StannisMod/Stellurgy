@@ -7,7 +7,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
@@ -83,25 +83,25 @@ public final class ShipRelativePoint {
      * Where an ABOARD body is standing, expressed against the flight computer at {@code afcPos} —
      * or {@code null} when it is not resolved on the deck of the ship that computer belongs to.
      *
-     * <p>"Aboard" here is the deck resolver's own answer ({@link ShipFrameTravel#aboardShipId}), the
-     * same question the durable aboard record and the hyperspace void ask. The ship identity is then
+     * <p>"Aboard" here is the deck's own answer ({@link DeckBoarding#aboardShipId}), the same
+     * question the durable aboard record and the hyperspace void ask. The ship identity is then
      * CHECKED against the computer the caller named, so a body standing on a neighbouring craft is
      * never measured against this one's landmark — the offset would be arithmetically fine and
      * describe a point on the wrong ship.</p>
      *
-     * <p>The point comes from the resolver's committed capture rather than from the body's world
-     * position converted back: the resolver is what decides where an aboard body is, and a second
-     * conversion here would be a second opinion for it to disagree with.</p>
+     * <p>The point is the one the deck holds rather than the body's world position converted back:
+     * the deck is what decides where an aboard body is, and a second conversion here would be a
+     * second opinion for it to disagree with.</p>
      */
     public static double[] deckOffsetOfAboardBody(World world, Entity body, BlockPos afcPos) {
         if (world == null || body == null || afcPos == null) {
             return null;
         }
-        String vsShipId = ShipFrameTravel.aboardShipId(body);
+        String vsShipId = DeckBoarding.aboardShipId(body);
         if (vsShipId == null || !vsShipId.equals(VSIntegration.shipIdManagingBlock(world, afcPos))) {
             return null;
         }
-        double[] deckPoint = ShipFrameTravel.aboardShipFramePoint(body);
+        double[] deckPoint = DeckBoarding.aboardShipFramePoint(body);
         return deckPoint == null
                 ? null : offsetOfSubspacePoint(afcPos, deckPoint[0], deckPoint[1], deckPoint[2]);
     }

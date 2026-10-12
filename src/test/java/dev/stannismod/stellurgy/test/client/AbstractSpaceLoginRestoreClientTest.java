@@ -270,10 +270,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected static final double MIN_WALK_TRAVEL = 0.5D;
 
-    /** The class whose client-side statics carry the per-tick ship-frame record. */
-    protected static final String SHIP_FRAME_TRAVEL =
-            "dev.stannismod.stellurgy.integration.vs.ShipFrameTravel";
-
     /**
      * One line of that record: {@code <tick><path>|B=<live body point>|H=<committed point>|m=<incoming
      * ship-relative motion>|c=<carry>|in=<strafe>/<forward>|d=<on deck>}. Every field is in the SHIP's
@@ -2124,10 +2120,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     /**
      * This client's per-tick ship-frame record, as the REPLY it is.
      *
-     * <p>It used to hand back {@code fieldLines(…, "line")} — the packed rendering each record also
-     * carries — and every reader below re-parsed that with a regex. The record has carried the same
-     * numbers as FIELDS since the trace moved into {@code MixinShipFrameTravelWrites}, which kept
-     * the line only so the readers would not have to change in the same step. They change here.</p>
+     * <p>Its numbers are FIELDS ({@code MixinDeckFrameTickEvents} writes it for a tick the deck frame
+     * held him), read by name.</p>
      */
     protected String clientTickHistory() throws Exception {
         return clientEvents().since(0, "ship_frame_tick");

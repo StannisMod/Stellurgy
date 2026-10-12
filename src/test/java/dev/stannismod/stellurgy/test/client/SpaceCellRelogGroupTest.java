@@ -211,8 +211,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         DeckCapture capBefore = DeckCapture.read(this::exec);
         requireArranged("he must be captured ABOARD the deck before the relog, or the leg is "
                         + "not about a restored deck capture at all: " + capBefore.raw(),
-                capBefore.alreadyTracked
-                        && !capBefore.hullStand);
+                capBefore.alreadyTracked);
         // On HIS deck. The capture's anchor is the PHYSICS id, and this scenario holds the durable
         // one, so the two are bridged by name rather than by asking what is standing at his feet.
         capBefore.requireAnchoredOn(

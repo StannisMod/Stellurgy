@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.trace;
 import java.util.List;
 
 /**
- * One armed shove of a captured body, added inside the client's own travel commit — see
- * {@code MixinShipFrameTravelShove} for why it has to be applied there and nowhere else.
+ * One armed shove of a body a deck holds, added inside the client's own held update — see
+ * {@code MixinDeckFrameTickShove} for why it has to be applied there and nowhere else.
  *
  * <p>A window the scenario opens with the number of blocks, consumed by the NEXT commit and then
  * spent: one shove per arming, so a test can say exactly when it happens. The pending shove was a

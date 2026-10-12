@@ -14,7 +14,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.util.FakePlayer;
 
 import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
 
@@ -184,7 +184,7 @@ public final class AboardRecord {
      */
     private static ShipAboardTag.Aboard standingRecord(World world, EntityPlayer player,
                                                        GalacticCoord presence) {
-        String vsShipId = ShipFrameTravel.aboardShipId(player);
+        String vsShipId = DeckBoarding.aboardShipId(player);
         if (vsShipId == null) {
             return null;
         }
@@ -210,7 +210,7 @@ public final class AboardRecord {
         if (riding instanceof EntityDummy && ((EntityDummy) riding).getSeatPos() != null) {
             return true;
         }
-        return ShipFrameTravel.aboardShipId(player) != null;
+        return DeckBoarding.aboardShipId(player) != null;
     }
 
     /** The cell {@code world} is, or {@code null} for any world that is not a space cell — a

@@ -95,6 +95,6 @@ public abstract class MixinDeckMovementBoundInputs {
                         // function it asks, at the same moment (it changes no capture). Without this
                         // an `accepted:true` is either a verdict or a shrug, and the two read alike.
                         + ",\"opinion\":" + (player != null
-                                && dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.aboardShipId(player) != null));
+                                && dev.stannismod.stellurgy.integration.vs.DeckBoarding.aboardShipId(player) != null));
     }
 }

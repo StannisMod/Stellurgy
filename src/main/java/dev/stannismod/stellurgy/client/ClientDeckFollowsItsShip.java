@@ -7,7 +7,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckFrameTick;
 
 /**
  * The client half of {@code DeckFollowsItsShip} — the same re-seat, hung on the event the client
@@ -23,12 +23,10 @@ public final class ClientDeckFollowsItsShip {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void afterTheShipsHaveMoved(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END && !Minecraft.getMinecraft().isGamePaused()) {
-            ShipFrameTravel.followShipPoses(Minecraft.getMinecraft().world);
-            // The client ticks with no world at all on its menus.
-            if (Minecraft.getMinecraft().world != null) {
-                dev.stannismod.stellurgy.integration.vs.DeckFrameTick.followShipPoses(Minecraft.getMinecraft().world);
-            }
+        // The client ticks with no world at all on its menus.
+        if (event.phase == TickEvent.Phase.END && !Minecraft.getMinecraft().isGamePaused()
+                && Minecraft.getMinecraft().world != null) {
+            DeckFrameTick.followShipPoses(Minecraft.getMinecraft().world);
         }
     }
 }

@@ -28,12 +28,10 @@ public interface EntityTrace {
         return ((EntityTrace) entity).stellurgyTest$memory(type, create);
     }
 
-    /** The deck-gate recorders' memory: the verdict last recorded, and whether the body was on the
-     *  ground at the last travel return. */
+    /** The deck-contact recorder's memory: whether the body was on the ground the last tick the deck
+     *  frame looked at it — held, or asked about admitting it — so a landing is recorded as an edge. */
     final class DeckGate {
-        /** {@code (worldTime << 2) | verdict bits} of the last {@code deck_gate_decided}, or -1. */
-        public long lastGateRecord = -1L;
-        /** Whether the body was grounded at the previous travel return; null before the first. */
+        /** Whether the body was grounded the previous tick the deck frame saw it; null before the first. */
         public Boolean groundedAtLastTravel;
     }
 

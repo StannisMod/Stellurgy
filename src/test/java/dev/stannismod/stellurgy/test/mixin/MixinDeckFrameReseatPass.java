@@ -15,8 +15,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
 import dev.stannismod.stellurgy.test.trace.TravelPassMemory;
 
 /**
- * The deck frame's end-of-tick re-image, published as the travel resolver's pass is
- * ({@code deck_reseat_pass}, marked {@code "by":"deckFrame"}): how many bodies it put back on their
+ * The deck frame's end-of-tick re-image, published as {@code deck_reseat_pass} (marked
+ * {@code "by":"deckFrame"}): how many bodies it put back on their
  * deck points and the largest step it carried one — the deck's own motion out from under a body
  * standing on it.
  *

@@ -132,13 +132,13 @@ public final class DeckMovementBound {
         return judgedShipId(player) != null;
     }
 
-    /** The craft this bound judges {@code player} on, or {@code null} for no opinion: any craft that
-     *  holds him, its outer hull included - a body standing on a moving hull is carried exactly as one
-     *  on its deck, and vanilla's check, which knows nothing of the carry, must not judge him either. */
+    /** The craft this bound judges {@code player} on, or {@code null} for no opinion: the craft whose
+     *  deck holds him. A body on a craft's OUTER hull is no deck's - the physics substrate carries it,
+     *  and vanilla's check judges it as it judges any body the world moves. */
     private static String judgedShipId(EntityPlayerMP player) {
         if (player == null || player.world == null || player.world.isRemote) {
             return null;
         }
-        return ShipFrameTravel.capturedShipId(player);
+        return DeckBoarding.aboardShipId(player);
     }
 }

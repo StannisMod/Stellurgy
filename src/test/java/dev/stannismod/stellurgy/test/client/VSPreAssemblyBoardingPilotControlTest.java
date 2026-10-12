@@ -351,7 +351,13 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
                             + "never started. boarding=" + how + " evidence=" + boardingEvidence,
                     100, boardingChain);
         } catch (AssertionError e) {
-            scenario().arrangementFailed(e.getMessage());
+            // The server drops a click silently while a teleport it sent is unconfirmed or when the
+            // clicker is out of reach, so the teleports his client applied around the click and where
+            // he stands are the two facts that name which.
+            scenario().arrangementFailed(e.getMessage()
+                    + " | teleports his client applied since the boarding began: "
+                    + clientEvents().since(boardOnClient, "client_pos_look_applied")
+                    + " | where his client has him: " + bot().reportState());
         }
 
         // The boarding's own return value cannot be trusted to mean "he sat down" - confirm it from

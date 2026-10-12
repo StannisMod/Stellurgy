@@ -7,22 +7,18 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.DeckBoarding;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
- * Server -> client: capture the recipient (a just-dismounted pilot) in his ship's frame, standing on a
- * DECK point expressed in the ship's own SUBSPACE.
+ * Server -> client: put the recipient (a just-dismounted pilot, or a player a relog returns) on his
+ * ship's deck, at a DECK point expressed in the ship's own SUBSPACE.
  *
- * <p>Crew movement is client-authoritative, so the capture that actually holds a body must live on the
- * client's own player object; the server can only ask for it. A server-side capture (or a server
- * teleport onto the deck) instead moves the client body, which {@link ShipFrameTravel}'s ~1&nbsp;mm
- * external-move guard reads as "someone else moved it" and drops the capture. The deck point therefore
- * travels as a SUBSPACE triple, never a world position: the client maps it to world through its OWN ship
- * transform, snaps there and stores that same world value, so its position and its stored anchor match
- * exactly and the guard holds. A world position computed on the server would differ here by more than the
- * guard and drop instantly. Re-sent across the short dismount window; a no-op once the capture has
- * taken.</p>
+ * <p>Crew movement is client-authoritative, so the hold that actually carries a body must live on the
+ * client's own player object; the server can only ask for it. The deck point travels as a SUBSPACE
+ * triple, never a world position: the client maps it to world through its OWN ship transform, so the
+ * point it is held at is exactly the deck point the server named, whatever the two sides' poses of the
+ * craft differ by. Re-sent across the short dismount window; a no-op once the seed has taken.</p>
  */
 public class PacketDeckCapture extends BasePacket {
 
@@ -96,7 +92,7 @@ public class PacketDeckCapture extends BasePacket {
         // an exclusion that persists (a pilot who flew away in creative) lets the seed expire
         // without ever snapping him.
         if (thePlayer != null) {
-            ShipFrameTravel.installPendingSeed(thePlayer, shipId, subX, subY, subZ, restore);
+            DeckBoarding.installPendingSeed(thePlayer, shipId, subX, subY, subZ, restore);
         }
     }
 

@@ -13,27 +13,22 @@ import dev.stannismod.stellurgy.test.trace.ShoveArming;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
- * The armed shove of {@link MixinShipFrameTravelShove}, taken where the DECK FRAME commits a held
- * body's position — the other code that can own a client player's position.
+ * The armed shove ({@link dev.stannismod.stellurgy.test.trace.ShoveArming}), taken where the DECK
+ * FRAME commits a held body's position — the code that owns a client player's position on a deck.
  *
- * <p>The driver has to live in whichever code owns the position at the moment it is armed, for the
- * reason the travel resolver's half gives: a write from anywhere else is not the client declaring a
- * position. A player standing or walking on a deck is held by the deck frame, whose update the
- * resolver's {@code travel} does not run — so an arming the resolver alone could take waited until
- * the body left the deck. Measured 2026-10-04: the scenario kept walking with the shove armed, the
- * deck let him go at its edge, the resolver took him in hull mode and the shove fired there, where
- * no deck holds him and the server's bound rightly has no opinion.</p>
+ * <p>The driver has to live in the code that owns the position at the moment it is armed: a write
+ * from anywhere else is not the client declaring a position, and the client's own movement undoes
+ * it before anything is sent.</p>
  *
  * <p>Taken at the end of the held update, after the deck frame has put him back in the world: the
  * step is a POSITION only. His client sends it a moment later, in the same entity update; the
  * deck frame's end-of-tick re-image then puts him back at the deck point it stored before the
- * shove, so the step exists for one packet — the shape the resolver's half produces. No velocity:
- * here nothing between the shove and the send can undo it, and a velocity would be carried into the
- * deck's frame as motion of his own the next tick.</p>
+ * shove, so the step exists for one packet. No velocity: here nothing between the shove and the
+ * send can undo it, and a velocity would be carried into the deck's frame as motion of his own the
+ * next tick.</p>
  *
- * <p>Records on the same instrument as the resolver's half, marked {@code "by":"deckFrame"}, so the
- * link a scenario waits on is the same whichever holder took the step. Test source set: absent from a
- * released jar.</p>
+ * <p>Records {@code ship_frame_travel_shove}, marked {@code "by":"deckFrame"}. Test source set:
+ * absent from a released jar.</p>
  */
 @Mixin(value = DeckFrameTick.class, remap = false)
 public abstract class MixinDeckFrameTickShove {
