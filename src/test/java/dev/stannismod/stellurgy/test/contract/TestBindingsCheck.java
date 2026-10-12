@@ -57,9 +57,9 @@ import java.util.stream.Stream;
  *       {@code *E2ETest} that does not extend {@link AbstractPlayerE2ETest}, a class that does, outside
  *       the {@code test.client} and {@code test.milestone} packages (an e2e boots a client), and a class
  *       with tests in {@code test.milestone} that does not (a milestone is a player's whole loop);</li>
- *   <li>A BOOT NOT DECLARED WHERE IT IS TAKEN: a class of an own-boot base without exactly one of
- *       {@link OwnBoot} and {@link NewGroup}, an e2e without {@link NewPath}, and any of the three on a
- *       class that does not take that boot;</li>
+ *   <li>A BOOT NOT DECLARED WHERE IT IS TAKEN: a class of an own-boot base without {@link OwnBoot} that
+ *       the committed debt list does not hold (the list only shrinks), an e2e without {@link NewPath}, and
+ *       either on a class that does not take that boot;</li>
  *   <li>what the e2e and the mechanics tier's own code reaches outside the gates ({@code E2EConfinement});</li>
  *   <li>a compiled test class it cannot read, and a clause order git cannot give -- each is a failure,
  *       never a skip.</li>
@@ -172,6 +172,7 @@ public final class TestBindingsCheck {
         System.out.println(String.format("test methods: %d @Test, %d of them pin no anchor; %d run by a test task",
                 corpus.testMethods, corpus.testMethodsWithoutPins, corpus.testMethodsRun));
         System.out.println(checkUnpinnedBaseline(root, corpus.unpinned, failures));
+        System.out.println(checkOwnBootDebt(root, corpus.ownBootWithoutReason, failures));
         System.out.println(String.format("records: %d @RedWitness (%d replayable), %d @NotYetRed; %d @Pins anchors",
                 corpus.witnesses, corpus.replayable, corpus.notYet, corpus.pinCount));
         for (String kind : listed) {
@@ -243,6 +244,46 @@ public final class TestBindingsCheck {
             }
         }
         return String.format("unpinned baseline: %d listed, %d unpinned now", baseline.size(), unpinned.size());
+    }
+
+    /** The committed list of the own-boot classes that carried no closed-list reason when the rule was set. */
+    static final String OWN_BOOT_DEBT = "src/test/bindings/own-boot-without-reason.txt";
+
+    /**
+     * A class of an own-boot base names its reason ({@link OwnBoot}), held as a RATCHET: the classes that
+     * had none when the rule was set — a cluster that should be a group on a shared base and is not yet —
+     * are listed in {@value #OWN_BOOT_DEBT}, and the list only shrinks. An own-boot class without a reason the
+     * list does not hold fails; a listed class that now carries a reason, or no longer takes a boot of its
+     * own, or is gone, fails until its line is deleted. Answers the line it prints.
+     */
+    static String checkOwnBootDebt(Path root, Set<String> withoutReason, List<String> failures) throws IOException {
+        Path debtFile = root.resolve(OWN_BOOT_DEBT);
+        if (!Files.isRegularFile(debtFile)) {
+            failures.add("the own-boot debt list " + OWN_BOOT_DEBT + " is missing -- without it every own-boot class"
+                    + " with no @OwnBoot is new");
+            return "own-boot debt: MISSING";
+        }
+        Set<String> debt = new TreeSet<>();
+        for (String line : Files.readAllLines(debtFile, StandardCharsets.UTF_8)) {
+            String entry = line.trim();
+            if (!entry.isEmpty() && !entry.startsWith("#") && !debt.add(entry)) {
+                failures.add(OWN_BOOT_DEBT + " lists " + entry + " twice");
+            }
+        }
+        for (String k : withoutReason) {
+            if (!debt.contains(k)) {
+                failures.add(k + " runs on a boot of its own and names no @OwnBoot(reason = …) -- a mechanics test"
+                        + " is a method of a group; a class of its own says which reason on the closed list forces"
+                        + " its boot, and " + OWN_BOOT_DEBT + " only shrinks");
+            }
+        }
+        for (String entry : debt) {
+            if (!withoutReason.contains(entry)) {
+                failures.add(OWN_BOOT_DEBT + " lists " + entry + ", which is no longer an own-boot class without a"
+                        + " reason (it names one now, moved to a shared base, or is gone) -- delete the line");
+            }
+        }
+        return String.format("own-boot debt: %d listed, %d without a reason now", debt.size(), withoutReason.size());
     }
 
     /** {@code docs/system/**}{@code .md} outside {@code tools/}, by path relative to it, in path order. */
@@ -353,6 +394,8 @@ public final class TestBindingsCheck {
         private final List<String> regionProblems = new ArrayList<>();
         /** Every {@code @Test} method that pins no anchor, as {@code class#method}. */
         final Set<String> unpinned = new TreeSet<>();
+        /** Every concrete class of an own-boot base that carries no {@link OwnBoot}, by name. */
+        final Set<String> ownBootWithoutReason = new TreeSet<>();
         int classes;
         int testMethods;
         int testMethodsRun;
@@ -594,17 +637,19 @@ public final class TestBindingsCheck {
                             + AbstractPlayerE2ETest.class.getSimpleName() + ": a milestone is a player's whole "
                             + "loop, so it is an e2e, and only the base starts its children in e2e mode");
                 }
-                checkBootDeclaration(k, onBase, failures);
+                checkBootDeclaration(k, onBase, ownBootWithoutReason, failures);
             }
         }
 
         /**
-         * A boot is declared where it is taken: a concrete class of an own-boot base carries exactly one of
-         * {@link OwnBoot} (a reason on the closed list) and {@link NewGroup}; an e2e carries {@link NewPath};
-         * neither declaration is admitted anywhere else, so a shared-base class cannot claim a boot it does
-         * not take. Declared on the class itself: none of the three is inherited.
+         * A boot is declared where it is taken: a concrete class of an own-boot base carries {@link OwnBoot}
+         * (a reason on the closed list) — one that does not is collected into {@code withoutReason} for the
+         * debt ratchet; an e2e carries {@link NewPath}; neither is admitted anywhere else, so a shared-base
+         * class cannot claim a boot it does not take. A class on a shared base declares nothing: sharing the
+         * boot is the default, and why it is a new group rather than a method of an old one is a judgement
+         * no annotation could check. Declared on the class itself: neither is inherited.
          */
-        static void checkBootDeclaration(Class<?> k, boolean e2e, List<String> failures) {
+        static void checkBootDeclaration(Class<?> k, boolean e2e, Set<String> withoutReason, List<String> failures) {
             // The bases that boot a server (and a client) for a mechanics class alone.
             Class<?>[] ownBootBases = {
                     com.github.stannismod.forge.testing.junit.AbstractMechanicsTest.class,
@@ -615,26 +660,19 @@ public final class TestBindingsCheck {
                 ownBoot |= base.isAssignableFrom(k);
             }
             OwnBoot own = k.getAnnotation(OwnBoot.class);
-            NewGroup group = k.getAnnotation(NewGroup.class);
             NewPath path = k.getAnnotation(NewPath.class);
             if (own != null && own.reason().length == 0) {
                 failures.add(k.getName() + ": @OwnBoot names no reason");
-            }
-            if (group != null && group.value().trim().isEmpty()) {
-                failures.add(k.getName() + ": @NewGroup names no cluster");
             }
             if (path != null && path.value().trim().isEmpty()) {
                 failures.add(k.getName() + ": @NewPath names no path");
             }
             if (ownBoot) {
-                if ((own == null) == (group == null)) {
-                    failures.add(k.getName() + " runs on a boot of its own and declares "
-                            + (own == null ? "neither" : "both") + " @OwnBoot(reason = …) and @NewGroup(…) -- a"
-                            + " mechanics test is a method of a group; a class of its own says which reason on the"
-                            + " closed list forces its boot, or which new group it opens");
+                if (own == null) {
+                    withoutReason.add(k.getName());
                 }
-            } else if (own != null || group != null) {
-                failures.add(k.getName() + " carries " + (own != null ? "@OwnBoot" : "@NewGroup") + " but runs on "
+            } else if (own != null) {
+                failures.add(k.getName() + " carries @OwnBoot but runs on "
                         + (e2e ? "the e2e base" : "a shared base") + ", not on a boot of its own -- the declaration"
                         + " belongs to the class that takes the boot");
             }

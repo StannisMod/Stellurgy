@@ -8,9 +8,10 @@ import java.lang.annotation.Target;
 
 /**
  * Why a mechanics class runs on a boot of its own rather than as a method of a group: one or more reasons
- * from the closed list {@link Reason}. The build ({@code checkTestBindings}) requires it, or
- * {@link NewGroup}, on every concrete class of an own-boot base, and refuses it on any other class. The
- * javadoc of the class says WHY the reason holds there; this says WHICH.
+ * from the closed list {@link Reason}. The build ({@code checkTestBindings}) requires it on every concrete
+ * class of an own-boot base — the classes that had none when the rule was set are a committed debt list
+ * that only shrinks — and refuses it on any other class. The javadoc of the class says WHY the reason holds
+ * there; this says WHICH.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
