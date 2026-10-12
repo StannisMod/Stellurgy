@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
@@ -45,7 +45,7 @@ public class StellarHierarchyTest {
      * bare hundredths of an AU until 2026-09-30, which is the unit a stale reader of the field also
      * divided by — fixture and defect agreed, and this class pinned it.
      */
-    @RedWitness(prose = "(the two placement scenarios): with {@code StellarBody.offsetFromSystemAu} back"
+    @LegacyWitness(prose = "(the two placement scenarios): with {@code StellarBody.offsetFromSystemAu} back"
             + " on {@code / 100d}: \"expected:&lt;20.0&gt; but was:&lt;299195.8&gt;\" and \"expected:&lt;25.0&gt;"
             + " but was:&lt;373994.75&gt;\", 2026-09-30.")
     private static int au(double au) {

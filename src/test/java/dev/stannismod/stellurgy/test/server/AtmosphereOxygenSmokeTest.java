@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -57,7 +57,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
      * sample powers the block; re-targeted to "vacuum", the next forced sample unpowers it. Both
      * samples go through the handler branch — the detector's no-handler branch is not reached here.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, for the three verdicts this branch"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, for the three verdicts this branch"
             + " rewrote. DEFAULT — {@code TileAtmosphereDetector#TileAtmosphereDetector} at {@code assertionToDetect = AtmosphereAssertion.BREATHABLE;} starting on {@code VACUUM}: \"detector"
             + " should default to watching for breathable air: … expected:&lt;[BREATHABLE]&gt; but"
             + " was:&lt;[VACUUM]&gt;\". BREATHABLE — {@code AtmosphereAssertions#holdsAt} at {@code return breathable(air, published);} never holding: \"overworld"

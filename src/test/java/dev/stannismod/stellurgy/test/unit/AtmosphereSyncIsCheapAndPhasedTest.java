@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -24,7 +24,7 @@ public class AtmosphereSyncIsCheapAndPhasedTest {
     /** Two seconds of ticks: long enough to count a rate rather than catch a moment. */
     private static final int WINDOW = 40;
 
-    @RedWitness(prose = "with {@code AtmosphereHandler#isSyncTick} at {@code return ticksExisted % SYNC_PERIOD_TICKS == 0;} serving on half the period: \"a readout"
+    @LegacyWitness(prose = "with {@code AtmosphereHandler#isSyncTick} at {@code return ticksExisted % SYNC_PERIOD_TICKS == 0;} serving on half the period: \"a readout"
             + " nobody decides anything with must not cost more than one packet a second per player"
             + " expected:&lt;2&gt; but was:&lt;4&gt;\", 2026-09-30. This does not see the period itself: the"
             + " expectation is computed from {@code AtmosphereHandler#SYNC_PERIOD_TICKS} at {@code 20}, and with"
@@ -43,7 +43,7 @@ public class AtmosphereSyncIsCheapAndPhasedTest {
                 WINDOW / AtmosphereHandler.SYNC_PERIOD_TICKS, told);
     }
 
-    @RedWitness(prose = "with {@code AtmosphereHandler#isSyncTick} at {@code return ticksExisted % SYNC_PERIOD_TICKS == 0;} serving on the first two ticks of every"
+    @LegacyWitness(prose = "with {@code AtmosphereHandler#isSyncTick} at {@code return ticksExisted % SYNC_PERIOD_TICKS == 0;} serving on the first two ticks of every"
             + " period: \"players whose ages differ by 1 ticks must never be served on the same tick ..."
             + " expected:&lt;0&gt; but was:&lt;2&gt;\", 2026-09-30.")
     @Test
@@ -66,7 +66,7 @@ public class AtmosphereSyncIsCheapAndPhasedTest {
         }
     }
 
-    @RedWitness(prose = "with {@code AtmosphereHandler#isSyncTick} at {@code return ticksExisted % SYNC_PERIOD_TICKS == 0;} never answering yes: \"a player joining at"
+    @LegacyWitness(prose = "with {@code AtmosphereHandler#isSyncTick} at {@code return ticksExisted % SYNC_PERIOD_TICKS == 0;} never answering yes: \"a player joining at"
             + " offset 0 must still hear about the air\", 2026-09-30.")
     @Test
     public void everyPlayerIsToldEventually() {

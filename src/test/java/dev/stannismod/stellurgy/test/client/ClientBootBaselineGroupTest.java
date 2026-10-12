@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -93,7 +93,7 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientTest {
      * model's purple-and-black cube. The item ships a model file; what decides whether the client
      * finds it is the item's mapping in {@code ClientProxy#preInitItems}.
      */
-    @RedWitness(prose = "with {@code ClientProxy#preInitItems} at {@code new ModelResourceLocation(\"stellurgy:repairWelder\", \"inventory\")}"
+    @LegacyWitness(prose = "with {@code ClientProxy#preInitItems} at {@code new ModelResourceLocation(\"stellurgy:repairWelder\", \"inventory\")}"
             + " — its whole line — removed (the shape it shipped with), this fails at \"the repair welder is drawn"
             + " with the missing model: its item has no model mapping\" (2026-10-06).")
     @Test
@@ -117,7 +117,7 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientTest {
      * id -1, decodes to {@code null}, and the client's task executor swallows the NPE: the sound
      * silently never plays. Nothing persistent changes, which is what keeps this in this group.</p>
      */
-    @RedWitness(prose = "with {@code combustionRocket} left out of {@code AudioRegistry}'s registration"
+    @LegacyWitness(prose = "with {@code combustionRocket} left out of {@code AudioRegistry}'s registration"
             + " ({@code AudioRegistry#registerSoundEvents} at {@code basicLaser, combustionRocket,}): \"combustionRocket must be present in ForgeRegistries at send time:"
             + " … \\\"registered\\\":false\", 2026-09-28. The probe's own reply answers {@code ok} whenever the"
             + " {@code AudioRegistry} field resolves; the registration verdict right after it is the one that"

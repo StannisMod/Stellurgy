@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -102,7 +102,7 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
      * cell turns it red on purpose — at which point the assertion flips to {@code dump < cell} and
      * the known-bug note goes.</p>
      */
-    @RedWitness(prose = "with the shipped default at {@code StellurgyConfiguration#loadPreInit} at {@code stellurgyConfig.shipHeatDumpThroughput = config.get(HEAT, \"shipHeatDumpThroughput\", 40000, \"How much heat an emergency dump pushes into the slug it is charging each second. Deliberately well under what a radiator array sheds: the dump buys seconds while something else is fixed, and a value large enough to keep a ship cool would turn an emergency into a cooling system that eats iron.\", 0, Integer.MAX_VALUE).getInt();} lowered from"
+    @LegacyWitness(prose = "with the shipped default at {@code StellurgyConfiguration#loadPreInit} at {@code stellurgyConfig.shipHeatDumpThroughput = config.get(HEAT, \"shipHeatDumpThroughput\", 40000, \"How much heat an emergency dump pushes into the slug it is charging each second. Deliberately well under what a radiator array sheds: the dump buys seconds while something else is fixed, and a value large enough to keep a ship cool would turn an emergency into a cooling system that eats iron.\", 0, Integer.MAX_VALUE).getInt();} lowered from"
             + " 40000 to 4000, below one cell's 6000: \"KNOWN BUG: at the shipped defaults a dump's sustained"
             + " throughput is at or above what the cheapest radiator (one cell) sheds … dump=4000 cell=6000\","
             + " 2026-09-30. The cell premise is an arrangement and is not witnessed.")
@@ -119,7 +119,7 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
                 dump >= cell);
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. INTO THE SLUG — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. INTO THE SLUG — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}"
             + " asking for heat only at ten times the trigger: \"the dump must have taken heat off the loop and"
             + " put it in the slug: … \\\"charge\\\":0 … \\\"hasStack\\\":true\". POORER — {@code HeatNetwork#tickThermodynamics} at {@code stored -= sunk;}"
             + " removed, so the slug is charged and reported sunk while the loop keeps every unit: \"and the loop"
@@ -151,7 +151,7 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
                 cooked.longInteger("heatStored") < cooked.longInteger("charged"));
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NOTHING AT ALL — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NOTHING AT ALL — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}"
             + " dropping the trigger temperature: \"below the trigger the dump must do nothing at all … expected:&lt;0&gt;"
             + " but was:&lt;6000&gt;\". STILL HOLDING — {@code TileHeatDump#getSinkRequestPerTick} at {@code return 0L;} firing the slug whenever it is"
             + " below the trigger: \"and it must still be holding the slug it was given: … \\\"hasStack\\\":false\"."

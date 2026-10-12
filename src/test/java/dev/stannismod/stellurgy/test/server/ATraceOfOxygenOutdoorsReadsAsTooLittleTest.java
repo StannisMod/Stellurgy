@@ -7,8 +7,8 @@ import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.After;
 import org.junit.Assume;
@@ -74,10 +74,10 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
         if (harness != null) harness.close();
     }
 
-    @RedWitness(prose = "with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}"
+    @LegacyWitness(prose = "with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}"
             + " replaced by {@code return false;}, this fails after the trace is added with"
             + " {@code expected:<[low]O2> but was:<[No]O2>} (2026-10-01).")
-    @RedWitness(prose = "with {@code DimensionProperties#copyData} lacking"
+    @LegacyWitness(prose = "with {@code DimensionProperties#copyData} lacking"
             + " {@code this.air = props.air.copy();}, this fails after the restart with"
             + " {@code expected:<[lowO2]> but was:<[air]>} — the world re-read from its planet file came back as"
             + " Earth's mix (2026-10-01, the first run of this test, before that line existed).")

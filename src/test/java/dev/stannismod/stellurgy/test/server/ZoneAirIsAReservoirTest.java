@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -60,7 +60,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-17 (Gas arriving at a different temperature mixes by how much of each there is).
      */
     @Pins("INV-HEAT-17")
-    @RedWitness(prose = "with {@code AirState#mixIn} at {@code double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)} mixing by the plain average of the two"
+    @LegacyWitness(prose = "with {@code AirState#mixIn} at {@code double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)} mixing by the plain average of the two"
             + " temperatures: \"the room must end up at the enthalpy-weighted mean … expected 314.648… K …"
             + " measured 293.001 K\", 2026-09-30. The four premises are arrangements and are not witnessed.")
     @Test
@@ -141,7 +141,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-18 (Drawing gas out leaves the temperature alone and lowers the capacity).
      */
     @Pins("INV-HEAT-18")
-    @RedWitness(prose = "with {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} ({@code draw}) cooling what is left by a percent on"
+    @LegacyWitness(prose = "with {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} ({@code draw}) cooling what is left by a percent on"
             + " every draw: \"what is left is the same gas at the same temperature — removing part of a body"
             + " does not cool the rest: … \\\"airTempMilliK\\\":361749\", 2026-09-30. The three premises are"
             + " arrangements and are not witnessed.")
@@ -182,7 +182,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-19 (A zone holding no gas reports ambient and no capacity, rather than the temperature it was at when it still had air).
      */
     @Pins("INV-HEAT-19")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code AirState#getTemperatureMilliK} at {@code return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;}'s empty-air rule removed, so the reading is whatever the gas last held: \"a zone"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code AirState#getTemperatureMilliK} at {@code return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;}'s empty-air rule removed, so the reading is whatever the gas last held: \"a zone"
             + " holding nothing must read ambient, not what it was at when it still had air: … \\\"airO2\\\":0 …"
             + " expected:&lt;293000&gt; but was:&lt;400000&gt;\". NO HEAT — {@code AirState#getHeatCapacity} at {@code return getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L;} giving air a"
             + " heat capacity whatever its pressure: \"and must hold no heat at all: … \\\"airO2\\\":0 …"

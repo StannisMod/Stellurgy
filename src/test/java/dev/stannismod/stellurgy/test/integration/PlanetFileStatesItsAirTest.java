@@ -6,7 +6,7 @@ import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader.DimensionPropertyCoupling;
 import org.junit.BeforeClass;
@@ -79,7 +79,7 @@ public class PlanetFileStatesItsAirTest {
         return null;
     }
 
-    @RedWitness(prose = "with {@code DimensionProperties#authorAtmosphere} at {@code air = authored;} made"
+    @LegacyWitness(prose = "with {@code DimensionProperties#authorAtmosphere} at {@code air = authored;} made"
             + " {@code air = AirState.vacuum();}, this fails with \"the carbon dioxide stated expected:&lt;965000000&gt;"
             + " but was:&lt;0&gt;\" (2026-10-03).")
     @Test
@@ -93,7 +93,7 @@ public class PlanetFileStatesItsAirTest {
         assertEquals("nothing but what was stated", 2, air.composition().size());
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code copy.body.authorAtmosphere(air);}"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code copy.body.authorAtmosphere(air);}"
             + " commented out, this fails with \"a forward copy holds the exemplar's air\" — the copy kept the"
             + " constructor's Earth air (2026-10-03).")
     @Test
@@ -111,14 +111,14 @@ public class PlanetFileStatesItsAirTest {
                 exemplar.getAir().composition(), named(read, "Second").getAir().composition());
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (chain.contains(self))} made"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (chain.contains(self))} made"
             + " {@code if (false && …)}, this fails with a {@code StackOverflowError} (2026-10-03).")
     @Test
     public void aCircleOfCopiesRefusesTheLoad() throws Exception {
         assertRefused(planet("Ping", copyOf("Pong")) + planet("Pong", copyOf("Ping")), "Ping");
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (named == null || named.isEmpty())}"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (named == null || named.isEmpty())}"
             + " made {@code if (false && …)}, this fails with \"the refusal must name the body whose air could not"
             + " be resolved: null\" — an NPE, not a refusal (2026-10-03).")
     @Test
@@ -126,7 +126,7 @@ public class PlanetFileStatesItsAirTest {
         assertRefused(planet("Orphan", copyOf("Nowhere")), "Orphan");
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (named.size() > 1)} made"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#resolveCopy} at {@code if (named.size() > 1)} made"
             + " {@code if (false && …)}, this fails with \"the load must be refused, not completed with a default"
             + " air for 'Reader'\" (2026-10-03).")
     @Test
@@ -135,7 +135,7 @@ public class PlanetFileStatesItsAirTest {
                 + planet("Reader", copyOf("Twin")), "Reader");
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
             + " {@code if ((statedAir != null || airCopyOf != null) && totalStated)} made {@code if (false && …)},"
             + " this fails with \"a body stating a composition AND a total must be refused\" — `Both` loaded, the"
             + " control passing (2026-10-03).")
@@ -155,7 +155,7 @@ public class PlanetFileStatesItsAirTest {
      * list a file once kept beside the air — would mean nothing; the body that carries one is refused
      * rather than loaded with the list quietly dropped.
      */
-    @RedWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at {@code throw new"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at {@code throw new"
             + " IllegalArgumentException(\"planet '\" + properties.getName() + \"' lists a <\"} replaced by an empty"
             + " branch, this fails with \"a body listing harvestable gases of its own must be refused\" — `Lister`"
             + " loaded, the control passing.")

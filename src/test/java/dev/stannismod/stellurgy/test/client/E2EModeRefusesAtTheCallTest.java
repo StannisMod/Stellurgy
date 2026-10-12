@@ -15,6 +15,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
@@ -168,7 +169,7 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#handleCommand",
             at = "JsonObject refusal = refusedInE2E(known, request);", replacedBy = "JsonObject refusal = null;",
             fails = "these were not: [interact_block RAN", on = "2026-10-12")
-    @RedWitness(prose = "round 4, one run with every new refusal inverted at its own branch (2026-10-09,"
+    @LegacyWitness(prose = "round 4, one run with every new refusal inverted at its own branch (2026-10-09,"
             + " logs/t564r4-refusal-witnessW1.log): {@code E2EModeGate#staticCallRefusal} at"
             + " {@code if (E2EInstrument.named(className, methodName) != null)} -> {@code if (true)}; the {@code give} tag"
             + " branch, the {@code clear} tag branch and the {@code fill} tag test {@code args[i].indexOf('{') >= 0}"
@@ -189,13 +190,13 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
             + " {@code forge.test.e2e} cleared in the server child by the inverted static call, every later bypass"
             + " ({@code summon}, {@code tp}, {@code execute}, {@code forge tps}, the reflective {@code tp}) was still"
             + " refused.")
-    @RedWitness(prose = "round 4, the console (2026-10-09, logs/t564r4-refusal-witnessW2.log):"
+    @LegacyWitness(prose = "round 4, the console (2026-10-09, logs/t564r4-refusal-witnessW2.log):"
             + " {@code E2EModeGate#onCommand} at {@code if (HARNESS_BRIDGE_SENDER.equals(sender.getClass().getName()))}"
             + " -> {@code if (true)} — the refusal thrown at every sender, as before round 4 — fails at the console"
             + " wait: \"Server bridge exchange failed for: stellurgytest invoke-static … ServerEventLog sinceReply …"
             + " command_refused\", the server having crashed with \"Encountered an unexpected exception"
             + " … E2EModeRefusal: {\\\"refused\\\":true,\\\"command\\\":\\\"tp\\\"…\".")
-    @RedWitness(prose = "with {@code ProbeVerbKind#admittedInE2E} at {@code return admittedInE2E;} replaced by {@code return false;}"
+    @LegacyWitness(prose = "with {@code ProbeVerbKind#admittedInE2E} at {@code return admittedInE2E;} replaced by {@code return false;}"
             + " and {@code Kind#admittedInE2E} at {@code return admittedInE2E;}"
             + " replaced by {@code return this == HARNESS;}, the refusal verdict"
             + " holds and fails: \"every read, build and input an e2e is made of must be answered … `stellurgytest"

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.integration;
 
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -33,7 +33,7 @@ public class AstronomicalBodyHelperOrbitalThetaTest {
         MinecraftBootstrap.ensure();
     }
 
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalThetaAt} at {@code return ((worldTick % periodTicks) / periodTicks) * (2d * Math.PI)} dropping the"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalThetaAt} at {@code return ((worldTick % periodTicks) / periodTicks) * (2d * Math.PI)} dropping the"
             + " modulo by the period, this fails at the one-orbit wrap with \"expected:&lt;0.0&gt; but"
             + " was:&lt;6.283185307179586&gt;\".")
     @Test

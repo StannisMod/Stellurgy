@@ -7,8 +7,8 @@ import dev.stannismod.stellurgy.ship.mass.MassContributor;
 import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.joml.Vector3d;
 import org.junit.Test;
 
@@ -70,7 +70,7 @@ public class ShipReadoutTest {
      * Pins INV-SFM-07 (cargo lowers acceleration, never force, and thrust to weight is about the local field).
      */
     @Pins("INV-SFM-07")
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);} recording the force"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);} recording the force"
             + " scaled by the mass fails \"the same force\" with 50000 against 100000; {@code ShipReadout#acceleration} at {@code return m > 0.0D ? f / m : 0.0D;}"
             + " dividing by the structural mass only fails \"the loaded ship accelerates less\" with 11.11 against"
             + " 5.56.")
@@ -96,7 +96,7 @@ public class ShipReadoutTest {
      * Pins INV-SFM-07 (cargo lowers acceleration, never force, and thrust to weight is about the local field).
      */
     @Pins("INV-SFM-07")
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#canHover} at {@code return thrustToWeight(view) >= 1.0D;} demanding a ratio"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#canHover} at {@code return thrustToWeight(view) >= 1.0D;} demanding a ratio"
             + " of 10 to hover fails \"it hovers on the light world\"; {@code ShipReadout#thrustToWeight} at {@code double weight = totalMass() * gravity;} weighing against a"
             + " fixed 9.81 instead of the local field fails \"and not on one five times heavier\";"
             + " {@code ShipReadout#thrustToWeight} at {@code return Double.POSITIVE_INFINITY;} answering 0 for no field fails \"infinite where there is no field\".")
@@ -113,7 +113,7 @@ public class ShipReadoutTest {
      * A direction the hull cannot give is named, never averaged away, and so is not being able to
      * hover.
      */
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#warningFor} at {@code if (!(authority(view, direction, Endurance.BURST) > 0.0D))} testing the"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipReadout#warningFor} at {@code if (!(authority(view, direction, Endurance.BURST) > 0.0D))} testing the"
             + " sustained figure first fails \"reverse is named\" with BURST_ONLY; {@code ShipReadout#warningFor} at {@code return Warning.BURST_ONLY;}"
             + " answering BURST_ONLY where nothing is wrong fails \"forward is not\"; {@code ShipReadout#warnings} at {@code out.add(Warning.CANNOT_HOVER);} not"
             + " adding the hover warning fails \"cannot hover is named\".")
@@ -130,7 +130,7 @@ public class ShipReadoutTest {
      * What crosses the wire arrives intact: every figure a surface reads, including an infinite
      * endurance, survives encoding and decoding.
      */
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — each by writing a zero in place of one"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — each by writing a zero in place of one"
             + " field — {@code ShipReadout#write} at {@code out.writeLong(revision);} fails \"revision\"; {@code ShipReadout#write} at {@code out.writeDouble(structural);} fails \"mass\" with 1234 against"
             + " 10234; {@code ShipReadout#write} at {@code out.writeDouble(gravity);} fails \"field\"; {@code ShipReadout#write} at {@code out.writeDouble(authority[v][e][d]);} fails \"every figure\" on DESIGN SURGE_POSITIVE;"
             + " {@code ShipReadout#write} at {@code out.writeDouble(torque[v][e][d]);} fails \"every figure: torque\" on DESIGN ROLL_POSITIVE BURST (it was GREEN before the"

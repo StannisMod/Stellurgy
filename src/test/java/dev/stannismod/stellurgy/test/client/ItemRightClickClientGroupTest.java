@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -351,7 +351,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * absence would fail it. The live control for {@code gui_container_served} is the sibling
      * scenario below, which asserts the same seam recording a served container.</p>
      */
-    @RedWitness(prose = "with the satellite gate of {@code ItemOreScanner#onItemRightClick} at"
+    @LegacyWitness(prose = "with the satellite gate of {@code ItemOreScanner#onItemRightClick} at"
             + " {@code if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())}"
             + " removed, so an unbound"
             + " scanner opens its GUI: \"an unbound ore scanner must never ask the server for a GUI; GUI"
@@ -469,7 +469,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * <p>The player is dropped to survival for the consumption half of the contract; the shared
      * reset puts the mode back for whoever runs next.</p>
      */
-    @RedWitness(prose = "with {@code ItemHovercraft#onItemRightClick} at"
+    @LegacyWitness(prose = "with {@code ItemHovercraft#onItemRightClick} at"
             + " {@code worldIn.spawnEntity(entityboat)} skipped on the block branch:"
             + " \"a right-click at a block must reach the server and spawn the hovercraft into the world — no"
             + " `entity_joined_world` was recorded within 200 ticks\", 2026-09-28. (A census of verdicts by call"
@@ -587,7 +587,7 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
      * hovercraft proves the item was in hand and the click was not dropped, so the silence that
      * follows is the ray trace's answer rather than the arrangement's.</p>
      */
-    @RedWitness(prose = "with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at"
+    @LegacyWitness(prose = "with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at"
             + " {@code if (raytraceresult == null)}) spawning a craft at the player before it passes: \"no hovercraft must be spawned on an empty ray-trace; entities that"
             + " joined the server world since the click: …\", 2026-09-28.")
     @Test

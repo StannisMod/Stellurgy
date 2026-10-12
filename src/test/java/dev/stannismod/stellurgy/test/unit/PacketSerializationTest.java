@@ -6,7 +6,7 @@ import dev.stannismod.stellurgy.network.PacketAtmSync;
 import dev.stannismod.stellurgy.network.PacketOxygenState;
 import dev.stannismod.stellurgy.network.PacketStellarInfo;
 import dev.stannismod.stellurgy.network.PacketSyncKnownPlanets;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
@@ -59,7 +59,7 @@ public class PacketSerializationTest {
         field.set(target, value);
     }
 
-    @RedWitness(prose = "one inversion per verdict on the readout, 2026-09-30. PRESSURE -"
+    @LegacyWitness(prose = "one inversion per verdict on the readout, 2026-09-30. PRESSURE -"
             + " {@code PacketAtmSync#write} at {@code nbt.setInteger(\"pressure\", summary.pressureCentiAtm());} writing half the pressure: \"expected:&lt;850&gt; but was:&lt;425&gt;\"."
             + " BREATHABLE - {@code PacketAtmSync#readClient} at {@code summary = new AtmosphereSummary(nbt.getInteger(\"pressure\"), nbt.getBoolean(\"breathable\"),} reading the flag negated: \"expected:&lt;false&gt; but"
             + " was:&lt;true&gt;\". WARNING - {@code PacketAtmSync#readClient} at {@code nbt.getString(\"warning\"), holding);} reading the warning under another key:"
@@ -102,7 +102,7 @@ public class PacketSerializationTest {
      * {@code Integer.MAX_VALUE}), so 400 atm — 40 000, above a short's 32 767 — must not arrive as a
      * wrapped negative.
      */
-    @RedWitness(prose = "with {@code PacketAtmSync#write} at {@code nbt.setInteger(\"pressure\", summary.pressureCentiAtm());}"
+    @LegacyWitness(prose = "with {@code PacketAtmSync#write} at {@code nbt.setInteger(\"pressure\", summary.pressureCentiAtm());}"
             + " and {@code PacketAtmSync#readClient} at {@code nbt.getInteger(\"pressure\")} back on their short"
             + " forms ({@code setShort(\"pressure\", (short) …)} / {@code getShort(\"pressure\")}), this fails with"
             + " \"a 400 atm room must reach the client as 400 atm expected:&lt;40000&gt; but was:&lt;-25536&gt;\""

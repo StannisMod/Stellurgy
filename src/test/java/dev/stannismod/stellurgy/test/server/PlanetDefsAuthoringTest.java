@@ -8,8 +8,8 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import org.junit.Assume;
 import org.junit.Test;
@@ -309,7 +309,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * is a broken system — a parent that does not list its moon draws a sky without it, a moon that
      * does not name its parent is laid out as a planet of the star.
      */
-    @RedWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
+    @LegacyWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
             + " {@code properties.addChildPlanet(child);} removed, this fails with both halves wrong —"
             + " {@code Primus.children=[]} and {@code PrimusMoon.parent=-2147483647} (the invalid sentinel).")
     @Test
@@ -347,7 +347,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * Pins DIMID-3 (an allocated id is never a stated one).
      */
     @Pins({"DIMID-1", "DIMID-2", "DIMID-3"})
-    @RedWitness(prose = "2026-10-03, with {@code XMLPlanetLoader#readPlanetFromNode} at"
+    @LegacyWitness(prose = "2026-10-03, with {@code XMLPlanetLoader#readPlanetFromNode} at"
             + " {@code statesADimId(planetNode)} put back to the shipped allocation — every body allocated"
             + " {@code getNextFreeDim(offset)} at parse time, before the file's stated ids were known — this"
             + " fails with {@code itsIdTakenByAnother=true}, {@code ownerOf2=Unnumbered} and"
@@ -417,7 +417,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * Pins DIMID-4 (a refused registration is bound to no holder and the load continues).
      */
     @Pins({"DIMID-1", "DIMID-4"})
-    @RedWitness(prose = "2026-10-03, with {@code DimensionManager#createAndLoadDimensions} at"
+    @LegacyWitness(prose = "2026-10-03, with {@code DimensionManager#createAndLoadDimensions} at"
             + " {@code if (!this.registerDimNoUpdate(properties, properties.isNativeDimension))} put back to the"
             + " shipped unchecked call (its refusal branch and the later {@code refusedBodies.contains(properties)}"
             + " skip removed), this fails with {@code Sol.bodiesUnder9611=[StatesTheSameId]}.")
@@ -462,10 +462,10 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * that id among its children, since the body under it is not its moon. Unless it IS — two moons of
      * one planet stating one id leave the first holding it, and that one stays the planet's child.
      */
-    @RedWitness(prose = "with {@code DimensionManager#createAndLoadDimensions} at"
+    @LegacyWitness(prose = "with {@code DimensionManager#createAndLoadDimensions} at"
             + " {@code detachFromParseParent(refused);} not called (the shape it shipped with), this fails showing"
             + " {@code Secundus.children=[9611]} — the id of HoldsTheId, a planet of the star (2026-10-06).")
-    @RedWitness(prose = "with {@code DimensionManager#detachFromParseParent} at"
+    @LegacyWitness(prose = "with {@code DimensionManager#detachFromParseParent} at"
             + " {@code if (holder != null && holder.getParentPlanet() == parentId)} never taken, this fails"
             + " showing {@code Tertius.children=[]} — the first moon, which holds the id, dropped with the"
             + " refused second (2026-10-06).")
@@ -492,7 +492,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * An atmosphere density or a gravity outside what the game models is brought to the nearest
      * bound, from above and from below — not taken as written, and not rejected.
      */
-    @RedWitness(prose = "2026-10-02, two runs. With {@code XMLPlanetLoader#readPlanetFromNode} at"
+    @LegacyWitness(prose = "2026-10-02, two runs. With {@code XMLPlanetLoader#readPlanetFromNode} at"
             + " {@code Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()),"
             + " DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE)} losing its"
             + " ceiling and {@code XMLPlanetLoader#readPlanetFromNode} at"
@@ -529,7 +529,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * stack — what every other reader of {@code oreIron} receives — keeps the count it was
      * registered with.
      */
-    @RedWitness(prose = "2026-10-02, three inversions, one run each: with"
+    @LegacyWitness(prose = "2026-10-02, three inversions, one run each: with"
             + " {@code XMLPlanetLoader#readPlanetFromNode} at {@code String oreName = parts[0].trim();}"
             + " untrimmed this fails with {@code Driller.laserDrillOres=[]}; with"
             + " {@code XMLPlanetLoader#readPlanetFromNode} at"
@@ -567,7 +567,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * other entries still resolve. (Before this was decided, the empty lookup threw, and the per-planet
      * isolation dropped the whole planet.)
      */
-    @RedWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
+    @LegacyWitness(prose = "2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at"
             + " {@code if (ores.isEmpty())} made never to hold (so the empty list reaches {@code ores.get(0)}),"
             + " this fails with {@code DrillerUnresolved.registered=false}: the whole planet was dropped.")
     @Test
@@ -601,7 +601,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * type without the whitespace around it; a value the game does not know does not cost the pack
      * its planet — the body is kept and generates natively.
      */
-    @RedWitness(prose = "2026-10-02, two inversions, one run each: with"
+    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
             + " {@code XMLPlanetLoader#readPlanetFromNode} at"
             + " {@code properties.setTerrainSource(TerrainSource.byName(planetPropertyNode.getTextContent().trim()));}"
             + " calling a strict {@code TerrainSource.valueOf} on the same text, this fails with"
@@ -636,7 +636,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * keeps the shared one. The flag read is the one {@code WorldProviderPlanet#updateWeather}
      * branches on.
      */
-    @RedWitness(prose = "2026-10-02, two inversions, one run each: with"
+    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
             + " {@code DimensionProperties#updateCustomWorldInfo} at {@code customWorldInfo = !isDefault;}"
             + " negated, this fails with {@code StatesAWeatherLength.usesCustomWorldInfo=false} (and"
             + " {@code StatesNoWeather} stays false — a planet stating no weather never reaches that method);"
@@ -669,7 +669,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * out from the SHIPPED spiral, and a weight of one; and an attribute the element leaves out takes
      * the shipped default.
      */
-    @RedWitness(prose = "2026-10-02, two verdicts. The generator verdict: with"
+    @LegacyWitness(prose = "2026-10-02, two verdicts. The generator verdict: with"
             + " {@code UniverseRegistry#populate} at"
             + " {@code reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes(),}"
             + " handed {@code null} for the config, this fails with {@code EmptyGalaxyGenerator}. The"
@@ -735,7 +735,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * another, and every other galaxy an anchor names is RESERVED in the generator's configuration —
      * its cell holds a galaxy under every seed, so the authored system has somewhere to be.
      */
-    @RedWitness(prose = "2026-10-02, two inversions, one run each: with"
+    @LegacyWitness(prose = "2026-10-02, two inversions, one run each: with"
             + " {@code XMLPlanetLoader#readGalaxyKey} at {@code return GalaxyKey.HOME;} (the unstated branch)"
             + " answering galaxy {@code 1,0,0}, this fails with {@code Sol.galaxy=1,0,0}; with"
             + " {@code XMLPlanetLoader#readAllPlanets} at"
@@ -794,7 +794,7 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
      * Pins ADDR-24 (an authored system holds what its pack declares and nothing else).
      */
     @Pins("ADDR-24")
-    @RedWitness(prose = "2026-10-03, three inversions, one run each: with"
+    @LegacyWitness(prose = "2026-10-03, three inversions, one run each: with"
             + " {@code UniverseRegistry#withDerivedRetinue} at {@code if (asked <= 0 || generator == null)}"
             + " always true, this fails with {@code Counted=… majors=0}; with"
             + " {@code int asked = star.getMaxRetinueBodies();} reading {@code Math.max(1, …)}, with"

@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -42,7 +42,7 @@ public class ABentBeamIsDrawnBentTest extends AbstractOwnBootClientTest {
     /** How often the gun is fed while a wait runs, in ticks — arrangement, not subject. */
     private static final int FEED_EVERY_TICKS = 20;
 
-    @RedWitness(prose = "with {@code PacketBeamState.of} ({@code PacketBeamState#of} at {@code for (Vec3d point : path)}) made to"
+    @LegacyWitness(prose = "with {@code PacketBeamState.of} ({@code PacketBeamState#of} at {@code for (Vec3d point : path)}) made to"
             + " carry only the path's two ends, this fails at \"with a mirror in the beam's way the client is"
             + " still drawing a straight line\" while the server reads {@code beamLit:true} (2026-09-29).")
     @Test

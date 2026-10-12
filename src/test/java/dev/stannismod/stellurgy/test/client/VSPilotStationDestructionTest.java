@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -142,7 +142,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
      * Destroying the flight computer throws its pilot out, removes his mount, and leaves a ship that
      * never climbs on the dead computer's last command.
      */
-    @RedWitness(prose = "the never-thrusts verdict. The line the wait rewrite touched is the break"
+    @LegacyWitness(prose = "the never-thrusts verdict. The line the wait rewrite touched is the break"
             + " probe's own reply, an arrangement check typed as an assertion; the contract after it needs"
             + " BOTH of production's two defences broken"
             + " — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no"

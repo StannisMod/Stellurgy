@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -48,13 +48,13 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @RedWitness(prose = "with {@code TurretDriveState.permitsFiring()} ({@code TurretDriveState#permitsFiring} at {@code return this != DEAD;})"
+    @LegacyWitness(prose = "with {@code TurretDriveState.permitsFiring()} ({@code TurretDriveState#permitsFiring} at {@code return this != DEAD;})"
             + " made to refuse {@code JAMMED} as well as {@code DEAD}, this fails at \"a seized gun stopped"
             + " firing — then JAMMED is just a slower way of saying DEAD\" (2026-09-29).")
-    @RedWitness(prose = "with {@code TurretDriveState#fromDamage} at {@code if (damageFraction >= Math.max(derateAt, jamAt))} jamming at the LOWER of the two"
+    @LegacyWitness(prose = "with {@code TurretDriveState#fromDamage} at {@code if (damageFraction >= Math.max(derateAt, jamAt))} jamming at the LOWER of the two"
             + " thresholds (no derated rung), the ladder verdict fails with \"a damaged mount went straight from"
             + " turning to seizing without ever turning slowly ... [JAMMED]\" (2026-09-30).")
-    @RedWitness(prose = "with {@code TileTurret.launch} ({@code TileTurret#launch} at {@code markDirty();}) setting the mount's"
+    @LegacyWitness(prose = "with {@code TileTurret.launch} ({@code TileTurret#launch} at {@code markDirty();}) setting the mount's"
             + " drive back to WORKING as a round leaves, this fails at \"the round left, but not from a seized"
             + " mount: {...drive:WORKING...} expected:&lt;[JAMMED]&gt;\" (2026-09-30).")
     @Test

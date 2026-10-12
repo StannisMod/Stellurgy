@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.integration;
 
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
 import org.junit.BeforeClass;
@@ -120,7 +120,7 @@ public class XMLPlanetLoaderTest {
 
     // ---- the procedural galaxy ----------------------------------------------
 
-    @RedWitness(prose = "with {@code DimensionPropertyCoupling#galaxyGenConfig} at"
+    @LegacyWitness(prose = "with {@code DimensionPropertyCoupling#galaxyGenConfig} at"
             + " {@code GalaxyGenConfig.defaults()} replaced by {@code GalaxyGenConfig.nonProcedural()}, the first"
             + " verdict fails with \"no <galaxyGen> is the shipped procedural galaxy, not an empty one\"; replaced by"
             + " the defaults with one more reserved galaxy, the second fails with \"and the shipped configuration,"
@@ -136,7 +136,7 @@ public class XMLPlanetLoaderTest {
                 GalaxyGenConfig.defaults().fingerprint(), read.galaxyGenConfig.fingerprint());
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s branch at"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s branch at"
             + " {@code if (\"false\".equalsIgnoreCase(value))} removed, this fails with \"procedural=\"false\" must be"
             + " read as a galaxy with nothing between its anchors\", 2026-10-05.")
     @Test
@@ -148,7 +148,7 @@ public class XMLPlanetLoaderTest {
                 read.galaxyGenConfig.procedural);
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#nonProcedural}'s {@code if (!knobs.isEmpty())} made"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#nonProcedural}'s {@code if (!knobs.isEmpty())} made"
             + " never true, this fails with \"a density beside procedural=\"false\" tunes a population the pack asked"
             + " not to have — it must be refused, not ignored\"; with its message's {@code \"; remove \" + knobs}"
             + " dropped, with \"the refusal must name the knob the pack must remove\", 2026-10-05.")
@@ -165,7 +165,7 @@ public class XMLPlanetLoaderTest {
         }
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s {@code if (!\"true\".equalsIgnoreCase(value))}"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readGalaxyGen}'s {@code if (!\"true\".equalsIgnoreCase(value))}"
             + " made never true, this fails with \"procedural=\"no\" is neither answer — reading it as either would be"
             + " a guess\"; with that refusal's message not naming the attribute, with \"the refusal must name the"
             + " attribute\", 2026-10-05.")

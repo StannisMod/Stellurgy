@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -147,12 +147,12 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     /**
      * The overworld is breathable, and the gate says so for a player standing in it.
      */
-    @RedWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType} at"
+    @LegacyWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType} at"
             + " {@code if (StellurgyConfiguration.getCurrentConfig().enableOxygen)} preceded by a return of"
             + " VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own"
             + " dimension check instead stays GREEN — no other world's handler exists in this scenario to"
             + " answer for the overworld.")
-    @RedWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType(Entity)} at"
+    @LegacyWitness(prose = "with {@code AtmosphereHandler#getAtmosphereType(Entity)} at"
             + " {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}"
             + " answering VACUUM for dimension 0: \"overworld baseline: cache must be empty or non-Stellurgy;"
             + " hasCached=true atmos=vacuum\", 2026-09-28 (taken on the other line of this test before the two"
@@ -175,7 +175,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     /**
      * An airless planet resolves as unbreathable for a player standing on it.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: \"the gate must answer"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: \"the gate must answer"
             + " SOMETHING for a player on a Stellurgy planet: … \\\"hasAtmosphere\\\":false\". UNBREATHABLE — the"
             + " same line answering {@code AIR} for every dimension: \"a planet declared with zero atmosphere"
             + " must resolve as unbreathable … \\\"breathable\\\":true\".")
@@ -198,7 +198,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
      * airless planet's atmosphere does not survive the move, because it is implied by the two
      * breathability verdicts either side of it.</p>
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}."
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}."
             + " SOMETHING BEFORE — answering nothing for an unbreathable dimension: \"the airless planet must"
             + " resolve to SOMETHING before the move\". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:"
             + " \"the airless planet must resolve as unbreathable before the move: … \\\"breathable\\\":true\"."

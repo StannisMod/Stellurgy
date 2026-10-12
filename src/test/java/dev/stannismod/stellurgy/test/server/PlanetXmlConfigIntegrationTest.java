@@ -5,7 +5,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -81,7 +81,7 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
      * The fixture's fields as the running server holds them, and — its last verdicts — that a file
      * stating no {@code <galaxyGen>} runs the shipped procedural galaxy.
      */
-    @RedWitness(prose = "the last two verdicts (the field reads above predate the record form): with"
+    @LegacyWitness(prose = "the last two verdicts (the field reads above predate the record form): with"
             + " {@code DimensionPropertyCoupling#galaxyGenConfig} at {@code GalaxyGenConfig.defaults()} replaced"
             + " by {@code GalaxyGenConfig.nonProcedural()}, it fails"
             + " with \"a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy:"

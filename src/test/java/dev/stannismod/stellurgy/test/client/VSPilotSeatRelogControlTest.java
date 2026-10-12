@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -82,7 +82,7 @@ public class VSPilotSeatRelogControlTest extends AbstractSharedVsClientTest {
      * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
     @Pins("SHIPCTL-16")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. BACK ON HIS MOUNT — the seat dummy"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. BACK ON HIS MOUNT — the seat dummy"
             + " refusing to be saved with its rider (a {@code writeToNBTOptional} override on"
             + " {@code EntityDummy} returning false): \"no `mount` … within 400 ticks\". CONTROL AFTER THE RELOG —"
             + " the client's ship-input send ({@code KeyBindings#handleShipPilotInput} at"

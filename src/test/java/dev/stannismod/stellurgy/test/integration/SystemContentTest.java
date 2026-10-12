@@ -4,8 +4,8 @@ import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.*;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.BeforeClass;
@@ -96,7 +96,7 @@ public class SystemContentTest {
      * Pins ADDR-3 (every body's name lies inside its own system's box).
      */
     @Pins("ADDR-3")
-    @RedWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the authored law at"
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the authored law at"
             + " {@code ORBIT_UNIT_BLOCKS / 1000} (zero in long arithmetic — an orbit with no length), this fails"
             + " with \"a planet sits in its OWN cell, not in the star's anchor cell\".")
     @Test
@@ -154,7 +154,7 @@ public class SystemContentTest {
         }
     }
 
-    @RedWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the AUTHORED law at"
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the AUTHORED law at"
             + " {@code ORBIT_UNIT_BLOCKS / 1000} while the procedural one is untouched, this fails with \"one"
             + " orbit unit must be one distance in both families expected:&lt;0.0&gt; but"
             + " was:&lt;400.00000338384956&gt;\" — 400 blocks per unit, the procedural family's measured scale.")
@@ -231,7 +231,7 @@ public class SystemContentTest {
      * cell apart, each against a cell boundary, so their addresses flipped under the slightest motion
      * and two bodies could share one.
      */
-    @RedWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at"
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at"
             + " {@code ORBIT_UNIT_BLOCKS / 1000} (zero), this fails with \"...and puts the whole orbital radius"
             + " along +Z\".")
     @Test
@@ -260,7 +260,7 @@ public class SystemContentTest {
      * bodies are made. Advertised as landable, it sent a ship's descent into a dimension with no
      * terrain to find.
      */
-    @RedWitness(prose = "2026-09-30, with {@code SystemContent#kindOf} at {@code return body.hasSurface() ? ifWalkable : SystemBodyKind.GAS_GIANT} answering the walkable kind"
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#kindOf} at {@code return body.hasSurface() ? ifWalkable : SystemBodyKind.GAS_GIANT} answering the walkable kind"
             + " whatever the surface, this fails with \"a surface-less body is not somewhere a ship can land\".")
     @Test
     public void aBodyWithNoSurfaceIsNotADescendTarget() {
@@ -306,7 +306,7 @@ public class SystemContentTest {
      * Pins ADDR-1 (a body's cell name is the same at every tick while its place is not).
      */
     @Pins("ADDR-1")
-    @RedWitness(prose = "2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of"
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of"
             + " the body's LIVE position instead of its name — the defect this test used to assert as the"
             + " model — this fails with \"half an orbit later the body is still addressed by the same cell"
             + " expected:&lt;19_0_0&gt; but was:&lt;-19_0_0&gt;\".")
@@ -348,7 +348,7 @@ public class SystemContentTest {
      * Pins ADDR-2 (a cell name is derived from the layout and a recorded name beats a later derivation).
      */
     @Pins("ADDR-2")
-    @RedWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at"
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at"
             + " {@code ORBIT_UNIT_BLOCKS / 1000} (zero — every orbit collapses onto the anchor), this fails with"
             + " \"two bodies authored on opposite sides of one star are not one address\".")
     @Test
@@ -377,7 +377,7 @@ public class SystemContentTest {
      * derivation itself. A name that is merely re-derived consistently is only as stable as its
      * inputs, and those inputs are known to move.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code SystemContent#nameOf} at {@code return names == null ? derived} returning the derivation without"
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemContent#nameOf} at {@code return names == null ? derived} returning the derivation without"
             + " consulting the store, this fails with \"the store's name is the body's name, whatever the"
             + " derivation would have said\".")
     @Test
@@ -414,7 +414,7 @@ public class SystemContentTest {
      * lands in the neighbouring cube and resolves to NO system: an address the console will happily
      * offer, with nothing at it, that a ship can fly to and never descend from.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code UniverseRegistry#anchorForCell} at {@code GalacticCoord stored = storedAnchorNear(cell)} skipping the"
+    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#anchorForCell} at {@code GalacticCoord stored = storedAnchorNear(cell)} skipping the"
             + " neighbourhood lookup ({@code storedAnchorNear}), this fails with \"its own cell must attribute"
             + " back to its system\".")
     @Test

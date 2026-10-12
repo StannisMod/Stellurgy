@@ -4,8 +4,8 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -176,7 +176,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
      * through {@code PlayerList.transferPlayerToDimension} &rarr; the client's OWN world must be the
      * slot dim and keep rendering.</p>
      */
-    @RedWitness(prose = "both reads of the hold, 2026-09-28. THE COUNT — one transfer to the overworld"
+    @LegacyWitness(prose = "both reads of the hold, 2026-09-28. THE COUNT — one transfer to the overworld"
             + " about a second after the settle's health probe, i.e. inside the hold window: \"a client that"
             + " arrived in a slot dim must STAY there; a dimension change during the hold is it being thrown"
             + " out\". THE END STATE — the space-dim guard ({@code PlanetEventHandler#spaceDimensionGuard} at"
@@ -310,7 +310,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
      * workaround — it is the arrangement a real pilot is in, and the control leg below is what says
      * so.</p>
      */
-    @RedWitness(prose = "the CONTROL and the arrival link, 2026-09-28 — the control is the verdict the"
+    @LegacyWitness(prose = "the CONTROL and the arrival link, 2026-09-28 — the control is the verdict the"
             + " wait rewrite touched; the contents pins after it are not witnessed and were not touched."
             + " With {@code SystemBodiesProducer#broadcastTo} at"
             + " {@code PacketHandler.sendToPlayer(PacketSystemBodiesSync.forDims(one, oneSky), player)} sending"
@@ -508,7 +508,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
      * load again. {@code vs-assemble} registers a fresh slot on every call, so nothing another scenario
      * here built is in it.</p>
      */
-    @RedWitness(prose = "with {@code SpaceSlotPool#unload} at {@code world.saveAllChunks(true, null)} saving nothing"
+    @LegacyWitness(prose = "with {@code SpaceSlotPool#unload} at {@code world.saveAllChunks(true, null)} saving nothing"
             + " before the slot goes: \"the ship must RE-LOAD live after the slot rebind — no `ship_usable`"
             + " carrying dim = 14 was recorded within 300 ticks\", 2026-09-28. The two verdicts before it are"
             + " the arrangement's: the ship spawned, and it is in the pool world's registry.")

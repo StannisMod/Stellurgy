@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import org.junit.Test;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
@@ -53,10 +53,10 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @RedWitness(prose = "with {@code TileTurret#update} at {@code if (!onTarget || isHoldingFire() || !canFireNow())}'s automatic path made to return before"
+    @LegacyWitness(prose = "with {@code TileTurret#update} at {@code if (!onTarget || isHoldingFire() || !canFireNow())}'s automatic path made to return before"
             + " {@code launch}, this fails with \"a gun with a target, a charge and no network never fired — no"
             + " `turret_fired` carrying pos = 9400,80,9400 was recorded within 600 ticks\". 2026-09-30.")
-    @RedWitness(prose = "with {@code GunSpec.getMuzzleSpeed} ({@code GunSpec#getMuzzleSpeed} at {@code return muzzleSpeed;}) answering 0 (the"
+    @LegacyWitness(prose = "with {@code GunSpec.getMuzzleSpeed} ({@code GunSpec#getMuzzleSpeed} at {@code return muzzleSpeed;}) answering 0 (the"
             + " operability test reads the field, so the gun still counts itself a gun), this fails at \"a built"
             + " gun must have a muzzle speed: {...operable:true...muzzleSpeed:0.0...}\"; with"
             + " {@code TileTurret#launch} at {@code lastShotId = id;} ({@code lastShotId = id}) removed, it fails at \"a gun that fired must"
@@ -96,10 +96,10 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * ticks of gravity and reds the first of them, so only an upward angle shallower than
      * gravity * age / muzzle speed reaches this line, which depends on the age at the read.</p>
      */
-    @RedWitness(prose = "with {@code TurretFireControl.fire} ({@code TurretFireControl#fire} at {@code spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),}) made"
+    @LegacyWitness(prose = "with {@code TurretFireControl.fire} ({@code TurretFireControl#fire} at {@code spec.getProjectileMass(), spec.getLifetimeTicks(), spec.getImpactEnergy(),}) made"
             + " to admit the round at half the spec's impact energy, this fails at \"the round is not worth what"
             + " the build says it is worth ... expected:&lt;44&gt; but was:&lt;22&gt;\" (2026-09-29).")
-    @RedWitness(prose = "with {@code TileTurret#launch} at {@code lastShotId = id;} ({@code lastShotId = id}) removed, this fails"
+    @LegacyWitness(prose = "with {@code TileTurret#launch} at {@code lastShotId = id;} ({@code lastShotId = id}) removed, this fails"
             + " at \"the gun reported a shot the substrate does not have: {ok:true,present:false...}\" — the fired"
             + " record names round -1 (2026-09-30).")
     @Test
@@ -147,10 +147,10 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * A controller with nothing built around it is not a gun and does not fire — and the same
      * controller, given its parts, does, which is what makes its silence evidence.
      */
-    @RedWitness(prose = "with {@code GunSpec.isOperable} ({@code GunSpec#isOperable} at {@code if (partCount <= 0)}) answering true"
+    @LegacyWitness(prose = "with {@code GunSpec.isOperable} ({@code GunSpec#isOperable} at {@code if (partCount <= 0)}) answering true"
             + " for a build of no parts, this fails at \"a bare controller reports itself operable\" on a"
             + " {@code turret_assembled} reading {@code operable:true, parts:0} (2026-09-29).")
-    @RedWitness(prose = "with the {@code spec.isOperable()} conjunct deleted from"
+    @LegacyWitness(prose = "with the {@code spec.isOperable()} conjunct deleted from"
             + " {@code TileTurret.canFireNow} ({@code TileTurret#canFireNow} at {@code && spec.isOperable()}), this fails at \"a bare controller, on"
             + " its target, was permitted to fire: {...permitted:true...operable:false...}\" (2026-09-30).")
     @Test
@@ -206,7 +206,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * assembled and charged, is the subject; the same gun given its drive back is the control, and
      * the only thing the two legs differ in is the drive.</p>
      */
-    @RedWitness(prose = "with {@code TurretDriveState.permitsFiring()} ({@code TurretDriveState#permitsFiring} at {@code return this != DEAD;})"
+    @LegacyWitness(prose = "with {@code TurretDriveState.permitsFiring()} ({@code TurretDriveState#permitsFiring} at {@code return this != DEAD;})"
             + " made to answer true, this fails at \"a gun with a dead drive fired, on target and charged\", on a"
             + " decision reading {@code permitted:true, drive:DEAD, energy:20000} (2026-09-29).")
     @Test
@@ -270,7 +270,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * round at a time. The hold is read off the gun's own launch being REFUSED after it was permitted
      * — on target, charged — and the same gun with the wall taken away fires.</p>
      */
-    @RedWitness(prose = "with the line-of-fire refusal in {@code TurretFireControl.muzzleOf}"
+    @LegacyWitness(prose = "with the line-of-fire refusal in {@code TurretFireControl.muzzleOf}"
             + " ({@code TurretFireControl#muzzleOf} at {@code if (StructureCrossing.isBlocked(world, worldMuzzle,}) disabled, this fails at \"a gun fired into the structure it"
             + " is built into\" (2026-09-29).")
     @Test
@@ -318,7 +318,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * coordinates: the same eight blocks, placed the same way, assemble and fire — which is also what
      * proves the assembly and fire recorders were live for the silence at the shipyard.</p>
      */
-    @RedWitness(prose = "with the {@code VSIntegration.isOnUnnamedShip} wait in {@code TileTurret.update}"
+    @LegacyWitness(prose = "with the {@code VSIntegration.isOnUnnamedShip} wait in {@code TileTurret.update}"
             + " ({@code TileTurret#update} at {@code if (VSIntegration.isOnUnnamedShip(world, pos))}) skipped, this fails at \"a gun aboard an unnamed ship counted its"
             + " build\" (2026-09-29).")
     @Test
@@ -365,13 +365,13 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
      * to be an addition rather than a rewrite. It is pinned now, while there is nothing driving it,
      * because a seam nobody exercises is a seam that quietly stops working.</p>
      */
-    @RedWitness(prose = "with a launch inserted in {@code TileTurret#update} at {@code mechanism.tick(spec.getTraverseDegreesPerTick());}'s manual branch whenever"
+    @LegacyWitness(prose = "with a launch inserted in {@code TileTurret#update} at {@code mechanism.tick(spec.getTraverseDegreesPerTick());}'s manual branch whenever"
             + " the mount is on its bearing (a gun under a hand firing on its own), this fails with \"the trigger"
             + " did nothing: {fired:false} state: {...shots:1...manual:true...}\" — the gun had already fired by"
             + " itself and was cooling down when the trigger was pulled. The later \"fired by itself\" verdict was"
             + " therefore not reached on that run, and the return-to-automatic verdicts were not witnessed."
             + " 2026-09-30.")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30: with {@code TileTurret.java:422}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code TileTurret.java:422}"
             + " commanding the mount 30 degrees off the bearing it was handed, this fails at \"the mount ignored"
             + " the bearing it was handed: {...yaw:-60.0...} expected:&lt;-90.0&gt;\"; with {@code fireOnce}"
             + " ({@code TileTurret.java:434}) clearing the hand around its own launch, at \"the round that left"

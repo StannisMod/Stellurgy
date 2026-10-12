@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -57,7 +57,7 @@ public class SpacedArmourIsAskedTwiceTest extends AbstractSharedServerTest {
     /**
      * The claim, on the arrangement that makes it matter.
      */
-    @RedWitness(prose = "with {@code ShotSubstrate.step} advancing a body that came out the far side by the"
+    @LegacyWitness(prose = "with {@code ShotSubstrate.step} advancing a body that came out the far side by the"
             + " whole of the tick's remaining travel ({@code ShotSubstrate#step} at {@code double advanced = Math.min(reachInside,}), this fails at \"the second"
             + " plate was never asked by the fast round\" (2026-09-29).")
     @Test

@@ -5,8 +5,8 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.LedgerEntry;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -35,7 +35,7 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
      * produced by an oracle that answers "aboard" unconditionally, or by a restore that drags every
      * logging-in player to the nearest ship.</p>
      */
-    @RedWitness(prose = "with the login hook ({@code SpaceEventHandler#onPlayerLoadFromFile} at"
+    @LegacyWitness(prose = "with the login hook ({@code SpaceEventHandler#onPlayerLoadFromFile} at"
             + " {@code ShipAboardTag.Aboard aboard = ShipAboardTag.of(player)}) giving a player who has no"
             + " aboard record a standing one on the first settled ship in the ledger — the restore that drags"
             + " everyone aboard: \"a player who was never aboard must come back where vanilla puts him …"

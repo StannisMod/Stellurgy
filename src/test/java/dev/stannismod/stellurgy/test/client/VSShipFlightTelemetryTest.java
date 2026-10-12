@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -265,7 +265,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * A seated pilot's throttle lifts the ship, his HUD shows its speed, and his flight cursor turns
      * it.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE HUD — {@code KeyBindings#freeFlightHudLines}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE HUD — {@code KeyBindings#freeFlightHudLines}"
             + " returning no lines for a tier-2 craft: \"a seated tier-2 pilot must get"
             + " a Free Flight HUD at all — no `ff_hud` carrying a non-empty HUD line\". THE LIFT — the linear"
             + " force ({@code TileAdvancedFlightComputer#onPhysicsTick} at"
@@ -397,7 +397,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * reference is pinned where the ship is, which brakes any residue. Measured the same day: the rate
      * is already near zero on the tick the cursor reaches the dead-zone.</p>
      */
-    @RedWitness(prose = "with the controller forbidden any angular acceleration against the current spin"
+    @LegacyWitness(prose = "with the controller forbidden any angular acceleration against the current spin"
             + " — spin-up allowed, braking not — this fails with \"its worst rate over the hold was 1.9025…\","
             + " every one of the ten readings the same: nothing else in a cell touches it. The identical"
             + " inversion left the overworld form of this verdict GREEN — 2026-09-28. Taken on the pre-actuator"
@@ -512,7 +512,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * An inverted ship turns its seated pilot's camera over with it, and his eye stays on the ship's
      * side of the deck.
      */
-    @RedWitness(prose = "with the seated-ship camera roll ({@code RocketEventHandler#onFreeFlightCameraSetup}"
+    @LegacyWitness(prose = "with the seated-ship camera roll ({@code RocketEventHandler#onFreeFlightCameraSetup}"
             + " at {@code event.setRoll(e[2])}, the tier-2 seat branch's — taken on the pre-refactor form, when"
             + " that branch slerped the attitude the client had sampled rather than asking"
             + " {@code VSIntegration.getShipAttitude}) given an extra 30 degrees, this fails at the upright control: \"an upright ship must leave the camera"
@@ -747,7 +747,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * A body on a deck with world ground laid right under its feet is not handed to vanilla.
      */
-    @RedWitness(prose = "{@code ShipFrameTravel#handles} at {@code if (isSupportedByWorldTerrain(entity) && !isSupportedByShipAt(entity, state.shipId, gate))}'s terrain release with its"
+    @LegacyWitness(prose = "{@code ShipFrameTravel#handles} at {@code if (isSupportedByWorldTerrain(entity) && !isSupportedByShipAt(entity, state.shipId, gate))}'s terrain release with its"
             + " {@code !isSupportedByShipAt} half removed (the original defect) fails \"laying world ground under"
             + " the deck must not hand this body … to vanilla\" with a {@code steppedOntoTerrain} release,"
             + " 2026-09-30 — on the one-block floor this scenario now lays. Only the release verdict is"
@@ -846,7 +846,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * A parked, unmanned ship holds its altitude instead of sinking.
      */
-    @RedWitness(prose = "with {@code TileAdvancedFlightComputer#onPhysicsTick} at"
+    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#onPhysicsTick} at"
             + " {@code gx = g.x(); gy = g.y(); gz = g.z();}, the gravity feed-forward, multiplied"
             + " by {@code 0.0} — the original defect — this fails with \"its vertical velocity peaked at"
             + " -0.1633 blk/s\", drift -1.33 blocks over the window — 2026-09-28, taken on the pre-actuator form,"
@@ -1408,10 +1408,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * <p>Contract: this fails if production breaks the contract that a ship's readout is sent to its
      * pilot and to no passenger.</p>
      */
-    @RedWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (the pilot-seat occupant left out of the"
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (the pilot-seat occupant left out of the"
             + " audience) fails \"seated at the helm, the pilot must receive his ship's readout\" with no readout"
             + " inside 200 ticks, 2026-09-30")
-    @RedWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (every player in the world made the"
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (every player in the world made the"
             + " audience) fails \"standing on the deck, off the helm and with no console open, a passenger must"
             + " receive none of his ship's readouts\" with 4 received against the pilot's 4, 2026-09-30")
     @Test

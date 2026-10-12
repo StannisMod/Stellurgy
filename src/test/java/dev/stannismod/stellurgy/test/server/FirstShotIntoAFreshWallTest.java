@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 /**
@@ -47,7 +47,7 @@ public class FirstShotIntoAFreshWallTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @RedWitness(prose = "with {@code ShotSubstrate#step} at {@code boolean structureFirst = first.isStructure();}'s {@code structureFirst} forced false (a round"
+    @LegacyWitness(prose = "with {@code ShotSubstrate#step} at {@code boolean structureFirst = first.isStructure();}'s {@code structureFirst} forced false (a round"
             + " that never sees a wall), this fails with \"a round fired once into a wall it flew down the middle"
             + " of marked nothing ... no `block_stage_set` on the wall's row was recorded within 600 ticks\"."
             + " 2026-09-30.")

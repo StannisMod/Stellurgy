@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -125,7 +125,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
     private static final int UNLOADED_X = 7000, UNLOADED_Z = 7000;
 
-    @RedWitness(prose = "only with all four of the source's collectors removed — the mark by name"
+    @LegacyWitness(prose = "only with all four of the source's collectors removed — the mark by name"
             + " ({@code VSIntegration#releaseShipIfNothingLoaded}), the same-world adoption"
             + " ({@code VSBridge#adoptOwnRemnant}), the registry walk's blockless clause"
             + " ({@code WorldServerShipManager#tick}) and the spawn drain's"
@@ -476,10 +476,10 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
     /**
      * A craft is built, dropped, and fetched back: ASSEMBLED, then UNLOADED, then LOADED — each once.
      */
-    @RedWitness(prose = "with {@code WorldServerShipManager#spawnNewShips} at"
+    @LegacyWitness(prose = "with {@code WorldServerShipManager#spawnNewShips} at"
             + " {@code noteNamed(toSpawn, spawnData.cause);} noting every spawn twice and as ASSEMBLED, this fails"
             + " with \"must be announced as ASSEMBLED exactly once\", 2026-09-29.")
-    @RedWitness(prose = "with the UNLOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at"
+    @LegacyWitness(prose = "with the UNLOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at"
             + " {@code noteUnloaded(physicsObject.getShipData());}) removed, \"dropping the ship object must be announced\""
             + " fails with no such record within 200 ticks; with the LOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at"
             + " {@code noteNamed(toLoad, ShipLifecycleEvent.Cause.LOADED);}) made twice, \"coming back must be announced exactly once\", 2026-09-29."
@@ -529,7 +529,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
     /**
      * A craft that crosses is announced as PASTED, never as a second birth.
      */
-    @RedWitness(prose = "with {@code WorldServerShipManager.spawnNewShips} ({@code WorldServerShipManager#spawnNewShips} at"
+    @LegacyWitness(prose = "with {@code WorldServerShipManager.spawnNewShips} ({@code WorldServerShipManager#spawnNewShips} at"
             + " {@code noteNamed(toSpawn, spawnData.cause);}) noting every spawn as {@code ASSEMBLED}, \"no `ship_lifecycle` carrying … cause ="
             + " PASTED was recorded within 200 ticks\", 2026-09-29; a PASTED spawn noted twice fails \"announced as"
             + " PASTED exactly once\", and one also noted as ASSEMBLED fails \"a crossing is not a new build\","
@@ -585,7 +585,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
      * <p>The window is read once the ARRIVAL is announced: the source's removal is published in that
      * pass or an earlier one, so by then a destruction of it would be on the record too.</p>
      */
-    @RedWitness(prose = "with {@code VSBridge#declareDeparture} at"
+    @LegacyWitness(prose = "with {@code VSBridge#declareDeparture} at"
             + " {@code ValkyrienUtils.getServerShipManager(world).declareDeparture(uuid, destinationDim);} never"
             + " reached, this fails with \"the source of a crossing must be announced as DEPARTED exactly once\","
             + " 2026-10-06. And its first green-tree run caught a defect of the implementation itself: the"

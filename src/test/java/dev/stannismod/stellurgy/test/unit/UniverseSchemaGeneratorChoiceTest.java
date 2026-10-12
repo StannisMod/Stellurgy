@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
@@ -17,7 +17,7 @@ public class UniverseSchemaGeneratorChoiceTest {
         return new UniverseSchemaV0().generator(config, PlanetTypes.stock(), new ReportOnce());
     }
 
-    @RedWitness(prose = "with {@code UniverseSchemaV0#generator} at {@code return config.procedural}"
+    @LegacyWitness(prose = "with {@code UniverseSchemaV0#generator} at {@code return config.procedural}"
             + " negated, the first verdict fails with \"a pack that states no <galaxyGen> must get the procedural"
             + " galaxy, got EmptyGalaxyGenerator\"; with its {@code new ClusteredGalaxyGenerator(reports, config, …)}"
             + " built from that config at half its density, the second fails with \"and built from the shipped"
@@ -34,7 +34,7 @@ public class UniverseSchemaGeneratorChoiceTest {
                 ((ClusteredGalaxyGenerator) generator).config().fingerprint());
     }
 
-    @RedWitness(prose = "with {@code UniverseSchemaV0#generator} at {@code return config.procedural}"
+    @LegacyWitness(prose = "with {@code UniverseSchemaV0#generator} at {@code return config.procedural}"
             + " negated, this fails with \"procedural=\"false\" must leave nothing between the authored anchors, got"
             + " ClusteredGalaxyGenerator\", 2026-10-05.")
     @Test

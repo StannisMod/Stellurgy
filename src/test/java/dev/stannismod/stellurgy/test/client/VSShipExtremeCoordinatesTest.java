@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -181,7 +181,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
     /**
      * A seated pilot keeps control of his ship at an extreme Y, through two teleports.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE SECOND UNPARK — the id-keyed"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE SECOND UNPARK — the id-keyed"
             + " {@code VSBridge#unparkShip} at {@code ship.setPhysicsEnabled(true)} failing a ship's second unpark"
             + " only: \"the second teleport leaves the"
             + " craft PARKED … {\\\"ok\\\":false}\". THE SECOND LANDING — {@code VSBridge.teleportShipToByUuid}'s"
@@ -630,7 +630,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * findable and mountable, a real held vertical-up key lifts the server ship by more than one block,
      * and the CLIENT-rendered rider tracks that climb within 3 blocks.</p>
      */
-    @RedWitness(prose = "with {@code TileAdvancedFlightComputer#setPilotInput} at"
+    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#setPilotInput} at"
             + " {@code this.pilotInput = input} discarding every input in the overworld: \"the x=0 control failed - the instrument, not the coordinate: the vertical-up"
             + " key did not lift the ship (serverLift=0.0000 …)\", 2026-09-28. The waits each turn an expiry into"
             + " that RUNG's verdict (spawn, id, load, riding), and the control assertion is where any of them at"

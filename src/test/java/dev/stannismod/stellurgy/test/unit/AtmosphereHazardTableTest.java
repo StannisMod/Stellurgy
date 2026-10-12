@@ -6,7 +6,7 @@ import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
 import dev.stannismod.stellurgy.atmosphere.hazard.HazardEffect;
 import dev.stannismod.stellurgy.atmosphere.hazard.HazardExposure;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -57,7 +57,7 @@ public class AtmosphereHazardTableTest {
 
     // ─── the fourteen cells, as hazard sets ────────────────────────────────────────────────────
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each a row for an air atmosphere added"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each a row for an air atmosphere added"
             + " to {@code AtmosphereHazards#byAtmosphere} at"
             + " {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);}, after"
             + " that line. AIR: \"air is what raises nothing\". PRESSURIZED AIR: \"and so is pressurised air\"."
@@ -68,7 +68,7 @@ public class AtmosphereHazardTableTest {
         assertTrue("and so is pressurised air", of(Atmosphere.PRESSURIZEDAIR).isEmpty());
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows"
             + " (taken while the table was a static block; its rows are unchanged). VACUUM —"
             + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);}"
             + " given suffocation instead: \"expected:&lt;[DECOMPRESSION]&gt; but was:&lt;[SUFFOCATION]&gt;\"."
@@ -124,7 +124,7 @@ public class AtmosphereHazardTableTest {
 
     // ─── what a suit must cover, and what it spends ────────────────────────────────────────────
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows"
             + " (taken while the table was a static block; its rows are unchanged). LOWOXYGEN —"
             + " {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} with"
             + " a pressure row added: \"thin air is a breathing problem\". NOO2 —"
@@ -161,7 +161,7 @@ public class AtmosphereHazardTableTest {
                 of(Atmosphere.SUPERHEATEDNOO2).needsFullSuit());
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. Six assertions carry no message and went"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. Six assertions carry no message and went"
             + " red as a bare AssertionError at their own line. VACUUM - the {@code AtmosphereHazards#DECOMPRESSION} at {@code 4, 4, 1, false, false, true, true, \"msg.noOxygen\"}"
             + " row no longer supplying oxygen: \"nothing outside to work with\". NOO2 - the"
             + " {@code AtmosphereHazards#SUFFOCATION} at {@code 4, 4, 1, false, false, true, true, \"msg.noOxygen\"} row no longer supplying it. HIGHPRESSURENOO2 - the"
@@ -189,7 +189,7 @@ public class AtmosphereHazardTableTest {
         assertFalse(of(Atmosphere.VERYHOT).needsSuppliedOxygen());
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. VACUUM - the"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. VACUUM - the"
             + " {@code AtmosphereHazards#DECOMPRESSION} at {@code 4, 4, 1, false, false, true, true, \"msg.noOxygen\"} row's key changed: \"expected:&lt;msg.[noOxygen]&gt; but"
             + " was:&lt;msg.[vacuum]&gt;\". LOWOXYGEN - the {@code AtmosphereHazards#THIN_AIR} at {@code 2, 2, HazardEffect.NONE, false, false, true, false, \"msg.noOxygen\"} row's key:"
             + " \"expected:&lt;msg.[noOxyge]n&gt; but was:&lt;msg.[thi]n&gt;\". HIGHOXYGEN - the"
@@ -222,7 +222,7 @@ public class AtmosphereHazardTableTest {
 
     // ─── the numbers, as they were ─────────────────────────────────────────────────────────────
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30; the assertions without a message went red"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30; the assertions without a message went red"
             + " as a bare AssertionError at their own line. Each is a change to one row, named by its field."
             + " NOO2 FIRES ON 10 - {@code AtmosphereHazards#SUFFOCATION} at {@code AtmosphereHazard.SUFFOCATION, 10} period 20: \"suffocating outright acts"
             + " twice as often as merely running short expected:&lt;true&gt; but was:&lt;false&gt;\". LOWOXYGEN"
@@ -262,7 +262,7 @@ public class AtmosphereHazardTableTest {
     // each is a candidate for deletion on its own merits. A failure here means somebody removed one
     // — which may well be right, but it is a decision about the GAME and must be made as one.
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30; the assertions without a message went red"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30; the assertions without a message went red"
             + " as a bare AssertionError at their own line. VERYHOT - the {@code AtmosphereHazards#HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, \"msg.tooHot\"} row not"
             + " igniting: \"a hot breathable room sets you alight\". SUPERHEATED - the"
             + " {@code AtmosphereHazards#SEARING_HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, \"msg.tooHot\"} row not igniting. VERYHOTNOO2 - the"
@@ -280,7 +280,7 @@ public class AtmosphereHazardTableTest {
         assertFalse(row(Atmosphere.SUPERHEATEDNOO2, AtmosphereHazard.HEAT).ignites());
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. BREATHABLE DEEP - the"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. BREATHABLE DEEP - the"
             + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code AtmosphereHandler.oxygenToxicityDamage, () -> 1} row given damage 2: \"crushing"
             + " breathable air draws blood expected:&lt;1&gt; but was:&lt;2&gt;\". AIRLESS DEEP - the"
             + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_AIRLESS} at {@code null, null, 3, 3, HazardEffect.NONE, true, false, false, false, \"msg.muchTooDense\"} row given a damage source and an amount"
@@ -294,7 +294,7 @@ public class AtmosphereHazardTableTest {
                 row(Atmosphere.SUPERHIGHPRESSURENOO2, AtmosphereHazard.PRESSURE).damageAmount());
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. AIRLESS DEEP - the"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. AIRLESS DEEP - the"
             + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_AIRLESS} at {@code null, null, 3, 3, HazardEffect.NONE, true, false, false, false, \"msg.muchTooDense\"} row with narcosis off: \"the airless deep"
             + " takes your jump — deliberately preserved\". BREATHABLE DEEP - the"
             + " {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code 3, 3, HazardEffect.NONE, false, false, true, false, \"msg.muchTooDense\"} row with narcosis on: \"and the"
@@ -307,7 +307,7 @@ public class AtmosphereHazardTableTest {
                 row(Atmosphere.SUPERHIGHPRESSURE, AtmosphereHazard.PRESSURE).narcosis());
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. HIGHPRESSURENOO2 - the"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. HIGHPRESSURENOO2 - the"
             + " {@code AtmosphereHazards#SUFFOCATION_WHERE_DENSE} at {@code 4, 4, 2, false, false, true, true, \"msg.noOxygen\"} row with nausea 1: \"depth makes suffocation more"
             + " nauseating — deliberately preserved expected:&lt;2&gt; but was:&lt;1&gt;\"."
             + " SUPERHIGHPRESSURENOO2 - {@code AtmosphereHazards#byAtmosphere} at"
@@ -329,7 +329,7 @@ public class AtmosphereHazardTableTest {
         assertEquals(1, row(Atmosphere.NOO2, AtmosphereHazard.SUFFOCATION).nausea());
     }
 
-    @RedWitness(prose = "with {@code AtmosphereHazards#byAtmosphere} at"
+    @LegacyWitness(prose = "with {@code AtmosphereHazards#byAtmosphere} at"
             + " {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);} giving the vacuum suffocation instead of"
             + " decompression: \"nothing in the game can inflict [DECOMPRESSION]\", 2026-09-30 (taken while the"
             + " table was a static block; the row is unchanged).")

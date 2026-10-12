@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -66,7 +66,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * Pins HEAT-16 (silence is never invisibility: a shut ship still radiates its hull).
      */
     @Pins({"INV-HEAT-29", "HEAT-16"})
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. SILENCED — {@code ThermalBody#setSinksClosed} at {@code changed++;}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SILENCED — {@code ThermalBody#setSinksClosed} at {@code changed++;}"
             + " stopping after the first cell it shuts: \"silencing failed: … \\\"changed\\\":1,\\\"silent\\\":false\"."
             + " NOT WORKING SURFACE — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the shut flag: \"a shut cell is not"
             + " working surface: … expected:&lt;0&gt; but was:&lt;3&gt;\". MOST OF IT — {@code ThermalBody#signature} at {@code signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),}"
@@ -80,7 +80,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
             + " still on the ship: … expected:&lt;3030000&gt; but was:&lt;3029999&gt;\". COMES BACK — {@code TileHeatRadiator#setClosed} at {@code if (this.closed == closed)} refusing to open a shut cell: \"a ship that went dark must be able to come"
             + " back: … \\\"rejected\\\":0 … \\\"silent\\\":true\"."
             + " The three premises at its head are arrangements and are not witnessed.")
-    @RedWitness(prose = "the same run, continued. LOCKABLE — {@code ThermalSignature#plus} at"
+    @LegacyWitness(prose = "the same run, continued. LOCKABLE — {@code ThermalSignature#plus} at"
             + " {@code Math.max(peakKelvin, other.peakKelvin));} taking the added surface's peak instead of the"
             + " hotter one, so the shut loop's zero wins over the hull: \"and a seeker still has a warm surface to"
             + " lock on, the hull's: … \\\"radianceMilli\\\":0\". NOT SILENT ONCE OPENED —"
@@ -167,7 +167,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-30 (A hotter cabin is a hotter skin and a brighter ship, and two loops threading one sealed room are ONE body).
      */
     @Pins("INV-HEAT-30")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. ONE BODY — {@code ThermalBody#loopsOf} at {@code if (shipId == null && (hull == null || hull.isEmpty()))}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. ONE BODY — {@code ThermalBody#loopsOf} at {@code if (shipId == null && (hull == null || hull.isEmpty()))}"
             + " never looking past the loop asked about: \"two loops in one sealed room are ONE body … expected:&lt;2&gt;"
             + " but was:&lt;1&gt;\". HOTTER SKIN — {@code ThermalBody#skinKelvin} at {@code return environmentKelvin + skinFraction() * above;} holding the skin at the environment's"
             + " temperature: \"a hotter cabin must show a hotter skin … cool=286000 hot=286000\". FOUND FURTHER"

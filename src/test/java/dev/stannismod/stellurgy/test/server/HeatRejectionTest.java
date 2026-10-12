@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -58,7 +58,7 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * Pins HEAT-7 (rejection scales linearly with area and with the fourth power of temperature).
      */
     @Pins({"INV-HEAT-07", "HEAT-7"})
-    @RedWitness(prose = "with {@code HeatNetwork#rejectHeat} at {@code double gross = cellPowerAt(temperature(stored, capacity));} dividing each cell's gross power by the square"
+    @LegacyWitness(prose = "with {@code HeatNetwork#rejectHeat} at {@code double gross = cellPowerAt(temperature(stored, capacity));} dividing each cell's gross power by the square"
             + " root of the loop's cell count: \"three cells must shed three times what one does (one=82"
             + " three=99) expected:&lt;246&gt; but was:&lt;99&gt;\", 2026-09-30. The four premises before it"
             + " are arrangements and are not witnessed.")
@@ -109,7 +109,7 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * Pins HEAT-7 (rejection scales linearly with area and with the fourth power of temperature).
      */
     @Pins({"INV-HEAT-08", "HEAT-7"})
-    @RedWitness(prose = "with {@code HeatNetwork#cellPowerAt} at {@code pow4(kelvin) / pow4(reference)}"
+    @LegacyWitness(prose = "with {@code HeatNetwork#cellPowerAt} at {@code pow4(kelvin) / pow4(reference)}"
             + " putting a cell's power on the square of its"
             + " temperature instead of the fourth power: \"what the cell radiates must follow the fourth power"
             + " of its temperature: expected 2.4763785142736783..2.476383626828728 … measured"
@@ -171,7 +171,7 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * Pins HEAT-9 (an obstructed radiator sheds nothing and reports where the block is).
      */
     @Pins({"INV-HEAT-09", "HEAT-9"})
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. SHEDS NOTHING — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the obstruction: \"nothing may be shed by an obstructed cell: …"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SHEDS NOTHING — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the obstruction: \"nothing may be shed by an obstructed cell: …"
             + " expected:&lt;0&gt; but was:&lt;82&gt;\". STILL IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} losing one"
             + " unit a tick outside rejection: \"and the energy must still be in the loop, not quietly gone: …"
             + " expected:&lt;8000&gt; but was:&lt;7999&gt;\". ONE BLOCK AWAY — {@code TileHeatRadiator#getObstruction} at {@code return HullClearance.obstructionDistance(world, pos, getRadiatingFacing(),}"

@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -94,15 +94,15 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      *
      * <p>One inversion per verdict, 2026-10-03:</p>
      */
-    @RedWitness(prose = "with {@code SubsystemNetworkRegistry#nodesIn} at"
+    @LegacyWitness(prose = "with {@code SubsystemNetworkRegistry#nodesIn} at"
             + " {@code if (type.isInstance(node) && node.getNodeWorld() == world)} dropping the world conjunct,"
             + " this fails at \"the overworld does not answer for exactly its own emitter"
             + " expected:[4020,151,4020] but was:[4020,151,4020, 4022,151,4020]\".")
-    @RedWitness(prose = "with {@code TileEntityFieldGenerator#loadedIn} at"
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#loadedIn} at"
             + " {@code nodesIn(ShieldNetworkManager.DOMAIN, world,} asking for the overworld whatever world it is"
             + " given, this fails at \"the nether does not answer for exactly its own emitter"
             + " expected:[4022,151,4020] but was:[4020,151,4020]\".")
-    @RedWitness(prose = "with {@code TileEntityFieldGenerator#onChunkUnload} at"
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#onChunkUnload} at"
             + " {@code SubsystemNetworkManager.of(world).unregister(this);} removed, this fails at \"after its chunk"
             + " unloaded, the emitter at 4020,151,4020 never left the overworld's shield registry\" with no"
             + " {@code subsystem_node_unregistered} for that position, while a {@code subsystem_network_rebuilt}"
@@ -176,11 +176,11 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * Pins INV-SHD-25 (A charged emitter in the shipyard that no ship claims projects no shell and spends nothing from its coil, beside a control at).
      */
     @Pins("INV-SHD-25")
-    @RedWitness(prose = "with {@code FieldFrames#forBlock} at {@code return"
+    @LegacyWitness(prose = "with {@code FieldFrames#forBlock} at {@code return"
             + " VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;}"
             + " answering the world frame whatever the position, this fails at \"an emitter in the shipyard that no"
             + " ship claims projected a shell over its shipyard address\".")
-    @RedWitness(prose = "with {@code TileEntityFieldGenerator#update} at {@code if"
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#update} at {@code if"
             + " (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at \"an emitter in the"
             + " shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but"
             + " was:&lt;10453&gt;\".")

@@ -7,7 +7,7 @@ import java.lang.annotation.*;
  *
  * <p>An anchor is defined in {@code docs/system} as a bold list item. A {@code [T]} clause names the
  * methods that pin it, and it counts as pinned only through a named method that carries this annotation
- * with its anchor AND a {@link RedWitness}. The compiler attaches the annotation to the method it is
+ * with its anchor AND a witness ({@link RedWitness}, or the older {@link LegacyWitness}). The compiler attaches the annotation to the method it is
  * written on, and {@link PinMapCheck} reads it by reflection inside the build, so no method can inherit
  * another's anchor from a comment above it. The javadoc says WHY the method pins the clause; this says
  * THAT it does.</p>

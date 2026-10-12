@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -113,7 +113,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
     /**
      * RESULT-1 is the control: a sealed cabin on an assembled ship seals a blob at all.
      */
-    @RedWitness(prose = "with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any"
+    @LegacyWitness(prose = "with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any"
             + " block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: \"RESULT-1: a vent in a"
             + " sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…"
             + " \\\"blobSize\\\":0)\", 2026-09-28, and again on 2026-09-30 after the gate read gained its"

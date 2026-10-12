@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -132,7 +132,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A jump craft assembles whole, and both its consoles answer a real key press.
      */
-    @RedWitness(prose = "with the vendored {@code ShipBlockPosFinder#isValidExpansion} at"
+    @LegacyWitness(prose = "with the vendored {@code ShipBlockPosFinder#isValidExpansion} at"
             + " {@code return !BlockPhysicsDetails.isNotPhysicsInfused(cache.getBlockState(mutablePos).getBlock())}"
             + " (Valkyrien Skies) refusing the navigation computer's block: \"the"
             + " navigation computer must have joined the ship: the flood fill out of the flight computer"

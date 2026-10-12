@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.server;
 // migrated to AbstractSharedServerTest
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -84,7 +84,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * capacity for at least one type is non-zero — the StatsRocket invariants
      * the production launch-readiness check relies on.
      */
-    @RedWitness(prose = "for the dry-mass verdict only (the others predate this branch — with"
+    @LegacyWitness(prose = "for the dry-mass verdict only (the others predate this branch — with"
             + " {@code StatsRocket#getDryMass} at {@code return mass;} answering a dry mass of 0, fails \"dry_mass_kg must be > 0\", 2026-09-30.")
     @Test
     public void statsRocketIsCalculatedFromComponents() throws Exception {

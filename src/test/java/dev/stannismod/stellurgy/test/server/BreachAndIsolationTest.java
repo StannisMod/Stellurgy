@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -41,7 +41,7 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
     /**
      * D127-9: the air leaves through the hole, over seconds, and it is really gone.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: \"a breached room is no"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NO LONGER A ZONE — {@code AtmosphereBlob#clearBlob} at {@code super.clearBlob();} ({@code clearBlob}) no longer emptying the graph: \"a breached room is no"
             + " longer a zone — its cells are gone: … expected:&lt;0&gt; but was:&lt;19&gt;\". IN NO ZONE —"
             + " {@code AtmosphereHandler#getBlobContaining} at {@code if (blob instanceof AtmosphereBlob && blob.contains(pos))} also answering the zone of a vent standing next to the"
             + " position: \"the position is in no zone any more — that is what the breach did: …"
@@ -93,7 +93,7 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * "requests nothing" is only a reading about the breached zone once {@code inNetwork} says the
      * vent is still a node — without it, a breach that tore the network apart would pass here.</p>
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, both read at the vent. STILL A NODE —"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, both read at the vent. STILL A NODE —"
             + " {@code TileOxygenVent#performFunction} at {@code breached = true;} also leaving the ventilation network when it marks itself breached:"
             + " \"the vent must still be a node on the network after the breach: … \\\"inNetwork\\\":false\". STOPS"
             + " ASKING — {@code TileOxygenVent#zoneAirForNetwork} at {@code if (world == null || world.isRemote || !isMaintainingAtmosphere()} no longer withholding the zone's air from the network once"
@@ -140,7 +140,7 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * into separately-maintained volumes. Pinned because the whole isolation story rests on it, and
      * nothing said so.
      */
-    @RedWitness(prose = "with {@code SealableBlockHandler#isBlockSealed} at {@code boolean doorIsSealed = checkDoorIsSealed(world, pos, state);} answering an airlock door as never"
+    @LegacyWitness(prose = "with {@code SealableBlockHandler#isBlockSealed} at {@code boolean doorIsSealed = checkDoorIsSealed(world, pos, state);} answering an airlock door as never"
             + " sealed: \"a closed bulkhead must divide the hall … (51 → 51)\", 2026-09-30. The two readings"
             + " before it (the open hall, the hall through the doorway) are arrangements and are not"
             + " witnessed.")

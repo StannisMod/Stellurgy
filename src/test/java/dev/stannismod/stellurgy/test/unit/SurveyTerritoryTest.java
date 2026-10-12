@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.ReportOnce;
@@ -52,7 +52,7 @@ public class SurveyTerritoryTest {
      * enumerates its whole (divided) territory — the property that lets a survey stride by one
      * territory while the field is divided more finely.</p>
      */
-    @RedWitness(prose = "with {@code ClusteredGalaxyGenerator#anchorsInTerritory} at"
+    @LegacyWitness(prose = "with {@code ClusteredGalaxyGenerator#anchorsInTerritory} at"
             + " {@code for (long i = 0; i < k; i++)} reading {@code i < 1}, this fails with \"a look over"
             + " territory -12,0,-10 missed seats that point resolution finds in it\"; at"
             + " {@code if (k <= 1 || seats > Math.max(1, limit))} reading {@code if (true)}, with \"no look returned"

@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
@@ -337,7 +337,7 @@ public class SystemRetinueTest {
         assertTrue(checked > MIN_SYSTEMS_FOR_STAR_COUNTS);
     }
 
-    @RedWitness(prose = "2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at"
+    @LegacyWitness(prose = "2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at"
             + " twice the blocks per distance unit, this fails with \"a companion stands at the separation its"
             + " own elements state expected:&lt;4.31384E7&gt; but was:&lt;8.627679969687484E7&gt;\".")
     @Test

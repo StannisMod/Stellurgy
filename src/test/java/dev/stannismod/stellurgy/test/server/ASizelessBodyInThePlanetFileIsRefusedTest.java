@@ -6,8 +6,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.After;
 import org.junit.Assume;
@@ -91,7 +91,7 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanics
         if (harness != null) harness.close();
     }
 
-    @RedWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
             + " {@code if (!properties.hasBulkProperties())} replaced by {@code if (false)}, this fails on the"
             + " sizeless airless planet: {@code \"stellurgyDimensions\":[3,4]} (2026-10-01).")
     @Test

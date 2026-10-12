@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.UniverseScale;
@@ -22,7 +22,7 @@ import static org.junit.Assert.assertTrue;
  * <p>That reach is 5 000 AU, which is 7.5 billion units of 100 km: past what an {@code int} holds.
  * Each method's red names the one class whose storage narrowed the value.</p>
  */
-@RedWitness(prose = "2026-09-30, with each of the three writers —"
+@LegacyWitness(prose = "2026-09-30, with each of the three writers —"
         + " {@code StellarBody#writeToNBT} at {@code nbt.setLong(\"companionOrbit\", orbitalDistance)},"
         + " {@code SystemBody#writeToNBT} at {@code nbt.setLong(\"orbitalDist\", orbitalDistance)} and"
         + " {@code DimensionProperties#writeToNBT} at {@code nbt.setLong(\"orbitalDist\", orbitalDist)} — put back"

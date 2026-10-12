@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.subsystem.network.*;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.DimensionType;
 import net.minecraft.world.World;
@@ -60,7 +60,7 @@ public class SubsystemNetworkFairShareTest {
      * Two sinks of one priority asking 100 each from a source of 100 get 50 each — not 100 and 0 in
      * whatever order a path search reached them.
      */
-    @RedWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);}"
+    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);}"
             + " replaced by opening every tier sink's edge to its request and running one plain max flow (the"
             + " shape it shipped with), this fails with \"two equal sinks must split a scarce supply evenly"
             + " (west, east): arrays first differed at element [0]; expected:&lt;50&gt; but was:&lt;100&gt;\""
@@ -87,7 +87,7 @@ public class SubsystemNetworkFairShareTest {
      * <p>Plain max flow also answers 30/70 here — nothing but the request caps the small sink — so
      * this pins the share's cap, not the fairness the other cases pin.</p>
      */
-    @RedWitness(prose = "with {@code SubsystemNetworkManager#shareTier} at {@code given[i] += Math.min(low, requested[i] - given[i]);}"
+    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#shareTier} at {@code given[i] += Math.min(low, requested[i] - given[i]);}"
             + " raising every sink by the full {@code low}, uncapped by its request, this fails with \"the small"
             + " request is met in full and the surplus goes to the other (small, large): arrays first differed"
             + " at element [0]; expected:&lt;30&gt; but was:&lt;70&gt;\" (2026-10-06).")
@@ -110,11 +110,11 @@ public class SubsystemNetworkFairShareTest {
      * The share is computed through the cables: a sink behind a cable carrying 10 gets 10, and the
      * other sink gets everything else — the tier still receives its whole max flow.
      */
-    @RedWitness(prose = "with {@code SubsystemNetworkManager#shareTier} at {@code trialFlow(solver, from, to, refs, given, Collections.singletonList(i), requested, 1) > 0}"
+    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#shareTier} at {@code trialFlow(solver, from, to, refs, given, Collections.singletonList(i), requested, 1) > 0}"
             + " answered as always false — every sink retired at the first bottleneck — this fails with \"..."
             + " (behind the cable, open): arrays first differed at element [1]; expected:&lt;90&gt; but"
             + " was:&lt;10&gt;\" (2026-10-06).")
-    @RedWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);}"
+    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);}"
             + " replaced by one plain max flow per tier (the shipped shape), this fails with \"... arrays first"
             + " differed at element [0]; expected:&lt;10&gt; but was:&lt;0&gt;\" (2026-10-06).")
     @Test
@@ -138,10 +138,10 @@ public class SubsystemNetworkFairShareTest {
      * Tiers still go in priority order, and the fair share is within a tier: a priority-1 sink is
      * filled first, and the two priority-0 sinks split what is left.
      */
-    @RedWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code TreeSet<Integer> priorityTiers = new TreeSet<>(Collections.reverseOrder());}"
+    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code TreeSet<Integer> priorityTiers = new TreeSet<>(Collections.reverseOrder());}"
             + " built in natural (ascending) order, this fails with \"... (high, west, east): arrays first"
             + " differed at element [0]; expected:&lt;100&gt; but was:&lt;0&gt;\" (2026-10-06).")
-    @RedWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);}"
+    @LegacyWitness(prose = "with {@code SubsystemNetworkManager#solve} at {@code maxFlow += shareTier(solver, superSource, superSink, sinkRefs, requestedBySink, tierSinks);}"
             + " replaced by one plain max flow per tier (the shipped shape), this fails with \"... arrays first"
             + " differed at element [1]; expected:&lt;25&gt; but was:&lt;50&gt;\" (2026-10-06).")
     @Test

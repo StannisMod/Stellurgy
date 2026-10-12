@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NotYetRed;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -1766,7 +1766,7 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * A body standing on a ship stands on the surface the renderer draws: parked (the control), and
      * hull-standing on a hovering, inverted ship (the subject).
      */
-    @RedWitness(prose = "with the hull-stand sweep's box ({@code ShipFrameTravel#hullStandTravel} at"
+    @LegacyWitness(prose = "with the hull-stand sweep's box ({@code ShipFrameTravel#hullStandTravel} at"
             + " {@code feet[0] - half, feet[1], feet[2] - half}) centred on the SHIP's up rather than the world's — the subspace-aligned phantom: \"the largest"
             + " gap between the swept solid and the body's own box was 1.77 over 95 sweeps (… upY=-0.93)\","
             + " 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the"

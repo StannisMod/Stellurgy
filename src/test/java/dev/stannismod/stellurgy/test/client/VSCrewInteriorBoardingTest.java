@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -190,7 +190,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * A pilot dismounted inside an inverted ship and moved about inside it stays held by that ship
      * with deck semantics, at his deck spot, with the ship camera engaged.
      */
-    @RedWitness(prose = "2026-09-28. THE INVERSION IS ACCEPTED — {@code VSIntegration#flightComputerOf}"
+    @LegacyWitness(prose = "2026-09-28. THE INVERSION IS ACCEPTED — {@code VSIntegration#flightComputerOf}"
             + " at {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: \"attitude hold must accept the inversion\". THE"
             + " CONTRACT — the dismount seed installing the hull-stand mode with no hand-over to the deck: \"the"
             + " client camera must engage for the re-seated interior body (shipCamActive=false)\". The other"
@@ -420,7 +420,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     /**
      * A body unsupported mid-cavity of an enclosed, inverted cockpit is claimed by the deck below it.
      */
-    @RedWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
+    @LegacyWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
             + " {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))}"
             + " answering null: \"attitude hold must accept the inversion\", 2026-09-28 — the one verdict the wait"
             + " rewrite touched here. The interior gate's own claim after it is not witnessed.")
@@ -647,7 +647,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
      * A crew member who starts creative flight on the deck stays captured, flies along the deck's
      * normal, and is put back on the deck when he turns flight off.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck"
             + " gravity ({@code ShipFrameTravel#travel} at {@code motion[1] -= LIVING_GRAVITY}) withheld from any"
             + " body that has flown aboard: \"turning"
             + " flight off must hand the body to deck gravity and put it in CONTACT with the ship's geometry …"

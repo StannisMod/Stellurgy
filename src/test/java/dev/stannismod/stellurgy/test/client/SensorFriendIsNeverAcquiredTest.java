@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -70,10 +70,10 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractOwnBootClientTest {
      * carrying the installation's code entered the target list: {...names:ForgeTestClient...}", the
      * same line the sensor's exclusion alone already reds.</p>
      */
-    @RedWitness(prose = "with the friend exclusion in {@code TacticalScan} ({@code TacticalScan#trackOf} at {@code if (CodeUtils.entityHasMatchingCode(candidate, friendlyCode))})"
+    @LegacyWitness(prose = "with the friend exclusion in {@code TacticalScan} ({@code TacticalScan#trackOf} at {@code if (CodeUtils.entityHasMatchingCode(candidate, friendlyCode))})"
             + " disabled, this fails at \"a player carrying the installation's code entered the target list\" on a"
             + " sweep listing {@code names:\"ForgeTestClient\"} (2026-09-29).")
-    @RedWitness(prose = "with {@code TileFireControlSensor#publish} at {@code state.setAcquiredTrack(contacts.get(0), world.getTotalWorldTime(), hold);} publishing the contact as the"
+    @LegacyWitness(prose = "with {@code TileFireControlSensor#publish} at {@code state.setAcquiredTrack(contacts.get(0), world.getTotalWorldTime(), hold);} publishing the contact as the"
             + " network's named target ({@code setTargetEntity}) instead of as an acquisition, this fails at \"it"
             + " fired, but not on an acquisition: {...acquired:false...}\" (2026-09-30).")
     @Test

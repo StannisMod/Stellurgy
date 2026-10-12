@@ -5,8 +5,8 @@ import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -78,7 +78,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
      * Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain).
      */
     @Pins("SHIPCTL-16")
-    @RedWitness(prose = "the regains-control verdict, the one contract verdict the wait rewrite touched"
+    @LegacyWitness(prose = "the regains-control verdict, the one contract verdict the wait rewrite touched"
             + " — the others it touched are arrangement reads (the ship's id, the cell entry, the transit"
             + " beginning); the re-seat and placement verdicts are not witnessed. With"
             + " {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} replacing every input by an idle one once the"

@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -51,7 +51,7 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-20 (A powered chiller breathing a room cools it and heats its loop, and the loop receives exactly what left the air PLUS the work).
      */
     @Pins("INV-HEAT-20")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. COLDER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. COLDER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);}"
             + " crediting the heat without taking it out of the air: \"the room must actually get colder …"
             + " (before=400000 after=400000)\". REPORTED — {@code HeatNetwork#runAirCooledPumps} at {@code state.addPumpedIn(delivered);} not recording the delivery"
             + " as pumped in: \"what the loop received must be reported as arriving from a pump: …"
@@ -113,7 +113,7 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-21 (An unpowered chiller leaves the room exactly where it was, with the same rig powered afterwards as the control).
      */
     @Pins("INV-HEAT-21")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller must"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller must"
             + " move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;\". WITH POWER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);} crediting the heat without taking it out of the air: \"the same rig with power"
             + " must cool the room, or nothing above was measured: … \\\"airTempMilliK\\\":400000\".")
     @Test

@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -51,10 +51,10 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
      * over the same window, or the plating is not reflecting but merely being slow to break. Either
      * half alone passes for the wrong reason.</p>
      */
-    @RedWitness(prose = "with {@code HeldBeam.emit}'s deflection branch ({@code HeldBeam#emit} at {@code if (answer.isDeflected())})"
+    @LegacyWitness(prose = "with {@code HeldBeam.emit}'s deflection branch ({@code HeldBeam#emit} at {@code if (answer.isDeflected())})"
             + " made to end the beam at the plating — the answer thrown away, as it once was — this fails at"
             + " \"the gun that fired into a mirror took nothing at all\" (2026-09-29).")
-    @RedWitness(prose = "with {@code BlockMirrorPlating#onContact} at {@code return ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));} answering \"passed through, carrying"
+    @LegacyWitness(prose = "with {@code BlockMirrorPlating#onContact} at {@code return ContactResult.deflected(away, (int) Math.round(contact.getEnergy() * reflectance));} answering \"passed through, carrying"
             + " everything\" on nineteen ticks in twenty and deflecting on the twentieth, this fails at \"the iron"
             + " BEHIND the mirror was damaged before the reflection reached the gun ... [{...pos:9713,84,9560,"
             + " from:0,to:1...}...]\" (2026-09-30). One tick in four was not enough: the gun's controller was"

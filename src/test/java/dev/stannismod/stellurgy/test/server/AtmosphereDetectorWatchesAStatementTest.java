@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -56,7 +56,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         return cy + 1;
     }
 
-    @RedWitness(prose = "one inversion per verdict. CONTROL — {@code AtmosphereAssertions#holdsAt} at {@code return !breathable(air, published);} holding"
+    @LegacyWitness(prose = "one inversion per verdict. CONTROL — {@code AtmosphereAssertions#holdsAt} at {@code return !breathable(air, published);} holding"
             + " \"not breathable\" everywhere: \"breathable air must not satisfy \\\"not breathable\\\" (after a forced"
             + " sample): … expected:&lt;false&gt; but was:&lt;true&gt;\", 2026-09-30. UNBREATHABLE — the same"
             + " line never holding: \"air nobody can breathe must satisfy it (after a forced sample): …"
@@ -86,7 +86,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         assertPowered(cx, false, "and refilling the room must switch it off again");
     }
 
-    @RedWitness(prose = "with {@code AtmosphereAssertions#holdsAt} at {@code return air != null && air.isToxic();} calling any zone air toxic: \"clean air"
+    @LegacyWitness(prose = "with {@code AtmosphereAssertions#holdsAt} at {@code return air != null && air.isToxic();} calling any zone air toxic: \"clean air"
             + " must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but"
             + " was:&lt;true&gt;\", 2026-09-30. POISONOUS — the same line never holding: \"a room can be"
             + " breathable and poisonous at once, and the detector must be able to wire the second (after a"

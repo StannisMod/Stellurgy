@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -172,7 +172,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      *  the offer they both read. Hydrogen and oxygen are used because Stellurgy itself registers their
      *  fluids; a gas no mod has bottled is measured and not offered, and that half is unpinned here.</p>
      */
-    @RedWitness(prose = "with {@code DimensionProperties#getHarvestableGases} at"
+    @LegacyWitness(prose = "with {@code DimensionProperties#getHarvestableGases} at"
             + " {@code air.partialPressure(gas) > 0L} widened to {@code >= 0L}, empty air was offered every"
             + " bottled gas; with the method answering an empty list, the hydrogen trace was not offered.")
     @Test

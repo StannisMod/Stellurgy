@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -247,7 +247,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * with the WRONG ship: without that leg "the id form was right" would be indistinguishable from
      * "any form would have been right here".</p>
      */
-    @RedWitness(prose = "with the teleport's transform write skipped ({@code VSBridge#teleportShip} at"
+    @LegacyWitness(prose = "with the teleport's transform write skipped ({@code VSBridge#teleportShip} at"
             + " {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}), LEG 1"
             + " fails at \"…and it must report where A IS now, not where it was built (posY=153.76)\", 2026-09-28."
             + " The wave removed the advance before LEG 1's reads, and what that removal risks is a STALE read —"
@@ -373,7 +373,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * was a positional nearest query about a ship this scenario had just built; each is now keyed on
      * the id this scenario's own assembly recorded. Nothing else changed.
      */
-    @RedWitness(prose = "one inversion per rung, 2026-09-28, each red at its own verdict with the rungs"
+    @LegacyWitness(prose = "one inversion per rung, 2026-09-28, each red at its own verdict with the rungs"
             + " before it green. LIFT — {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at"
             + " {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by"
             + " {@code 0.0}: \"maxClimb=0.0\". YAW — its raw-rate branch ({@code MixinTileAdvancedFlightComputer#onPhysicsTick}"
@@ -631,7 +631,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * Migrated from {@code VSShipSeatDriveE2ETest}: the server-side bisection of the seat &rarr; AFC
      * &rarr; force path. Body unchanged apart from the ship oracle.
      */
-    @RedWitness(prose = "with {@code TileAdvancedFlightComputer#setPilotInput} at"
+    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#setPilotInput} at"
             + " {@code this.pilotInput = input} discarding its input, this fails at the climb with \"maxClimb=0.0\" (the seat still reports {@code afcResolved:true}, so"
             + " the red names the computer's intake, not the seat's link) — 2026-09-28.")
     @Test
@@ -712,7 +712,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * world anchor", which is the guarantee the first {@code @Test} of this very class exists to
      * disprove. The identity-keyed form is {@code find-seat <dim> id <shipUuid>}.</p>
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat"
             + " dummy no longer glued to its ship ({@code EntityDummy#onUpdate} at"
             + " {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} made server-only): \"the"
             + " CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25\". THE CAMERA STAYS"

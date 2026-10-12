@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.space.TerrainHeightFinder;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.client.ClientEvents;
 import dev.stannismod.stellurgy.test.client.SeatDelivery;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NewPath;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
@@ -295,7 +296,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * build at the assembler, board, fly up into space, aim at the console, arm, jump beside the Moon,
      * be taken into its zone and keep station there, approach, descend onto it, and leave it.
      */
-    @RedWitness(prose = "the MOON links (2026-09-30, one inversion per run, each red at its own line with"
+    @LegacyWitness(prose = "the MOON links (2026-09-30, one inversion per run, each red at its own line with"
             + " the earlier legs green): {@code CrystalSeeding#starterFor} at"
             + " {@code if (home != null && isInZoneOf(coord, home))} — the zone skip — reverted to cell equality —"
             + " leg T, \"…and must NOT carry the home world's moon … starter … [0,2]\"; {@code CrystalSeeding#starterFor}"
@@ -315,7 +316,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             + " NOT witnessed at their own lines: leg 7b's client-follows-into-the-zone wait and seat check, the"
             + " console listing the moon (leg 6's pick), and the ledger still naming the moon's zone after the"
             + " station window — each sits behind a link above whose inversion fails first.")
-    @RedWitness(prose = "one inversion per rung, each red at its own rung with the earlier ones green."
+    @LegacyWitness(prose = "one inversion per rung, each red at its own rung with the earlier ones green."
             + " THE BUILD (2026-09-28, taken on the pre-2026-10-07 form that handed over a pasted snapshot) —"
             + " the assembler's hand-over ({@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);}) skipped: the rung's helper link fails first, \"the BUILD"
             + " pass must add a ship to the registry — no `ship_spawned` was recorded within 3600 ticks\"; the"

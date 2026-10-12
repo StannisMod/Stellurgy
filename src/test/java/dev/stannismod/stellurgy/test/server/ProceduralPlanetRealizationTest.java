@@ -5,8 +5,8 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.test.CellInfo;
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -232,7 +232,7 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
      * <p>Positive half on the same read: the moon's parent IS listed, so an empty or unread list cannot
      * pass the verdict.</p>
      */
-    @RedWitness(prose = "2026-10-01, on the code as it stood before the fix — {@code PlanetRealizer#materialize}"
+    @LegacyWitness(prose = "2026-10-01, on the code as it stood before the fix — {@code PlanetRealizer#materialize}"
             + " at {@code props.setStar(star)} called before the parent was set, plus a second"
             + " {@code star.addPlanet(props)} after registration: \"moon 15 must be listed under its planet 14,"
             + " not among its star's planets [14, 15]\".")

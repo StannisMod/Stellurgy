@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import org.junit.Test;
 
@@ -43,10 +43,10 @@ public class TurretAimReachesClientTest extends AbstractOwnBootClientTest {
 
     private static final int X = 120, Y = 79, Z = 120;
 
-    @RedWitness(prose = "with {@code TileTurret.getUpdateTag} ({@code TileTurret#getUpdateTag} at {@code NBTTagCompound mount = new NBTTagCompound();}) no longer"
+    @LegacyWitness(prose = "with {@code TileTurret.getUpdateTag} ({@code TileTurret#getUpdateTag} at {@code NBTTagCompound mount = new NBTTagCompound();}) no longer"
             + " writing the mount, this fails at \"the client's turret never turned onto its command: the server"
             + " commanded a bearing -90.0 and the client is still where it started (0.0)\" (2026-09-29).")
-    @RedWitness(prose = "with {@code TurretMechanism.isOnTarget} ({@code TurretMechanism#isOnTarget} at {@code return dYaw <= AIM_TOLERANCE_DEGREES && dPitch <= AIM_TOLERANCE_DEGREES;})"
+    @LegacyWitness(prose = "with {@code TurretMechanism.isOnTarget} ({@code TurretMechanism#isOnTarget} at {@code return dYaw <= AIM_TOLERANCE_DEGREES && dPitch <= AIM_TOLERANCE_DEGREES;})"
             + " answering true for any commanded mount, this fails at \"the client reports itself on target yet"
             + " points elsewhere than its command: {...onTarget:true...yaw:-4.0...commandedYaw:-90.0...remote:true}\""
             + " (2026-09-30).")

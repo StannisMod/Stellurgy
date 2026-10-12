@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -68,7 +68,7 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
     private static final String CHAIR_ENTITY =
             "org.valkyrienskies.mod.common.entity.EntityMountableChair";
 
-    @RedWitness(prose = "with {@code EntityNetworkIds#of} at {@code Integer id = IDS.get(key(name.toString()))}"
+    @LegacyWitness(prose = "with {@code EntityNetworkIds#of} at {@code Integer id = IDS.get(key(name.toString()))}"
             + " answering the mount dummy's id for the chair"
             + " — the collision this pins: red at the server's {@code mount} link with \"Connection reset\", the"
             + " client having died on the chair it built as the other class, 2026-09-28. Earlier than the"

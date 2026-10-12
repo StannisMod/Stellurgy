@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -54,7 +54,7 @@ public class BeamReachesClientTest extends AbstractOwnBootClientTest {
     /** How often both guns are fed while the wait runs, in ticks — arrangement, not subject. */
     private static final int FEED_EVERY_TICKS = 20;
 
-    @RedWitness(prose = "with the radius test in {@code ProximityBroadcast.sendNearSegment}"
+    @LegacyWitness(prose = "with the radius test in {@code ProximityBroadcast.sendNearSegment}"
             + " ({@code ProximityBroadcast#sendNearSegment} at {@code if (distanceSqToSegment(player.posX, player.posY, player.posZ, from, to) > radiusSq)}) disabled, this fails at \"a beam burning four kilometres away"
             + " was replicated to this client anyway\", on a {@code client_beam_drawn} for {@code 4300,84,300}"
             + " recorded before the near gun's (2026-09-29).")

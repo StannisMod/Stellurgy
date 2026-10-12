@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -40,7 +40,7 @@ public class VSNavComputerAssemblyTest extends AbstractSharedServerTest {
     /**
      * The assembler links the navigation computer it found in the build, read on the ship it built.
      */
-    @RedWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);} (the navigation computer's"
+    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code ((TileNavigationComputer) navTe).linkToFlightComputer(shipAnchor);} (the navigation computer's"
             + " {@code linkToFlightComputer}) skipped fails \"the assembler must link the navigation computer it"
             + " found in the build\" with {@code \"linked\":false}, 2026-09-30.")
     @Test

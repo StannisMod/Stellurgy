@@ -7,8 +7,8 @@ import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
 import dev.stannismod.stellurgy.test.CleanCommandLaw;
 import dev.stannismod.stellurgy.test.ShipMotionCases;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.Regions;
 import org.joml.Vector3d;
 import org.junit.Test;
@@ -93,7 +93,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-02 (a sign is not a symmetry: two aft and one fore engine give surge 2T to T).
      */
     @Pins("INV-SFM-02")
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code java.util.Arrays.fill(upper, 1.0D);} with every"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code java.util.Arrays.fill(upper, 1.0D);} with every"
             + " throttle bounded at 0.5 fails \"forward is twice\" with 100000 against 200000;"
             + " {@code ShipCapability#solveOne} at {@code if (!direction.isPositive())} with the direction's sign dropped (both senses solve the positive"
             + " one) fails \"braking is the one forward engine\" with 200000 against 100000.")
@@ -118,7 +118,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-03 (a bad build is weak, never spinny).
      */
     @Pins("INV-SFM-03")
-    @RedWitness(prose = "2026-09-30 — {@code ShipCapability#solveOne} at {@code a[k][j] = w[k] / (k < 3 ? forceScale : torqueScale);} with the torque rows zeroed in the"
+    @LegacyWitness(prose = "2026-09-30 — {@code ShipCapability#solveOne} at {@code a[k][j] = w[k] / (k < 3 ? forceScale : torqueScale);} with the torque rows zeroed in the"
             + " tableau and {@code ShipCapability#solveOne} at {@code if (forceResidual > AllocationTolerances.FORCE_RESIDUAL * forceScale}'s residual check skipped fails with 200000 against 100000 — the"
             + " off-centre engine counted as if it pushed straight.")
     @Test
@@ -136,7 +136,7 @@ public class ShipMotionLawsTest {
      * right side and the centre of mass moves toward it, the left engine's lever arm grows, and clean
      * forward thrust falls to the pair's new balance: {@code u_L · 1.5 = u_R · 0.5}, so 4/3 T.
      */
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code java.util.Arrays.fill(upper, 1.0D);} with every"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code java.util.Arrays.fill(upper, 1.0D);} with every"
             + " throttle bounded at 0.5 fails \"centred, both engines push fully\" with 100000 against 200000;"
             + " {@code Actuator#wrenchAbout} at {@code Vector3d arm = new Vector3d(position).sub(centre);} taking the lever arm about the origin instead of the centre of mass fails"
             + " \"loaded right\" with 200000 against 133333.")
@@ -165,7 +165,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-04 (a wheel turns and never pushes, and a full wheel turns no more).
      */
     @Pins("INV-SFM-04")
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code Actuator#wrenchAbout} at {@code Vector3d torque = arm.cross(maxForce, new Vector3d()).add(maxTorque);} turning a wheel's"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code Actuator#wrenchAbout} at {@code Vector3d torque = arm.cross(maxForce, new Vector3d()).add(maxTorque);} turning a wheel's"
             + " torque into a force at its position fails \"a wheel pushes nowhere\" on SURGE_POSITIVE with"
             + " 5000; {@code Actuator#isSustained} at {@code return Double.isInfinite(momentumCapacity);} marking every device sustained fails \"a wheel alone holds nothing"
             + " forever\" on ROLL_POSITIVE with 0.18; {@code ShipCapability#solve} at {@code : solveOne(fixed, mass, frame, d, false);} solving the burst figure over"
@@ -196,7 +196,7 @@ public class ShipMotionLawsTest {
      * The wheel's one job in translation: an off-centre engine plus a wheel to null its torque gives
      * clean forward thrust — for the seconds the wheel can absorb the moment, and not in general.
      */
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solve} at {@code : solveOne(fixed, mass, frame, d, true);} solving the"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solve} at {@code : solveOne(fixed, mass, frame, d, true);} solving the"
             + " sustained figure over every device fails \"none of it is sustained\" with 100000;"
             + " {@code ShipCapability#solve} at {@code : solveOne(fixed, mass, frame, d, false);} solving the burst figure over sustained devices only fails \"a wheel"
             + " buys the full engine\" with 0.0; {@code ShipCapability#solveOne} at {@code double rate = Math.abs(throttles[i]) * act.maxTorque().length();} taking the endurance from the"
@@ -219,7 +219,7 @@ public class ShipMotionLawsTest {
      * Rotation is an acceleration on THIS hull: the same devices turn a hull with twice the inertia
      * half as fast, while the torque behind it is the same.
      */
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code Vector3d t = mass.getInertia().transform(new Vector3d(axis));} using the bare"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code Vector3d t = mass.getInertia().transform(new Vector3d(axis));} using the bare"
             + " axis instead of {@code I · axis} fails \"half as fast\" with 5000 against 2500;"
             + " {@code ShipCapability#torque} at {@code return authority(direction, endurance) * inertiaAlong(frame.axis(direction.axis())).length();} reporting the torque without the inertia fails \"the same torque\""
             + " with 0.46 against 0.92.")
@@ -254,7 +254,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-06 (a combined command never drives a device past full and keeps the requested proportions).
      */
     @Pins("INV-SFM-06")
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — \"no device past full\" is held by TWO"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — \"no device past full\" is held by TWO"
             + " mechanisms — {@code CleanAxisScheme#allocate} at {@code if (lambda < 1.0D)}'s global factor and {@code MomentumStore#liveRange} at {@code range[i][1] = 1.0D;}'s live"
             + " range — and only both broken fail it, with 1.6; {@code CleanAxisScheme#allocate} at {@code if (lambda < 1.0D)} with the saturation"
             + " flag not raised fails \"reports saturation\"; {@code CleanAxisScheme#allocate} at {@code if (lambda < 1.0D)} with the global factor"
@@ -297,7 +297,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-04 (a wheel turns and never pushes, and a full wheel turns no more).
      */
     @Pins("INV-SFM-04")
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code MomentumStore#liveRange} at {@code range[i][1] = Math.max(0.0D, Math.min(1.0D, (cap - now) / rate));} closing the"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code MomentumStore#liveRange} at {@code range[i][1] = Math.max(0.0D, Math.min(1.0D, (cap - now) / rate));} closing the"
             + " positive sense outright fails \"fresh, the wheel gives its full torque\" with 0.0;"
             + " {@code MomentumStore#liveRange} at {@code double now = given(a.id());} ignoring the booked momentum fails \"a full wheel turns nothing more\""
             + " with 5000; {@code CleanAxisScheme#allocate} at {@code if (u[i] > live[i][1])} not raising saturation on the live clip fails \"says it"
@@ -329,7 +329,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-05 (recipes are bit-identical under any listing order).
      */
     @Pins("INV-SFM-05")
-    @RedWitness(prose = "2026-09-30 — {@code ShipCapability#solve} at {@code sorted.sort((a, b) -> a.id().compareTo(b.id()));} with the sort removed fails on the"
+    @LegacyWitness(prose = "2026-09-30 — {@code ShipCapability#solve} at {@code sorted.sort((a, b) -> a.id().compareTo(b.id()));} with the sort removed fails on the"
             + " first shuffle, SURGE_POSITIVE BURST, with a different set of throttles.")
     @Test
     public void theAnswerDoesNotDependOnListingOrder() {
@@ -362,7 +362,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-01 (every recipe keeps each throttle in range and does only what it names).
      */
     @Pins("INV-SFM-01")
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code return new Recipe(throttles, s, seconds);} negating the"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipCapability#solveOne} at {@code return new Recipe(throttles, s, seconds);} negating the"
             + " authority fails \"never negative\"; \"throttle in range\" is held by the solver's bound"
             + " ({@code ShipCapability#solveOne} at {@code java.util.Arrays.fill(upper, 1.0D);}, {@code ShipCapability#solveOne} at {@code double x = Math.max(0.0D, Math.min(1.0D, result.x[j]));}), the scheme's global factor ({@code CleanAxisScheme#allocate} at {@code u[i] *= lambda;})"
             + " and the live range ({@code MomentumStore#liveRange} at {@code range[i][1] = 1.0D;}) — all four broken fail it with 2.0 on layout 0;"
@@ -482,7 +482,7 @@ public class ShipMotionLawsTest {
      * <p>Found 2026-09-30 by the e2e pass: a laden craft commanded forward past its sustained figure
      * tumbled (ω to 1.7 rad/s) once its wheel had been spent.</p>
      */
-    @RedWitness(prose = "one break per verdict, 2026-09-30 — {@code CleanAxisScheme#allocate} at {@code recipe = burstIfItCanDeliver(capability, direction, recipe, amount, u, live);} (taken on the form that passed {@code momentum, dt}, before the share check of 2026-10-07) taking the burst"
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code CleanAxisScheme#allocate} at {@code recipe = burstIfItCanDeliver(capability, direction, recipe, amount, u, live);} (taken on the form that passed {@code momentum, dt}, before the share check of 2026-10-07) taking the burst"
             + " recipe unconditionally (the form before the fix) fails \"a spent wheel leaves the push clean\" with"
             + " a torque of 2e5; {@code CleanAxisScheme#burstIfItCanDeliver} at {@code return sustained;} falling back to no recipe at all fails \"delivers the"
             + " sustained figure\"; {@code CleanAxisScheme#allocate} at {@code fraction = 1.0D; saturated = true;} not raising saturation on the per-axis clip fails"
@@ -554,7 +554,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-11 (a wheel the command leaves idle is given back its momentum).
      */
     @Pins("INV-SFM-11")
-    @RedWitness(prose = "one break per verdict, 2026-10-05, after a healthy run of the class —"
+    @LegacyWitness(prose = "one break per verdict, 2026-10-05, after a healthy run of the class —"
             + " {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed fails"
             + " \"step 0: every step brings it nearer empty: 505999.99999999994 -> 505999.99999999994\";"
             + " {@code CleanAxisScheme#desaturate} at {@code delta[k] += holding[k];} dropped (the wheel unwinds"
@@ -616,7 +616,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-11 (a wheel the command uses is not unloaded).
      */
     @Pins("INV-SFM-11")
-    @RedWitness(prose = "2026-10-05 — {@code CleanAxisScheme#desaturate} at"
+    @LegacyWitness(prose = "2026-10-05 — {@code CleanAxisScheme#desaturate} at"
             + " {@code if (wheel.isSustained() || u[i] != 0.0D)} unloading a wheel the command uses fails \"device"
             + " #1 gets the same throttle whatever the wheel already holds\" with 1.0 against 0.9; with"
             + " {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed the"
@@ -663,7 +663,7 @@ public class ShipMotionLawsTest {
      * answering massless for every hull, the scenario stops at "the same engine on a hull with mass
      * must have authority" — the verdict alone would have stayed green — 2026-10-04.</p>
      */
-    @RedWitness(prose = "2026-09-30 — {@code ShipCapability#solve} at {@code boolean massless = !(mass.getTotalMass() > AllocationTolerances.MASS_EPSILON);} with the massless guard removed fails"
+    @LegacyWitness(prose = "2026-09-30 — {@code ShipCapability#solve} at {@code boolean massless = !(mass.getTotalMass() > AllocationTolerances.MASS_EPSILON);} with the massless guard removed fails"
             + " \"no mass, no authority\".")
     @Test
     public void aMasslessHullHasNoAuthority() {
@@ -710,11 +710,11 @@ public class ShipMotionLawsTest {
      */
     @Pins("INV-SFM-12")
     @Regions(of = "INV-SFM-12", value = {"delivered whole", "saturated", "an empty wheel", "a full wheel", "a wheel inside its last step", "two axes sharing a wheel"})
-    @RedWitness(prose = "2026-10-07, on the form before the share check — {@code"
+    @LegacyWitness(prose = "2026-10-07, on the form before the share check — {@code"
             + " CleanAxisScheme#burstIfItCanDeliver} refusing a burst only for a wheel with NO room — fails"
             + " \"generated hull #1, command 0 (SURGE_NEGATIVE×4.0 SWAY_POSITIVE×0.3 YAW_NEGATIVE×1.5), step 1:"
             + " ROLL was not asked for and moved anyway … 0.0823\" (the wheel had 5.5e-4 of a step left).")
-    @RedWitness(prose = "2026-10-07 — {@code CleanAxisScheme#burstIfItCanDeliver} at {@code double next"
+    @LegacyWitness(prose = "2026-10-07 — {@code CleanAxisScheme#burstIfItCanDeliver} at {@code double next"
             + " = committed[i] + t;} reading {@code t} alone (each axis checked against the wheel as if no other"
             + " axis had taken from it) fails \"generated hull #3, command 3 (YAW_NEGATIVE×1.0 PITCH_NEGATIVE×1.5"
             + " HEAVE_POSITIVE×1.0), step 14: PITCH delivered the wrong way — asked -7.935, got 0.0095\".")
@@ -828,7 +828,7 @@ public class ShipMotionLawsTest {
      * Pins INV-SFM-12 (a command the hull can hold is delivered exactly from any wheel state).
      */
     @Pins("INV-SFM-12")
-    @RedWitness(prose = "2026-10-07 — {@code CleanAxisScheme#allocate} at {@code if (!(recipe.authority >"
+    @LegacyWitness(prose = "2026-10-07 — {@code CleanAxisScheme#allocate} at {@code if (!(recipe.authority >"
             + " 0.0D))} taken for every axis (each treated as one the hull cannot deliver: nothing is pushed, and"
             + " every call says so, so the safety law alone stays satisfied) fails \"symmetric hull, SURGE_POSITIVE at"
             + " 0.25 of the geometric 4905000.0 N, command 0, step 0: a command the hull can hold was flagged"
@@ -883,7 +883,7 @@ public class ShipMotionLawsTest {
      * promises, delivers less than the sustained figure once it is spent, fails to give an idle wheel
      * back, or does not offer the burst again once it has.</p>
      */
-    @RedWitness(prose = "2026-10-07, on the form before the share check — {@code"
+    @LegacyWitness(prose = "2026-10-07, on the form before the share check — {@code"
             + " CleanAxisScheme#burstIfItCanDeliver} refusing a burst only for a wheel with NO room — fails"
             + " \"burst hull, the first burst, step 53: YAW was not asked for and moved anyway … -1.152\", the step"
             + " the wheel fills in.")
@@ -1018,8 +1018,8 @@ public class ShipMotionLawsTest {
      * controller — which no fast test can reach.</p>
      */
     @Pins("INV-SFM-15")
-    @RedWitness(prose = "with {@code FlightCommand#copy} at {@code return part.clone();} replaced by {@code return part;}, fails: \"INV-SFM-15: the velocity a step flies is the one published\" (2026-10-08; element [0] expected 1.0, was 99.0).")
-    @RedWitness(prose = "with {@code FlightCommand#velocity} at {@code velocity.clone()} replaced by {@code velocity}, fails: \"INV-SFM-15: the velocity a step flies is the one published\" (2026-10-08; element [1] expected -2.0, was 77.0).")
+    @LegacyWitness(prose = "with {@code FlightCommand#copy} at {@code return part.clone();} replaced by {@code return part;}, fails: \"INV-SFM-15: the velocity a step flies is the one published\" (2026-10-08; element [0] expected 1.0, was 99.0).")
+    @LegacyWitness(prose = "with {@code FlightCommand#velocity} at {@code velocity.clone()} replaced by {@code velocity}, fails: \"INV-SFM-15: the velocity a step flies is the one published\" (2026-10-08; element [1] expected -2.0, was 77.0).")
     @Test
     public void aPublishedCommandCannotChangeUnderItsReader() {
         double[] velocity = {1.0D, -2.0D, 3.0D};

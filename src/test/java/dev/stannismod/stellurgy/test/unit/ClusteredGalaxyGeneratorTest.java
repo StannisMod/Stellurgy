@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.*;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
@@ -515,7 +515,7 @@ public class ClusteredGalaxyGeneratorTest {
         assertTrue(checkedAny);
     }
 
-    @RedWitness(prose = "2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at"
+    @LegacyWitness(prose = "2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at"
             + " twice the blocks per distance unit, this fails with \"body at orbit 104997 of system … must"
             + " stand that far from its star expected:&lt;4.19988E7&gt; but was:&lt;8.399759966695575E7&gt;\".")
     @Test
@@ -1047,7 +1047,7 @@ public class ClusteredGalaxyGeneratorTest {
      * <p>Regenerate deliberately, never to make a red test green:
      * {@code ./gradlew testUnit -Dstellurgy.universe.corpus.write=true}</p>
      */
-    @RedWitness(prose = "2026-09-29, against the fixture regenerated for moon zones: with"
+    @LegacyWitness(prose = "2026-09-29, against the fixture regenerated for moon zones: with"
             + " {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} back to the flat 1024-cell lattice it shipped with, this fails"
             + " with \"THE WORLD MODEL HAS MOVED. line 14: fixture: body … .1_0_0 kind=MOON … now: body …"
             + " .9_0_-2 kind=MOON\" — a moon renamed by a lattice regression.")

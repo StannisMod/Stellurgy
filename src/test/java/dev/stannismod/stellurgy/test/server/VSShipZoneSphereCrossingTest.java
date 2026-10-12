@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -180,7 +180,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * craft is taken deeper: "production does not agree the craft has entered the moon's sphere …
      * {"started":false,"wouldCarry":false …}".</p>
      */
-    @RedWitness(prose = "2026-10-04, on the form where the craft's own computer carries it, after two"
+    @LegacyWitness(prose = "2026-10-04, on the form where the craft's own computer carries it, after two"
             + " healthy runs of the class (3/3 each). With {@code CellSeam#hasLeftZone} at"
             + " {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the first carry,"
             + " \"production does not agree the craft has left the moon's sphere (264996 blocks out against a"
@@ -191,7 +191,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
             + " told apart from the decision. With {@code CellSeam#hasEnteredZone} at"
             + " {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the carry back in,"
             + " \"…has entered the moon's sphere (132365 blocks out …) … {\"wouldCarry\":false …}\".")
-    @RedWitness(prose = "2026-09-29, four inversions, one production line each, each restored, with the"
+    @LegacyWitness(prose = "2026-09-29, four inversions, one production line each, each restored, with the"
             + " method run healthy in the same arrangement first (and twice since)."
             + " (1) {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}: fails at the carry decision, \"production"
             + " does not agree the craft has left the moon's sphere … {\"started\":false,\"wouldCarry\":false …}\"."
@@ -261,7 +261,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * <p>The other code path of the same seam: outward re-addresses against the GRANDPARENT, inward
      * against a child the controller has just found, so the one cannot vouch for the other.</p>
      */
-    @RedWitness(prose = "2026-10-04, on the form where the craft's own computer carries it, after two"
+    @LegacyWitness(prose = "2026-10-04, on the form where the craft's own computer carries it, after two"
             + " healthy runs of the class. With {@code CellSeam#hasEnteredZone} at"
             + " {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the carry in,"
             + " \"production does not agree the craft has entered the moon's sphere (132365 blocks out against a"
@@ -274,7 +274,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
             + " {\"wouldCarry\":false …}\". The records after this one were taken 2026-09-29 on the earlier form,"
             + " which drove the carry itself through {@code space seam-carry}; their failure texts are that"
             + " form's.")
-    @RedWitness(prose = "2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}:"
+    @LegacyWitness(prose = "2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}:"
             + " fails at the carry decision, \"production does not agree the craft has entered the moon's sphere"
             + " (… 132365 blocks out against a radius of 264731): {\"started\":false,\"wouldCarry\":false,"
             + " \"fromCell\":\"19_0_0.1_0_0\" …}\", while the outward scenario stays green on that same inversion."
@@ -364,7 +364,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * planet), so the moon's position in this cell is read from production
      * ({@code space zone-sphere} → {@code fromGalacticCell}) immediately before each move.</p>
      */
-    @RedWitness(prose = "2026-10-04, on the form where the craft's own computer carries it, after two"
+    @LegacyWitness(prose = "2026-10-04, on the form where the craft's own computer carries it, after two"
             + " healthy runs of the class. With {@code CellSeam#hasEnteredZone} at"
             + " {@code return zoneRadiusBlocks > 0d} answering {@code false}, it fails at the carry, \"production"
             + " does not agree the craft has entered the moon's sphere from the planet's own cell (moved"
@@ -376,7 +376,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
             + " {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false} it"
             + " stays green, as it must: nothing here leaves a sphere. The record after this one was taken on"
             + " the earlier form, which drove the carry through {@code space seam-carry}.")
-    @RedWitness(prose = "2026-10-01, after a healthy run of the class (3/3), with"
+    @LegacyWitness(prose = "2026-10-01, after a healthy run of the class (3/3), with"
             + " {@code SpaceSubsystem#zoneMembershipIn} at {@code if (craftCoord == null || craftCoord.cellBlocks() <= 0L)}"
             + " put back to refusing any craft whose {@code zone()} is null, this fails at the carry decision:"
             + " \"production does not agree a craft in the planet's own cell has entered the moon's sphere"
@@ -867,13 +867,13 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * star), refused as an arrangement unless that sphere reaches past two half-cells. Measured
      * 2026-10-06 at the harness seed: {@code 10577143_2_2}, 2 838 272 986 blocks.</p>
      */
-    @RedWitness(prose = "with {@code SpaceSubsystem#sphereRadiusOf} at"
+    @LegacyWitness(prose = "with {@code SpaceSubsystem#sphereRadiusOf} at"
             + " {@code return ZoneScale.extentRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);} reading"
             + " {@code ZoneScale.realizedRadiusBlocks} (the capped form it shipped with), this fails at \"a craft"
             + " 1427136493 blocks from 10577143_2_2 — past its realized half-cell (16000000) but inside its"
             + " sphere (2838272986) — was carried out of its zone: {...carried:true,to:10577188_2_2...}\""
             + " (2026-10-06).")
-    @RedWitness(prose = "with {@code SpaceSubsystem#sphereRadiusOf} at"
+    @LegacyWitness(prose = "with {@code SpaceSubsystem#sphereRadiusOf} at"
             + " {@code return ZoneScale.extentRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);} answering"
             + " twice the extent, this fails at \"a craft"
             + " 2841111259 blocks from 10577143_2_2, past its sphere (2838272986), was left in its zone:"

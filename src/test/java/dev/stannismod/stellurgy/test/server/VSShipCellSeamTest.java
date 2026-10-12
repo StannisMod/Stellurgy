@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.space.CellSeam;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -166,7 +166,7 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
      * Pins ADDR-10 (a ship past a cell face is carried into the neighbour with hysteresis).
      */
     @Pins("ADDR-10")
-    @RedWitness(prose = "{@code TileAdvancedFlightComputer#update} at {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} (the computer's own"
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#update} at {@code if (stack.cellCrossings.requestCarry(world.provider.getDimension(),} (the computer's own"
             + " {@code requestCarry}) short-circuited to false fails the carry link \"flown across its +X face"
             + " … THIS ship must be carried into and settle in the neighbouring cell\" with no"
             + " {@code ship_entered_cell} in 600 ticks, 2026-09-30. That break reddens the link only; the"

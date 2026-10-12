@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -37,7 +37,7 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
     /** EXPERIMENT: how long the golem breathes each air — the dose is this time. Ten seconds. */
     private static final int EXPOSURE_TICKS = 200;
 
-    @RedWitness(prose = "with {@code Poisoning#tick} at {@code if (damage > 0.0F)} made unreachable (the"
+    @LegacyWitness(prose = "with {@code Poisoning#tick} at {@code if (damage > 0.0F)} made unreachable (the"
             + " dose kept, the harm never dealt): \"health 100.0 -> 100.0\"; with {@code AtmosphereAssertions#holdsAt}"
             + " at {@code return around != null && around.isToxic();} reading the zone's air only: \"air with carbon"
             + " monoxide past its limit is said to be poisonous, outdoors too\". Run apart: the statement is"

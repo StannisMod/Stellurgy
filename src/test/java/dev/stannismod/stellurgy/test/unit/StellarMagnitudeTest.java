@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.StellarMagnitude;
 import org.junit.Test;
 
@@ -48,7 +48,7 @@ public class StellarMagnitudeTest {
      * <p>Fails if {@code StellarMagnitude#luminositySuns} stops deciding brightness by
      * {@code R^2 (T/T_sun)^4}.</p>
      */
-    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at"
+    @LegacyWitness(prose = "with {@code StellarMagnitude#luminositySuns} at"
             + " {@code return r * r * t * t * t * t;} doubled, this fails with \"the Sun is one Sun expected:<1.0>"
             + " but was:<2.0>\"; with it reading {@code r * t * t * t * t}, \"twice the size is four times the"
             + " light expected:<4.0> but was:<2.0>\"; with it reading {@code r * r * t * t * t}, \"twice the"
@@ -73,7 +73,7 @@ public class StellarMagnitudeTest {
      * {@code StellarMagnitude#apparentMagnitude} stops dimming a star by five magnitudes per factor of
      * ten in distance.</p>
      */
-    @RedWitness(prose = "with {@code StellarMagnitude#detectionRangeLightYears} at"
+    @LegacyWitness(prose = "with {@code StellarMagnitude#detectionRangeLightYears} at"
             + " {@code (limitMagnitude - absolute) / 5d + 1d} reading {@code / 2.5d}, this fails with \"five"
             + " magnitudes of aperture is ten times the reach expected:<10.0> but was:<100.0>\"; reading"
             + " {@code + 0d}, with \"… sees it out to ten parsecs expected:<32.6156> but was:<3.26156>\"; with"
@@ -108,7 +108,7 @@ public class StellarMagnitudeTest {
      * <p>Fails if {@code StellarMagnitude#apparentMagnitude} stops deciding that extinction adds to
      * the apparent magnitude, or lets a negative extinction brighten a star.</p>
      */
-    @RedWitness(prose = "with {@code StellarMagnitude#apparentMagnitude} at"
+    @LegacyWitness(prose = "with {@code StellarMagnitude#apparentMagnitude} at"
             + " {@code return absolute + modulus + Math.max(0d, extinctionMagnitudes);} dropping the extinction"
             + " term, this fails with \"two and a half magnitudes of dust dim the star by two and a half"
             + " magnitudes expected:<2.5> but was:<0.0>\"; with its {@code 5d * Math.log10(parsecs / 10d)} reading"
@@ -136,7 +136,7 @@ public class StellarMagnitudeTest {
      * unstated (zero) temperature means the Sun's — the decision that keeps a pack's size-only star
      * from being written as an invisible one.</p>
      */
-    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at"
+    @LegacyWitness(prose = "with {@code StellarMagnitude#luminositySuns} at"
             + " {@code temperature > 0 ? temperature : SOLAR_TEMPERATURE_UNITS} reading {@code temperature}, this"
             + " fails with \"a star of two Suns' size and no stated temperature shines like … expected:<4.0> but"
             + " was:<0.0>\"; reading {@code SOLAR_TEMPERATURE_UNITS}, with \"and a stated temperature is the one"
@@ -159,7 +159,7 @@ public class StellarMagnitudeTest {
      * hole is dark, or {@code StellarMagnitude#absoluteMagnitude} stops answering infinity for a
      * star that emits nothing.</p>
      */
-    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at {@code if (star.isBlackHole())}"
+    @LegacyWitness(prose = "with {@code StellarMagnitude#luminositySuns} at {@code if (star.isBlackHole())}"
             + " reading {@code if (false)}, this fails with \"a black hole is dark expected:<0.0> but was:<1.0>\";"
             + " with {@code StellarMagnitude#absoluteMagnitude} at {@code return Double.POSITIVE_INFINITY;}"
             + " answering {@code 99d}, with \"so it looks infinitely faint even from a tenth of a light year\" — one"
@@ -184,7 +184,7 @@ public class StellarMagnitudeTest {
      * star is dark (the detection stage hands it the empty answer of {@code starAt} for a starless
      * system).</p>
      */
-    @RedWitness(prose = "with {@code StellarMagnitude#luminositySuns} at {@code if (star == null)}"
+    @LegacyWitness(prose = "with {@code StellarMagnitude#luminositySuns} at {@code if (star == null)}"
             + " returning {@code 1d}, this fails with \"a world with no star looks infinitely faint at any"
             + " distance\"; with {@code StellarMagnitude#detectionRangeLightYears} at"
             + " {@code if (Double.isInfinite(absolute))} returning {@code Double.MAX_VALUE}, with \"and no"

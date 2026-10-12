@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -59,14 +59,14 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
      * A battery nobody has told anything acquires a hostile that walks into range, and stops doing
      * so the moment acquisition is switched off — which is what says the sensor is the reason.
      */
-    @RedWitness(prose = "with {@code enableFireControlSensor} taken out of the sensor's gate"
+    @LegacyWitness(prose = "with {@code enableFireControlSensor} taken out of the sensor's gate"
             + " ({@code TileFireControlSensor#update} at {@code if (!StellurgyConfiguration.getCurrentConfig().enableFireControlSensor)}), this fails at \"the sensor went on running with"
             + " acquisition switched off — no `sensor_gate_refused` carrying pos = 9401,80,9400 and sensor = false"
             + " was recorded within 600 ticks\" (re-taken 2026-10-03 after the war switch was removed from the same"
             + " gate, with the condition made never-true at run time). The off window's \"fired at"
             + " something nobody named it\" is downstream of that link and was not reached by it: a round in the"
             + " window needs an acquisition, which needs a sweep past a gate the link proves refused.")
-    @RedWitness(prose = "with {@code TileFireControlSensor#publish} at {@code state.setAcquiredTrack(contacts.get(0), world.getTotalWorldTime(), hold);} publishing the contact as the"
+    @LegacyWitness(prose = "with {@code TileFireControlSensor#publish} at {@code state.setAcquiredTrack(contacts.get(0), world.getTotalWorldTime(), hold);} publishing the contact as the"
             + " network's named target ({@code setTargetEntity}) instead of as an acquisition, this fails at \"the"
             + " gun fired, but not on an acquisition — something else gave it a target: {...acquired:false...}\""
             + " (2026-09-30).")
@@ -136,7 +136,7 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
      * not reached by either inversion: with the lock refusing and every other input shown satisfied,
      * the gun is refused in the tick it asks.</p>
      */
-    @RedWitness(prose = "one inversion per line, 2026-09-30:"
+    @LegacyWitness(prose = "one inversion per line, 2026-09-30:"
             + " <ul>"
             + " <li>{@code TargetTrack.isLocked} ({@code TargetTrack.java:88}) answering true: fails at \"a cool"
             + " body at 60 blocks was locked by listening alone ... {...quality:0.038...locked:true...}\".</li>"
@@ -240,7 +240,7 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
      * that merely equals the default cannot pass. A bare sensor on a held chunk is enough: the sweep
      * does not depend on a gun, a target or power (a passive sensor pays nothing).</p>
      */
-    @RedWitness(prose = "with {@code TileFireControlSensor#update} at {@code scanCooldown = Math.max(1, StellurgyConfiguration.getCurrentConfig().fireControlSensorScanIntervalTicks) - 1;}"
+    @LegacyWitness(prose = "with {@code TileFireControlSensor#update} at {@code scanCooldown = Math.max(1, StellurgyConfiguration.getCurrentConfig().fireControlSensorScanIntervalTicks) - 1;}"
             + " set to the interval rather than {@code interval - 1} (the shape it had before), this fails with \"a sensor configured"
             + " to sweep every 7 ticks swept at gaps [8,8,8]\" (2026-09-30).")
     @Test

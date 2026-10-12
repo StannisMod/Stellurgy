@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -39,10 +39,10 @@ public class WeaponFireAsksBeforeItTakesTest extends AbstractSharedServerTest {
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
-    @RedWitness(prose = "with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}"
+    @LegacyWitness(prose = "with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}"
             + " ({@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}) disabled, this fails at \"a guarded block was destroyed"
             + " by weapon fire anyway\" (2026-09-29).")
-    @RedWitness(prose = "with the refused-centre stop in {@code StructureDamageEngine.Walk#visit}"
+    @LegacyWitness(prose = "with the refused-centre stop in {@code StructureDamageEngine.Walk#visit}"
             + " ({@code StructureDamageEngine#visit} at {@code if (axisRemovalRefused)}) disabled, this fails at"
             + " \"a claimed block let the round through: the block behind it was reached\" on a"
             + " {@code block_stage_set} at 9804,82,9800 from 0 to 4 and that block gone to air (2026-10-04).")

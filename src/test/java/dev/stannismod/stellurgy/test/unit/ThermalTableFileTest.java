@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -35,7 +35,7 @@ public class ThermalTableFileTest {
      * <p>The shipped row is read the way the game gets it on a fresh install - a load with no file -
      * so the expected values come from production's own table and none of them is typed here.</p>
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}."
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}."
             + " RESOLVES — at {@code parsed.put(shipped.getKey(), shipped.getValue());} removed, so a missing"
             + " shipped row never enters the table: \"a material the file predates must still resolve\". FILE"
             + " WINS — at {@code if (!parsed.containsKey(shipped.getKey()))} made always to hold, so the shipped"

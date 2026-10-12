@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
@@ -56,7 +56,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * A body's apparent size falls inversely with its distance, in AU.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getBodySizeMultiplier} at {@code return (float) DISTANCE_UNITS_PER_AU / orbitalDistance} back on the"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getBodySizeMultiplier} at {@code return (float) DISTANCE_UNITS_PER_AU / orbitalDistance} back on the"
             + " old distance unit ({@code 100 / d}, \"1 AU = 100\"), this fails at its first sample with"
             + " \"expected:&lt;1.0&gt; but was:&lt;6.684585969196633E-5&gt;\".")
     @Test
@@ -80,7 +80,7 @@ public class AstronomicalBodyHelperTest {
      * float rounding (1e-6). Through the planet law it reads 389; through the law as it stood before
      * Luna's distance was corrected, 100 / 7 688.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getMoonSizeMultiplier} at"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getMoonSizeMultiplier} at"
             + " {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}"
             + " replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)} (the planet law the sky used),"
             + " this fails with \"a moon at Luna's distance must draw at 100/150"
@@ -100,7 +100,7 @@ public class AstronomicalBodyHelperTest {
      * exact) reads 4/3 within 1e-6. A law that ignored the distance and drew every moon as Luna would
      * read 2/3.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#moonViewUnits} at"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#moonViewUnits} at"
             + " {@code return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS)}"
             + " replaced by {@code return MOON_VIEW_UNITS_AT_LUNA} (every moon read as Luna), this fails with"
             + " \"a moon at half Luna's distance must draw at 100/75 expected:&lt;1.3333333730697632&gt; but"
@@ -121,7 +121,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Pins("INV-NAV-03")
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
             + " distance unit ({@code a / 100}), this fails with \"expected:&lt;48.0&gt; but"
             + " was:&lt;8.782729013584356E7&gt;\".")
     @Test
@@ -134,7 +134,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Pins("INV-NAV-03")
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} raising the"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} raising the"
             + " distance to the power -3 instead of 3, this fails with \"inner planet must orbit faster than"
             + " Earth\". (A distance-unit inversion leaves it green: it asserts an order.)")
     @Test
@@ -165,7 +165,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Pins("INV-NAV-03")
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
             + " to the power -2 instead of 2, this fails with \"brightness must drop with distance\".")
     @Test
     public void stellarBrightnessMonotonicWithDistance() {
@@ -184,7 +184,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Pins("INV-NAV-03")
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
             + " old distance unit ({@code d / 100}), this fails with \"expected:&lt;1.0&gt; but"
             + " was:&lt;4.468368725849103E-9&gt;\".")
     @Test
@@ -198,7 +198,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-03 (orbital period grows with distance and brightness is monotone, one at Earth, reduced for black holes).
      */
     @Pins("INV-NAV-03")
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's"
             + " luminosity by 1 instead of 0.25, this fails with \"expected:&lt;0.25&gt; but was:&lt;1.0&gt;\".")
     @Test
     public void blackHoleStarReducesBrightness() {
@@ -220,7 +220,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-07 (every star lights the world and a black hole is never treated as though it had stopped being one).
      */
     @Pins("INV-NAV-07")
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only"
             + " the star the planet is bound to instead of its whole system, this fails with \"two identical"
             + " stars in the same place light a world twice as brightly expected:&lt;2.0&gt; but"
             + " was:&lt;1.0&gt;\". (A distance-unit inversion leaves it green: it asserts a ratio.)")
@@ -243,9 +243,9 @@ public class AstronomicalBodyHelperTest {
      * hundredths of an AU, the unit {@code StellarBody.offsetFromSystemAu} also still divided by, so
      * fixture and reader agreed and the test pinned a reader 14 960× wrong.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
             + " to the power -2 instead of 2, this fails with \"a distant one adds only a little\".")
-    @RedWitness(prose = "with {@code StellarBody#offsetFromSystemAu} at"
+    @LegacyWitness(prose = "with {@code StellarBody#offsetFromSystemAu} at"
             + " {@code / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back"
             + " on {@code / 100d}: \"a close"
             + " companion nearly doubles the light\", 2026-09-30.")
@@ -278,7 +278,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * A world of the companion is lit by the primary too.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only"
             + " the star the planet is bound to, this fails with \"a world of the companion sees both stars"
             + " expected:&lt;2.0&gt; but was:&lt;1.0&gt;\".")
     @Test
@@ -308,7 +308,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-07 (every star lights the world and a black hole is never treated as though it had stopped being one).
      */
     @Pins("INV-NAV-07")
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's"
             + " luminosity by 1 instead of 0.25, this fails with \"the hole stays dimmed: the pair is never as"
             + " bright as two ordinary stars\".")
     @Test
@@ -349,7 +349,7 @@ public class AstronomicalBodyHelperTest {
         assertEquals(1.0 / 1.5, halfFlux, 1e-9);
     }
 
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code return (int) (averageWithoutAtmosphere} dropping"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code return (int) (averageWithoutAtmosphere} dropping"
             + " the atmosphere multiplier, this fails with \"thicker atmosphere must imply higher surface"
             + " temperature\".")
     @Test
@@ -363,7 +363,7 @@ public class AstronomicalBodyHelperTest {
                 thickAtmosphereTemp > thinAtmosphereTemp);
     }
 
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
             + " to the power -2 instead of 2, this fails with \"planet farther from the star must be cooler\".")
     @Test
     public void averageTemperatureIsDistanceSensitive() {
@@ -374,7 +374,7 @@ public class AstronomicalBodyHelperTest {
         assertTrue("planet farther from the star must be cooler", outerPlanet < innerPlanet);
     }
 
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance"
             + " to the power -2 instead of 2, this fails with \"PLM at d=747989 was 0.44444410352775, expected"
             + " within [2.2, 2.3]\".")
     @Test
@@ -421,7 +421,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-10 (A darker world runs hotter and a more reflective one colder, and the albedo-less call still means Earth's albedo).
      */
     @Pins("INV-NAV-10")
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
             + " old distance unit, this fails with \"a darker surface absorbs more and runs hotter\" — every"
             + " temperature collapses to a couple of kelvin and the albedo stops making a difference.")
     @Test
@@ -440,7 +440,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * Kepler's third law, exactly: {@code P ∝ a^1.5 / sqrt(M)}.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
             + " distance unit ({@code a / 100}), this fails with \"expected:&lt;384.0&gt; but"
             + " was:&lt;7.026183210867485E8&gt;\".")
     @Test
@@ -463,7 +463,7 @@ public class AstronomicalBodyHelperTest {
      * Pins INV-NAV-09 (A planet's year follows its star's mass).
      */
     @Pins("INV-NAV-09")
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
             + " distance unit, this fails with \"expected:&lt;48.0&gt; but was:&lt;8.782729013584356E7&gt;\".")
     @Test
     public void aYearIsKeyedOnStellarMassAndAStarWithoutOneDerivesItFromItsRadius() {
@@ -509,7 +509,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * One AU under one atmosphere is 287 K.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
             + " old distance unit, this fails with \"expected:&lt;287&gt; but was:&lt;2&gt;\".")
     @Test
     public void temperatureAtOneAuUnderOneAtmosphereIsPinned() {
@@ -520,7 +520,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * A vacuum world at one AU gets the bare radiative balance, 255 K.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
             + " old distance unit, this fails with \"expected:&lt;255&gt; but was:&lt;2&gt;\".")
     @Test
     public void aVacuumWorldGetsTheBareRadiativeBalance() {
@@ -531,7 +531,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * Four AU under one atmosphere is 143 K.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
             + " old distance unit, this fails with \"expected:&lt;143&gt; but was:&lt;1&gt;\".")
     @Test
     public void temperatureAtFourAuIsPinned() {
@@ -541,7 +541,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * Brightness falls with the square of distance, exactly.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the"
             + " old distance unit, this fails with \"expected:&lt;0.25&gt; but was:&lt;1.1170921814622757E-9&gt;\".")
     @Test
     public void brightnessFallsWithTheSquareOfDistanceExactly() {
@@ -555,7 +555,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * The orbital angle wraps once per period.
      */
-    @RedWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
+    @LegacyWitness(prose = "2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old"
             + " distance unit, this fails with \"expected:&lt;1.5707963267948966&gt; but"
             + " was:&lt;8.584828652863555E-7&gt;\".")
     @Test
@@ -576,7 +576,7 @@ public class AstronomicalBodyHelperTest {
      * it: {@code tick % Infinity / Infinity} is already 0 (measured 2026-09-29: with the moon guard
      * removed, that leg stayed green).</p>
      */
-    @RedWitness(prose = "2026-09-29, twice. With the guard in"
+    @LegacyWitness(prose = "2026-09-29, twice. With the guard in"
             + " {@code AstronomicalBodyHelper#getMoonOrbitalThetaAt} at {@code * getMoonOrbitalPeriod(orbitalDistance, parentMassEarths)} removed, this fails with \"a moon at zero"
             + " distance has a zero period, and must not answer NaN expected:&lt;0.0&gt; but"
             + " was:&lt;NaN&gt;\". With {@code AstronomicalBodyHelper#getMoonOrbitalPeriod} at {@code * Math.pow(Math.pow((orbitalDistance / (double) MOON_REFERENCE_UNITS), 3) / planetaryMass, 0.5d)} flooring the parent's"
@@ -604,7 +604,7 @@ public class AstronomicalBodyHelperTest {
      * <p>What this does not see: that the renderers call this law. They are client GL code and no
      * tier here reads a drawn size.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getSizeMultiplierAtHeight} at {@code return REFERENCE_VIEW_HEIGHT / height}"
+    @LegacyWitness(prose = "2026-09-30, with {@code AstronomicalBodyHelper#getSizeMultiplierAtHeight} at {@code return REFERENCE_VIEW_HEIGHT / height}"
             + " returning {@code getBodySizeMultiplier(height)} — the form the views used before this change:"
             + " \"size at heights 100, 190, 200: [14959.79, 7873.5737, 7479.895]: arrays first differed at"
             + " element [0]; expected:&lt;1.0&gt; but was:&lt;14959.79&gt;\" — all three samples wrong, one"

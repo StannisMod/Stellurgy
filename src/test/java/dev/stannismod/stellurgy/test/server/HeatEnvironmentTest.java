@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -112,7 +112,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
     @Pins({"INV-HEAT-14", "HEAT-8"})
-    @RedWitness(prose = "with {@code HeatEnvironment#incidentFluxPerCell} at {@code return unshieldedFluxPerCell;} putting twice the reported flux into each"
+    @LegacyWitness(prose = "with {@code HeatEnvironment#incidentFluxPerCell} at {@code return unshieldedFluxPerCell;} putting twice the reported flux into each"
             + " cell: \"a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a"
             + " world and -1129 in space, a difference of 1179.0, against a reported flux difference of"
             + " 589.965\", 2026-09-30. The premises on both legs are arrangements and are not witnessed.")
@@ -185,7 +185,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * Pins HEAT-8 (the environment couples through a single incident-flux term, and where it exceeds rejection the ship heats).
      */
     @Pins({"INV-HEAT-15", "HEAT-8"})
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork#rejectHeat} at {@code if (share != 0L)}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork#rejectHeat} at {@code if (share != 0L)}"
             + " exchanging only positive shares: \"under a star this strong the net must run BACKWARDS … \\\"rejected\\\":0\"."
             + " IN THE LOOP — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} subtracting only positive rejection: \"and the energy must"
             + " actually be in the loop, not merely reported: … \\\"rejected\\\":-76764,\\\"heatStored\\\":0\". NO"
@@ -249,7 +249,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * Pins HEAT-10 (a shield attenuates incident flux and never eliminates it).
      */
     @Pins({"INV-HEAT-16", "HEAT-10"})
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment#incidentFluxPerCell} at {@code if (ShieldCoverage.isCovered(shieldGenerators, world, pos))}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment#incidentFluxPerCell} at {@code if (ShieldCoverage.isCovered(shieldGenerators, world, pos))}"
             + " treating no cell as covered: \"a raised shield must take most of the incident flux off the ship"
             + " (shielded=76764 unshielded=76764)\". NOT ALL — the {@code HeatEnvironment#MAX_SHIELD_ATTENUATION} at {@code 0.995D} constant letting the shield take"
             + " everything: \"and it must NOT take all of it, however much the configuration asks for … (shielded=0)\"."

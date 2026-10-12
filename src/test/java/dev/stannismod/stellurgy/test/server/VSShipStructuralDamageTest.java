@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -49,7 +49,7 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
         System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
     }
 
-    @RedWitness(prose = "with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked"
+    @LegacyWitness(prose = "with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked"
             + " instead), this fails with \"an impact at the ship's world position struck nothing — the world"
             + " point was not mapped into the frame the ship's blocks live in: {...outcome:NOTHING_STRUCK...}\";"
             + " with {@code ShipDamageService#toWorld} at {@code if (shipId == null)} returning the report's points unmapped, it fails with"

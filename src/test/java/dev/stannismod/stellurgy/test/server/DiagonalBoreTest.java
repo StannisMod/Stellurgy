@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -53,7 +53,7 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
      * Pins INV-DMG-09 (The damaged blocks of one impact form an UNBROKEN chain).
      */
     @Pins("INV-DMG-09")
-    @RedWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor made to skip every voxel entered"
+    @LegacyWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor made to skip every voxel entered"
             + " through a Z face (a sampled path's missed diagonal step), this fails with \"the bore has 6"
             + " hole(s) ... (11600,84,11601) -> (11601,84,11602) (2 apart)\"; the axis-aligned control stayed"
             + " green on the same run. 2026-09-30.")
@@ -109,7 +109,7 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
                 0, holes.size());
     }
 
-    @RedWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor shifting every even-X voxel one"
+    @LegacyWitness(prose = "with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor shifting every even-X voxel one"
             + " block south, this fails with \"a straight shot along X wandered off its row: (11800,84,11601)"
             + " expected:&lt;11600&gt; but was:&lt;11601&gt;\". 2026-09-30.")
     @Test

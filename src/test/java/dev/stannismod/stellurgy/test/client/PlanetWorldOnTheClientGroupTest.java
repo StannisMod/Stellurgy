@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -219,7 +219,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      * A player who crosses a dimension boundary has his client told the destination's spawn point,
      * rather than keeping a placeholder from a freshly constructed client world.
      */
-    @RedWitness(prose = "taken on the pre-fix form, with {@code MixinPlayerList} cancelling"
+    @LegacyWitness(prose = "taken on the pre-fix form, with {@code MixinPlayerList} cancelling"
             + " {@code updateTimeAndWeatherForPlayer} for a copy that dropped vanilla's spawn packet; the mixin now"
             + " stands as {@code MixinPlayerList#rainFlagInsteadOfLerpedStrength} at"
             + " {@code return world.getWorldInfo().isRaining()}, redirecting one call instead of replacing the method:"
@@ -311,7 +311,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      * Each planet keeps its own weather through a real client, and a fresh planet never inherits the
      * overworld's rain.
      */
-    @RedWitness(prose = "the fresh-dim packet verdicts and the overworld control, 2026-09-28, one"
+    @LegacyWitness(prose = "the fresh-dim packet verdicts and the overworld control, 2026-09-28, one"
             + " inversion per verdict. THE OVERWORLD CONTROL — dim C's wrap clearing the overworld's own rain flag:"
             + " \"overworld should still be raining\". NEVER TOLD IT IS RAINING — {@code"
             + " PlanetWeatherManager.wrapWorldInfoIfNeeded} no longer re-seeding the rain strength after wrapping:"
@@ -408,7 +408,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      * hard-codes {@code server.worlds[0]}; a console sender stands in the overworld, so this needs the
      * real chat path with the planet-standing player as sender.
      */
-    @RedWitness(prose = "one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand#execute} at"
+    @LegacyWitness(prose = "one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand#execute} at"
             + " {@code worldinfo.setRaining(true)} not setting the flag: \"no `planet_weather_changed` carrying dim ="
             + " 9304 and raining = true\". CLEAR — the clear branch ({@code WeatherCommand#execute} at"
             + " {@code if (\"clear\".equals(action))}) writing nothing: \"… raining = false was recorded within 200"

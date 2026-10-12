@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -42,7 +42,7 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * Pins REPAIR-3 (material and charge leave on a repair and neither leaves on a refusal).
      */
     @Pins({"REPAIR-1", "REPAIR-3"})
-    @RedWitness(prose = "with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);} (the real material withdrawal) removed,"
+    @LegacyWitness(prose = "with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);} (the real material withdrawal) removed,"
             + " this fails with \"the repair took no material — nothing may be created from nothing:"
             + " {...materialBefore:64,materialAfter:64...}\". The stage and charge verdicts were not separately"
             + " witnessed. 2026-09-30, taken on the pre-change form {@code RepairCost.consume(player, cost, false);},"
@@ -70,7 +70,7 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * Pins REPAIR-7 (a bay that cannot work says why: every refusal is its own answer).
      */
     @Pins({"REPAIR-3", "REPAIR-7"})
-    @RedWitness(prose = "with a charge withdrawal inserted before {@code ItemRepairWelder#weld} at {@code return Outcome.NO_MATERIALS;}'s"
+    @LegacyWitness(prose = "with a charge withdrawal inserted before {@code ItemRepairWelder#weld} at {@code return Outcome.NO_MATERIALS;}'s"
             + " NO_MATERIALS return, this fails with \"a refused repair spent charge: {...outcome:NO_MATERIALS,"
             + " energyBefore:100000,energyAfter:98000...}\". The later refusals' verdicts were not separately"
             + " witnessed. 2026-09-30.")
@@ -116,13 +116,13 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      * lists {@code minecraft:planks} data 0..5, oak first), and a player carrying only spruce
      * (data 1) can weld one.
      */
-    @RedWitness(prose = "with {@code RepairCost#consume} at {@code !wanted.accepts.apply(inSlot)}"
+    @LegacyWitness(prose = "with {@code RepairCost#consume} at {@code !wanted.accepts.apply(inSlot)}"
             + " replaced by a match against the slot's first variant only"
             + " ({@code !OreDictionary.itemMatches(wanted.accepts.getMatchingStacks()[0], inSlot, false)} — the"
             + " shape it shipped with), this fails at \"a player carrying spruce planks could not pay for a"
             + " crafting table, whose slots accept every plank: {...outcome:NO_MATERIALS,...materialBefore:64,"
             + " materialAfter:64...} expected:&lt;[REPAIRED]&gt; but was:&lt;[NO_MATERIALS]&gt;\" (2026-10-06).")
-    @RedWitness(prose = "with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);}"
+    @LegacyWitness(prose = "with {@code ItemRepairWelder#weld} at {@code cost.consume(player, false);}"
             + " removed, this fails at \"the repair was granted but no spruce left the inventory:"
             + " {...outcome:REPAIRED,...materialBefore:64,materialAfter:64...}\" (2026-10-06).")
     @Test

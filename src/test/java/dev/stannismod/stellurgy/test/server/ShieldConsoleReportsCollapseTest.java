@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -36,7 +36,7 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
      * Pins INV-NET-04 (a component with no source reports DISCONNECTED to controllers).
      */
     @Pins("INV-NET-04")
-    @RedWitness(prose = "with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}"
+    @LegacyWitness(prose = "with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}"
             + " once it has been true: \"a console whose network lost its last source must stop reporting it as"
             + " live: … \\\"networkConnected\\\":true\", 2026-09-30, re-run under the battery arrangement."
             + " STATUS — {@code TileEntityShieldConsole#applyNetworkState} at {@code networkStatus = shieldState.getStatus();} keeping its previous"

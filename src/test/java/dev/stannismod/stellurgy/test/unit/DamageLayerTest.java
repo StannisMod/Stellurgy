@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.unit;
 import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
 import dev.stannismod.stellurgy.damage.DamageLayer;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 import org.junit.Test;
@@ -128,7 +128,7 @@ public class DamageLayerTest {
      * which did look the name up would answer as it does in a game, not throw.
      */
     @Pins("INV-DMG-10")
-    @RedWitness(prose = "with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by {@code data.recordDestroyed(pos, net.minecraft.block.Block.REGISTRY.getObject(new net.minecraft.util.ResourceLocation(entry.originalBlock)), entry.originalMeta);}, fails: \"INV-DMG-10: a hole of a block no longer registered must arrive under ITS name\" (2026-10-08; expected removedmod:hull_plate, was minecraft:air).")
+    @LegacyWitness(prose = "with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by {@code data.recordDestroyed(pos, net.minecraft.block.Block.REGISTRY.getObject(new net.minecraft.util.ResourceLocation(entry.originalBlock)), entry.originalMeta);}, fails: \"INV-DMG-10: a hole of a block no longer registered must arrive under ITS name\" (2026-10-08; expected removedmod:hull_plate, was minecraft:air).")
     @Test
     public void aHoleOfABlockNoLongerRegisteredKeepsItsNameAcrossACarry() {
         MinecraftBootstrap.ensure();

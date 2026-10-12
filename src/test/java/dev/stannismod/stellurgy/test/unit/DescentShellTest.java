@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.space.ShipEntryController;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -140,7 +140,7 @@ public class DescentShellTest {
      * one), so the comparison converts the shell's depth and allows the half chart block the shell is
      * rounded to; Earth's line is checked against the Kármán line it is defined from.</p>
      */
-    @RedWitness(prose = "2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code double depthWorldBlocks = depthChartBlocks * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;}"
+    @LegacyWitness(prose = "2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code double depthWorldBlocks = depthChartBlocks * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK;}"
             + " left in chart blocks (the multiplication removed), this fails with \"the takeoff line must be the"
             + " descent shell's depth in world blocks (r=0.2727)\".")
     @Test
@@ -163,7 +163,7 @@ public class DescentShellTest {
      * its derived line would sit inside the block band takes the top of the band, and a body with no
      * radius has no line to derive.
      */
-    @RedWitness(prose = "2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code return (int) Math.max(TerrainHeightFinder.MAX_BUILD_Y, Math.round(depthWorldBlocks));}"
+    @LegacyWitness(prose = "2026-10-05, with {@code DescentShell#orbitLineWorldY} at {@code return (int) Math.max(TerrainHeightFinder.MAX_BUILD_Y, Math.round(depthWorldBlocks));}"
             + " returning the bare rounded depth, this fails with \"expected:&lt;255&gt; but was:&lt;100&gt;\".")
     @Test
     public void aTakeoffLineNeverSitsInsideTheBlockBand() {

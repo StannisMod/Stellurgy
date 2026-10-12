@@ -37,8 +37,11 @@ import java.util.stream.Stream;
  *       observation nor a behaviour, or both;</li>
  *   <li>a {@link Pins} or {@link Regions} anchor no doc defines, a {@link Regions} for an anchor its
  *       method does not pin;</li>
- *   <li>a {@link RedWitness} that is neither exactly the replayable form nor exactly the prose form, a
+ *   <li>a {@link RedWitness} that lacks a part of the replayable form, or whose member is neither
+ *       production code nor one of the test system's own judges; a {@link LegacyWitness} or a
  *       {@link NotYetRed} with nothing in it;</li>
+ *   <li>A PROSE WITNESS NOT IN ITS DEBT LIST: a {@link LegacyWitness} on a method the committed list does
+ *       not hold, and a listed method that no longer carries one (the list only shrinks);</li>
  *   <li>THE KIND OF A CLASS, which is the base it extends and never its name: a concrete class named
  *       {@code *E2ETest} that does not extend {@link AbstractPlayerE2ETest}, a class that does, outside
  *       the {@code test.client} and {@code test.milestone} packages (an e2e boots a client), and a class
@@ -159,8 +162,11 @@ public final class TestBindingsCheck {
                 corpus.testMethods, corpus.testMethodsWithoutPins, corpus.testMethodsRun));
         System.out.println(checkUnpinnedBaseline(root, corpus.unpinned, failures));
         System.out.println(checkOwnBootDebt(root, corpus.ownBootWithoutReason, failures));
-        System.out.println(String.format("records: %d @RedWitness (%d replayable), %d @NotYetRed; %d @Pins anchors",
-                corpus.witnesses, corpus.replayable, corpus.notYet, corpus.pinCount));
+        System.out.println(checkLegacyWitnessDebt(root, corpus.legacyWitnessed, failures));
+        checkWitnessMembers(root, corpus.witnessMembers, failures);
+        System.out.println(String.format("records: %d witnesses (%d @RedWitness, %d @LegacyWitness), %d @NotYetRed;"
+                        + " %d @Pins anchors",
+                corpus.witnesses + corpus.legacy, corpus.witnesses, corpus.legacy, corpus.notYet, corpus.pinCount));
         for (String kind : listed) {
             new TreeMap<>(state).forEach((anchor, v) -> {
                 if (v.state.name().equals(kind)) {
@@ -272,6 +278,137 @@ public final class TestBindingsCheck {
         return String.format("own-boot debt: %d listed, %d without a reason now", debt.size(), withoutReason.size());
     }
 
+    /** The committed list of the methods (a class, for a record on the type) that carried a prose witness at the split. */
+    static final String LEGACY_WITNESS_DEBT = "src/test/bindings/legacy-witness-methods.txt";
+
+    /**
+     * A witness is replayable, held as a RATCHET over the older prose form: the methods that carried a
+     * {@link LegacyWitness} when it was split from {@link RedWitness} are listed in {@value #LEGACY_WITNESS_DEBT},
+     * and the list only shrinks. A {@link LegacyWitness} on a method the list does not hold fails (a new record
+     * is taken replayable; a renamed or moved method is new); a listed method that no longer carries one fails
+     * until its line is deleted. The current set is written beside the bindings report, for that deletion and
+     * nothing else. A {@link LegacyWitness} still counts as its method's witness for {@link PinMap}: dropping
+     * it would un-pin clauses whose tests were seen red, a loss of what the map shows, not a gain in what is
+     * true. Answers the line it prints.
+     */
+    static String checkLegacyWitnessDebt(Path root, Set<String> carrying, List<String> failures) throws IOException {
+        Path current = root.resolve("build").resolve("reports").resolve("test-bindings").resolve("legacy-witness-methods.txt");
+        Files.createDirectories(current.getParent());
+        Files.write(current, (String.join("\n", carrying) + "\n").getBytes(StandardCharsets.UTF_8));
+        Path debtFile = root.resolve(LEGACY_WITNESS_DEBT);
+        if (!Files.isRegularFile(debtFile)) {
+            failures.add("the prose-witness debt list " + LEGACY_WITNESS_DEBT + " is missing -- without it every"
+                    + " @LegacyWitness is new; the current set is in " + root.relativize(current));
+            return "legacy-witness debt: MISSING";
+        }
+        Set<String> debt = new TreeSet<>();
+        for (String line : Files.readAllLines(debtFile, StandardCharsets.UTF_8)) {
+            String entry = line.trim();
+            if (!entry.isEmpty() && !entry.startsWith("#") && !debt.add(entry)) {
+                failures.add(LEGACY_WITNESS_DEBT + " lists " + entry + " twice");
+            }
+        }
+        for (String where : carrying) {
+            if (!debt.contains(where)) {
+                failures.add(where + " carries a @LegacyWitness and is not in " + LEGACY_WITNESS_DEBT + " -- a new"
+                        + " record is taken in @RedWitness's replayable form; the list only shrinks");
+            }
+        }
+        for (String entry : debt) {
+            if (!carrying.contains(entry)) {
+                failures.add(LEGACY_WITNESS_DEBT + " lists " + entry + ", which carries no @LegacyWitness now (re-taken"
+                        + " replayable, renamed, or gone) -- delete the line");
+            }
+        }
+        return String.format("legacy-witness debt: %d listed, %d carrying one now", debt.size(), carrying.size());
+    }
+
+    /**
+     * The test system's own judges, whose decisions a test may break as its subject: what they refuse is
+     * a decision of code, not the reply of an instrument. A member is admitted by its class, or, where the
+     * class also holds instruments, by the member itself. A list, not a pattern -- a new judge is named here.
+     */
+    static boolean isJudge(String member) {
+        switch (member.substring(0, member.indexOf('#'))) {
+            case "E2EModeGate":         // the server child's mode gate: what a command may do, per mode
+            case "BridgeCommand":       // the client bridge's command table and the kind of each
+            case "E2EConfinement":      // the build's confinement of e2e and mechanics test code
+            case "PinMap":              // what pins a clause
+            case "TestBindingsCheck":   // this check
+                return true;
+            default:
+                break;
+        }
+        switch (member) {
+            // The client bridge's admission; the rest of the class serves the commands it admits.
+            case "ForgeTestClientBootstrap#handleCommand":
+            case "ForgeTestClientBootstrap#refusedInE2E":
+            case "ForgeTestClientBootstrap#refusedInMechanics":
+            case "ForgeTestClientBootstrap#offTheSlider":
+            case "ForgeTestClientBootstrap#inputNoHandProduces":
+            // The console half of the server gate's refusal: the gate writes its verdict on a console
+            // command to the console, and here a test's console command is refused on reading it.
+            case "TestClient#sendRaw":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * A replayable record breaks a decision of production: its member is a type declared in
+     * {@code src/main/java} outside the probe package {@code command/test}, or in
+     * {@code valkyrienskies/src/main/java}, or a resource under {@code src/main/resources} -- or one of the
+     * test system's own judges ({@link #isJudge}). A probe or a harness instrument is never the decision, so
+     * a record naming one fails, naming its method. Types are found by their declaration in the source (an
+     * inner type by its own simple name, as the record names it).
+     */
+    static void checkWitnessMembers(Path root, List<String[]> records, List<String> failures) throws IOException {
+        Set<String> production = productionTypes(root);
+        for (String[] record : records) {
+            String member = record[1];
+            String owner = member.substring(0, member.indexOf('#'));
+            boolean isProduction = owner.contains("/")
+                    ? Files.isRegularFile(root.resolve("src/main/resources").resolve(owner))
+                    : production.contains(owner);
+            if (!isProduction && !isJudge(member)) {
+                failures.add(record[0] + ": @RedWitness names " + member
+                        + ", which is no production code (src/main/java outside command/test,"
+                        + " valkyrienskies/src/main/java, src/main/resources) and none of the test system's own"
+                        + " judges -- a probe or a harness instrument is not the decision a witness breaks");
+            }
+        }
+    }
+
+    /** A constant: a compiled {@link Pattern} is immutable. */
+    private static final Pattern TYPE_DECLARATION = Pattern.compile("^[ \\t]*(?:(?:public|protected|private|static"
+            + "|final|abstract|strictfp)\\s+)*(?:class|interface|enum|@interface)\\s+([A-Za-z_$][\\w$]*)", Pattern.MULTILINE);
+
+    /** The simple names of every type declared in the production source roots, probes excluded. */
+    static Set<String> productionTypes(Path root) throws IOException {
+        Set<String> names = new HashSet<>();
+        for (String base : new String[]{"src/main/java", "valkyrienskies/src/main/java"}) {
+            Path dir = root.resolve(base);
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            List<Path> files;
+            try (Stream<Path> walk = Files.walk(dir)) {
+                files = walk.filter(p -> p.toString().endsWith(".java"))
+                        .filter(p -> !dir.relativize(p).toString().replace('\\', '/')
+                                .startsWith("dev/stannismod/stellurgy/command/test/"))
+                        .collect(Collectors.toList());
+            }
+            for (Path p : files) {
+                Matcher m = TYPE_DECLARATION.matcher(new String(Files.readAllBytes(p), StandardCharsets.UTF_8));
+                while (m.find()) {
+                    names.add(m.group(1));
+                }
+            }
+        }
+        return names;
+    }
+
     /** {@code docs/system/**}{@code .md} outside {@code tools/}, by path relative to it, in path order. */
     static Map<String, String> readDocs(Path sysroot) throws IOException {
         Map<String, String> out = new LinkedHashMap<>();
@@ -329,14 +466,11 @@ public final class TestBindingsCheck {
         return commits == 0 ? "git knows no commit touching docs/system (a shallow or foreign checkout)" : null;
     }
 
-    /** What is wrong with a red-witness record's form, or null when it is exactly one of the two forms. */
+    /** What is wrong with a red-witness record's form, or null when it is the complete replayable form. */
     public static String recordProblem(String verdict, String member, String at, String replacedBy, String fails,
-                                String on, String prose) {
+                                String on) {
         boolean structured = !member.isEmpty() || !at.isEmpty() || !RedWitness.NOT_GIVEN.equals(replacedBy)
                 || !fails.isEmpty() || !on.isEmpty() || !verdict.isEmpty();
-        if (!prose.trim().isEmpty()) {
-            return structured ? "a prose record carries replayable elements too -- it is one form or the other" : null;
-        }
         if (!structured) {
             return "an empty record";
         }
@@ -357,6 +491,14 @@ public final class TestBindingsCheck {
             missing.add("on as yyyy-mm-dd");
         }
         return missing.isEmpty() ? null : "a replayable record without " + String.join(", ", missing);
+    }
+
+    /** What is wrong with a prose record, or null when it says something. */
+    public static String legacyProblem(String prose) {
+        if (prose.trim().isEmpty()) {
+            return "a prose record that says nothing";
+        }
+        return null;
     }
 
     private static Path classesRoot() {
@@ -382,12 +524,16 @@ public final class TestBindingsCheck {
         final Set<String> unpinned = new TreeSet<>();
         /** Every concrete class of an own-boot base that carries no {@link OwnBoot}, by name. */
         final Set<String> ownBootWithoutReason = new TreeSet<>();
+        /** Every method (a class, for a record on the type) that carries a {@link LegacyWitness}. */
+        final Set<String> legacyWitnessed = new TreeSet<>();
+        /** Every {@link RedWitness}, as {where, member}. */
+        final List<String[]> witnessMembers = new ArrayList<>();
         int classes;
         int testMethods;
         int testMethodsRun;
         int testMethodsWithoutPins;
         int witnesses;
-        int replayable;
+        int legacy;
         int notYet;
         int pinCount;
 
@@ -482,6 +628,9 @@ public final class TestBindingsCheck {
             for (RedWitness w : k.getAnnotationsByType(RedWitness.class)) {
                 witness(k, null, w, failures);
             }
+            for (LegacyWitness w : k.getAnnotationsByType(LegacyWitness.class)) {
+                legacy(k, null, w, failures);
+            }
             for (NotYetRed n : k.getAnnotationsByType(NotYetRed.class)) {
                 attempt(k, null, n, failures);
             }
@@ -525,6 +674,11 @@ public final class TestBindingsCheck {
                     witness(k, m, w, failures);
                     seen++;
                 }
+                // A prose record is still the method's witness: debt, not absence (see checkLegacyWitnessDebt).
+                for (LegacyWitness w : m.getAnnotationsByType(LegacyWitness.class)) {
+                    legacy(k, m, w, failures);
+                    seen++;
+                }
                 for (NotYetRed n : m.getAnnotationsByType(NotYetRed.class)) {
                     attempt(k, m, n, failures);
                 }
@@ -549,22 +703,31 @@ public final class TestBindingsCheck {
 
         private void witness(Class<?> k, Method m, RedWitness w, List<String> failures) {
             witnesses++;
-            String problem = recordProblem(w.verdict(), w.member(), w.at(), w.replacedBy(), w.fails(), w.on(), w.prose());
+            String problem = recordProblem(w.verdict(), w.member(), w.at(), w.replacedBy(), w.fails(), w.on());
             if (problem != null) {
                 failures.add(where(k, m) + ": @RedWitness: " + problem);
+            } else {
+                witnessMembers.add(new String[]{where(k, m), w.member()});
             }
             Map<String, Object> row = base(k, m, "RedWitness");
-            if (w.prose().isEmpty()) {
-                replayable++;
-                row.put("verdict", w.verdict());
-                row.put("member", w.member());
-                row.put("at", w.at());
-                row.put("replacedBy", RedWitness.NOT_GIVEN.equals(w.replacedBy()) ? null : w.replacedBy());
-                row.put("fails", w.fails());
-                row.put("on", w.on());
-            } else {
-                row.put("prose", w.prose());
+            row.put("verdict", w.verdict());
+            row.put("member", w.member());
+            row.put("at", w.at());
+            row.put("replacedBy", RedWitness.NOT_GIVEN.equals(w.replacedBy()) ? null : w.replacedBy());
+            row.put("fails", w.fails());
+            row.put("on", w.on());
+            records.add(row);
+        }
+
+        private void legacy(Class<?> k, Method m, LegacyWitness w, List<String> failures) {
+            legacy++;
+            legacyWitnessed.add(where(k, m));
+            String problem = legacyProblem(w.prose());
+            if (problem != null) {
+                failures.add(where(k, m) + ": @LegacyWitness: " + problem);
             }
+            Map<String, Object> row = base(k, m, "LegacyWitness");
+            row.put("prose", w.prose());
             records.add(row);
         }
 

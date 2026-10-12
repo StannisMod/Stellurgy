@@ -5,8 +5,8 @@ import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRole;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -45,7 +45,7 @@ public class AtmospherePredicatesTest {
     /**
      * Nothing burns in a vacuum, whatever the config says, because there is no oxidiser there.
      */
-    @RedWitness(prose = "one DOUBLE inversion per verdict, 2026-09-30 - each predicate has two defences"
+    @LegacyWitness(prose = "one DOUBLE inversion per verdict, 2026-09-30 - each predicate has two defences"
             + " here, the vacuum ceiling and the oxidiser threshold. NO BURNING - {@code AirState#allowsCombustion} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer"
             + " refusing a vacuum AND {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} accepting any oxidiser at all: \"an empty composition"
             + " has no oxidiser to burn\". NO BREATHING - {@code AirState#isBreathableAir} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer refusing a vacuum AND"
@@ -63,7 +63,7 @@ public class AtmospherePredicatesTest {
      * Pins INV-ATM-22 (A strictly better atmosphere never reads as worse).
      */
     @Pins("INV-ATM-22")
-    @RedWitness(prose = "one inversion per verdict. POISON MAKES IT TOXIC - {@code AirState#isToxic} at"
+    @LegacyWitness(prose = "one inversion per verdict. POISON MAKES IT TOXIC - {@code AirState#isToxic} at"
             + " {@code return toxicIndex() >= 1.0D;} calling air toxic only at three times its limit: \"and adding"
             + " a poison must make it so\" (2026-10-04, when the predicate became a sum). REMOVING IT CLEARS IT -"
             + " {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was"
@@ -89,7 +89,7 @@ public class AtmospherePredicatesTest {
      * Pins INV-ATM-23 (A poison is judged against ITS OWN limit, so the same amount of two different gases is not the same hazard, and good air is no).
      */
     @Pins("INV-ATM-23")
-    @RedWitness(prose = "re-taken 2026-10-04, when the predicate became a sum. UNDER ITS OWN LIMIT -"
+    @LegacyWitness(prose = "re-taken 2026-10-04, when the predicate became a sum. UNDER ITS OWN LIMIT -"
             + " {@code AirState#isToxic} at {@code return toxicIndex() >= 1.0D;} halving the limit: \"under its own"
             + " limit, a poison is not yet poisoning: ...\". STRICTER POISON IS OVER - {@code AirState#toxicIndex}"
             + " at {@code index += (double) entry.getValue() / gas.hazardThreshold();} judging every poison"
@@ -117,7 +117,7 @@ public class AtmospherePredicatesTest {
      * Poisons ADD UP, each by its share of its own limit, and carbon dioxide is one of them past five
      * percent — before it has displaced enough oxygen to suffocate anybody.
      */
-    @RedWitness(prose = "MIXTURE - {@code AirState#toxicIndex} at {@code index += (double)"
+    @LegacyWitness(prose = "MIXTURE - {@code AirState#toxicIndex} at {@code index += (double)"
             + " entry.getValue() / gas.hazardThreshold();} made a maximum instead of a sum: \"two poisons at"
             + " sixty percent of their limits are past it together\". CARBON DIOXIDE - {@code GasRegistry#CARBON_DIOXIDE}"
             + " at {@code new Gas(\"carbondioxide\", \"carbon_dioxide\", 44.0D, 194.7D, 50_000, GasRole.WASTE, GasRole.TOXIC);}"
@@ -142,7 +142,7 @@ public class AtmospherePredicatesTest {
      * Corrosion needs something corrosive, something to dissolve it into, and heat — and it reads all
      * three rather than switching on one.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. WET IS WORSE - {@code AirState#corrosionIndex} at {@code double wet = 1.0D + (double) roleTotal(GasRole.SOLVENT) / ONE_ATM;}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. WET IS WORSE - {@code AirState#corrosionIndex} at {@code double wet = 1.0D + (double) roleTotal(GasRole.SOLVENT) / ONE_ATM;}"
             + " ignoring the solvent: \"water makes it worse: dry=10.0 wet=10.0\". HOT IS WORSE -"
             + " {@code AirState#corrosionIndex} at {@code double warm = Math.max(0.5D, getTemperatureKelvin() / Math.max(1, ambientKelvin()));} ignoring the temperature: \"and so does heat: dry=10.0 hot=10.0\". CLEAN AIR -"
             + " {@code AirState#corrosionIndex} at {@code return 0.0D;} answering 0.1 when nothing attacks: \"clean air attacks nothing"
@@ -173,7 +173,7 @@ public class AtmospherePredicatesTest {
      * Every substance in the model has a job, and every hazard a predicate can raise has a substance
      * that raises it — the two halves of "no storage without a consumer".
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. EVERY GAS HAS A ROLE - a DOUBLE"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. EVERY GAS HAS A ROLE - a DOUBLE"
             + " inversion, the {@code GasRegistry#HELIUM} at {@code new Gas(\"helium\", \"helium\", 4.0D, 4.2D, 0, GasRole.INERT)} row declared with no role AND {@code Gas#Gas} at"
             + " {@code if (roles.length == 0)} made never to hold: \"a gas with no role has no reason to be"
             + " modelled: Gas[helium []]\". FINDABLE BY NAME - {@code GasRegistry#byName} at"
@@ -208,7 +208,7 @@ public class AtmospherePredicatesTest {
      * name its composition is written under. A declared gas missing from the list would be read back
      * from a save as unknown and dropped — the composition would lose it without a word.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each in {@code GasRegistry}. LISTED —"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each in {@code GasRegistry}. LISTED —"
             + " {@code HELIUM} left out of {@code ALL}: \"declared gas HELIUM is missing from the registry's"
             + " list\". FOUND BY NAME — {@code GasRegistry#byName} at {@code index.put(gas.name(), gas);} keying"
             + " by the upper-cased name: \"declared gas NITROGEN must be found by its saved name … but"
@@ -241,7 +241,7 @@ public class AtmospherePredicatesTest {
      * Pins INV-ATM-24 (A composition survives a save including a substance the three old keys could not name, and a substance this game no longer knows).
      */
     @Pins("INV-ATM-24")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. OXYGEN - {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. OXYGEN - {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing"
             + " oxygen at half: \"oxygen comes back expected:&lt;210000000&gt; but was:&lt;105000000&gt;\"."
             + " NITROGEN - {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing nitrogen at half: \"so does the nitrogen"
             + " expected:&lt;790000000&gt; but was:&lt;395000000&gt;\". METHANE - {@code AirState#readFromNBT} at {@code state.set(GasRegistry.byName(name), gases.getLong(name));} skipping"

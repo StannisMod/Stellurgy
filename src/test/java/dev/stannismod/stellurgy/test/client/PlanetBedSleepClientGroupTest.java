@@ -5,7 +5,7 @@ import com.google.gson.JsonParser;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -171,7 +171,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
 
     // ── the shipped default: a bed does not bring a planet's morning ─────────────────────────────
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE POLICY — {@code TimeSkipPolicy#allows} at {@code return allowOnPlanets}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE POLICY — {@code TimeSkipPolicy#allows} at {@code return allowOnPlanets}"
             + " allowing the skip on every planet: \"no `time_skip_decided` refusing the skip on dim 9502\". THE"
             + " CLOCK — {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at {@code ar$tellSleepersWhenDawnIs(self); return}"
             + " — the return after a refusal — dropped, so the refused"
@@ -255,7 +255,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
      * A completed sleep on a planet whose skip is allowed wakes it at the PLANET's dawn — the next
      * multiple of its rotational period — and leaves the overworld's clock alone.
      */
-    @RedWitness(prose = "with {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at"
+    @LegacyWitness(prose = "with {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at"
             + " {@code self.setWorldTime(StellurgyDimensionWorldInfo.computeSleepWakeTime(self.getWorldTime(), rotationalPeriod))}"
             + " — the planetary rounding in the per-dim branch — replaced by vanilla's"
             + " {@code setWorldTime(vanillaRounded)}, this fails with \"sleep skip must"

@@ -5,8 +5,8 @@ import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
@@ -477,7 +477,7 @@ public class PlanetDerivationTest {
     /**
      * A very close orbit is tidally locked and one a thousand AU out is not.
      */
-    @RedWitness(prose = "2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for"
+    @LegacyWitness(prose = "2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for"
             + " every orbit, this fails with \"a distant orbit must not be locked\". That is what the distant leg"
             + " can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the"
             + " old \"1 AU = 100\") leaves it green, because 1 000 AU is outside the radius either way.")
@@ -666,7 +666,7 @@ public class PlanetDerivationTest {
      * every gas escapes or freezes out would scan as an atmosphere and land as a vacuum — and keep the
      * warmth of a greenhouse it does not have.
      */
-    @RedWitness(prose = "with {@code PlanetDerivation#derive} at {@code if (pressure > 0 && BodyAtmosphere.derive(}"
+    @LegacyWitness(prose = "with {@code PlanetDerivation#derive} at {@code if (pressure > 0 && BodyAtmosphere.derive(}"
             + " made {@code if (false && …}, this fails listing ice worlds reported at {@code p=1} to {@code p=38}"
             + " at 53-59 K (2026-10-01).")
     @Test

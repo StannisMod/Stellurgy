@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.sensor.SignatureModel;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -95,10 +95,10 @@ public class SignatureModelTest {
      * The reason the active mode exists: a cold, quiet thing that passive listening cannot hold is
      * held perfectly well the moment you illuminate it — at the price of illuminating.
      */
-    @RedWitness(prose = "with {@code SignatureModel#activeQuality} at {@code return clamp01(plateau);}'s plateau cut to a fifth, this fails with"
+    @LegacyWitness(prose = "with {@code SignatureModel#activeQuality} at {@code return clamp01(plateau);}'s plateau cut to a fifth, this fails with"
             + " \"and illuminating must lift it over the lock floor (0.25), or going active buys the shooter"
             + " nothing: 0.19\". 2026-09-30.")
-    @RedWitness(prose = "with {@code SignatureModel#passiveQuality} at {@code return clamp01(temperatureRatio * rangeRatio * rangeRatio);} dividing by the temperature ratio instead of"
+    @LegacyWitness(prose = "with {@code SignatureModel#passiveQuality} at {@code return clamp01(temperatureRatio * rangeRatio * rangeRatio);} dividing by the temperature ratio instead of"
             + " multiplying (a cold body read as loud), this fails at \"a cold target at range must be below the"
             + " lock floor (0.25) by listening alone ...: 1.0\" (2026-09-30). Two gentler inversions stayed green,"
             + " and they say how far below the floor the healthy value sits: the passive quality here is 0.0124"

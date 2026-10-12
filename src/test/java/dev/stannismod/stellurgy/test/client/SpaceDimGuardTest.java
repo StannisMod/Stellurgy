@@ -4,8 +4,8 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -148,7 +148,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
      * Pins INV-EVT-07 (a server-side teleport of a PLAYER is never made from a handler that runs inside NetHandlerPlayServer.update).
      */
     @Pins("INV-EVT-07")
-    @RedWitness(prose = "with the guard's call ({@code PlanetEventHandler#spaceDimensionGuard} at"
+    @LegacyWitness(prose = "with the guard's call ({@code PlanetEventHandler#spaceDimensionGuard} at"
             + " {@code evictIfOffStation(player)}) moved back into {@code PlanetEventHandler.playerTick}"
             + " (the living update, inside the network handler's update) and {@code spaceDimensionGuard}"
             + " disabled, this fails with \"the guard must move a body off a given point ONCE … origin=206,64,154\""

@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.integration;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.*;
 import org.junit.Before;
 import org.junit.Test;
@@ -72,7 +72,7 @@ public class AuthoredNeighbourhoodTest {
      * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
      */
     @Pins("ADDR-23")
-    @RedWitness(prose = "with {@code UniverseRegistry#anchorsInTerritory} at"
+    @LegacyWitness(prose = "with {@code UniverseRegistry#anchorsInTerritory} at"
             + " {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with \"a survey's"
             + " territory may not offer a seat that reaches the authored neighbourhood\"; with"
             + " {@code UniverseRegistry#anchorForCell} at"
@@ -146,7 +146,7 @@ public class AuthoredNeighbourhoodTest {
      * Pins ADDR-23 (no procedural seat whose neighbourhood reaches an authored one is a system; a pin clears nothing).
      */
     @Pins("ADDR-23")
-    @RedWitness(prose = "with {@code UniverseRegistry#authoredBySuperIndex} at"
+    @LegacyWitness(prose = "with {@code UniverseRegistry#authoredBySuperIndex} at"
             + " {@code if (pinnedSystems.containsKey(anchor.cellKey()))} reading {@code if (false)}, this fails"
             + " with \"a pinned system is not authored and must not clear its sibling\" — 2026-10-03.")
     @Test
@@ -191,7 +191,7 @@ public class AuthoredNeighbourhoodTest {
     /**
      * What the generator says the system at {@code seat} owns; a seat it handed out always has one.
      */
-    @RedWitness(prose = "with {@code ClusteredGalaxyGenerator#neighbourhoodOf} at"
+    @LegacyWitness(prose = "with {@code ClusteredGalaxyGenerator#neighbourhoodOf} at"
             + " {@code if (!seated.isPresent() || !seated.get().sameCell(here))} always true, both scenarios fail"
             + " here with \"the generator must say what its own seat … owns\" — 2026-10-03.")
     private SectorBox owns(GalacticCoord seat) {

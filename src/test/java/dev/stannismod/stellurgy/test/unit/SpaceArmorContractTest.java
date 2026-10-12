@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 import dev.stannismod.stellurgy.armor.ItemSpaceChest;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import net.minecraft.init.Items;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemArmor;
@@ -76,7 +76,7 @@ public class SpaceArmorContractTest {
 
     // ───────────────────── the protection matrix ─────────────────────────
 
-    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"space armor must"
+    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"space armor must"
             + " protect from HEAT\", 2026-09-30.")
     @Test
     public void protectsFromEveryHazardTheModelCanRaise() {
@@ -92,7 +92,7 @@ public class SpaceArmorContractTest {
         }
     }
 
-    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that raises"
+    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that raises"
             + " no hazard needs no protecting from\", 2026-09-30.")
     @Test
     public void protectsFromNothingWhereThereIsNoHazard() {
@@ -105,7 +105,7 @@ public class SpaceArmorContractTest {
                 armor.protectsFrom(Collections.<AtmosphereHazard>emptySet(), false, stack, false));
     }
 
-    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes whenever it is acted on: \"protect"
+    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes whenever it is acted on: \"protect"
             + " decision must be commit-invariant for [] expected:&lt;true&gt; but was:&lt;false&gt;\","
             + " 2026-09-30. This asks the base piece, whose answer never read the commit flag; the chest that"
             + " does spend on commit ({@code ItemSpaceChest#protectsFrom} at {@code if (!super.protectsFrom(hazards, needsSuppliedOxygen, stack, commitProtection))}) is not what it calls.")

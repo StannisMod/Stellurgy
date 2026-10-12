@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -70,12 +70,12 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientTest {
      * Pins INV-SHD-24 (An emitter holds a player at its membrane on the side of ITS OWN shell he was last seen clear of).
      */
     @Pins("INV-SHD-24")
-    @RedWitness(prose = "with {@code TileEntityFieldGenerator#shouldRepelEntity} at"
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#shouldRepelEntity} at"
             + " {@code Boolean outside = playerOutsideShell.get(entity.getUniqueID());} reading a map made"
             + " {@code static} again — one record per player for every emitter, the shape it replaced — this"
             + " fails at \"shield B let in a player who walked at it from outside ... no `shield_player_held`"
             + " carrying pos = 4026,150,4020 was recorded within 200 ticks\" (2026-10-03).")
-    @RedWitness(prose = "with {@code TileEntityFieldGenerator#pushEntityBack} at"
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#pushEntityBack} at"
             + " {@code Vec3d targetCenter = fieldCenter.add(} replaced by the field's own centre — B holds him, but"
             + " puts him INSIDE — this fails at \"shield B held the player but did not keep him OUT: after the hold"
             + " he stands 1.0584229873233446 from B's centre, inside its inner surface at 3.5\" (2026-10-03).")

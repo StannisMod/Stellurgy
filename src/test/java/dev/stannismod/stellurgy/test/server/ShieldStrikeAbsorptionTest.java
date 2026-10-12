@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -87,7 +87,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * Pins INV-SHD-08 (a strike the shield cannot fully pay for is partially absorbed and leaves a residual).
      */
     @Pins("INV-SHD-08")
-    @RedWitness(prose = "with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, Math.max(1, residual));}'s short-pay residual forced to 0, this"
+    @LegacyWitness(prose = "with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, Math.max(1, residual));}'s short-pay residual forced to 0, this"
             + " fails with \"an overmatching strike was reported fully absorbed — the shield cannot afford it:"
             + " {...fullyAbsorbed:true,residual:0...}\"; the charged-shield method stayed green on that run."
             + " 2026-09-30.")
@@ -131,11 +131,11 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * Pins INV-SHD-16 (a reflected body leaves along the outward normal and never faster than it arrived).
      */
     @Pins({"INV-SHD-15", "INV-SHD-16"})
-    @RedWitness(prose = "with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())}'s reflection branch disabled, this fails"
+    @LegacyWitness(prose = "with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())}'s reflection branch disabled, this fails"
             + " with \"a fully absorbed kinetic strike carrying a travelling body was not reflected ..."
             + " {...reflected:false...}\". The bodiless half and the equal-bill verdict were not separately"
             + " witnessed. 2026-09-30.")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30: with {@code ShieldStrikeService#absorb} at {@code Vec3d newVelocity = generator.reflectBodyVelocity(hitPoint, strike.getBodyVelocity());}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code ShieldStrikeService#absorb} at {@code Vec3d newVelocity = generator.reflectBodyVelocity(hitPoint, strike.getBodyVelocity());}"
             + " handing the body back its own velocity, this fails at \"the reflected body still travels inward"
             + " (newVz=-2.0, it arrived at -2.0)\"; with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, 0);}'s full pay answering a"
             + " residual of 1, at \"an abstract kinetic source with no travelling body was not fully absorbed ..."
@@ -203,7 +203,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
      * Pins INV-SHD-17 (a short pay never reflects).
      */
     @Pins("INV-SHD-17")
-    @RedWitness(prose = "with a line inserted before {@code ShieldStrikeService#absorb} at {@code double fractionStopped = (double) spent / (double) cost;} reflecting any"
+    @LegacyWitness(prose = "with a line inserted before {@code ShieldStrikeService#absorb} at {@code double fractionStopped = (double) spent / (double) cost;} reflecting any"
             + " body on a SHORT pay, this fails with \"an overmatching strike was reported fully absorbed ..."
             + " {...reflected:true,newVz:2.0...}\". 2026-09-30.")
     @Test

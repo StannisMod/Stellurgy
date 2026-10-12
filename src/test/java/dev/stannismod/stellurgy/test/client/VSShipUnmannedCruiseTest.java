@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -65,7 +65,7 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
      * A pilot who stands up leaves his ship cruising, and one who sits back down gets the cruise
      * back rather than a stopped or reset ship.
      */
-    @RedWitness(prose = "the ramp and both cruise verdicts, 2026-09-28. THE RAMP — with"
+    @LegacyWitness(prose = "the ramp and both cruise verdicts, 2026-09-28. THE RAMP — with"
             + " {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} discarding"
             + " every input: \"the held throttle must"
             + " ramp this ship's vertical cruise all the way to the computer's own ceiling … no"

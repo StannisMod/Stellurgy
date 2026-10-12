@@ -5,8 +5,8 @@ import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ZoneScale;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
@@ -65,7 +65,7 @@ public class ZoneScaleTest {
      * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Pins({"ADDR-17", "ADDR-19"})
-    @RedWitness(prose = "2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} leaving a zone with children"
+    @LegacyWitness(prose = "2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} leaving a zone with children"
             + " undivided (one cell), this fails with \"Mars's innermost moon orbits 9376 km out and shares its"
             + " planet's cell: lattice cell = 4609334 blocks, index = 0 …\".")
     @Test
@@ -96,7 +96,7 @@ public class ZoneScaleTest {
      * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Pins("ADDR-19")
-    @RedWitness(prose = "2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} put back to the flat 1024 it"
+    @LegacyWitness(prose = "2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} put back to the flat 1024 it"
             + " shipped as (for any zone with a child), this fails with \"Mars has a descent shell of 13786"
             + " blocks against a zone cell of 4502 (half 2251) …\".")
     @Test
@@ -134,7 +134,7 @@ public class ZoneScaleTest {
      * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Pins("ADDR-19")
-    @RedWitness(prose = "2026-09-29, with the same inversion as the descent-shell test —"
+    @LegacyWitness(prose = "2026-09-29, with the same inversion as the descent-shell test —"
             + " {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} returning the flat 1024 — this fails with \"Mars's innermost moon"
             + " has a sphere of influence 7843 blocks in radius against a cell of 4502 (half 2251) …\".")
     @Test
@@ -171,7 +171,7 @@ public class ZoneScaleTest {
      * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Pins("ADDR-19")
-    @RedWitness(prose = "2026-09-29, twice. With {@code ZoneScale#cellsAcrossZone} at {@code return 1} answering 2 for a"
+    @LegacyWitness(prose = "2026-09-29, twice. With {@code ZoneScale#cellsAcrossZone} at {@code return 1} answering 2 for a"
             + " childless body, this fails with \"a childless body's zone is not divided expected:&lt;1&gt; but"
             + " was:&lt;2&gt;\". With `ZoneScale.cellBlocks` sizing a one-cell zone from the realization cap"
             + " instead of the sphere, it fails with \"...so its one cell spans exactly its sphere"
@@ -219,7 +219,7 @@ public class ZoneScaleTest {
      * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Pins("ADDR-19")
-    @RedWitness(prose = "2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code int count = 1} returning the raw"
+    @LegacyWitness(prose = "2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code int count = 1} returning the raw"
             + " {@code needed} count instead of rounding it up to a power of two, this fails with \"Mars has a"
             + " lattice of 62 cells, which is not a power of two\".")
     @Test
@@ -238,7 +238,7 @@ public class ZoneScaleTest {
      * cell handed back here would be indistinguishable from a real lattice at every call site — the
      * naming would succeed and produce an address for a zone nobody owns.</p>
      */
-    @RedWitness(prose = "2026-09-29, with {@code ZoneScale#cellBlocks} at {@code return 0L} answering 1 instead of 0 for a"
+    @LegacyWitness(prose = "2026-09-29, with {@code ZoneScale#cellBlocks} at {@code return 0L} answering 1 instead of 0 for a"
             + " body with no zone, this fails with \"a body with no sphere of influence has no lattice"
             + " expected:&lt;0&gt; but was:&lt;1&gt;\".")
     @Test
@@ -338,7 +338,7 @@ public class ZoneScaleTest {
      * cell centre at the instant it crossed a sphere — up to half a cell, which in Earth's zone is
      * 924 647 blocks of teleport nobody asked for. This is the assertion that separates the two.</p>
      */
-    @RedWitness(prose = "2026-09-29, with {@code ZoneScale#addressOnLattice} at {@code return GalacticCoord.inZone(zoneKey, cellBlocks, ix, iy, iz,} dropping the in-cell"
+    @LegacyWitness(prose = "2026-09-29, with {@code ZoneScale#addressOnLattice} at {@code return GalacticCoord.inZone(zoneKey, cellBlocks, ix, iy, iz,} dropping the in-cell"
             + " remainder (locals 0), this fails with \"the address must denote where the craft actually is"
             + " expected:&lt;4315080&gt; but was:&lt;3698640&gt;\".")
     @Test
@@ -388,7 +388,7 @@ public class ZoneScaleTest {
      * Pins ADDR-19 (a zone's cell size is a property of the zone: a moon gets a cell of its own and a cell contains the sphere of the body it names).
      */
     @Pins("ADDR-19")
-    @RedWitness(prose = "2026-09-29, with {@code ZoneScale#addressOnLattice} at {@code long ix = cellIndex(offset.dx(), cellBlocks)} made to ignore the width it"
+    @LegacyWitness(prose = "2026-09-29, with {@code ZoneScale#addressOnLattice} at {@code long ix = cellIndex(offset.dx(), cellBlocks)} made to ignore the width it"
             + " is handed and use the undivided one (7 397 280), this fails with *\"a craft standing exactly"
             + " where the moon stands is named by cell 0_0_0.0_0_0 while the moon itself is named by"
             + " 0_0_0.1_0_0\"* — the defect verbatim.")

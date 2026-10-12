@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.Nebula;
 import dev.stannismod.stellurgy.universe.StellarMagnitude;
@@ -293,7 +293,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
                 done.addressesOnCrystal() >= 1);
     }
 
-    @RedWitness(prose = "with the survey written into NEITHER of the two places a save takes it from —"
+    @LegacyWitness(prose = "with the survey written into NEITHER of the two places a save takes it from —"
             + " {@code TileObservatory#writeToNBT} at {@code nbt.setTag(\"regionScan\", scan)} and"
             + " {@code TileObservatory#writeNetworkData} at {@code nbt.setTag(\"regionScan\", scan)},"
             + " which {@code TileMultiBlock.writeToNBT} also calls: \"the survey did not come back with the"
@@ -684,7 +684,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * buttons (the probe aims), the research-paced sweep (switched off here), or a sky other than the
      * shipped procedural one.</p>
      */
-    @RedWitness(prose = "with {@code TelescopeScan#characterise} at"
+    @LegacyWitness(prose = "with {@code TelescopeScan#characterise} at"
             + " {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} reading"
             + " {@code if (false)}, this fails with \"a sun-like star 2.98… ly away must be NAMED by the shipped"
             + " telescope\"; with {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading"
@@ -818,7 +818,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * <p>Does NOT see a look with no observer (no production caller makes one) or the obscured-look
      * count the operator is shown.</p>
      */
-    @RedWitness(prose = "with {@code TelescopeScan#characterise} at"
+    @LegacyWitness(prose = "with {@code TelescopeScan#characterise} at"
             + " {@code !isObscuredAt(hit.extinctionMagnitudes())} comparing the column"
             + " ({@code hit.extinctionMagnitudes() / Nebula.MAGNITUDES_PER_DENSITY_LIGHT_YEAR}), this fails with"
             + " \"behind dust thinner than the threshold the system must be named\"; the same with"
@@ -931,7 +931,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * <p>Sees the operator's toggle pressed through the machine's own button handler; does NOT see the
      * GUI that sends it, or the sync of what was taught to a client.</p>
      */
-    @RedWitness(prose = "with {@code TelescopeScan#characterise} at"
+    @LegacyWitness(prose = "with {@code TelescopeScan#characterise} at"
             + " {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} dropping"
             + " {@code wholeSystem}, this fails with \"recording positions only writes the home system's address"
             + " alone\"; with every body of the system reported to {@code named} inside {@code if (!namedSomething)},"
@@ -1087,7 +1087,7 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
      * Pins ADDR-25 (one seat, one system, one answer across attribution, territory and survey).
      */
     @Pins({"ADDR-23", "ADDR-25"})
-    @RedWitness(prose = "with {@code UniverseRegistry#anchorsInTerritory} at"
+    @LegacyWitness(prose = "with {@code UniverseRegistry#anchorsInTerritory} at"
             + " {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with"
             + " \"expected:&lt;seated=[0 home=0]&gt; but was:&lt;seated=[1 home=5]&gt;\" (the same reading the tree"
             + " gave before the mask existed, 2026-10-02); with {@code TelescopeScan#characterise} at"

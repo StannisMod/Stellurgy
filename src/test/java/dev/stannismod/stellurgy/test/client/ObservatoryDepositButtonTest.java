@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.TelescopeReading;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -44,7 +44,7 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientTest {
         return "knowledge-deposit";
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —"
             + " {@code TileObservatory#useNetworkData} at {@code int[] result = uploadCrystalHere()} answering the"
             + " button without calling {@code uploadCrystalHere}: \"no"
             + " `crystal_deposited` carrying pos = … was recorded within 200 ticks\". THE WORLD LEARNS —"

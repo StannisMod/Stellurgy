@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -79,11 +79,11 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * being a candidate, and the second T names the decoy. A designation that chose by distance names
      * the decoy first; one that ignored the heading would name the quarry behind him second.</p>
      */
-    @RedWitness(prose = "with {@code ShipDesignation#designate} at"
+    @LegacyWitness(prose = "with {@code ShipDesignation#designate} at"
             + " {@code double angle = angleFromSight(eye, look, ship.getValue());} ranking the ships ahead by"
             + " DISTANCE instead, this fails at \"with a ship dead ahead and a nearer one forty-five degrees off,"
             + " another was named\" (2026-10-05).")
-    @RedWitness(prose = "with {@code HullAllegianceRule#isFriend} at"
+    @LegacyWitness(prose = "with {@code HullAllegianceRule#isFriend} at"
             + " {@code && CodeUtils.entityHasMatchingCode(player, accessCode)) {} in {@code CODE_ON_CREW} negated,"
             + " this fails at \"with him aboard carrying the code, his battery never decided about that ship again"
             + " — no `turret_fire_decided` carrying … friendly = true\" (2026-10-05).")
@@ -222,11 +222,11 @@ public class HelmControlsClientGroupTest extends AbstractSharedVsClientTest {
      * this run in client ticks (an upper bound: read before the press and after the record arrived).
      * Measured 2026-10-05: the slowest act landed within 6 client ticks, so the window was 60.</p>
      */
-    @RedWitness(prose = "with {@code KeyBindings#scopeSteeringKeysToCockpit} at"
+    @LegacyWitness(prose = "with {@code KeyBindings#scopeSteeringKeysToCockpit} at"
             + " {@code gs.keyBindAttack.setKeyConflictContext(StellurgyKeyConflictContext.NOT_PILOTING);} and its"
             + " two siblings for use and pick removed, this fails at \"from the helm the cursor acted on the world"
             + " (held 60 ticks)\" (2026-10-05).")
-    @RedWitness(prose = "with {@code KeyBindings#onHelmBlockHighlight} at"
+    @LegacyWitness(prose = "with {@code KeyBindings#onHelmBlockHighlight} at"
             + " {@code if (StellurgyKeyConflictContext.PILOTING.isActive()) {} never cancelling, this fails at"
             + " \"from the helm a block was outlined as the one about to be hit (over 60 ticks)\" (2026-10-05).")
     @Test

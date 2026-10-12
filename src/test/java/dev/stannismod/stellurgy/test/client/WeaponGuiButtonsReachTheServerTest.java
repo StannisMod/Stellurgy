@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -57,7 +57,7 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
      * client JVM's (empty) network map and does nothing, and no packet carries the press to the
      * server. Measured on this test's first run.</p>
      */
-    @RedWitness(prose = "with {@code TileWeaponConsole#onInventoryButtonPressed} at {@code if (buttonId == BUTTON_HOLD_FIRE)}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#onInventoryButtonPressed} at {@code if (buttonId == BUTTON_HOLD_FIRE)}"
             + " acting on the client's copy (calling {@code setHoldFire} directly) instead of sending the press"
             + " to the server — the shape it shipped with — this fails at \"the console's Hold Fire button was"
             + " pressed and the battery never held fire on the server: the press never left the client — no"
@@ -108,7 +108,7 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
      * may legitimately move in between (a gun finishing its charge), and the screen is right if it
      * shows either of the states the server was in while it was being told.</p>
      */
-    @RedWitness(prose = "with {@code TileWeaponConsole#getModules} at {@code modules.add(new ReadoutSync(this));}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#getModules} at {@code modules.add(new ReadoutSync(this));}"
             + " followed by the client copy filling its own lines ({@code showReadout(readoutTag())}) and"
             + " {@code TileWeaponConsole#useNetworkData} at {@code if (id == NET_READOUT)} ignoring the server's"
             + " readout — the shape the screen shipped with, every line derived on the client — this fails at"
@@ -116,12 +116,12 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
             + " `client_console_readout` carrying pos = 624,84,620 and guns = 1 and holding = false was recorded"
             + " within 600 ticks\", with a {@code client_console_readout} in the same log, so the instrument ran"
             + " and saw the client's own zero (2026-10-01; green on the fixed tree the same day).")
-    @RedWitness(prose = "with {@code TileWeaponConsole#readoutTag} at {@code tag.setString(\"status\", networkStatusKey());}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#readoutTag} at {@code tag.setString(\"status\", networkStatusKey());}"
             + " writing the fixed key {@code msg.weaponConsole.status.unknown} instead — a screen told SOMETHING,"
             + " but not the server's status — this fails at \"the console's screen shows network status"
             + " 'unknown', which the server's network was in neither before the screen opened ('disconnected')"
             + " nor after its readout landed ('disconnected')\" (2026-10-01).")
-    @RedWitness(prose = "with {@code TileWeaponConsole#isUpdateRequired} at {@code return world != null && !world.isRemote && !console.readoutTag().equals(sent);}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#isUpdateRequired} at {@code return world != null && !world.isRemote && !console.readoutTag().equals(sent);}"
             + " also requiring {@code sent == null} — the readout sent on opening and never again — this fails at"
             + " \"Hold Fire was pressed and the console's screen never said the network is holding — no"
             + " `client_console_readout` carrying pos = 624,84,620 and holding = true was recorded within 600"
@@ -172,7 +172,7 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
      * reason as the console's — {@code TileFireControlSensor.onInventoryButtonPressed} sets the mode
      * field of the client's copy of the tile and sends nothing. Measured on this test's first run.</p>
      */
-    @RedWitness(prose = "with {@code TileFireControlSensor#onInventoryButtonPressed} at {@code if (buttonId == BUTTON_MODE)}"
+    @LegacyWitness(prose = "with {@code TileFireControlSensor#onInventoryButtonPressed} at {@code if (buttonId == BUTTON_MODE)}"
             + " setting the client copy's mode (calling {@code setMode} directly) instead of sending the press to"
             + " the server — the shape it shipped with — this fails at \"the sensor's mode button was pressed and"
             + " the sensor on the server never swept in ACTIVE mode: the press never left the client — no"

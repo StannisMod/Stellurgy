@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -45,7 +45,7 @@ public class TurretFriendOrFoeTest extends AbstractOwnBootClientTest {
     /** Controller + four barrels + two cooling jackets; the controller is not a part. */
     private static final int PARTS = 6;
 
-    @RedWitness(prose = "with {@code !targetIsFriendly()} taken out of {@code TileTurret.canFireNow}"
+    @LegacyWitness(prose = "with {@code !targetIsFriendly()} taken out of {@code TileTurret.canFireNow}"
             + " ({@code TileTurret#canFireNow} at {@code return !targetIsFriendly()}), this fails at \"the gun was PERMITTED to fire on a player carrying"
             + " its own access code\" on a decision reading {@code permitted:true, friendly:true} (2026-10-04).")
     @Test

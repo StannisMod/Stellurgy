@@ -4,7 +4,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import org.junit.Test;
@@ -60,7 +60,7 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
      * nothing else. The placement is linked on the map's own hearing of it
      * ({@code damage_invalidation_heard}), and the verdict is then read off the map once.</p>
      */
-    @RedWitness(prose = "with {@code DamageInvalidationHandler#onBlockPlaced} at {@code forget(event.getWorld(), event.getPos());} (the placement's"
+    @LegacyWitness(prose = "with {@code DamageInvalidationHandler#onBlockPlaced} at {@code forget(event.getWorld(), event.getPos());} (the placement's"
             + " {@code forget}) skipped, this fails with \"a block a player placed into a hole still reads as"
             + " DESTROYED ... {...block:minecraft:stone,wasDestroyed:true...}\". 2026-09-30.")
     @Test
@@ -113,11 +113,11 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
      * right-click. The link is the block's own stage write ({@code block_stage_set}), which carries
      * the stage it came from and the one it went to.
      */
-    @RedWitness(prose = "with {@code ItemRepairWelder#onItemUse} at {@code if (world.isRemote)}'s server branch returning before"
+    @LegacyWitness(prose = "with {@code ItemRepairWelder#onItemUse} at {@code if (world.isRemote)}'s server branch returning before"
             + " {@code weld}, this fails with \"a charged welder in a player's hand ... repaired nothing: the"
             + " item's own use never reached the repair — no `block_stage_set` carrying dim = 0 and pos ="
             + " 566,84,560 was recorded within 600 ticks\". 2026-09-30.")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30: with a write of one stage MORE inserted"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with a write of one stage MORE inserted"
             + " before {@code ItemRepairWelder.java:115}'s own, this fails at \"the stage write the welder made did"
             + " not start from the block's damage: {...from:3,to:1...} expected:&lt;2&gt; but was:&lt;3&gt;\"; with"
             + " that line taking two stages off, at \"one use of the welder must take exactly one stage off:"
@@ -175,7 +175,7 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
      * ({@code damage_invalidation_heard} with {@code cause} {@code break}), and the verdict is then
      * read off the map once.</p>
      */
-    @RedWitness(prose = "with {@code DamageInvalidationHandler#onBlockBroken} at {@code forget(event.getWorld(), event.getPos());} (the break's {@code forget})"
+    @LegacyWitness(prose = "with {@code DamageInvalidationHandler#onBlockBroken} at {@code forget(event.getWorld(), event.getPos());} (the break's {@code forget})"
             + " skipped, this fails with \"a damaged block a player broke still carries its damage (2 stages"
             + " before the break) ... {...stage:2,maxStage:4,...block:minecraft:air,wasDestroyed:false...}\"."
             + " 2026-09-30.")

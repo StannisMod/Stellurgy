@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.test;
 
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -83,10 +83,10 @@ public final class AssembledCraft {
      * addressable: its naming (which hands over the physics id) and its first flight model (which
      * hands over the flight computer's address aboard).
      */
-    @RedWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);} (the build never handed to the"
+    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);} (the build never handed to the"
             + " physics mod) fails \"the craft must be named once it is assembled\" in every scenario that builds,"
             + " 2026-09-30 — taken on the pre-2026-10-07 form, which handed over a pasted snapshot at that line.")
-    @RedWitness(prose = "{@code TileAdvancedFlightComputer#rebuildFlightModel} at {@code net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(} (a rebuilt flight model never announced)"
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#rebuildFlightModel} at {@code net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(} (a rebuilt flight model never announced)"
             + " fails \"the craft's flight computer must build its first flight model\" in every scenario that"
             + " builds, 2026-09-30")
     public static AssembledCraft assemble(FixtureSite site, Events.Probe probe, Events events,

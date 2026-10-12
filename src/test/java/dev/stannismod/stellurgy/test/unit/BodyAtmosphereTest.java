@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -28,7 +28,7 @@ public class BodyAtmosphereTest {
     /**
      * A world the derivation gave oxygen breathes Earth's mix, whatever its pressure.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. SHARED OUT — {@code BodyAtmosphere#derive}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SHARED OUT — {@code BodyAtmosphere#derive}"
             + " at {@code air.add(entry.getKey(), Math.round(totalPressure * (entry.getValue() / share)), kelvin);}"
             + " halving every amount: \"the whole stated pressure is shared out expected:&lt;2.0E9&gt; but"
             + " was:&lt;1.0E9&gt;\". OXYGEN — {@code BodyAtmosphere#derive} at {@code if (oxygenated)} made never to"
@@ -50,7 +50,7 @@ public class BodyAtmosphereTest {
      * Venus: heavy, hot, never rearranged by life — the outgassed air itself, carbon dioxide over
      * nitrogen, with its trace of water still airborne because nothing is cold enough to trap it.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. WHAT IT HOLDS — {@code BodyAtmosphere#derive}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. WHAT IT HOLDS — {@code BodyAtmosphere#derive}"
             + " at {@code boolean escapes = retention * gas.molarMass() < ESCAPE_THRESHOLD;} with the threshold"
             + " raised from 4.6 to 8.0: \"Venus holds [nitrogen, carbondioxide], expected [carbondioxide,"
             + " nitrogen, water]\". DOMINANT — {@code BodyAtmosphere#derive} at"
@@ -69,7 +69,7 @@ public class BodyAtmosphereTest {
      * Titan: too cold for carbon dioxide to stay airborne, heavy enough for the cold to keep its
      * nitrogen — a nitrogen world, as it really is.
      */
-    @RedWitness(prose = "with {@code BodyAtmosphere#derive} at"
+    @LegacyWitness(prose = "with {@code BodyAtmosphere#derive} at"
             + " {@code boolean frozen = !gasGiant && kelvin < gas.boilingKelvin();} made false, this fails with"
             + " \"Titan holds [carbondioxide, nitrogen], expected [nitrogen]\"; and with the threshold at"
             + " {@code boolean escapes = retention * gas.molarMass() < ESCAPE_THRESHOLD;} raised to 8.0, with"
@@ -84,7 +84,7 @@ public class BodyAtmosphereTest {
      * Mars: light but cold enough to hold both of its outgassed bulk gases, and cold enough that its
      * water lies on the ground rather than in the air.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. KEEPS NITROGEN — {@code BodyAtmosphere#derive}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. KEEPS NITROGEN — {@code BodyAtmosphere#derive}"
             + " at {@code boolean escapes = retention * gas.molarMass() < ESCAPE_THRESHOLD;} with the threshold"
             + " raised to 8.0: \"Mars holds [carbondioxide], expected [carbondioxide, nitrogen]\". FREEZES ITS"
             + " WATER — {@code BodyAtmosphere#derive} at"
@@ -102,7 +102,7 @@ public class BodyAtmosphereTest {
      * nothing. Ganymede is the one that separates this from Titan — nearly the same size and cold,
      * and its nitrogen still escapes.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30, each at {@code BodyAtmosphere#derive}."
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30, each at {@code BodyAtmosphere#derive}."
             + " MERCURY — at {@code boolean escapes = retention * gas.molarMass() < ESCAPE_THRESHOLD;} with the"
             + " threshold lowered to 4.0: \"Mercury holds [carbondioxide], expected []\". GANYMEDE — the same line"
             + " with the threshold at 4.3, which Mercury still clears: \"Ganymede holds [nitrogen], expected []\";"
@@ -124,7 +124,7 @@ public class BodyAtmosphereTest {
      * A giant keeps the nebula it formed from — hydrogen, helium and methane — while a hot one has
      * burnt its methane to carbon monoxide.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. HOT — {@code BodyAtmosphere#derive} at"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. HOT — {@code BodyAtmosphere#derive} at"
             + " {@code boolean burnt = gasGiant && gas == GasRegistry.METHANE && kelvin >= METHANE_CEILING_KELVIN;}"
             + " made false: \"hot Jupiter holds [helium, methane, hydrogen], expected [hydrogen, helium]\"."
             + " KEEPS — {@code BodyAtmosphere#retention} at"
@@ -142,7 +142,7 @@ public class BodyAtmosphereTest {
      * Neptune is colder than methane's boiling point and still holds it: a giant has no surface to
      * freeze onto. This is what keeps the cold trap a rule about rocky worlds.
      */
-    @RedWitness(prose = "with {@code BodyAtmosphere#derive} at"
+    @LegacyWitness(prose = "with {@code BodyAtmosphere#derive} at"
             + " {@code boolean frozen = !gasGiant && kelvin < gas.boilingKelvin();} applied to giants too, this"
             + " fails with \"Neptune holds [helium, hydrogen], expected [hydrogen, helium, methane]\" (2026-09-30).")
     @Test
@@ -156,7 +156,7 @@ public class BodyAtmosphereTest {
      * one of the same size and temperature keeps too. (Temperature has no such rule — colder holds
      * against escape but freezes out — which is why this sweeps mass alone.)
      */
-    @RedWitness(prose = "with {@code BodyAtmosphere#retention} at"
+    @LegacyWitness(prose = "with {@code BodyAtmosphere#retention} at"
             + " {@code return (massEarths / radiusEarths) / (kelvin / EARTH_SURFACE_KELVIN);} inverted to radius"
             + " over mass, this fails with \"mass 2.919292602539063 kept nitrogen, mass 4.378938903808595 did not"
             + " (T=250)\" (2026-09-30). The closing count is the sweep's own premise and is not witnessed.")
@@ -191,7 +191,7 @@ public class BodyAtmosphereTest {
      * A body with no mass or no size has nothing to hold air with, and the rule refuses rather than
      * answers.
      */
-    @RedWitness(prose = "with {@code BodyAtmosphere#derive} at"
+    @LegacyWitness(prose = "with {@code BodyAtmosphere#derive} at"
             + " {@code if (!(massEarths > 0.0D) || !(radiusEarths > 0.0D))} made never to hold, this fails with"
             + " \"no refusal for mass 0\" (2026-09-30).")
     @Test

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.universe.ConeWalk;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.RegionScan;
@@ -38,7 +38,7 @@ public class TelescopeReachTest {
      * assertion MEASURES what they buy — that the full-depth pointing really would not fit — so the
      * shortening below is one the tuning forced and not one it merely permitted.</p>
      */
-    @RedWitness(prose = "with {@code Tuning#fit} at {@code depth = Math.max(1, depth / 2);}"
+    @LegacyWitness(prose = "with {@code Tuning#fit} at {@code depth = Math.max(1, depth / 2);}"
             + " reading {@code break;}, this fails with \"an aperture too good for the budget must be shortened,"
             + " not refused: a pointing of half-angle 5,000 degrees holds more than 5000 looks …\"; at"
             + " {@code if (aimed.totalLooks() <= maxCells)} reading {@code if (true)}, with \"the survey must fit"

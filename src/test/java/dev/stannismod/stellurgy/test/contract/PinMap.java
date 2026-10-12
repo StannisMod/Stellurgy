@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  *   <li>PINNED -- tagged {@code [T]}, names test METHODS ({@code ClassTest#method}, or
  *       {@code …#method} continuing the previous class; a bare class pins nothing), every named class
  *       and method exists, and at least one named method carries {@link Pins} with the anchor AND a
- *       {@link RedWitness}. A clause listing {@code REGIONS:} is pinned only when those methods'
+ *       witness, a {@link RedWitness} or a {@link LegacyWitness}. A clause listing {@code REGIONS:} is pinned only when those methods'
  *       {@link Regions} cover every listed region.</li>
  *   <li>UNPINNED -- carries {@code UNPINNED:} with a dated maintainer ruling, or "pinned by
  *       {@code <ANCHOR>}" where that anchor is PINNED and one of its named methods pins this one too.</li>
@@ -95,7 +95,8 @@ public final class PinMap {
 
         /**
          * @param pins      the anchors of its {@link Pins}
-         * @param witnesses how many {@link RedWitness} records it carries ({@link NotYetRed} is not one)
+         * @param witnesses how many {@link RedWitness} and {@link LegacyWitness} records it carries ({@link NotYetRed}
+         *                  is not one)
          * @param regions   per anchor, the regions its {@link Regions} name
          * @param runs      whether a test task RUNS it as a test: a {@code @Test} not {@code @Ignore}d, in a
          *                  concrete class a task includes (or, declared in an abstract class, inherited by one)
@@ -349,9 +350,10 @@ public final class PinMap {
         }
         if (!evidence) {
             return pinnedButNotRun
-                    ? "the named method carries @Pins(\"" + c.anchor + "\") and a @RedWitness, but no test task"
+                    ? "the named method carries @Pins(\"" + c.anchor + "\") and a witness, but no test task"
                             + " runs it as a test (not a @Test, @Ignore'd, or in a class no task includes)"
-                    : "no named method carries @Pins(\"" + c.anchor + "\") together with a @RedWitness";
+                    : "no named method carries @Pins(\"" + c.anchor + "\") together with a witness"
+                            + " (@RedWitness or @LegacyWitness)";
         }
         Set<String> wanted = regions(c.body);
         if (wanted == null) {

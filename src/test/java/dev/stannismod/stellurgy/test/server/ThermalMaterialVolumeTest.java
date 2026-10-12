@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -46,7 +46,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
         return read;
     }
 
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. A CUBIC METRE —"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. A CUBIC METRE —"
             + " {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);}"
             + " measuring every block at twice its collision volume: \"a full block is a cubic metre: …"
             + " expected:&lt;1000000&gt; but was:&lt;2000000&gt;\". A CAPACITY — {@code ThermalMaterials#slugCapacity}"
@@ -64,7 +64,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
                 iron.longInteger("capacity") > 0);
     }
 
-    @RedWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);} measuring every block at twice its collision"
+    @LegacyWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);} measuring every block at twice its collision"
             + " volume: \"half the shape is half the substance: … expected:&lt;500000&gt; but"
             + " was:&lt;1000000&gt;\", 2026-09-30. The placement premise is an arrangement and is not witnessed.")
     @Test
@@ -78,7 +78,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
     /**
      * The discriminator: the outline of a staircase is a full cube, and its substance is not.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NOT A WHOLE BLOCK —"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NOT A WHOLE BLOCK —"
             + " {@code ThermalMaterials#volumeMillilitres} at {@code return (long) (cubicMetres * 1_000_000L);}"
             + " measuring every block at twice its collision volume: \"a staircase must"
             + " not read as a whole block … \\\"volumeMilliLitres\\\":1500000\". THREE QUARTERS —"
@@ -104,7 +104,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * slab, so without this the thing in your hand is nothing at all - while the identical block on
      * the ground is half a cubic metre.
      */
-    @RedWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code return fromBlock * stack.getCount();} doubling the volume an item's block"
+    @LegacyWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code return fromBlock * stack.getCount();} doubling the volume an item's block"
             + " answers for: \"an item the ore dictionary cannot name still has the shape of what it places: …"
             + " expected:&lt;500000&gt; but was:&lt;1000000&gt;\", 2026-09-30.")
     @Test
@@ -120,7 +120,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * block's own {@code Material} a stone slab has a size and no identity - and a size alone answers
      * nothing, because capacity is the two multiplied.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. STONE — {@code ThermalMaterials#byVanillaMaterial} at {@code return byName(VANILLA_MATERIAL_NAMES.get(vanilla));}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. STONE — {@code ThermalMaterials#byVanillaMaterial} at {@code return byName(VANILLA_MATERIAL_NAMES.get(vanilla));}"
             + " answering no material for any vanilla {@code Material}: \"stone must resolve through the block's"
             + " own vanilla material: … expected:&lt;[stone]&gt; but was:&lt;[]&gt;\". A CAPACITY — {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} answering zero for every slug: \"and having both halves, it must have a"
             + " capacity: … \\\"capacity\\\":0\". The placement premise is an arrangement and is not witnessed.")
@@ -140,7 +140,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * because that material means "metal-looking" and nothing finer. Asked on an IRON block this
      * assertion would pass whichever source won, which is a test that cannot fail.
      */
-    @RedWitness(prose = "with {@code ThermalMaterials#of} at {@code if (found != null)} passing over every ore-dictionary match:"
+    @LegacyWitness(prose = "with {@code ThermalMaterials#of} at {@code if (found != null)} passing over every ore-dictionary match:"
             + " \"the specific name must win over the coarse one: … expected:&lt;[gold]&gt; but"
             + " was:&lt;[iron]&gt;\", 2026-09-30. The placement premise is an arrangement and is not"
             + " witnessed.")
@@ -156,7 +156,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * <p>Its capacity is not asserted: a capacity is material times volume, and with no volume it is
      * zero whatever the material — so "it can hold no heat" is this verdict again.</p>
      */
-    @RedWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code double cubicMetres = 0.0D;} measuring a block with no collision boxes as"
+    @LegacyWitness(prose = "with {@code ThermalMaterials#volumeMillilitres} at {@code double cubicMetres = 0.0D;} measuring a block with no collision boxes as"
             + " a whole cube: \"air is not a small lump of something: … expected:&lt;0&gt; but"
             + " was:&lt;1000000&gt;\", 2026-09-30. The placement premise is an arrangement and is not witnessed.")
     @Test

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -81,7 +81,7 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, DIM));
     }
 
-    @RedWitness(prose = "with {@code TacticalScan.isAboard}'s guard ({@code TacticalScan#isAboard} at {@code if (ownShipId == null)})"
+    @LegacyWitness(prose = "with {@code TacticalScan.isAboard}'s guard ({@code TacticalScan#isAboard} at {@code if (ownShipId == null)})"
             + " inverted so no body is ever aboard, this fails with \"the sensor holds the creeper standing on"
             + " its own deck ... tracks:[{entityId:2102,distance:1.35...,quality:1.0},{entityId:2103,"
             + " distance:20.018...}]\"; with {@code TileFireControlSensor.worldPosition}"

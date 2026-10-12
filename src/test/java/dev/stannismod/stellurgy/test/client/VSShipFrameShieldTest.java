@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -107,7 +107,7 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
      * velocity command the hold obeys; a never-flown craft is simulated, so nothing here relies on
      * it being inert.</p>
      */
-    @RedWitness(prose = "with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}"
+    @LegacyWitness(prose = "with {@code FieldFrames#forBlock} at {@code new ShipFieldFrame(world, shipId)}"
             + " replaced by {@code WorldFieldFrame.INSTANCE}, this fails \"the ship's emitter must resolve a SHIP"
             + " frame and report it ready … no `field_frame_resolved` carrying shipFramed:true AND ready:true"
             + " was recorded within 200 ticks\" — 2026-10-06. With {@code ShipFieldFrame#surfaceVelocityAt} at"

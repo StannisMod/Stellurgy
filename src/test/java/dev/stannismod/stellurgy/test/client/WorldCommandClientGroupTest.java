@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -258,12 +258,12 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
      * harness client is always remote (a separate server JVM), so this does not see the single-player
      * branch, where the registration is the integrated server's and must be left alone.</p>
      */
-    @RedWitness(prose = "with {@code PacketDimInfo#executeClient} at"
+    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
             + " {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every"
             + " client only forgetting, the shape it shipped with — this fails with \"the client forgot the"
             + " deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,"
             + " withdraw:false,forgeRegistered:true}\" (2026-10-06).")
-    @RedWitness(prose = "with {@code PacketDimInfo#executeClient} at"
+    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
             + " {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails"
             + " at \"the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14\";"
             + " with its {@code if (deleteDim)} branch never taken, at \"the client was never told the planet was"
@@ -409,7 +409,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
      * Positive coverage of the whole resolve &rarr; transfer &rarr; placement path without a second
      * bot (the harness is single-client; fetching a DIFFERENT connected player stays out of scope).
      */
-    @RedWitness(prose = "with {@code FetchCommand#execute} at {@code new"
+    @LegacyWitness(prose = "with {@code FetchCommand#execute} at {@code new"
             + " BasicTeleporter(destPlayer.getPosition())} aimed 20 blocks east, the wait for the client's"
             + " placement at the teleporter's target passes and this fails on the position assertion with"
             + " \"preX=4096.5 … postX=4116.5\" (2026-09-30).")

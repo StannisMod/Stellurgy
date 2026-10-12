@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
@@ -44,7 +45,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
      * Earth was quoted the interstellar price for a planet of its own star, and an edit to star 0 does
      * not reach the star Earth is lit by.</p>
      */
-    @RedWitness(prose = "2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}"
+    @LegacyWitness(prose = "2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}"
             + " at {@code overworldProperties.setStar(sol)} written as"
             + " {@code sol.addPlanet(overworldProperties)}, which lists Earth without binding it:"
             + " \"Earth's star must be the registered star 0 itself, not a copy with its id: {… \"starIsRegistered\":false …}\".")

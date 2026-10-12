@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -143,7 +143,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
      * Pins INV-API-10 (writeToNBT wraps in rocketStats).
      */
     @Pins("INV-API-10")
-    @RedWitness(prose = "with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}"
+    @LegacyWitness(prose = "with {@code StatsRocket#createFromNBT} at {@code statsRocket.readFromNBT(nbt)}"
             + " handed the unwrapped {@code nbt.getCompoundTag(TAGNAME)} instead — the shipped defect — this"
             + " fails at the verdict: the rewritten compound carries {@code thrust:0}, {@code weight:0.0f} and"
             + " {@code playerXPos:-2147483648} where the written one carries {@code thrust:100},"

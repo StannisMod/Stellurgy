@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -138,7 +138,7 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
         return TelescopeReading.at(this::exec, at(site));
     }
 
-    @RedWitness(prose = "with {@code TileObservatory.scanOrigin}'s {@code .map(galacticCell)} removed:"
+    @LegacyWitness(prose = "with {@code TileObservatory.scanOrigin}'s {@code .map(galacticCell)} removed:"
             + " \"an observatory on the moon must survey from its system's galactic cell … expected 19_0_0 but"
             + " was 19_0_0.1_0_0\"; with {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}'s body loop skipping a {@code MOON}: \"the"
             + " moon's local radar must name the moon it stands on\"; and skipping a {@code PLANET}: \"and the"

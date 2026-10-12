@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -42,11 +42,11 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
      * one network out of three nodes. No cable is involved: two touching nodes are one network, and
      * a cable is a reach tool rather than a requirement.</p>
      */
-    @RedWitness(prose = "with {@code TileTurret#getEffectiveTarget} at {@code if (state != null && state.getTarget() != null)} taking the network's target only when a"
+    @LegacyWitness(prose = "with {@code TileTurret#getEffectiveTarget} at {@code if (state != null && state.getTarget() != null)} taking the network's target only when a"
             + " console stands directly east of the gun (the nearest gun alone commanded), this fails with \"the"
             + " second gun never fired on the console's target: one console must point the whole battery, not"
             + " the nearest gun\". 2026-09-30.")
-    @RedWitness(prose = "with {@code TileWeaponConsole.getGunCount} ({@code TileWeaponConsole#getGunCount} at {@code return state == null ? 0 : state.getSinkCount();})"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole.getGunCount} ({@code TileWeaponConsole#getGunCount} at {@code return state == null ? 0 : state.getSinkCount();})"
             + " counting at most one gun, this fails at \"the console is not commanding both guns ..."
             + " {...guns:1...} expected:&lt;2&gt; but was:&lt;1&gt;\" (2026-09-30).")
     @Test
@@ -78,10 +78,10 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
     /**
      * Hold fire stops the shooting without losing the target.
      */
-    @RedWitness(prose = "with the hold's answer ignored in {@code TileTurret.update}'s fire gate"
+    @LegacyWitness(prose = "with the hold's answer ignored in {@code TileTurret.update}'s fire gate"
             + " ({@code TileTurret#update} at {@code if (!onTarget || isHoldingFire() || !canFireNow())}, {@code isHoldingFire()} still asked), this fails at \"the battery"
             + " kept firing while holding fire\" (2026-09-29).")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30: with {@code TileTurret.isHoldingFire}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30: with {@code TileTurret.isHoldingFire}"
             + " ({@code TileTurret.java:619}) letting go of the hold one tick in seven, this fails at \"the gun"
             + " stopped holding inside the hold window ... {...held:true},{...held:false}...\"; with"
             + " {@code TileWeaponConsole.getTarget} ({@code TileWeaponConsole.java:191}) answering nothing while the"
@@ -147,11 +147,11 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
      * Breaking the last console clears the target rather than leaving the battery firing at a point
      * nobody can retract — the one failure a player cannot fix by breaking something.
      */
-    @RedWitness(prose = "with {@code WeaponNetworkDomain#onComponentRebuilt} at {@code if (controllers.isEmpty())}'s clear of a console-less network's"
+    @LegacyWitness(prose = "with {@code WeaponNetworkDomain#onComponentRebuilt} at {@code if (controllers.isEmpty())}'s clear of a console-less network's"
             + " target disabled, this fails with \"the gun still holds the command of a console that no longer"
             + " exists — no `turret_aim` carrying ... commanded = false was recorded within 600 ticks\" while the"
             + " gun went on firing. 2026-09-30.")
-    @RedWitness(prose = "with {@code TileTurret.update} ({@code TileTurret#update} at {@code Vec3d target = getEffectiveTarget();}) taking back the"
+    @LegacyWitness(prose = "with {@code TileTurret.update} ({@code TileTurret#update} at {@code Vec3d target = getEffectiveTarget();}) taking back the"
             + " last target it had once it had held none for five ticks, this fails at \"the battery fired after"
             + " it lost the command of a console that no longer exists (marks 1851..1916, 21 ticks past the"
             + " recharge): [{...shot:2...},{...shot:3...}]\" (2026-09-30). The \"took a command again\" verdict after"
@@ -224,7 +224,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
      * exact consoles of one row; the code is then read once from the console that joined them, which
      * holds no order of its own.</p>
      */
-    @RedWitness(prose = "with {@code WeaponNetworkDomain#seedFromLatestOrders} at"
+    @LegacyWitness(prose = "with {@code WeaponNetworkDomain#seedFromLatestOrders} at"
             + " {@code stamp >= latestStamp} made {@code stamp <= latestStamp} (the earliest order wins), this"
             + " fails at \"the joined battery in the first row must take the order given last — the east"
             + " console's: … expected:&lt;w636-[la]st&gt; but was:&lt;w636-[fir]st&gt;\" (2026-10-05).")

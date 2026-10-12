@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -49,7 +49,7 @@ public class ShotReachesClientTest extends AbstractOwnBootClientTest {
     /** Comfortably outside it, and travelling further away. */
     private static final double FAR = 4_000.0D;
 
-    @RedWitness(prose = "with the radius test in {@code ProximityBroadcast.sendNearSegment}"
+    @LegacyWitness(prose = "with the radius test in {@code ProximityBroadcast.sendNearSegment}"
             + " ({@code ProximityBroadcast#sendNearSegment} at {@code if (distanceSqToSegment(player.posX, player.posY, player.posZ, from, to) > radiusSq)}) disabled, this fails at \"a round fired four kilometres away"
             + " was replicated to this client anyway\", on a {@code client_shot_drawn} at {@code x=4008.5}"
             + " (2026-09-29).")
@@ -82,10 +82,10 @@ public class ShotReachesClientTest extends AbstractOwnBootClientTest {
      * A round that stops in a wall in front of the player is told to the client as ENDED, for the
      * reason it ended — so the drawing stops at the wall and the flash is drawn where it hit.
      */
-    @RedWitness(prose = "with {@code ShotReplication.announceEnd} ({@code ShotReplication#announceEnd} at {@code if (world == null || world.isRemote || point == null)})"
+    @LegacyWitness(prose = "with {@code ShotReplication.announceEnd} ({@code ShotReplication#announceEnd} at {@code if (world == null || world.isRemote || point == null)})"
             + " made to return before sending, this fails at \"a round that stopped in a wall beside the player"
             + " was never told to the client as over\" (2026-09-29).")
-    @RedWitness(prose = "with both of {@code ShotSubstrate.step}'s come-to-rest returns"
+    @LegacyWitness(prose = "with both of {@code ShotSubstrate.step}'s come-to-rest returns"
             + " ({@code ShotSubstrate#step} at {@code return ShotEndReason.STRUCTURE_IMPACT;} and {@code :320}) answering EXPIRED, this fails at \"the client was"
             + " told the round ended, but not that it hit structure: {...client_shot_ended...reason:EXPIRED...}\""
             + " (2026-09-30). That inversion is in the server's decision, so it shows the verdict reads the reason"

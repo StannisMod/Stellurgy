@@ -4,9 +4,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NotYetRed;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import org.junit.Before;
@@ -597,7 +597,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * and the result synced back. Slots are addressed by the container slot number the report gives,
      * never by guessed coordinates.
      */
-    @RedWitness(prose = "with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:"
+    @LegacyWitness(prose = "with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:"
             + " \"`slots` holds no element whose `item` is stellurgy:planetidchip — it holds 0\","
             + " 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's"
             + " quick-move never asks it.")
@@ -722,7 +722,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * whatever distance the clicks actually produced — so the arrangement follows the GUI rather
      * than assuming it worked.</p>
      */
-    @RedWitness(prose = "with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger(\"d\")))}) skipped:"
+    @LegacyWitness(prose = "with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger(\"d\")))}) skipped:"
             + " \"clicking the distance button twice must move the aim out from 1: … aimDistance:1\","
             + " 2026-09-28.")
     @NotYetRed(prose = "NOT YET, with {@code ClientEvents#placeOntoGroundItHolds} at"
@@ -835,7 +835,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * Pins INV-IVC-03 (clicking a planet button on the selector registers a server-side selection).
      */
     @Pins("INV-IVC-03")
-    @RedWitness(prose = "with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:"
+    @LegacyWitness(prose = "with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:"
             + " \"clicking planet button 0 did not register a selection server-side: … hasSelection:false\","
             + " 2026-09-28. The link before it records at the handler's RETURN and stays green by design —"
             + " it says the packet arrived, not that it was applied.")
@@ -895,7 +895,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * {@link #thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150}, and the rocket's own selector, which
      * opens the same module over a rocket.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit"
+    @LegacyWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit"
             + " radius — back on the raw unit ({@code properties.getOrbitalDist() * distanceZoomMultiplier}):"
             + " \"Earth (1.0 AU) must be drawn 150.0 pixels from its star, slack 2.8284271247461903: … expected:"
             + " &lt;150.0&gt; but was:&lt;1496028.93842148&gt;\". The two {@code requireArranged} lines are"
@@ -967,7 +967,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * at any distance but the one the world's moons stand at — the proportion is pinned in
      * {@code AstronomicalBodyHelperTest}.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at"
+    @LegacyWitness(prose = "2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at"
             + " {@code AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT}"
             + " back on the raw distance ({@code properties.orbitalDist}), this fails with \"each moon must be"
             + " drawn 0.5 x moonViewUnits + Earth's width (150) pixels from Earth, slack 2.8284271247461903:"
@@ -1294,20 +1294,20 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * the screen's own button, which {@code WeaponGuiButtonsReachTheServerTest} drives, and a press
      * from another dimension (the forger can only address its own world).</p>
      */
-    @RedWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
             + " answering {@code true} unconditionally (the shape it shipped with), this fails at \"the console"
             + " judged a press from 24 blocks away as within reach: {...weapon_console_press_judged,"
             + " pos:4016,150,4016,player:ForgeTestClient,reachable:true}\" (2026-10-06).")
-    @RedWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code if (!canInteractWithContainer(player))}"
             + " keeping its log line but not its {@code return}, this fails at \"a press from beyond reach held the"
             + " battery's fire anyway: {...network:true,...holdFire:true...}\" (2026-10-06).")
-    @RedWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ}"
             + " answering {@code false} unconditionally, this fails at \"the console refused a press from the"
             + " player standing on it: {...reachable:false}\" (2026-10-06).")
-    @RedWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#useNetworkData} at {@code setHoldFire(!isHoldFire());}"
             + " removed, this fails at \"a press from the player standing on the console did not hold fire:"
             + " {...holdFire:false...}\" (2026-10-06).")
-    @RedWitness(prose = "with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}"
+    @LegacyWitness(prose = "with {@code TileWeaponConsole#update} at {@code SubsystemNetworkManager.of(world).register(this);}"
             + " removed, this fails at the arrangement wait \"the console never joined a weapon network ... no"
             + " `weapon_orders_seeded` carrying consoles = 4144,150,4016\"; with {@code TileWeaponConsole#useNetworkData}"
             + " returning before {@code if (!canInteractWithContainer(player))}, at the far wait \"the console never"
@@ -1389,7 +1389,7 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientTest {
      * player standing on it switches it to illuminating. Both presses are forged by the real client
      * ({@link ForgedMachinePress}); the screen's own button is {@code WeaponGuiButtonsReachTheServerTest}'s.
      */
-    @RedWitness(prose = "(2026-10-06, one inversion per run):"
+    @LegacyWitness(prose = "(2026-10-06, one inversion per run):"
             + " {@code TileFireControlSensor#canInteractWithContainer} at {@code <= CONTAINER_REACH_SQ} answering"
             + " true fails \"the sensor judged a press from 24 blocks away as within reach\"; answering false fails"
             + " \"the sensor refused a press from the player standing on it\";"

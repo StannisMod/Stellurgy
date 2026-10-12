@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
@@ -58,7 +58,7 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * <p>What this does not see: the gauge being DRAWN — it is the server copy of the tile answering
      * the same {@code getTotalProgress} the client's bar is drawn from.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code TilePlanetSelector#distanceGauge} at {@code return (int) (body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back on"
+    @LegacyWitness(prose = "2026-09-30, with {@code TilePlanetSelector#distanceGauge} at {@code return (int) (body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back on"
             + " {@code orbitalDist / 16}: \"each planet must read floor(orbitAU x 100 / 16) on the distance"
             + " gauge: Earth at 1.0 AU → 93498; GaugeTarget at 11.998453186842863 AU → 1121839; : arrays first"
             + " differed at element [0]; expected:&lt;6&gt; but was:&lt;93498&gt;\" — both planets wrong.")
@@ -116,7 +116,7 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * over the sorted radii). Read raw, Earth stands 14 960 blocks out. The slack was first 0.05 and
      * was tightened to the derived one on 2026-09-30, after the first greens.</p>
      */
-    @RedWitness(prose = "2026-09-30 (re-taken the same day when the radius moved into its own method),"
+    @LegacyWitness(prose = "2026-09-30 (re-taken the same day when the radius moved into its own method),"
             + " with {@code TileHolographicPlanetSelector#projectionRadius} at"
             + " {@code return PROJECTION_INNER_RADIUS + body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU}"
             + " back on {@code body.orbitalDist / 100d}: \"each planet of Sol must be projected 0.1 + its orbit in"
@@ -205,7 +205,7 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * any distance but the one the server's moons stand at — the proportion is pinned in
      * {@code AstronomicalBodyHelperTest}.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code TilePlanetSelector#distanceGauge} at"
+    @LegacyWitness(prose = "2026-09-30, with {@code TilePlanetSelector#distanceGauge} at"
             + " {@code if (body.isMoon())} made false (a moon read through the planet law), this fails with"
             + " \"each moon of Earth must read floor(moonViewUnits / 16) on the distance gauge: Luna at 3844"
             + " units → 0; : arrays first differed at element [0]; expected:&lt;9&gt; but was:&lt;0&gt;\".")
@@ -266,7 +266,7 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * with Luna alone — within the sine table's step at the farthest radius, one verdict. Through the
      * planet law Luna stands at 0.1026.</p>
      */
-    @RedWitness(prose = "2026-09-30, with {@code TileHolographicPlanetSelector#projectionRadius} at"
+    @LegacyWitness(prose = "2026-09-30, with {@code TileHolographicPlanetSelector#projectionRadius} at"
             + " {@code if (body.isMoon())} made false (a moon projected through the planet law), this fails"
             + " with \"a planet centred in the hologram must carry its moons 0.1 + moonViewUnits / 100 out,"
             + " slack 2.16937643464764E-4 (expected [0.0, 1.6], projected [0.0, 0.10256955525784028]): …"

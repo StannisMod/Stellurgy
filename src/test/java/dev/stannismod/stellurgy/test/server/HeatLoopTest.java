@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
@@ -58,7 +58,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-01 (A machine's waste heat ends up in the loop touching it, and raises its temperature above ambient).
      */
     @Pins("INV-HEAT-01")
-    @RedWitness(prose = "with {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's pending heat: \"the"
+    @LegacyWitness(prose = "with {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's pending heat: \"the"
             + " plant's waste heat must end up in the loop it touches (stored=0)\", 2026-09-30. The three"
             + " premises at its head are arrangements and are not witnessed.")
     @Test
@@ -99,7 +99,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * Pins HEAT-3 (one connected network is one thermodynamic object: the same heat in a longer loop is a lower temperature).
      */
     @Pins({"INV-HEAT-02", "HEAT-3"})
-    @RedWitness(prose = "with {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(stored, capacity, temperature(stored, capacity),} publishing the temperature against one block's"
+    @LegacyWitness(prose = "with {@code HeatNetwork#tickThermodynamics} at {@code state.setThermalState(stored, capacity, temperature(stored, capacity),} publishing the temperature against one block's"
             + " capacity instead of the loop's: \"a loop with twice the thermal mass must warm markedly less on"
             + " the same heat (short rose 226500 milliK, long rose 226500)\", 2026-09-30. The four premises"
             + " before it are arrangements and are not witnessed.")
@@ -154,7 +154,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-03 (With shipHeat off nothing stores heat, no loop reports capacity, and every loop reads ambient).
      */
     @Pins("INV-HEAT-03")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. STORES NO HEAT — {@code HeatNetwork#enabled} at {@code return StellurgyConfiguration.getCurrentConfig().shipHeat;} ignoring the flag: \"with the thermal system off a loop must store no heat: …"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. STORES NO HEAT — {@code HeatNetwork#enabled} at {@code return StellurgyConfiguration.getCurrentConfig().shipHeat;} ignoring the flag: \"with the thermal system off a loop must store no heat: …"
             + " \\\"heatStored\\\":4530\". NO CAPACITY — {@code HeatNetwork#tickThermodynamics} at {@code if (!enabled())} and {@code TileHeatPipe#getHeatCapacity} at {@code if (!HeatNetwork.enabled())} both"
             + " ignoring the flag, the waste-heat guard left standing: \"and must report no capacity to store it"
             + " in: … \\\"heatCapacity\\\":60\". HEATS AGAIN — {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's"
@@ -205,7 +205,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "it warms" is the stored verdict read through a division.</p>
      */
-    @RedWitness(prose = "with {@code HeatNetwork#onLoopNeighbourChanged} at {@code SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);} no longer marking the domain dirty when a loop's"
+    @LegacyWitness(prose = "with {@code HeatNetwork#onLoopNeighbourChanged} at {@code SubsystemNetworkManager.of(world).markDirty(DOMAIN, world);} no longer marking the domain dirty when a loop's"
             + " neighbour changes: \"a machine placed against a finished loop must be found by it (stored=0)\","
             + " 2026-09-30, taken on the pre-merge static form {@code SubsystemNetworkManager.markDirty(DOMAIN, world)}. The premise at its head is an arrangement and is not witnessed.")
     @Test

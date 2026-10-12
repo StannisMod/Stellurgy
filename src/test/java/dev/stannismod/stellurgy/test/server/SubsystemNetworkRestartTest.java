@@ -5,9 +5,9 @@ import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.ServerRoot;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -91,7 +91,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
      * would drop it before the restart too and leave the comparison equal; that is not this test's
      * contract.)</p>
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. CABLES — {@code TileVentilationDuct#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. CABLES — {@code TileVentilationDuct#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);}"
             + " not re-registering a duct restored from the save: \"the ventilation graph must come back with the"
             + " same cable count … \\\"cables\\\":0\". SOURCES — the same in {@code TileLifeSupportPlant#onLoad} at"
             + " {@code SubsystemNetworkManager.of(world).register(this);}: \"and the same source count: … \\\"sources\\\":0\"."
@@ -189,7 +189,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
      * Pins INV-HEAT-06 (A loop's energy survives a server restart, and comes back OFF THE BLOCKS).
      */
     @Pins("INV-HEAT-06")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. OFF THE BLOCKS — {@code TileHeatLoopBlock#readFromNBT} at {@code storedHeat = nbt.getLong(NBT_STORED_HEAT);} not reading the stored heat back: \"every heat unit must come back off the"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. OFF THE BLOCKS — {@code TileHeatLoopBlock#readFromNBT} at {@code storedHeat = nbt.getLong(NBT_STORED_HEAT);} not reading the stored heat back: \"every heat unit must come back off the"
             + " blocks that were holding it … expected:&lt;4531&gt; but was:&lt;0&gt;\". REBUILT —"
             + " {@code TileHeatLoopBlock#onLoad} at {@code SubsystemNetworkManager.of(world).register(this);} not"
             + " re-registering a block restored from the save: \"the loop must be REBUILT with the same membership"
@@ -265,7 +265,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
      * PLAYER not being engaged, which needs a player; what is asserted instead is the code the gun
      * judges a body by, read off the gun, which is that decision's only input from the network.</p>
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-10-05. The HOLD, CODE and RULE breaks are made"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-10-05. The HOLD, CODE and RULE breaks are made"
             + " where the orders come OFF THE SAVE, because the same adoption also runs on every in-session"
             + " rebuild and a break there already fails boot 1's premise. ALL (the defect as filed) —"
             + " {@code TileWeaponConsole#readFromNBT} at {@code savedOrders = nbt.getCompoundTag(NBT_ORDERS);}"

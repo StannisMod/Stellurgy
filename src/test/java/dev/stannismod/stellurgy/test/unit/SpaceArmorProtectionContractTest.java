@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
 import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
@@ -41,7 +41,7 @@ public class SpaceArmorProtectionContractTest {
         return new ItemStack(armor, 1);
     }
 
-    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"suit must"
+    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: \"suit must"
             + " protect against HEAT\", 2026-09-30.")
     @Test
     public void protectsAgainstEveryKindOfHarmAirCanDo() {
@@ -59,7 +59,7 @@ public class SpaceArmorProtectionContractTest {
         }
     }
 
-    @RedWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that does"
+    @LegacyWitness(prose = "with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: \"air that does"
             + " nothing is not a threat\", 2026-09-30.")
     @Test
     public void doesNotProtectWhereThereIsNothingToProtectAgainst() {

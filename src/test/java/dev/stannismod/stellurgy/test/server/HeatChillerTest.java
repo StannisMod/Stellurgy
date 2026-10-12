@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -72,7 +72,7 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * Pins HEAT-6 (the chiller is a heat pump and the hot side receives the heat plus the work).
      */
     @Pins({"INV-HEAT-10", "INV-HEAT-13", "INV-HEAT-11", "HEAT-6"})
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. NONE OF THE MASS — {@code HeatNetwork#boltedMass} at {@code if (drawsFromThisLoop(pump, pumpPos, memberPositions))} and {@code HeatNetwork#boltedMass} at {@code if (hotAnchor == null || !memberPositions.contains(hotAnchor))} both opened, so the chiller's mass joins every loop it"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NONE OF THE MASS — {@code HeatNetwork#boltedMass} at {@code if (drawsFromThisLoop(pump, pumpPos, memberPositions))} and {@code HeatNetwork#boltedMass} at {@code if (hotAnchor == null || !memberPositions.contains(hotAnchor))} both opened, so the chiller's mass joins every loop it"
             + " touches: \"the loop the chiller merely draws FROM carries none of the machine's mass: …"
             + " expected:&lt;60&gt; but was:&lt;260&gt;\". ITS OWN MASS — {@code HeatNetwork#tickThermodynamics} at {@code capacity += boltedCapacity;} leaving a"
             + " bolted chiller out of the loop's capacity: \"a chiller bolted onto the hot loop must add its own"
@@ -150,7 +150,7 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * Pins INV-HEAT-12 (The hot loop ends up hotter than the cold one it is fed from, because the energy accumulates in it against its own capacity).
      */
     @Pins("INV-HEAT-12")
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30. TAKES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller takes"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. TAKES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: \"an unpowered chiller takes"
             + " nothing out of the loop it draws from: … expected:&lt;6000&gt; but was:&lt;0&gt;\". WITH POWER"
             + " — {@code TileHeatChiller#getThroughputPerTick} at {@code return HeatNetwork.perTick(StellurgyConfiguration.getCurrentConfig().shipHeatChillerThroughput);} offering no throughput: \"the same chiller with power must take"
             + " heat out, or the reading above measured nothing: … \\\"heatStored\\\":6000\". UP THE GRADIENT — a"

@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -53,7 +53,7 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientTes
     /**
      * The record survives a death and a respawn through the death screen.
      */
-    @RedWitness(prose = "with {@code CapabilityPlayerBindings#carryAcrossDeath} at"
+    @LegacyWitness(prose = "with {@code CapabilityPlayerBindings#carryAcrossDeath} at"
             + " {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: \"a player who dies must still know which ship he belongs to …"
             + " {\\\"bound\\\":[]}\", 2026-09-28.")
     @Test

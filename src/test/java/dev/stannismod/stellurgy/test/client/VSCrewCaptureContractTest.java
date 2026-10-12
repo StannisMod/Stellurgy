@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -444,7 +444,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * A jump from the top deck keeps the capture and lands back on the same deck.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel#jump}"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel#jump}"
             + " adding 1.5 blocks a tick of ship-frame sideways motion to every"
             + " aboard jump, flinging him off the deck: \"the jumper was in the air when the key came up, so he"
             + " must LAND on the deck he jumped from … no `deck_contact` carrying ship = …\". THE JUMP LEAVES THE"
@@ -758,7 +758,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * A still crew member on a deck rolled past vertical is neither dragged sideways nor churned.
      */
-    @RedWitness(prose = "with {@code ShipFrameTravel#travel} declining"
+    @LegacyWitness(prose = "with {@code ShipFrameTravel#travel} declining"
             + " every tick on a deck whose up points below -0.5: \"the client must be resolving the crew member"
             + " through the stillness window — the ship frame's frame never committed a capture for this body\","
             + " 2026-09-28. That is the verdict the wait rewrite touched; the drift and churn verdicts after it"
@@ -1224,7 +1224,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * Pins DECKSYNC-7 (the server bounds the region a captured body may declare).
      */
     @Pins("DECKSYNC-7")
-    @RedWitness(prose = "with {@code DeckMovementBound#accepts} at {@code return moved <= allowed}"
+    @LegacyWitness(prose = "with {@code DeckMovementBound#accepts} at {@code return moved <= allowed}"
             + " ratifying every step: \"a 6-block step committed by the client's own travel must be REFUSED by"
             + " the server's deck bound … refused 0, accepted 2\", 2026-09-28. Healthy, the same run shape"
             + " records {@code moved 6.0, accepted:false}. The step is taken from a WALKING body: from a"
@@ -1365,7 +1365,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * A pilot who dismounts and takes to creative flight is never pulled back down by the deck.
      */
-    @RedWitness(prose = "only with BOTH defences removed — the dismount hold's exclusion of an excluded"
+    @LegacyWitness(prose = "only with BOTH defences removed — the dismount hold's exclusion of an excluded"
             + " body ({@code EntityDummy#keepDismountedPilotOnDeck} at {@code logHold(\"pilotExcluded\", exit)}) AND"
             + " the seed's own excluded check ({@code ShipFrameTravel#tryApplyPendingSeed} at"
             + " {@code excludedStateOf((EntityLivingBase) body) != null}) —"
@@ -2130,7 +2130,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * Pins DECKSYNC-6 (a body is never moved by a quantity only its own client derived).
      */
     @Pins("DECKSYNC-6")
-    @RedWitness(prose = "with the client's carry ({@code ShipFrameTravel#travel} at"
+    @LegacyWitness(prose = "with the client's carry ({@code ShipFrameTravel#travel} at"
             + " {@code remember(entity, shipId, sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ)}, the deck"
             + " carry that call binds) raised by 0.1 a tick on a capture that follows more than 100"
             + " ticks off the deck: \"the carry installed when the body was captured must be what the craft SAYS"
@@ -2375,7 +2375,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * The mouse turns a walking crew member's aim in the deck frame, and the aim rides the deck.
      */
-    @RedWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
+    @LegacyWitness(prose = "with {@code VSIntegration#flightComputerOf} at"
             + " {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: \"attitude hold must accept the roll\", 2026-09-28. The other wait the rewrite"
             + " touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts"
             + " after the roll were not touched and are not witnessed.")

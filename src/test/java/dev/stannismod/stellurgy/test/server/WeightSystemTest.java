@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -131,7 +131,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
      * when held content is not weighed at all (the default leg finds nothing in a full chest), or when
      * the scale reaches the block itself (the block part moves between legs).</p>
      */
-    @RedWitness(prose = "with {@code WeightEngine#getTEWeight} at {@code heldWeight(te) *"
+    @LegacyWitness(prose = "with {@code WeightEngine#getTEWeight} at {@code heldWeight(te) *"
             + " StellurgyConfiguration.getCurrentConfig().contentMassScale} reduced to {@code heldWeight(te)},"
             + " this fails on the scale-0 leg — \"expected:&lt;750.0&gt; but was:&lt;320750.0&gt;\"; and with"
             + " {@code WeightEngine#getWeight} at {@code return weight + getTEWeight(te)} scaling {@code weight}"

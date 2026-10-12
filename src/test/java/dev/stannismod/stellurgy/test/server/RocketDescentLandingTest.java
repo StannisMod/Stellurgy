@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -104,7 +104,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         }
     }
 
-    @RedWitness(prose = "with the descent gate, {@code EntityRocket#onUpdate} at"
+    @LegacyWitness(prose = "with the descent gate, {@code EntityRocket#onUpdate} at"
             + " {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}, losing the"
             + " {@code setInFlight(true)} it guards: \"no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100"
             + " ticks\", 2026-09-28.")
@@ -141,7 +141,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 info.inFlight);
     }
 
-    @RedWitness(prose = "with {@code EntityRocket#onUpdate} at"
+    @LegacyWitness(prose = "with {@code EntityRocket#onUpdate} at"
             + " {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())} made to fire past"
             + " tick 3 and to clear the flag again at once — early, and gone before any state read could see it —"
             + " this fails with \"and nothing may have set it in flight before its counter passed the timer"
@@ -226,7 +226,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 posYAfter < posYBefore);
     }
 
-    @RedWitness(prose = "with the landing branch's post, {@code EntityRocket#onUpdate} at"
+    @LegacyWitness(prose = "with the landing branch's post, {@code EntityRocket#onUpdate} at"
             + " {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this));}, removed: \"no `rocket_landed` carrying e = … was recorded within 100"
             + " ticks\", 2026-09-28.")
     @Test

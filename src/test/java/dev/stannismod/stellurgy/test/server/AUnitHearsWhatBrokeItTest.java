@@ -4,7 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
-import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
 import java.util.List;
@@ -48,7 +48,7 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
      * A unit that survives hears about it, and what it hears names the cause, the severity and the
      * stage it moved to — not a verdict, because the consequence is the unit's own to compute.
      */
-    @RedWitness(prose = "one inversion per verdict, 2026-09-30:"
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30:"
             + " <ul>"
             + " <li>with {@code ShipDamageService#tellTheUnits} at"
             + " {@code if (walk == null || walk.touched.isEmpty())} made always true, the link fails with"
@@ -110,7 +110,7 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
      * exist, a plasma engine is a tank letting go. A unit that never hears about its own death cannot
      * have one of those.</p>
      */
-    @RedWitness(prose = "2026-09-30:"
+    @LegacyWitness(prose = "2026-09-30:"
             + " <ul>"
             + " <li>with {@code ShipDamageService#tellTheUnits} at"
             + " {@code if (walk == null || walk.touched.isEmpty())} made always true, the link fails with"
@@ -166,7 +166,7 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
      * {@code if (unit == null)}'s {@code continue}, it never ran for the struck stone (a stone has no
      * listener), and the method stayed green.</p>
      */
-    @RedWitness(prose = "2026-09-30:"
+    @LegacyWitness(prose = "2026-09-30:"
             + " <ul>"
             + " <li>with {@code StructureDamageEngine#spendInto} at {@code result.blocksStaged++;} removed"
             + " from the branch that stages without destroying, the first arrangement fails with an"
