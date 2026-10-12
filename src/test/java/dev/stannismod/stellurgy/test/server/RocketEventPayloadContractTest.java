@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -193,6 +194,12 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
      * across those ticks.</p>
      */
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(client(), 0, 3);",
+            why = "the dose is the rocket's own counter crossing 20, and 3 ticks of its world carry it from 18"
+                    + " through 20 — one increment per tick of the world it is ticked in. The gate is an"
+                    + " equality, so overshoot adds ticks past 21 where it is shut and cannot fire the event a"
+                    + " second time or hide it. No record of RocketDeOrbitingEvent exists to link on; the"
+                    + " counter read below is what says the dose was delivered.")
     public void rocketDeOrbitingEventCarriesRocketEntityAndWorld() throws Exception {
         int rocketId = buildAndAssemble(CX_DEORBIT);
         forceLoadChunksAround(0, CX_DEORBIT, CZ);
@@ -208,11 +215,6 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // event.
         String set = exec("stellurgytest rocket set-state " + rocketId
                 + " orbit=true flight=false ticksExisted=18 posY=300 motionY=0");
-        // EXPERIMENT: the dose is the rocket's own counter crossing 20, and 3 ticks of its world
-        // carry it from 18 through 20 — one increment per tick of the world it is ticked in. The
-        // gate is an equality, so overshoot adds ticks past 21 where it is shut and cannot fire the
-        // event a second time or hide it. No record of RocketDeOrbitingEvent exists to link on; the
-        // counter read below is what says the dose was delivered.
         GameTicks.advanceWorld(client(), 0, 3);
         int ticksAfter = RocketInfo.byId(cmd -> exec(cmd), rocketId).ticksExisted;
         assertTrue("the rocket's counter must have crossed the deorbit gate at 20, or the event had"

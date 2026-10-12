@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -45,6 +46,10 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
             + " was:&lt;2&gt;\", 2026-09-30. The two premises at its head are arrangements and are not"
             + " witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), 2);",
+            why = "two server ticks are the dose, not a wait: one for the battery to feed the generator and the"
+                    + " generator to convert, one more for a solve to see it on offer. The network solves at"
+                    + " the END of a server tick, after every tile, so these are real ticks, not forced solves.")
     public void aConsoleStopsReportingANetworkThatLostItsLastSource() throws Exception {
         FixtureSite site = clearedSite(2, 2, "a shield source, sink and console in a row");
         y = site.y + 1;
@@ -64,10 +69,6 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
         // Measured: `sourceAvailable:0, networkStatus:1` two ticks after such an inject.
         place("libvulpes:creativePowerBattery", source, z + 1);
 
-        // EXPERIMENT: two server ticks are the dose, not a wait: one for the battery to feed the
-        // generator and the generator to convert, one more for a solve to see it on offer. The network
-        // solves at the END of a server tick, after every tile, so these are real ticks, not forced
-        // solves.
         GameTicks.advance(client(), GameTicks.server(), 2);
         Reply working = consoleInfo(console, z);
         assertTrue("premise: with a source and a sink the console must report a live network: "

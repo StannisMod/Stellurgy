@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -556,6 +558,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20);",
+            why = "onUpdate->tickFreeFlight runs every server tick while the rocket is in FF + isInFlight, and the"
+                    + " motion it produces is a value no record carries.")
     public void verticalThrottleProducesObservableMotionThroughRealTickLoop() throws Exception {
         tpNearBuildSite();
 
@@ -575,8 +580,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // Snapshot motion BEFORE ticks (right after start).
         double myBefore = rocketInfo(rocketId).motionY;
 
-        // WINDOW: onUpdate->tickFreeFlight runs every server tick while the rocket is in FF +
-        // isInFlight, and the motion it produces is a value no record carries.
         advanceServerAndClient(20);
 
         double myAfter = rocketInfo(rocketId).motionY;
@@ -658,6 +661,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(30);",
+            why = "a climb is a value, not an event; no record answers.")
     public void verticalThrustGainsAltitude() throws Exception {
         // The core "can take off" contract: with TWR-based thrust, a
         // launch-capable fixture rocket (TWR ≫ 1) must actually CLIMB under
@@ -669,7 +674,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("vertical input must apply: " + inputResp, Reply.of(inputResp).bool("applied"));
 
         double yBefore = rocketInfo(rocketId).posY;
-        // WINDOW: a climb is a value, not an event; no record answers.
         advanceServerAndClient(30);
         RocketInfo after = rocketInfo(rocketId);
         double yAfter = after.posY;
@@ -685,6 +689,13 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(windowTicks(6, 10));",
+            why = "not a poll-until-travelled — the poll exited on \"moved more than a block\", which is the"
+                    + " assertion below, so the displacement could only ever be confirmed or timed out. The"
+                    + " window is the poll's own ceiling, so the takeoff-kick grace and the horizontal ramp"
+                    + " still get every tick they used to. The probe's own reply says the input was ACCEPTED —"
+                    + " it goes through `free-flight-input`, not a key — so no delivery question is left for a"
+                    + " link.")
     public void forwardThrustDisplacesHorizontally() throws Exception {
         // Forward throttle at yaw=0 -> +Z. Vertical kept on so the rocket stays
         // airborne (doesn't auto-land mid-test).
@@ -694,12 +705,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         final double xb = before.posX;
         final double zb = before.posZ;
         exec("stellurgytest rocket free-flight-input " + rocketId + " 1 1 0 0 0");
-        // WINDOW: not a poll-until-travelled — the poll exited on "moved more than a block", which
-        // is the assertion below, so the displacement could only ever be confirmed or timed out.
-        // The window is the poll's own ceiling, so the takeoff-kick grace and the horizontal ramp
-        // still get every tick they used to. The probe's own reply says the input was ACCEPTED —
-        // it goes through `free-flight-input`, not a key — so no delivery question is left for a
-        // link.
         advanceServerAndClient(windowTicks(6, 10));
         RocketInfo moved = rocketInfo(rocketId);
         double xa = moved.posX;
@@ -718,6 +723,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(8);",
+            why = "a yaw change is a value, not an event; no record answers.")
     public void yawInputRotatesHeading() throws Exception {
         // Yaw input must steer the heading through the live loop. Vertical kept
         // on to stay airborne while yawing (yaw rotates regardless of thrust).
@@ -725,7 +732,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
         exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 1 0 0");
         double yawBefore = rocketInfo(rocketId).rotationYaw;
-        // WINDOW: a yaw change is a value, not an event; no record answers.
         advanceServerAndClient(8);
         double yawAfter = rocketInfo(rocketId).rotationYaw;
 
@@ -740,6 +746,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     // ===== REAL keypress path (no server input probe) ====================
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(windowTicks(4, 10));",
+            why = "a climb is a value, not an event. The client's Y read at the end beside the server's is one"
+                    + " comparison of the two sides, not a second window.")
     public void realVerticalKeyThrustClimbsServerAndClientTracks() throws Exception {
         // The honest end-to-end: FF entry via probes (M/space are event-driven and
         // not the broken part), but STEERING via a REAL injected key. Holding R
@@ -766,8 +775,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // half of its subject and must be asserted as itself rather than inferred from altitude.
         climbEvents.awaitField(climbMark, "rocket_ff_traced", "e", rocketId,
                 "holding the real climb key must deliver a free-flight input to this rocket", 100);
-        // WINDOW: a climb is a value, not an event. The client's Y read at the end beside the
-        // server's is one comparison of the two sides, not a second window.
         advanceServerAndClient(windowTicks(4, 10));
         RocketInfo svrInfo = rocketInfo(rocketId);
         double svrYAfter = svrInfo.posY;
@@ -806,6 +813,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " written against cannot happen on this tree; what it pins is that the client moves the craft it"
             + " draws at all.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < samples; i++) {",
+            why = "the per-tick delta is the measurement, on the clock the render it measures advances on.")
     public void freeFlightClientRenderAdvancesEveryTickNoStutter() throws Exception {
         // Render smoothness: the rendered rocket must advance on (almost) every single client tick.
         // Its original subject — a snap-only client freezing between tracker updates — is no longer
@@ -837,8 +846,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         int samples = 8;
         int moved = 0;
         double prev = bot().reportRidingEntity().get("posY").getAsDouble();
-        // WINDOW: the per-tick delta is the measurement, on the clock the render it measures
-        // advances on.
         for (int i = 0; i < samples; i++) {
             bot().waitWorldTicks(1);
             double cur = bot().reportRidingEntity().get("posY").getAsDouble();
@@ -932,6 +939,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20);",
+            why = "a drain is a value, not an event; no record answers.")
     public void verticalThrustDrainsFuelThroughLiveLoop() throws Exception {
         // Fuel must burn classic-style (getFuelConsumptionRate, gated by
         // rocketRequireFuel) while thrust is applied across real server ticks — so fuel is REQUIRED
@@ -944,7 +953,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             assertTrue("rocket must report a primary fuel amount", fuelBefore >= 0);
 
             exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
-            // WINDOW: a drain is a value, not an event; no record answers.
             advanceServerAndClient(20);
             int fuelAfter = primaryFuelAmount(exec("stellurgytest rocket fuel " + rocketId));
             assertTrue("rocket must still report a primary fuel amount", fuelAfter >= 0);
@@ -1028,6 +1036,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(windowTicks(5, 5));",
+            why = "a strafe is a value, not an event; the screen is read at the window's end, when an inventory"
+                    + " the key had opened would be showing.")
     public void inventoryKeyIsOverriddenToStrafeWhilePiloting() throws Exception {
         // Same physical key (E), while piloting in Free Flight: it must NOT open
         // the inventory (which would also freeze steering) and must instead drive
@@ -1053,8 +1064,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         eEvents.awaitField(eMark, "rocket_ff_traced", "e", rocketId,
                 "the held keys must deliver a free-flight input to this rocket while E is down",
                 100);
-        // WINDOW: a strafe is a value, not an event; the screen is read at the window's end, when an
-        // inventory the key had opened would be showing.
         advanceServerAndClient(windowTicks(5, 5));
 
         String screenDuring = currentScreen();
@@ -1077,6 +1086,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(windowTicks(5, 5));",
+            why = "a displacement is a value, not an event; no record answers.")
     public void strafeLeftKeyMovesPositiveX() throws Exception {
         // Q (strafe left) -> +X at yaw 0 after the polarity fix: with the camera
         // looking out the nose, world +X renders on the pilot's LEFT, so the
@@ -1097,7 +1108,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // the claim is "the key path is alive for this rocket", and the DIRECTION is the assertion.
         qEvents.awaitField(qMark, "rocket_ff_traced", "e", rocketId,
                 "the held keys must deliver a free-flight input to this rocket", 100);
-        // WINDOW: a displacement is a value, not an event; no record answers.
         advanceServerAndClient(windowTicks(5, 5));
         double xAfter = rocketInfo(rocketId).posX;
         bot().releaseKey(Keyboard.KEY_Q);
@@ -1115,6 +1125,11 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " \"R must climb (y0=151.5999964 y1=151.5999964)\". DESCENT — a negative one ignored: \"F must reduce"
             + " vertical velocity vs the climb (myUp=1.3499 myDown=1.3999)\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20);",
+            why = "a climb is a value, not an event; no record answers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(windowTicks(5, 2));",
+            why = "not a poll-until-braked — the poll's predicate was `my < myUp - 0.05`, the assertion below, so"
+                    + " nothing could fail except the ceiling.")
     public void verticalKeysClimbAndDescend() throws Exception {
         // R climbs (real altitude gain); F is the opposite vertical thrust, so it
         // must drive the vertical velocity down. We measure F by motionY (robust
@@ -1126,7 +1141,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
                 "holding R must deliver a climb input to this rocket");
         double y0 = rocketInfo(rocketId).posY;
-        // WINDOW: a climb is a value, not an event; no record answers.
         advanceServerAndClient(20);
         RocketInfo climbInfo = rocketInfo(rocketId);
         double y1 = climbInfo.posY;
@@ -1137,8 +1151,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // F is downward thrust: it must reduce the vertical velocity vs the climb.
         holdKeyUntilApplied(rocketId, Keyboard.KEY_F, "vert=-1",
                 "holding F must deliver a descent input to this rocket");
-        // WINDOW: not a poll-until-braked — the poll's predicate was `my < myUp - 0.05`, the
-        // assertion below, so nothing could fail except the ceiling.
         advanceServerAndClient(windowTicks(5, 2));
         double myDown = rocketInfo(rocketId).motionY;
         bot().releaseKey(Keyboard.KEY_F);
@@ -1154,6 +1166,14 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " \"when the cut arrived 1.4499, twelve ticks later 2.0498\", 2026-09-28. The precondition at its"
             + " head is an arrangement and is not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(12); double myClimb ="
+            + " rocketInfo(rocketId).motionY;",
+            why = "twelve ticks of R from its arrival is the dose, and the precondition is what they did — upward"
+                    + " motion. Not a difference from the moment R arrived: the liftoff hover may still be"
+                    + " rising then, and the pilot's setpoint takes over from zero.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(12); double myCut ="
+            + " rocketInfo(rocketId).motionY;",
+            why = "a change of velocity is a value, not an event; no record answers.")
     public void throttleCutKeyNeutralisesThrust() throws Exception {
         // X (cut) with FA on zeroes the velocity setpoint even while R is held:
         // a climbing craft stops accelerating and eases back toward hover.
@@ -1163,9 +1183,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // the time a packet takes to cross is not charged against what is measured.
         holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
                 "holding R must deliver a climb input to this rocket");
-        // EXPERIMENT: twelve ticks of R from its arrival is the dose, and the precondition is what
-        // they did — upward motion. Not a difference from the moment R arrived: the liftoff hover
-        // may still be rising then, and the pilot's setpoint takes over from zero.
         advanceServerAndClient(12);
         double myClimb = rocketInfo(rocketId).motionY;
         assertTrue("precondition: R must be producing upward motion twelve ticks after it"
@@ -1177,7 +1194,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         holdKeyUntilApplied(rocketId, Keyboard.KEY_X, "cut=true",
                 "holding X must deliver a throttle cut to this rocket");
         double myAtCut = rocketInfo(rocketId).motionY;
-        // WINDOW: a change of velocity is a value, not an event; no record answers.
         advanceServerAndClient(12);
         double myCut = rocketInfo(rocketId).motionY;
         bot().releaseKey(Keyboard.KEY_X);
@@ -1195,6 +1211,18 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " the setpoint on a cut:"
             + " \"cut must brake the climb into a hover (was 1.0999…, now 1.0999…)\", 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(15);",
+            why = "the climb the cut is then asked to brake; the check below says whether it did.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(serverClient(), GameTicks.server(),"
+            + " windowTicks(5, 8));",
+            why = "forty SERVER ticks of cut from its arrival is the dose, and the assertion is what they did —"
+                    + " braked to a hover. The brake is the rocket's own server-side update, so its clock is"
+                    + " the server's: counted there, forty is forty brake steps on any box, where forty client"
+                    + " ticks bought a busy one fewer. It replaced a poll whose predicate, `|my| < 0.05`, was"
+                    + " the assertion below, so the old leg could only time out, never fail.")
+    @ServerOnly(at = "GameTicks.advance(serverClient(), GameTicks.server(), windowTicks(5, 8));",
+            why = "the cut has arrived (linked above); the brake is the rocket's own server update and the read is"
+                    + " the server's rocket report.")
     public void cutKeyBrakesToAGravityCancelledHover() throws Exception {
         // X with Flight Assist on: zero the velocity setpoint —
         // the craft eases to a stop AND holds altitude. Build a climb via the
@@ -1203,7 +1231,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
         holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
                 "holding R must deliver a climb input to this rocket");
-        // STIMULUS: the climb the cut is then asked to brake; the check below says whether it did.
         advanceServerAndClient(15);
         bot().releaseKey(Keyboard.KEY_R);
         RocketInfo preInfo = rocketInfo(rocketId);
@@ -1221,12 +1248,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
         holdKeyUntilApplied(rocketId, Keyboard.KEY_X, "cut=true",
                 "holding X must deliver a throttle cut to this rocket");
-        // EXPERIMENT: forty SERVER ticks of cut from its arrival is the dose, and the assertion is
-        // what they did — braked to a hover. The brake is the rocket's own server-side update, so
-        // its clock is the server's: counted there, forty is forty brake steps on any box, where
-        // forty client ticks bought a busy one fewer. It replaced a poll whose predicate,
-        // `|my| < 0.05`, was the assertion below, so the old leg could only time out, never fail.
-        // SERVER-ONLY: the cut has arrived (linked above); the brake is the rocket's own server update and the read is the server's rocket report.
         GameTicks.advance(serverClient(), GameTicks.server(), windowTicks(5, 8));
         RocketInfo info = rocketInfo(rocketId);
         double myCut = info.motionY;
@@ -1279,6 +1300,14 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " {@code I18n.format(\"msg.ff.hud.engines.on\")}) replaced by the ENGINES OFF text: \"HUD must"
             + " show the engines running: FREE FLIGHT … ENGINES OFF — hold SPACE to start\".")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(serverClient(), GameTicks.server(), 40);",
+            why = "forty SERVER ticks after the engines lit is the moment the claim is about — the start ritual's"
+                    + " ease (the rocket's own server update, gain 0.25 a tick) has closed on its fixed hover"
+                    + " target within a handful of them. Counted on the server, forty is forty steps of that"
+                    + " law on any box; more of them move neither number, the target being fixed.")
+    @ServerOnly(at = "GameTicks.advance(serverClient(), GameTicks.server(), 40);",
+            why = "the engines lit (linked above); the ease is the rocket's server update and the read is the"
+                    + " server's rocket report.")
     public void realSpaceHoldStartsEnginesAndHoversOneBlock() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
         RocketInfo before = rocketInfo(rocketId);
@@ -1301,11 +1330,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         } finally {
             bot().releaseKey(Keyboard.KEY_SPACE);
         }
-        // EXPERIMENT: forty SERVER ticks after the engines lit is the moment the claim is about —
-        // the start ritual's ease (the rocket's own server update, gain 0.25 a tick) has closed on
-        // its fixed hover target within a handful of them. Counted on the server, forty is forty
-        // steps of that law on any box; more of them move neither number, the target being fixed.
-        // SERVER-ONLY: the engines lit (linked above); the ease is the rocket's server update and the read is the server's rocket report.
         GameTicks.advance(serverClient(), GameTicks.server(), 40);
 
         RocketInfo info = rocketInfo(rocketId);
@@ -1345,6 +1369,9 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " … isInFlight:true\". A start that also reaches the client fails the HUD verdict first; the"
             + " never-lit verdict is reached only by one it does not.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(25);",
+            why = "twenty-five ticks of Space, well under the 60-tick requirement — the early release is the"
+                    + " experiment.")
     public void spaceEarlyReleaseCancelsEngineStart() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
 
@@ -1352,8 +1379,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         long holdMark = events.markInstrumented();
         long holdHudMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_SPACE);
-        // STIMULUS: twenty-five ticks of Space, well under the 60-tick requirement — the early
-        // release is the experiment.
         bot().waitWorldTicks(25);
 
         // Mid-hold the pilot must SEE the start progress — the line ON SCREEN now, with the key still
@@ -1492,6 +1517,13 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " at {@code if (input.cutActive)} no longer zeroing the setpoint: \"no"
             + " `ff_hud` drawing a VRT setpoint of zero was recorded within 200 ticks\".")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(windowTicks(5, 5));",
+            why = "twenty-five ticks of R from its arrival is the dose, and the assertions are what it did to the"
+                    + " ramped setpoint and the velocity chasing it. It replaced a poll that exited on"
+                    + " `setpoint > 0.4 && actual > 0.1` — exactly the pair of assertions below — so neither"
+                    + " could fail except by the ceiling, and the failure text then blamed the ramp for a"
+                    + " timeout. Both numbers are read off ONE rendered HUD frame, which is what lets \"the"
+                    + " actual is chasing the setpoint\" be a statement about one moment.")
     public void hudVectorLineTracksSetpointAndVelocity() throws Exception {
         // The per-axis vector readout: holding R ramps the VRT setpoint and the
         // actual velocity follows; X zeroes the setpoint back. Read from the
@@ -1500,12 +1532,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
         holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
                 "holding R must deliver a climb input to this rocket");
-        // EXPERIMENT: twenty-five ticks of R from its arrival is the dose, and the assertions are
-        // what it did to the ramped setpoint and the velocity chasing it. It replaced a poll that
-        // exited on `setpoint > 0.4 && actual > 0.1` — exactly the pair of assertions below — so
-        // neither could fail except by the ceiling, and the failure text then blamed the ramp for a
-        // timeout. Both numbers are read off ONE rendered HUD frame, which is what lets "the actual
-        // is chasing the setpoint" be a statement about one moment.
         advanceServerAndClient(windowTicks(5, 5));
         String hudClimb = freeFlightHud();
         bot().releaseKey(Keyboard.KEY_R);
@@ -1592,6 +1618,22 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " 2026-09-28. That is the verdict whose wait the tick-wait rewrite changed; the at-rest and"
             + " convergence verdicts after it were outside that rewrite and are not witnessed here.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 8; i++) {",
+            why = "the iterations ARE the manoeuvre — eight swipes, one a tick, each from where the last left the"
+                    + " view; the camera window opened above records every frame, so nothing is read per"
+                    + " iteration.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(40);",
+            why = "forty client ticks with every input released — the rest the at-rest lock below is judged at."
+                    + " The client bleeds the server's rotation correction geometrically, so there is no"
+                    + " instant at which the craft \"has settled\" and no record production could commit for"
+                    + " one. This used to sample the yaw until two readings two ticks apart agreed (up to forty"
+                    + " ticks), which stopped on the first pause in the bleed rather than at rest; a fixed rest"
+                    + " of the old ceiling is the more lenient of the two for the \"exact at rest\" bound, and"
+                    + " says so.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int spent = 0; spent < window; spent += 4) {",
+            why = "the paragraph above says why — the measurement is the BEST convergence reached anywhere in it,"
+                    + " not the sample the loop stopped on. No record carries a best-over-a-stretch. What it"
+                    + " cannot see: a better residual touched between two samples.")
     public void cameraIsLockedToCraftYawAndPitchWhileManeuvering() throws Exception {
         // While actively maneuvering (climb + yaw key + mouse swipes), the
         // client camera must stay pinned to the craft axes on every sampled
@@ -1608,9 +1650,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
         bot().holdKey(Keyboard.KEY_R);   // stay airborne
         bot().holdKey(Keyboard.KEY_D);   // yaw the nose
-        // STIMULUS: the iterations ARE the manoeuvre — eight swipes, one a tick, each from where the
-        // last left the view; the camera window opened above records every frame, so nothing is
-        // read per iteration.
         for (int i = 0; i < 8; i++) {
             // A mouse swipe on top of the key yaw: down-right each tick.
             JsonObject st = bot().reportState();
@@ -1620,12 +1659,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         }
         bot().releaseKey(Keyboard.KEY_D);
         bot().releaseKey(Keyboard.KEY_R);
-        // EXPERIMENT: forty client ticks with every input released — the rest the at-rest lock below
-        // is judged at. The client bleeds the server's rotation correction geometrically, so there
-        // is no instant at which the craft "has settled" and no record production could commit for
-        // one. This used to sample the yaw until two readings two ticks apart agreed (up to forty
-        // ticks), which stopped on the first pause in the bleed rather than at rest; a fixed rest of
-        // the old ceiling is the more lenient of the two for the "exact at rest" bound, and says so.
         bot().waitWorldTicks(40);
 
         // Frame-time lock telemetry: the worst divergence the pilot SAW on any
@@ -1674,9 +1707,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         double convErr = Double.MAX_VALUE;
         double settledErr = Double.NaN;
         int window = windowTicks(4, 20);
-        // WINDOW: the paragraph above says why — the measurement is the BEST convergence reached
-        // anywhere in it, not the sample the loop stopped on. No record carries a best-over-a-stretch.
-        // What it cannot see: a better residual touched between two samples.
         for (int spent = 0; spent < window; spent += 4) {
             advanceServerAndClient(4);
             // Both halves of the residual read as ONE measurement, in this order: two reads a
@@ -1697,6 +1727,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 8; i++) {",
+            why = "the drag itself, measured at eight (above).")
     public void mouseSwipesPitchTheNoseAndCameraFollows() throws Exception {
         // Mouse-as-rate: repeated downward swipes (a real drag) pitch the nose
         // down tick by tick; the camera never detaches from the craft. The
@@ -1724,7 +1756,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // quaternion — there is no clamp to stop it) and the pitch reading turns back down
         // through the bound. So the drive is EIGHT, measured at 40.8° — twice the bound, and
         // twice as far again from the wrap.
-        // STIMULUS: the drag itself, measured at eight (above).
         for (int i = 0; i < 8; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat(),
@@ -1754,6 +1785,12 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(5);",
+            why = "climb input ahead of the drag, so the bank is flown clear of the pad.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 8; i++) {",
+            why = "the drag; the window after it is what is read.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(windowTicks(3, 5));",
+            why = "it replaced a poll that exited on `|r| > 15.0`, which is the bank assertion.")
     public void mouseHorizontalBanksTheCraftNotItsHeading() throws Exception {
         // Deflection scheme: the mouse is a virtual cursor —
         // HORIZONTAL drives ROLL (bank), not yaw (yaw is A/D only). A real
@@ -1763,20 +1800,17 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         int rocketId = mountFreshFreeFlightRocket();
         openFlightCameraWindow(); // this bank's own numbers, not the previous scenario's
         bot().holdKey(Keyboard.KEY_R);   // climb clear of the pad while banking
-        // STIMULUS: climb input ahead of the drag, so the bank is flown clear of the pad.
         advanceServerAndClient(5);
 
         double yaw0 = bot().reportRidingEntity().get("rotationYaw").getAsDouble();
         double roll0 = flightCameraNow("camRoll");
         // A real rightward mouse drag: repeated +8° horizontal swipes saturate the
         // absolute roll cursor, which then holds a steady bank rate.
-        // STIMULUS: the drag; the window after it is what is read.
         for (int i = 0; i < 8; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat() + 8f, st.get("playerPitch").getAsFloat());
             bot().waitWorldTicks(1);
         }
-        // WINDOW: it replaced a poll that exited on `|r| > 15.0`, which is the bank assertion.
         advanceServerAndClient(windowTicks(3, 5));
         double camRoll = flightCameraNow("camRoll");
         double yaw1 = bot().reportRidingEntity().get("rotationYaw").getAsDouble();
@@ -1807,6 +1841,15 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " prediction shares with the server: \"client min forward.z must go negative (was 0.1429)\","
             + " 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(30);",
+            why = "the climb sets the altitude the loop is flown at.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 8; i++) {",
+            why = "the drag that saturates the cursor; the EXPERIMENT below is what it did.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(windowTicks(5, 12));",
+            why = "sixty ticks of the saturated pitch cursor is the dose that must carry the nose over the top,"
+                    + " and the assertion is what it did. `minForwardZ` is an ACCUMULATOR — a minimum over the"
+                    + " flight — so reading it at the end sees every frame, and nothing is lost by not sampling"
+                    + " along the way. It replaced a poll that exited on `z < -0.5`, which was the assertion.")
     public void sustainedPitchLoopsPastVerticalWithNoClamp() throws Exception {
         int rocketId = mountFreshFreeFlightRocket();
         openFlightCameraWindow(); // this loop's own min-forward-Z witness
@@ -1815,7 +1858,6 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // craft can loop in place without body-up thrust flying it into the ground.
         holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
                 "holding R must deliver a climb input to this rocket");
-        // STIMULUS: the climb sets the altitude the loop is flown at.
         advanceServerAndClient(30);
         bot().releaseKey(Keyboard.KEY_R);
         // Cut -> hover (attitude-independent). The drag may start the moment the cut has ARRIVED:
@@ -1826,17 +1868,11 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
         // Real downward mouse drag: saturate the absolute pitch cursor, which then
         // holds full pitch rate and carries the nose past vertical and over.
-        // STIMULUS: the drag that saturates the cursor; the EXPERIMENT below is what it did.
         for (int i = 0; i < 8; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat(), st.get("playerPitch").getAsFloat() + 8f);
             bot().waitWorldTicks(1);
         }
-        // EXPERIMENT: sixty ticks of the saturated pitch cursor is the dose that must carry the nose
-        // over the top, and the assertion is what it did. `minForwardZ` is an ACCUMULATOR — a
-        // minimum over the flight — so reading it at the end sees every frame, and nothing is lost
-        // by not sampling along the way. It replaced a poll that exited on `z < -0.5`, which was
-        // the assertion.
         advanceServerAndClient(windowTicks(5, 12));
         double minFwdZ = flightCameraNow("minForwardZ");
         // `riding`, not `!= null`: reportRidingEntity throws on a failed reply and otherwise
@@ -1955,6 +1991,12 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             + " {@code double rollRate  = in.rollInput  * FreeFlightPhysics.MAX_ROLL_RATE} multiplied by zero: \"commanded roll must integrate server-side (roll0=0.0 roll1=0.0)\","
             + " 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(10);",
+            why = "a roll is a value, not an event; no record answers.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(10);",
+            why = "ten ticks of the client drawing the banked craft is the dose, and the claim is that it survived"
+                    + " them. The window counts the in-flight frames it saw, so a client that drew none cannot"
+                    + " pass on an empty dose.")
     public void rollChannelIntegratesAndClientRendersWithoutCrash() throws Exception {
         int rocketId = mountFreshFreeFlightRocket();
         double roll0 = rocketInfo(rocketId).freeFlightRoll;
@@ -1962,16 +2004,12 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // Command a steady bank-right: probe args are
         // id fwd vert yaw pitch brake cut strafe roll -> roll = last (=+1).
         exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 1");
-        // WINDOW: a roll is a value, not an event; no record answers.
         advanceServerAndClient(10);
         double roll1 = rocketInfo(rocketId).freeFlightRoll;
 
         // Stop and let the client keep rendering the banked craft a moment.
         exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 0");
         long renderMark = openFlightCameraWindow();
-        // EXPERIMENT: ten ticks of the client drawing the banked craft is the dose, and the claim
-        // is that it survived them. The window counts the in-flight frames it saw, so a client that
-        // drew none cannot pass on an empty dose.
         bot().waitWorldTicks(10);
         double framesDrawn = Events.number(
                 closeFlightCameraWindow(renderMark, "the banked craft's render"), "frames");

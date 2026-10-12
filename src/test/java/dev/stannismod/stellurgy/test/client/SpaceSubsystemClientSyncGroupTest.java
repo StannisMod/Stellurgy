@@ -6,6 +6,7 @@ import dev.stannismod.stellurgy.test.PlayerState;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -188,6 +189,11 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
             + " (An earlier record here said no inversion was possible because {@code CrewTransfer} is the"
             + " only world mover; the guard is a second one, and that record was wrong.)")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SETTLE_WINDOW_TICKS);",
+            why = "where he settles is a value, not an event; no record answers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
+            why = "forty ticks of the SERVER's clock — whatever would throw him out is the server's doing — and of"
+                    + " the client's, which must apply what it is sent before the log read below can see it.")
     public void aRealClientEntersASlotDimAndKeepsRendering() throws Exception {
         scenario().arranging("register a pool slot while the client is online, and bind a cell");
         String botName = botName();
@@ -261,7 +267,6 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         // settle. The height is printed, so the next reader can size it from a measurement rather
         // than inherit it.
         double placedY = bot().reportState().get("playerY").getAsDouble();
-        // WINDOW: where he settles is a value, not an event; no record answers.
         advanceServerAndClient(SETTLE_WINDOW_TICKS);
         double clientY = bot().reportState().get("playerY").getAsDouble();
         boolean settled = clientY > 63.5 && clientY < 68.0;
@@ -278,9 +283,6 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         // says he was never moved out and back in between the two reads, which a pair of samples
         // cannot distinguish from a client that left the world and returned.
         long holdMark = clientLog.mark();
-        // WINDOW: forty ticks of the SERVER's clock — whatever would throw him out is the server's
-        // doing — and of the client's, which must apply what it is sent before the log read below
-        // can see it.
         advanceServerAndClient(40);
         String changes = clientLog.since(holdMark, "client_dimension_changed");
         Events.assertInstrumentRan(changes, "client_dimension_changed",
@@ -319,6 +321,9 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
             + " be sent its sky\". With it sending nothing: \"no `system_bodies_received` naming slot dim 3 was"
             + " recorded within 400 ticks\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
+            why = "an absence of feeds over forty ticks of the SERVER's clock, which is the clock the feed is sent"
+                    + " on, and of the client's, which records one only once it is applied there.")
     public void aRealClientReceivesTheSettledShipsCellBodies() throws Exception {
         try {
             scenario().arranging("install the space stack and register a descend-target POI");
@@ -357,9 +362,6 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
             scenario().measuring("what a player OUTSIDE the cell is sent (the control)");
             Events clientLog = clientEvents();
             long controlMark = clientLog.mark();
-            // WINDOW: an absence of feeds over forty ticks of the SERVER's clock, which is the
-            // clock the feed is sent on, and of the client's, which records one only once it is
-            // applied there.
             advanceServerAndClient(40);
             String outside = clientLog.since(controlMark, "system_bodies_received");
             scenario().record("skyFeedsWhileOutside", outside);

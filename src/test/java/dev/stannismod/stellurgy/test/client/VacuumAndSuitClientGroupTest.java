@@ -7,6 +7,8 @@ import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NotYetRed;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -148,6 +150,10 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * into survival while he is still falling from the reset's teleport would cost him fall damage
      * that three of these scenarios would read as the subject.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(10);",
+            why = "survival on the spot he was placed, watched for damage — he arrived in creative, so full health"
+                    + " is the start by construction, and a spot that hurts (inside a block, over nothing)"
+                    + " shows as less at its end.")
     private void standOnOwnPlatformInSurvival() throws Exception {
         int dim = plot().dim;
         scenario().arranging("build a platform in open air and stand on it");
@@ -166,9 +172,6 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
         arrangeProbe("stellurgytest player clear-armor");
         exec("gamerule naturalRegeneration false");
         exec("gamemode survival @a");
-        // WINDOW: survival on the spot he was placed, watched for damage — he arrived in creative, so
-        // full health is the start by construction, and a spot that hurts (inside a block, over
-        // nothing) shows as less at its end.
         advanceServerAndClient(10);
         double health = health(bot().reportState());
         scenario().record("healthOnPlatform", health);
@@ -419,6 +422,14 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " every ten ticks (it spends a suit's air, hurts nobody), this fails with"
             + " \"a breathable atmosphere must never reach the suit's tank at all; drains recorded\" — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), plot().dim,"
+            + " ABSENCE_WINDOW_TICKS);",
+            why = "from the mark to the log read below, counted on the player's OWN world clock — the atmosphere"
+                    + " judges him on that world's ticks, so client ticks would buy a busy box fewer judgments"
+                    + " and a quieter log.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);",
+            why = "the atmosphere judges the player on his world's server ticks; the reads are the server's log"
+                    + " and the server's chest reading.")
     public void breathableAtmosphereDoesNotDrainChestTank() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
@@ -445,10 +456,6 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             // recorder and a mixin configuration that was never queued.
             Events events = serverEvents();
             long mark = events.markInstrumented();
-            // WINDOW: from the mark to the log read below, counted on the player's OWN world clock —
-            // the atmosphere judges him on that world's ticks, so client ticks would buy a busy box
-            // fewer judgments and a quieter log.
-            // SERVER-ONLY: the atmosphere judges the player on his world's server ticks; the reads are the server's log and the server's chest reading.
             GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);
 
             String drains = events.since(mark, "suit_air_drained");
@@ -634,6 +641,9 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " body in a breathable atmosphere every ten ticks — this fails with \"a breathable atmosphere must"
             + " never reach the enchanted suit's buffer; drains recorded\" — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(plot().dim, ABSENCE_WINDOW_TICKS);",
+            why = "the same absence window, on the player's own world clock. Both clocks: the verdict below also"
+                    + " reads the CLIENT's chest air, synced from the server.")
     public void suitedPlayerInBreathableDimDoesNotLoseChestAir() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
@@ -652,8 +662,6 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             // player was judged. markInstrumented is what rules out an instrument that was not there.
             Events events = serverEvents();
             long mark = events.markInstrumented();
-            // WINDOW: the same absence window, on the player's own world clock.
-            // Both clocks: the verdict below also reads the CLIENT's chest air, synced from the server.
             advanceWorldAndClient(plot().dim, ABSENCE_WINDOW_TICKS);
 
             String drains = events.since(mark, "suit_air_drained");
@@ -1094,6 +1102,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " in the window, 2026-09-30. The rung, cabin and player-name premises are arrangements and are"
             + " not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(80);",
+            why = "the interval is how long the room at cabin temperature had to hurt.")
     public void overheatedZoneAirHurtsAnUnsuitedCrewman() throws Exception {
         PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
@@ -1114,7 +1124,6 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
 
             scenario().measuring("health in the same room while it is merely warm");
             double healthStart = openSurvivalWindow();
-            // WINDOW: the interval is how long the room at cabin temperature had to hurt.
             advanceServerAndClient(80);
             double healthCold = health(bot().reportState());
             scenario().record("healthAfterControlWindow", healthCold);

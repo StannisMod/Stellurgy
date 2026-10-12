@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -157,6 +158,11 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
             + " recirculator took (took 60000000, oxygen rose 0)\", 2026-09-30. The vent-alone premise is an"
             + " arrangement and is not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), 20);",
+            why = "two reads with the vent alone between them, ventAloneBefore and before. The vent's top-up is"
+                    + " the only other thing that puts oxygen into this room, it works per server tick, and at"
+                    + " this room's size it would add tens of ppm on each of them — so an unchanged reading"
+                    + " across twenty ticks says the vent is not adding, which no single read could say.")
     public void aRecirculatorGivesBackOneOxygenForEachCarbonDioxideItTakes() throws Exception {
         int cx = stand("a room at sea-level oxygen plus carbon dioxide, with a recirculator in it");
         buildSealableRoom(cx);
@@ -169,10 +175,6 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
                 + " " + ppm(730_000) + " " + ppm(210_000) + " " + ppm(60_000));
 
         Reply ventAloneBefore = ventInfo(cx);
-        // WINDOW: two reads with the vent alone between them, ventAloneBefore and before. The vent's
-        // top-up is the only other thing that puts oxygen into this room, it works per server tick,
-        // and at this room's size it would add tens of ppm on each of them — so an unchanged reading
-        // across twenty ticks says the vent is not adding, which no single read could say.
         GameTicks.advance(client(), GameTicks.server(), 20);
         Reply before = ventInfo(cx);
         requireArranged("premise: the vent alone must add no oxygen to this room, or the oxygen below"

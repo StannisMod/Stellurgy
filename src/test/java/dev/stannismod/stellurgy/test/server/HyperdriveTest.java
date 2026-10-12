@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -659,6 +660,10 @@ public class HyperdriveTest extends AbstractSharedServerTest {
             + " not have put a single unit into a bank nothing is feeding ... expected:&lt;18&gt; but"
             + " was:&lt;121&gt;\", 2026-10-05")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), DIM, UNFED_WINDOW_TICKS);",
+            why = "the bank is read on both sides of a stretch of its own world's clock, and the claim is that the"
+                    + " second read equals the first. Overshoot gives an unfed bank MORE time to fill itself,"
+                    + " so a slow box can only make this stricter.")
     public void aFRESHBANKSTAYSEMPTYWHILETIMEPASSES() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft with a drained bank");
         charge(ship, "empty", "a drained bank");
@@ -666,9 +671,6 @@ public class HyperdriveTest extends AbstractSharedServerTest {
         requireArranged("the drained bank must be short of the burst, or a bank that filled itself"
                 + " would have no room to show it: " + before, before.charge < before.burstCost);
 
-        // WINDOW: the bank is read on both sides of a stretch of its own world's clock, and the claim
-        // is that the second read equals the first. Overshoot gives an unfed bank MORE time to fill
-        // itself, so a slow box can only make this stricter.
         GameTicks.advanceWorld(client(), DIM, UNFED_WINDOW_TICKS);
         DriveInfo after = drive(ship);
 

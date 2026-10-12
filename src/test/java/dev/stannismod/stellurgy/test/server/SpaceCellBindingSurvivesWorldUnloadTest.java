@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.MaterializedCell;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -121,10 +122,11 @@ public class SpaceCellBindingSurvivesWorldUnloadTest extends AbstractSharedServe
      * version this replaces spent the budget polling and then asserted on the LAST reading — which
      * is green for a world that was unloaded and re-materialized inside the window.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), SWEEP_BUDGET_TICKS);",
+            why = "the log is read from the caller's mark to the end of this stretch, and the caller asserts over"
+                    + " everything in between, naming both ends. Overshoot only widens the stretch the sweep"
+                    + " had to take the held world in, which can turn a green red and never the reverse.")
     private String unloadRecordsOver(long mark) throws Exception {
-        // WINDOW: the log is read from the caller's mark to the end of this stretch, and the caller
-        // asserts over everything in between, naming both ends. Overshoot only widens the stretch
-        // the sweep had to take the held world in, which can turn a green red and never the reverse.
         GameTicks.advance(client(), GameTicks.server(), SWEEP_BUDGET_TICKS);
         return events.since(mark, "world_unloaded");
     }

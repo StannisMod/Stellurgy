@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
@@ -207,6 +208,9 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
             + " window read 0.667 per step with zero variation. RE-ENABLE when a ridden entity"
             + " rides that prediction too; the acceptance is this class green in eight parallel"
             + " instances, because four green out of eight is what it already does.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(SETTLE_TICKS);",
+            why = "leg C is DEFINED as the same flight SETTLE_TICKS after leg B — the gap is the variable that"
+                    + " tells a transient from a lasting change.")
     public void aShipFliesAsSmoothlyAfterAJumpAsBeforeOne() throws Exception {
 
         // The rendered frame is one of the four clocks this test reads, and the harness seeds
@@ -355,8 +359,6 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // defect. Measured 6 of 6 in leg B before this leg existed: one 199-266 ms tick, with ZERO
         // chunks arriving in the window — so whatever it is, it is not the loading the report
         // suspected.
-        // EXPERIMENT: leg C is DEFINED as the same flight SETTLE_TICKS after leg B — the gap is the
-        // variable that tells a transient from a lasting change.
         advanceServerAndClient(SETTLE_TICKS);
         Leg settled = measure("after-jump-settled", targetDim, afcArrived);
 
@@ -759,11 +761,12 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
                 moved >= LIFT_CLEAR_BLOCKS);
     }
 
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(FLY_TICKS);",
+            why = "held climb — the flight each leg's traces describe.")
     private Leg measure(String label, int dim, int[] afc) throws Exception {
         resetServerMotionTrace();
         bot().holdKey(Keyboard.KEY_R);
         try {
-            // STIMULUS: held climb — the flight each leg's traces describe.
             advanceServerAndClient(FLY_TICKS);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);

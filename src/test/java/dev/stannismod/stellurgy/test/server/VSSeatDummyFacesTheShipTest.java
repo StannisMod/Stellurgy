@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
@@ -58,6 +59,19 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
     private static final double YAW_TOLERANCE_DEG = 6.0;
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);",
+            why = "not a wait, and the difference is what this line is for. A yaw slewing round is a converging"
+                    + " VALUE — nothing announces it and there is no edge to link on — so the shape it owes is"
+                    + " two reads with a stretch of the subject's own clock between them, and an assertion that"
+                    + " names both. The poll it replaces asked the same question the assertion below asks (`>"
+                    + " 45 degrees`) and exited the moment it was satisfied, which makes the budget a disguised"
+                    + " claim about how fast the box is: a slow one expires and reds, a fast one leaves early"
+                    + " and the assertion is a formality. The slew is driven by the attitude controller's own"
+                    + " tick at a fixed rate per tick, so a fixed stretch of that controller's world turns the"
+                    + " ship the same amount on every machine, and the window is spent on purpose. Overshoot"
+                    + " eases the lower-bound gate below, but only up to the commanded heading, where the hold"
+                    + " parks; the verdict itself is the mount-vs-ship agreement, which extra ticks cannot"
+                    + " loosen.")
     public void theSeatMountTurnsWithItsShip() throws Exception {
 
         String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
@@ -92,17 +106,6 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + shipId
                         + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded"));
 
-        // WINDOW: not a wait, and the difference is what this line is for. A yaw slewing round is a
-        // converging VALUE — nothing announces it and there is no edge to link on — so the shape it
-        // owes is two reads with a stretch of the subject's own clock between them, and an assertion
-        // that names both. The poll it replaces asked the same question the assertion below asks
-        // (`> 45 degrees`) and exited the moment it was satisfied, which makes the budget a disguised
-        // claim about how fast the box is: a slow one expires and reds, a fast one leaves early and
-        // the assertion is a formality. The slew is driven by the attitude controller's own tick at a
-        // fixed rate per tick, so a fixed stretch of that controller's world turns the ship the same
-        // amount on every machine, and the window is spent on purpose. Overshoot eases the
-        // lower-bound gate below, but only up to the commanded heading, where the hold parks; the
-        // verdict itself is the mount-vs-ship agreement, which extra ticks cannot loosen.
         GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
         double shipYawAfter = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
 

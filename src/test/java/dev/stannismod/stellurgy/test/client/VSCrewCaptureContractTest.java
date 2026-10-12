@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -453,6 +454,10 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " (apex=157.0 deckY=157.0)\"; that one never airs him, so the conditional landing wait is skipped"
             + " on it.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 10; i++) {",
+            why = "the APEX of the jump is an extremum over the samples, a property of the arc rather than of any"
+                    + " instant production commits, so no record can carry it. What it cannot see: a higher"
+                    + " apex reached and left between two samples.")
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -525,9 +530,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         StringBuilder trace = new StringBuilder();
         bot().holdKey(Keyboard.KEY_SPACE);
         try {
-            // WINDOW: the APEX of the jump is an extremum over the samples, a property of the arc
-            // rather than of any instant production commits, so no record can carry it. What it
-            // cannot see: a higher apex reached and left between two samples.
             for (int i = 0; i < 10; i++) {
                 bot().waitWorldTicks(2);
                 samples++;
@@ -612,6 +614,17 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     // ---- Boarding vs bystanders: terra firma near a ship never captures -------------------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(120);",
+            why = "an attitude converges and nothing in production declares it reached, so there is no record to"
+                    + " wait on; overshoot only brings the hull nearer its commanded tilt, which is the"
+                    + " premise, never away from it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(10);",
+            why = "rest is approached, not announced; a longer interval only gives a still-falling body more room"
+                    + " to show it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 12; i++) {",
+            why = "the captured fraction and the y RANGE are properties of the traverse rather than of one"
+                    + " instant; a record could say capture began, not what fraction of a walk it held for."
+                    + " What it cannot see: a capture dropped and regained inside one 4-tick sample.")
     public void walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -627,9 +640,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the tilt",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on; overshoot only brings the hull nearer its commanded tilt, which is
-        // the premise, never away from it.
         advanceServerAndClient(120);
         ShipInfo info = shipInfo();
         // The TILT is the premise, and until now nothing checked that it took: a run in which
@@ -668,8 +678,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // height; two that differ mean he is still moving, which is an arrangement fault this
         // scenario must not walk into rather than a number to average.
         double firstY = bot().reportState().get("playerY").getAsDouble();
-        // WINDOW: rest is approached, not announced; a longer interval only gives a still-falling
-        // body more room to show it.
         advanceServerAndClient(10);
         double groundY = bot().reportState().get("playerY").getAsDouble();
         // THE TEST'S OWN — a bound on "at rest", not on anything production decides. It is the
@@ -702,9 +710,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         StringBuilder trace = new StringBuilder();
         bot().holdKey(Keyboard.KEY_W);
         try {
-            // WINDOW: the captured fraction and the y RANGE are properties of the traverse rather
-            // than of one instant; a record could say capture began, not what fraction of a walk it
-            // held for. What it cannot see: a capture dropped and regained inside one 4-tick sample.
             for (int i = 0; i < 12; i++) {
                 advanceServerAndClient(4);
                 samples++;
@@ -764,6 +769,13 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " 2026-09-28. That is the verdict the wait rewrite touched; the drift and churn verdicts after it"
             + " are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(200);",
+            why = "an attitude converges and nothing in production declares it reached, so there is no record to"
+                    + " wait on; overshoot only brings the hull nearer the commanded roll, which is the"
+                    + " premise.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(100);",
+            why = "drift and churn accumulate rather than happen, so no record answers; a longer window can only"
+                    + " show more of both, never less.")
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -789,9 +801,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
                         ).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on; overshoot only brings the hull nearer the commanded roll, which is
-        // the premise.
         advanceServerAndClient(200);
 
         // The subject must be in the regime the symptom lives in, and the instrument must fire:
@@ -812,8 +821,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double maxLateral = 0.0;
         float strafeSeen = 0f, forwardSeen = 0f;
         StringBuilder trace = new StringBuilder();
-        // WINDOW: drift and churn accumulate rather than happen, so no record answers; a longer
-        // window can only show more of both, never less.
         advanceServerAndClient(100);
         // Read ONCE, from the client's own per-tick record, instead of polling four statics every
         // fifth tick. The poll saw one tick in five and paid a round trip per field for it; the
@@ -882,6 +889,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     // ---- The LIVE configuration: a station-keeping hover, never fully still --
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(100);",
+            why = "as in the held-roll leg above; a longer window only shows more.")
     public void aStillCrewMemberOnAHoveringShipIsNotDraggedSideways() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -911,7 +920,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double maxLateral = 0.0;
         float strafeSeen = 0f, forwardSeen = 0f;
         StringBuilder trace = new StringBuilder();
-        // WINDOW: as in the held-roll leg above; a longer window only shows more.
         advanceServerAndClient(100);
         // Read once from the per-tick record; see the sibling leg above for why a five-tick poll of
         // four statics was both blinder and dearer than this.
@@ -957,6 +965,20 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /** Pins DECKSYNC-7 (the server bounds the region a captured body may declare). */
     @Pins("DECKSYNC-7")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int t = 0; t < 3; t++) {",
+            why = "the arc's SHAPE, for the failure message — a trajectory is not one record; the verdict is the"
+                    + " link below. What it cannot see: the part of the arc between two samples.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int t = 3; t < 6; t++) {",
+            why = "the arc's second half, sampled for the same reason as the first; the landing is decided by the"
+                    + " link that follows. What it cannot see: the ticks in between.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int leg = 0; leg < 4; leg++) {",
+            why = "four legs, not a wait — deleting the loop stops the walking rather than the watching. What the"
+                    + " legs cannot see: a capture that dropped and returned inside a single 3-tick hold.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20);",
+            why = "the activity window's TAIL, which lets the LAST leg's consequences land inside it: the server"
+                    + " judges a step only when that step's packet arrives, and the bound writes no record for"
+                    + " an ordinary step, so there is no record of \"the last step has been judged\" to wait"
+                    + " on. A longer tail admits more records and so can only make these counts stricter.")
     public void walkingAndJumpingOnAHoveringShipDoesNotChurnTheCapture() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1015,8 +1037,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         long jumpMark = client.mark();
         bot().holdKey(Keyboard.KEY_SPACE);
         StringBuilder arc = new StringBuilder();
-        // WINDOW: the arc's SHAPE, for the failure message — a trajectory is not one record; the
-        // verdict is the link below. What it cannot see: the part of the arc between two samples.
         for (int t = 0; t < 3; t++) {
             bot().waitWorldTicks(2);
             arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f sub=%.2f] ",
@@ -1029,8 +1049,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // before, filtered to this scenario's ship. A fixed sample count could only say "no release
         // was recorded in twenty ticks", which is also what it says about a body still falling —
         // and on the run that sent us here it WAS still falling, four blocks below its deck.
-        // WINDOW: the arc's second half, sampled for the same reason as the first; the landing is
-        // decided by the link that follows. What it cannot see: the ticks in between.
         for (int t = 3; t < 6; t++) {
             bot().waitWorldTicks(2);
             arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f sub=%.2f] ",
@@ -1064,9 +1082,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         int[] keys = {Keyboard.KEY_W, Keyboard.KEY_D, Keyboard.KEY_S, Keyboard.KEY_A};
         StringBuilder legs = new StringBuilder();
         long walkMoveMark = clientEvents().mark();
-        // STIMULUS: four legs, not a wait — deleting the loop stops the walking rather than the
-        // watching. What the legs cannot see: a capture that dropped and returned inside a single
-        // 3-tick hold.
         for (int leg = 0; leg < 4; leg++) {
             bot().holdKey(keys[leg]);
             try {
@@ -1095,11 +1110,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
                     Events.lastRecord(legMoves) == null
                             ? "(none)" : Events.text(Events.lastRecord(legMoves), "mover")));
         }
-        // WINDOW: the activity window's TAIL, which lets the LAST leg's consequences land inside it:
-        // the server judges a step only when
-        // that step's packet arrives, and the bound writes no record for an ordinary step, so there
-        // is no record of "the last step has been judged" to wait on. A longer tail admits more
-        // records and so can only make these counts stricter.
         advanceServerAndClient(20);
         System.out.println("[crewcap] active-legs " + legs);
 
@@ -1231,6 +1241,10 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " standing one the bound accepted it on healthy production, because a standing client reports only"
             + " every twenty ticks and the bound licenses up to ten ticks of movement per report.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().holdKey(Keyboard.KEY_W);",
+            why = "the walk key held from before the step until after it is taken.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(WALK_BEFORE_THE_STEP_TICKS);",
+            why = "walking, so the bound has judged this body tick by tick.")
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1280,11 +1294,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // more than vanilla's own ten. Measured 2026-09-28: this step from a standing body was
         // ACCEPTED, moved 6.0. That is the bound working as written — its subject is a body moving
         // on a wrong carry, and a moving body reports every tick — so the stimulus has to be one.
-        // STIMULUS: the walk key held from before the step until after it is taken.
         bot().holdKey(Keyboard.KEY_W);
         ClientWindow shove;
         try {
-            // STIMULUS: walking, so the bound has judged this body tick by tick.
             advanceServerAndClient(WALK_BEFORE_THE_STEP_TICKS);
             shove = ClientWindow.open(bot(),
                     "dev.stannismod.stellurgy.test.trace.ShoveArming", WILD_STEP_BLOCKS);
@@ -1374,6 +1386,20 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " is the premise that the double-tap started flight at all, which is vanilla's and no Stellurgy line"
             + " decides.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().releaseKey(Keyboard.KEY_SPACE);"
+            + " bot().waitWorldTicks(2);",
+            why = "the first press. Vanilla toggles flight when a second jump press lands within seven client"
+                    + " ticks of the first (`EntityPlayerSP.flyToggleTimer`), so the three two-tick intervals"
+                    + " here ARE the double-tap; overshoot that pushed them past seven would fail loudly, on"
+                    + " the rise check after the window.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().holdKey(Keyboard.KEY_SPACE);",
+            why = "the gap between the two presses")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().releaseKey(Keyboard.KEY_SPACE); //"
+            + " Hold space well past the hold window: a flying player RISES steadily and, on this",
+            why = "the second press")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 25; i++) {",
+            why = "the worst DROP below the running high-water mark is an extremum over the whole hold, which no"
+                    + " single record carries. What it cannot see: a deeper drop recovered between two samples.")
     public void aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1401,15 +1427,11 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         exec("stellurgytest player dismount");
         // Double-tap space IMMEDIATELY - inside the hold window - to start creative flight.
         bot().holdKey(Keyboard.KEY_SPACE);
-        // STIMULUS: the first press. Vanilla toggles flight when a second jump press lands within
-        // seven client ticks of the first (`EntityPlayerSP.flyToggleTimer`), so the three
-        // two-tick intervals here ARE the double-tap; overshoot that pushed them past seven would fail
-        // loudly, on the rise check after the window.
         bot().waitWorldTicks(2);
         bot().releaseKey(Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the gap between the two presses
+        bot().waitWorldTicks(2);
         bot().holdKey(Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the second press
+        bot().waitWorldTicks(2);
         bot().releaseKey(Keyboard.KEY_SPACE);
 
         // Hold space well past the hold window: a flying player RISES steadily and, on this
@@ -1429,9 +1451,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         boolean trackedAtEnd = false;
         bot().holdKey(Keyboard.KEY_SPACE);
         try {
-            // WINDOW: the worst DROP below the running high-water mark is an extremum over the whole
-            // hold, which no single record carries. What it cannot see: a deeper drop recovered
-            // between two samples.
             for (int i = 0; i < 25; i++) {
                 bot().waitWorldTicks(2);
                 double y = bot().reportState().get("playerY").getAsDouble();
@@ -1484,6 +1503,14 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     // ---- The OUTER hull of an inverted ship is walkable, with WORLD-frame semantics -------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(200);",
+            why = "an attitude converges and nothing in production declares it reached, so there is no record to"
+                    + " wait on; overshoot only brings the hull nearer the commanded roll, which is the"
+                    + " premise.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 30; i++) {",
+            why = "where the body SETTLES is a value reached asymptotically rather than an instant anything"
+                    + " commits; the trace is for the message. What it cannot see: a bounce between two 3-tick"
+                    + " samples.")
     public void standingOnTheWorldTopOfAnInvertedShipKeepsWorldFrameSemantics() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1501,9 +1528,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on; overshoot only brings the hull nearer the commanded roll, which is
-        // the premise.
         advanceServerAndClient(200);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1534,9 +1558,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         long encounterMark = client.mark();
         StringBuilder land = new StringBuilder();
         double settledY = Double.NaN;
-        // WINDOW: where the body SETTLES is a value reached asymptotically rather than an instant
-        // anything commits; the trace is for the message. What it cannot see: a bounce between two
-        // 3-tick samples.
         for (int i = 0; i < 30; i++) {
             advanceServerAndClient(3);
             double py = bot().reportState().get("playerY").getAsDouble();
@@ -1622,6 +1643,14 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " acceptance is aboard 0/30 on a full tier, twice.")
     /** Pins DECKSYNC-6 (a body is never moved by a quantity only its own client derived). */
     @Pins("DECKSYNC-6")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(200);",
+            why = "an attitude converges and nothing in production declares it reached, so there is no record to"
+                    + " wait on; overshoot only brings the hull nearer the commanded roll, which is the"
+                    + " premise.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 30; i++) {",
+            why = "the split between aboard-mode and hull-stand samples is a ratio over the observation, which no"
+                    + " record can carry. What it cannot see: a mode that flipped and flipped back inside 3"
+                    + " ticks.")
     public void aHullTopEncounterNeverEntersTheShipFrame() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1638,9 +1667,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on; overshoot only brings the hull nearer the commanded roll, which is
-        // the premise.
         advanceServerAndClient(200);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1712,9 +1738,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double settledY = Double.NaN;
         StringBuilder enc = new StringBuilder();
         StringBuilder fine = new StringBuilder();
-        // WINDOW: the split between aboard-mode and hull-stand samples is a ratio over the
-        // observation, which no record can carry. What it cannot see: a mode that flipped and
-        // flipped back inside 3 ticks.
         for (int i = 0; i < 30; i++) {
             advanceServerAndClient(3);
             samples++;
@@ -1932,6 +1955,10 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     // ---- The crosshair picks the block the camera looks at, at any attitude ---------------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150); ShipInfo info = shipInfo();",
+            why = "an attitude converges and nothing in production declares it reached, so there is no record to"
+                    + " wait on. Overshoot brings the hull nearer its commanded 50 degrees, which is inside the"
+                    + " band.")
     public void theCrosshairPicksTheSameDeckBlockAtAnyAttitude() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -2000,9 +2027,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on. Overshoot brings the hull nearer its commanded 50 degrees, which is
-        // inside the band.
         advanceServerAndClient(150);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -2137,6 +2161,18 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " it is doing (5.9E-19/tick …) … the largest carry any capture in this window was committed with"
             + " is 0.1\", 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(driveIterations);",
+            why = "nothing in production declares a manoeuvre over, so there is no record to wait on. The same"
+                    + " interval is what lets it end, and that is measured by the settle window below rather"
+                    + " than assumed; overshoot only lets the craft settle further, which that window then"
+                    + " sees.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20);",
+            why = "overshoot adds ticks to the numerator and not to the divisor, so a slow box overstates the"
+                    + " residual: the stricter direction.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 25; i++) {",
+            why = "kept for the contact TRACE a failure needs — no record carries how the contact looked across"
+                    + " the fall; the verdict is taken from the records afterwards. What it cannot see:"
+                    + " anything finer than a tick.")
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -2233,10 +2269,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
                 + " never manoeuvres and the interval under test spans nothing: " + commanded,
                 Reply.of(commanded).bool("commanded"));
         int driveIterations = 200;
-        // WINDOW: nothing in production declares a manoeuvre over, so there is no record to wait
-        // on. The same interval is what lets it end, and that is measured by the settle window
-        // below rather than assumed; overshoot only lets the craft settle further, which that
-        // window then sees.
         advanceServerAndClient(driveIterations);
 
         // What the deck is ACTUALLY doing now, measured rather than assumed. A craft can be told to
@@ -2246,8 +2278,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double upAfter = after.upY();
         double settledOmega = after.omega;
         double ySettleStart = after.y;
-        // WINDOW: overshoot adds ticks to the numerator and not to the divisor, so a slow box
-        // overstates the residual: the stricter direction.
         advanceServerAndClient(20);
         double ySettleEnd = shipInfo().y;
         double settledPerTick = Math.abs(ySettleEnd - ySettleStart) / 20.0;
@@ -2279,9 +2309,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // tick the capture takes hold: the held carry is what the next tick subtracts to recover the
         // body's own motion, so a wrong one is a real displacement and not a reading.
         StringBuilder contact = new StringBuilder();
-        // WINDOW: kept for the contact TRACE a failure needs — no record carries how the contact
-        // looked across the fall; the verdict is taken from the records afterwards. What it cannot
-        // see: anything finer than a tick.
         for (int i = 0; i < 25; i++) {
             advanceServerAndClient(1);
             boolean tracked = DeckCapture.read(this::exec).alreadyTracked;
@@ -2380,6 +2407,27 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             + " touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts"
             + " after the roll were not touched and are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150); double[] up = shipUpFromInfo(shipInfo());",
+            why = "an attitude converges and nothing in production declares it reached, so there is no record to"
+                    + " wait on. Overshoot brings the hull nearer its commanded 60 degrees, which is inside the"
+                    + " band.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < DECK_LOOK_TURNS; i++) {",
+            why = "the swept ANGLE is a sum over the steps, which no record could carry. What it cannot see: how"
+                    + " the look travelled inside one step.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150); double[] up2 = shipUpFromInfo(shipInfo());",
+            why = "overshoot only lets the deck turn further, which the roll gate measures instead of assuming.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int dir = 0; dir < 4; dir++) {",
+            why = "four legs whose result is an extremum — the largest yaw divergence across the four directions."
+                    + " Each leg drives the body itself, and the quantity compared is a MAXIMUM over legs,"
+                    + " which is not a moment anything records. Every leg's re-seed IS awaited as a link below."
+                    + " What this cannot see: a worse divergence inside a leg.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 8; i++) {",
+            why = "the walk this leg measures.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 20; i++) {",
+            why = "the jump whose frames the open frame-step window summarises.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(5);",
+            why = "five ticks after the key comes up stay inside the frame-step window, so the summary includes"
+                    + " the start of the body coming back down.")
     public void theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -2444,9 +2492,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: an attitude converges and nothing in production declares it reached, so there is
-        // no record to wait on. Overshoot brings the hull nearer its commanded 60 degrees, which is
-        // inside the band.
         advanceServerAndClient(150);
         double[] up = shipUpFromInfo(shipInfo());
         scenario().requireArranged("the ship must be steeply rolled for the frames to diverge (upY " + upBeforeRoll
@@ -2485,8 +2530,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double swept = 0.0;
         double[] prev = look0;
         StringBuilder steps = new StringBuilder();
-        // STIMULUS: the swept ANGLE is a sum over the steps, which no record could carry. What it
-        // cannot see: how the look travelled inside one step.
         for (int i = 0; i < DECK_LOOK_TURNS; i++) {
             bot().turnLook(MOUSE_UNITS_PER_TURN, 0f);
             bot().waitWorldTicks(2);
@@ -2533,8 +2576,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the second roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h2) + " " + Math.sin(h2) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: overshoot only lets the deck turn further, which the roll gate measures instead
-        // of assuming.
         advanceServerAndClient(150);
         double[] up2 = shipUpFromInfo(shipInfo());
         double rolledBy = Math.toDegrees(Math.acos(clampUnit(dot(up, up2))));
@@ -2622,10 +2663,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double[] anchor = clientPos();
         double bestMag = -1.0, bestWalkedYaw = 0.0, bestHeldYaw = 0.0;
         StringBuilder legs = new StringBuilder();
-        // STIMULUS: four legs whose result is an extremum — the largest yaw divergence across the
-        // four directions. Each leg drives the body itself, and the quantity compared is a MAXIMUM
-        // over legs, which is not a moment anything records. Every leg's re-seed IS awaited as a
-        // link below. What this cannot see: a worse divergence inside a leg.
         for (int dir = 0; dir < 4; dir++) {
             long reseatMark = clientEvents().mark();
             exec("tp @a " + anchor[0] + " " + anchor[1] + " " + anchor[2] + " 0 0");
@@ -2645,7 +2682,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             double[] p0 = clientPos();
             double[] s0 = {infoW0.x, infoW0.y, infoW0.z};
             try {
-                // STIMULUS: the walk this leg measures.
                 for (int i = 0; i < 8; i++) {
                     bot().holdKey(Keyboard.KEY_W); // re-asserted per tick against key-state churn
                     bot().waitWorldTicks(1);
@@ -2705,7 +2741,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         long stepMark = clientEvents().mark();
         ClientWindow stepWindow = ClientWindow.open(bot(), FRAME_STEP_WINDOW);
         try {
-            // STIMULUS: the jump whose frames the open frame-step window summarises.
             for (int i = 0; i < 20; i++) {
                 bot().holdKey(Keyboard.KEY_SPACE);
                 bot().waitWorldTicks(1);
@@ -2713,8 +2748,6 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         } finally {
             bot().releaseKey(Keyboard.KEY_SPACE);
         }
-        // EXPERIMENT: five ticks after the key comes up stay inside the frame-step window, so the
-        // summary includes the start of the body coming back down.
         bot().waitWorldTicks(5);
         stepWindow.close();
         String stepSummary = Events.lastRecord(clientEvents().since(stepMark, "frame_step_window"));

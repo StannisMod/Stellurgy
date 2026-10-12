@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -137,6 +138,13 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
      * block into the volume leaves the zone covering a different set of cells than the test thinks —
      * which is how this test first failed, silently, by sampling a position in no zone at all.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), SEAL_TICKS);",
+            why = "SEAL_TICKS is a DOSE of the SERVER'S OWN clock, not a budget for this box to be quick. The fill"
+                    + " that makes a room a zone is paced by world time, and a force-ticked tile does not move"
+                    + " world time — which is why ticking the vent alone never seals it, and why an earlier"
+                    + " version of this that force-ticked in a poll loop only worked by accident, on the real"
+                    + " seconds that elapsed between its polls. The clock is advanced explicitly instead, so"
+                    + " the same dose does the same work everywhere, and the state is read ONCE.")
     private void sealRoom(int cx) throws Exception {
         // The vent's own power, under its floor and out of the room, so the detector's signal — which
         // reaches the vent through the floor block beneath the detector — is never the thing that
@@ -145,12 +153,6 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
                 + " " + cx + " " + (cy - 1) + " " + cz + " minecraft:redstone_block");
         arrange("stellurgytest place 0 " + cx + " " + cy + " " + cz + " stellurgy:oxygenVent");
         arrange("stellurgytest energy inject 0 " + cx + " " + cy + " " + cz + " 1000000");
-        // EXPERIMENT: SEAL_TICKS is a DOSE of the SERVER'S OWN clock, not a budget for this box to
-        // be quick. The fill that makes a room a zone is paced by world time, and a force-ticked
-        // tile does not move world time — which is why ticking the vent alone never seals it, and
-        // why an earlier version of this that force-ticked in a poll loop only worked by accident,
-        // on the real seconds that elapsed between its polls. The clock is advanced explicitly
-        // instead, so the same dose does the same work everywhere, and the state is read ONCE.
         GameTicks.advance(client(), GameTicks.server(), SEAL_TICKS);
         Reply air = ask("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
         assertTrue("premise: the room must actually be a sealed zone with gases in it: " + air,

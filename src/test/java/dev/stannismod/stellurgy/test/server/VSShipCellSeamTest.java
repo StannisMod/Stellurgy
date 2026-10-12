@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -575,6 +576,10 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
 //                Reply.of(still).bool("found") && Reply.of(still).bool("aboard"));
 //    }
 
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, TICK_CENSUS_WINDOW);",
+            why = "the census is read on both sides of this stretch and the assertion below is that the two"
+                    + " differ, naming both. \"It moved at all\" is the bar, so overshoot cannot make a"
+                    + " computer that never ticks look like one that does.")
     private ShipAtItsFace arrangeAShipAtItsFace() throws Exception {
         // Marked at the very top, so a failure below can print every claim THIS scenario caused and
         // nothing from the ones before it — the question is what accumulates, and an unbounded dump
@@ -668,9 +673,6 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         // since stopped also satisfies.
         String gateBefore = entryGate(srcVsId);
         String censusBefore = extractString(gateBefore, "tickCensus");
-        // WINDOW: the census is read on both sides of this stretch and the assertion below is that
-        // the two differ, naming both. "It moved at all" is the bar, so overshoot cannot make a
-        // computer that never ticks look like one that does.
         GameTicks.advanceWorld(client(), 0, TICK_CENSUS_WINDOW);
         String gateAfter = entryGate(srcVsId);
         String censusAfter = extractString(gateAfter, "tickCensus");

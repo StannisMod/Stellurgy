@@ -906,9 +906,8 @@ public final class Events {
     /**
      * Work a headless test has to keep doing WHILE it waits — arrangement a player would provide.
      *
-     * <p>Its own parameter rather than folded into the wait, for the reason {@code GameTicks.until}
-     * gives for the same split: a condition is ASKED and must change nothing, a stimulus is
-     * PERFORMED and answers nothing. Folding the two together is how "this only passes when the
+     * <p>Its own parameter rather than folded into the wait: a condition is ASKED and must change
+     * nothing, a stimulus is PERFORMED and answers nothing. Folding the two together is how "this only passes when the
      * assertion runs" gets written.</p>
      */
     public interface Stimulus {

@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -188,6 +189,23 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
             + " {...z:8800.0...}\" (2026-09-30). The hull-frame and position verdicts after it were not reached by"
             + " that inversion.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "int approachSteps = (int) Math.ceil(approach / speed) + 5;",
+            why = "each iteration is one probe-driven step of the substrate, and the read after it is of the step"
+                    + " just taken; the loop ends on the round's own report that a hull holds it. Bounded by"
+                    + " the approach itself: its length at this speed, and a few steps more.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "double seatBottomY = ship.toWorld(sub[0], sub[1], sub[2])[1];",
+            why = "\"the round goes where the ship goes\" is a standing state, and the move is not finished when"
+                    + " the teleport answers — the physics adopts the new pose on its next pass"
+                    + " (VSBridge.teleportShip says so of itself), and the substrate steps the round on the"
+                    + " world's own ticks. So two reads: one in the pass the teleport answered in, and one"
+                    + " after two world ticks, by which the adoption has run and at least one substrate step"
+                    + " has run after it, whichever of the two a tick runs first. The claim is made of BOTH"
+                    + " reads; a round carried at the first and dropped at the second is a round the ship does"
+                    + " not keep. Where the seat block now stands in the world: the premise of every read below"
+                    + " is that the round is still somewhere inside it, and a round that has honestly come out"
+                    + " of the underside is an arrangement that outran its window, not a hull that let go.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), 2);",
+            why = "the ticks between the two reads described above; every verdict below names both.")
     public void aRoundDrillingAHullGoesWhereTheShipGoes() throws Exception {
         ask("stellurgytest shot clear 0").requireOk("clear the air");
 
@@ -223,9 +241,6 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
                 + energy + " 400");
 
         Reply lodged = null;
-        // STIMULUS: each iteration is one probe-driven step of the substrate, and the read after it
-        // is of the step just taken; the loop ends on the round's own report that a hull holds it.
-        // Bounded by the approach itself: its length at this speed, and a few steps more.
         int approachSteps = (int) Math.ceil(approach / speed) + 5;
         for (int tick = 0; tick < approachSteps && lodged == null; tick++) {
             ask("stellurgytest shield tick 0").requireOk("step the substrate");
@@ -254,19 +269,8 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
         ask("stellurgytest vs teleport-ship-by-id 0 " + ship.vsShip + " " + MOVE_AGAIN_X + " " + MOVE_AGAIN_Y
                 + " " + MOVE_AGAIN_Z).requireOk("move the ship with the round in it");
 
-        // WINDOW: "the round goes where the ship goes" is a standing state, and the move is not
-        // finished when the teleport answers — the physics adopts the new pose on its next pass
-        // (VSBridge.teleportShip says so of itself), and the substrate steps the round on the
-        // world's own ticks. So two reads: one in the pass the teleport answered in, and one after
-        // two world ticks, by which the adoption has run and at least one substrate step has run
-        // after it, whichever of the two a tick runs first. The claim is made of BOTH reads; a round
-        // carried at the first and dropped at the second is a round the ship does not keep.
-        // Where the seat block now stands in the world: the premise of every read below is that the
-        // round is still somewhere inside it, and a round that has honestly come out of the underside
-        // is an arrangement that outran its window, not a hull that let go.
         double seatBottomY = ship.toWorld(sub[0], sub[1], sub[2])[1];
         Reply sameTick = lodgedAfterTheMove(id, "in the pass the teleport answered in", seatBottomY);
-        // WINDOW: the ticks between the two reads described above; every verdict below names both.
         GameTicks.advance(client(), GameTicks.server(), 2);
         Reply stepped = lodgedAfterTheMove(id, "after the world stepped it past the move", seatBottomY);
 

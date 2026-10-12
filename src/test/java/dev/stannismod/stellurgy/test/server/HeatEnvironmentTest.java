@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -255,6 +256,11 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
             + " everything: \"and it must NOT take all of it, however much the configuration asks for … (shielded=0)\"."
             + " The emitter premise and the unshielded premise are arrangements and are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 15; i++) {",
+            why = "fifteen rounds of charge, generator tick and network solve are the DOSE that brings the emitter"
+                    + " up, and every round is driven by a probe rather than by world time, so the same dose"
+                    + " does the same work on any box. No record closes it because nothing here waits: the one"
+                    + " read after the dose is refused as an arrangement failure below.")
     public void aShieldThinsTheFluxAndNeverRemovesIt() throws Exception {
         Cell cell = occupyHomeCell();
         try {
@@ -267,10 +273,6 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
             buildLoopWithRadiatorFirst(cell.dim, shieldedX);
             buildLoopWithRadiatorFirst(cell.dim, unshieldedX);
 
-            // STIMULUS: fifteen rounds of charge, generator tick and network solve are the DOSE that
-            // brings the emitter up, and every round is driven by a probe rather than by world time,
-            // so the same dose does the same work on any box. No record closes it because nothing
-            // here waits: the one read after the dose is refused as an arrangement failure below.
             for (int i = 0; i < 15; i++) {
                 arrange("stellurgytest energy inject " + cell.dim + " " + generatorX + " " + y + " " + z
                         + " 4000");

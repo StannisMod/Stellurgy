@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -139,6 +140,12 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
             + " decides what comes along\", 2026-09-28. The other two waits the rewrite touched are arrangement"
             + " links (the ship usable, the client standing at the console).")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false); // The"
+            + " two links a boarding IS, in the order the game commits them: Forge fires",
+            why = "the use key held down across client ticks, as a mouse button is.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false);"
+            + " events.await(navMark, \"right_click_block\", \"the use press aimed at the NAVIGATION CONSOLE \"",
+            why = "the use key held down across client ticks, as a mouse button is.")
     public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
@@ -300,7 +307,6 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // who is riding what, so the replication half below is a record on this log.
         long seatPressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
-        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
@@ -344,7 +350,6 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         long navMark = events.markInstrumented();
         long navClientMark = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
-        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
@@ -404,6 +409,13 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
      * arrives as a pos-look packet which vanilla applies with {@code setPositionAndRotation}, so an
      * aim set before it would be silently overwritten by it.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int attempt = 0; attempt < budget; attempt++) {",
+            why = "each pass stands and aims against the ship's live pose, and ends on the crosshair resting on"
+                    + " the target — the argument is in the javadoc above.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5);",
+            why = "the controller's step. MEASURED that one tick is not enough (2026-09-23: deterministic red, the"
+                    + " pick read back from a look tens of degrees off the aim); the mechanism is NOT"
+                    + " established.")
     private Aim aimAt(int[] afcSub, int[] targetSub, int[] standOffset,
                       double tx, double ty, double tz, int budget) throws Exception {
         Aim aim = new Aim();
@@ -413,8 +425,6 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         double[] targetWorld = null;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
-        // STIMULUS: each pass stands and aims against the ship's live pose, and ends on the
-        // crosshair resting on the target — the argument is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
             // READS, not waits — all three of the checks below used to sleep five ticks and retry.
             // The ship was resolved before this method was called (its computer's subspace address
@@ -452,9 +462,6 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
             double horizontal = Math.sqrt(dx * dx + dz * dz);
             bot().setLook((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D),
                     (float) (-Math.toDegrees(Math.atan2(dy, horizontal))));
-            // STIMULUS: the controller's step. MEASURED that one tick is not enough (2026-09-23:
-            // deterministic red, the pick read back from a look tens of degrees off the aim); the mechanism
-            // is NOT established.
             bot().waitWorldTicks(5);
 
             aim.mouseOver = bot().reportMouseOver();
@@ -585,6 +592,9 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
      * red here. Which route actually worked is recorded, so a green run still says it; a test for
      * the key itself would have to assert the first route and is not written.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2 * budget);",
+            why = "a best-effort sneak held for a fixed stretch; its expiry is not a failure, and the guaranteed"
+                    + " route below is linked.")
     private void leaveTheSeat(int budget) throws Exception {
         // Mark the CLIENT log first: whichever route gets him off the seat, his own
         // `dismountRidingEntity` is the record, and one mark covers both attempts.
@@ -593,8 +603,6 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // javadoc), so its expiry must not fail — and a poll-until-off cannot express "give the key
         // this long and then read what happened", which is what this actually wants.
         bot().holdKey(Keyboard.KEY_LSHIFT);
-        // STIMULUS: a best-effort sneak held for a fixed stretch; its expiry is not a failure, and
-        // the guaranteed route below is linked.
         bot().waitWorldTicks(2 * budget);
         bot().releaseKey(Keyboard.KEY_LSHIFT);
         boolean bySneak = !Events.records(clientEvents().since(clientMark, "dismount")).isEmpty();

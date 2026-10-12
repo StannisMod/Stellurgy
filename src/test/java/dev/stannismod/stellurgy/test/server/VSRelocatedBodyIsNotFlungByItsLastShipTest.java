@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
@@ -82,6 +83,11 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
     private static final int TOUCH_TICKS = 100;
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);",
+            why = "the subject's position was read at the hazard (`before`) and is read again after this stretch"
+                    + " of the hull rotating; the verdict is the horizontal distance between the two, and its"
+                    + " message names both. The bar is an UPPER bound, so overshoot gives the hull longer to"
+                    + " throw the body and can only turn a green red.")
     public void aBodyCarriedAwayFromAShipIsNotThrownByIt() throws Exception {
 
         // No player stands anywhere near this craft, and an unattended ship unloads: without this the
@@ -174,10 +180,6 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         assertTrue("the hull left behind could not be commanded to rotate: " + rot,
                 Reply.of(rot).bool("afcResolved"));
 
-        // WINDOW: the subject's position was read at the hazard (`before`) and is read again after
-        // this stretch of the hull rotating; the verdict is the horizontal distance between the two,
-        // and its message names both. The bar is an UPPER bound, so overshoot gives the hull longer
-        // to throw the body and can only turn a green red.
         GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);
 
         // One reading at the end is enough for the verdict: a fling is a DISPLACEMENT, and a body

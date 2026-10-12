@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.test.client;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -362,6 +364,9 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: a walking client player on a grounded deck falls through it -----------------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(60);",
+            why = "overshoot only gives a sinking body longer to sink, so a slow box makes this stricter, never"
+                    + " more lenient.")
     public void aRealClientPlayerOnAGroundedDeckStaysOnItInsteadOfFallingThrough() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -446,8 +451,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // an inference from two Y samples. An absence only means something once the instrument has
         // announced itself, which is what assertInstrumentRan is for.
         long sinkMark = clientEvents.mark();
-        // WINDOW: overshoot only gives a sinking body longer to sink, so a slow box makes this
-        // stricter, never more lenient.
         advanceServerAndClient(60);
         double clientYLater = bot().reportState().get("playerY").getAsDouble();
         String sinkReleases = clientEvents.since(sinkMark, "deck_released");
@@ -466,6 +469,17 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: dismounting mid-hover drops the ship and the pilot --------------------------------
 
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), 0, 10);",
+            why = "the sag window opens after the coast. The helper returns the instant it cuts, and the hull then"
+                    + " coasts UP past its hold (measured +3.07..+4.75 against a hold to +3.0) — a climb that,"
+                    + " left inside the window, would cancel the very sag it measures, which is the silent"
+                    + " direction. Its vertical velocity at the window's start is printed with the verdict, so"
+                    + " a coast still under way is visible.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, 10);",
+            why = "the coast is the server's physics; the read is the server's ship report at the window's start.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
+            why = "its length is how long a hull whose hold is off needs to fall visibly; overshoot only lets it"
+                    + " fall further.")
     public void standingUpWhileHoveringKeepsTheShipUpAndThePilotOnTheDeck() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -476,12 +490,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // and why the climb is measured rather than awaited all live in the helper.
         hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
 
-        // EXPERIMENT: the sag window opens after the coast. The helper returns the instant it cuts,
-        // and the hull then coasts UP past its hold (measured +3.07..+4.75 against a hold to +3.0) —
-        // a climb that, left inside the window, would cancel the very sag it measures, which is the
-        // silent direction. Its vertical velocity at the window's start is printed with the verdict,
-        // so a coast still under way is visible.
-        // SERVER-ONLY: the coast is the server's physics; the read is the server's ship report at the window's start.
         GameTicks.advanceWorld(serverClient(), 0, 10);
         // The start of the sag window below, read at the instant before the stimulus it measures.
         ShipInfo atWindowStart = shipInfo();
@@ -561,8 +569,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up"
                         + " mid-hover", DECK_LINK_BUDGET_TICKS);
 
-        // WINDOW: its length is how long a hull whose hold is off needs to fall visibly; overshoot
-        // only lets it fall further.
         advanceServerAndClient(40);
         ShipInfo info = shipInfo();
         double shipYPost = info.y;
@@ -724,6 +730,23 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo"
+            + " info = shipInfo();",
+            why = "a deck that has not tilted is not \"the airspace you cross flying up to a ship\" this leg"
+                    + " describes.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo info = shipInfo();",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo"
+            + " lvl = shipInfo();",
+            why = "the levelling slew; an attitude converges and nothing declares it reached.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS); ShipInfo lvl = shipInfo();",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(DECK_LANDING_TICKS);",
+            why = "the reading is DEFINED forty client ticks after the put-down reached the client. He is dropped"
+                    + " five blocks, which vanilla gravity covers in about thirteen ticks, and it is the"
+                    + " client's own ticks that move him and resolve his capture — so forty of them are a"
+                    + " landing and then some, on any box. A camera that has not engaged by then fails below"
+                    + " with the capture verdict beside it.")
     public void flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -737,9 +760,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
-        // WINDOW: a deck that has not tilted is not "the airspace you cross flying up to a ship" this
-        // leg describes.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo info = shipInfo();
         scenario().requireArranged("the ship must be rolled before the fly-in: upY " + upBeforeRoll
@@ -877,8 +897,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept levelling",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0")
                         ).bool("commanded"));
-        // WINDOW: the levelling slew; an attitude converges and nothing declares it reached.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo lvl = shipInfo();
         scenario().requireArranged("the ship must be level again before the positive control lands"
@@ -907,11 +925,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 "placing the client over the level deck",
                 "the put-down over the level deck must reach the client before its landing can be"
                         + " read", DECK_LINK_BUDGET_TICKS);
-        // EXPERIMENT: the reading is DEFINED forty client ticks after the put-down reached the client.
-        // He is dropped five blocks, which vanilla gravity covers in about thirteen ticks, and it is
-        // the client's own ticks that move him and resolve his capture — so forty of them are a
-        // landing and then some, on any box. A camera that has not engaged by then fails below with
-        // the capture verdict beside it.
         bot().waitWorldTicks(DECK_LANDING_TICKS);
         String engaged = clientEvents.since(onDeckMark, "deck_camera_changed");
         boolean onDeckCam = Boolean.parseBoolean(deckCameraText("active"));
@@ -935,6 +948,9 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: a hovering ship falls (and tumbles inverted) after a world reload -----------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(80);",
+            why = "its length is how long a hull whose hold did not come back needs to fall visibly after the"
+                    + " reload; overshoot only lets it fall further.")
     public void aHoveringShipKeepsHoveringAcrossAReloadInsteadOfFalling() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -995,8 +1011,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // as a regex failure reading like the contract breaking.
         String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
                 "arrangement: the saved ship must come back before its hold can be judged");
-        // WINDOW: its length is how long a hull whose hold did not come back needs to fall visibly
-        // after the reload; overshoot only lets it fall further.
         advanceServerAndClient(80);
 
         // What the flight computer restored from NBT, and what it then decided unmanned. Read, not
@@ -1036,6 +1050,14 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(30);",
+            why = "releasedUpY (the instant the command is cut) to `tilted`, and the assertion below holds BOTH"
+                    + " ends in the envelope and prints both — the craft has to KEEP the tilt it was brought"
+                    + " to, not merely pass through it. Overshoot only gives it longer to drift out.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 22; i++) {",
+            why = "the MINIMUM height over the settled tail — a body that dipped and recovered is exactly the"
+                    + " failure being looked for, so a last-sample read would miss it, and no record carries a"
+                    + " minimum over a stretch of ticks. What this cannot see: a dip inside one 2-tick sample.")
     public void standingUpFromASeatOnASteeplyTiltedShipKeepsThePilotOnTheDeck() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1061,9 +1083,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         takeTheStickWhileHeld("at the steep tilt, before the probe hold is cut");
         exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
         double releasedUpY = shipUpYFromInfo(shipInfo());
-        // WINDOW: releasedUpY (the instant the command is cut) to `tilted`, and the assertion below
-        // holds BOTH ends in the envelope and prints both — the craft has to KEEP the tilt it was
-        // brought to, not merely pass through it. Overshoot only gives it longer to drift out.
         advanceServerAndClient(30);
         double tilted = shipUpYFromInfo(shipInfo());
         // An ASSERT, not an Assume: the tilt is commanded to a value inside the envelope, so failing
@@ -1094,10 +1113,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                         + " measuring a body vanilla owns", DECK_LINK_BUDGET_TICKS);
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE;
-        // WINDOW: the MINIMUM height over the settled tail — a body that dipped and recovered is
-        // exactly the failure being looked for, so a last-sample read would miss it, and no record
-        // carries a minimum over a stretch of ticks. What this cannot see: a dip inside one 2-tick
-        // sample.
         for (int i = 0; i < 22; i++) {
             advanceServerAndClient(2);
             double y = bot().reportState().get("playerY").getAsDouble();
@@ -1169,6 +1184,13 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * steep/inverted deck in the headless harness. Thresholds are deck-relative (derived from the measured
      * ship Y), never a magic absolute.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the slew to the roll; an attitude converges and nothing declares it reached.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 22; i++) {",
+            why = "under a roll the claim is that the body stays within a band, a property of the stretch and not"
+                    + " of any instant. What this cannot see: an excursion inside one 2-tick sample.")
     private void assertDismountThenRollHolds(FixtureSite site, double qw, double qz,
             double upYLo, double upYHi, String label) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged. It arrives as
@@ -1198,8 +1220,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the " + label + " roll command",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + qw + " 0.0 0.0 " + qz)
                         ).bool("commanded"));
-        // WINDOW: the slew to the roll; an attitude converges and nothing declares it reached.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);
         double tilted = shipUpYFromInfo(shipInfo());
         // Reliable command -> a HARD assert that the regime was reached (fail loudly, not a silent skip).
@@ -1212,9 +1232,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         long rollMark = clientEvents.mark();
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE, settledMax = -Double.MAX_VALUE;
-        // WINDOW: under a roll the claim is that the body stays within a band, a property of the
-        // stretch and not of any instant. What this cannot see: an excursion inside one 2-tick
-        // sample.
         for (int i = 0; i < 22; i++) {
             advanceServerAndClient(2);
             double y = bot().reportState().get("playerY").getAsDouble();
@@ -1267,6 +1284,22 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);",
+            why = "a slew that did not get there fails in the gate below, loudly.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);",
+            why = "overshoot only gives the craft longer to right itself.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);",
+            why = "the hold is the server computer's, the pilot's idle input already linked in"
+                    + " takeTheStickWhileHeld; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 15; i++) {",
+            why = "fifteen raw mouse deltas two ticks apart are the turn command itself; the loop applies the"
+                    + " input and reads nothing. What it produced is judged after it — the cursor through its"
+                    + " `flight_cursor` link, the hull's answer through the rate window below.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> turnRates = new java.util.ArrayList<Double>();",
+            why = "the hull's rate over 20 readings two ticks of its world apart — the stretch the poll it"
+                    + " replaced could spend — and the verdict below is on the LARGEST of them.")
     public void enteringAndLeavingTheSeatOnAnInvertedShipWorks() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1302,8 +1335,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         String held = exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
         scenario().requireArranged("the attitude hold must be accepted by THIS craft's computer: "
                 + held, Reply.of(held).bool("commanded"));
-        // WINDOW: a slew that did not get there fails in the gate below, loudly.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);
         double reachedUpY = shipUpYFromInfo(shipInfo());
 
@@ -1320,8 +1351,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // Then let go, and let it sit: REACHING an attitude and KEEPING it are different questions,
         // and everything below needs the second one.
         exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
-        // WINDOW: overshoot only gives the craft longer to right itself.
-        // SERVER-ONLY: the hold is the server computer's, the pilot's idle input already linked in takeTheStickWhileHeld; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);
         ShipInfo info0 = shipInfo();
         double invertedUpY = shipUpYFromInfo(info0);
@@ -1344,9 +1373,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // still after an inversion (0.27 rad/s measured in the sibling scenario below), and a bare
         // bar would be cleared by that residue with the controls dead.
         double omegaSettled = shipInfo().omega;
-        // STIMULUS: fifteen raw mouse deltas two ticks apart are the turn command itself; the loop
-        // applies the input and reads nothing. What it produced is judged after it — the cursor
-        // through its `flight_cursor` link, the hull's answer through the rate window below.
         for (int i = 0; i < 15; i++) {
             mouseDelta(60, 0);
             bot().waitWorldTicks(2);
@@ -1358,8 +1384,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // the result is an angular RATE. A rate is measured, and the window's EXTREMUM is the
         // measurement, because a hull commanded round passes through every attitude and a last
         // sample of a completed turn reads as "unmoved".
-        // WINDOW: the hull's rate over 20 readings two ticks of its world apart — the stretch the poll
-        // it replaced could spend — and the verdict below is on the LARGEST of them.
         java.util.List<Double> turnRates = new java.util.ArrayList<Double>();
         // Both clocks: the client keeps the deflected cursor's turn command going while the hull answers.
         GameTicks.observe(worldAndClient(0), 20, TURN_WINDOW_GAP_TICKS,
@@ -1393,6 +1417,18 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(0, INVERT_SLEW_WINDOW_TICKS);",
+            why = "the reading is the client's deck camera, so the client's ticks count too.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(0, INVERTED_HOLD_WINDOW_TICKS);",
+            why = "releasedUpY (the instant the command is cut) to shipUpY, and the assertion holds BOTH ends"
+                    + " inverted and prints both. The same ticks let the slew's residual spin decay before the"
+                    + " turn below; that spin is printed as omegaSettled and asserted nowhere.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 20; i++) {",
+            why = "twenty raw mouse deltas two ticks apart are the command; the loop applies the input and reads"
+                    + " nothing, and what it produced is judged after it, as in the leg above.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "java.util.List<Double> turnRates = new java.util.ArrayList<Double>();",
+            why = "30 readings two ticks of the hull's world apart, the stretch the poll it replaced could spend;"
+                    + " the verdict below is on the LARGEST.")
     public void aSeatedPilotCanStillTurnTheShipWhenItIsInverted() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1411,16 +1447,12 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         String held = exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
         scenario().requireArranged("the attitude hold must be accepted by THIS craft's computer: "
                 + held, Reply.of(held).bool("commanded"));
-        // WINDOW: the reading is the client's deck camera, so the client's ticks count too.
         advanceWorldAndClient(0, INVERT_SLEW_WINDOW_TICKS);
         double releasedUpY = deckCamera("shipUpY");
         // His hands on the stick while the hold stands, so the inversion is what his computer keeps
         // once it is cut (see takeTheStickWhileHeld); it leaves the cursor centred.
         takeTheStickWhileHeld("at the inversion, before the probe hold is cut");
         exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
-        // WINDOW: releasedUpY (the instant the command is cut) to shipUpY, and the assertion holds
-        // BOTH ends inverted and prints both. The same ticks let the slew's residual spin decay
-        // before the turn below; that spin is printed as omegaSettled and asserted nowhere.
         advanceWorldAndClient(0, INVERTED_HOLD_WINDOW_TICKS);
         double shipUpY = deckCamera("shipUpY");
         // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
@@ -1440,8 +1472,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
         // Now, WHILE inverted, command a fresh turn. The ship must respond - its angular velocity must
         // rise - just as it does upright. If it stays at rest, the controls are dead at inversion.
-        // STIMULUS: twenty raw mouse deltas two ticks apart are the command; the loop applies the
-        // input and reads nothing, and what it produced is judged after it, as in the leg above.
         for (int i = 0; i < 20; i++) {
             mouseDelta(60, 0);
             bot().waitWorldTicks(2);
@@ -1451,8 +1481,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // the link for the command going in — asserted three lines below, not merely printed — and
         // the hull's answer is an angular rate that nothing decides and no record carries. Read the
         // refusal there; it is not repeated here.
-        // WINDOW: 30 readings two ticks of the hull's world apart, the stretch the poll it replaced
-        // could spend; the verdict below is on the LARGEST.
         java.util.List<Double> turnRates = new java.util.ArrayList<Double>();
         // Both clocks: the client keeps the deflected cursor's turn command going while the hull answers.
         GameTicks.observe(worldAndClient(0), 30, TURN_WINDOW_GAP_TICKS,
@@ -1487,9 +1515,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * THIS ship). The centring's last send is the idle input; the scenario's following read of the
      * attitude over a window is what says the hold took.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 20 && Math.abs(flightCursorX(what + \","
+            + " deflecting\")) <= CURSOR_DEFLECTED; i++) {",
+            why = "each iteration IS a push of the cursor off centre, and the loop ends on its goal state — a"
+                    + " deflection past the dead-zone, which is a CHANGE the client sends.")
     private void takeTheStickWhileHeld(String what) throws Exception {
-        // STIMULUS: each iteration IS a push of the cursor off centre, and the loop ends on its goal
-        // state — a deflection past the dead-zone, which is a CHANGE the client sends.
         for (int i = 0; i < 20 && Math.abs(flightCursorX(what + ", deflecting")) <= CURSOR_DEFLECTED; i++) {
             mouseDelta(60, 0);
             bot().waitWorldTicks(1);
@@ -1531,10 +1561,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * {@link #flightCursorX} is what makes that failure legible — against a dead path it names the
      * empty window instead of handing back the value the last live tick left behind.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 200 && Math.abs(cursor) >= 0.03; i++) {",
+            why = "each iteration IS a nudge of the cursor, and the loop ends on its goal state; delete it and the"
+                    + " centring stops happening, not merely stops being watched.")
     private void centreFlightCursor() throws Exception {
         double cursor = flightCursorX("before centring");
-        // STIMULUS: each iteration IS a nudge of the cursor, and the loop ends on its goal state;
-        // delete it and the centring stops happening, not merely stops being watched.
         for (int i = 0; i < 200 && Math.abs(cursor) >= 0.03; i++) {
             int step = Math.abs(cursor) > 0.2 ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);
@@ -1565,6 +1596,16 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: camera/capture instability on a steeply tilted, HELD deck ------------------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, SIDE_SLEW_WINDOW_TICKS);",
+            why = "\"on its side\" is the band this class already holds the same 90-degree command to"
+                    + " (aFreshlyDismountedPilotStaysCaptured...Ninety).")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, SIDE_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < n; i++) {",
+            why = "how many samples had the deck camera on, and how far roll and height moved across them, are"
+                    + " properties of the observation rather than of a moment, so no record could answer. What"
+                    + " this cannot see: a capture or a camera that flipped and returned inside one 4-tick"
+                    + " sample.")
     public void aClientPlayerRidingASteeplyTiltedDeckHasStableCaptureAndCamera() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1598,9 +1639,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the tilt",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
-        // WINDOW: "on its side" is the band this class already holds the same 90-degree command to
-        // (aFreshlyDismountedPilotStaysCaptured...Ninety).
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, SIDE_SLEW_WINDOW_TICKS);
         double upOnSide = shipInfo().upY();
         scenario().requireArranged("the deck must be on its side before its stability is sampled:"
@@ -1618,10 +1656,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double yMin = Double.MAX_VALUE, yMax = -Double.MAX_VALUE;
         int captured = 0, camOn = 0;
         StringBuilder trace = new StringBuilder();
-        // WINDOW: how many samples had the deck camera on, and how far roll and height moved across
-        // them, are properties of the observation rather than of a moment, so no record could
-        // answer. What this cannot see: a capture or a camera that flipped and returned inside one
-        // 4-tick sample.
         for (int i = 0; i < n; i++) {
             advanceServerAndClient(4);
             boolean active = Boolean.parseBoolean(deckCameraText("active"));
@@ -1670,6 +1704,10 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
     // ---- Bug: coordinate transforms break at extreme (inverted) attitudes ----------------------
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the flip; an attitude publishes no record, so the frame check below reads it.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
     public void anInvertedShipsMovementAndCameraFramesStayConsistent() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -1689,8 +1727,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the flip",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
                         ).bool("commanded"));
-        // WINDOW: the flip; an attitude publishes no record, so the frame check below reads it.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);
 
         ShipInfo info = shipInfo();
@@ -1772,6 +1808,19 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             + " 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the"
             + " body starts falling).")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 5; i++) {",
+            why = "the MAXIMUM cross-side delta at rest — a difference between two rendered sides, which no record"
+                    + " carries. What it cannot see: a spike between two samples, hence the log read after.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SKEW_ROLL_WINDOW_TICKS);",
+            why = "the attitude is a value no record publishes, so the slew is read, not linked.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(SKEW_FALL_WATCH_TICKS);",
+            why = "the reading is DEFINED twenty client ticks after the placement was applied.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 6; i++) {",
+            why = "the MAXIMUM cross-side delta over the hull-stand mode. What it cannot see: a spike inside one"
+                    + " 13-tick gap.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 8; i++) {",
+            why = "the MAXIMUM and the MEAN cross-side delta under motion; a mean is not something one record can"
+                    + " carry.")
     public void theSurfaceABodyStandsOnIsTheSurfaceTheRendererDraws() throws Exception {
         final FixtureSite site = site();
 
@@ -1794,8 +1843,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         long restMark = clientEvents().mark();
         double restCrossMax = 0.0;
         StringBuilder restTrace = new StringBuilder();
-        // WINDOW: the MAXIMUM cross-side delta at rest — a difference between two rendered sides, which
-        // no record carries. What it cannot see: a spike between two samples, hence the log read after.
         for (int i = 0; i < 5; i++) {
             double cross = renderCrossSideDelta();
             if (!Double.isNaN(cross)) restCrossMax = Math.max(restCrossMax, cross);
@@ -1820,7 +1867,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: the attitude is a value no record publishes, so the slew is read, not linked.
         advanceServerAndClient(SKEW_ROLL_WINDOW_TICKS);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1848,7 +1894,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 + " on the client before its fall can be watched", SKEW_POS_LOOK_BUDGET_TICKS);
         double preY = bot().reportState().get("playerY").getAsDouble();
         long preTicks = bot().reportState().get("ticks").getAsLong();
-        // EXPERIMENT: the reading is DEFINED twenty client ticks after the placement was applied.
         bot().waitWorldTicks(SKEW_FALL_WATCH_TICKS);
         double fallY = bot().reportState().get("playerY").getAsDouble();
         // Excluded by construction: a client tick stall (waitWorldTicks errors on its own timeout — the
@@ -1879,8 +1924,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         long hullSkewMark = clientEvents().mark();
         StringBuilder hullTrace = new StringBuilder();
         double hullCrossMax = 0.0;
-        // WINDOW: the MAXIMUM cross-side delta over the hull-stand mode. What it cannot see: a spike
-        // inside one 13-tick gap.
         for (int i = 0; i < 6; i++) {
             double cross = renderCrossSideDelta();
             if (!Double.isNaN(cross)) hullCrossMax = Math.max(hullCrossMax, cross);
@@ -1927,8 +1970,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             double moveCrossMax = 0.0, moveCrossSum = 0.0;
             int moveCrossN = 0;
             StringBuilder moveTrace = new StringBuilder();
-            // WINDOW: the MAXIMUM and the MEAN cross-side delta under motion; a mean is not something
-            // one record can carry.
             for (int i = 0; i < 8; i++) {
                 double cross = renderCrossSideDelta();
                 if (!Double.isNaN(cross)) {
@@ -1968,10 +2009,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * {@code v * 0.15 s}. NaN when the client committed nothing in the window, or the server cannot map
      * the point.
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "bot().waitWorldTicks(2);",
+            why = "whatever the client committed in two of its own ticks; none is NaN, which every caller counts"
+                    + " as \"no signal\".")
     private double renderCrossSideDelta() throws Exception {
         long mark = clientEvents().mark();
-        // WINDOW: whatever the client committed in two of its own ticks; none is NaN, which every
-        // caller counts as "no signal".
         bot().waitWorldTicks(2);
         String latest = Events.lastRecord(clientEvents().since(mark, "render_pose_skew"));
         if (latest == null) {
@@ -2213,6 +2255,11 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
             + " is the only thing this verdict reads. What would turn it red is a release on a falling deck; the"
             + " production line that decides one there is not yet identified.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(4);",
+            why = "the sneak key held across client ticks, as a player holds it to stand up.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceWorldAndClient(0, DECK_FALL_TICKS);",
+            why = "the dose is DECK_FALL_TICKS of fall. The gate below is a LOWER bound on the deck's drop, which"
+                    + " extra ticks only make easier to meet — for a deck that is falling at all.")
     public void yABodyTakenOntoADeckIsKeptWhileTheDeckFalls() throws Exception {
         buildAndBoardShip(site());
         // Off the pad first: the launchpad is WORLD blocks under the hull, so a deck released where it
@@ -2227,7 +2274,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         long clientMark = clientEvents.mark();
         long dismountMark = serverEvents().markInstrumented();
         bot().holdKey(Keyboard.KEY_LSHIFT);
-        // STIMULUS: the sneak key held across client ticks, as a player holds it to stand up.
         bot().waitWorldTicks(4);
         bot().releaseKey(Keyboard.KEY_LSHIFT);
         ArrangementFailure.arranged(() -> serverEvents().await(dismountMark, "dismount", "the real sneak key"
@@ -2243,8 +2289,6 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                 Reply.of(exec("stellurgytest vs fa-by-id 0 " + scenarioShipId + " false"))
                         .bool("afcResolved"));
         double deckFrom = shipInfo().y;
-        // EXPERIMENT: the dose is DECK_FALL_TICKS of fall. The gate below is a LOWER bound on the
-        // deck's drop, which extra ticks only make easier to meet — for a deck that is falling at all.
         advanceWorldAndClient(0, DECK_FALL_TICKS);
         double deckTo = shipInfo().y;
         scenario().requireArranged("the released deck must actually FALL, or nothing here is about a"

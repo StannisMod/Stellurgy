@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -86,6 +87,13 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
             + " MOVE THE ARRIVED SHIP\", every one of the client's gate readings open and his inputs sent — the"
             + " fault named as the computer's, not the wire's — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(LEVEL_WINDOW_TICKS);",
+            why = "a converging attitude, where nothing decides it has arrived — the hold never publishes"
+                    + " \"level\". Reading both ends lets a red say whether the hull was slewing (short window)"
+                    + " or never moved (a command accepted and not obeyed, which no window repairs). Sized from"
+                    + " the computer's own limits: a 2.0 rad/s ceiling reached at 4.0 rad/s^2, so even a"
+                    + " half-turn is about 45 ticks. Overshoot is lenient, and the gate it feeds is an"
+                    + " ARRANGEMENT, never the verdict.")
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {
 
         // Headless: pin ships loaded so the assembled ship survives between probe calls.
@@ -266,12 +274,6 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
         assertTrue("the craft must accept a level attitude command before it is flown",
                 Reply.of(exec("stellurgytest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
                         ).bool("commanded"));
-        // WINDOW: a converging attitude, where nothing decides it has arrived — the hold never
-        // publishes "level". Reading both ends lets a red say whether the hull was slewing (short
-        // window) or never moved (a command accepted and not obeyed, which no window repairs). Sized
-        // from the computer's own limits: a 2.0 rad/s ceiling reached at 4.0 rad/s^2, so even a
-        // half-turn is about 45 ticks. Overshoot is lenient, and the gate it feeds is an ARRANGEMENT,
-        // never the verdict.
         advanceServerAndClient(LEVEL_WINDOW_TICKS);
         String poseBeforeClimb = shipInfoById(originDim, shipId);
         System.out.println("[relog] level window :: before=" + poseBeforeLevel

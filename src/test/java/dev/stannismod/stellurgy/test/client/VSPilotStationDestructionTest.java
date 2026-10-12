@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -77,6 +78,11 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
     // the game rather than off a sentence.
 
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(40);",
+            why = "the window opens forty ticks after the destruction — the brake's share of the experiment; a"
+                    + " hold slower than that reads as motion, loudly, never as a pass.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(60);",
+            why = "the 3-second stability window described above.")
     public void breakingTheOccupiedSeatDismountsThePilotAndHoldsTheShip() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -120,11 +126,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
             // that has to precede it is already asserted above. Let the brake settle, then require
             // the altitude to be stable over a 3-second window — with the key STILL physically
             // held, so a surviving latch would be climbing at cruise speed here.
-            // EXPERIMENT: the window opens forty ticks after the destruction — the brake's share of
-            // the experiment; a hold slower than that reads as motion, loudly, never as a pass.
             advanceServerAndClient(40);
             double y1 = shipY(ship.id);
-            // WINDOW: the 3-second stability window described above.
             advanceServerAndClient(60);
             double y2 = shipY(ship.id);
             assertTrue("after the seat is destroyed the ship must HOLD, never fly the dead pilot's "
@@ -153,6 +156,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
             + " {@code commandedVelocity = null}; the fragment renamed 2026-10-08 when the command became one"
             + " object, the same line of {@code invalidate}, not re-run).")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(80);",
+            why = "a climb that continues is a value, not an event; no record answers.")
     public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -193,7 +198,6 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // A brainless ship must never keep thrusting upward: the dead computer's channels die
         // with the tile. (It is free to FALL — only continued powered climb is the defect.)
         double y1 = shipY(ship.id);
-        // WINDOW: a climb that continues is a value, not an event; no record answers.
         advanceServerAndClient(80);
         double y2 = shipY(ship.id);
         assertTrue("a ship whose flight computer was destroyed must not keep climbing under the "

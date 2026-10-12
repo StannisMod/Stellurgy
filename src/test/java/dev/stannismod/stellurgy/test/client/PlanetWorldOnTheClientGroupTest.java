@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -321,6 +322,9 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             + " told-rain link on A has not been reddened: the rain reaches an arriving client by more paths than"
             + " any one inversion removed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(SYNC_C, FADE_WINDOW_TICKS);",
+            why = "dim C's clock and the client's, which applies what dim C sends. What it cannot see: a packet"
+                    + " sent in the window's last tick and not yet applied.")
     public void weatherIsolatedAcrossDimsThroughRealClient() throws Exception {
         try {
             String setA = exec("stellurgytest weather set " + SYNC_A + " rain 12000");
@@ -377,8 +381,6 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             long toC = clientLog.mark();
             exec("stellurgytest tp " + SYNC_C);
             awaitClientDim(toC, SYNC_C, "the weather read below is the weather of the world he is IN");
-            // WINDOW: dim C's clock and the client's, which applies what dim C sends. What it cannot see:
-            // a packet sent in the window's last tick and not yet applied.
             advanceWorldAndClient(SYNC_C, FADE_WINDOW_TICKS);
             String toldC = clientLog.since(toC, "client_game_state_changed");
             Events.assertInstrumentRan(toldC, "client_game_state_changed",

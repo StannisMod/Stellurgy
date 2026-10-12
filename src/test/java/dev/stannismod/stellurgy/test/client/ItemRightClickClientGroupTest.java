@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -476,6 +477,11 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
             + " pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real"
             + " verdict after the rewritten wait is this chain.)")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(1);",
+            why = "one client tick — the one in which the client REPORTS the new look. Vanilla sends a changed"
+                    + " rotation from the player's own update, once per tick, and the harness counts a tick at"
+                    + " its END, after that update; the click below leaves on the same connection after it, so"
+                    + " the server has the look when it ray-traces the click.")
     public void rightClickAtTargetBlockSpawnsHovercraftAndConsumesStack() throws Exception {
         int dim = plot().dim;
         int x = plot().x(FIXTURE_DX);
@@ -524,10 +530,6 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
         scenario().requireArranged("the client must be looking straight down before the click, or"
                 + " the item's 5-block ray traces into empty air; client pitch=" + pitch,
                 pitch > LOOKING_STRAIGHT_DOWN_DEG);
-        // STIMULUS: one client tick — the one in which the client REPORTS the new look. Vanilla sends
-        // a changed rotation from the player's own update, once per tick, and the harness counts a
-        // tick at its END, after that update; the click below leaves on the same connection after
-        // it, so the server has the look when it ray-traces the click.
         bot().waitWorldTicks(1);
 
         scenario().asserting("the client sees exactly one spawned hovercraft, and loses the stack");
@@ -687,6 +689,10 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
         }
     }
 
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(6);",
+            why = "the sneak is held across client ticks before the use, because the client publishes sneaking"
+                    + " from its own tick; one connection delivers in order, so the server reads the sneak"
+                    + " before the use packet that follows it.")
     private void chipOpensAndReopens(int modularFullScreenId, int leftShift) throws Exception {
         scenario().measuring("sneak-right-click opens the chip's modular GUI");
         Events events = serverEvents();
@@ -694,9 +700,6 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientTest {
         long openOnClient = clientEvents().mark();
         bot().setKey(leftShift, true);
         try {
-            // STIMULUS: the sneak is held across client ticks before the use, because the client
-            // publishes sneaking from its own tick; one connection delivers in order, so the server
-            // reads the sneak before the use packet that follows it.
             bot().waitWorldTicks(6);
             bot().useItem();
             events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"

@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.Nebula;
 import dev.stannismod.stellurgy.universe.StellarMagnitude;
@@ -336,6 +337,11 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), STARVED_SURVEY_TICKS);",
+            why = "the survey's progress is read as it starts and again after this stretch, and the claim is that"
+                    + " it did not move. The stretch is over a dozen steps' worth at this pacing, which a fed"
+                    + " instrument spends resolving cells; overshoot only gives a starved one longer to cheat,"
+                    + " which can turn a green red and never the reverse.")
     public void anUnfedInstrumentStallsInsteadOfSurveyingForFree() throws Exception {
         final int x = 4580;
         surveySetup(true, 1, 3);
@@ -348,10 +354,6 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
             assertEquals("a fresh survey has resolved nothing yet: " + started.raw(),
                     0, started.cellsDone());
 
-            // WINDOW: the survey's progress is read as it starts and again after this stretch, and
-            // the claim is that it did not move. The stretch is over a dozen steps' worth at this
-            // pacing, which a fed instrument spends resolving cells; overshoot only gives a starved
-            // one longer to cheat, which can turn a green red and never the reverse.
             GameTicks.advance(client(), GameTicks.server(), STARVED_SURVEY_TICKS);
             TelescopeReading after = scope(x);
             assertTrue("an instrument with no data must still be waiting, not finished: "

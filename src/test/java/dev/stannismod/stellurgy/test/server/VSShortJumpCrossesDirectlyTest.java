@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.DIRECT_JUMP_SPEED;
@@ -102,6 +103,10 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
             + " dropped — the flat 1 024 ring the standoff used before it took the bodies' shells — this fails"
             + " with \"Tightest body … \"distance\":1023,\"boundaryDistance\":0,\"shellRadius\":25913\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), slotDim, STANDOFF_WATCH_TICKS);",
+            why = "from the arrival record to the ledger read below, STANDOFF_WATCH_TICKS of the arrival cell's"
+                    + " own clock — the descent trigger runs on its flight computer's tick there, and a ship"
+                    + " inside the radius is taken down on the first of them.")
     public void aShortJumpAtABodyArrivesOnItsStandoffRingAndStaysInSpace() throws Exception {
 
         TransitSetup setup = setUpPilotedShip();
@@ -120,9 +125,6 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
                 ARRIVAL_TICKS, "ship", durableId, "route", "DIRECT");
         int slotDim = extractInt(arrived, "dim");
 
-        // WINDOW: from the arrival record to the ledger read below, STANDOFF_WATCH_TICKS of the
-        // arrival cell's own clock — the descent trigger runs on its flight computer's tick there,
-        // and a ship inside the radius is taken down on the first of them.
         GameTicks.advanceWorld(client(), slotDim, STANDOFF_WATCH_TICKS);
         String bodies = exec("stellurgytest space bodies");
         String row = null;

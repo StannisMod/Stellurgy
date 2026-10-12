@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -185,6 +186,9 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
             + " shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but"
             + " was:&lt;10453&gt;\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(),"
+            + " MAINTENANCE_WINDOW_TICKS);",
+            why = "two reads of each coil with the world advanced between; the verdicts name both reads.")
     public void anEmitterInTheShipyardThatNoShipClaimsProjectsNothing() throws Exception {
         FixtureSite here = site();
         here.requireClear(this::exec, 0, 1, "the control emitter's block");
@@ -209,7 +213,6 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         long controlBefore = stored(controlX, y, z);
         long shipyardBefore = stored(SHIPYARD_X, y, z);
-        // WINDOW: two reads of each coil with the world advanced between; the verdicts name both reads.
         GameTicks.advance(client(), GameTicks.server(), MAINTENANCE_WINDOW_TICKS);
         long controlAfter = stored(controlX, y, z);
         long shipyardAfter = stored(SHIPYARD_X, y, z);

@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -258,6 +259,15 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * The shared scenario, so the two variants cannot drift apart: build loose, board (by
      * {@code how}), assemble, settle, measure a no-key control leg, then measure the key-held climb.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE);",
+            why = "the resolve's ticks, then ONE reading. It replaced a loop that sampled until twenty readings"
+                    + " agreed; the no-key control window right below is what proves the ship then sits still,"
+                    + " and it reports the drift it saw rather than a loop's run length.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "try { climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, \"a pilot who"
+            + " took the seat BEFORE assembling\"",
+            why = "a fixed dose of thrust from the key's arrival, then one reading with the thrust cut. The dose"
+                    + " is shorter than the control's window, which only makes the comparison stronger: the"
+                    + " same free drift has less time to add up.")
     private void runPreAssemblyBoardingScenario(FixtureSite plot, Boarding how) throws Exception {
         useSite(plot);
 
@@ -598,9 +608,6 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
         // overlaps, and that motion is not the pilot's.
-        // EXPERIMENT: the resolve's ticks, then ONE reading. It replaced a loop that sampled until
-        // twenty readings agreed; the no-key control window right below is what proves the ship then
-        // sits still, and it reports the drift it saw rather than a loop's run length.
         advanceServerAndClient(SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE);
         double yRest = shipPosY();
         scenario().requireArranged("the ship must report an altitude once the post-assembly resolve"
@@ -628,9 +635,6 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // that happened while the ship was settling.
         long inputServerMark = events.markInstrumented();
         long inputClientMark = clientEvents().mark();
-        // EXPERIMENT: a fixed dose of thrust from the key's arrival, then one reading with the thrust
-        // cut. The dose is shorter than the control's window, which only makes the comparison
-        // stronger: the same free drift has less time to add up.
         try {
             climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, "a pilot who took the seat BEFORE assembling"
                     + " must have his held vertical key reach the craft's flight computer right after"
@@ -784,12 +788,12 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
     }
 
     /** The largest deviation from {@code from} over a full measurement window. */
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int sample = 0; sample < MEASURE_SAMPLES; sample++) {",
+            why = "its result is the LARGEST deviation across it — the method's whole purpose. A drift that"
+                    + " appeared and was corrected is exactly what is being looked for, so a single read would"
+                    + " report the correction. What it cannot see: a worse excursion between two samples.")
     private double measureMaxDrift(double from) throws Exception {
         double worst = 0.0;
-        // WINDOW: its result is the LARGEST deviation across it — the method's whole purpose.
-        // A drift that appeared and was corrected is exactly what is being looked for, so a single
-        // read would report the correction. What it cannot see: a worse excursion between two
-        // samples.
         for (int sample = 0; sample < MEASURE_SAMPLES; sample++) {
             advanceServerAndClient(TICKS_PER_SAMPLE);
             double y = shipPosY();

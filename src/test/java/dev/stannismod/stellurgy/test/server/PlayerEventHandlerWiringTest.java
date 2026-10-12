@@ -4,6 +4,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -83,6 +84,12 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
     private static final String WORLD_INFO_CLASS = "worldInfoClass";
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);",
+            why = "both counters are read on each side of this stretch and each assertion below is over the"
+                    + " difference, naming both reads. Not circular: the stretch is measured on"
+                    + " MinecraftServer's tick counter, the assertions on vanilla's worldTotalTime and"
+                    + " Stellurgy's own handler time. \"It moved at all\" is the bar, so overshoot cannot let a"
+                    + " frozen counter pass.")
     public void planetEventHandlerTickCounterAdvancesUnderServerTicks() throws Exception {
         // Tick counter advance is the strongest "PlanetEventHandler is
         // subscribed to the event bus" smoke we have at the headless
@@ -92,10 +99,6 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         long t1 = parseGroup(TIME_PATTERN, first, "time");
         long w1 = parseGroup(WORLD_TIME_PATTERN, first, "worldTotalTime");
 
-        // WINDOW: both counters are read on each side of this stretch and each assertion below is
-        // over the difference, naming both reads. Not circular: the stretch is measured on
-        // MinecraftServer's tick counter, the assertions on vanilla's worldTotalTime and Stellurgy's own
-        // handler time. "It moved at all" is the bar, so overshoot cannot let a frozen counter pass.
         GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);
 
         String second = ok(client().execute("stellurgytest event tick-counter"));

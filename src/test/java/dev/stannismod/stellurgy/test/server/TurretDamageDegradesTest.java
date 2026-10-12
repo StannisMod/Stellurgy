@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -100,12 +101,13 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
      * Hit the mount until its own record says its drive is {@code wanted}, and answer that record.
      * Every impact carries its own identity, because the service refuses a repeat.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int shot = 0; shot < 40; shot++) {",
+            why = "each iteration IS the dose — one impact — and the loop stops on the mount's own record of the"
+                    + " rung, never on a sample. Deleting the loop stops the damage happening, not merely being"
+                    + " watched; it is bounded by the block's own stage count, past which the mount is gone"
+                    + " rather than seized.")
     private String shootUntilDrive(int bx, String wanted) throws Exception {
         List<String> seen = new ArrayList<>();
-        // STIMULUS: each iteration IS the dose — one impact — and the loop stops on the mount's own
-        // record of the rung, never on a sample. Deleting the loop stops the damage happening, not
-        // merely being watched; it is bounded by the block's own stage count, past which the mount
-        // is gone rather than seized.
         for (int shot = 0; shot < 40; shot++) {
             long hit = events.mark();
             Reply stage = ask("stellurgytest damage stage 0 " + bx + " " + Y + " " + Z)

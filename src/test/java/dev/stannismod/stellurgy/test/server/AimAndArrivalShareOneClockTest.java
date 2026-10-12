@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.CellInfo;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -219,13 +220,14 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
      */
     @Pins("CLOCK-5")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "dev.stannismod.stellurgy.test.GameTicks.advance(client(),",
+            why = "both clocks read on either side of the stretch; the rate check compares the two deltas over the"
+                    + " SAME stretch, so its length — overshoot included — cancels out.")
     public void theClockAdvancesWithoutBeingTold() throws Exception {
         // Ticks of the SERVER's own counter the clocks are watched across. The wait is on one counter
         // and the claims are about two others, so this is not circular.
         final int observedTicks = 60;
         String first = exec("stellurgytest space clock");
-        // WINDOW: both clocks read on either side of the stretch; the rate check compares the two deltas
-        // over the SAME stretch, so its length — overshoot included — cancels out.
         dev.stannismod.stellurgy.test.GameTicks.advance(client(),
                 dev.stannismod.stellurgy.test.GameTicks.server(), observedTicks);
         String second = exec("stellurgytest space clock");

@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.List;
@@ -244,9 +245,10 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
      * the hole is. The feed stands in for the ship supply this scenario deliberately does not build:
      * without it the measurement would be of the capacitor, not of the dwell.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int i = 0; i < cycles; i++) {",
+            why = "the number of cycles IS the dose — the thing the two legs differ in. Nothing is awaited here;"
+                    + " the depth read after it is the measurement of what the dose bought.")
     private int burnFor(int bx, int cycles) throws Exception {
-        // EXPERIMENT: the number of cycles IS the dose — the thing the two legs differ in. Nothing
-        // is awaited here; the depth read after it is the measurement of what the dose bought.
         for (int i = 0; i < cycles; i++) {
             charge(bx);
             GameTicks.advance(client(), GameTicks.server(), CYCLE_TICKS);

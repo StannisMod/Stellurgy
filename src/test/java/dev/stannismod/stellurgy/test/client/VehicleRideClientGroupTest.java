@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.EntityState;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Plot;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -243,6 +244,8 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientTest {
      *  {@code player.moveForward}, which {@code EntityHoverCraft.getPassengerMovingForward()} reads
      *  each tick. */
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(40);",
+            why = "held W — an input, not a wait.")
     public void forwardThrottleMovesHovercraftLaterally() throws Exception {
         buildPadAndStand();
         int craftId = spawnVehicle("stellurgy:StellurgyHoverCraft");
@@ -257,7 +260,6 @@ public class VehicleRideClientGroupTest extends AbstractSharedClientTest {
         scenario().asserting("a held forward key drives the craft laterally");
         bot().setKey(KEY_W, true);
         try {
-            // STIMULUS: held W — an input, not a wait.
             bot().waitWorldTicks(40);
         } finally {
             bot().setKey(KEY_W, false);

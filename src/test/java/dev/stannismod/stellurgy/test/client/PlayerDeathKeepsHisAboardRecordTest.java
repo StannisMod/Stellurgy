@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -57,6 +58,8 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientTes
             + " {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: \"a player who dies must still know which ship he belongs to …"
             + " {\\\"bound\\\":[]}\", 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "bot().waitWorldTicks(DEATH_SCREEN_BUTTONS_ENABLE_TICKS);",
+            why = "the death screen's own enabling timer, counted on the clock that runs it.")
     public void aPlayerWhoDiesStillKnowsWhichShipHeBelongsTo() throws Exception {
         scenario().arranging("stamp the aboard record on the real player");
         String bind = exec("stellurgytest player bind-aboard " + SHIP);
@@ -76,7 +79,6 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientTes
                 seen -> !Events.recordsWhere(seen, "gui", "GuiGameOver").isEmpty(),
                 "opening the death screen",
                 "the kill must bring the player's client to the death screen", DEATH_LINK_BUDGET_TICKS);
-        // WINDOW: the death screen's own enabling timer, counted on the clock that runs it.
         bot().waitWorldTicks(DEATH_SCREEN_BUTTONS_ENABLE_TICKS);
         long respawnMark = client.mark();
         bot().clickButton(RESPAWN_BUTTON_INDEX);

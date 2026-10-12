@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -453,6 +455,11 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         return riding;
     }
 
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(cellDim, PILOT_THRUST_DOSE_TICKS, \"[\" + label +"
+            + " \"] the held vertical key must\"",
+            why = "a dose of thrust from the key's arrival — which is a link inside it, so a key that never"
+                    + " reached the computer is not read as a ship that would not climb — and one reading of"
+                    + " the ship once the release has arrived too.")
     private void climbLeg(String label) throws Exception {
         double yBefore = shipY();
         // THROUGH THE GUARD, not a bare read. This call site was doing
@@ -466,9 +473,6 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         long climbServerMark = serverEvents().mark();
         requireStillAboard("before the " + label + " climb leg is driven", climbClientMark,
                 climbServerMark);
-        // EXPERIMENT: a dose of thrust from the key's arrival — which is a link inside it, so a key
-        // that never reached the computer is not read as a ship that would not climb — and one
-        // reading of the ship once the release has arrived too.
         climbOnPilotKey(cellDim, PILOT_THRUST_DOSE_TICKS, "[" + label + "] the held vertical key must"
                 + " reach the flight computer of a ship this far out");
         double yAfter = shipY();
@@ -563,6 +567,8 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * mechanism's own constant, or it pins the day it was written.</p>
      */
     @Test
+    @ServerOnly(at = "dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);",
+            why = "a server-side park between cases; the next case reads the server's own teleport reply.")
     public void whereExactlyDoesADeliveryStopWorking() throws Exception {
         java.util.Map<String, String> rules = setGamerules(
                 "sendCommandFeedback", "false", "logAdminCommands", "false");
@@ -597,7 +603,6 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 }
                 // Park him back near the origin so the next case starts from a known place.
                 exec("stellurgytest player far-tp 0.5 200 0.5");
-                // SERVER-ONLY: a server-side park between cases; the next case reads the server's own teleport reply.
                 dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);
             }
 

@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -199,6 +201,14 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
             + " and taking a census after it, and the region check that the teleport did not carry him out"
             + " through the doorway.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
+            why = "the same slew window the roofed-deck scenario below argues.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 30; i++) {",
+            why = "coming to rest is a value approached over ticks, not an instant production commits; the trace"
+                    + " is the deliverable, and the per-tick record read after this loop carries the verdict."
+                    + " What this cannot see: motion inside one 3-tick sample.")
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
         final FixtureSite site = site();
@@ -212,8 +222,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: the same slew window the roofed-deck scenario below argues.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
         double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         scenario().requireArranged("the hull must be upside down before the pilot is released inside"
@@ -334,9 +342,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         String reclaimed = "no re-capture: the body was never released (see the premise above)";
 
         StringBuilder trace = new StringBuilder();
-        // WINDOW: coming to rest is a value approached over ticks, not an instant production commits;
-        // the trace is the deliverable, and the per-tick record read after this loop carries the
-        // verdict. What this cannot see: motion inside one 3-tick sample.
         for (int i = 0; i < 30; i++) {
             advanceServerAndClient(3);
             // No obst=/onDeck= columns: both are in the per-tick line appended after this loop
@@ -425,6 +430,25 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
             + " answering null: \"attitude hold must accept the inversion\", 2026-09-28 — the one verdict the wait"
             + " rewrite touched here. The interior gate's own claim after it is not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
+            why = "then the attitude READ — the pair that replaces a fixed 200 CLIENT ticks and the re-stepping"
+                    + " loop further down that existed to survive them. What the READ buys is the whole point:"
+                    + " a hull short of its inversion now fails HERE, as an arrangement failure that names its"
+                    + " up axis, where the loop re-teleported the body until the geometry happened to work out"
+                    + " and so hid the short slew entirely. WHAT THE WINDOW DOES NOT BUY, and an earlier"
+                    + " version of this comment claimed it did: the slew is not on any game clock. The hold's"
+                    + " torque is applied on the physics mod's own thread, which steps a FIXED simulated"
+                    + " interval per physics tick and paces those ticks by wall clock at its target rate"
+                    + " (`VSWorldPhysicsLoop.run`). Server ticks are the clock the hull's WORLD advances on,"
+                    + " which is why they replace the client's; they are not the clock the SLEW advances on, so"
+                    + " on a starved box this window can still end short — and then the read below says so,"
+                    + " loudly and typed. A link on the hull reaching its commanded attitude would remove that"
+                    + " too; nothing publishes one yet.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 30; i++) {",
+            why = "rest is approached, not announced, and this trace is what a red reads. What it cannot see:"
+                    + " motion inside one 3-tick sample.")
     public void aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -444,21 +468,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: then the attitude READ — the pair that replaces a fixed 200 CLIENT ticks and the
-        // re-stepping loop further down that existed to survive them. What the READ buys is the
-        // whole point: a hull short of its inversion now fails HERE, as an arrangement failure that
-        // names its up axis, where the loop re-teleported the body until the geometry happened to
-        // work out and so hid the short slew entirely.
-        // 
-        // WHAT THE WINDOW DOES NOT BUY, and an earlier version of this comment claimed it did: the
-        // slew is not on any game clock. The hold's torque is applied on the physics mod's own
-        // thread, which steps a FIXED simulated interval per physics tick and paces those ticks by
-        // wall clock at its target rate (`VSWorldPhysicsLoop.run`). Server ticks are the clock the
-        // hull's WORLD advances on, which is why they replace the client's; they are not the clock
-        // the SLEW advances on, so on a starved box this window can still end short — and then the
-        // read below says so, loudly and typed. A link on the hull reaching its commanded attitude
-        // would remove that too; nothing publishes one yet.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
         ShipInfo inverted = ShipInfo.byId(this::exec, 0, scenarioShipId);
         // WHY -sqrt(1/2): the step below moves the body world-DOWN, and it only reaches the cavity
@@ -573,8 +582,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         String reclaimed = "no re-capture: the episode was never broken (see the arrangement above)";
 
         StringBuilder trace = new StringBuilder();
-        // WINDOW: rest is approached, not announced, and this trace is what a red reads. What it
-        // cannot see: motion inside one 3-tick sample.
         for (int i = 0; i < 30; i++) {
             advanceServerAndClient(3);
             trace.append(String.format(java.util.Locale.ROOT,
@@ -662,6 +669,56 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
             + " NORMAL (subspace -Y): 131.0 -&gt; 132.0\". The ABOARD commit after the dismount is the"
             + " arrangement's link (server-committed).")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);",
+            why = "the gate's angle is not a choice: the ascent bounds below (ASCENT_ALONG_NORMAL_BLOCKS 1.2 along"
+                    + " the normal, ASCENT_LATERAL_BLOCKS 1.6 across it) tell a deck-normal ascent from a"
+                    + " world-up one only past tan(theta) = 1.6 / 1.2, i.e. 53.1 degrees — below that a"
+                    + " world-up climb can pass both. So the hull must be past it, with a degree of margin"
+                    + " inside the commanded 60.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);",
+            why = "the slew is a server command to the flight computer; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
+            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(4);",
+            why = "the first tap's press")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
+            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(4);",
+            why = "the gap between taps, inside vanilla's toggle window")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(4);",
+            why = "the second tap's press, the one that toggles flight")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(4);",
+            why = "the held-ascend phase is defined to begin four client ticks after the second tap's release. A"
+                    + " player's own motion is simulated by his client, one step per client tick, so this is"
+                    + " four steps of the tap's residual climb on any box — not a wait for it.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int i = 0; i < FLY_ABOARD_DOSE_SAMPLES; i++) {",
+            why = "four ticks of held ascend, the stretch the 2026-09-23 gate measured reaching +2 (subFly=129.0"
+                    + " dySub=2.0 after two samples).")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(FLY_ABOARD_DESCEND_TICKS);",
+            why = "held descend, NOT measured, and not the ascent's four: vanilla creative flight from rest covers"
+                    + " about 1.0 block in four ticks of sneak (0.15/tick added, 0.6 kept), which a floored"
+                    + " census can fail to register, and about 3.2 in ten. The deck below stops a longer fall;"
+                    + " the old poll's ceiling was fourteen. The sink it bought is printed in the assertion.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
+            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); // THE LANDING IS A LINK, and it was"
+            + " already being asserted twenty lines below as one —",
+            why = "the first press of the double-tap that toggles flight off")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
+            + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); // THE LANDING IS A LINK, and it was"
+            + " already being asserted twenty lines below as one —",
+            why = "the gap, inside vanilla's toggle window")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); // THE LANDING IS A LINK, and it was"
+            + " already being asserted twenty lines below as one —",
+            why = "the second press")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(10);",
+            why = "a body that touched and then slid or bounced away is what the far end is for, and overshoot"
+                    + " only gives it longer to do so.")
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -683,12 +740,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: the gate's angle is not a choice: the ascent bounds below
-        // (ASCENT_ALONG_NORMAL_BLOCKS 1.2 along the normal, ASCENT_LATERAL_BLOCKS 1.6 across it)
-        // tell a deck-normal ascent from a world-up one only past tan(theta) = 1.6 / 1.2, i.e. 53.1
-        // degrees — below that a world-up climb can pass both. So the hull must be past it, with a
-        // degree of margin inside the commanded 60.
-        // SERVER-ONLY: the slew is a server command to the flight computer; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);
         double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         scenario().requireArranged("the hull must be rolled past the angle the ascent bounds can"
@@ -713,15 +764,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         Events clientEvents = clientEvents();
         long flightMark = clientEvents.mark();
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the first tap's press
+        bot().waitWorldTicks(2);
         bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the gap between taps, inside vanilla's toggle window
+        bot().waitWorldTicks(2);
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the second tap's press, the one that toggles flight
+        bot().waitWorldTicks(2);
         bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        // EXPERIMENT: the held-ascend phase is defined to begin four client ticks after the second
-        // tap's release. A player's own motion is simulated by his client, one step per client
-        // tick, so this is four steps of the tap's residual climb on any box — not a wait for it.
         bot().waitWorldTicks(4);
 
         // The double-tap itself climbs a few blocks (a deck jump + held-space flight ticks), so
@@ -741,8 +789,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // and the dose stops well short of it.
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         try {
-            // EXPERIMENT: four ticks of held ascend, the stretch the 2026-09-23 gate measured reaching +2
-            // (subFly=129.0 dySub=2.0 after two samples).
             for (int i = 0; i < FLY_ABOARD_DOSE_SAMPLES; i++) {
                 bot().waitWorldTicks(2);
                 samples++;
@@ -805,11 +851,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // needs MORE than a block of travel.
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
         try {
-            // EXPERIMENT: held descend, NOT measured, and not the ascent's four: vanilla creative flight
-            // from rest covers about 1.0 block in four ticks of sneak (0.15/tick added, 0.6 kept), which
-            // a floored census can fail to register, and about 3.2 in ten. The deck below stops a
-            // longer fall; the old poll's ceiling was fourteen. The sink it bought is printed in the
-            // assertion.
             bot().waitWorldTicks(FLY_ABOARD_DESCEND_TICKS);
         } finally {
             bot().releaseKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
@@ -828,11 +869,11 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         double[] subSeated = subEnd;
         long flightOffMark = clientEvents.mark();
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the first press of the double-tap that toggles flight off
+        bot().waitWorldTicks(2);
         bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the gap, inside vanilla's toggle window
+        bot().waitWorldTicks(2);
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitWorldTicks(2); // STIMULUS: the second press
+        bot().waitWorldTicks(2);
         bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         // THE LANDING IS A LINK, and it was already being asserted twenty lines below as one —
         // `deck_contact`, the tick the deck resolver put the body on a surface it was not on before.
@@ -849,8 +890,6 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 "turning flight off must hand the body to deck gravity and put it in CONTACT with"
                         + " the ship's geometry — a body merely hovering at the right height was"
                         + " never seated by anything", DECK_LINK_BUDGET_TICKS);
-        // WINDOW: a body that touched and then slid or bounced away is what the far end is for, and
-        // overshoot only gives it longer to do so.
         advanceServerAndClient(10);
         capEnd = DeckCapture.read(this::exec);
         subSeated = parseSub(censusField("subPos"));

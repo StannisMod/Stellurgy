@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -218,14 +219,16 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
      * <p>The sensor's range is compared with a range this test computes from the hull's transform,
      * and the two are taken at different ticks — so the hull must not move between them.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "Reply first = shipInfo(hull);",
+            why = "a parked hull is a VALUE that must hold still, and nothing publishes \"it is still\". Two reads"
+                    + " a world tick apart — the tick on which the physics object adopts the written pose"
+                    + " (VSBridge.teleportShip sets it to use the game transform) — and the claim names both.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), DIM, 1);",
+            why = "the one world tick between the two reads named above; the claim below names both.")
     private void parkStill(String hull) throws Exception {
         ask("stellurgytest vs teleport-ship-by-id " + DIM + " " + hull + " " + PARK_X + " " + PARK_Y + " "
                 + PARK_Z).requireOk("park hull " + hull);
-        // WINDOW: a parked hull is a VALUE that must hold still, and nothing publishes "it is still".
-        // Two reads a world tick apart — the tick on which the physics object adopts the written
-        // pose (VSBridge.teleportShip sets it to use the game transform) — and the claim names both.
         Reply first = shipInfo(hull);
-        // WINDOW: the one world tick between the two reads named above; the claim below names both.
         GameTicks.advanceWorld(client(), DIM, 1);
         Reply second = shipInfo(hull);
         double moved = Math.sqrt(sq(second.number("posX") - first.number("posX"))

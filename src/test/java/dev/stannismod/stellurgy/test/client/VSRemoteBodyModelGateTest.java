@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -185,6 +186,13 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
             + " when the remote-body model gate asks that predicate, and re-stage the subject inside the"
             + " hull's world box but outside its field.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "String shipAtOpen = shipInfo();",
+            why = "the precondition is read at BOTH ends, and the verdict is only a verdict if it held at both."
+                    + " \"Beside the hull\" is a relation to a hull that stays put; a held hull that moves"
+                    + " during the reading can sweep onto the body — then rotating it is right, and leg B's"
+                    + " contract — or away from it, and then a gate that rotates everything in the box would"
+                    + " pass for want of anything in the box. Each end carries the ship's pose, so a lapsed"
+                    + " premise names what moved.")
     public void aBodyStandingOnTerrainBesideARolledShipIsNotDrawnShipAligned() throws Exception {
         // GROUND-SUBJECT: this leg's premise is a body standing on REAL TERRAIN beside the ship, so
         // it takes the surveyed-clean plot rather than the open-air band. The old 7420 had 49 water
@@ -243,12 +251,6 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
                         + " | client cows=" + safeReportCows(),
                 s.drawn);
 
-        // WINDOW: the precondition is read at BOTH ends, and the verdict is only a verdict if it held
-        // at both. "Beside the hull" is a relation to a hull that stays put; a held hull that moves
-        // during the reading can sweep onto the body — then rotating it is right, and leg B's
-        // contract — or away from it, and then a gate that rotates everything in the box would pass
-        // for want of anything in the box. Each end carries the ship's pose, so a lapsed premise
-        // names what moved.
         String shipAtOpen = shipInfo();
         DeckCapture contactAtOpen = DeckCapture.byId(this::exec, 0, subject);
         String legWindow = watchModelGate(60);
@@ -517,10 +519,11 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
      * shared client had already been advancing before this scenario began, and a forgotten
      * subtraction read as a rich sample.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "bot().waitWorldTicks(ticks);",
+            why = "its one record is the whole reading.")
     private String watchModelGate(int ticks) throws Exception {
         long mark = clientEvents().mark();
         ClientWindow window = ClientWindow.open(bot(), REMOTE_MODEL_WINDOW);
-        // WINDOW: its one record is the whole reading.
         bot().waitWorldTicks(ticks);
         window.close();
         String summary = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
@@ -547,6 +550,15 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
     /** Hold the ship at a steep roll and wait for the attitude to actually CONVERGE - the stimulus
      *  depends on the fixture's dynamic state, so it gates on the measured attitude, never on a
      *  tick count (under suite load the slew takes longer than any fixed wait). */
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ROLL_WINDOW_TICKS);",
+            why = "not a poll — and the comment above was right that a tick count cannot be the GATE, which is a"
+                    + " different claim from \"so it must re-read until it likes the answer\". An attitude"
+                    + " converging under a hold is a physical value nobody publishes, and the hold never"
+                    + " decides it has arrived, so there is no link to await; but a loop whose exit is the"
+                    + " assertion three lines below it can be timed out and never disproved. Give the slew its"
+                    + " ticks, then read: the hold applies torque toward its target every tick and HOLDS the"
+                    + " attitude once it is there, so a window longer than the slew reads the same state. Equal"
+                    + " ends mean the command was ignored; different-but-short means the window was.")
     private void rollShip(int bx, int by, int bz) throws Exception {
         String infoBefore = shipInfo();
         double qxBefore = readDouble(infoBefore, Q_X), qzBefore = readDouble(infoBefore, Q_Z);
@@ -554,14 +566,6 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the steep roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
                         ).bool("commanded"));
-        // WINDOW: not a poll — and the comment above was right that a tick count cannot be the
-        // GATE, which is a different claim from "so it must re-read until it likes the answer". An
-        // attitude converging under a hold is a physical value nobody publishes, and the hold never
-        // decides it has arrived, so there is no link to await; but a loop whose exit is the
-        // assertion three lines below it can be timed out and never disproved. Give the slew its
-        // ticks, then read: the hold applies torque toward its target every tick and HOLDS the
-        // attitude once it is there, so a window longer than the slew reads the same state. Equal
-        // ends mean the command was ignored; different-but-short means the window was.
         advanceServerAndClient(ROLL_WINDOW_TICKS);
         // The ship's own up, world-frame, from the attitude quaternion the probe reports.
         String info = shipInfo();

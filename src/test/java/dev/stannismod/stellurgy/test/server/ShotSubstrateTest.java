@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
@@ -50,6 +51,8 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
             + " have been deflected ... but was:&lt;2000064.5209999986&gt;\"; with 0.001 along Z, at \"expected:&lt;"
             + " 40000.5&gt; but was:&lt;40000.52099999993&gt;\".")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int tick = 0; tick < 10; tick++) {",
+            why = "ten steps of the substrate, each one the dose; nothing is awaited.")
     public void aShotCrossesEmptySpaceWithoutLoadingAnyWorld() throws Exception {
         ask("stellurgytest shot clear 0").requireOk("clear the air");
         double originX = 40_000.5D;
@@ -58,7 +61,6 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
 
         long id = fire(originX + " " + POSE_BAND_Y + " " + originZ + " " + perTick + " 0 0 4000 400");
 
-        // STIMULUS: ten steps of the substrate, each one the dose; nothing is awaited.
         for (int tick = 0; tick < 10; tick++) {
             ask("stellurgytest shield tick 0").requireOk("step the substrate");
         }
@@ -101,11 +103,12 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
             + " steps, this fails at \"a shot with a three-tick lifetime was still up after five: {...present:true"
             + " ...age:11,lifetime:3...}\" (2026-09-30).")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int tick = 0; tick < 5; tick++) {",
+            why = "five steps against a three-tick lifetime.")
     public void aShotEndsForAStatedReasonRatherThanJustDisappearing() throws Exception {
         ask("stellurgytest shot clear 0").requireOk("clear the air");
         long id = fire(41_000.5D + " " + POSE_BAND_Y + " " + 41_000.5D + " 10 0 0 4000 3");
 
-        // STIMULUS: five steps against a three-tick lifetime.
         for (int tick = 0; tick < 5; tick++) {
             ask("stellurgytest shield tick 0").requireOk("step the substrate");
         }
@@ -249,6 +252,9 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
     // ---- arrangement
 
     /** A shield generator and emitter charged until the emitter reports itself powered. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 15; i++) {",
+            why = "fifteen feed-and-solve passes, the dose the shell is charged with; the verdict on whether it"
+                    + " took is the emitter's own reading below.")
     private void chargedShield(int gx, int gy, int gz) throws Exception {
         ask("stellurgytest chunk warmup 0 " + ((gx - 16) >> 4) + " " + ((gz - 16) >> 4) + " "
                 + ((gx + 16) >> 4) + " " + ((gz + 16) >> 4)).requireOk("warm the site's chunks");
@@ -256,8 +262,6 @@ public class ShotSubstrateTest extends AbstractSharedServerTest {
                 + (gy + 8) + " " + (gz + 12) + " minecraft:air").requireOk("clear the site");
         place("affs:shield_generator", gx, gy, gz);
         place("affs:field_generator", gx + 1, gy, gz);
-        // STIMULUS: fifteen feed-and-solve passes, the dose the shell is charged with; the verdict on
-        // whether it took is the emitter's own reading below.
         for (int i = 0; i < 15; i++) {
             ask("stellurgytest energy inject 0 " + gx + " " + gy + " " + gz + " 4000").requireOk("feed the generator");
             ask("stellurgytest tile force-tick 0 " + gx + " " + gy + " " + gz + " 1").requireOk("tick the generator");

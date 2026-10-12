@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -115,6 +117,11 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
             + " fails \"the shell's surface velocity stayed zero on a moving ship (speed=0.0)\" — 2026-10-06. The"
             + " two tracking verdicts between them (shell moved, shell still on the hull) are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);",
+            why = "the dose of drive the hull is given; the displacement it buys is read below and gated as an"
+                    + " arrangement, so a dose that turns out short says so rather than passing.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);",
+            why = "a server command drives the hull; the reads are the server's ship pose and shield report.")
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
 
         // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
@@ -268,9 +275,6 @@ public class VSShipFrameShieldTest extends AbstractSharedVsClientTest {
                 + " 0");
         scenario().requireArranged("the drive must reach THIS ship's own flight computer: " + drive,
                 Reply.of(drive).bool("afcResolved"));
-        // EXPERIMENT: the dose of drive the hull is given; the displacement it buys is read below and
-        // gated as an arrangement, so a dose that turns out short says so rather than passing.
-        // SERVER-ONLY: a server command drives the hull; the reads are the server's ship pose and shield report.
         GameTicks.advanceWorld(serverClient(), 0, DRIVE_TICKS);
         exec("stellurgytest vs force-clear-by-id 0 " + shipId);
         double[] ship2 = shipPos(shipId);

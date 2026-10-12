@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -181,6 +182,9 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * DOMINANCE assertion still reads a fact the travel bar does not settle: "it moved 2 blocks along
      * Z" says nothing about whether X moved more.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int spent = 0; spent < TRAVEL_DOSE_TICKS; spent += 2) {",
+            why = "the MAXIMUM driven travel and the other axis off the same reply are the measurement; the ship"
+                    + " publishes no per-tick pose. What it cannot see: an excursion inside one 2-tick sample.")
     private double[] travelWindow(String shipId, int key, Axis driven, Axis other,
                                   double drivenBefore, double otherBefore) throws Exception {
         double best = 0.0;
@@ -194,9 +198,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                     seen -> Events.anyRecordHasAll(seen, "input", "set", "dim", "0"),
                     "with input = set in dim 0",
                     "the seated pilot's held key must reach the ship's flight computer", 200);
-            // WINDOW: the MAXIMUM driven travel and the other axis off the same reply are the
-            // measurement; the ship publishes no per-tick pose. What it cannot see: an excursion inside
-            // one 2-tick sample.
             for (int spent = 0; spent < TRAVEL_DOSE_TICKS; spent += 2) {
                 advanceServerAndClient(2);
                 String info = shipInfoById(shipId);
@@ -387,6 +388,36 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
             + " inversion first left the method GREEN: the rung accepted any displacement, and a hull with no"
             + " throttle falls. It asserts a climb now.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
+            + " advanceServerAndClient(1); ShipInfo info = ShipInfo.of(shipInfoById(shipId));",
+            why = "the MAXIMUM climb over the window is the measurement, not the last sample — a quantity read at"
+                    + " one instant can have come back, and the window's extremum cannot. The link would be a"
+                    + " record of the hull's pose passing yBefore + 1, and none exists: VS integrates the"
+                    + " motion on its physics tick and publishes no per-tick pose. What it cannot see: a climb"
+                    + " that peaked and fell back between two 1-tick samples (it reads low, the strict"
+                    + " direction).")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
+            + " advanceServerAndClient(1); double[] qNow = readQuat(shipInfoById(shipId));",
+            why = "the MINIMUM |dot| over the window is the measurement, and here that is not a refinement — it is"
+                    + " the only correct reading. A ship under a held 1 rad/s yaw command passes through every"
+                    + " attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a"
+                    + " last-sample read of a full turn says \"unmoved\", and no record carries the hull's"
+                    + " attitude per physics tick. What it cannot see: an attitude passed through between two"
+                    + " 1-tick samples.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ATTITUDE_WINDOW_TICKS);",
+            why = "the FINAL value is the measurement: the claim is that the controller CONVERGES and HOLDS, so a"
+                    + " maximum along the way would pass on a ship that swung through the target and carried"
+                    + " on. The hold never decides it has arrived, so there is no record to link on.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
+            + " advanceServerAndClient(1); ffClimb = readVec(shipInfoById(shipId))[1] - pBefore[1];",
+            why = "the MAXIMUM CLIMB over the window is the measurement — a ship that rises and settles back reads"
+                    + " zero at the end. No record carries the hull's pose per physics tick. What it cannot"
+                    + " see: a peak between two 1-tick samples (it reads low, the strict way). CLIMB, not"
+                    + " displacement, and this is the verdict's whole content. It used to accept any"
+                    + " displacement over a block, and with the flight computer ignoring pilot input entirely"
+                    + " it stayed GREEN: released from the probe command, the hull simply FELL, and a fall is a"
+                    + " displacement. Every rotation above is about world Y (the yaw command and the hold's 90°"
+                    + " turn), so the hull's up is still world up and a full-up throttle must raise it.")
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
 
         final FixtureSite site = site();
@@ -447,11 +478,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         String upCmd = exec("stellurgytest vs force-vel-by-id 0 " + shipId + " 0 8 0");
         assertTrue("force-vel must reach THIS ship's own flight computer: " + upCmd,
                 Reply.of(upCmd).bool("commanded"));
-        // WINDOW: the MAXIMUM climb over the window is the measurement, not the last sample — a
-        // quantity read at one instant can have come back, and the window's extremum cannot. The link
-        // would be a record of the hull's pose passing yBefore + 1, and none exists: VS integrates the
-        // motion on its physics tick and publishes no per-tick pose. What it cannot see: a climb that
-        // peaked and fell back between two 1-tick samples (it reads low, the strict direction).
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             ShipInfo info = ShipInfo.of(shipInfoById(shipId));
@@ -477,11 +503,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         String turnCmd = exec("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
         assertTrue("force-rot must reach THIS ship's own flight computer: " + turnCmd,
                 Reply.of(turnCmd).bool("commanded"));
-        // WINDOW: the MINIMUM |dot| over the window is the measurement, and here that is not a
-        // refinement — it is the only correct reading. A ship under a held 1 rad/s yaw command passes
-        // through every attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a
-        // last-sample read of a full turn says "unmoved", and no record carries the hull's attitude
-        // per physics tick. What it cannot see: an attitude passed through between two 1-tick samples.
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             double[] qNow = readQuat(shipInfoById(shipId));
@@ -517,9 +538,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                 + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]);
         assertTrue("point must reach THIS ship's own flight computer: " + pointCmd,
                 Reply.of(pointCmd).bool("commanded"));
-        // WINDOW: the FINAL value is the measurement: the claim is that the controller CONVERGES and
-        // HOLDS, so a maximum along the way would pass on a ship that swung through the target and
-        // carried on. The hold never decides it has arrived, so there is no record to link on.
         advanceServerAndClient(ATTITUDE_WINDOW_TICKS);
         double[] q = readQuat(shipInfoById(shipId));
         double convDot = Math.abs(q[0] * target[0] + q[1] * target[1] + q[2] * target[2] + q[3] * target[3]);
@@ -558,15 +576,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
             fail("the throttle must reach this ship's own flight computer: " + ffCmd
                     + " | ship now: " + shipInfoById(shipId));
         }
-        // WINDOW: the MAXIMUM CLIMB over the window is the measurement — a ship that rises and settles
-        // back reads zero at the end. No record carries the hull's pose per physics tick. What it
-        // cannot see: a peak between two 1-tick samples (it reads low, the strict way).
-        //
-        // CLIMB, not displacement, and this is the verdict's whole content. It used to accept any
-        // displacement over a block, and with the flight computer ignoring pilot input entirely it
-        // stayed GREEN: released from the probe command, the hull simply FELL, and a fall is a
-        // displacement. Every rotation above is about world Y (the yaw command and the hold's 90°
-        // turn), so the hull's up is still world up and a full-up throttle must raise it.
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             ffClimb = readVec(shipInfoById(shipId))[1] - pBefore[1];
@@ -635,6 +644,11 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
             + " {@code this.pilotInput = input} discarding its input, this fails at the climb with \"maxClimb=0.0\" (the seat still reports {@code afcResolved:true}, so"
             + " the red names the computer's intake, not the seat's link) — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
+            + " advanceServerAndClient(1); yAfter = ShipInfo.of(shipInfoById(shipId)).y;",
+            why = "the MAXIMUM climb over the window is the measurement, so a ship that rises and settles back is"
+                    + " not read as one that never rose. No record carries the hull's pose per physics tick."
+                    + " What it cannot see: a peak between two 1-tick samples (reads low).")
     public void seatPathResolvesAfcAndFliesTheShip() throws Exception {
 
         final FixtureSite site = site();
@@ -682,9 +696,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         assertTrue("the pilot seat must resolve its linked flight computer (offset intact "
                         + "after VS relocation): " + lastSeat,
                 Reply.of(lastSeat).bool("afcResolved"));
-        // WINDOW: the MAXIMUM climb over the window is the measurement, so a ship that rises and
-        // settles back is not read as one that never rose. No record carries the hull's pose per
-        // physics tick. What it cannot see: a peak between two 1-tick samples (reads low).
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             advanceServerAndClient(1);
             yAfter = ShipInfo.of(shipInfoById(shipId)).y;
@@ -721,6 +732,11 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
             + " camYawAfter=180.0\". The two waits before them are arrangement links (the spawn, the client"
             + " standing at the build site).")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(60);",
+            why = "vertical thrust — the climb clear of the terrain, then cut.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 6; i++) {",
+            why = "the iterations ARE the input — six hard sideways looks, one a tick, each measured from where"
+                    + " the last one left the view. Delete the loop and nothing is steered at all.")
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {
 
         final FixtureSite site = site();
@@ -842,7 +858,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // releasing the vertical key leaves the ship climbing, and a horizontal leg flown at pad
         // height could be stopped by a hillside rather than by the ship's own controls.
         bot().holdKey(Keyboard.KEY_R);
-        // STIMULUS: vertical thrust — the climb clear of the terrain, then cut.
         advanceServerAndClient(60);
         bot().releaseKey(Keyboard.KEY_R);
         cutAndSettle();
@@ -891,8 +906,6 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // (unmoved) ship nose every client tick. Read BOTH the client camera and the server ship
         // attitude, converting the latter to a heading with the SAME quat->Euler the lock uses.
         double camYawBefore = bot().reportState().get("playerYaw").getAsDouble();
-        // STIMULUS: the iterations ARE the input — six hard sideways looks, one a tick, each measured
-        // from where the last one left the view. Delete the loop and nothing is steered at all.
         for (int i = 0; i < 6; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat() + 30f, st.get("playerPitch").getAsFloat());
@@ -924,9 +937,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * the release were more of the same brake. They are folded into the hold (40 + 10), which keeps
      * the brake the ship is given unchanged.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(50);",
+            why = "how long the brake-to-hover is applied before the next leg's baseline is read.")
     private void cutAndSettle() throws Exception {
         bot().holdKey(Keyboard.KEY_X);          // throttle cut
-        // STIMULUS: how long the brake-to-hover is applied before the next leg's baseline is read.
         advanceServerAndClient(50);
         bot().releaseKey(Keyboard.KEY_X);
     }

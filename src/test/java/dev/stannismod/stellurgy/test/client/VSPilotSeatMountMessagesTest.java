@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -87,6 +88,8 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
     private static final int SILENCE_WINDOW_TICKS = 60;
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SILENCE_WINDOW_TICKS);",
+            why = "an absence of notices; nothing records one that was not sent.")
     public void theSeatAnswersTheClickerInsteadOfFailingSilently() throws Exception {
         // ---- Arrange: a platform with a single loose (unassembled, unlinked) pilot seat. -------
         exec("stellurgytest chunk warmup 0 " + ((SEAT_X - 8) >> 4) + " " + ((SEAT_Z - 8) >> 4)
@@ -153,7 +156,6 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
         events.await(selfMark, "right_click_block", "the self-click must REACH the server — an"
                 + " absence of messages below means nothing if the click was dropped on the reach"
                 + " check before the block ever saw it", NOTICE_BUDGET_TICKS);
-        // WINDOW: an absence of notices; nothing records one that was not sent.
         advanceServerAndClient(SILENCE_WINDOW_TICKS);
         String selfQueued = events.since(selfMark, "action_bar_queued");
         String selfSent = events.since(selfMark, "status_message_sent");

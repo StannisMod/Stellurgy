@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -83,6 +84,10 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
             + " deck, not the world: he moved 1.95 relative to the ship but only 0.37 in the world\","
             + " 2026-09-28. The lines the wait rewrite touched are the arrangement links before the roll.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceWorldAndClient(0, ROLL_WINDOW_TICKS);",
+            why = "on the hull's world clock and the client's ticks — the world rolls the deck, the client moves"
+                    + " him on it — and the roll it bought is GATED below: a hull that has turned a few degrees"
+                    + " satisfies every claim here without testing any of them.")
     public void aStandingCrewMemberStaysOnTheDeckWhenTheShipRolls() throws Exception {
 
         // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
@@ -164,9 +169,6 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         String point = exec("stellurgytest vs point-by-id 0 " + shipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
         assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded"));
-        // WINDOW: on the hull's world clock and the client's ticks — the world rolls the deck, the
-        // client moves him on it — and the roll it bought is GATED below: a hull that has turned a few
-        // degrees satisfies every claim here without testing any of them.
         advanceWorldAndClient(0, ROLL_WINDOW_TICKS);
         double upAfterRoll = ShipInfo.byId(this::exec, 0, shipId).upY();
         scenario().requireArranged("the deck must actually be rolled before the ride is judged - the"

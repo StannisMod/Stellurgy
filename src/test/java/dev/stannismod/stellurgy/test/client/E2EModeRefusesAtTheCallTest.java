@@ -230,8 +230,9 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#inputNoHandProduces",
             at = "if (count > HUMAN_PRESSES_PER_TICK)", replacedBy = "if (false)",
             fails = "these were not: [input RAN", on = "2026-10-12")
-    @RedWitness(verdict = "refused at the console", member = "TestClient#sendRaw",
-            at = "if (line.contains(refused)) {", replacedBy = "if (line.contains(refused)) { return; } if (false) {",
+    @RedWitness(verdict = "refused at the console", member = "E2EModeGate#onCommand",
+            at = "CONSOLE_JUDGED + (why == null ? \"admitted \" : \"refused \")",
+            replacedBy = "CONSOLE_JUDGED + \"admitted \"",
             fails = "a command the e2e gate refuses at the CONSOLE must reach the test as a refusal too", on = "2026-10-12")
     @Test
     public void everyActAnE2EMayNotPerformIsRefusedAtTheCallAndEveryReadItIsMadeOfIsAnswered() throws Exception {

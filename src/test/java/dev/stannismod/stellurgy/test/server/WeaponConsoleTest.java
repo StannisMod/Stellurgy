@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.List;
@@ -87,6 +88,14 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
             + " {@code TileWeaponConsole.getTarget} ({@code TileWeaponConsole.java:191}) answering nothing while the"
             + " network holds fire, at \"holding fire lost the target ... {...holdFire:true...hasTarget:false}\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "int interval = read(base).integer(\"fireInterval\");",
+            why = "while it holds, nothing is decided per tick that a record could close — the hold returns before"
+                    + " the fire question. So the claim is an absence over an interval: three of this gun's own"
+                    + " fire intervals (read off the gun), charged, on target, held. Both ends are marks, and"
+                    + " the assertion reads the hold chain over the same window.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), 3 * Math.max(1,"
+            + " interval));",
+            why = "three of the gun's own fire intervals, closed by the two marks around it (above).")
     public void holdFireStopsTheShootingAndKeepsTheTarget() throws Exception {
         int base = X + 100;
         buildSite(base);
@@ -113,12 +122,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
         events.awaitRecordWithFields(held, "turret_hold_decided",
                 "the gun on target never answered that it was holding fire", Weapons.SUBJECT_TICKS,
                 "pos", Weapons.at(base, Y, Z), "held", "true");
-        // WINDOW: while it holds, nothing is decided per tick that a record could close — the hold
-        // returns before the fire question. So the claim is an absence over an interval: three of
-        // this gun's own fire intervals (read off the gun), charged, on target, held. Both ends are
-        // marks, and the assertion reads the hold chain over the same window.
         int interval = read(base).integer("fireInterval");
-        // WINDOW: three of the gun's own fire intervals, closed by the two marks around it (above).
         GameTicks.advance(client(), GameTicks.server(), 3 * Math.max(1, interval));
         long heldEnd = events.mark();
         String holds = events.since(held, "turret_hold_decided");
@@ -157,6 +161,16 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
             + " recharge): [{...shot:2...},{...shot:3...}]\" (2026-09-30). The \"took a command again\" verdict after"
             + " it is not reached by that inversion and was not separately witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "int interval = gun.integer(\"fireInterval\");",
+            why = "a gun with no target takes no fire decision at all — it returns before the question is asked —"
+                    + " so no record can close this; the claim is an absence over an interval that must CONTAIN"
+                    + " the decision a still-commanded gun would take. Such a gun, on target and charged, fires"
+                    + " on the first tick its cooldown reaches zero, and the cooldown set by its last round is"
+                    + " the gun's own fire interval (read off the gun). So the interval runs from the drop to"
+                    + " one interval plus a tick past the recharge; overshoot only lengthens it, which makes a"
+                    + " negative claim stricter, never more lenient.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), interval + 1);",
+            why = "one fire interval plus a tick past the recharge, which contains the decision (above).")
     public void losingTheLastConsoleClearsTheTarget() throws Exception {
         int base = X + 200;
         buildSite(base);
@@ -185,15 +199,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
         Reply gun = read(base);
         assertTrue("the gun still holds a target it cannot be told to drop: " + gun,
                 !gun.bool("hasTarget"));
-        // WINDOW: a gun with no target takes no fire decision at all — it returns before the question
-        // is asked — so no record can close this; the claim is an absence over an interval that must
-        // CONTAIN the decision a still-commanded gun would take. Such a gun, on target and charged,
-        // fires on the first tick its cooldown reaches zero, and the cooldown set by its last round is
-        // the gun's own fire interval (read off the gun). So the interval runs from the drop to one
-        // interval plus a tick past the recharge; overshoot only lengthens it, which makes a negative
-        // claim stricter, never more lenient.
         int interval = gun.integer("fireInterval");
-        // WINDOW: one fire interval plus a tick past the recharge, which contains the decision (above).
         GameTicks.advance(client(), GameTicks.server(), interval + 1);
         long windowEnd = events.mark();
         long droppedSeq = (long) Events.number(dropped, "seq");
@@ -229,6 +235,9 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
             + " fails at \"the joined battery in the first row must take the order given last — the east"
             + " console's: … expected:&lt;w636-[la]st&gt; but was:&lt;w636-[fir]st&gt;\" (2026-10-05).")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), 1);",
+            why = "one tick is the dose — an order is stamped with the tick it was given, so the second pair of"
+                    + " orders must be given at least one tick after the first to be the later one.")
     public void theLastOrderWinsWhenTwoBatteriesAreJoined() throws Exception {
         FixtureSite site = clearedSite(1, 2, "two rows of weapon consoles");
         int y = site.y + 1;
@@ -253,8 +262,6 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
 
         code(west, y, eastLastRow, "w636-first");
         code(east, y, westLastRow, "w636-first");
-        // EXPERIMENT: one tick is the dose — an order is stamped with the tick it was given, so the
-        // second pair of orders must be given at least one tick after the first to be the later one.
         GameTicks.advance(client(), GameTicks.server(), 1);
         code(east, y, eastLastRow, "w636-last");
         code(west, y, westLastRow, "w636-last");

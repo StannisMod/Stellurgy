@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -88,6 +89,8 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
     /** Pins SHIPCTL-16 (a pilot who logs out seated logs back in seated with a working control chain). */
     @Pins("SHIPCTL-16")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20);",
+            why = "an absence; nothing records a remount that did not happen.")
     public void aSeatTakenWhileThePilotWasOfflineStaysWithTheOccupant() throws Exception {
 
         // ---- ARRANGE: build + assemble a piloted ship, seat the client player on it. ------------
@@ -249,7 +252,6 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         // ---- ASSERT 3: the returner is NOT seated — twice, so a late re-mount cannot hide. ------
         assertFalse("a pilot whose seat was taken while he was offline must NOT come back seated: "
                 + observed, isRiding(riding));
-        // WINDOW: an absence; nothing records a remount that did not happen.
         advanceServerAndClient(20);
         JsonObject ridingLater = bot().reportRidingEntity();
         assertFalse("...and must STAY unseated (no delayed re-mount stealing the seat back): at the"

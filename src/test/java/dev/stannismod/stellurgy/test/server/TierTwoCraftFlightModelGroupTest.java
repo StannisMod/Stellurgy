@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.After;
 import org.junit.Before;
@@ -834,6 +835,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             + " pos, state))} made always true; the controller — {@code TileAdvancedFlightComputer#onPhysicsTick}"
             + " at {@code scheme.allocate(model.live(), a,} handed {@code model.design()}.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), WEAR_BRAKE_TICKS);",
+            why = "the brake's duration; the verdict reads acceleration, never position or speed.")
     public void aMotorWornToItsLastStagePutsNoForceIntoTheCraft() throws Exception {
         FixtureSite site = site();
         standInVacuum();
@@ -854,7 +857,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 Events.number(unworn, "satEngineAccelY") > NO_MOTION_BAND);
 
         command(craft, "force-vel-by-id", 0.0, 0.0, 0.0, "brake the worn-motor craft to rest");
-        // STIMULUS: the brake's duration; the verdict reads acceleration, never position or speed.
         GameTicks.advance(client(), GameTicks.server(), WEAR_BRAKE_TICKS);
 
         Reply survey = Reply.of(exec("stellurgytest vs actuators " + DIM + " " + craft.physicsId));
@@ -928,6 +930,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             + " fails \"an idle craft must give its wheel back: the fullest wheel aboard read 0.058823529411764705"
             + " of its capacity, and 20 ticks later 0.058823529411764705\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "double first = wheelFill(craft);",
+            why = "the fill is a value that converges; two reads, and the verdict names both.")
     public void anIdleCraftGivesItsWheelBack() throws Exception {
         standInVacuum();
         FixtureSite site = site();
@@ -947,7 +951,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         requireArranged("the craft must be able to turn about yaw with its thrusters alone, or nothing "
                 + "aboard can cancel an unwinding wheel: " + yaw, sustainedYaw > 0.0);
 
-        // WINDOW: the fill is a value that converges; two reads, and the verdict names both.
         double first = wheelFill(craft);
         requireArranged("the wheel must hold momentum once the craft is built (wound: " + wound
                 + ")", first > 0.0);
@@ -1016,6 +1019,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             + " {@code momentum, dt}); on the form that refused a burst only for a wheel with NO room the same"
             + " verdict failed at 0.29 rad/s — a kick each time the wheel filled.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int t = 0; t < OVERLOAD_DOSE_TICKS; t += WHEEL_SAMPLE_TICKS) {",
+            why = "the drive is the dose; the wheel is read along it because \"was it spent\" is a question about"
+                    + " how its fill moved over the drive, which no single read can answer.")
     public void aCraftWhoseWheelIsSpentDoesNotTurnUnderAStraightCommand() throws Exception {
         standInVacuum();
         FixtureSite site = site();
@@ -1046,8 +1052,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         double previous = Double.NaN;
         double fill = Double.NaN;
         StringBuilder trace = new StringBuilder();
-        // EXPERIMENT: the drive is the dose; the wheel is read along it because "was it spent" is a
-        // question about how its fill moved over the drive, which no single read can answer.
         for (int t = 0; t < OVERLOAD_DOSE_TICKS; t += WHEEL_SAMPLE_TICKS) {
             GameTicks.advance(client(), GameTicks.server(), WHEEL_SAMPLE_TICKS);
             previous = fill;
@@ -1489,6 +1493,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 Plot.CLEAN_GROUND_Z, "the terrain around the pad is what a hull at rest must not be pushed by"));
     }
 
+    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo before = ShipInfo.byId(this::exec, DIM, shipId);",
+            why = "a hull at rest is a value that does not converge to anything — it holds, or the physics pushes"
+                    + " it. Two reads with the observed ticks between them, and the verdict names both.")
     private void requireItStaysWhereItWasBuilt(FixtureSite site) throws Exception {
         int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", HALO, HEIGHT,
                 "the craft that must stay where it was built stands in this volume");
@@ -1510,8 +1517,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 Math.abs(dx) < BUILT_IN_PLACE_BLOCKS && Math.abs(dy) < BUILT_IN_PLACE_BLOCKS
                         && Math.abs(dz) < BUILT_IN_PLACE_BLOCKS);
 
-        // WINDOW: a hull at rest is a value that does not converge to anything — it holds, or the physics
-        // pushes it. Two reads with the observed ticks between them, and the verdict names both.
         ShipInfo before = ShipInfo.byId(this::exec, DIM, shipId);
         long ticks = GameTicks.advanceObserved(client(), GameTicks.server(), AT_REST_WINDOW_TICKS);
         ShipInfo after = ShipInfo.byId(this::exec, DIM, shipId);
@@ -1893,6 +1898,15 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             + " ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} to {@code if (true)}), the hold verdict fails — \"must keep station, and this one moved"
             + " from 235.7 to 57.1\" — 2026-09-30.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "long heldTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), ASSIST_SAMPLE_TICKS);",
+            why = "the altitude is read before and after this stretch and the claim is an UPPER bound on the"
+                    + " difference, so a longer stretch than asked can only make a leaking hold show.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long fallTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), ASSIST_SAMPLE_TICKS);",
+            why = "the dose is ASSIST_SAMPLE_TICKS of release. The claim is a LOWER bound, which extra ticks make"
+                    + " easier — but only for a craft that is falling at all: a held one does not sink further"
+                    + " for being watched longer, and a released one clears FELL many times over.")
     public void flightAssistDecidesWhetherAnUnpilotedCraftHoldsOrFalls() throws Exception {
 
         String asm = RocketFixture.assembleAt(site(), this::exec,
@@ -1908,8 +1922,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         Released craft = new Released(DIM, shipId);
         hold(craft);
         double heldFrom = altitudeOf(craft);
-        // WINDOW: the altitude is read before and after this stretch and the claim is an UPPER bound
-        // on the difference, so a longer stretch than asked can only make a leaking hold show.
         long heldTicks = GameTicks.advanceObserved(client(), GameTicks.server(), ASSIST_SAMPLE_TICKS);
         double heldTo = altitudeOf(craft);
         assertTrue("with Flight Assist ON an unpiloted craft must keep station,"
@@ -1921,9 +1933,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // --- the subject: Flight Assist OFF must RELEASE ------------------------------------------
         release(craft);
         double releasedFrom = altitudeOf(craft);
-        // EXPERIMENT: the dose is ASSIST_SAMPLE_TICKS of release. The claim is a LOWER bound, which
-        // extra ticks make easier — but only for a craft that is falling at all: a held one does not
-        // sink further for being watched longer, and a released one clears FELL many times over.
         long fallTicks = GameTicks.advanceObserved(client(), GameTicks.server(), ASSIST_SAMPLE_TICKS);
         double fellTo = altitudeOf(craft);
         measured("flight assist", "held drift " + (heldFrom - heldTo) + " in " + heldTicks + " ticks",
@@ -1967,6 +1976,15 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             + " scaling it by the body's multiplier, the ratio verdict fails at 1.015 (\"outside [0.125, 0.5]\"),"
             + " 2026-09-29.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceObserved(client(), GameTicks.server(),"
+            + " COMPARISON_SAMPLE_TICKS); double earthHeldY = altitudeOf(earth), lowHeldY = altitudeOf(low);",
+            why = "both altitudes are read before and after this stretch and the claim is an UPPER bound on each"
+                    + " difference, so a longer stretch than asked can only make a leaking hold show.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long fallTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), COMPARISON_SAMPLE_TICKS);",
+            why = "the dose is COMPARISON_SAMPLE_TICKS of release for both craft at once. The subject is a RATIO"
+                    + " of two falls over the same ticks, so the box delivering more of them changes both"
+                    + " numbers together and not the verdict.")
     public void aCraftOverALowGravityBodyFallsInProportionToThatBodysGravity() throws Exception {
 
         int lowGravityDim = authorLowGravityBody();
@@ -1979,8 +1997,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         hold(earth);
         hold(low);
         double earthFrom = altitudeOf(earth), lowFrom = altitudeOf(low);
-        // WINDOW: both altitudes are read before and after this stretch and the claim is an UPPER
-        // bound on each difference, so a longer stretch than asked can only make a leaking hold show.
         GameTicks.advanceObserved(client(), GameTicks.server(), COMPARISON_SAMPLE_TICKS);
         double earthHeldY = altitudeOf(earth), lowHeldY = altitudeOf(low);
         requireHeld(earth, earthFrom, earthHeldY);
@@ -1992,9 +2008,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // --- release both in the same window --------------------------------------------------------
         release(earth);
         release(low);
-        // EXPERIMENT: the dose is COMPARISON_SAMPLE_TICKS of release for both craft at once. The
-        // subject is a RATIO of two falls over the same ticks, so the box delivering more of them
-        // changes both numbers together and not the verdict.
         long fallTicks = GameTicks.advanceObserved(client(), GameTicks.server(), COMPARISON_SAMPLE_TICKS);
         double earthFell = earthHeldY - altitudeOf(earth);
         double lowFell = lowHeldY - altitudeOf(low);
@@ -2051,6 +2064,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             + " the scenario stops at that premise — \"no `unmanned_mode` released, for this craft's flight"
             + " computer … within 200 ticks\" — 2026-10-04.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "long stillTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), CELL_SAMPLE_TICKS);",
+            why = "the altitude is read before and after this stretch and the claim is an UPPER bound on the"
+                    + " difference, so a longer stretch than asked can only make a real field show.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long driven = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), CELL_SAMPLE_TICKS);",
+            why = "the dose is CELL_SAMPLE_TICKS of commanded drive, and the claim is a LOWER bound — so the bar"
+                    + " is scaled by the ticks this box delivered and the rate it demands is fixed.")
     public void aReleasedCraftInACellKeepsItsAltitude() throws Exception {
 
         // A craft that can FLY, built in the cell: the transit stack's empty origin cell, and the
@@ -2114,8 +2135,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // --- the subject: released, over nothing, it must keep its altitude ------------------------
         ShipInfo atRelease = ShipInfo.byId(this::exec, cellDim, shipId);
         double before = atRelease.y;
-        // WINDOW: the altitude is read before and after this stretch and the claim is an UPPER bound
-        // on the difference, so a longer stretch than asked can only make a real field show.
         long stillTicks = GameTicks.advanceObserved(client(), GameTicks.server(), CELL_SAMPLE_TICKS);
         ShipInfo afterStill = ShipInfo.byId(this::exec, cellDim, shipId);
         double after = afterStill.y;
@@ -2128,8 +2147,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         requireArranged("could not command the craft's flight computer: the control leg cannot run",
                 Reply.of(exec("stellurgytest vs force-vel-by-id " + cellDim + " " + shipId + " 0 0 "
                         + DRIVE_VZ)).bool("afcResolved"));
-        // EXPERIMENT: the dose is CELL_SAMPLE_TICKS of commanded drive, and the claim is a LOWER bound
-        // — so the bar is scaled by the ticks this box delivered and the rate it demands is fixed.
         long driven = GameTicks.advanceObserved(client(), GameTicks.server(), CELL_SAMPLE_TICKS);
         double travelled = Math.abs(ShipInfo.byId(this::exec, cellDim, shipId).z - zBefore);
         double required = DRIVE_MIN_TRAVEL * driven / CELL_SAMPLE_TICKS;

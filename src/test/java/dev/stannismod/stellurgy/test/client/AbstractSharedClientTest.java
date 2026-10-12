@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.*;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.FixMethodOrder;
@@ -655,16 +656,17 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
      * here is a client-side read (no server command, so no chat marker) on a path that is already
      * failing, so a passing scenario pays exactly nothing.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int sample = 0; sample < 6; sample++) {",
+            why = "one that DECIDES NOTHING — it runs after a verdict has already been lost, and its only product"
+                    + " is the trail a failure message prints. There is no link to take because there is no"
+                    + " claim being made here, and it runs its full length (it used to stop on the first point"
+                    + " inside the plot, which cut the trail at the one sample worth continuing past). What it"
+                    + " cannot see: where the body went between two samples — which is why the trail prints"
+                    + " every point rather than the last.")
     private String diagnoseMissedPlot(Plot plot) throws Exception {
         StringBuilder trail = new StringBuilder();
         boolean arrived = false;
         JsonObject last = null;
-        // WINDOW: one that DECIDES NOTHING — it runs after a verdict has already been lost, and its
-        // only product is the trail a failure message prints. There is no link to take because
-        // there is no claim being made here, and it runs its full length (it used to stop on the
-        // first point inside the plot, which cut the trail at the one sample worth continuing past).
-        // What it cannot see: where the body went between two samples — which is why the trail
-        // prints every point rather than the last.
         for (int sample = 0; sample < 6; sample++) {
             last = bot().reportState();
             trail.append(' ').append(describePlayerPoint(last));

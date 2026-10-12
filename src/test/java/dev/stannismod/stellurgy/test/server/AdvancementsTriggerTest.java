@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -87,6 +88,14 @@ public class AdvancementsTriggerTest extends AbstractSharedServerTest {
      *  real server ticks. A forceload ticket keeps the otherwise-empty planet
      *  dim loaded AND TICKING — without it Stellurgy's per-tick unload flickers the
      *  world and its clock never crosses the %20 trigger window. */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(client(), dim, ticks + 10);",
+            why = "the dose is `ticks` living updates, and the callers' assertions are about what that many did (a"
+                    + " name gate, a distance gate: \"none of them granted it\"). The ticker posts one update"
+                    + " per SERVER tick and stops at `ticks`; this world's clock can only advance on a server"
+                    + " tick, so `ticks + 10` of it deliver every update, and cross the same %20 windows the"
+                    + " updates are judged against. Overshoot adds no updates — the dose is capped by the"
+                    + " ticker, not by this wait — so the verdict does not move with the box's speed. Measured"
+                    + " on the world's clock so a world that is not ticking fails here, naming itself.")
     private void stationAndTick(int dim, double x, double y, double z, int ticks) throws Exception {
         String fake = exec("stellurgytest player ensure-fake " + dim + " " + x + " " + y + " " + z);
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
@@ -94,13 +103,6 @@ public class AdvancementsTriggerTest extends AbstractSharedServerTest {
         exec("stellurgytest chunk forceload " + dim + " " + (((int) x) >> 4) + " " + (((int) z) >> 4));
         assertTrue("tick-living must succeed",
                 Reply.of(exec("stellurgytest player tick-living " + ticks)).ok());
-        // EXPERIMENT: the dose is `ticks` living updates, and the callers' assertions are about what
-        // that many did (a name gate, a distance gate: "none of them granted it"). The ticker posts
-        // one update per SERVER tick and stops at `ticks`; this world's clock can only advance on a
-        // server tick, so `ticks + 10` of it deliver every update, and cross the same %20 windows
-        // the updates are judged against. Overshoot adds no updates — the dose is capped by the
-        // ticker, not by this wait — so the verdict does not move with the box's speed. Measured
-        // on the world's clock so a world that is not ticking fails here, naming itself.
         GameTicks.advanceWorld(client(), dim, ticks + 10);
     }
 

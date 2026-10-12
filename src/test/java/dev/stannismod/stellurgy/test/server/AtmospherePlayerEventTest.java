@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -112,10 +113,12 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
      * world a sibling scenario left him in — so the move to an airless planet that follows is a
      * change of answer, which is what the instrument records.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES +"
+            + " TICK_SLACK);",
+            why = "the dose is OVERWORLD_UPDATES living updates in the overworld; the ticker posts one per server"
+                    + " tick and then stops, so overshoot delivers none extra.")
     private void startFromTheOverworld() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);
-        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld; the ticker posts
-        // one per server tick and then stops, so overshoot delivers none extra.
         GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
     }
 
@@ -158,12 +161,13 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
             + " hasCached=true atmos=vacuum\", 2026-09-28 (taken on the other line of this test before the two"
             + " were merged).")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES +"
+            + " TICK_SLACK);",
+            why = "the dose is OVERWORLD_UPDATES living updates in the overworld. The ticker posts one per server"
+                    + " tick and then stops, so this many server ticks (plus the slack) deliver all of them;"
+                    + " overshoot delivers none extra, so the verdict does not depend on the box's speed.")
     public void aPlayerInTheOverworldResolvesBreathableAir() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);
-        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld. The ticker
-        // posts one per server tick and then stops, so this many server ticks (plus the slack)
-        // deliver all of them; overshoot delivers none extra, so the verdict does not depend on the
-        // box's speed.
         GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
         String resp = exec("stellurgytest atmosphere for-player");
         assertFalse("the gate must answer SOMETHING for a player in the overworld: " + resp,

@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -167,6 +168,8 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
             + " carries 10.0 blocks a tick along X while the hull was measured doing 0.5634920634930884 (ratio"
             + " 17.746478873207156)\" (2026-10-05).")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "Reply before = ship.info();",
+            why = "the hull's own displacement over ticks the box actually delivered, read twice.")
     public void aRoundFromAMovingHullCarriesTheHullsMotionPerTick() throws Exception {
         ask("stellurgytest shot clear 0").requireOk("clear the air");
 
@@ -188,7 +191,6 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
                 drive.bool("afcResolved"));
         GameTicks.advanceObserved(client(), GameTicks.server(), SETTLE_TICKS);
 
-        // WINDOW: the hull's own displacement over ticks the box actually delivered, read twice.
         Reply before = ship.info();
         long elapsed = GameTicks.advanceObserved(client(), GameTicks.server(), WINDOW_TICKS);
         Reply after = ship.info();

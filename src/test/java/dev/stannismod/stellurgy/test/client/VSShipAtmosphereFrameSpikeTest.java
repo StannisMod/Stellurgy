@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -297,12 +299,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
      * could not tell a change made and undone from one never made, and answered the same silence
      * for "the gate resolved him to what he was already in" as for "the gate never ran".</p>
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);",
+            why = "a dose of gate evaluations, not a budget — both legs of this test are in dim 0, and `tp` has"
+                    + " already moved the server's copy of him by the time the command answers.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);",
+            why = "the gate runs on the server's ticks of dim 0; the read is the server's log.")
     private String cachedAtmosphereWithPlayerAt(double x, double y, double z) throws Exception {
         long mark = serverEvents().markInstrumented();
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
-        // EXPERIMENT: a dose of gate evaluations, not a budget — both legs of this test are in dim 0,
-        // and `tp` has already moved the server's copy of him by the time the command answers.
-        // SERVER-ONLY: the gate runs on the server's ticks of dim 0; the read is the server's log.
         GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);
         String changes = serverEvents().since(mark, "player_atmosphere_changed");
 

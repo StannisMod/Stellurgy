@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 /**
@@ -52,6 +53,9 @@ public class FirstShotIntoAFreshWallTest extends AbstractSharedServerTest {
             + " of marked nothing ... no `block_stage_set` on the wall's row was recorded within 600 ticks\"."
             + " 2026-09-30.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(client(), GameTicks.server(),"
+            + " PRECEDING_FLIGHT_TICKS);",
+            why = "the preceding round's time in the air is part of the arrangement reproduced.")
     public void theFirstRoundFiredIntoAFreshWallDamagesIt() throws Exception {
         // A PRECEDING scenario, because two standalone versions of this test went green without one:
         // rounds fired down another lane and left to fly, exactly as the scenario before the failing
@@ -62,7 +66,6 @@ public class FirstShotIntoAFreshWallTest extends AbstractSharedServerTest {
                 + " " + Y + " " + Z3 + " minecraft:glass_pane").requireOk("build the preceding wall");
         ask("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " " + (Z3 + 0.5D)
                 + " 0.45 0 0 3000 1200 KINETIC 0.25 1.0").requireOk("fire the preceding round");
-        // EXPERIMENT: the preceding round's time in the air is part of the arrangement reproduced.
         GameTicks.advance(client(), GameTicks.server(), PRECEDING_FLIGHT_TICKS);
 
         ask("stellurgytest shot clear " + DIM).requireOk("clear the air");

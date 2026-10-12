@@ -5,6 +5,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.List;
@@ -296,10 +297,11 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * it settled at. Bounded: an emitter that never shrinks fails on the caller's assertion with the
      * numbers in hand rather than hanging here.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int shot = 0; shot < 12; shot++) {",
+            why = "every iteration IS an impact plus the feed-and-tick that lets the emitter re-read its condition"
+                    + " — all driven by the probe on the server thread, so the read that opens the next"
+                    + " iteration sees what the last one did. Bounded by shot count, never by wall clock.")
     private int shootUntilFieldShrinks(int ex, int radiusBefore) throws Exception {
-        // STIMULUS: every iteration IS an impact plus the feed-and-tick that lets the emitter re-read
-        // its condition — all driven by the probe on the server thread, so the read that opens the
-        // next iteration sees what the last one did. Bounded by shot count, never by wall clock.
         for (int shot = 0; shot < 12; shot++) {
             int radius = (int) readInt(RADIUS, readShield(ex));
             if (radius < radiusBefore) {
@@ -329,8 +331,9 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     /** Shoot a block until the world records a stage against it. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int shot = 0; shot < 12; shot++) {",
+            why = "each iteration is one synchronous impact; the stage it wrote is read at once.")
     private void shootUntilStaged(int x) throws Exception {
-        // STIMULUS: each iteration is one synchronous impact; the stage it wrote is read at once.
         for (int shot = 0; shot < 12; shot++) {
             // the producer always writes `stage` on a `damage stage` reply, so refusing on a missing
             // one is the right failure.
@@ -379,8 +382,10 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     /** Feed the generator until its emitter lights up. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 16 &&"
+            + " !Reply.of(readShield(ex)).bool(\"powered\"); i++) {",
+            why = "each iteration is a feed plus one probe-driven solve pass.")
     private void powerUp(int gx, int ex) throws Exception {
-        // STIMULUS: each iteration is a feed plus one probe-driven solve pass.
         for (int i = 0; i < 16 && !Reply.of(readShield(ex)).bool("powered"); i++) {
             exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + Z + " 4000");
             exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + Z + " 1");

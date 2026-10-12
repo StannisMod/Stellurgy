@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -222,6 +223,17 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             + " taken by the entry crossing and SETTLE in a cell … `cell_crossing_begun` is missing from the"
             + " chain\" within 4000 ticks, 2026-09-30.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(40);",
+            why = "a fall is a value, not an event; no record answers.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CRUISE_BRAKE_TICKS);",
+            why = "CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the constant for the"
+                    + " measurement).")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "try { climbOnPilotKey(clientDim, PILOT_THRUST_DOSE_TICKS, \"the"
+            + " pilot must still CONTROL his\"",
+            why = "a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival at its computer"
+                    + " — that arrival is the first half of the contract and a link, so a seat binding that"
+                    + " does not carry his input fails naming it rather than as a ship that would not climb —"
+                    + " and one reading of his rendered altitude once the release has arrived.")
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
@@ -358,7 +370,6 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // (3) Not falling: over a two-second window the client-rendered altitude must not sink
         // like a body in free fall.
         double y0 = clientPlayerY();
-        // WINDOW: a fall is a value, not an event; no record answers.
         advanceServerAndClient(40);
         double y1 = clientPlayerY();
         assertTrue("the arrived pilot must NOT be in free fall (clientY " + y0 + " -> " + y1
@@ -381,14 +392,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         scenario().requireArranged("the arrived ship's cruise must be zeroed before his key is"
                 + " judged, or its own climb answers the question: " + zeroed,
                 Reply.of(zeroed).bool("afcResolved"));
-        // EXPERIMENT: CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the
-        // constant for the measurement).
         advanceServerAndClient(CRUISE_BRAKE_TICKS);
         final double before = clientPlayerY();
-        // EXPERIMENT: a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival
-        // at its computer — that arrival is the first half of the contract and a link, so a seat
-        // binding that does not carry his input fails naming it rather than as a ship that would not
-        // climb — and one reading of his rendered altitude once the release has arrived.
         try {
             climbOnPilotKey(clientDim, PILOT_THRUST_DOSE_TICKS, "the pilot must still CONTROL his"
                     + " ship after the crossing - the fresh seat binding on the re-assembled ship must"

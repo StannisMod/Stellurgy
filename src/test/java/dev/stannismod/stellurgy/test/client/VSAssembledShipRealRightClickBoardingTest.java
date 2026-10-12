@@ -4,6 +4,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -131,6 +132,15 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             + " the client's crosshair must resolve to a BLOCK\", 2026-09-28. The two waits before it are"
             + " arrangement links (the ship usable, the client standing at the seat).")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int attempt = 0; attempt < budget; attempt++) {",
+            why = "each pass stands and aims against the ship's live pose, and ends on the crosshair resting on"
+                    + " the seat — the argument is above.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); aim = bot().reportMouseOver();",
+            why = "the controller's step. MEASURED that one tick is not enough (2026-09-23: deterministic red,"
+                    + " with the stand's own pos-look the only move applied, and still red with twenty ticks"
+                    + " after the stand); the mechanism is NOT established.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false);",
+            why = "the use key held down across client ticks, as a mouse button is.")
     public void aRealUseKeyPressOnAnAssembledShipsSeatBoardsThePilot() throws Exception {
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
@@ -206,8 +216,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         double distSq = Double.POSITIVE_INFINITY;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
         long lastStandMark = -1L;
-        // STIMULUS: each pass stands and aims against the ship's live pose, and ends on the crosshair
-        // resting on the seat — the argument is above.
         for (int attempt = 0; attempt < budget; attempt++) {
             pose = findSeat();
             // A READ, not a wait. This branch used to sleep five ticks and retry, as if the ship
@@ -248,9 +256,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
             float pitch = (float) (-Math.toDegrees(Math.atan2(dy, horizontal)));
             bot().setLook(yaw, pitch);
-            // STIMULUS: the controller's step. MEASURED that one tick is not enough (2026-09-23:
-            // deterministic red, with the stand's own pos-look the only move applied, and still red with
-            // twenty ticks after the stand); the mechanism is NOT established.
             bot().waitWorldTicks(5);
 
             aim = bot().reportMouseOver();
@@ -307,7 +312,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         // mark taken here it cannot be missed however the two sides interleave.
         long pressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
-        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
@@ -460,6 +464,8 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             + " ship's chunk, the break event still stands and the read-back fails — \"the block must be gone"
             + " now\" ({@code minecraft:iron_block}) — 2026-09-30.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(10);",
+            why = "the attack key held across client ticks, as a mouse button is.")
     public void aRealAttackKeyPressBreaksABlockOfAnAssembledShip() throws Exception {
 
         Deck deck = standOnTheDeckAndAimAtIt();
@@ -473,7 +479,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         long pressMark = events.markInstrumented();
         scenario().asserting("a real attack-key press on the aimed ship block, and the server's verdict on it");
         bot().setKey(KEY_ATTACK, true);
-        // STIMULUS: the attack key held across client ticks, as a mouse button is.
         bot().waitWorldTicks(10);
         bot().setKey(KEY_ATTACK, false);
 
@@ -500,6 +505,10 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             + " of {@code getDistanceSq} maps a subspace position to the world). The transform alone was broken"
             + " on 2026-09-29 and the leg stayed GREEN, which is how the second route was found.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); JsonObject aim = bot().reportMouseOver();",
+            why = "the raytrace refreshes once per client tick, so the new rotation needs a tick.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false);",
+            why = "the use key held across client ticks, as a mouse button is.")
     public void aRealUseKeyPressPlacesABlockOnAnAssembledShip() throws Exception {
 
         Deck deck = standOnTheDeckAndAimAtIt();
@@ -523,7 +532,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
 
         // Re-aim: filling the hand does not move the crosshair, but a settling ship does.
         bot().setLook(deck.yaw, deck.pitch);
-        // STIMULUS: the raytrace refreshes once per client tick, so the new rotation needs a tick.
         bot().waitWorldTicks(5);
         JsonObject aim = bot().reportMouseOver();
         scenario().requireArranged("the crosshair must still be on the same ship block after the hand"
@@ -537,7 +545,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         long pressMark = events.markInstrumented();
         scenario().asserting("a real use-key press with stone in hand, and the server's verdict on it");
         bot().setKey(KEY_USE_ITEM, true);
-        // STIMULUS: the use key held across client ticks, as a mouse button is.
         bot().waitWorldTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
@@ -577,6 +584,17 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
      * deck until {@code reportMouseOver} names a ship block. Returns that block's SUBSPACE address —
      * the raytrace's own answer, never a computed one.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int attempt = 0; attempt < AIM_ATTEMPTS && aim == null;"
+            + " attempt++) {",
+            why = "each pass stands and aims against the ship's LIVE pose and ends on the crosshair resting on a"
+                    + " deck block. Delete the loop and the standing and aiming stop HAPPENING; no link could"
+                    + " replace it, because nothing in production decides that a crosshair is on a block. The"
+                    + " order inside is load-bearing — teleport first, aim last — since a teleport arrives as a"
+                    + " pos-look that vanilla applies with setPositionAndRotation, overwriting any aim set"
+                    + " before it.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); JsonObject candidate ="
+            + " bot().reportMouseOver();",
+            why = "the raytrace refreshes once per client tick, so the new rotation needs a tick.")
     private Deck standOnTheDeckAndAimAtIt() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -612,11 +630,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         JsonObject aim = null;
         double[] seatWorld = null;
         float usedPitch = 0.0F;
-        // STIMULUS: each pass stands and aims against the ship's LIVE pose and ends on the crosshair
-        // resting on a deck block. Delete the loop and the standing and aiming stop HAPPENING; no link
-        // could replace it, because nothing in production decides that a crosshair is on a block. The
-        // order inside is load-bearing — teleport first, aim last — since a teleport arrives as a
-        // pos-look that vanilla applies with setPositionAndRotation, overwriting any aim set before it.
         for (int attempt = 0; attempt < AIM_ATTEMPTS && aim == null; attempt++) {
             PilotSeat pose = findSeat();
             scenario().requireArranged("the seat resolved before aiming began, so the ship must still"
@@ -632,7 +645,6 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
 
             for (float pitch : AIM_PITCHES) {
                 bot().setLook(0.0F, pitch);
-                // STIMULUS: the raytrace refreshes once per client tick, so the new rotation needs a tick.
                 bot().waitWorldTicks(5);
                 JsonObject candidate = bot().reportMouseOver();
                 if (isShipDeckHit(candidate, seatSub)) {

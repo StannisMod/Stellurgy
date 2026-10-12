@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -147,6 +148,23 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
             + " tick the window starts on. Lift once the steady-cruise window is anchored to an"
             + " observed event of the ship rather than to a tick count after the command.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CRUISE_RAMP_TICKS);",
+            why = "CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured, see the"
+                    + " constant); then the cruise is judged ONCE, by the window below.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);",
+            why = "three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names both. The"
+                    + " physics velocity controller never decides it has arrived, so no record answers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SETTLE_SAMPLE_TICKS); ShipInfo s1 ="
+            + " ShipInfo.byId(this::exec, dim, shipId);",
+            why = "a cruise speed is a value, not an event; no record answers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SETTLE_SAMPLE_TICKS); ShipInfo s2 ="
+            + " ShipInfo.byId(this::exec, dim, shipId);",
+            why = "the second speed of the pair.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {",
+            why = "it COUNTS how many samples of a cruise found the rider unseated, his mount missing or the"
+                    + " anchor lagging, plus the WORST lag seen. Every one of those is a statistic over the"
+                    + " cruise, and the contract is about the cruise rather than about any tick of it. What it"
+                    + " cannot see: a seat lost and regained inside one sampling gap.")
     public void aSeatedRiderNeverLosesTheMountHeIsRidingWhileTheShipCruises() throws Exception {
 
         // Headless: nobody is near the ship between probe calls, so pin it loaded. This is
@@ -312,16 +330,10 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         scenario().requireArranged("the cruise command must reach THIS ship's flight computer: "
                 + commanded, readBool(commanded, "commanded"));
 
-        // EXPERIMENT: CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured,
-        // see the constant); then the cruise is judged ONCE, by the window below.
         advanceServerAndClient(CRUISE_RAMP_TICKS);
-        // WINDOW: three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names
-        // both. The physics velocity controller never decides it has arrived, so no record answers.
         ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);
-        // WINDOW: a cruise speed is a value, not an event; no record answers.
         advanceServerAndClient(SETTLE_SAMPLE_TICKS);
         ShipInfo s1 = ShipInfo.byId(this::exec, dim, shipId);
-        // WINDOW: the second speed of the pair.
         advanceServerAndClient(SETTLE_SAMPLE_TICKS);
         ShipInfo s2 = ShipInfo.byId(this::exec, dim, shipId);
         double first = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
@@ -348,10 +360,6 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         int notRiding = 0, samples = 0, mountMissing = 0, riderUntracked = 0;
         double maxAnchorLag = 0.0;
         StringBuilder trace = new StringBuilder();
-        // WINDOW: it COUNTS how many samples of a cruise found the rider unseated, his mount
-        // missing or the anchor lagging, plus the WORST lag seen. Every one of those is a statistic
-        // over the cruise, and the contract is about the cruise rather than about any tick of it.
-        // What it cannot see: a seat lost and regained inside one sampling gap.
         for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {
             advanceServerAndClient(POLL_EVERY_TICKS);
             samples++;

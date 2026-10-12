@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.test.client.SeatDelivery;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NewPath;
 import dev.stannismod.stellurgy.test.contract.RedWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.Before;
 import org.junit.Test;
@@ -342,6 +343,13 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             fails = "the ship's own power must have filled its jump bank",
             on = "2026-10-08")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(20);",
+            why = "a short, fixed sample of the moon's own motion, to size the window below.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int given = 0; given < stationTicks; given +="
+            + " STATION_DOSE_PIECE_TICKS) {",
+            why = "the dose is the moon's travel, sized just above; no key is held. Given in pieces because one"
+                    + " bridge wait is bounded below the bot's read timeout (ForgeTestClientBootstrap's"
+                    + " CLIENT_SIDE_BUDGET_MILLIS), and a dose of minutes does not fit in one.")
     public void aPlayerBuildsHisShipAtTheAssemblerBoardsItAndFliesItOffThePlanet() throws Exception {
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
@@ -1008,7 +1016,6 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // (2 × range) at which the two predictions stop overlapping, so the verdict below is not
         // decided at the edge of its own premise.
         long[] moonAt0 = frameOf(homeMoon.cell, homeMoon.homeCell);
-        // STIMULUS: a short, fixed sample of the moon's own motion, to size the window below.
         advanceServerAndClient(20);
         long[] moonAt1 = frameOf(homeMoon.cell, homeMoon.homeCell);
         double sampleTravel = travel(moonAt0, moonAt1);
@@ -1019,10 +1026,6 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         long[] before = skyReadingOf(exec("stellurgytest space bodies"), homeMoon.dim);
         long[] moonBefore = frameOf(homeMoon.cell, homeMoon.homeCell);
         int stationTicks = (int) Math.ceil(4.0 * before[0] / perTick);
-        // EXPERIMENT: the dose is the moon's travel, sized just above; no key is held. Given in pieces
-        // because one bridge wait is bounded below the bot's read timeout
-        // (ForgeTestClientBootstrap's CLIENT_SIDE_BUDGET_MILLIS), and a dose of minutes does not fit
-        // in one.
         for (int given = 0; given < stationTicks; given += STATION_DOSE_PIECE_TICKS) {
             advanceServerAndClient(Math.min(STATION_DOSE_PIECE_TICKS, stationTicks - given));
         }
@@ -1957,13 +1960,15 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     /** One press of the jump key, edge-triggered the way the real keyboard delivers it. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "client().waitWorldTicks(5);",
+            why = "down across client ticks, then up across client ticks — so that a second press right after this"
+                    + " one is a new edge and not a continuation of this one.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "client().waitWorldTicks(20);",
+            why = "the key-up half of the edge.")
     private void pressJumpKey() throws Exception {
         input().setKey(Keyboard.KEY_J, true);
-        // STIMULUS: down across client ticks, then up across client ticks — so that a second press
-        // right after this one is a new edge and not a continuation of this one.
         client().waitWorldTicks(5);
         input().setKey(Keyboard.KEY_J, false);
-        // STIMULUS: the key-up half of the edge.
         client().waitWorldTicks(20);
     }
 
@@ -2058,10 +2063,11 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * The cut matters: flight assist ramps a velocity SETPOINT rather than thrusting directly, so a
      * released key leaves the craft coasting and the next burst would measure the previous one.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(burstTicks);",
+            why = "the burst.")
     private String flyBurst(int key, int burstTicks, int cutTicks) throws Exception {
         input().holdKey(key);
         try {
-            // STIMULUS: the burst.
             advanceServerAndClient(burstTicks);
         } finally {
             input().releaseKey(key);
@@ -2076,10 +2082,11 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     /** Brake to a stop and read the cell back, from rest. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(cutTicks);",
+            why = "the throttle cut.")
     private String cutThrottle(int cutTicks) throws Exception {
         input().holdKey(Keyboard.KEY_X);
         try {
-            // STIMULUS: the throttle cut.
             advanceServerAndClient(cutTicks);
         } finally {
             input().releaseKey(Keyboard.KEY_X);
@@ -2261,13 +2268,22 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * that a crosshair is on a block, the pick is re-derived every frame from where the player
      * stands, and where he stands is still settling.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int attempt = 0; attempt < budget; attempt++) {",
+            why = "each pass aims and reads back the pick, ending on the goal state — the argument is in the"
+                    + " javadoc above.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "client().waitWorldTicks(AIM_STEP_TICKS);",
+            why = "the controller's step — five client ticks between the aim and the read of the pick. MEASURED"
+                    + " that one is not enough (2026-09-23: a one-tick step turned all three aim controllers"
+                    + " red, deterministically, the pick read back from a look tens of degrees off the aim;"
+                    + " five, alone, green). The mechanism is NOT established — Minecraft.runTick does call"
+                    + " getMouseOver inside the tick the harness counts, so the lag is somewhere after it (the"
+                    + " deck look, the physics mod's ship pick, the render frame). An open question, not a"
+                    + " settled number.")
     private Aim aimAtWorldBlock(int[] target, double tx, double ty, double tz, int budget)
             throws Exception {
         double[] targetWorld = {target[0] + tx, target[1] + ty, target[2] + tz};
         Aim aim = new Aim();
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
-        // STIMULUS: each pass aims and reads back the pick, ending on the goal state — the argument
-        // is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
             JsonObject state = client().reportState();
             // A READ, not a wait: this used to sleep five ticks and retry when the client reported
@@ -2279,13 +2295,6 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             aim.distSq = look(targetWorld, px, py, pz);
-            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
-            // pick. MEASURED that one is not enough (2026-09-23: a one-tick step turned all three aim
-            // controllers red, deterministically, the pick read back from a look tens of degrees off
-            // the aim; five, alone, green). The mechanism is NOT established — Minecraft.runTick does
-            // call getMouseOver inside the tick the harness counts, so the lag is somewhere after
-            // it (the deck look, the physics mod's ship pick, the render frame). An open question,
-            // not a settled number.
             client().waitWorldTicks(AIM_STEP_TICKS);
             aim.mouseOver = client().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, target)) {
@@ -2323,6 +2332,12 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * the aim last. A server teleport arrives as a pos-look packet and vanilla applies it with
      * {@code setPositionAndRotation}, so an aim set before it would be overwritten by it.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int attempt = 0; attempt < budget; attempt++) {",
+            why = "each pass stands and aims against the ship's live pose, ending on the goal state — the argument"
+                    + " is in the javadoc above.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "client().waitWorldTicks(AIM_STEP_TICKS);",
+            why = "the controller's step — why five ticks and not one: see the same step in the aim controller"
+                    + " above.")
     private Aim aimAt(int dim, int[] afcSub, int[] targetSub, int[] standOffset,
                       double tx, double ty, double tz, int budget) throws Exception {
         Aim aim = new Aim();
@@ -2331,8 +2346,6 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         double[] targetWorld = null;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
-        // STIMULUS: each pass stands and aims against the ship's live pose, ending on the goal
-        // state — the argument is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
             // READS, not waits — all three checks below used to sleep five ticks and retry. The ship
             // was resolved before this method was called (its computer's subspace address is an
@@ -2371,8 +2384,6 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             aim.distSq = look(targetWorld, px, py, pz);
-            // STIMULUS: the controller's step — why five ticks and not one: see the same step in the
-            // aim controller above.
             client().waitWorldTicks(AIM_STEP_TICKS);
 
             aim.mouseOver = client().reportMouseOver();
@@ -2459,9 +2470,10 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     /** One real use-key press, the way the mouse handler writes it. */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "client().waitWorldTicks(5);",
+            why = "the use key held down across client ticks, as a mouse button is.")
     private void pressUse() throws Exception {
         input().setKey(KEY_USE_ITEM, true);
-        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         client().waitWorldTicks(5);
         input().setKey(KEY_USE_ITEM, false);
     }
@@ -2549,14 +2561,15 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * sneaks, which is how a player closes the last step without running past it — and on a deck,
      * how he keeps from walking off its edge.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int tick = 0; tick < maxTicks; tick++) {",
+            why = "the iterations ARE the input — each pass turns his head toward the point and holds the forward"
+                    + " key for one world tick, against his own client-read position, the same closed loop a"
+                    + " player's hands run. No record could answer \"has he arrived\": the arrival is this"
+                    + " loop's own doing, and it ends on the goal state or refuses below.")
     private double[] walkTo(double x, double z, double within, int maxTicks, String what) throws Exception {
         double px = Double.NaN, pz = Double.NaN;
         boolean sneaking = false;
         try {
-            // STIMULUS: the iterations ARE the input — each pass turns his head toward the point and
-            // holds the forward key for one world tick, against his own client-read position, the
-            // same closed loop a player's hands run. No record could answer "has he arrived": the
-            // arrival is this loop's own doing, and it ends on the goal state or refuses below.
             for (int tick = 0; tick < maxTicks; tick++) {
                 JsonObject state = client().reportState();
                 px = state.get("playerX").getAsDouble();

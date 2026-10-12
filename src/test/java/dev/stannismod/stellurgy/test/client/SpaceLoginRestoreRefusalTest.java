@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -41,6 +42,10 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
             + " everyone aboard: \"a player who was never aboard must come back where vanilla puts him …"
             + " expected:&lt;0&gt; but was:&lt;3&gt;\", 2026-09-28. The line before it is an arrangement.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(RESTORE_LINK_BUDGET_TICKS);",
+            why = "an ABSENCE watched for exactly as long as every positive leg waits for the presence"
+                    + " (RESTORE_LINK_BUDGET_TICKS, which outlives the re-seat's silent give-up). Shorter, and"
+                    + " a restore the positive legs would have accepted could land after the reads.")
     public void aPlayerWhoWasNeverAboardIsNotRestoredOntoTheShip() throws Exception {
         flyOneShipIntoItsCell();
 
@@ -68,9 +73,6 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
 
         startClient();
         bot().waitForWorld();
-        // WINDOW: an ABSENCE watched for exactly as long as every positive leg waits for the presence
-        // (RESTORE_LINK_BUDGET_TICKS, which outlives the re-seat's silent give-up). Shorter, and a
-        // restore the positive legs would have accepted could land after the reads.
         advanceServerAndClient(RESTORE_LINK_BUDGET_TICKS);
 
         int dim = clientDim();

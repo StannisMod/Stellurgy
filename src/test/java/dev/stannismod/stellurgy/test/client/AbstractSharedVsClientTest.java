@@ -2,6 +2,8 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 
 import static org.junit.Assert.*;
 
@@ -487,6 +489,20 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      * a true sentence about the wrong world, which reads as a craft that has unloaded. The dim is
      * now a parameter and the refusal names it.</p>
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);",
+            why = "the write above is the GAME-side transform; the loaded physics object is told to adopt it and"
+                    + " does so on a later tick, and VSBridge.teleportShip says its caller unparks \"once the"
+                    + " adoption has propagated\". Unparked sooner, the physics re-integrates its OWN pose and"
+                    + " the craft is back on its pad. Thirty ticks of the hull's world clock is the stretch"
+                    + " this helper has always given it; the read below, taken after the craft has flown"
+                    + " unparked, is what reports a stretch that was too short.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);",
+            why = "the transform is adopted by the server's physics object; the read is the server's ship report.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);",
+            why = "physics running unparked — a craft whose adoption did not take is back at its pad here, and the"
+                    + " gate below names where it was sent and where it is.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);",
+            why = "the craft flies on the server's physics; the read is the server's ship report.")
     protected final String liftClearOfThePad(int dim, String shipId, int clearanceBlocks)
             throws Exception {
         // The substrate's load controller drops a RIGID-TELEPORTED ship's physics object even with a
@@ -523,21 +539,11 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
                 + " " + x + " " + toY + " " + z);
         scenario().requireArranged("the lift off the pad must take, or the craft flies its whole"
                 + " window in ground contact: " + moved, Reply.of(moved).ok());
-        // EXPERIMENT: the write above is the GAME-side transform; the loaded physics object is told
-        // to adopt it and does so on a later tick, and VSBridge.teleportShip says its caller
-        // unparks "once the adoption has propagated". Unparked sooner, the physics re-integrates its
-        // OWN pose and the craft is back on its pad. Thirty ticks of the hull's world clock is the
-        // stretch this helper has always given it; the read below, taken after the craft has flown
-        // unparked, is what reports a stretch that was too short.
-        // SERVER-ONLY: the transform is adopted by the server's physics object; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);
         String unparked = exec("stellurgytest vs unpark-by-id " + dim + " " + shipId);
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
                 + " recipe, and a parked ship cannot be flown: " + unparked,
                 Reply.of(unparked).ok());
-        // WINDOW: physics running unparked — a craft whose adoption did not take is back at its pad
-        // here, and the gate below names where it was sent and where it is.
-        // SERVER-ONLY: the craft flies on the server's physics; the read is the server's ship report.
         GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);
 
         String after = shipInfoById(dim, shipId);

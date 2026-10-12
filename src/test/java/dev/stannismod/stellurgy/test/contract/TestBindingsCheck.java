@@ -50,6 +50,9 @@ import java.util.stream.Stream;
  *       the committed debt list does not hold (the list only shrinks), an e2e without {@link NewPath}, and
  *       either on a class that does not take that boot;</li>
  *   <li>what the e2e and the mechanics tier's own code reaches outside the gates ({@code E2EConfinement});</li>
+ *   <li>A WAIT THAT IS A POLL: a loop that advances the clock and no {@link Wait} names, a loop that waits and
+ *       leaves its body by more than one edge, and a {@link Wait} / {@link ServerOnly} claim that does not
+ *       resolve -- beyond the committed debt list, which only shrinks ({@code WaitLoops});</li>
  *   <li>a compiled test class it cannot read, and a clause order git cannot give -- each is a failure,
  *       never a skip.</li>
  * </ul>
@@ -137,6 +140,7 @@ public final class TestBindingsCheck {
                 serverInstruments("MechanicsInstrument", failures),
                 com.github.stannismod.forge.testing.client.bridge.ClientInstruments.mechanicsRows(),
                 dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin.OBSERVATION));
+        System.out.println(WaitLoops.check(root, classesRoot(), failures));
 
         Map<String, Integer> ages = new HashMap<>();
         String gitProblem = clauseAges(root, ages);
@@ -346,9 +350,6 @@ public final class TestBindingsCheck {
             case "ForgeTestClientBootstrap#refusedInMechanics":
             case "ForgeTestClientBootstrap#offTheSlider":
             case "ForgeTestClientBootstrap#inputNoHandProduces":
-            // The console half of the server gate's refusal: the gate writes its verdict on a console
-            // command to the console, and here a test's console command is refused on reading it.
-            case "TestClient#sendRaw":
                 return true;
             default:
                 return false;

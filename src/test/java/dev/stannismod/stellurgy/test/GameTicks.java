@@ -157,76 +157,11 @@ public final class GameTicks {
         return clock.read(client);
     }
 
-    // ------------------------------------------------------------------ waiting
+    // ------------------------------------------------------------------ sampling
 
-    /**
-     * Something a test is waiting for. It may talk to the server, so it may throw.
-     *
-     * <p>Deliberately not {@code java.util.function.BooleanSupplier}: that one cannot throw, so every
-     * probe round-trip inside a condition would need its own try/catch that swallows the failure —
-     * which turns a broken probe into a condition that is merely false, i.e. into a timeout with the
-     * wrong story attached.</p>
-     */
-    public interface Condition {
-        boolean holds() throws Exception;
-    }
-
-    /**
-     * Work a headless test has to keep doing WHILE it waits — arrangement a player would be providing.
-     *
-     * <p>Its own parameter rather than folded into the condition because the two answer different
-     * questions: a condition is asked and must not change anything, an action is performed and answers
-     * nothing. A side effect inside a predicate is how "why does this only pass when the assertion
-     * runs" gets written.</p>
-     */
+    /** One sample of an observation window. It may talk to the game, so it may throw. */
     public interface Action {
         void run() throws Exception;
-    }
-
-    /**
-     * Wait for {@code condition}, giving it at most {@code tickBudget} ticks of {@code clock}.
-     *
-     * <p>Returns whether it held, so the CALL SITE keeps its own assertion and its own message — which
-     * is usually the whole diagnosis (the last status blob, the cell it was aiming at). A helper that
-     * threw would take that away and replace it with a sentence that knows less.</p>
-     *
-     * <p>Asked once before any waiting at all, so a condition that already holds costs nothing.</p>
-     *
-     * @throws AssertionError if the CLOCK stops moving — a finding about the instrument, not a verdict
-     *         on the condition, and the budget was never spent.
-     */
-    public static boolean until(TestClient client, Clock clock, int tickBudget, Condition condition)
-            throws Exception {
-        return until(client, clock, tickBudget, condition, null);
-    }
-
-    /** As above, performing {@code eachPoll} after every unsatisfied check. */
-    public static boolean until(TestClient client, Clock clock, int tickBudget, Condition condition,
-                                Action eachPoll) throws Exception {
-        if (tickBudget <= 0) {
-            throw new IllegalArgumentException("the budget must be positive, got " + tickBudget);
-        }
-        long start = clock.read(client);
-        long deadline = System.nanoTime() + stallNet(tickBudget).toNanos();
-        while (true) {
-            if (condition.holds()) {
-                return true;
-            }
-            if (eachPoll != null) {
-                eachPoll.run();
-            }
-            long elapsed = clock.read(client) - start;
-            if (elapsed >= tickBudget) {
-                return false;
-            }
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError(clock.describe() + " stopped moving while waiting: "
-                        + elapsed + " of " + tickBudget + " ticks elapsed. That is a stalled or"
-                        + " unticking clock, NOT a verdict on the condition — the budget was never"
-                        + " spent.");
-            }
-            Thread.sleep(TICK_MS);
-        }
     }
 
     // ------------------------------------------------------------------ advancing
@@ -379,8 +314,8 @@ public final class GameTicks {
      * net — no condition, no early exit, no subject. It was called {@code await} until 2026-09-07,
      * which told all 25 of its call sites that something was being waited FOR; a reader who believed
      * the name would look for the thing it waited on, and there is none. The name now says what the
-     * method does, so a site that wants a CONDITION has to reach for {@link #until} and be seen
-     * doing it.</p>
+     * method does. A site that wants a CONDITION waits on the record that says it holds ({@code Events}),
+     * or reads a {@link Window}; there is no poll to reach for.</p>
      */
     public static long advanceWorld(TestClient client, int dim, int ticks) throws Exception {
         return advanceObserved(client, world(dim), ticks);

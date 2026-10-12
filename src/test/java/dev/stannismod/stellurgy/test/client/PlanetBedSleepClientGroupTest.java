@@ -6,6 +6,8 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -177,6 +179,14 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
             + " — the return after a refusal — dropped, so the refused"
             + " skip happens anyway: \"The clock was at 20006 before the sleep and 30006 after it\".")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), DIM_LOCKED,"
+            + " SKYLIGHT_WORLD_TICKS);",
+            why = "trySleep's daytime gate reads skylightSubtracted, which WorldServer.tick recomputes from the"
+                    + " clock on every pass of THAT world — so a pass of the planet's own clock is the whole of"
+                    + " what is needed, counted there rather than on the client.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), DIM_LOCKED, SKYLIGHT_WORLD_TICKS);",
+            why = "the daytime gate is recomputed on the planet world's own pass; the read is the server's world"
+                    + " time.")
     public void sleepingOnAPlanetSetsSpawnAndWakesYouWithoutBringingMorning() throws Exception {
         // The premise, MEASURED rather than seeded: this scenario is about the default, so a build
         // whose default changed must fail here rather than quietly measure the other side.
@@ -193,10 +203,6 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
         setFlag(true);
         exec("time set " + STAGED_NIGHT);
         setFlag(false);
-        // EXPERIMENT: trySleep's daytime gate reads skylightSubtracted, which WorldServer.tick
-        // recomputes from the clock on every pass of THAT world — so a pass of the planet's own
-        // clock is the whole of what is needed, counted there rather than on the client.
-        // SERVER-ONLY: the daytime gate is recomputed on the planet world's own pass; the read is the server's world time.
         GameTicks.advanceWorld(serverClient(), DIM_LOCKED, SKYLIGHT_WORLD_TICKS);
 
         long staged = dimTime(DIM_LOCKED);
@@ -261,6 +267,12 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
             + " {@code setWorldTime(vanillaRounded)}, this fails with \"sleep skip must"
             + " land at/after the next planetary dawn (30000), got 24007\" — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), DIM_SKIP,"
+            + " SKYLIGHT_WORLD_TICKS);",
+            why = "the same daytime gate, recomputed on a pass of the planet's own clock.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), DIM_SKIP, SKYLIGHT_WORLD_TICKS);",
+            why = "the daytime gate is recomputed on the planet world's own pass; the read is the server's world"
+                    + " time.")
     public void sleepingOnPlanetSkipsToPlanetaryDawnOnly() throws Exception {
         setFlag(true);
 
@@ -273,8 +285,6 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
         // that lands in the per-dim state. Phase 20000/30000 ≈ 0.67 is night on the planet;
         // 20000/24000 is night in the overworld.
         exec("time set " + STAGED_NIGHT);
-        // EXPERIMENT: the same daytime gate, recomputed on a pass of the planet's own clock.
-        // SERVER-ONLY: the daytime gate is recomputed on the planet world's own pass; the read is the server's world time.
         GameTicks.advanceWorld(serverClient(), DIM_SKIP, SKYLIGHT_WORLD_TICKS);
 
         JsonObject before = dimTimeJson(DIM_SKIP);
@@ -362,6 +372,9 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
      * ran. Measured 2026-08-21: {@code posY:64.0} against a bed at 151, with an empty chat and
      * breathable air.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "bot().waitWorldTicks(20);",
+            why = "a player's position is his client's to move, so a platform that is not there shows as the fall"
+                    + " his client simulates over these ticks.")
     private void stageSleepingSite(int dim) throws Exception {
         String weather = exec("stellurgytest weather set " + dim + " clear 12000");
         scenario().requireArranged("could not clear the planet's weather: " + weather,
@@ -426,8 +439,6 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
         exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
         awaitClientPlacedNear(placedMark, 8.5, 7.5,
                 "the player's own client must stand him on the platform - his movement is his");
-        // WINDOW: a player's position is his client's to move, so a platform that is not there shows as
-        // the fall his client simulates over these ticks.
         bot().waitWorldTicks(20);
 
         // AND HE MUST STILL BE THERE. A /tp onto a platform that is not there drops him to the

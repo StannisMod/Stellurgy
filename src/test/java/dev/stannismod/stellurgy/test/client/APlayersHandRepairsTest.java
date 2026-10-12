@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractOwnBootClientTest;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import org.junit.Test;
@@ -180,6 +181,13 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
             + " before the break) ... {...stage:2,maxStage:4,...block:minecraft:air,wasDestroyed:false...}\"."
             + " 2026-09-30.")
     @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(1); JsonObject pick = bot().reportMouseOver();",
+            why = "one client tick, the one whose start recomputes the crosshair from the rotation the placement"
+                    + " applied (Minecraft.runTick recomputes it before it reads any key).")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(1); bot().setKey(KEY_ATTACK, false);",
+            why = "the attack key held across one client tick, as a mouse button is — long enough for the press to"
+                    + " be read (Minecraft.processKeyBinds), shorter than the five ticks a creative break waits"
+                    + " before it will take the next block (PlayerControllerMP.blockHitDelay).")
     public void aDamagedBlockAPlayerBreaksLeavesNoDamageBehind() throws Exception {
         // The break and its record happen in the server's world, so the server half of the step is
         // that world's own clock; the client half counts the ticks in which it sends the press.
@@ -222,8 +230,6 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
                 "tp " + PLAYER + " " + standX + " " + standY + " " + standZ + " 0 " + pitch,
                 standX, standY, standZ, "the player must stand in front of the damaged post",
                 ROUND_TRIP_DEADLINE_TICKS);
-        // STIMULUS: one client tick, the one whose start recomputes the crosshair from the rotation
-        // the placement applied (Minecraft.runTick recomputes it before it reads any key).
         bot().waitWorldTicks(1);
         JsonObject pick = bot().reportMouseOver();
         requireArranged("the client's crosshair is not on the damaged post, so a press would break"
@@ -234,9 +240,6 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
 
         long broken = server.markInstrumented();
         bot().setKey(KEY_ATTACK, true);
-        // STIMULUS: the attack key held across one client tick, as a mouse button is — long enough
-        // for the press to be read (Minecraft.processKeyBinds), shorter than the five ticks a
-        // creative break waits before it will take the next block (PlayerControllerMP.blockHitDelay).
         bot().waitWorldTicks(1);
         bot().setKey(KEY_ATTACK, false);
         server.awaitRecordWithFields(broken, "damage_invalidation_heard",

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test;
 
 import com.github.stannismod.forge.testing.server.TestClient;
+import dev.stannismod.stellurgy.test.contract.Wait;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
@@ -51,6 +52,9 @@ public final class ShipLift {
      * @param server    the harness client whose clock the stretches are counted on
      * @param what      a scenario-facing sentence for why the craft has to be up there
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(server, dim, UNPARKED_TICKS);",
+            why = "from the teleport's write to the read below, over ticks of physics running unparked; the gate"
+                    + " names where the craft was sent and where it is.")
     public static ShipInfo toAltitude(Events.Probe probe, Events serverLog, TestClient server, int dim,
                                       String shipId, int toY, String what) throws Exception {
         ShipInfo onThePad = ShipInfo.byId(probe::exec, dim, shipId);
@@ -64,8 +68,6 @@ public final class ShipLift {
         String unparked = probe.exec("stellurgytest vs unpark-by-id " + dim + " " + shipId);
         requireArranged(what + " — the rigid teleport leaves the ship PARKED, and a parked ship is"
                 + " not simulated: " + unparked, Reply.of(unparked).ok());
-        // WINDOW: from the teleport's write to the read below, over ticks of physics running
-        // unparked; the gate names where the craft was sent and where it is.
         GameTicks.advanceWorld(server, dim, UNPARKED_TICKS);
         ShipInfo lifted = ShipInfo.byId(probe::exec, dim, shipId);
         System.out.println("[lift] dim " + dim + " sent to y=" + toY + ", reports y=" + lifted.y

@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Test;
 
@@ -83,6 +84,16 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
             + " {@code 0.0}, this fails at the subject with \"it moved -0.506 blocks in 25 server ticks, needing"
             + " more than 1.0\", the setpoint control still green — 2026-09-28.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);",
+            why = "z is read before the setpoint and after this stretch, and the control is an UPPER bound on the"
+                    + " difference — overshoot gives a working setpoint longer to show itself, so it can only"
+                    + " turn this red.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "long driven = GameTicks.advanceObserved(client(), GameTicks.server(),"
+            + " DRIVE_TICKS);",
+            why = "z is read just before the command (zAfterSetpoint) and after this stretch, and the claim is a"
+                    + " LOWER bound on the difference — the direction in which overshoot is silent, because a"
+                    + " longer stretch lets a drive too weak to pass on time pass anyway. So the bar is scaled"
+                    + " by the ticks this box actually delivered: the rate it demands does not change.")
     public void aCommandedVelocityTranslatesTheShipWhileARawSetpointDoesNot() throws Exception {
 
         // A headless server has nobody standing near this craft, and an unattended ship UNLOADS
@@ -161,9 +172,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // than deleting it, is what stops the class quietly going back to the setpoint.
         String setpoint = exec("stellurgytest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
         assertTrue("push-ship-by-id must find the ship: " + setpoint, Reply.of(setpoint).bool("pushed"));
-        // WINDOW: z is read before the setpoint and after this stretch, and the control is an UPPER
-        // bound on the difference — overshoot gives a working setpoint longer to show itself, so it
-        // can only turn this red.
         GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
         double zAfterSetpoint = ShipInfo.byId(this::exec, 0, shipId[0]).z;
         assertTrue("a raw velocity setpoint must NOT be mistaken for a working drive: the ship moved "
@@ -180,10 +188,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         String drive = exec("stellurgytest vs force-vel-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
         assertTrue("the command must reach THIS ship's own flight computer: " + drive,
                 Reply.of(drive).bool("afcResolved"));
-        // WINDOW: z is read just before the command (zAfterSetpoint) and after this stretch, and the
-        // claim is a LOWER bound on the difference — the direction in which overshoot is silent,
-        // because a longer stretch lets a drive too weak to pass on time pass anyway. So the bar is
-        // scaled by the ticks this box actually delivered: the rate it demands does not change.
         long driven = GameTicks.advanceObserved(client(), GameTicks.server(), DRIVE_TICKS);
         double zAfter = ShipInfo.byId(this::exec, 0, shipId[0]).z;
         double requiredDisplacement = MIN_DISPLACEMENT_PER_DRIVE * driven / DRIVE_TICKS;

@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -248,9 +249,10 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
      * below stayed green. The LAST slice is where a braking ship has already stopped and a cruising
      * one has not.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < y.length; i++) {",
+            why = "the link would be a record of the hull's pose per tick, and none exists.")
     private double[] altitudeEveryTenTicks() throws Exception {
         double[] y = new double[4];
-        // WINDOW: the link would be a record of the hull's pose per tick, and none exists.
         for (int i = 0; i < y.length; i++) {
             advanceServerAndClient(10);
             y[i] = shipY();

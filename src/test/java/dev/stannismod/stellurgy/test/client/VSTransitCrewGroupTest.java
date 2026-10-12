@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -778,6 +780,15 @@ private String hud() throws Exception {
             + " adding no line in the transit phase: \"no `ff_hud` whose latest drawn line names HYPERSPACE was"
             + " recorded within 600 ticks\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(RENDER_WINDOW_TICKS); long skyAfter ="
+            + " skyFrames();",
+            why = "frame counters grow; nothing records it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(RENDER_WINDOW_TICKS); long tunnelInFlight ="
+            + " tunnelFrames();",
+            why = "what grows across it is a frame COUNTER, which is not an event, so a longer window samples more"
+                    + " frames and changes nothing about whether the assertion can hold; same length as the"
+                    + " control window above, so the two readings are comparable. The HUD is NOT read off this"
+                    + " window — see its link below.")
     public void aJumpAnnouncesItselfInChatOnTheHudAndInTheSky() throws Exception {
 
         // Vanilla runs the sky pass only at renderDistanceChunks >= 4 and the harness pins the client
@@ -800,7 +811,6 @@ private String hud() throws Exception {
         // ── CONTROL, in an ordinary cell ────────────────────────────────────────────────────────
         long skyBefore = skyFrames();
         long tunnelBefore = tunnelFrames();
-        // WINDOW: frame counters grow; nothing records it.
         advanceServerAndClient(RENDER_WINDOW_TICKS);
         long skyAfter = skyFrames();
         long tunnelAfter = tunnelFrames();
@@ -841,10 +851,6 @@ private String hud() throws Exception {
         long tunnelAtStart = tunnelFrames();
         scenario().record("tunnelAtStart", tunnelAtStart);
 
-        // WINDOW: what grows across it is a frame COUNTER, which is not an event, so a longer window
-        // samples more frames and changes nothing about whether the assertion can hold; same length
-        // as the control window above, so the two readings are comparable. The HUD is NOT read off
-        // this window — see its link below.
         advanceServerAndClient(RENDER_WINDOW_TICKS);
         long tunnelInFlight = tunnelFrames();
 
@@ -1086,6 +1092,32 @@ private String hud() throws Exception {
             + " {@code player.attackEntityFrom(VOID_OF_HYPERSPACE, Float.MAX_VALUE)} never called: \"no"
             + " `player_died` carrying source = stellurgyHyperspaceVoid was recorded within 260 ticks\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterInCell = skyFrames();",
+            why = "frame counters grow; nothing records it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long cellTileTicksAfter ="
+            + " gameSeen(motionTrace(cellAfcKey));",
+            why = "a tick counter rising is not an event; nothing records it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterStanding = skyFrames();",
+            why = "frame counters grow; nothing records it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long tileTicksAfter ="
+            + " gameSeen(motionTrace(afcKey));",
+            why = "a tick counter rising is not an event; nothing records it.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advance(serverClient(), GameTicks.server(),",
+            why = "the dose is the void's grace plus a margin, in SERVER ticks — the clock the countdown runs on"
+                    + " (`HyperspaceVoid.onServerTick`). Not client ticks: the two JVMs tick independently, and"
+                    + " a server running slower than its client would end a client-counted span before the"
+                    + " countdown reached its budget — \"he survived\" green for a void that never got the"
+                    + " chance, which is the silent direction. Overshoot lengthens the exposure — the strict"
+                    + " direction — and the premise gate below catches the one thing a longer span can do"
+                    + " wrong, an arrival.")
+    @ServerOnly(at = "GameTicks.advance(serverClient(), GameTicks.server(),",
+            why = "the void's countdown runs on the server tick; the reads are the server's transit status and"
+                    + " deck capture.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(100);",
+            why = "the length of the walk is how far he is carried from the hull, which is what the fallback"
+                    + " teleport's thirty blocks stand in for — five seconds of W take a body far clear of a"
+                    + " 3x3 deck, so the one the void is then asked about is nowhere near a deck that could"
+                    + " take him back. Stopping at the release record would leave him at the deck's edge.")
     public void aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip() throws Exception {
 
         // The void exempts creative and spectator on purpose, so the mode is SET rather than assumed:
@@ -1113,7 +1145,6 @@ private String hud() throws Exception {
         // advanced in hyperspace" is a first reading rather than a change.
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
-        // WINDOW: frame counters grow; nothing records it.
         advanceServerAndClient(20);
         long skyAfterInCell = skyFrames();
         long tunnelAfterInCell = tunnelFrames();
@@ -1133,7 +1164,6 @@ private String hud() throws Exception {
         String cellAfcKey = originDim + " " + cellSeat.afcX
                 + " " + cellSeat.afcY + " " + cellSeat.afcZ;
         long cellTileTicks = gameSeen(motionTrace(cellAfcKey));
-        // WINDOW: a tick counter rising is not an event; nothing records it.
         advanceServerAndClient(20);
         long cellTileTicksAfter = gameSeen(motionTrace(cellAfcKey));
         assertTrue("CONTROL: the ship's flight computer must be recording server ticks in an"
@@ -1183,7 +1213,6 @@ private String hud() throws Exception {
 
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
-        // WINDOW: frame counters grow; nothing records it.
         advanceServerAndClient(20);
         long skyAfterStanding = skyFrames();
         long tunnelAfterStanding = tunnelFrames();
@@ -1220,7 +1249,6 @@ private String hud() throws Exception {
         int afcZ = hyperSeat.afcZ;
         String afcKey = hyperDim + " " + afcX + " " + afcY + " " + afcZ;
         long tileTicksBefore = gameSeen(motionTrace(afcKey));
-        // WINDOW: a tick counter rising is not an event; nothing records it.
         advanceServerAndClient(20);
         long tileTicksAfter = gameSeen(motionTrace(afcKey));
         assertTrue("the ship's flight computer must keep TICKING while the ship is parked in"
@@ -1243,14 +1271,6 @@ private String hud() throws Exception {
         // ...and stay there. The span is the void's OWN budget plus a margin, so "he is alive" is a
         // statement about the countdown having had every chance to fire rather than about a window
         // too short to reach it.
-        // EXPERIMENT: the dose is the void's grace plus a margin, in SERVER ticks — the clock the
-        // countdown runs on (`HyperspaceVoid.onServerTick`). Not client ticks: the two JVMs tick
-        // independently, and a server running slower than its client would end a client-counted
-        // span before the countdown reached its budget — "he survived" green for a void that never
-        // got the chance, which is the silent direction.
-        // Overshoot lengthens the exposure — the strict direction — and the premise gate below
-        // catches the one thing a longer span can do wrong, an arrival.
-        // SERVER-ONLY: the void's countdown runs on the server tick; the reads are the server's transit status and deck capture.
         GameTicks.advance(serverClient(), GameTicks.server(),
                 VOID_GRACE_TICKS + VOID_GRACE_MARGIN_TICKS);
         // The PREMISE, gated before the subject is read: this leg is about a man standing in a
@@ -1290,10 +1310,6 @@ private String hud() throws Exception {
         // announces.
         long offMark = clientEvents().mark();
         bot().holdKey(FORWARD_KEY);
-        // STIMULUS: the length of the walk is how far he is carried from the hull, which is what the
-        // fallback teleport's thirty blocks stand in for — five seconds of W take a body far clear
-        // of a 3x3 deck, so the one the void is then asked about is nowhere near a deck that could
-        // take him back. Stopping at the release record would leave him at the deck's edge.
         bot().waitWorldTicks(100);
         bot().releaseKey(FORWARD_KEY);
         if (Events.records(clientEvents().since(offMark, "deck_released")).isEmpty()) {
@@ -1576,6 +1592,12 @@ private String hud() throws Exception {
     /** Pins CON-C14-18 (hyperspace's backdrop belongs to the world, so a standing crew member still sees the corridor). */
     @Pins("CON-C14-18")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterInCell = skyFrames();",
+            why = "frame counters grow; nothing records it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long tunnelAfterSeated = tunnelFrames();",
+            why = "frame counters grow; nothing records it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(20); long skyAfterStanding = skyFrames();",
+            why = "frame counters grow; nothing records it.")
     public void aStandingCrewMemberStillSeesTheHyperspaceCorridor() throws Exception {
 
         // Vanilla runs the sky pass only at renderDistanceChunks >= 4 and the harness pins the client
@@ -1597,7 +1619,6 @@ private String hud() throws Exception {
         // ── READING 1, in an ordinary cell: no corridor ──────────────────────────────────────────
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
-        // WINDOW: frame counters grow; nothing records it.
         advanceServerAndClient(20);
         long skyAfterInCell = skyFrames();
         long tunnelAfterInCell = tunnelFrames();
@@ -1623,7 +1644,6 @@ private String hud() throws Exception {
         // is asserted INSIDE, where the chain that would explain a failure is still readable.
         JsonObject mount = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         long tunnelSeated = tunnelFrames();
-        // WINDOW: frame counters grow; nothing records it.
         advanceServerAndClient(20);
         long tunnelAfterSeated = tunnelFrames();
         long drawnSeated = tunnelAfterSeated - tunnelSeated;
@@ -1647,7 +1667,6 @@ private String hud() throws Exception {
         // ── READING 3, THE CONTRACT: on his feet, the corridor is still coming ───────────────────
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
-        // WINDOW: frame counters grow; nothing records it.
         advanceServerAndClient(20);
         long skyAfterStanding = skyFrames();
         long tunnelAfterStanding = tunnelFrames();

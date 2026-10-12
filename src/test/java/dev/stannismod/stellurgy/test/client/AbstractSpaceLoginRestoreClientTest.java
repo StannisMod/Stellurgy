@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -308,6 +309,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      * stopping the server under him must bring him back in that seat, in his ship's cell, with a
      * control chain that still flies. Takes the slot dimension the arrangement banked him in.
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SEAT_SETTLE_TICKS);",
+            why = "a value converging, where nothing decides; reading both ends lets a red say whether he was"
+                    + " converging or never left the wrong height.")
     protected void requireHeComesBackAboardHisShip(int slotDim) throws Exception {
         // CONTROL LEG (pre-restart): the seated pilot's REAL key must fly the ship in its cell
         // BEFORE the restart - without this, a dead key after the reboot could be a chain that
@@ -495,8 +499,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         // above; what is left is the rider's position being written each tick, which nothing
         // publishes and no record could carry. So: give it the ticks, then read.
         double joinY = state.get("playerY").getAsDouble();
-        // WINDOW: a value converging, where nothing decides; reading both ends lets a red say whether
-        // he was converging or never left the wrong height.
         advanceServerAndClient(SEAT_SETTLE_TICKS);
         state = bot().reportState();
         double clientX = state.get("playerX").getAsDouble();
@@ -565,6 +567,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      * so the number of resolved ticks inside the window is asserted before the travel is. Without
      * that, a client whose resolver never ran would produce the cleanest possible pass.</p>
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(OBSERVE_TICKS);",
+            why = "an idle stretch is not an event; nothing records it.")
     protected void requireHeIsNotDraggedAlongHisDeck(int dim) throws Exception {
         // DIAGNOSTIC FIRST, and it covers the login itself. The client JVM is new on this boot, so its
         // record starts empty and everything in it belongs to this session: the whole restore, the
@@ -605,7 +609,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         // on it. A release is an EVENT with production's own reason string on it, and an empty log
         // is only an answer once the recorder says it was listening.
         long idleReleaseMark = clientEvents().mark();
-        // WINDOW: an idle stretch is not an event; nothing records it.
         advanceServerAndClient(OBSERVE_TICKS);
         String idleReleases = clientReleases(idleReleaseMark, "an idle window with no input at all");
         long dropsInIdle = guardReleases(idleReleases);
@@ -795,6 +798,15 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      */
     protected String lastWalkMovers = "";
 
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(6);",
+            why = "six ticks of W, not twelve: the fixture's deck is small, and a walk long enough to carry him"
+                    + " off its edge ends the capture - which reads as a silent record rather than as a clean"
+                    + " body.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "bot().waitWorldTicks(2);",
+            why = "the idle window opens two client ticks after the release, so the walk's last applied input tick"
+                    + " is outside it and \"idle\" means no input at all.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(OBSERVE_TICKS);",
+            why = "an idle stretch is not an event; nothing records it.")
     protected double[] walkThenIdle(int dim) throws Exception {
         commandWindowCruise(dim);
         double[] deckBefore = awaitShipPose(dim);
@@ -803,9 +815,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         // difference of two counter reads could not fail.
         long walkReleaseMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_W);
-        // STIMULUS: six ticks of W, not twelve: the fixture's deck is small, and a walk long enough
-        // to carry him off its edge ends the capture - which reads as a silent record rather than as
-        // a clean body.
         bot().waitWorldTicks(6);
         bot().releaseKey(Keyboard.KEY_W);
         String walkHistory = clientTickHistory();
@@ -815,12 +824,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
                 + "\n      re-seat passes: "
                 + clientEvents().since(walkReleaseMark, "deck_reseat_pass");
         long dropsInWalk = guardReleases(clientReleases(walkReleaseMark, "a swept and committed walk"));
-        // EXPERIMENT: the idle window opens two client ticks after the release, so the walk's last
-        // applied input tick is outside it and "idle" means no input at all.
         bot().waitWorldTicks(2);
         long idleFrom = lastClientTick();
         long idleReleaseMark = clientEvents().mark();
-        // WINDOW: an idle stretch is not an event; nothing records it.
         advanceServerAndClient(OBSERVE_TICKS);
         String idleHistory = clientTickHistory();
         long dropsInIdle = guardReleases(clientReleases(idleReleaseMark,
@@ -957,6 +963,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      * <p>Commanded fresh before each window rather than once at the start: the channel is live state
      * and does not survive the server restart one leg performs.</p>
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(THROTTLE_PULSE_TICKS);",
+            why = "the pulse is the dose — long enough to set the ship moving, short enough that the window the"
+                    + " caller opens next watches the hold SETTLING it (see THROTTLE_PULSE_TICKS).")
     protected void commandWindowCruise(int dim) throws Exception {
         assertNotNull("commandWindowCruise before the arrangement located the ship's computer",
                 arrangedAfcPos);
@@ -965,8 +974,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
         requireArranged("the drive must reach THIS ship's own flight computer, or the window "
                 + "below observes a motionless deck and cannot fail: " + driven,
                 Reply.of(driven).bool("afcResolved"));
-        // EXPERIMENT: the pulse is the dose — long enough to set the ship moving, short enough that
-        // the window the caller opens next watches the hold SETTLING it (see THROTTLE_PULSE_TICKS).
         advanceServerAndClient(THROTTLE_PULSE_TICKS);
     }
 
@@ -1033,6 +1040,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
      * and measure the same drift over the same window. Diagnostic only: any failure to find a seat
      * degrades to text, because this must never be the reason the subject's pin goes red.
      */
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(OBSERVE_TICKS);",
+            why = "the same one the subject measures.")
     protected String measureAfterReCapture(int dim) {
         try {
             // On THIS pilot's own ship. The bare form mounts the first pilot seat in the world's
@@ -1074,7 +1083,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest extends AbstractMechan
             commandWindowCruise(dim);
             double[] deckBefore = awaitShipPose(dim);
             long fromTick = lastClientTick();
-            // WINDOW: the same one the subject measures.
             advanceServerAndClient(OBSERVE_TICKS);
             double[] deckAfter = awaitShipPose(dim);
             String history = clientTickHistory();

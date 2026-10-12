@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -149,6 +150,11 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
             + " was red here only under full-tier load, when the timer had legitimately run out before the log"
             + " was read. The two premises before it are arrangements and are not witnessed.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, 5);",
+            why = "ticksExisted is read on both sides of this stretch. The rocket's own counter advancing proves"
+                    + " the gate was ASKED (it runs in the same onUpdate), and its staying at or below the"
+                    + " timer proves it was asked only where it must answer no. Overshoot can only push the"
+                    + " counter past the timer and turn this red; it can never make a firing gate look idle.")
     public void tickBeforeDescentTimerKeepsFlightOff_realTick() throws Exception {
         // Counter-test under real ticking: with ticksExisted well below
         // DESCENT_TIMER, even a few real server ticks must NOT flip the
@@ -164,10 +170,6 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " orbit=true flight=false ticksExisted=5 posY=300 motionY=0"));
         int ticksBefore = gi(TICKS_EXISTED, set, "ticksExisted as set");
 
-        // WINDOW: ticksExisted is read on both sides of this stretch. The rocket's own counter
-        // advancing proves the gate was ASKED (it runs in the same onUpdate), and its staying at or
-        // below the timer proves it was asked only where it must answer no. Overshoot can only push
-        // the counter past the timer and turn this red; it can never make a firing gate look idle.
         GameTicks.advanceWorld(client(), 0, 5);
 
         RocketInfo info = rocketInfo(id);
@@ -199,6 +201,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     }
 
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), 0, 5);",
+            why = "posY is read by the set-state itself and again after this stretch, and the claim is that it"
+                    + " FELL. The bar is \"any fall at all\", so overshoot adds descent without being able to"
+                    + " turn a craft that does not fall into one that does.")
     public void inFlightDescentApplesGravityUnderRealTicks_realTick() throws Exception {
         // Production line 1260: when isInOrbit AND descending (motionY
         // negative or burning false), motionY decreases on every tick.
@@ -215,9 +221,6 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " posY=" + DESCENT_START_Y + " motionY=0"));
         double posYBefore = Reply.of(set).number("posY");
 
-        // WINDOW: posY is read by the set-state itself and again after this stretch, and the claim
-        // is that it FELL. The bar is "any fall at all", so overshoot adds descent without being
-        // able to turn a craft that does not fall into one that does.
         GameTicks.advanceWorld(client(), 0, 5);
 
         double posYAfter = rocketInfo(id).posY;

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -87,6 +88,20 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
     // position. Measured - a ship built at world 6720 reports its crew at B=5120000.000, 51200.000 in
     // exactly the same range, because that is simply where Valkyrien Skies parks a subspace. There is
     // no coordinate-magnitude variable to vary.
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(30);",
+            why = "an absence; `resolved=` in the message is the window's measured width. Overshoot only lengthens"
+                    + " a control that must stay at zero — the strict direction.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ROLL_WINDOW_TICKS);",
+            why = "not a poll. The header used to exit on `upY > -0.9`, which is the arrangement gate below — so"
+                    + " its green said \"some sample was inverted\" and could not be disproved. An attitude"
+                    + " converging under the hold IS a physical value, and the hold never decides it has"
+                    + " arrived, so there is no link to await; but a loop that re-reads until the value is"
+                    + " acceptable is a poll whatever the value is made of. Give the roll its ticks, then read."
+                    + " The window is the roll's own time rather than a budget: the hold slews at about 2"
+                    + " rad/s, so half a turn is ~31 ticks, and an attitude this far past the reference reseed"
+                    + " is ADOPTED and then HELD — a window longer than the slew cannot walk back out of the"
+                    + " state. Overshoot adds held-attitude ticks to a window whose pins are zeros and maxima —"
+                    + " the strict direction.")
     private void requireHeIsHeldThroughARoll(FixtureSite site, String where) throws Exception {
         // The caller asks the allocator for this site; it used to pass two coordinates it had chosen,
         // and the Y was a bare `final int by = 64;` until 2026-09-14 — a staging decision with no
@@ -129,8 +144,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // -1 - -1 == 0 and every zero-release pin in this class went green on it, saying nothing.
         long restReleaseMark = clientEvents().mark();
         long restMark = lastClientTick();
-        // WINDOW: an absence; `resolved=` in the message is the window's measured width. Overshoot
-        // only lengthens a control that must stay at zero — the strict direction.
         advanceServerAndClient(30);
         String restHistory = clientTickHistory();
         String restReleases = clientReleases(restReleaseMark, "the still-ship control window");
@@ -151,17 +164,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         long poseTraceMark = clientEvents().mark();
         ClientWindow poseTrace = ClientWindow.open(bot(),
                 "dev.stannismod.stellurgy.test.trace.DeckPoseTraceWindow", 200);
-        // WINDOW: not a poll. The header used to exit on `upY > -0.9`, which is the arrangement
-        // gate below — so its green said "some sample was inverted" and could not be disproved. An
-        // attitude converging under the hold IS a physical value, and the hold never decides it has
-        // arrived, so there is no link to await; but a loop that re-reads until the value is
-        // acceptable is a poll whatever the value is made of. Give the roll its ticks, then read.
-        // 
-        // The window is the roll's own time rather than a budget: the hold slews at about 2 rad/s,
-        // so half a turn is ~31 ticks, and an attitude this far past the reference reseed is ADOPTED
-        // and then HELD — a window longer than the slew cannot walk back out of the state. Overshoot
-        // adds held-attitude ticks to a window whose pins are zeros and maxima — the strict
-        // direction.
         advanceServerAndClient(ROLL_WINDOW_TICKS);
         // The shared reading, which uses the full expression 1 - 2(qx^2 + qz^2). The single-axis
         // shortcut this leg carried answers a confident 1.0 for a ship that rolled about a different
@@ -374,6 +376,9 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             + " world and this method is the LAST one, so nothing downstream inherits its world;"
             + " that is not true of its siblings — this very red was uncovered by ignoring the"
             + " method that ran immediately before it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ROLL_WINDOW_TICKS);",
+            why = "overshoot is lenient, and the gate it feeds is the arrangement for the relog, not the relog's"
+                    + " verdict.")
     public void aPlayerWhoRelogsOnAnInvertedDeckStaysAboardIt() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -419,8 +424,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // opposite fixes: the first is a window too short, the second is a command that was accepted
         // and did nothing, which no wait can repair.
         double upYBefore = upYOf(shipInfo());
-        // WINDOW: overshoot is lenient, and the gate it feeds is the arrangement for the relog, not
-        // the relog's verdict.
         advanceServerAndClient(ROLL_WINDOW_TICKS);
         double upY = upYOf(shipInfo());
         assertTrue("the ship must be (near-)inverted for the relog to be able to drop the player"
@@ -530,6 +533,14 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             + " of the two outcomes it already produces. RE-ENABLE when the mode a login leaves"
             + " behind is settled by the time the restore is complete — the acceptance is this"
             + " method green on two consecutive full tiers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(30);",
+            why = "the creep across it is what the post-relog pin quotes; staying put is not an event.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(12);",
+            why = "W held — an input, not a wait.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 1; i < trace.length; i++) {",
+            why = "staying put is the absence of motion, not a thing production commits, so no record could stand"
+                    + " in for the reads; the samples between them are the trace a failure prints. What it"
+                    + " cannot see: motion that went and came back inside one 5-tick step.")
     public void aCrewMemberWhoLogsOutWalkingComesBackStandingStillOnHisDeckSpot() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -556,7 +567,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // documented to feed its crew a constant no-input drift. Without this baseline, any creep
         // measured after the relog would be blamed on the restore by default.
         double[] idle0 = deckPoint();
-        // WINDOW: the creep across it is what the post-relog pin quotes; staying put is not an event.
         advanceServerAndClient(30);
         double[] idle1 = deckPoint();
         double idleCreep = alongDeck(idle0, idle1);
@@ -565,7 +575,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
 
         double[] beforeWalk = clientPos();
         bot().holdKey(Keyboard.KEY_W);
-        // STIMULUS: W held — an input, not a wait.
         bot().waitWorldTicks(12);
         double[] walking = clientPos();
         bot().releaseKey(Keyboard.KEY_W);
@@ -632,9 +641,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         String[] who = new String[11];
         trace[0] = deckPoint();
         who[0] = mover();
-        // WINDOW: staying put is the absence of motion, not a thing production commits, so no
-        // record could stand in for the reads; the samples between them are the trace a failure
-        // prints. What it cannot see: motion that went and came back inside one 5-tick step.
         for (int i = 1; i < trace.length; i++) {
             advanceServerAndClient(5);
             trace[i] = deckPoint();

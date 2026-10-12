@@ -3,6 +3,7 @@ package dev.stannismod.stellurgy.test.client;
 import com.google.gson.JsonObject;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -44,6 +45,11 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
      * because a disconnect and a reconnect between two samples read as a client that never left.</p>
      */
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndAllClientTicks(settleTicks);",
+            why = "a disconnect is the event that must NOT happen, so there is no record to link on; the pre-fix"
+                    + " NPE disconnected a tick or two after the decode, well inside this window. The client"
+                    + " half counts every tick, world or not: a disconnect is exactly what would take the world"
+                    + " away.")
     public void unknownSatelliteTypeOnWireDoesNotCrashClient() throws Exception {
         // The type the probe puts on the wire when none is given — nothing is registered under it.
         final String bogusType = "stellurgy:unregistered.satellite.type.repro";
@@ -67,10 +73,6 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
                         + " unresolved — that is the branch readClient must then drop",
                 decodeBudgetTicks);
 
-        // WINDOW: a disconnect is the event that must NOT happen, so there is no record to link on;
-        // the pre-fix NPE disconnected a tick or two after the decode, well inside this window. The
-        // client half counts every tick, world or not: a disconnect is exactly what would take the
-        // world away.
         advanceServerAndAllClientTicks(settleTicks);
 
         // SILENCE-IS-THE-ANSWER: the disconnect seam runs only on a disconnect, so no instrument check
