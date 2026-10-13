@@ -37,7 +37,7 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
     private static final int RADAR_RECORD_TICKS = 20;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The regime under test, stated: research OFF, the shipped default, where an observation
@@ -46,8 +46,8 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
      * subject; a wider sweep would add systems this test says nothing about.
      */
     private void defaultGameLocalRadar() throws Exception {
-        exec("stellurgytest config set planetsMustBeDiscovered false");
-        exec("stellurgytest config set telescopePassiveRadiusSteps 0");
+        arrange("stellurgytest config set planetsMustBeDiscovered false");
+        arrange("stellurgytest config set telescopePassiveRadiusSteps 0");
     }
 
     /** A body of the home world's system whose own cell lies INSIDE the home world's zone. */
@@ -74,10 +74,10 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
      * zone separator is inside its zone.
      */
     private ZoneBody bodyInsideTheHomeZone() throws Exception {
-        CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, HOME_DIM);
+        CellInfo home = CellInfo.atSector(c -> read(c).raw(), 0, 0, 0, HOME_DIM);
         requireArranged("the registry places no home world, so there is no zone to hold a moon: "
                 + home, home.dimCell != null);
-        CellInfo system = CellInfo.atKey(this::exec, home.dimCell);
+        CellInfo system = CellInfo.atKey(c -> read(c).raw(), home.dimCell);
         for (CellInfo.Body body : system.systemBodies) {
             if (body.dim != HOME_DIM && body.cell != null
                     && body.cell.startsWith(home.dimCell + ".")) {
@@ -110,12 +110,12 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
     /** An observatory at {@code site} holding a crystal read back as blank. */
     private TelescopeReading observatoryWithBlankCrystal(FixtureSite site) throws Exception {
         requireArranged("could not place an observatory at " + site,
-                Reply.of(exec("stellurgytest telescope place " + at(site))).ok());
-        String crystal = exec("stellurgytest telescope crystal " + at(site));
+                Reply.of(arrange("stellurgytest telescope place " + at(site)).raw()).ok());
+        String crystal = arrange("stellurgytest telescope crystal " + at(site)).raw();
         requireArranged("the crystal must start blank, or what the radar wrote cannot be told from"
                         + " what was already there: " + crystal,
                 Reply.of("stellurgytest telescope crystal", crystal).integer("addresses") == 0);
-        TelescopeReading idle = TelescopeReading.at(this::exec, at(site));
+        TelescopeReading idle = TelescopeReading.at(c -> read(c).raw(), at(site));
         requireArranged("the instrument must be the one the game ships — aperture "
                         + StellurgyConfiguration.DEFAULT_TELESCOPE_LIMITING_MAGNITUDE + ": " + idle.raw(),
                 idle.limitMagnitude == StellurgyConfiguration.DEFAULT_TELESCOPE_LIMITING_MAGNITUDE);
@@ -127,7 +127,7 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
     /** Run the local radar at {@code site} and read the instrument once it says it has finished. */
     private TelescopeReading localRadar(FixtureSite site) throws Exception {
         long mark = events.markInstrumented();
-        TelescopeReading.of(exec("stellurgytest telescope passive " + at(site)))
+        TelescopeReading.of(act("stellurgytest telescope passive " + at(site)).raw())
                 .requireOk("the local radar did not start");
         // A RECORD is the positive observation, so the recorder ran; markInstrumented has already
         // ruled out the two silences (bus unsubscribed, mixins unwoven) that would make a timeout
@@ -135,7 +135,7 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
         events.awaitRecordWithFields(mark, "region_scan_advanced",
                 "the local radar must finish", RADAR_RECORD_TICKS,
                 "pos", recordKey(site), "complete", "true");
-        return TelescopeReading.at(this::exec, at(site));
+        return TelescopeReading.at(c -> read(c).raw(), at(site));
     }
 
     @LegacyWitness(prose = "with {@code TileObservatory.scanOrigin}'s {@code .map(galacticCell)} removed:"

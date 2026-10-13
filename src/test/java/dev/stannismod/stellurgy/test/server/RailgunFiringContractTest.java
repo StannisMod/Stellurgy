@@ -71,8 +71,8 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         buildAndComplete(SX, SY, SZ);
         buildAndComplete(DX, DY, DZ);
 
-        String fire = exec("stellurgytest infra railgun-fire 0 " + SX + " " + SY + " " + SZ
-                + " 0 " + DX + " " + DY + " " + DZ + " minecraft:cobblestone " + CARGO);
+        String fire = act("stellurgytest infra railgun-fire 0 " + SX + " " + SY + " " + SZ
+                + " 0 " + DX + " " + DY + " " + DZ + " minecraft:cobblestone " + CARGO).raw();
         assertTrue("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -107,15 +107,15 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     @Test
     public void railgunLoadsRegisteredButUnloadedDestinationDimension() throws Exception {
         int template = firstNonOverworldStellurgyDimOrSkip();
-        String create = exec("stellurgytest worldgen create-asteroid-dim "
-                + FRESH_DIM + " " + template);
+        String create = arrange("stellurgytest worldgen create-asteroid-dim "
+                + FRESH_DIM + " " + template).raw();
         assertTrue("create-asteroid-dim must succeed: " + create,
                 Reply.of(create).ok());
 
         buildAndComplete(LX, SY, XZ);
 
-        String fire = exec("stellurgytest infra railgun-fire 0 " + LX + " " + SY + " " + XZ
-                + " " + FRESH_DIM + " 0 64 0 minecraft:cobblestone " + CARGO);
+        String fire = act("stellurgytest infra railgun-fire 0 " + LX + " " + SY + " " + XZ
+                + " " + FRESH_DIM + " 0 64 0 minecraft:cobblestone " + CARGO).raw();
         assertTrue("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -149,8 +149,8 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     public void railgunReportsUnavailableForUnloadableDestination() throws Exception {
         buildAndComplete(UX, SY, XZ);
 
-        String fire = exec("stellurgytest infra railgun-fire 0 " + UX + " " + SY + " " + XZ
-                + " " + UNREGISTERED_DIM + " 0 64 0 minecraft:cobblestone " + CARGO);
+        String fire = act("stellurgytest infra railgun-fire 0 " + UX + " " + SY + " " + XZ
+                + " " + UNREGISTERED_DIM + " 0 64 0 minecraft:cobblestone " + CARGO).raw();
         assertTrue("railgun-fire probe must succeed: " + fire,
                 Reply.of(fire).ok());
 
@@ -173,7 +173,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     /** First registered non-overworld Stellurgy dimension, to clone as an asteroid
      *  template; skips the test if none exist on the harness. */
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = exec("stellurgytest dim list");
+        String joined = read("stellurgytest dim list").raw();
         Assume.assumeFalse("No Stellurgy dimensions registered — skipping",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -186,13 +186,13 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     }
 
     private void buildAndComplete(int x, int y, int z) throws Exception {
-        String fixture = exec("stellurgytest fixture multiblock railgun 0 "
-                + x + " " + y + " " + z);
+        String fixture = arrange("stellurgytest fixture multiblock railgun 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("fixture multiblock railgun failed at " + x + "," + y + "," + z
                 + ": " + fixture, Reply.of(fixture).ok());
 
-        String tryComplete = exec("stellurgytest machine try-complete 0 "
-                + x + " " + y + " " + z);
+        String tryComplete = act("stellurgytest machine try-complete 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("railgun must validate at " + x + "," + y + "," + z
                 + ": " + tryComplete, Reply.of(tryComplete).bool("isComplete"));
     }

@@ -48,17 +48,17 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
 
     /** What the server says about one dimension, read through the verb's own reader. */
     private DimInfo dimInfo(int dim) throws Exception {
-        return DimInfo.forDim(this::exec, dim);
+        return DimInfo.forDim(c -> read(c).raw(), dim);
     }
 
     @Test
     public void modWorldtypeUsesForeignGeneratorButStaysAnStellurgyPlanet() throws Exception {
         int template = firstTemplateStellurgyDimOrSkip();
-        String create = exec("stellurgytest worldgen create-terrain-dim "
-                + MOD_WT_DIM + " " + template + " MOD_WORLDTYPE flat");
+        String create = arrange("stellurgytest worldgen create-terrain-dim "
+                + MOD_WT_DIM + " " + template + " MOD_WORLDTYPE flat").raw();
         assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
-        exec("stellurgytest dim load " + MOD_WT_DIM);
+        arrange("stellurgytest dim load " + MOD_WT_DIM);
         DimInfo info = dimInfo(MOD_WT_DIM);
 
         assertEquals("the loaded world must see the authored terrainSource: " + info.raw(),
@@ -79,11 +79,11 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
     @Test
     public void templateWithNoSourceGeneratesVoidViaTemplateGenerator() throws Exception {
         int template = firstTemplateStellurgyDimOrSkip();
-        String create = exec("stellurgytest worldgen create-terrain-dim "
-                + TEMPLATE_DIM + " " + template + " TEMPLATE noSuchTemplate");
+        String create = arrange("stellurgytest worldgen create-terrain-dim "
+                + TEMPLATE_DIM + " " + template + " TEMPLATE noSuchTemplate").raw();
         assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
-        exec("stellurgytest dim load " + TEMPLATE_DIM);
+        arrange("stellurgytest dim load " + TEMPLATE_DIM);
         DimInfo info = dimInfo(TEMPLATE_DIM);
         assertEquals("the loaded world must see the authored terrainSource: " + info.raw(),
                 "TEMPLATE", info.terrainSource());
@@ -94,7 +94,7 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
                 info.chunkGeneratorClass());
 
         // No source region files -> void: the scanned region has no fill (stone) blocks.
-        String stats = exec("stellurgytest worldgen ore-stats " + TEMPLATE_DIM + " 0 0 2 minecraft:stone");
+        String stats = read("stellurgytest worldgen ore-stats " + TEMPLATE_DIM + " 0 0 2 minecraft:stone").raw();
         Reply mReply = Reply.of(stats);
         assertTrue("ore-stats must report a count: " + stats, mReply.has(COUNT));
         int count = Integer.parseInt(mReply.text(COUNT));
@@ -105,11 +105,11 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
     @Test
     public void unregisteredModWorldtypeFallsBackToNativeGenerator() throws Exception {
         int template = firstTemplateStellurgyDimOrSkip();
-        String create = exec("stellurgytest worldgen create-terrain-dim "
-                + FALLBACK_DIM + " " + template + " MOD_WORLDTYPE definitelyNotAWorldType");
+        String create = arrange("stellurgytest worldgen create-terrain-dim "
+                + FALLBACK_DIM + " " + template + " MOD_WORLDTYPE definitelyNotAWorldType").raw();
         assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
-        exec("stellurgytest dim load " + FALLBACK_DIM);
+        arrange("stellurgytest dim load " + FALLBACK_DIM);
         DimInfo info = dimInfo(FALLBACK_DIM);
 
         assertEquals("fallback dim must stay a WorldProviderPlanet: " + info.raw(),
@@ -139,7 +139,7 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
     @Test
     public void planetPublishesItsOwnWorldTypeThroughWorldInfo() throws Exception {
         int planet = firstTemplateStellurgyDimOrSkip();
-        exec("stellurgytest dim load " + planet);
+        arrange("stellurgytest dim load " + planet);
         DimInfo info = dimInfo(planet);
 
         assertTrue("the dim must be loaded, or every field below is about a world that is not there: "
@@ -173,11 +173,11 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
     @Test
     public void modWorldtypePlanetConfiguresItsForeignGeneratorFromItsOwnOptions() throws Exception {
         int template = firstTemplateStellurgyDimOrSkip();
-        String create = exec("stellurgytest worldgen create-terrain-dim "
-                + OPTIONS_DIM + " " + template + " MOD_WORLDTYPE flat " + FLAT_DIAMOND_PRESET);
+        String create = arrange("stellurgytest worldgen create-terrain-dim "
+                + OPTIONS_DIM + " " + template + " MOD_WORLDTYPE flat " + FLAT_DIAMOND_PRESET).raw();
         assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
-        exec("stellurgytest dim load " + OPTIONS_DIM);
+        arrange("stellurgytest dim load " + OPTIONS_DIM);
         DimInfo info = dimInfo(OPTIONS_DIM);
 
         assertTrue("the dim must actually be running the foreign generator, else there is no "
@@ -193,7 +193,7 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
                 "", info.overworldGeneratorOptions());
 
         // The player-visible half: the authored preset is what the generator actually built.
-        String stats = exec("stellurgytest worldgen ore-stats " + OPTIONS_DIM + " 0 0 2 minecraft:diamond_block");
+        String stats = read("stellurgytest worldgen ore-stats " + OPTIONS_DIM + " 0 0 2 minecraft:diamond_block").raw();
         Reply mReply = Reply.of(stats);
         assertTrue("ore-stats must report a count: " + stats, mReply.has(COUNT));
         int count = Integer.parseInt(mReply.text(COUNT));
@@ -209,7 +209,7 @@ public class PlanetTerrainSourceTest extends AbstractSharedServerTest {
 
     /** A registered non-overworld Stellurgy planet to clone, excluding the dims this test creates. */
     private int firstTemplateStellurgyDimOrSkip() throws Exception {
-        String joined = exec("stellurgytest dim list");
+        String joined = read("stellurgytest dim list").raw();
         Assume.assumeFalse("No Stellurgy dimensions registered — skipping",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);

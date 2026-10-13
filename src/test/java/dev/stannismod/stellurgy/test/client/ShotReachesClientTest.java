@@ -56,7 +56,7 @@ public class ShotReachesClientTest extends AbstractOwnBootClientTest {
     @Test
     public void aRoundFiredNearbyIsDrawnByTheClientAndOneFiredFarAwayIsNot() throws Exception {
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
-        serverClient().execute("tp @a " + PX + " " + PY + " " + PZ);
+        serverClient().arrange("tp @a " + PX + " " + PY + " " + PZ);
 
         long mark = client.mark();
         // The control first. Without it the test would pass just as well against a replication
@@ -94,19 +94,19 @@ public class ShotReachesClientTest extends AbstractOwnBootClientTest {
     @Test
     public void aRoundThatStopsNearbyIsToldToTheClientAsEnded() throws Exception {
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
-        serverClient().execute("tp @a " + PX + " " + PY + " " + PZ);
+        serverClient().arrange("tp @a " + PX + " " + PY + " " + PZ);
         int wallX = (int) Math.floor(PX + NEAR);
         int wallY = (int) Math.floor(PY), wallZ = (int) Math.floor(PZ) + 6;
-        ask("stellurgytest fill 0 " + (wallX - 6) + " " + (wallY - 1) + " " + (wallZ - 1) + " "
+        arrange("stellurgytest fill 0 " + (wallX - 6) + " " + (wallY - 1) + " " + (wallZ - 1) + " "
                 + (wallX + 2) + " " + (wallY + 1) + " " + (wallZ + 1) + " minecraft:air").requireOk("clear the lane");
-        ask("stellurgytest fill 0 " + wallX + " " + (wallY - 1) + " " + (wallZ - 1) + " " + (wallX + 2)
+        arrange("stellurgytest fill 0 " + wallX + " " + (wallY - 1) + " " + (wallZ - 1) + " " + (wallX + 2)
                 + " " + (wallY + 1) + " " + (wallZ + 1) + " minecraft:stone").requireOk("build the wall");
 
         // A block and a half of this wall's own price, read off the wall: enough to bore in and run
         // out inside a three-block wall. Not less — a round that cannot buy a single stage LODGES in
         // the face and lives out its lifetime there, ending EXPIRED (measured on this scenario's
         // first run, 2026-09-29), which is a different ending from the one this is about.
-        Reply wall = ask("stellurgytest damage stage 0 " + wallX + " " + wallY + " " + wallZ);
+        Reply wall = read("stellurgytest damage stage 0 " + wallX + " " + wallY + " " + wallZ);
         int budget = (int) Math.round(wall.integer("stageCost") * Math.max(1, wall.integer("maxStage")) * 1.5D);
         assertTrue("the wall has no price, so no budget here means anything: " + wall, budget > 0);
 
@@ -128,13 +128,24 @@ public class ShotReachesClientTest extends AbstractOwnBootClientTest {
 
     /** One round through production's own entry point; the id, or a failed arrangement. */
     private long fire(String spec) throws Exception {
-        Reply fired = ask("stellurgytest shot fire 0 " + spec).requireOk("fire a round");
+        Reply fired = act("stellurgytest shot fire 0 " + spec).requireOk("fire a round");
         long id = fired.longInteger("id");
         assertTrue("the launch was refused, so nothing else here means anything: " + fired, id >= 0);
         return id;
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, String.join("\n", serverClient().execute(command)));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
+    }
+
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
+    }
+
+    /** A server command that CALLS a production entry a player, a tick or a packet would reach, sent in its role. */
+    private Reply act(String command) throws Exception {
+        return Reply.answering(command, serverClient().act(command));
     }
 }

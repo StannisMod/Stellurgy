@@ -223,7 +223,13 @@ again, the answer is `permaload false` plus a poll.
   harness server child with none does not start (`E2EModeGate#launchedMode`). Every probe verb has a kind in
   `ProbeVerbKind` — READ, BUILD, ARRANGE, TRIGGER (calls the production entry a player, a tick or a packet
   reaches), DECIDE (writes a decision's outcome), and the e2e-only STATIC_CALL / WALK / START_ITEM — matched on
-  its leading one to three words; a verb with no row is UNCLASSIFIED and refused in BOTH modes. An e2e server
+  its leading one to three words; a verb with no row is UNCLASSIFIED and refused in BOTH modes. Every command
+  the harness bridge carries is sent in a ROLE (`CommandRole`: `read` admits READ and a named instrument,
+  `arrange` admits ARRANGE / BUILD / DECIDE and the e2e's walk and start item, `act` admits TRIGGER; a SPLIT row
+  whose later word picks between two forms admits either), carried in the bridge sender's name after a slash;
+  in either mode a bridge command with no role, or of a kind its role does not admit, is refused at the call
+  (`E2EModeGate#roleRefusalOf`, kinds `NO_ROLE`, `ROLE`) before the mode's own judgement, and on a mechanics
+  server so is a bridge command whose root has no kind (`E2EModeGate#rootKinds`, kind `UNCLASSIFIED`). An e2e server
   admits READ, BUILD (judged further by place) and the named exceptions. On a MECHANICS server the gate
   refuses at the call an unclassified verb, a static call (`invoke-static`) on anything but a row of
   `MechanicsInstrument`, and

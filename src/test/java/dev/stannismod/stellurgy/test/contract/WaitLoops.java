@@ -62,7 +62,7 @@ import java.util.stream.Stream;
  * {@code assertTrue} there; a clock advanced by a lambda handed to another method, or by a probe verb that
  * steps a subsystem ({@code transit-tick}); a recursive retry; whether a claimed shape is the true one.
  * Of the goal exit: whether an input sent every pass DOES anything (a key re-held, a delta into a clamped
- * cursor); a command handed to the console through a functional interface ({@code this::exec}) or built
+ * cursor); a command handed to the console through a functional interface ({@code c -> act(c).raw()}) or built
  * without a constant start, which counts as no input; exception edges.</p>
  */
 final class WaitLoops {
@@ -413,8 +413,9 @@ final class WaitLoops {
     // input
 
     /**
-     * Fills {@link #senders}: the harness's console call, then every test-source method that hands one
-     * of its own parameters, unchanged, to a sender -- {@code exec(cmd)}, {@code ask(cmd)}, and so on up.
+     * Fills {@link #senders}: the harness's console calls in a writing role ({@code TestClient#arrange},
+     * {@code #act}), then every test-source method that hands one of its own parameters, unchanged, to a
+     * sender -- {@code arrange(cmd)}, {@code act(cmd)}, and so on up.
      */
     private void closeSenders() {
         boolean grew = true;
@@ -471,7 +472,9 @@ final class WaitLoops {
         }
         MethodInsnNode mi = (MethodInsnNode) code[i];
         Integer param;
-        if (TEST_CLIENT.equals(mi.owner) && "execute".equals(mi.name)) {
+        // `read` is never input: its role admits only what observes. `arrange` and `act` carry what the
+        // command's own leading words then say it is (`stimulusCommand`).
+        if (TEST_CLIENT.equals(mi.owner) && ("arrange".equals(mi.name) || "act".equals(mi.name))) {
             param = 0;
         } else {
             String target = declared(mi.owner, mi.name, mi.desc);

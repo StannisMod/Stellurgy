@@ -39,14 +39,14 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
 
     /** Whether the gate a rocket standing in {@code standing} asks says {@code target} is known. */
     private boolean known(int standing, int target) throws Exception {
-        String reply = exec("stellurgytest planet knowledge " + standing + " " + target);
+        String reply = read("stellurgytest planet knowledge " + standing + " " + target).raw();
         assertTrue("the knowledge probe failed: " + reply, Reply.of(reply).has("known"));
         return Reply.of(reply).bool("known");
     }
 
     /** The same reply's two halves, so a red test says WHICH source moved. */
     private String halves(int standing, int target) throws Exception {
-        return exec("stellurgytest planet knowledge " + standing + " " + target);
+        return read("stellurgytest planet knowledge " + standing + " " + target).raw();
     }
 
     /** A numeric field of a probe reply. */
@@ -73,7 +73,7 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
 
     @Test
     public void withResearchOnAPadIsNotOfferedAWorldNobodyHasFoundHere() throws Exception {
-        exec("stellurgytest config set planetsMustBeDiscovered true");
+        arrange("stellurgytest config set planetsMustBeDiscovered true");
 
         assertTrue("the overworld must always be known - it is the floor every pack starts from",
                 known(0, 0));
@@ -82,15 +82,15 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
         // world that has just come into existence cannot be in anybody's known-set, so the assertion
         // below cannot be quietly satisfied by whatever another test taught this world earlier.
         try {
-            String installed = exec("stellurgytest space gen-install 0.9 2000000 987654321");
+            String installed = arrange("stellurgytest space gen-install 0.9 2000000 987654321").raw();
             assertTrue("the procedural generator must install: " + installed,
                     Reply.of(installed).ok());
-            String found = exec("stellurgytest space find-procedural 4");
+            String found = read("stellurgytest space find-procedural 4").raw();
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
                     Reply.of(found).ok());
             String cell = intField(found, "sx") + " " + intField(found, "sy") + " "
                     + intField(found, "sz");
-            int fresh = RealizedBody.at(this::exec, cell).dim;
+            int fresh = RealizedBody.at(c -> act(c).raw(), cell).dim;
 
             String reply = halves(0, fresh);
             assertTrue("a freshly minted world must be in nobody's global set: " + reply,
@@ -100,7 +100,7 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
             assertFalse("and a pad here must therefore not be offered it: " + reply,
                     known(0, fresh));
         } finally {
-            exec("stellurgytest space gen-reset");
+            arrange("stellurgytest space gen-reset");
         }
     }
 
@@ -110,15 +110,15 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
         // relies on: with the master switch off there must be NO new gate anywhere. Measured against
         // the hardest case - a world minted a moment ago, which by construction is in neither the
         // pack's authored set nor this world's own, and which must still be selectable.
-        exec("stellurgytest config set planetsMustBeDiscovered false");
+        arrange("stellurgytest config set planetsMustBeDiscovered false").raw();
         try {
-            String installed = exec("stellurgytest space gen-install 0.9 2000000 987654321");
+            String installed = arrange("stellurgytest space gen-install 0.9 2000000 987654321").raw();
             assertTrue("the procedural generator must install: " + installed,
                     Reply.of(installed).ok());
-            String found = exec("stellurgytest space find-procedural 4");
+            String found = read("stellurgytest space find-procedural 4").raw();
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
                     Reply.of(found).ok());
-            int fresh = RealizedBody.atSectorLocal(this::exec, intField(found, "sx"),
+            int fresh = RealizedBody.atSectorLocal(c -> act(c).raw(), intField(found, "sx"),
                     intField(found, "sy"), intField(found, "sz")).dim;
 
             String reply = halves(0, fresh);
@@ -128,8 +128,8 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
             assertTrue("with research off a pad must still be offered it - the place-bound set is"
                     + " additive over a gate that is not there: " + reply, known(0, fresh));
         } finally {
-            exec("stellurgytest space gen-reset");
-            exec("stellurgytest config set planetsMustBeDiscovered true");
+            arrange("stellurgytest space gen-reset");
+            arrange("stellurgytest config set planetsMustBeDiscovered true");
         }
     }
 
@@ -139,26 +139,26 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
         // the pacing is a different mechanic with its own test, and waiting for it here would only
         // make this fixture slower and flakier. The GATE is then asked with research ON, which is
         // the mode the whole question exists in.
-        exec("stellurgytest config set planetsMustBeDiscovered false");
-        exec("stellurgytest config set telescopeLimitingMagnitude 30");
-        exec("stellurgytest config set telescopePassiveRadiusSteps 1");
+        arrange("stellurgytest config set planetsMustBeDiscovered false").raw();
+        arrange("stellurgytest config set telescopeLimitingMagnitude 30");
+        arrange("stellurgytest config set telescopePassiveRadiusSteps 1");
 
-        String placed = exec("stellurgytest telescope place " + where());
+        String placed = arrange("stellurgytest telescope place " + where()).raw();
         assertTrue("could not place an observatory: " + placed, Reply.of(placed).ok());
-        String crystal = exec("stellurgytest telescope crystal " + where());
+        String crystal = arrange("stellurgytest telescope crystal " + where()).raw();
         assertEquals("the crystal must start blank: " + crystal,
                 0, Reply.of("stellurgytest telescope crystal", crystal).integer("addresses"));
 
         // The instrument watching its own neighbourhood: what it resolves are the bodies of the
         // system this observatory is standing in, which are the ones that have worlds to fly to.
-        TelescopeReading.of(exec("stellurgytest telescope passive " + where()))
+        TelescopeReading.of(act("stellurgytest telescope passive " + where()).raw())
                 .requireOk("the passive sweep did not start");
-        TelescopeReading afterSweep = TelescopeReading.at(this::exec, where());
+        TelescopeReading afterSweep = TelescopeReading.at(c -> read(c).raw(), where());
         assertFalse("the sweep must be finished with research off: " + afterSweep.raw(),
                 afterSweep.scanning);
-        exec("stellurgytest config set planetsMustBeDiscovered true");
+        arrange("stellurgytest config set planetsMustBeDiscovered true");
 
-        String deposited = exec("stellurgytest telescope deposit " + where());
+        String deposited = act("stellurgytest telescope deposit " + where()).raw();
         List<Integer> landed = ints(deposited, "dims");
         assertFalse("the sweep resolved nothing with a world in it, so there is nothing to deposit"
                 + " and this fixture proves nothing: " + deposited, landed.isEmpty());
@@ -171,7 +171,7 @@ public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest 
                     + reply, Reply.of(reply).bool("local"));
         }
 
-        String depositedAgain = exec("stellurgytest telescope deposit " + where());
+        String depositedAgain = act("stellurgytest telescope deposit " + where()).raw();
         assertEquals("depositing the same crystal twice must land the same addresses, not more",
                 landed, ints(depositedAgain, "dims"));
     }

@@ -46,7 +46,7 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * Wait for the substrate's registry to take a ship, on the registry's own add.
@@ -63,7 +63,7 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
     private int awaitRegistered(long mark, int dim) throws Exception {
         events.await(mark, "ship_spawned",
                 "a VS ship must enter the pool world's registry", REGISTER_TICKS);
-        Reply reply = Reply.of(exec("stellurgytest space vs-count " + dim));
+        Reply reply = Reply.of(read("stellurgytest space vs-count " + dim).raw());
         return reply.has(COUNT) ? Integer.parseInt(reply.text(COUNT)) : -1;
     }
 
@@ -72,7 +72,7 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
 
         // Marked before the assemble, because the registry add it waits on happens inside it.
         long assembleMark = events.mark();
-        String asm = exec("stellurgytest space vs-assemble deep");
+        String asm = arrange("stellurgytest space vs-assemble deep").raw();
         Reply mReply = Reply.of(asm);
         assertTrue("vs-assemble must report a slot dim: " + asm, mReply.has(SLOT));
         int slot = Integer.parseInt(mReply.text(SLOT));
@@ -83,7 +83,7 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
         // Synchronous unload (saves VS ship data) + reload the same cell; the count is read inside
         // the same probe call (before any auto-unload), so it is not masked by the keepLoaded=false
         // world unloading between calls.
-        String reload = exec("stellurgytest space reload " + slot + " deep");
+        String reload = arrange("stellurgytest space reload " + slot + " deep").raw();
         assertTrue("slot must reload after a VS-ship unload: " + reload, Reply.of(reload).bool("present"));
         Reply rmReply = Reply.of(reload);
         int after = rmReply.has(COUNT_AFTER) ? Integer.parseInt(rmReply.text(COUNT_AFTER)) : -99;
@@ -93,7 +93,7 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
     /** The overworld craft a scenario built goes with it; the slot scenario's craft lives in its own world. */
     @org.junit.After
     public void clearOverworldCraft() throws Exception {
-        ShipReadiness.clearCraftFrom(this::exec, 0);
+        ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0);
     }
 
     /**
@@ -125,22 +125,22 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
             on = "2026-10-12")
     public void anImmediateLoadOfAPermanentlyLoadedShipDoesNotKillTheServer() throws Exception {
         final int baseX = 8200, baseZ = 8200;
-        ShipReadiness.letShipsUnload(this::exec, "the ship has to UNLOAD before anything can ask for it twice");
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(), "the ship has to UNLOAD before anything can ask for it twice");
         try {
             // Marked BEFORE the build, for both the registry add and the unload: the hull is loaded on
             // the assemble and lets go again a tick or two later, and there is no second unload to wait
             // for (measured on the gate of 2026-09-22).
             long buildMark = events.mark();
-            int[] bp = RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), this::exec, "with-pilot-seat",
+            int[] bp = RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), c -> arrange(c).raw(), "with-pilot-seat",
                     4, 12, "the craft whose load is queued twice stands in this volume");
-            String asm = exec("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
+            String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
             assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                     (Reply.of(asm).integer("rocketCount") == 0));
             String durable = ShipIdentity.nameFromAssembly(asm);
             events.awaitField(buildMark, "ship_spawned", "stellurgyShip", durable,
                     "the ship never entered the registry: " + overworldCounters(), REGISTER_TICKS);
             // Taken while the craft is still loaded: resolving the physics id force-loads the ship.
-            String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durable);
+            String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durable);
 
             // Registered, with nothing loaded behind it: the LINK is the substrate's own unload of THIS
             // hull, and the READ that follows is the standing fact — the early mark could otherwise be
@@ -149,20 +149,20 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
                     "the ship never unloaded, so nothing here could ask for it twice: " + overworldCounters(),
                     REGISTER_TICKS);
             assertEquals("the ship unloaded and was loaded again, so it is NOT the arrangement this scenario"
-                    + " needs: " + overworldCounters(), 0, ShipReadiness.loadedCount(this::exec, 0));
+                    + " needs: " + overworldCounters(), 0, ShipReadiness.loadedCount(c -> read(c).raw(), 0));
             assertTrue("the ship left the registry as well as the loaded set, so there is nothing to load: "
-                    + overworldCounters(), ShipReadiness.registeredCount(this::exec, 0) >= 1);
+                    + overworldCounters(), ShipReadiness.registeredCount(c -> read(c).raw(), 0) >= 1);
 
             // The second wanter: permanent loading makes the world's pass queue a background load every
             // tick this ship is unloaded; the explicit request queues the immediate one.
-            ShipReadiness.holdShipsLoaded(this::exec,
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(),
                     "the world's pass only queues the background load while the ship is permanently"
                     + " loaded and unloaded — that is the second of the two wanters");
             // The window: two reads of the server's own clock around the tick on which both wanters meet.
             // The server dying inside it ends the window early, and that IS the verdict, so a clock that
             // stops answering is reported as the subject, with what it threw.
             long requested = serverTick();
-            exec("stellurgytest vs load-ships 0");
+            arrange("stellurgytest vs load-ships 0");
             long served;
             try {
                 GameTicks.advance(client(), GameTicks.server(), BOTH_WANTERS_SERVED_TICKS);
@@ -177,23 +177,23 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
             assertTrue(DIED, client().isAlive());
             assertTrue("the server survived, but the ship was never loaded, so its survival says nothing "
                     + "about serving two load requests at once: " + overworldCounters(),
-                    ShipReadiness.loadedCount(this::exec, 0) >= 1);
+                    ShipReadiness.loadedCount(c -> read(c).raw(), 0) >= 1);
         } catch (Exception | AssertionError verdict) {
             // The opt-out's end is sent to the server this scenario may have just killed; its failure then
             // rides on the verdict instead of replacing it.
             try {
-                ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+                ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "this scenario's opt-out ends with it");
             } catch (Exception cleanup) {
                 verdict.addSuppressed(cleanup);
             }
             throw verdict;
         }
-        ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+        ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "this scenario's opt-out ends with it");
     }
 
     /** Both overworld counters together: the pair is the diagnosis. */
     private String overworldCounters() throws Exception {
-        return "[loaded=" + ShipReadiness.loadedCount(this::exec, 0)
-                + " registry=" + ShipReadiness.registeredCount(this::exec, 0) + "]";
+        return "[loaded=" + ShipReadiness.loadedCount(c -> read(c).raw(), 0)
+                + " registry=" + ShipReadiness.registeredCount(c -> read(c).raw(), 0) + "]";
     }
 }

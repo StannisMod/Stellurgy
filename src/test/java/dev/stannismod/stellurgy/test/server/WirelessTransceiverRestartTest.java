@@ -104,7 +104,7 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
         // onLoad re-registers as source for extract mode. Without onLoad
         // running, isSource would be false and the player's pre-restart
         // configuration would be invisible to the network.
-        String role = String.join("\n", secondBoot.client().execute(
+        String role = String.join("\n", secondBoot.client().read(
                 "stellurgytest pipe wireless-role-on-network "
                         + DIM + " " + X_A + " " + Y + " " + Z));
         assertTrue("onLoad must re-register extract-mode tile as source: " + role,
@@ -116,14 +116,14 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
     // --- helpers -----------------------------------------------------------
 
     private static void place(RealDedicatedServerHarness h, int x) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest place " + DIM + " " + x + " " + Y + " " + Z
                         + " stellurgy:wirelessTransciever"));
         assertTrue("place failed at x=" + x + ": " + r, Reply.of(r).bool("placed"));
     }
 
     private static int pair(RealDedicatedServerHarness h, int xA, int xB) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest pipe wireless-pair " + DIM + " "
                         + xA + " " + Y + " " + Z + " "
                         + xB + " " + Y + " " + Z));
@@ -132,19 +132,19 @@ public class WirelessTransceiverRestartTest extends AbstractMechanicsTest {
     }
 
     private static String info(RealDedicatedServerHarness h, int x) throws Exception {
-        return String.join("\n", h.client().execute(
+        return String.join("\n", h.client().read(
                 "stellurgytest pipe wireless-info " + DIM + " " + x + " " + Y + " " + Z));
     }
 
     private static void setMode(RealDedicatedServerHarness h, int x, String mode) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest pipe wireless-set-mode " + DIM + " "
                         + x + " " + Y + " " + Z + " " + mode));
         assertTrue("set-mode failed: " + r, Reply.of(r).ok());
     }
 
     private static void setEnabled(RealDedicatedServerHarness h, int x, boolean enabled) throws Exception {
-        String r = String.join("\n", h.client().execute(
+        String r = String.join("\n", h.client().arrange(
                 "stellurgytest pipe wireless-set-enabled " + DIM + " "
                         + x + " " + Y + " " + Z + " " + enabled));
         assertTrue("set-enabled failed: " + r, Reply.of(r).ok());

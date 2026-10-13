@@ -866,12 +866,13 @@ public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTe
                 + " restIsMoonsAndBelts=" + restIsMoonsAndBelts;
     }
 
+    /** Every caller asks a READ verb of the authored world. */
     private Reply probe(String command) throws Exception {
-        return Reply.of(command, String.join("\n", world.harness.client().execute(command)));
+        return Reply.of(command, String.join("\n", world.harness.client().read(command)));
     }
 
     private DimList dims() throws Exception {
-        return DimList.of(String.join("\n", world.harness.client().execute("stellurgytest dim list")));
+        return DimList.of(String.join("\n", world.harness.client().read("stellurgytest dim list")));
     }
 
     /** A body this file states, which the arrangement requires to exist. */

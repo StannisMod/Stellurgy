@@ -52,7 +52,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
+        ShieldTile emitter = ShieldTile.at(c -> read(c).raw(), DIM, ex, Y, ez);
         assertTrue("adjacent generator+emitter (no cable) failed to power — the cable-less edge did not "
                         + "carry shield energy:\n" + emitter.raw(),
                 emitter.powered());
@@ -70,7 +70,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
+        ShieldTile emitter = ShieldTile.at(c -> read(c).raw(), DIM, ex, Y, ez);
         assertTrue("disconnected emitter (one-block gap, no cable) powered anyway — a spurious edge is "
                         + "carrying energy across the gap:\n" + emitter.raw(),
                 !emitter.powered());
@@ -111,14 +111,14 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     @Test
     public void aWorldAnswersForTheEmittersLoadedInItAndNoOthers() throws Exception {
         FixtureSite here = site();
-        here.requireClear(this::exec, 0, 1, "the emitter's block");
+        here.requireClear(cmd -> arrange(cmd).raw(), 0, 1, "the emitter's block");
         int y = here.y + 1, z = here.z;
         int overworldX = here.x, netherX = here.x + 2;
         String overworldEmitter = overworldX + "," + y + "," + z, netherEmitter = netherX + "," + y + "," + z;
         int cx = overworldX >> 4, cz = z >> 4;
         // The nether is held loaded for the whole scenario, so its answer below is about a loaded world
         // with an emitter in it rather than about a world that has gone away.
-        Reply held = Reply.of(exec("stellurgytest chunk forceload " + NETHER + " " + (netherX >> 4) + " " + cz));
+        Reply held = Reply.of(arrange("stellurgytest chunk forceload " + NETHER + " " + (netherX >> 4) + " " + cz).raw());
         requireArranged("the nether chunk could not be held loaded: " + held, held.ok());
         placeAt(DIM, "affs:field_generator", overworldX, y, z);
         placeAt(NETHER, "affs:field_generator", netherX, y, z);
@@ -130,10 +130,10 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
                 Collections.singletonList(netherEmitter),
                 emittersAmong(NETHER, overworldEmitter, netherEmitter));
 
-        Events events = new Events(this::exec,
+        Events events = new Events(c -> read(c).raw(),
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
         long cycled = events.markInstrumented();
-        Reply cycle = Reply.of(exec("stellurgytest chunk cycle " + DIM + " " + cx + " " + cz));
+        Reply cycle = Reply.of(arrange("stellurgytest chunk cycle " + DIM + " " + cx + " " + cz).raw());
         requireArranged("the emitter's chunk did not unload and come back as a new chunk, so there is no"
                         + " released tile to look for: " + cycle,
                 cycle.bool("dropped") && cycle.bool("reloaded") && !cycle.bool("sameInstance"));
@@ -191,17 +191,17 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
             why = "two reads of each coil with the world advanced between; the verdicts name both reads.")
     public void anEmitterInTheShipyardThatNoShipClaimsProjectsNothing() throws Exception {
         FixtureSite here = site();
-        here.requireClear(this::exec, 0, 1, "the control emitter's block");
+        here.requireClear(cmd -> arrange(cmd).raw(), 0, 1, "the control emitter's block");
         int y = here.y + 1, z = here.z;
         int controlX = here.x;
-        Reply held = Reply.of(exec("stellurgytest chunk forceload " + DIM + " " + (SHIPYARD_X >> 4) + " " + (z >> 4)));
+        Reply held = Reply.of(arrange("stellurgytest chunk forceload " + DIM + " " + (SHIPYARD_X >> 4) + " " + (z >> 4)).raw());
         requireArranged("the shipyard chunk could not be held loaded: " + held, held.ok());
         placeAt(DIM, "affs:field_generator", controlX, y, z);
         placeAt(DIM, "affs:field_generator", SHIPYARD_X, y, z);
         charge(controlX, y, z);
         charge(SHIPYARD_X, y, z);
 
-        ShieldTile control = ShieldTile.at(cmd -> exec(cmd), DIM, controlX, y, z).require(ShieldTile.EMITTER,
+        ShieldTile control = ShieldTile.at(c -> read(c).raw(), DIM, controlX, y, z).require(ShieldTile.EMITTER,
                 "the control emitter");
         requireArranged("the control emitter must be powered by the charge: " + control.raw(), control.powered());
         // Inside the emitter's own sphere, straight above it: the point its shell covers if it has one.
@@ -239,21 +239,21 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private static final int MAINTENANCE_WINDOW_TICKS = 40;
 
     private void charge(int x, int y, int z) throws Exception {
-        Reply charged = Reply.of(exec("stellurgytest shield charge " + DIM + " " + x + " " + y + " " + z + " "
-                + CHARGE));
+        Reply charged = Reply.of(arrange("stellurgytest shield charge " + DIM + " " + x + " " + y + " " + z + " "
+                + CHARGE).raw());
         requireArranged("the emitter at " + x + "," + y + "," + z + " could not be charged: " + charged,
                 charged.ok() && charged.integer("stored") > 0);
     }
 
     private boolean covered(int x, int y, int z) throws Exception {
-        Reply zone = Reply.of(exec("stellurgytest shield zone " + DIM + " " + x + " " + y + " " + z));
+        Reply zone = Reply.of(read("stellurgytest shield zone " + DIM + " " + x + " " + y + " " + z).raw());
         requireArranged("the zone probe did not answer for " + x + "," + y + "," + z + ": " + zone,
                 zone.has("covered"));
         return zone.bool("covered");
     }
 
     private long stored(int x, int y, int z) throws Exception {
-        Reply read = Reply.of(exec("stellurgytest shield read " + DIM + " " + x + " " + y + " " + z));
+        Reply read = Reply.of(read("stellurgytest shield read " + DIM + " " + x + " " + y + " " + z).raw());
         requireArranged("no emitter answered at " + x + "," + y + "," + z + ": " + read, read.has("shieldStored"));
         return (long) read.number("shieldStored");
     }
@@ -276,7 +276,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      */
     private List<String> emittersAmong(int dim, String... positions) throws Exception {
         Reply listed = Reply.of("stellurgytest shield emitters " + dim,
-                exec("stellurgytest shield emitters " + dim));
+                read("stellurgytest shield emitters " + dim).raw());
         assertEquals("the emitters probe answered for another dimension: " + listed,
                 dim, listed.integer("dim"));
         List<String> wanted = Arrays.asList(positions);
@@ -293,7 +293,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     }
 
     private void placeAt(int dim, String block, int x, int y, int z) throws Exception {
-        Reply placed = Reply.of(exec("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block));
+        Reply placed = Reply.of(arrange("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block).raw());
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + " in dim " + dim + ": "
                 + placed, placed.bool("placed"));
     }
@@ -301,14 +301,14 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     /** Feed the generator FE and run one network solve per iteration. */
     private void chargeAndSolve(int gx, int gz) throws Exception {
         for (int i = 0; i < CHARGE_ITERATIONS; i++) {
-            exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-            exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+            act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+            act("stellurgytest shield tick " + DIM);
         }
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

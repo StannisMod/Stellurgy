@@ -52,7 +52,7 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
         // The client never went near the ship. The record must be absent BEFORE the restart too -
         // that is what makes the reading after it attributable to the restore rather than to a
         // record that was never written in the first place.
-        String tagBefore = exec("stellurgytest space aboard-tag " + BOT);
+        String tagBefore = read("stellurgytest space aboard-tag " + BOT).raw();
         assertTrue("a player who never boarded must carry no aboard record: " + tagBefore,
                 (!Reply.of(tagBefore).bool("tagged")));
 
@@ -63,10 +63,10 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
 
         // The same two discriminators the other legs establish, so this leg differs from them in
         // exactly one thing: whether the player was ever aboard.
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
-        LedgerEntry ledger = LedgerEntry.forShip(this::exec, arrangedShipId);
+        LedgerEntry ledger = LedgerEntry.forShip(c -> read(c).raw(), arrangedShipId);
         assertTrue("the ship must still be ledgered - a restore with nothing to restore ONTO would "
                 + "leave him in the overworld for the wrong reason: " + ledger.raw(),
                 ledger.found);
@@ -77,7 +77,7 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
 
         int dim = clientDim();
         JsonObject riding = bot().reportRidingEntity();
-        String tag = exec("stellurgytest space aboard-tag " + BOT);
+        String tag = read("stellurgytest space aboard-tag " + BOT).raw();
         String observed = "clientDim=" + dim + " riding=" + riding + " tag=" + tag;
 
         assertTrue("the client must have a world at all before anything can be read from it: "

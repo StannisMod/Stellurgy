@@ -75,15 +75,15 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
     @Test
     public void pressBuildAssemblesOpticalSatellite() throws Exception {
         int x = CX_OPTICAL, y = CY, z = CZ;
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
                 + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:satelliteBuilder");
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:satelliteBuilder").raw();
         assertTrue("satellite builder place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String resp = exec("stellurgytest satellite-builder press-build 0 "
-                + x + " " + y + " " + z + " optical");
+        String resp = act("stellurgytest satellite-builder press-build 0 "
+                + x + " " + y + " " + z + " optical").raw();
         assertTrue("press-build must succeed: " + resp, Reply.of(resp).ok());
 
         // Per-type resolution: optical must map to a primary-function meta.
@@ -136,15 +136,15 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
     @Test
     public void pressBuildRejectsDefaultChipForChipOverridingType() throws Exception {
         int x = CX_WEATHER, y = CY, z = CZ;
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
                 + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:satelliteBuilder");
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:satelliteBuilder").raw();
         assertTrue("satellite builder place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String resp = exec("stellurgytest satellite-builder press-build 0 "
-                + x + " " + y + " " + z + " weatherController");
+        String resp = act("stellurgytest satellite-builder press-build 0 "
+                + x + " " + y + " " + z + " weatherController").raw();
         // Probe must surface the canAssemble-false branch as an error
         // (not crash, not silently succeed).
         // Read OF THE FIELD: the producer writes a tail onto this one ("… after slot load"), so

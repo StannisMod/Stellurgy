@@ -47,7 +47,7 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
     private int nextImpactId = 1000;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @LegacyWitness(prose = "with {@code TurretDriveState.permitsFiring()} ({@code TurretDriveState#permitsFiring} at {@code return this != DEAD;})"
             + " made to refuse {@code JAMMED} as well as {@code DEAD}, this fails at \"a seized gun stopped"
@@ -70,8 +70,8 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
         // It works: pointed at something, it turns onto it and fires. Without this the degradation
         // below would be indistinguishable from a gun that never did anything.
         long aimed = events.mark();
-        ask("stellurgytest turret charge 0 " + base + " " + Y + " " + Z).requireOk("charge the gun");
-        ask("stellurgytest turret target 0 " + base + " " + Y + " " + Z + " " + (base + 40.5D) + " "
+        arrange("stellurgytest turret charge 0 " + base + " " + Y + " " + Z).requireOk("charge the gun");
+        arrange("stellurgytest turret target 0 " + base + " " + Y + " " + Z + " " + (base + 40.5D) + " "
                 + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("aim the gun");
         Weapons.awaitFired(events, aimed, base, Y, Z, "the pristine gun never fired, so nothing below is"
                 + " about damage");
@@ -87,7 +87,7 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
 
         // The rung that earns its own name: it stopped turning, it did not stop shooting.
         long jammed = events.mark();
-        ask("stellurgytest turret charge 0 " + base + " " + Y + " " + Z).requireOk("recharge the gun");
+        arrange("stellurgytest turret charge 0 " + base + " " + Y + " " + Z).requireOk("recharge the gun");
         String fired = Weapons.awaitFired(events, jammed, base, Y, Z,
                 "a seized gun stopped firing — then JAMMED is just a slower way of saying DEAD, and a"
                         + " whole class of desperate defence is gone: " + read(base));
@@ -110,7 +110,7 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
         List<String> seen = new ArrayList<>();
         for (int shot = 0; shot < 40; shot++) {
             long hit = events.mark();
-            Reply stage = ask("stellurgytest damage stage 0 " + bx + " " + Y + " " + Z)
+            Reply stage = read("stellurgytest damage stage 0 " + bx + " " + Y + " " + Z)
                     .requireOk("price the mount");
             // the producer always writes `stageCost` on an ok `damage stage` reply, so a reply without
             // it is a broken probe and refusing here is the right failure.
@@ -119,7 +119,7 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
             // solid thing the ray meets. From above it would go through the barrels first and take
             // the gun apart before the drive ever degraded — which is a different experiment, and
             // the one the first version of this test accidentally ran.
-            Reply resp = ask("stellurgytest damage impact 0 " + (bx - 2.5D) + " " + (Y + 0.5D) + " "
+            Reply resp = act("stellurgytest damage impact 0 " + (bx - 2.5D) + " " + (Y + 0.5D) + " "
                     + (Z + 0.5D) + " 1 0 0 " + budget + " KINETIC " + (nextImpactId++))
                     .requireOk("shoot the mount");
             assertTrue("the impact spent nothing — it is not reaching the mount, and every assertion"
@@ -161,21 +161,21 @@ public class TurretDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     private void buildSite(int bx) throws Exception {
-        ask("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((bx + 64) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill 0 " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60) + " "
+        arrange("stellurgytest fill 0 " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60) + " "
                 + (Y + 12) + " " + (Z + 4) + " minecraft:air").requireOk("clear the site");
-        ask("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (Z >> 4)).requireOk("hold the chunk");
+        arrange("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (Z >> 4)).requireOk("hold the chunk");
     }
 
     // ---- reading the world
 
     private Reply read(int bx) throws Exception {
-        return ask("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
+        return read("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 }

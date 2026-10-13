@@ -78,7 +78,7 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
         // Extra ticks past first-run + reseal so the drain-fail branch
         // has a chance to fire (it gates on getBlobSize > 0 to compute
         // amtToDrain, and the blob registers on tick 1).
-        exec("stellurgytest tile force-tick 0 " + CX_NO_FLUID + " " + CY_BASE + " " + CZ_BASE + " 20");
+        act("stellurgytest tile force-tick 0 " + CX_NO_FLUID + " " + CY_BASE + " " + CZ_BASE + " 20").raw();
 
         String info = ventInfo(CX_NO_FLUID);
         assertTrue("vent without oxygen must report hasFluid:false after the "
@@ -135,7 +135,7 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
 
         // Force-tick the vent. Each successful tick where isSealed=true
         // calls extractEnergy(getPowerPerOperation(), false).
-        exec("stellurgytest tile force-tick 0 " + CX_DRAIN + " " + CY_BASE + " " + CZ_BASE + " 50");
+        act("stellurgytest tile force-tick 0 " + CX_DRAIN + " " + CY_BASE + " " + CZ_BASE + " 50").raw();
 
         String postInfo = ventInfo(CX_DRAIN);
         int energyAfter = extract(postInfo, VENT_ENERGY);
@@ -150,35 +150,35 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
     private void buildSealableRoom(int cx) throws Exception {
         int by = CY_BASE, bz = CZ_BASE;
         // Floor slab.
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
+                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone").raw();
         // Walls + interior air for y+1, y+2.
         for (int yy = by + 1; yy <= by + 2; yy++) {
-            exec("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
+            arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
                     + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
-            exec("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
+            arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
                     + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
         }
         // Roof.
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
+                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone").raw();
     }
 
     private void placeVent(int cx) throws Exception {
-        String resp = exec("stellurgytest place 0 " + cx + " " + CY_BASE + " " + CZ_BASE
-                + " stellurgy:oxygenVent");
+        String resp = arrange("stellurgytest place 0 " + cx + " " + CY_BASE + " " + CZ_BASE
+                + " stellurgy:oxygenVent").raw();
         assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed"));
     }
 
     private void injectEnergy(int cx, int amount) throws Exception {
-        String resp = exec("stellurgytest energy inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
-                + " " + amount);
+        String resp = arrange("stellurgytest energy inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
+                + " " + amount).raw();
         assertTrue("energy inject failed: " + resp, Reply.of(resp).ok());
     }
 
     private void injectOxygen(int cx, int amount) throws Exception {
-        String resp = exec("stellurgytest fluid inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
-                + " oxygen " + amount);
+        String resp = arrange("stellurgytest fluid inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
+                + " oxygen " + amount).raw();
         assertTrue("oxygen inject failed: " + resp, Reply.of(resp).ok());
     }
 
@@ -187,13 +187,13 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
      *  {@code sealedRoomBecomesBreathableThenLeaks} test in
      *  {@link MachineDomainSmokeSuite}. */
     private void forceTickAndReseal(int cx) throws Exception {
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY_BASE + " " + CZ_BASE + " 1");
-        exec("stellurgytest vent reseal 0 " + cx + " " + CY_BASE + " " + CZ_BASE);
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY_BASE + " " + CZ_BASE + " 5");
+        act("stellurgytest tile force-tick 0 " + cx + " " + CY_BASE + " " + CZ_BASE + " 1");
+        arrange("stellurgytest vent reseal 0 " + cx + " " + CY_BASE + " " + CZ_BASE);
+        act("stellurgytest tile force-tick 0 " + cx + " " + CY_BASE + " " + CZ_BASE + " 5");
     }
 
     private String ventInfo(int cx) throws Exception {
-        return exec("stellurgytest vent info 0 " + cx + " " + CY_BASE + " " + CZ_BASE);
+        return read("stellurgytest vent info 0 " + cx + " " + CY_BASE + " " + CZ_BASE).raw();
     }
 
     private static int extract(String src, String field) {

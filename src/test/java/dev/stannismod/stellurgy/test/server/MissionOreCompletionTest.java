@@ -53,16 +53,16 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
     }
 
     private long startOreMission(int rocketId, long duration, float drillingPower) throws Exception {
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest mission start-ore 0 " + rocketId + " " + duration + " " + drillingPower));
         assertFalse("start-ore must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
@@ -83,7 +83,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(9000);
         long mid = startOreMission(rid, 1000, 1.0f);
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         // Refilled chip lands in the respawned rocket's guidance
         // computer (storage chunk inventory tile). It's a fresh chip
         // with no NBT — registry name match is enough.
@@ -103,7 +103,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(9100);
         long mid = startOreMission(rid, 1000, 0.0f);
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         // The blank refill chip (line 118) is the only item expected
         // — extract a count and pin upper bound. Tolerant of the
         // respawn-coords search returning multiple rockets if a prior
@@ -128,7 +128,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(9200);
         long mid = startOreMission(rid, 1000, 1.0f);
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertTrue("at least one rocket entity must exist near launch coords after ore completion: "
                         + cargo.raw(),
                 cargo.rocketCount > 0);

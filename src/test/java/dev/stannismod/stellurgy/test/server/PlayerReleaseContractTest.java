@@ -60,7 +60,7 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
     private static final String TRANSFER_GRACE = "rocket transfer grace";
 
     private void ensurePlayer() throws Exception {
-        String fake = exec("stellurgytest player ensure-fake 0 8.5 80 8.5");
+        String fake = act("stellurgytest player ensure-fake 0 8.5 80 8.5").raw();
         assertTrue("the fake player must exist before anything can be bound to him: " + fake,
                 Reply.of(fake).ok());
     }
@@ -72,17 +72,17 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
         // this scenario can be handed; it ARRANGES "has nothing bound" instead, by letting go of
         // whatever a sibling left. The claims below are about the witness and the release, not about
         // freshness.
-        exec("stellurgytest player release");
+        act("stellurgytest player release").raw();
         // THE CONTROL FOR EVERY OTHER ASSERTION IN THIS FILE. If the witness could not answer
         // "nothing", "he is bound to nothing after a release" would be satisfied by an answer that
         // never changes, and so would every green below.
-        String bound = exec("stellurgytest player bindings");
+        String bound = read("stellurgytest player bindings").raw();
         assertTrue("a player with nothing bound must be REPORTED as bound to nothing: " + bound,
                 (Reply.of(bound).arrayLength("bound") == 0));
 
         // And releasing nothing releases NOTHING — a release that always claims something would
         // make clause 2 vacuous.
-        String released = exec("stellurgytest player release");
+        String released = act("stellurgytest player release").raw();
         assertTrue("releasing an unbound player must report an empty list, not a courtesy one: "
                 + released, (Reply.of(released).integer("releasedCount") == 0));
     }
@@ -90,7 +90,7 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
     @Test
     public void anAboardRecordIsReportedThenReleasedThenGone() throws Exception {
         ensurePlayer();
-        String bind = exec("stellurgytest player bind-aboard " + SHIP);
+        String bind = arrange("stellurgytest player bind-aboard " + SHIP).raw();
         assertTrue("the arrangement must actually stamp the record: " + bind,
                 Reply.of(bind).bool("tagged"));
 
@@ -98,22 +98,22 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
         // rendering it was also satisfied by the name appearing in some other field — and
         // `"aboard record incomplete"`, which this probe family writes as a REFUSAL, carries
         // `"aboard record"` inside it.
-        String bound = exec("stellurgytest player bindings");
+        String bound = read("stellurgytest player bindings").raw();
         assertTrue("a stamped aboard record must be REPORTED as a binding — the question 'what is"
                 + " this player bound to' is half the contract: " + bound,
                 Reply.of(bound).holdsText(BOUND, ABOARD_RECORD));
 
-        String released = exec("stellurgytest player release");
+        String released = act("stellurgytest player release").raw();
         assertTrue("the release must NAME the aboard record it let go; a release nobody can see is"
                 + " indistinguishable from no release: " + released,
                 Reply.of(released).holdsText(RELEASED, ABOARD_RECORD));
 
         // Asked of production twice, two different ways: the release's own view and the aboard
         // record's independent read-only witness. One of them agreeing with itself proves nothing.
-        String after = exec("stellurgytest player bindings");
+        String after = read("stellurgytest player bindings").raw();
         assertTrue("after a release he must be bound to nothing: " + after,
                 (Reply.of(after).arrayLength("bound") == 0));
-        String tag = exec("stellurgytest space aboard-tag " + fakeName());
+        String tag = read("stellurgytest space aboard-tag " + fakeName()).raw();
         assertTrue("and the record's own witness must agree that it is gone: " + tag,
                 (!Reply.of(tag).bool("tagged")));
     }
@@ -121,21 +121,21 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
     @Test
     public void theTransferGraceIsAlsoABindingAndIsReleasedWithTheRest() throws Exception {
         ensurePlayer();
-        String bind = exec("stellurgytest player bind-grace");
+        String bind = arrange("stellurgytest player bind-grace").raw();
         assertTrue("the arrangement must actually open the window: " + bind,
                 Reply.of(bind).bool("active"));
 
-        String bound = exec("stellurgytest player bindings");
+        String bound = read("stellurgytest player bindings").raw();
         assertTrue("the post-transfer grace is a binding like any other — it SUPPRESSES the suit"
                 + " check, so a player carrying one into his next situation is measured against a"
                 + " gate that was told to stand down: " + bound,
                 Reply.of(bound).holdsText(BOUND, TRANSFER_GRACE));
 
-        String released = exec("stellurgytest player release");
+        String released = act("stellurgytest player release").raw();
         assertTrue("the release must name the grace: " + released,
                 Reply.of(released).holdsText(RELEASED, TRANSFER_GRACE));
 
-        String after = exec("stellurgytest player bindings");
+        String after = read("stellurgytest player bindings").raw();
         assertTrue("after a release he must be bound to nothing: " + after,
                 (Reply.of(after).arrayLength("bound") == 0));
     }
@@ -143,15 +143,15 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
     @Test
     public void twoBindingsAtOnceAreBothReportedAndBothReleased() throws Exception {
         ensurePlayer();
-        exec("stellurgytest player bind-aboard " + SHIP);
-        exec("stellurgytest player bind-grace");
+        arrange("stellurgytest player bind-aboard " + SHIP);
+        arrange("stellurgytest player bind-grace");
 
-        String bound = exec("stellurgytest player bindings");
+        String bound = read("stellurgytest player bindings").raw();
         assertTrue("both bindings must be reported, not the first one found: " + bound,
                 Reply.of(bound).holdsText(BOUND, ABOARD_RECORD)
                         && Reply.of(bound).holdsText(BOUND, TRANSFER_GRACE));
 
-        String released = exec("stellurgytest player release");
+        String released = act("stellurgytest player release").raw();
         assertTrue("a release stops at nothing: both must be named: " + released,
                 Reply.of(released).holdsText(RELEASED, ABOARD_RECORD)
                         && Reply.of(released).holdsText(RELEASED, TRANSFER_GRACE));
@@ -159,7 +159,7 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
                         + " owner said it actually let go: " + released,
                 (Reply.of(released).integer("releasedCount") == 0));
 
-        String after = exec("stellurgytest player bindings");
+        String after = read("stellurgytest player bindings").raw();
         assertTrue("after a release he must be bound to nothing: " + after,
                 (Reply.of(after).arrayLength("bound") == 0));
     }
@@ -184,19 +184,19 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
         ensurePlayer();
         // A record that says he was out in space, on a ship this server has never heard of — the
         // SHIP_UNKNOWN orphan branch, and a grace still open when he comes back.
-        exec("stellurgytest player bind-aboard " + SHIP + " spaceborne");
-        exec("stellurgytest player bind-grace");
+        arrange("stellurgytest player bind-aboard " + SHIP + " spaceborne").raw();
+        arrange("stellurgytest player bind-grace");
         // THE CONTROL: both are held before the login, asked of the same witness as after it.
-        String before = exec("stellurgytest player bindings");
+        String before = read("stellurgytest player bindings").raw();
         assertTrue("before the login he must be bound to his ship AND inside his transfer grace: "
                         + before,
                 Reply.of(before).holdsText(BOUND, ABOARD_RECORD)
                         && Reply.of(before).holdsText(BOUND, TRANSFER_GRACE));
 
-        String login = exec("stellurgytest player load-from-file");
+        String login = act("stellurgytest player load-from-file").raw();
         assertTrue("the login event must be posted: " + login, Reply.of(login).ok());
 
-        String after = exec("stellurgytest player bindings");
+        String after = read("stellurgytest player bindings").raw();
         assertTrue("a player orphaned from a ship the server no longer knows must come back bound to"
                 + " nothing — every binding to a ship or a cell released by the login: " + after,
                 (Reply.of(after).arrayLength(BOUND) == 0));

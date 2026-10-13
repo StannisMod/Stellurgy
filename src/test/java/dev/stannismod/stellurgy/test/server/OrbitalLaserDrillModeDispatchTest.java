@@ -40,8 +40,8 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
     @Pins("INV-MBM-04")
     @Test
     public void miningModeBreaksTargetBlockAndYieldsItsDrop() throws Exception {
-        String resp = exec("stellurgytest infra laserdrill-mine 0 "
-                + X + " " + Y + " " + Z + " minecraft:iron_ore");
+        String resp = act("stellurgytest infra laserdrill-mine 0 "
+                + X + " " + Y + " " + Z + " minecraft:iron_ore").raw();
 
         assertTrue("probe must succeed: " + resp, Reply.of(resp).ok());
 

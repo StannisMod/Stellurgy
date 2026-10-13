@@ -118,13 +118,13 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
         // residue left in the generator's small buffer so the accumulator is the only real source.
         place("affs:field_generator", ax, ez);
         for (int i = 0; i < 6; i++) {
-            exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-            exec("stellurgytest shield tick " + DIM);
+            act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+            act("stellurgytest shield tick " + DIM);
         }
 
         // Now run the emitter off the reserve for a good many ticks.
         for (int i = 0; i < 20; i++) {
-            exec("stellurgytest shield tick " + DIM);
+            act("stellurgytest shield tick " + DIM);
         }
 
         ShieldTile emitter = read(ax, ez);
@@ -142,17 +142,17 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
     }
 
     private void chargeIteration(int gx, int gz) throws Exception {
-        exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-        exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-        exec("stellurgytest shield tick " + DIM);
+        arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+        act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+        act("stellurgytest shield tick " + DIM);
     }
 
     private ShieldTile read(int x, int z) throws Exception {
-        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+        return ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

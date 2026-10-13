@@ -57,7 +57,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
         // `AirState.earthLike()`), so from here on every unit of oxygen that appears is the plant's —
         // which is what lets the oxygen coming back be read exactly instead of as a floor.
         arrange("stellurgytest vent setair 0 " + cxPlant + " " + cy + " " + cz
-                + " " + ppm(640_000) + " " + ppm(210_000) + " " + ppm(150_000));
+                + " " + ppm(640_000) + " " + ppm(210_000) + " " + ppm(150_000)).requireOk();
 
         // Duct run leaving the vent, then the plant at the far end: the plant touches no zone.
         placeDuct(cxPlant + 1);
@@ -93,7 +93,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
         assertEquals("and every unit of CO2 it took must come back to the room as oxygen: " + before
                 + " → " + after, co2Removed, o2Returned);
 
-        Reply slot = ask("stellurgytest hatch read 0 " + (cxPlant + 4) + " " + cy + " " + cz);
+        Reply slot = read("stellurgytest hatch read 0 " + (cxPlant + 4) + " " + cy + " " + cz);
         assertTrue("the carbon it took out of that room must appear in the PLANT's slot, not the "
                 + "room's: " + slot + " | air=" + after + " | network=" + subnetInfo(cxPlant + 2),
                 slot.element("slots", "item", "stellurgy:carbondust").integer("count") >= 1);
@@ -152,7 +152,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     public void underADeficitTheHigherPriorityZoneIsServedFirst() throws Exception {
         int roomA = stand("two stale rooms on one plant, one of them prioritised");
         int roomB = roomA + SECOND_ROOM_OFFSET;
-        String plantRateBefore = arrange("stellurgytest config get lifeSupportPlantRate").text("value");
+        String plantRateBefore = read("stellurgytest config get lifeSupportPlantRate").requireOk().text("value");
         try {
             buildStaleRoom(roomA);
             buildStaleRoom(roomB);
@@ -169,9 +169,9 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
             injectEnergyAt(roomA + 4, cy - 1, 1_000_000);
 
             // Less than one room can take: 3000 a tick against a duct that would pass 6000.
-            arrange("stellurgytest config set lifeSupportPlantRate 60000");
+            arrange("stellurgytest config set lifeSupportPlantRate 60000").requireOk();
 
-            Reply high = arrange("stellurgytest vent priority 0 " + roomA + " " + cy + " " + cz + " 1");
+            Reply high = act("stellurgytest vent priority 0 " + roomA + " " + cy + " " + cz + " 1");
             assertEquals("priority set failed: " + high, 1, high.integer("priority"));
 
             // Measure from a snapshot taken HERE, not from the value setair wrote: the server ticks
@@ -189,7 +189,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
             assertEquals("and under a deficit the normal-priority room must get nothing, not a "
                     + "share: " + b, baseB, b.longInteger("airCO2"));
         } finally {
-            arrange("stellurgytest config set lifeSupportPlantRate " + plantRateBefore);
+            arrange("stellurgytest config set lifeSupportPlantRate " + plantRateBefore).requireOk();
         }
     }
 
@@ -198,26 +198,26 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     /** A sealed, maintained room whose air has been breathed down. */
     private void buildStaleRoom(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
 
         place(cx, cy, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000").requireOk();
 
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1");
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5");
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5").requireOk();
 
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
     }
 
     private void placeDuct(int x) throws Exception {
@@ -229,7 +229,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, int y, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + cz + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + cz + " " + block).requireOk();
         assertTrue(block + " place failed at " + x + "," + y + ": " + resp, resp.bool("placed"));
     }
 
@@ -242,15 +242,15 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     }
 
     private void solve(int ticks) throws Exception {
-        Reply solved = arrange("stellurgytest subnet solve lifesupport 0 " + ticks);
+        Reply solved = act("stellurgytest subnet solve lifesupport 0 " + ticks).requireOk();
         assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
     private Reply subnetInfo(int x) throws Exception {
-        return ask("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
+        return read("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
     }
 }

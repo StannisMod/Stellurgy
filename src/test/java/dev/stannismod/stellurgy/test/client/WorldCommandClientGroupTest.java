@@ -79,12 +79,12 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
     /** Ops the bot: every verb below is op-gated, and an un-opped run fails as a permission error
      *  that reads nothing like the contract under test. */
     private void opTheBot() throws Exception {
-        String op = exec("stellurgytest player op-self");
+        String op = arrange("stellurgytest player op-self").raw();
         scenario().requireArranged("op-self must succeed: " + op, Reply.of(op).bool("opped"));
     }
 
     private String botName() throws Exception {
-        return PlayerState.botName(this::exec);
+        return PlayerState.botName(c -> read(c).raw());
     }
 
     /**
@@ -171,7 +171,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
     public void stellurgyGiveStationAddsChipToPlayerInventory() throws Exception {
         scenario().arranging("op the bot and create a station for the chip to bind to");
         opTheBot();
-        String create = exec("stellurgytest station create " + plot().dim);
+        String create = arrange("stellurgytest station create " + plot().dim).raw();
         Reply created = Reply.of("stellurgytest station create", create);
         scenario().requireArranged("station create response must include id: " + create,
                 created.has(STATION_ID));
@@ -205,7 +205,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
                 + "inventory; client count=" + count + " (the slot write was recorded: "
                 + slotWrites + ")", count >= 1);
 
-        String post = exec("stellurgytest player inventory-contains stellurgy:spacestationchip");
+        String post = read("stellurgytest player inventory-contains stellurgy:spacestationchip").raw();
         assertTrue("server inventory must also contain the chip: " + post,
                 !(Reply.of(post).integer("count") == 0));
     }
@@ -218,15 +218,15 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
     public void stellurgyGotoTransfersPlayerToTargetDim() throws Exception {
         scenario().arranging("op the bot and generate a planet to travel to");
         opTheBot();
-        String before = exec("stellurgytest dim list");
-        exec("ar planet generate 0 GotoTarget");
-        String after = exec("stellurgytest dim list");
+        String before = read("stellurgytest dim list").raw();
+        arrange("ar planet generate 0 GotoTarget");
+        String after = read("stellurgytest dim list").raw();
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
                 + " after=" + after, targetDim != -1);
         try {
-            exec("stellurgytest dim load " + targetDim);
+            arrange("stellurgytest dim load " + targetDim);
 
             scenario().asserting("the client renders the target dim after the command");
             Events clientLog = clientEvents();
@@ -236,14 +236,14 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
                     "the server half is read below and would agree about a world the client never"
                             + " reached");
 
-            String health = exec("stellurgytest player health");
+            String health = read("stellurgytest player health").raw();
             assertTrue("server must agree the player is in dim " + targetDim + ": " + health,
                     String.valueOf(targetDim).equals(Reply.of(health).text("dim")));
         } finally {
             // The dimension itself must go: a generated planet outlives the scenario and the next
             // one's `ar planet list` diff would see it. The player's own return is the reset's.
-            exec("stellurgytest tp " + plot().dim);
-            exec("ar planet delete " + targetDim);
+            arrange("stellurgytest tp " + plot().dim).raw();
+            arrange("ar planet delete " + targetDim);
         }
     }
 
@@ -274,9 +274,9 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
         opTheBot();
         Events clientLog = clientEvents();
         long heard = clientLog.mark();
-        String before = exec("stellurgytest dim list");
-        exec("ar planet generate 0 WithdrawTarget");
-        String after = exec("stellurgytest dim list");
+        String before = read("stellurgytest dim list").raw();
+        arrange("ar planet generate 0 WithdrawTarget");
+        String after = read("stellurgytest dim list").raw();
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
@@ -291,7 +291,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
 
         scenario().asserting("after the deletion the client's Forge registry no longer holds the id");
         long deleted = clientLog.mark();
-        exec("ar planet delete " + targetDim);
+        arrange("ar planet delete " + targetDim);
         String forgotten = clientLog.awaitRecordWithFields(deleted, "client_dim_forgotten",
                 "the client was never told the planet was deleted", REPLY_BUDGET_TICKS,
                 "dim", String.valueOf(targetDim));
@@ -317,15 +317,15 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
         scenario().requireArranged("the client must name the world type it starts in, else the"
                 + " comparison below has nothing to change FROM; got '" + home + "'", !home.isEmpty());
 
-        String before = exec("stellurgytest dim list");
-        exec("ar planet generate 0 WorldTypeTarget");
-        String after = exec("stellurgytest dim list");
+        String before = read("stellurgytest dim list").raw();
+        arrange("ar planet generate 0 WorldTypeTarget");
+        String after = read("stellurgytest dim list").raw();
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
                 + " after=" + after, targetDim != -1);
         try {
-            exec("stellurgytest dim load " + targetDim);
+            arrange("stellurgytest dim load " + targetDim);
 
             scenario().asserting("the client renders the planet's own world type after arriving");
             Events clientLog = clientEvents();
@@ -342,8 +342,8 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
             assertNotEquals("the world type the client renders must differ between the overworld"
                     + " and a planet, or it is not per-dimension at all", home, onPlanet);
         } finally {
-            exec("stellurgytest tp " + plot().dim);
-            exec("ar planet delete " + targetDim);
+            arrange("stellurgytest tp " + plot().dim);
+            arrange("ar planet delete " + targetDim);
         }
     }
 
@@ -361,14 +361,14 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
     public void stellurgyGotoStationTeleportsToStationSpawnInSpaceDim() throws Exception {
         scenario().arranging("op the bot and create a station to travel to");
         opTheBot();
-        String create = exec("stellurgytest station create " + plot().dim);
+        String create = arrange("stellurgytest station create " + plot().dim).raw();
         Reply created = Reply.of("stellurgytest station create", create);
         scenario().requireArranged("station create must succeed: " + create,
                 created.has(STATION_ID));
         int stationId = created.integer(STATION_ID);
         scenario().record("stationId", stationId);
 
-        exec("stellurgytest dim load " + SPACE_DIM);
+        arrange("stellurgytest dim load " + SPACE_DIM);
 
         scenario().asserting("the client renders the space dim after the command");
         Events clientLog = clientEvents();
@@ -472,7 +472,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
         assertTrue("self-fetch must leave bot within 1 block of its prior position:" + where,
                 Math.abs(postZ - preZ) < 1.0);
 
-        String postServer = exec("stellurgytest player health");
+        String postServer = read("stellurgytest player health").raw();
         assertTrue("server-side X must agree with the client view: " + postServer,
                 Math.abs(extractDouble(postServer, POS_X) - postX) < 1.0);
     }

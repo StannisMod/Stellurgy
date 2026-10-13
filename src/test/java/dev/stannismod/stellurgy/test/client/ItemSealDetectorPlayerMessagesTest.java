@@ -98,7 +98,7 @@ public class ItemSealDetectorPlayerMessagesTest extends AbstractSharedClientTest
         int cz = z >> 4;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-                exec("stellurgytest chunk forceload " + plot().dim + " " + (cx + dx) + " " + (cz + dz));
+                arrange("stellurgytest chunk forceload " + plot().dim + " " + (cx + dx) + " " + (cz + dz));
             }
         }
     }
@@ -181,22 +181,22 @@ public class ItemSealDetectorPlayerMessagesTest extends AbstractSharedClientTest
                 .arranging("place the " + fixtureBlock + " fixture at " + x + "," + Y + "," + z);
 
         forceLoadAround(x, z);
-        String placed = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " " + fixtureBlock);
+        String placed = arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " " + fixtureBlock).raw();
         // Air placement is a no-op for /stellurgytest place but force-loads the chunk — accept either
         // "placed":true or a "placed":false echoing that the block was already there.
         scenario().requireArranged("place must not error at " + x + "," + Y + "," + z
                 + " with " + fixtureBlock + "; resp=" + placed, !Reply.of(placed).has("error"));
 
         scenario().arranging("perch the player two blocks south of the fixture");
-        String perch = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + perchZ + " minecraft:stone");
+        String perch = arrange("stellurgytest place " + dim + " " + x + " " + Y + " " + perchZ + " minecraft:stone").raw();
         scenario().requireArranged("perch place must not error: " + perch, !Reply.of(perch).has("error"));
 
         scenario().arranging("give the seal detector and wait for the CLIENT to render it in hand");
         long equipMark = clientEvents().mark();
-        String give = exec("stellurgytest player give-held stellurgy:sealdetector");
+        String give = arrange("stellurgytest player give-held stellurgy:sealdetector").raw();
         scenario().requireArranged("give-held sealdetector must succeed: " + give,
                 Reply.of(give).ok());
-        exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 1.5));
+        arrange("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 1.5));
         awaitClientPlacedNear(equipMark, x + 0.5, z - 1.5,
                 "the detector is used from where the player stands, so the client must have been"
                         + " put there before it clicks");
@@ -243,7 +243,7 @@ public class ItemSealDetectorPlayerMessagesTest extends AbstractSharedClientTest
                 LINK_BUDGET_TICKS);
 
         scenario().asserting("production dispatch and the server-tier mirror agree on the branch");
-        String checkResp = exec("stellurgytest seal-detector check " + dim + " " + x + " " + Y + " " + z);
+        String checkResp = read("stellurgytest seal-detector check " + dim + " " + x + " " + Y + " " + z).raw();
         assertEquals("production dispatch and server-tier mirror must agree on branch for "
                         + fixtureBlock, expected, fieldOf(BRANCH, checkResp, "branch"));
     }

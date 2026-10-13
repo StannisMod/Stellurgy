@@ -115,7 +115,7 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
                 arrangedShipId, Reply.of(tag).text("shipId"));
         // He must really be resolved on the DECK, in the ship's own frame, before the restart: that
         // is what produces the record asserted above, and a hull-stand catch is not it.
-        DeckCapture capBefore = DeckCapture.read(this::exec);
+        DeckCapture capBefore = DeckCapture.read(c -> read(c).raw());
         requireArranged("he must be captured ABOARD the deck after standing up, or the record "
                 + "above describes something other than a crew member on his feet: " + capBefore.raw(),
                 capBefore.alreadyTracked
@@ -124,11 +124,11 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
         // Without it the two claims are about possibly different craft and the sentence "the record
         // describes this crew member on this deck" is not established by either of them.
         capBefore.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
+                ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), slotDim, arrangedShipId,
                         200),
                 "the deck he is captured on must be the ship the STANDING record names");
 
-        PlayerPosition serverBeforeLogout = PlayerPosition.of(this::exec, BOT);
+        PlayerPosition serverBeforeLogout = PlayerPosition.of(c -> read(c).raw(), BOT);
         assertEquals("the SERVER must still have him in his ship's slot dimension when it writes him "
                 + "to disk: " + serverBeforeLogout.raw(), slotDim, serverBeforeLogout.dim);
 
@@ -140,10 +140,10 @@ public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreC
         // Both discriminators, BEFORE the client connects. Without them a client reading says
         // nothing about the record: a second boot whose subsystem stood down, or whose ledger did
         // not survive the shutdown save, would leave him at an ordinary spawn for its own reasons.
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is "
                 + "exercising it: " + statusAfter.raw(), statusAfter.registered);
-        LedgerEntry ledger = LedgerEntry.forShip(this::exec, arrangedShipId);
+        LedgerEntry ledger = LedgerEntry.forShip(c -> read(c).raw(), arrangedShipId);
         assertTrue("his ship must still be ledgered - there has to be a ship to restore him ONTO: "
                 + ledger.raw(), ledger.found);
 

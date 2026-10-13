@@ -68,12 +68,12 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
     private static final String PLAIN_SUBJECT_BLOCK = "minecraft:iron_block";
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** A craft left behind goes on ticking in the world the next scenario runs in. */
     @Before
     public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
+        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
     }
 
     /**
@@ -89,9 +89,9 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
             + " at the vacated subspace address 19200001,129,51200\". 2026-09-30.")
     @Test
     public void aRelocatedShipCarriesItsDamageAndLeavesNoneBehind() throws Exception {
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
         FixtureSite site = FixtureSite.openAir(0, SRC_X, SRC_Z);
-        WarShip ship = WarShip.build(events, this::exec, site, builder -> addPlainSubjectBlock(site),
+        WarShip ship = WarShip.build(events, commands(), site, builder -> addPlainSubjectBlock(site),
                 "the craft whose damage is carried");
 
         // A block of this ship whose subspace address we know, used only as the anchor the yard is
@@ -112,13 +112,13 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
         // comes out of it is a NEW physics object under the same durable name.
         Reply pose = ship.info();
         long moved = events.mark();
-        Reply repack = ask("stellurgytest vs ship-repack 0 id " + ship.vsShip + " " + (int) pose.number("posX")
+        Reply repack = act("stellurgytest vs ship-repack 0 id " + ship.vsShip + " " + (int) pose.number("posX")
                 + " " + (int) pose.number("posY") + " " + (int) pose.number("posZ") + " " + DST_X + " "
                 + DST_Y + " " + DST_Z).requireOk("relocate the ship");
         String spawned = events.awaitRecordWithField(moved, "ship_spawned", "stellurgyShip", ship.durable,
                 "the relocated ship never re-registered: " + repack, LINK_TICKS);
         String movedShip = Events.text(spawned, "vsShip");
-        Reply movedSeat = Reply.of(exec("stellurgytest vs find-seat 0 id " + movedShip));
+        Reply movedSeat = Reply.of(read("stellurgytest vs find-seat 0 id " + movedShip).raw());
         assertTrue("could not locate the relocated ship's seat: " + movedSeat, movedSeat.bool("seatFound"));
         int[] newSeat = {movedSeat.integer("seatX"), movedSeat.integer("seatY"), movedSeat.integer("seatZ")};
 
@@ -157,9 +157,9 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
             + " expected:&lt;[0/true/stellurgy:advrocketmotor, ...]&gt; but was:&lt;[]&gt;\". 2026-09-30.")
     @Test
     public void breakingAndReplacingTheFlightComputerDoesNotRepairTheHull() throws Exception {
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
         FixtureSite site = FixtureSite.openAir(0, AFC_X, AFC_Z);
-        WarShip ship = WarShip.build(events, this::exec, site, builder -> addPlainSubjectBlock(site),
+        WarShip ship = WarShip.build(events, commands(), site, builder -> addPlainSubjectBlock(site),
                 "the craft whose flight computer is swapped");
         int[] seat = ship.seat();
 
@@ -182,11 +182,11 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
 
         // Mine the flight computer out, and put an identical one back — the whole exploit, in two calls.
         String afcPos = afcX + " " + afcY + " " + afcZ + " " + afcX + " " + afcY + " " + afcZ;
-        ask("stellurgytest fill 0 " + afcPos + " minecraft:air").requireOk("remove the flight computer");
+        arrange("stellurgytest fill 0 " + afcPos + " minecraft:air").requireOk("remove the flight computer");
         String removed = stage(afcX, afcY, afcZ).text("block");
         requireArranged("the flight computer is still standing (" + removed + "), so nothing was removed",
                 "minecraft:air".equals(removed));
-        ask("stellurgytest fill 0 " + afcPos + " " + afcBlock).requireOk("put the flight computer back");
+        arrange("stellurgytest fill 0 " + afcPos + " " + afcBlock).requireOk("put the flight computer back");
         String replaced = stage(afcX, afcY, afcZ).text("block");
         requireArranged("the replacement flight computer is not there (" + replaced + ")",
                 afcBlock.equals(replaced));
@@ -197,7 +197,7 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
     /** Weld one plain block onto the craft, face-adjacent to the pilot seat, before it is assembled. */
     private void addPlainSubjectBlock(FixtureSite site) throws Exception {
         int x = site.x + 4, y = site.y + 5, z = site.z + 3;   // rocket+(1,4,0) — one east of the seat
-        ask("stellurgytest fill 0 " + x + " " + y + " " + z + " " + x + " " + y + " " + z + " "
+        arrange("stellurgytest fill 0 " + x + " " + y + " " + z + " " + x + " " + y + " " + z + " "
                 + PLAIN_SUBJECT_BLOCK).requireOk("add the plain subject block");
     }
 
@@ -214,7 +214,7 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
                 + " welded on — the fixture layout it assumes has changed",
                 PLAIN_SUBJECT_BLOCK.equals(subject));
         double[] world = ship.toWorld(subjX, subjY, subjZ);
-        Reply result = ask("stellurgytest damage impact 0 " + world[0] + " " + (world[1] + 6.0D) + " "
+        Reply result = act("stellurgytest damage impact 0 " + world[0] + " " + (world[1] + 6.0D) + " "
                 + world[2] + " 0 -1 0 200000 KINETIC " + impactId).requireOk("shoot the plain block");
         requireArranged("the impact resolved to no ship, so nothing on this hull was damaged:\n" + result,
                 result.bool("onShip"));
@@ -240,13 +240,13 @@ public class ShipDamageSurvivesRelocationTest extends AbstractSharedServerTest {
 
     /** The same reading with its POSITIONS intact — for failure messages, where they are the evidence. */
     private Reply rawYardDamage(int[] anchor) throws Exception {
-        return ask("stellurgytest damage records 0 " + (anchor[0] - YARD_PROBE_RADIUS) + " "
+        return read("stellurgytest damage records 0 " + (anchor[0] - YARD_PROBE_RADIUS) + " "
                 + Math.max(0, anchor[1] - YARD_PROBE_RADIUS) + " " + (anchor[2] - YARD_PROBE_RADIUS) + " "
                 + (anchor[0] + YARD_PROBE_RADIUS) + " " + (anchor[1] + YARD_PROBE_RADIUS) + " "
                 + (anchor[2] + YARD_PROBE_RADIUS)).requireOk("read the yard's damage records");
     }
 
     private Reply stage(int x, int y, int z) throws Exception {
-        return ask("stellurgytest damage stage 0 " + x + " " + y + " " + z).requireOk("read a stage");
+        return read("stellurgytest damage stage 0 " + x + " " + y + " " + z).requireOk("read a stage");
     }
 }

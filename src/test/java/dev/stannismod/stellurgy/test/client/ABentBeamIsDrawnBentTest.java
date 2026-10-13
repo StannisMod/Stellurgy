@@ -47,16 +47,16 @@ public class ABentBeamIsDrawnBentTest extends AbstractOwnBootClientTest {
             + " still drawing a straight line\" while the server reads {@code beamLit:true} (2026-09-29).")
     @Test
     public void aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
-        serverClient().execute("tp @a " + (GUN_X + 4) + ".5 " + (Y + 1) + " " + (Z + 0.5D));
+        serverClient().arrange("tp @a " + (GUN_X + 4) + ".5 " + (Y + 1) + " " + (Z + 0.5D));
 
         long built = server.markInstrumented();
         buildBeamGun();
         Weapons.awaitAssembled(server, built, GUN_X, Y, Z, PARTS, "the beam gun never assembled");
 
         // Leg one, the control: plain iron. A beam that meets it is a straight line to its end.
-        ask("stellurgytest fill " + DIM + " " + TARGET_X + " " + Y + " " + Z + " " + (TARGET_X + 5) + " "
+        arrange("stellurgytest fill " + DIM + " " + TARGET_X + " " + Y + " " + Z + " " + (TARGET_X + 5) + " "
                 + Y + " " + Z + " minecraft:iron_block").requireOk("build the iron wall");
         long straight = client.mark();
         aimAtTarget();
@@ -74,7 +74,7 @@ public class ABentBeamIsDrawnBentTest extends AbstractOwnBootClientTest {
         // Leg two: swap the iron the beam is standing on for a mirror. Same gun, same aim, same
         // distance — the ONE thing that changes is what the beam meets.
         long mirrored = client.mark();
-        ask("stellurgytest fill " + DIM + " " + TARGET_X + " " + Y + " " + Z + " " + (TARGET_X + 5) + " "
+        arrange("stellurgytest fill " + DIM + " " + TARGET_X + " " + Y + " " + Z + " " + (TARGET_X + 5) + " "
                 + Y + " " + Z + " minecraft:air").requireOk("take the iron away");
         place("stellurgy:mirrorPlatingGold", TARGET_X, Y, Z);
         place("minecraft:iron_block", TARGET_X + 1, Y, Z);
@@ -91,12 +91,12 @@ public class ABentBeamIsDrawnBentTest extends AbstractOwnBootClientTest {
     // ---- building
 
     private void buildBeamGun() throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((GUN_X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((GUN_X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((GUN_X + 48) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill " + DIM + " " + (GUN_X - 8) + " " + (Y - 2) + " " + (Z - 4) + " "
+        arrange("stellurgytest fill " + DIM + " " + (GUN_X - 8) + " " + (Y - 2) + " " + (Z - 4) + " "
                 + (GUN_X + 40) + " " + (Y + 12) + " " + (Z + 4) + " minecraft:air").requireOk("clear the site");
         for (int cx = ((GUN_X - 16) >> 4); cx <= ((GUN_X + 40) >> 4); cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
         place("stellurgy:turret", GUN_X, Y, Z);
         for (int i = 1; i <= 3; i++) {
@@ -107,7 +107,7 @@ public class ABentBeamIsDrawnBentTest extends AbstractOwnBootClientTest {
     }
 
     private void aimAtTarget() throws Exception {
-        ask("stellurgytest turret target " + DIM + " " + GUN_X + " " + Y + " " + Z + " "
+        arrange("stellurgytest turret target " + DIM + " " + GUN_X + " " + Y + " " + Z + " "
                 + (TARGET_X + 0.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("aim the gun");
     }
 
@@ -119,25 +119,27 @@ public class ABentBeamIsDrawnBentTest extends AbstractOwnBootClientTest {
      * never arrived.
      */
     private void charge() throws Exception {
-        exec("stellurgytest turret charge " + DIM + " " + GUN_X + " " + Y + " " + Z);
+        arrange("stellurgytest turret charge " + DIM + " " + GUN_X + " " + Y + " " + Z);
     }
 
     // ---- reading
 
     private Reply read() throws Exception {
-        return ask("stellurgytest turret read " + DIM + " " + GUN_X + " " + Y + " " + Z);
+        return read("stellurgytest turret read " + DIM + " " + GUN_X + " " + Y + " " + Z);
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
     }
 }

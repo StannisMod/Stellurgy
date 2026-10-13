@@ -56,7 +56,7 @@ public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
         assertTrue("sanity: the handler should hand over more than one SoundEvent, found "
                 + declaredPaths.size(), declaredPaths.size() > 1);
 
-        String resp = join(client().execute("stellurgytest registry sounds stellurgy"));
+        String resp = join(client().read("stellurgytest registry sounds stellurgy"));
         assertTrue("registry sounds probe errored: " + resp, Reply.of(resp).ok());
         // MEMBERSHIP of the sound list, asked of the list. As a quoted substring over the whole
         // rendering it was also answered by the `namespace` field, and by any path that merely
@@ -85,7 +85,7 @@ public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
         // This jar registers ten entities of its own before either vendored code base adds one, so a
         // scan that saw fewer examined a registry that had not finished loading.
         final int minScanned = 10;
-        String report = join(client().execute("stellurgytest entity registry"));
+        String report = join(client().read("stellurgytest entity registry"));
         Reply reply = Reply.of(report);
         assertTrue("the registry probe must answer: " + report, reply.ok());
         assertTrue("the probe must report how many entities it examined: " + report, reply.has("checked"));
@@ -108,15 +108,15 @@ public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
     public void hovercraftSpawnsAndTicksWithoutCrash() throws Exception {
         FixtureSite s = site();
         // Solid floor so the hovercraft rests on stone.
-        client().execute("stellurgytest fill 0 " + (s.x - 1) + " " + (s.y - 1) + " " + (s.z - 1)
+        client().arrange("stellurgytest fill 0 " + (s.x - 1) + " " + (s.y - 1) + " " + (s.z - 1)
                 + " " + (s.x + 1) + " " + (s.y - 1) + " " + (s.z + 1) + " minecraft:stone");
 
-        String spawn = join(client().execute("stellurgytest entity spawn 0 " + s.x + ".5 " + s.y + " "
+        String spawn = join(client().arrange("stellurgytest entity spawn 0 " + s.x + ".5 " + s.y + " "
                 + s.z + ".5 stellurgy:StellurgyHoverCraft"));
         assertTrue("hovercraft spawn failed: " + spawn, Reply.of(spawn).ok() && Reply.of(spawn).bool("spawned"));
         int entityId = Reply.of("stellurgytest entity spawn", spawn).integer("entityId");
 
-        EntityState info = EntityState.byId(cmd -> join(client().execute(cmd)), 0, entityId);
+        EntityState info = EntityState.byId(cmd -> join(client().read(cmd)), 0, entityId);
         // Asked of the `entityClass` FIELD by its simple name: `contains` also accepted any subclass
         // or package component carrying those letters.
         info.entityClass();

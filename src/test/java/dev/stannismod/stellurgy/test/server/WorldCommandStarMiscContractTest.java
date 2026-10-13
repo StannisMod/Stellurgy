@@ -32,7 +32,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
 
     @Test
     public void starListIncludesSolAsId0() throws Exception {
-        String list = exec("ar star list");
+        String list = read("ar star list").raw();
         assertTrue("star list must include Sol — got: " + list,
                 list.contains("Star ID: 0") && list.contains("Sol"));
     }
@@ -51,7 +51,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
             + " \"Earth's star must be the registered star 0 itself, not a copy with its id: {… \"starIsRegistered\":false …}\".")
     @Test
     public void earthBelongsToTheRegisteredSolNotToACopyOfIt() throws Exception {
-        Reply earth = Reply.of(exec("stellurgytest planet info 0"));
+        Reply earth = Reply.of(read("stellurgytest planet info 0").raw());
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
                 "Earth is bound to star 0: " + earth, earth.integer("starId") == 0);
         assertTrue("Earth's star must be the registered star 0 itself, not a copy with its id: " + earth,
@@ -60,7 +60,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
 
     @Test
     public void starGetTempEchoesSolBaselineTemperature() throws Exception {
-        String resp = exec("ar star get temp 0");
+        String resp = read("ar star get temp 0").raw();
         Matcher m = TEMP_LINE.matcher(resp);
         assertTrue("must include a Temp: line — got: " + resp, m.find());
         assertEquals("Sol baseline temperature per DimensionManager ctor",
@@ -69,11 +69,11 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
 
     @Test
     public void starGenerateRegistersNewStarObservableInList() throws Exception {
-        String beforeList = exec("ar star list");
+        String beforeList = read("ar star list").raw();
         assertTrue("baseline list must NOT yet contain the test star name",
                 !beforeList.contains("GenStarA"));
-        exec("ar star generate GenStarA 8000 50 50");
-        String afterList = exec("ar star list");
+        arrange("ar star generate GenStarA 8000 50 50");
+        String afterList = read("ar star list").raw();
         // No `star delete` exists in production — the new star persists for
         // the rest of the shared harness. That's fine because (a) the name
         // is unique to this test and (b) subsequent tests don't enumerate
@@ -99,7 +99,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
     public void dumpBiomesWritesBiomeDumpFileWithVanillaPlainsBiome() throws Exception {
         ServerRoot root = harness().root();        requireArranged("BiomeDump.txt must not exist before the command, or its presence after proves"
                 + " nothing", !root.exists("BiomeDump.txt"));
-        exec("ar dev dumpBiomes");
+        arrange("ar dev dumpBiomes");
         assertTrue("BiomeDump.txt must exist after the command",
                 root.exists("BiomeDump.txt"));
         String body = root.readText("BiomeDump.txt");
@@ -113,7 +113,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
      *  once. XML hot-reload now succeeds. */
     @Test
     public void reloadRecipesEmitsSuccessConfirmationMessage() throws Exception {
-        String resp = exec("ar reloadRecipes");
+        String resp = arrange("ar reloadRecipes").raw();
         assertTrue("reloadRecipes must emit success confirmation — got: " + resp,
                 resp.contains("Recipes reloaded"));
         assertTrue("must NOT emit the catch-branch error envelope — got: " + resp,
@@ -123,7 +123,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
     private static final String CUTTING_COUNT = "TileCuttingMachine";
 
     private int cuttingMachineRecipeCount() throws Exception {
-        String summary = exec("stellurgytest machine recipes-summary");
+        String summary = read("stellurgytest machine recipes-summary").raw();
         Reply mReply = Reply.of(summary);
         assertTrue("recipes-summary must include TileCuttingMachine count: "
                 + summary, mReply.has(CUTTING_COUNT));
@@ -152,7 +152,7 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
         assertTrue("pre-condition: TileCuttingMachine must have recipes "
                 + "registered at init (got " + before + ")", before > 0);
 
-        String resp = exec("ar reloadRecipes");
+        String resp = arrange("ar reloadRecipes").raw();
         assertTrue("reload must succeed: " + resp,
                 resp.contains("Recipes reloaded"));
 

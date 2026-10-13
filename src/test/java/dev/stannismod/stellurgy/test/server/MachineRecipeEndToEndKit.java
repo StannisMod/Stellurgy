@@ -70,7 +70,7 @@ final class MachineRecipeEndToEndKit {
 
     static FixturePositions placeFixture(TestClient c, String fixtureKey,
                                          int cx, int cy, int cz) throws Exception {
-        String resp = String.join("\n", c.execute(
+        String resp = String.join("\n", c.arrange(
                 "stellurgytest fixture machine " + fixtureKey + " 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine " + fixtureKey + " failed: " + resp,
                 Reply.of(resp).ok());
@@ -120,7 +120,7 @@ final class MachineRecipeEndToEndKit {
      */
     static String tryComplete(TestClient c, int dim, int cx, int cy, int cz) throws Exception {
         return String.join("\n",
-                c.execute("stellurgytest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
+                c.act("stellurgytest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
     }
 
     static void assertFixtureValidates(TestClient c, int cx, int cy, int cz,
@@ -157,7 +157,7 @@ final class MachineRecipeEndToEndKit {
 
     static FirstRecipe resolveFirstRecipe(TestClient c, String tileShortName) throws Exception {
         String resp = String.join("\n",
-                c.execute("stellurgytest machine recipe-info " + tileShortName + " 0"));
+                c.read("stellurgytest machine recipe-info " + tileShortName + " 0"));
         assertTrue("recipe-info errored for " + tileShortName + ": " + resp,
                 !Reply.of(resp).has("error"));
         int time = 0;
@@ -213,18 +213,18 @@ final class MachineRecipeEndToEndKit {
         FirstRecipe r = resolveFirstRecipe(c, tileShortName);
         fillItemIngredients(c, fixtureKey, p, r.itemIngredients);
         fillFluidIngredients(c, fixtureKey, p, r.fluidIngredients);
-        String inject = String.join("\n", c.execute(
+        String inject = String.join("\n", c.arrange(
                 "stellurgytest energy inject 0 " + p.firstPower() + " 10000000"));
         assertTrue("power inject failed: " + inject, Reply.of(inject).ok());
-        String enable = String.join("\n", c.execute(
+        String enable = String.join("\n", c.arrange(
                 "stellurgytest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed: " + enable,
                 Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
         int tickBudget = Math.max(2000, r.time + 1000);
-        String tick = String.join("\n", c.execute(
+        String tick = String.join("\n", c.act(
                 "stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
         assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
-        return String.join("\n", c.execute("stellurgytest hatch read 0 " + p.firstOutput()));
+        return String.join("\n", c.read("stellurgytest hatch read 0 " + p.firstOutput()));
     }
 
     static void runFirstRecipeEndToEnd(TestClient c, String fixtureKey,
@@ -240,12 +240,12 @@ final class MachineRecipeEndToEndKit {
         fillItemIngredients(c, fixtureKey, p, r.itemIngredients);
         fillFluidIngredients(c, fixtureKey, p, r.fluidIngredients);
 
-        String inject = String.join("\n", c.execute(
+        String inject = String.join("\n", c.arrange(
                 "stellurgytest energy inject 0 " + p.firstPower() + " 10000000"));
         assertTrue("power inject failed for " + fixtureKey + ": " + inject,
                 Reply.of(inject).ok());
 
-        String enable = String.join("\n", c.execute(
+        String enable = String.join("\n", c.arrange(
                 "stellurgytest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed for " + fixtureKey + ": " + enable,
                 Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
@@ -256,7 +256,7 @@ final class MachineRecipeEndToEndKit {
         // Floor of 2000 keeps the 7 machines on their original budget;
         // ceiling extends to `time + 1000` for the long ones.
         int tickBudget = Math.max(2000, r.time + 1000);
-        String tick = String.join("\n", c.execute(
+        String tick = String.join("\n", c.act(
                 "stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
         assertTrue("force-tick failed for " + fixtureKey + ": " + tick,
                 Reply.of(tick).ok());
@@ -272,7 +272,7 @@ final class MachineRecipeEndToEndKit {
         // would false-positive on those. But if ALL slots remain at initial
         // count after recipe-time × N cycles, the recipe did not actually run.
         if (!r.itemIngredients.isEmpty()) {
-            String inputRead = String.join("\n", c.execute("stellurgytest hatch read 0 " + p.firstInput()));
+            String inputRead = String.join("\n", c.read("stellurgytest hatch read 0 " + p.firstInput()));
             boolean anyDrained = false;
             // ASKED of the list, not addressed in it: an element carrying all three of slot,
             // item and count is the slot still holding its initial stack, and NO such element is
@@ -303,7 +303,7 @@ final class MachineRecipeEndToEndKit {
             assertTrue(fixtureKey + " produces item " + expectedItem
                             + " but has no outputPos ('O' in structure)",
                     p.firstOutput() != null);
-            String read = String.join("\n", c.execute("stellurgytest hatch read 0 " + p.firstOutput()));
+            String read = String.join("\n", c.read("stellurgytest hatch read 0 " + p.firstOutput()));
             assertTrue("hatch read errored for " + fixtureKey + ": " + read,
                     !Reply.of(read).has("error"));
             // Addressed by the FETCH — the machine's own output hatch at `firstOutput()` — so the
@@ -323,7 +323,7 @@ final class MachineRecipeEndToEndKit {
             boolean found = false;
             StringBuilder seen = new StringBuilder();
             for (String pos : p.liquidOutputPositions) {
-                String read = String.join("\n", c.execute("stellurgytest fluid stored 0 " + pos));
+                String read = String.join("\n", c.read("stellurgytest fluid stored 0 " + pos));
                 seen.append(pos).append(" -> ").append(read).append('\n');
                 // A SEARCH over candidate positions: this position may legitimately hold nothing,
                 // so the question is existence and `element`'s refusal would end the loop.
@@ -371,7 +371,7 @@ final class MachineRecipeEndToEndKit {
                     hatchIdx < p.inputPositions.size());
             String pos = p.inputPositions.get(hatchIdx);
             // hatch fill <dim> <pos> <slot> <itemId> [count] [meta]
-            String fill = String.join("\n", c.execute(
+            String fill = String.join("\n", c.arrange(
                     "stellurgytest hatch fill 0 " + pos + " " + localSlot + " "
                             + ing[1] + " " + ing[2] + " " + ing[3]));
             assertTrue("hatch fill (hatch " + hatchIdx + " slot " + localSlot + " " + ing[1]
@@ -384,7 +384,7 @@ final class MachineRecipeEndToEndKit {
 
     /** Reads an input hatch's inventory size from a {@code hatch read}. */
     private static int readInventorySize(TestClient c, String pos) throws Exception {
-        String resp = String.join("\n", c.execute("stellurgytest hatch read 0 " + pos));
+        String resp = String.join("\n", c.read("stellurgytest hatch read 0 " + pos));
         Reply mReply = Reply.of(resp);
         assertTrue("could not read input-hatch size at " + pos + ": " + resp, mReply.has(INV_SIZE));
         return Integer.parseInt(mReply.text(INV_SIZE));
@@ -406,7 +406,7 @@ final class MachineRecipeEndToEndKit {
             String pos = p.liquidInputPositions.get(i);
             // ×10 safety margin — some impls drain slightly more than declared.
             int amount = Integer.parseInt(f[1]) * 10;
-            String fluidResp = String.join("\n", c.execute(
+            String fluidResp = String.join("\n", c.arrange(
                     "stellurgytest fluid inject 0 " + pos + " " + f[0] + " " + amount));
             assertTrue("fluid inject (" + f[0] + " ×" + amount + " into "
                             + pos + ") failed for " + fixtureKey + ": " + fluidResp,

@@ -90,11 +90,11 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
 
     private void assertOffersWasteHeat(String block) throws Exception {
         String at = standAlone(block);
-        arrange("stellurgytest place " + at + " " + block);
+        arrange("stellurgytest place " + at + " " + block).requireOk();
 
         // The probe answers `present:false, tile:"none"` for an empty position, so "the probe found a
         // tile" is the `tile` field and not `ok` — `ok` is true for both.
-        Reply emitter = arrange("stellurgytest heat emitter " + at);
+        Reply emitter = read("stellurgytest heat emitter " + at).requireOk();
         requireArranged("premise: the probe must find a tile there: " + emitter,
                 !"none".equals(emitter.text("tile")));
         assertTrue(block + " must offer a coolant loop its waste heat, and every powered machine "
@@ -115,9 +115,9 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
     @Test
     public void aTileThatIsNotAMachineOffersNothing() throws Exception {
         String at = standAlone("minecraft:chest");
-        arrange("stellurgytest place " + at + " minecraft:chest");
+        arrange("stellurgytest place " + at + " minecraft:chest").requireOk();
 
-        Reply emitter = arrange("stellurgytest heat emitter " + at);
+        Reply emitter = read("stellurgytest heat emitter " + at).requireOk();
         requireArranged("premise: the probe must find the chest's tile, or the capability was never"
                 + " asked: " + emitter, !"none".equals(emitter.text("tile")));
         assertFalse("a chest does no work and so has no waste heat to offer: " + emitter,

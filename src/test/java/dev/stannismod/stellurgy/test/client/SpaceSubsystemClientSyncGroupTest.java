@@ -65,7 +65,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
     }
 
     private String botName() throws Exception {
-        return PlayerState.botName(this::exec);
+        return PlayerState.botName(c -> read(c).raw());
     }
 
     // ── the CLIENT's own event log ────────────────────────────────────────────
@@ -197,13 +197,13 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
     public void aRealClientEntersASlotDimAndKeepsRendering() throws Exception {
         scenario().arranging("register a pool slot while the client is online, and bind a cell");
         String botName = botName();
-        String reg = exec("stellurgytest space pool-register 1");
+        String reg = arrange("stellurgytest space pool-register 1").raw();
         int[] pooled = Reply.of("stellurgytest space pool-register", reg).intArray(POOL_DIMS);
         scenario().requireArranged("pool-register must return the new dim id: " + reg,
                 pooled.length > 0);
         int slotDim = pooled[0];
         scenario().record("slotDim", slotDim);
-        exec("stellurgytest space load " + slotDim + " e2ecell");
+        arrange("stellurgytest space load " + slotDim + " e2ecell");
 
         // Move the REAL player through the production transfer FIRST — an empty loaded slot is
         // auto-unloaded by Forge at tick end and its unsaved edits are DISCARDED (the documented
@@ -211,7 +211,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         scenario().arranging("transfer the player in high, place a floor, then step onto it");
         Events clientLog = clientEvents();
         long entryMark = clientLog.mark();
-        String enter = exec("stellurgytest space enter " + botName + " " + slotDim + " 0.5 200 0.5");
+        String enter = arrange("stellurgytest space enter " + botName + " " + slotDim + " 0.5 200 0.5").raw();
         scenario().requireArranged("space enter must succeed: " + enter, Reply.of(enter).ok());
         // The client's own world is now the slot dim — the far side of the transfer, and the proof
         // that the registration sync landed (a client that never registered the dim could not build
@@ -233,10 +233,10 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         } catch (AssertionError arrangement) {
             scenario().arrangementFailed(arrangement.getMessage());
         }
-        exec("stellurgytest space set-block " + slotDim + " 0 64 0");
+        arrange("stellurgytest space set-block " + slotDim + " 0 64 0");
 
         long repositionMark = clientLog.mark();
-        String reposition = exec("stellurgytest space enter " + botName + " " + slotDim + " 0.5 66 0.5");
+        String reposition = arrange("stellurgytest space enter " + botName + " " + slotDim + " 0.5 66 0.5").raw();
         scenario().requireArranged("repositioning onto the platform must succeed: " + reposition,
                 Reply.of(reposition).ok());
         // A same-dim reposition is a server-side position write, and its far side is the client
@@ -273,7 +273,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         System.out.println("[spacesync] client Y " + placedY + " -> " + clientY + " over "
                 + SETTLE_WINDOW_TICKS + " ticks (the band is 63.5..68.0)");
         JsonObject clientBlock = bot().blockState(0, 64, 0);
-        String serverView = exec("stellurgytest player health");
+        String serverView = read("stellurgytest player health").raw();
         assertTrue("client-rendered Y must settle at the platform (~65), went " + placedY + " -> "
                 + clientY + " over " + SETTLE_WINDOW_TICKS + " ticks; client block(0,64,0)="
                 + clientBlock + "; server player: " + serverView, settled);
@@ -295,7 +295,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
 
         // The reader refuses a reply with no player in it, which IS this assertion; what is left
         // is naming it, so a red says which claim failed rather than printing a reply.
-        PlayerState.read(this::exec).requireName();
+        PlayerState.read(c -> read(c).raw()).requireName();
     }
 
     // ── system bodies broadcast ───────────────────────────────────────────────
@@ -327,21 +327,21 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
     public void aRealClientReceivesTheSettledShipsCellBodies() throws Exception {
         try {
             scenario().arranging("install the space stack and register a descend-target POI");
-            String setup = exec("stellurgytest space entry-setup 1");
+            String setup = arrange("stellurgytest space entry-setup 1").raw();
             int[] pooled = Reply.of("stellurgytest space entry-setup", setup).intArray(POOL_DIMS);
             scenario().requireArranged("entry-setup must return a slot dim: " + setup,
                     pooled.length > 0);
 
             // A descend-target PLANET at cell (0,5000,0), local (1000,500,-300). sy=5000 dodges the
             // fallback stars (all at sy=sz=0), so bodiesAt returns ONLY this POI.
-            String poi = exec("stellurgytest space add-poi 0 5000 0 1000 500 -300 PLANET 0 7");
+            String poi = arrange("stellurgytest space add-poi 0 5000 0 1000 500 -300 PLANET 0 7").raw();
             scenario().requireArranged("add-poi must register a descend target: " + poi,
                     Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
             // The dimension under test is the one the subsystem ACTUALLY bound the cell to, read
             // back from the settle. It is not the test's to choose: slot ids are minted per boot,
             // and a number picked here would only be a guess at the binding.
-            String settle = exec("stellurgytest space ledger-settle 0 5000 0 " + pooled[0]);
+            String settle = arrange("stellurgytest space ledger-settle 0 5000 0 " + pooled[0]).raw();
             scenario().requireArranged("ledger-settle must succeed: " + settle,
                     Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
@@ -374,7 +374,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
 
             scenario().arranging("put the player where a pilot in that cell would be");
             long insideMark = clientLog.mark();
-            String enter = exec("stellurgytest space enter " + botName() + " " + slotDim + " 0.5 200 0.5");
+            String enter = arrange("stellurgytest space enter " + botName() + " " + slotDim + " 0.5 200 0.5").raw();
             scenario().requireArranged("space enter must succeed: " + enter,
                     Reply.of(enter).ok());
 
@@ -404,7 +404,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
             assertTrue("ship->body direction survived: " + value, value.contains("dir=1000,500,-300"));
         } finally {
             try {
-                exec("stellurgytest space entry-clear");
+                arrange("stellurgytest space entry-clear");
             } catch (Exception ignored) {
                 // Teardown only: the next scenario's own arrangement mints fresh ids regardless.
             }
@@ -455,7 +455,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
             Events clientLog = clientEvents();
             long syncMark = clientLog.mark();
 
-            String moved = exec("stellurgytest space set-clock " + (serverBefore + JUMP_TICKS));
+            String moved = arrange("stellurgytest space set-clock " + (serverBefore + JUMP_TICKS)).raw();
             scenario().requireArranged("the server clock must move: " + moved,
                     Reply.of(moved).ok());
 
@@ -494,7 +494,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         } finally {
             // Put the world's clock back: this harness server is not this scenario's private
             // property, and on a shared one the next scenario inherits whatever is left.
-            exec("stellurgytest space set-clock " + serverBefore);
+            arrange("stellurgytest space set-clock " + serverBefore).raw();
         }
     }
 
@@ -521,14 +521,14 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         scenario().arranging("assemble a VS ship in a fresh pool slot");
         Events serverLog = serverEvents();
         long spawnMark = serverLog.markInstrumented();
-        String asm = exec("stellurgytest space vs-assemble deep");
+        String asm = arrange("stellurgytest space vs-assemble deep").raw();
         Reply assembled = Reply.of(asm);
         assertTrue("vs-assemble must report a slot dim: " + asm, assembled.has("slot"));
         int slot = assembled.integer("slot");
         serverLog.await(spawnMark, "ship_spawned", "the assembled ship must be spawned by the"
                 + " substrate's queue before its registry can be asked about it", 200);
         // absence is the answer: a reply with no count reads -1, which the assertion below refuses.
-        int queryable = Reply.of(exec("stellurgytest vs ship-count-all " + slot)).integerOr("count", -1);
+        int queryable = Reply.of(read("stellurgytest vs ship-count-all " + slot).raw()).integerOr("count", -1);
         assertTrue("a ship must be created in the pool world's registry: count-all=" + queryable, queryable >= 1);
 
         scenario().measuring("the ship loads with the client on it");
@@ -540,16 +540,16 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
         // The LEAVING is a dimension change, waited for as the client's own record of one: a world the
         // client has not left still holds a player, and could not unload.
         long leaveMark = clientEvents().mark();
-        exec("stellurgytest tp 0");
+        arrange("stellurgytest tp 0");
         awaitClientDim(leaveMark, 0, "the client must actually LEAVE the pool dimension — a world with"
                 + " a player in it cannot unload, and the reload below is about an unloaded one");
         assertTrue("slot must reload after the ship's world is unloaded",
-                Reply.of(exec("stellurgytest space reload " + slot + " deep")).bool("present"));
+                Reply.of(arrange("stellurgytest space reload " + slot + " deep").raw()).bool("present"));
 
         scenario().asserting("the ship re-loads live after the slot rebind");
         int loadedAfter = enterSlotOnShipAndAwaitLoad(serverLog, slot, "the ship must RE-LOAD live after the slot rebind");
         assertTrue("the ship must RE-LOAD live after the slot rebind: loadedAfter=" + loadedAfter, loadedAfter >= 1);
-        exec("stellurgytest tp 0");
+        arrange("stellurgytest tp 0");
     }
 
     /**
@@ -560,11 +560,11 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
      */
     private int enterSlotOnShipAndAwaitLoad(Events serverLog, int slot, String what) throws Exception {
         long loadMark = serverLog.markInstrumented();
-        exec("stellurgytest tp " + slot);
-        exec("tp @a 1 68 1");
+        arrange("stellurgytest tp " + slot);
+        arrange("tp @a 1 68 1");
         serverLog.awaitField(loadMark, "ship_usable", "dim", slot, what, 300);
         // absence is the answer: a reply with no count reads -1, which every caller's assertion refuses.
-        return Reply.of(exec("stellurgytest vs ship-count " + slot)).integerOr("count", -1);
+        return Reply.of(read("stellurgytest vs ship-count " + slot).raw()).integerOr("count", -1);
     }
 
     private long clientClock() throws Exception {
@@ -576,7 +576,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientTest 
     }
 
     private long serverClock() throws Exception {
-        String frame = exec("stellurgytest space frame 0 0 0");
+        String frame = read("stellurgytest space frame 0 0 0").raw();
         Reply space = Reply.of("stellurgytest space frame", frame);
         assertTrue("the probe reports no server clock: " + frame, space.has("clock"));
         return (long) space.number("clock");

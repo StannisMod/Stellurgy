@@ -62,7 +62,7 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
     private static final double RADIUS = 0.25D;
 
     private final Events events =
-            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The same energy, the same body, the same wall — only the KIND differs, and the depths must not
@@ -152,7 +152,7 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
         buildWall(FAINT_Z);
         buildWall(STRONG_Z);
 
-        double threshold = ask("stellurgytest config get beamAblationIntensityThreshold")
+        double threshold = read("stellurgytest config get beamAblationIntensityThreshold")
                 .requireOk("read the ablation threshold").number("value");
         assertTrue("the ablation threshold is switched off, so nothing here straddles it: " + threshold,
                 threshold > 0.0D);
@@ -263,7 +263,7 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
 
     /** Straight down the X axis into the face of the wall: square-on, so nothing can ricochet. */
     private long fire(int lane, int energy, String kind) throws Exception {
-        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
+        Reply fired = act("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
                 + (lane + 0.5D) + " " + BORE_SPEED + " 0 0 " + energy + " " + Weapons.ROUND_LIFETIME_TICKS
                 + " " + kind + " " + RADIUS
                 + " 1.0").requireOk("fire down lane " + lane);
@@ -277,7 +277,7 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
      * it. The plate is one block thick and the round comes in from above and beside.
      */
     private long grazeAt(int lane, int energy) throws Exception {
-        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (X - 1.0D) + " " + (Y + 1.6D) + " "
+        Reply fired = act("stellurgytest shot fire " + DIM + " " + (X - 1.0D) + " " + (Y + 1.6D) + " "
                 + (lane + 0.5D) + " 1.5 -0.2 0 " + energy + " " + Weapons.ROUND_LIFETIME_TICKS
                 + " KINETIC " + RADIUS + " 1.0")
                 .requireOk("graze lane " + lane);
@@ -291,13 +291,13 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
     }
 
     private void buildWallOf(int lane, String block) throws Exception {
-        ask("stellurgytest fill " + DIM + " " + X + " " + Y + " " + lane + " " + (X + WALL_DEPTH - 1) + " "
+        arrange("stellurgytest fill " + DIM + " " + X + " " + Y + " " + lane + " " + (X + WALL_DEPTH - 1) + " "
                 + Y + " " + lane + " " + block).requireOk("build the wall");
     }
 
     /** One block thick and long enough to be grazed along, with clear air above it. */
     private void buildPlate(int lane, String block) throws Exception {
-        ask("stellurgytest fill " + DIM + " " + X + " " + Y + " " + (lane - 1) + " " + (X + 8) + " " + Y
+        arrange("stellurgytest fill " + DIM + " " + X + " " + Y + " " + (lane - 1) + " " + (X + 8) + " " + Y
                 + " " + (lane + 1) + " " + block).requireOk("build the plate");
     }
 
@@ -305,18 +305,18 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
         // Scenario isolation, and this class went without it for four scenarios: a round that punches
         // through its own wall keeps flying for the rest of its lifetime, and the next scenario builds
         // its arrangement while somebody else's round is still in the air.
-        ask("stellurgytest shot clear " + DIM).requireOk("clear the air");
+        arrange("stellurgytest shot clear " + DIM).requireOk("clear the air");
         // HELD, not merely warmed. There is no player on this server, so a warmed chunk unloads again
         // on its own — and a swept segment SKIPS a voxel whose chunk is not loaded rather than calling
         // it solid or empty, because nobody looked.
         for (int cx = (X - 16) >> 4; cx <= (X + 32) >> 4; cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (lane >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (lane >> 4)).requireOk("hold a chunk");
         }
-        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
                 + ((X + 60) >> 4) + " " + ((lane + 16) >> 4)).requireOk("warm the lane's chunks");
         // Cleared far past the wall along the line of fire: a round that punches through must fly out
         // into empty air rather than into the next thing this class built.
-        ask("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (lane - 3) + " " + (X + 60)
+        arrange("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (lane - 3) + " " + (X + 60)
                 + " " + (Y + 6) + " " + (lane + 3) + " minecraft:air").requireOk("clear the lane");
     }
 
@@ -381,6 +381,6 @@ public class ArmourAnswersByKindAndAngleTest extends AbstractSharedServerTest {
     }
 
     private Reply stageAt(int x, int lane) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
     }
 }

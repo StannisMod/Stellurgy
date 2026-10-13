@@ -99,7 +99,7 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanics
         harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String command = "stellurgytest dim list";
-        Reply dims = Reply.of(command, String.join("\n", harness.client().execute(command)));
+        Reply dims = Reply.of(command, String.join("\n", harness.client().read(command)));
         int[] registered = dims.intArray("stellurgyDimensions");
 
         // CONTROL: the file was read, and a body that states its size loads from it — so an absence

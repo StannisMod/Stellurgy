@@ -94,7 +94,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // ship is REGISTERED and not LOADED, which has no transform to read and no physics to tick.
 
         String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the ship never loaded", loadedShips(0) >= 1);
@@ -102,7 +102,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // WHICH ship, from the assembler that named it. What remains a POLL is the world transform
         // propagating — the ship is loaded before that happens — and that is a fact about time, not
         // about which craft is being waited for.
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
+        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, ShipIdentity.nameFromAssembly(asm));
         // READ, not a poll. What `managed:true` reports is that the substrate resolved a STATE for
         // this id — the probe answers `{"managed":false}` when it cannot — and that is true by the
         // time this line runs: the spawn is drained on the world's tick, and every probe command is
@@ -113,10 +113,10 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // the check was never unsatisfied. And the comment above it claimed the poll was waiting for
         // "the world transform to propagate"; the condition never tested that — it tested whether
         // the ship could be resolved at all, which is what the message now says.
-        String info = exec("stellurgytest vs ship-info 0 id " + shipId);
+        String info = read("stellurgytest vs ship-info 0 id " + shipId).raw();
         assertTrue("VS could not resolve a state for this ship at its own build site: " + info
-                + " countAll=" + exec("stellurgytest vs ship-count-all 0")
-                + " loaded=" + exec("stellurgytest vs ship-count 0"),
+                + " countAll=" + read("stellurgytest vs ship-count-all 0").raw()
+                + " loaded=" + read("stellurgytest vs ship-count 0").raw(),
                 ShipInfo.isLoaded(info));
         ShipInfo atBuildSite = ShipInfo.of(info);
         double sx = atBuildSite.x, sy = atBuildSite.y, sz = atBuildSite.z;
@@ -128,15 +128,15 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         int dstX = SRC_X + CARRY_DX, dstZ = SRC_Z;
         assertTrue("the destination chunks never loaded, so the relocated subject would not be"
                         + " ticked there",
-                Reply.of(exec("stellurgytest chunk warmup 0 " + ((dstX - 16) >> 4) + " " + ((dstZ - 16) >> 4) + " "
-                        + ((dstX + 16) >> 4) + " " + ((dstZ + 16) >> 4))).ok());
+                Reply.of(arrange("stellurgytest chunk warmup 0 " + ((dstX - 16) >> 4) + " " + ((dstZ - 16) >> 4) + " "
+                        + ((dstX + 16) >> 4) + " " + ((dstZ + 16) >> 4)).raw()).ok());
 
         // The subject: a plain item, dropped over the hull so it falls onto the deck. Only the server
         // tick moves it, so any displacement below has exactly one possible author.
         // Marked before the drop: the association is formed on one of the ticks the item spends
         // falling, and a mark taken after it would be waiting for the body to touch a second ship.
         long touchMark = events.mark();
-        String dropped = exec("stellurgytest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz);
+        String dropped = arrange("stellurgytest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz).raw();
         int subjectId = extractInt(dropped, "entityId");
         assertTrue("the subject item was not spawned: " + dropped, subjectId != Integer.MIN_VALUE);
 
@@ -155,8 +155,8 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // teleport is. It does not route through move(), so the substrate never re-evaluates which
         // ship the body is standing on and the association crosses the gap intact — exactly as it
         // does for a player the game teleports.
-        String moved = exec("stellurgytest entity set-pos 0 " + subjectId + " " + dstX + " " + DST_Y
-                + " " + dstZ);
+        String moved = arrange("stellurgytest entity set-pos 0 " + subjectId + " " + dstX + " " + DST_Y
+                + " " + dstZ).raw();
         assertTrue("the subject could not be relocated: " + moved, Reply.of(moved).ok());
 
         // CONTROL 4, taken BEFORE the hazard rather than after it: the subject must still be
@@ -164,7 +164,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // server several ticks, and the association only lives 20 of them — a run that spent them on
         // its own setup would introduce the hazard to a body the substrate had already let go, and
         // report a green that means "too slow", not "correct".
-        String atHazard = exec("stellurgytest vs player-ship-data 0 " + subjectId);
+        String atHazard = read("stellurgytest vs player-ship-data 0 " + subjectId).raw();
         int sinceAtHazard = extractInt(atHazard, "ticksSinceTouchedShip");
         assertTrue("sensitivity control — the subject was released by the ship before the rotation"
                 + " even began, so the defect had no path to it: sinceTouched=" + sinceAtHazard
@@ -176,7 +176,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
         // physics. A directly-written angular velocity is not usable here: the flight computer drives
         // omega back to zero on every unmanned tick, so a one-shot spin is gone before it can be
         // measured. A commanded rotation is held by the same controller instead of fought by it.
-        String rot = exec("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 " + YAW_RAD_PER_S + " 0");
+        String rot = arrange("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 " + YAW_RAD_PER_S + " 0").raw();
         assertTrue("the hull left behind could not be commanded to rotate: " + rot,
                 Reply.of(rot).bool("afcResolved"));
 
@@ -184,8 +184,8 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
 
         // One reading at the end is enough for the verdict: a fling is a DISPLACEMENT, and a body
         // that has been thrown does not come back.
-        String after = exec("stellurgytest vs player-ship-data 0 " + subjectId);
-        ShipInfo lastShip = ShipInfo.byId(this::exec, 0, shipId);
+        String after = read("stellurgytest vs player-ship-data 0 " + subjectId).raw();
+        ShipInfo lastShip = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double drift = Math.hypot(extractDouble(after, "playerX") - beforeX,
                 extractDouble(after, "playerZ") - beforeZ);
         double omega = lastShip.omega;
@@ -219,12 +219,12 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
     /**
@@ -237,7 +237,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipTest extends AbstractSharedSe
      * because the fill force-loads every chunk in its own box.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft whose last passenger must not be flung when it is relocated");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

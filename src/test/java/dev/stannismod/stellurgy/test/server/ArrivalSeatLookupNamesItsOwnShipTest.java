@@ -54,19 +54,19 @@ public class ArrivalSeatLookupNamesItsOwnShipTest extends AbstractSharedServerTe
         // one. Reset in @After (shared-harness contract).
 
 
-        String seatedAsm = exec("stellurgytest rocket assemble 0 "
-                + placeFixture(FixtureSite.openAir(0, SEATED_X, SEATED_Z), "with-pilot-seat"));
+        String seatedAsm = act("stellurgytest rocket assemble 0 "
+                + placeFixture(FixtureSite.openAir(0, SEATED_X, SEATED_Z), "with-pilot-seat")).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + seatedAsm,
                 (Reply.of(seatedAsm).integer("rocketCount") == 0));
-        String seatlessAsm = exec("stellurgytest rocket assemble 0 "
-                + placeFixture(FixtureSite.openAir(0, SEATLESS_X, SEATLESS_Z), "with-nav-computer"));
+        String seatlessAsm = act("stellurgytest rocket assemble 0 "
+                + placeFixture(FixtureSite.openAir(0, SEATLESS_X, SEATLESS_Z), "with-nav-computer")).raw();
         assertTrue("the seatless craft did not become a ship either: " + seatlessAsm,
                 (Reply.of(seatlessAsm).integer("rocketCount") == 0));
         assertTrue("the ships never loaded", loadedShips(0) >= SHIPS_FOR_AMBIGUITY);
 
         // ARRANGEMENT CHECK, before either leg: the two crafts must be two REGISTERED ships, or the
         // whole question ("which one does the lookup answer for") does not exist in this world.
-        String all = exec("stellurgytest vs ship-count-all 0");
+        String all = read("stellurgytest vs ship-count-all 0").raw();
         assertTrue("fewer than two ships are registered, so no lookup can pick the wrong one: " + all,
                 extractInt(all, "count") >= SHIPS_FOR_AMBIGUITY);
 
@@ -83,16 +83,16 @@ public class ArrivalSeatLookupNamesItsOwnShipTest extends AbstractSharedServerTe
 
         // CONTROL — the defect, asked the old way. At the SEATLESS craft's position a position
         // lookup resolves that craft, and its shipyard holds no pilot seat.
-        String byPosition = exec("stellurgytest vs seat-yard 0 "
-                + SEATLESS_X + " " + (SEATLESS_Y + 2) + " " + SEATLESS_Z);
+        String byPosition = read("stellurgytest vs seat-yard 0 "
+                + SEATLESS_X + " " + (SEATLESS_Y + 2) + " " + SEATLESS_Z).raw();
         assertEquals("control leg: a position lookup at the seatless craft must find NO seat. It "
                         + "found one, so this arrangement cannot exhibit a wrong-ship arrival and the "
                         + "subject leg below would pass for the wrong reason: " + byPosition,
                 0, extractInt(byPosition, "seats"));
 
         // SUBJECT — the same point, asked about the seated ship BY IDENTITY.
-        String byIdentity = exec("stellurgytest vs seat-yard 0 "
-                + SEATLESS_X + " " + (SEATLESS_Y + 2) + " " + SEATLESS_Z + " " + seatedShip);
+        String byIdentity = read("stellurgytest vs seat-yard 0 "
+                + SEATLESS_X + " " + (SEATLESS_Y + 2) + " " + SEATLESS_Z + " " + seatedShip).raw();
         assertTrue("asked about its own ship, the arrival's seat lookup still scanned whichever "
                         + "shipyard was nearest and found no seat: " + byIdentity,
                 extractInt(byIdentity, "seats") >= 1);
@@ -105,7 +105,7 @@ public class ArrivalSeatLookupNamesItsOwnShipTest extends AbstractSharedServerTe
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
 
@@ -123,7 +123,7 @@ public class ArrivalSeatLookupNamesItsOwnShipTest extends AbstractSharedServerTe
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

@@ -100,13 +100,13 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
     @LegacyWitness(prose = "with {@code TileWeaponConsole#onLinkAimed} at {@code state.clearTarget();} removed, legs 1 and 2 pass and leg 3 fails: \"the gun must turn off the zombie and back onto the block — no `turret_aim` … onTarget true later than\" the designation, the gun still firing on the zombie (2026-10-04; again 2026-10-08 through the input pipeline: \"no `turret_aim` carrying [pos, …, onTarget, true] later than seq 1930 was recorded within 600 ticks\").")
     @Test
     public void aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
 
         // ---- where it stands: open air, a plot of its own, proved empty first
         Plot plot = Plot.forScenario(0, getClass().getSimpleName(), OVERWORLD, Plot.Lane.DEFAULT);
         FixtureSite site = plot.site();
-        site.requireClear(this::exec, HALO, 4, "the battery, the player beside it and both targets");
+        site.requireClear(c -> arrange(c).raw(), HALO, 4, "the battery, the player beside it and both targets");
         int x0 = site.x, y0 = site.y, z0 = site.z;
 
         int gx = x0 + 2, gy = y0 + 1, gz = z0 + 2;           // the gun's controller
@@ -114,16 +114,16 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
         int tx = gx + TARGET_RANGE, ty = y0 + 1, tz = z0 + 4; // the block he names
         int px = tx, py = y0, pz = z0 - 2;                   // the zombie's footing
 
-        requireOk("a floor for him", exec("stellurgytest fill " + OVERWORLD + " " + (x0 - 1) + " " + y0
-                + " " + z0 + " " + (x0 + 4) + " " + y0 + " " + (z0 + 6) + " minecraft:stone"));
-        requireOk("the target block", exec(place(tx, ty, tz, "minecraft:stone")));
-        requireOk("the zombie's footing", exec(place(px, py, pz, "minecraft:stone")));
+        requireOk("a floor for him", arrange("stellurgytest fill " + OVERWORLD + " " + (x0 - 1) + " " + y0
+                + " " + z0 + " " + (x0 + 4) + " " + y0 + " " + (z0 + 6) + " minecraft:stone").raw());
+        requireOk("the target block", arrange(place(tx, ty, tz, "minecraft:stone")).raw());
+        requireOk("the zombie's footing", arrange(place(px, py, pz, "minecraft:stone")).raw());
 
         // ---- the battery: console first, then the barrel, then the controller that walks them
         long built = server.mark();
-        requireOk("the console", exec(place(cx, cy, cz, "stellurgy:weaponconsole")));
-        requireOk("the barrel", exec(place(gx, gy + 1, gz, "stellurgy:gunbarrel")));
-        requireOk("the gun", exec(place(gx, gy, gz, "stellurgy:turret")));
+        requireOk("the console", arrange(place(cx, cy, cz, "stellurgy:weaponconsole")).raw());
+        requireOk("the barrel", arrange(place(gx, gy + 1, gz, "stellurgy:gunbarrel")).raw());
+        requireOk("the gun", arrange(place(gx, gy, gz, "stellurgy:turret")).raw());
         String assembled = server.awaitRecordWithFields(built, "turret_assembled",
                 "the gun must count its build before it is anything to aim", Weapons.ARRANGEMENT_TICKS,
                 "pos", Weapons.at(gx, gy, gz), "operable", "true");
@@ -132,22 +132,22 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
                 seen -> !laterThan(Events.recordsWhere(seen, "domain", "Weapon"), afterAssembly).isEmpty(),
                 "a Weapon rebuild later than the gun's first tick",
                 "the gun and its console must be joined into one network", Weapons.ARRANGEMENT_TICKS);
-        Reply console = Reply.of(exec(consoleCommand("read", cx, cy, cz))).requireOk("console read");
+        Reply console = Reply.of(read(consoleCommand("read", cx, cy, cz)).raw()).requireOk("console read");
         ArrangementFailure.requireArranged("the console must command exactly this one gun: " + console,
                 console.bool("network") && console.integer("guns") == 1);
-        requireOk("the gun's charge", exec(turretCommand("charge", gx, gy, gz)));
-        Reply before = Reply.of(exec(turretCommand("read", gx, gy, gz))).requireOk("turret read");
+        requireOk("the gun's charge", arrange(turretCommand("charge", gx, gy, gz)).raw());
+        Reply before = Reply.of(read(turretCommand("read", gx, gy, gz)).raw()).requireOk("turret read");
         ArrangementFailure.requireArranged("before he names anything the gun must have NO target, or"
                 + " what follows could not be his doing: " + before, !before.bool("hasTarget"));
 
         // ---- him: on the floor, behind the gun, the linker in his hand
-        ClientEvents.placeOntoGroundItHolds(bot(), client, this::exec,
+        ClientEvents.placeOntoGroundItHolds(bot(), client, c -> arrange(c).raw(),
                 "tp " + PLAYER + " " + (x0 + 0.5) + " " + (y0 + 1) + " " + (z0 + 4.5),
                 x0 + 0.5, y0 + 1, z0 + 4.5, "he stands on the floor behind his battery", ROUND_TRIP_TICKS);
         // Emptied first: a mod hands every joining player a guide book, and it occupies the first slot.
-        exec("clear " + PLAYER);
+        arrange("clear " + PLAYER).raw();
         long given = client.mark();
-        exec("give " + PLAYER + " libvulpes:linker");
+        arrange("give " + PLAYER + " libvulpes:linker");
         client.awaitMatching(given, "client_slot_set",
                 seen -> Events.anyRecordFieldContains(seen, "item", "libvulpes:linker"),
                 "holding libvulpes:linker", "the linker must reach his inventory", ROUND_TRIP_TICKS);
@@ -201,7 +201,7 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
 
         awaitGun(server, namingBlock, seqOf(designated), gx, gy, gz, "turret_aim", "onTarget", "true",
                 "the gun must turn onto the block he named");
-        Reply aimed = Reply.of(exec(turretCommand("read", gx, gy, gz))).requireOk("turret read");
+        Reply aimed = Reply.of(read(turretCommand("read", gx, gy, gz)).raw()).requireOk("turret read");
         assertTrue("the gun's target must be the point he named " + Arrays.toString(hit) + ": " + aimed,
                 aimed.bool("hasTarget") && distance(hit, targetOf(aimed)) < 1.0E-6D);
         awaitGun(server, namingBlock, seqOf(designated), gx, gy, gz, "turret_fired", null, null,
@@ -213,10 +213,10 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
         // pig removed dead within the tick). No AI and unkillable, so the point the gun must follow
         // stays put while it is read; its uuid is given, so the designation is checked against THIS one.
         long summoning = server.mark();
-        String summoned = exec("stellurgytest arrange held-target " + OVERWORLD + " " + (px + 0.5D) + " " + (py + 1)
-                + " " + (pz + 0.5D) + " " + ZOMBIE_UUID_MOST + " " + ZOMBIE_UUID_LEAST);
-        Reply zombies = Reply.of(exec("stellurgytest entity near " + OVERWORLD + " " + (px + 0.5D) + " "
-                + (py + 1) + " " + (pz + 0.5D) + " 2 EntityZombie")).requireOk("entity near");
+        String summoned = arrange("stellurgytest arrange held-target " + OVERWORLD + " " + (px + 0.5D) + " " + (py + 1)
+                + " " + (pz + 0.5D) + " " + ZOMBIE_UUID_MOST + " " + ZOMBIE_UUID_LEAST).raw();
+        Reply zombies = Reply.of(read("stellurgytest entity near " + OVERWORLD + " " + (px + 0.5D) + " "
+                + (py + 1) + " " + (pz + 0.5D) + " 2 EntityZombie").raw()).requireOk("entity near");
         // the producer always writes `count` on an ok `entity near` reply, so a reply without it is a
         // broken probe and refusing here is the right failure.
         if (zombies.integer("count") != 1) {
@@ -227,7 +227,7 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
         // Where it actually stands, read rather than assumed from the summon's arguments.
         Reply zombie = Reply.of(zombies.objectArray("entities")[0]);
         // Shots on the block spent the charge; what the gun has left is not this leg's subject.
-        requireOk("the gun's charge", exec(turretCommand("charge", gx, gy, gz)));
+        requireOk("the gun's charge", arrange(turretCommand("charge", gx, gy, gz)).raw());
         double[] zombieCentre = {zombie.number("x"), zombie.number("y") + ZOMBIE_HEIGHT / 2.0D,
                 zombie.number("z")};
         lookAt(server, zombieCentre);
@@ -248,7 +248,7 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
         // otherwise read as one on the zombie.
         awaitGun(server, namingZombie, seqOf(designatedZombie), gx, gy, gz, "turret_aim", "onTarget", "true",
                 "the gun must turn off the block and onto the zombie");
-        Reply onZombie = Reply.of(exec(turretCommand("read", gx, gy, gz))).requireOk("turret read");
+        Reply onZombie = Reply.of(read(turretCommand("read", gx, gy, gz)).raw()).requireOk("turret read");
         assertTrue("the gun must follow the zombie's body centre " + Arrays.toString(zombieCentre)
                 + " — a designation that left the block order standing would still point at the"
                 + " block: " + onZombie, onZombie.bool("hasTarget") && distance(zombieCentre, targetOf(onZombie)) < 0.05D);
@@ -268,7 +268,7 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
                 "BLOCK", Events.text(designatedAgain, "hit"));
         awaitGun(server, renamingBlock, seqOf(designatedAgain), gx, gy, gz, "turret_aim", "onTarget", "true",
                 "the gun must turn off the zombie and back onto the block");
-        Reply back = Reply.of(exec(turretCommand("read", gx, gy, gz))).requireOk("turret read");
+        Reply back = Reply.of(read(turretCommand("read", gx, gy, gz)).raw()).requireOk("turret read");
         assertTrue("the gun must point at the block again, not keep following the zombie "
                 + Arrays.toString(zombieCentre) + ": " + back,
                 back.bool("hasTarget") && distance(faceCentre, targetOf(back)) < 0.05D);
@@ -403,7 +403,13 @@ public class ALinkerNamesTheBatteryItsTargetTest extends AbstractOwnBootClientTe
                 reply != null && Reply.of(reply).ok());
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
+    }
+
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
     }
 }

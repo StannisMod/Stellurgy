@@ -41,12 +41,12 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
     private static final double ON_THE_HULL = 64.0D;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** A craft left behind goes on ticking in the world the next scenario runs in. */
     @Before
     public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
+        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
     }
 
     @LegacyWitness(prose = "with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked"
@@ -58,10 +58,10 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
             + " witnessed. 2026-09-30.")
     @Test
     public void aBlockOfAMovedShipIsDamagedThroughItsWorldPosition() throws Exception {
-        Reply.of(exec("stellurgytest damage clear-impacts")).requireOk("forget earlier impacts");
+        Reply.of(arrange("stellurgytest damage clear-impacts").raw()).requireOk("forget earlier impacts");
 
         // Build a ship and move it, so world and subspace no longer coincide.
-        WarShip ship = WarShip.build(events, this::exec, FixtureSite.openAir(0, SRC_X, SRC_Z), null,
+        WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, SRC_X, SRC_Z), null,
                 "the craft whose block is shot");
         ship.parkAt(FAR_X, FAR_Y, FAR_Z, ON_THE_HULL);
 
@@ -93,8 +93,8 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
 
         // Fire straight down through the seat's WORLD position with a budget that will not be spent
         // in one block, and give it an identity of its own.
-        Reply result = Reply.of(exec("stellurgytest damage impact 0 " + world[0] + " " + (world[1] + 3.0D) + " "
-                + world[2] + " 0 -1 0 200000 KINETIC 77001")).requireOk("declare the impact");
+        Reply result = Reply.of(act("stellurgytest damage impact 0 " + world[0] + " " + (world[1] + 3.0D) + " "
+                + world[2] + " 0 -1 0 200000 KINETIC 77001").raw()).requireOk("declare the impact");
         assertTrue("the impact point resolved to no ship at all (candidates offered: "
                 + result.integer("candidateShips") + "), so the engine walked the world frame where"
                 + " this ship has no blocks:\n" + result, result.bool("onShip"));
@@ -127,7 +127,7 @@ public class VSShipStructuralDamageTest extends AbstractSharedServerTest {
     }
 
     private Reply stage(int x, int y, int z) throws Exception {
-        return Reply.of(exec("stellurgytest damage stage 0 " + x + " " + y + " " + z)).requireOk("read a stage");
+        return Reply.of(read("stellurgytest damage stage 0 " + x + " " + y + " " + z).raw()).requireOk("read a stage");
     }
 
     private static double sq(double v) {

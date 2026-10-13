@@ -55,7 +55,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
     private int buildAndAssemble(FixtureSite site) throws Exception {
@@ -66,12 +66,12 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+        String assemble = RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)),
                 "simple", 2, 50,
-                "the craft is built and flown in this volume");
+                "the craft is built and flown in this volume"));
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
@@ -112,9 +112,9 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // Critical FF contract: NO destination chip programmed, NO classic
         // countdown — start-free-flight goes directly to isInFlight=true.
         int id = buildAndAssemble(FixtureSite.openAir(0, 2300, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
 
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest rocket start-free-flight " + id));
         assertTrue("start-free-flight must succeed: " + start,
                 Reply.of(start).ok());
@@ -134,11 +134,11 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // liftoff hover until input arrives, so 10 ticks of full vertical
         // throttle must produce a clearly positive climb rate.
         int id = buildAndAssemble(FixtureSite.openAir(0, 2550, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 1.0 0 0 0"));
-        String tickRes = ok(client().execute(
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 1.0 0 0 0"));
+        String tickRes = ok(client().act(
                 "stellurgytest rocket free-flight-tick " + id + " 10"));
         double my = parseDouble(tickRes, MOTION_Y, "motionY");
         assertTrue("full vertical throttle must build upward motion "
@@ -151,11 +151,11 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // ~1 block off the pad and HOVERS there (near-zero motion), without
         // any takeoff kick and without auto-landing.
         int id = buildAndAssemble(FixtureSite.openAir(0, 2900, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         double y0 = rocketInfo(id).posY;
 
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 60"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 60"));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("engines-on craft must still be in flight (hovering): " + info.raw(),
@@ -171,12 +171,12 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // pilot descent input drives the craft into ground contact, which
         // exits flight (engines off) and zeroes motion.
         int id = buildAndAssemble(FixtureSite.openAir(0, 2950, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 40")); // reach the hover
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 40")); // reach the hover
 
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 -1.0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 80"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 -1.0 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 80"));
 
         RocketInfo info = rocketInfo(id);
         assertFalse("touchdown must shut the engines off (isInFlight=false): " + info.raw(),
@@ -189,22 +189,22 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // With fuel REQUIRED for the whole scenario, assembly included: the engines' burn rate is
         // fixed when the rocket is assembled, a rocket that needs no fuel burns none, and the shared
         // harness world starts with the requirement off.
-        try (ConfigFlag fuelRequired = ConfigFlag.set(c -> String.join("\n", client().execute(c)),
+        try (ConfigFlag fuelRequired = ConfigFlag.set(commands(),
                 "rocketRequireFuel", true)) {
             int id = buildAndAssemble(FixtureSite.openAir(0, 2600, 500));
-            ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-            ok(client().execute("stellurgytest rocket start-free-flight " + id));
+            ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+            ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
             // Inspect fuel BEFORE — start-free-flight auto-fills the primary tank.
-            String fuelBefore = ok(client().execute("stellurgytest rocket fuel " + id));
+            String fuelBefore = ok(client().read("stellurgytest rocket fuel " + id));
             int amountBefore = parsePrimaryFuel(fuelBefore);
             assertTrue("start-free-flight must auto-fill primary fuel for tests, got amount="
                     + amountBefore + " from " + fuelBefore, amountBefore > 0);
 
             // Push full vertical thrust + tick several ticks.
-            ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 1.0 0 0 0"));
-            ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 10"));
-            int amountAfter = parsePrimaryFuel(ok(client().execute("stellurgytest rocket fuel " + id)));
+            ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 1.0 0 0 0"));
+            ok(client().act("stellurgytest rocket free-flight-tick " + id + " 10"));
+            int amountAfter = parsePrimaryFuel(ok(client().read("stellurgytest rocket fuel " + id)));
             assertTrue("fuel must decrease monotonically under thrust; before=" + amountBefore
                             + " after=" + amountAfter,
                     amountAfter < amountBefore);
@@ -218,7 +218,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 2700, 500));
         // (intentionally NO set-flight-mode — rocket stays CLASSIC_LAUNCH)
 
-        ok(client().execute(
+        ok(client().act(
                 "stellurgytest rocket free-flight-input " + id + " 1.0 1.0 1.0 1.0 0.0"));
 
         // info still shows zero current input (defensive). A craft with NO input block at all
@@ -234,10 +234,10 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // Server-side authority: out-of-range float inputs must be clamped
         // before storage. The applied JSON is the clamped value.
         int id = buildAndAssemble(FixtureSite.openAir(0, 2800, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
-        String resp = ok(client().execute(
+        String resp = ok(client().act(
                 "stellurgytest rocket free-flight-input " + id + " 5.0 -5.0 99.0 -99.0 50.0"));
         assertTrue("clamp positive overshoot to 1.0: " + resp,
                 (Reply.of(resp).number("fwd") == 1.0));

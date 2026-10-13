@@ -29,11 +29,11 @@ public class SatelliteBuilderAssembleUnregisteredDirectTest extends AbstractShar
     public void directAssembleWithUnregisteredCoreTypeIsNullSafe() throws Exception {
         int x = 10960, y = FixtureSite.OPEN_AIR_Y, z = 9760; // isolated column, distinct chunk from other builder tests
 
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:satelliteBuilder");
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4)).raw();
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:satelliteBuilder").raw();
         assertTrue("satellite builder must place: " + place, Reply.of(place).bool("placed"));
 
-        String resp = exec("stellurgytest satellite-builder assemble-unregistered-direct 0 " + x + " " + y + " " + z);
+        String resp = act("stellurgytest satellite-builder assemble-unregistered-direct 0 " + x + " " + y + " " + z).raw();
         assertTrue("probe setup must succeed: " + resp, Reply.of(resp).ok());
         assertTrue("the bogus type must be absent from the class registry (else not a valid L6 repro): " + resp,
                 Reply.of(resp).bool("getNewSatelliteNull"));

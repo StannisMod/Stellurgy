@@ -40,21 +40,21 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
     /** A loop with a dump bolted to its end, loaded with a block of iron and powered. */
     private void buildRig(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (y - 1) + " " + (z - 2)
-                + " " + (cx + PIPES + 12) + " " + (y + 2) + " " + (z + 2) + " minecraft:air");
+                + " " + (cx + PIPES + 12) + " " + (y + 2) + " " + (z + 2) + " minecraft:air").requireOk();
         for (int i = 0; i < PIPES; i++) {
             Reply placed = arrange("stellurgytest place 0 " + (cx + i) + " " + y + " " + z
-                    + " stellurgy:heatPipe");
+                    + " stellurgy:heatPipe").requireOk();
             assertTrue("pipe place failed: " + placed, placed.bool("placed"));
         }
         Reply dump = arrange("stellurgytest place 0 " + (cx + PIPES) + " " + y + " " + z
-                + " stellurgy:heatDump");
+                + " stellurgy:heatDump").requireOk();
         assertTrue("dump place failed: " + dump, dump.bool("placed"));
         arrange("stellurgytest energy inject 0 " + (cx + PIPES) + " " + y + " " + z + " 1000000");
         Reply loaded = arrange("stellurgytest heat dump 0 " + (cx + PIPES) + " " + y + " " + z
                 + " load minecraft:iron_block");
         assertTrue("the dump must be loaded with something to charge: " + loaded,
                 loaded.bool("hasStack"));
-        arrange("stellurgytest subnet solve all 0 1");
+        act("stellurgytest subnet solve all 0 1").requireOk();
     }
 
     /**
@@ -72,20 +72,20 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
 
     /** Charge the loop to a stated temperature and advance the domain in one call. */
     private Reply cycle(int cx, long kelvin, int ticks) throws Exception {
-        Reply empty = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1");
+        Reply empty = act("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1").requireOk();
         requireArranged("premise: the pipes must form a loop: " + empty, empty.bool("inLoop"));
         long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass: " + empty, capacity > 0);
         long ambient = configValue("shipHeatAmbientKelvin");
         long charge = (kelvin - ambient) * capacity;
-        Reply cycled = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " " + ticks);
+        Reply cycled = act("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " " + ticks).requireOk();
         requireArranged("premise: the loop must still be a loop when charged: " + cycled,
                 cycled.bool("inLoop"));
         return cycled;
     }
 
     private long configValue(String key) throws Exception {
-        return arrange("stellurgytest config get " + key).longInteger("value");
+        return read("stellurgytest config get " + key).requireOk().longInteger("value");
     }
 
     /**

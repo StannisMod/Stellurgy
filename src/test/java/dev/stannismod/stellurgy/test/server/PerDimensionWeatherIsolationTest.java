@@ -79,13 +79,13 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
     public void rainOnPlanetADoesNotLeakToBOrOverworld() throws Exception {
 
         // Clear everywhere first so the test starts from a known baseline.
-        client().execute("stellurgytest weather set 0 clear 12000");
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
+        client().arrange("stellurgytest weather set 0 clear 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
 
         // Rain on A only.
         String setA = String.join("\n",
-                client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000"));
+                client().arrange("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000"));
         assertTrue("set rain on A failed: " + setA, Reply.of(setA).ok());
 
         DimWeather wA = weather(FIXTURE_DIM_A);
@@ -112,11 +112,11 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
         // The reverse direction — guards against a one-way leak bug where A
         // is properly wrapped but B silently writes to the overworld.
 
-        client().execute("stellurgytest weather set 0 clear 12000");
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
+        client().arrange("stellurgytest weather set 0 clear 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
 
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
 
         DimWeather wA = weather(FIXTURE_DIM_A);
         DimWeather wB = weather(FIXTURE_DIM_B);
@@ -136,8 +136,8 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
         // other. Without the wrapper, /weather clear would propagate.
 
         // Rain on BOTH first.
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000");
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
 
         DimWeather beforeA = weather(FIXTURE_DIM_A);
         DimWeather beforeB = weather(FIXTURE_DIM_B);
@@ -145,7 +145,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
         assertTrue("planet B must be raining as precondition: " + beforeB.raw(), beforeB.raining);
 
         // Clear only A.
-        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
+        client().arrange("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
 
         DimWeather afterA = weather(FIXTURE_DIM_A);
         DimWeather afterB = weather(FIXTURE_DIM_B);
@@ -158,7 +158,7 @@ public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
 
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().arrange(cmd)), dim)
                 .requireDim(dim);
     }
 }

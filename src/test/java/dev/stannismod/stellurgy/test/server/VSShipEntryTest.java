@@ -84,7 +84,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
             + " the line the world answers\".")
     @Test
     public void aWorldsTakeoffLineIsItsBodysAtmosphereUnlessItsFileStatesOne() throws Exception {
-        OrbitLine asHeld = OrbitLine.of(this::exec, 0);
+        OrbitLine asHeld = OrbitLine.of(c -> read(c).raw(), 0);
         requireArranged("the overworld must not carry a stated line before this scenario: " + asHeld,
                 !asHeld.stated);
         double radius = asHeld.radius();
@@ -96,9 +96,9 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         int stated = asHeld.line() / 2;
         try {
             assertEquals("a stated line must be the line the world answers",
-                    stated, OrbitLine.state(this::exec, 0, stated).line());
+                    stated, OrbitLine.state(c -> arrange(c).raw(), 0, stated).line());
         } finally {
-            OrbitLine cleared = OrbitLine.unstate(this::exec, 0);
+            OrbitLine cleared = OrbitLine.unstate(c -> arrange(c).raw(), 0);
             assertEquals("and clearing it must give the body's own line back: " + cleared,
                     asHeld.line(), cleared.line());
         }
@@ -109,23 +109,23 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
 
         // Headless: pin ships loaded so a freshly assembled/crossed ship does not auto-unload between calls.
         // Install the entry stack into SpaceSubsystem so the PRODUCTION trigger path runs under the harness.
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // CONTROL: nothing is ledgered before the climb — a later "settled" is then a real observation.
-        EntryStatus control = EntryStatus.wholeLedger(this::exec);
+        EntryStatus control = EntryStatus.wholeLedger(c -> read(c).raw());
         assertEquals("witness sensitivity control — no ship must be ledgered before the climb: " + control,
                 0, control.ships);
 
         // Build a piloted tier-2 ship in the overworld and assemble it into a VS ship.
         String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The cell the production resolver answers for the launch dimension — the entry MUST land here.
-        String launch = exec("stellurgytest space launch-cell 0");
+        String launch = read("stellurgytest space launch-cell 0").raw();
         assertTrue("launch-cell resolve failed: " + launch, Reply.of(launch).ok());
         String expectedCell = extractString(launch, "cellKey");
         assertTrue("launch dim resolved to no cell: " + launch, expectedCell != null);
@@ -136,24 +136,24 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // The name comes from the assembler, which minted it — not from asking the shared overworld what
         // stands near the pad, which answers with a neighbouring scenario's craft just as readily.
         String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
 
-        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double sx = src.x, sy = src.y, sz = src.z;
 
         // A held throttle on THIS ship's own flight computer => a pilot is flying. Addressed by ship,
         // and the resolution is asserted: an input that reached nothing would leave the climb below
         // reading as unpiloted while claiming to be the piloted leg.
-        String heldInput = exec("stellurgytest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
+        String heldInput = arrange("stellurgytest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0").raw();
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
                 Reply.of(heldInput).bool("afcResolved"));
-        String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz);
+        String tp = arrange("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
+                + (int) sx + " " + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + (int) sz).raw();
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         // Marked BEFORE the unpark, which is the act that lets the entry start: the arrival is
         // announced once and a mark taken after it would be waiting for a second one.
         long entryMark = events.mark();
-        exec("stellurgytest vs unpark-by-id 0 " + shipId);
+        arrange("stellurgytest vs unpark-by-id 0 " + shipId);
 
         // Linked on the record production publishes at the settle — `ShipEntryController` posts
         // LeftPlanet on the line after `ledger.settle(...)`. The ledger poll this replaced asked the
@@ -164,7 +164,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
                 // Keep the destination slots' ships load-queued (headless has no player to auto-load
                 // them). This is work the wait has to keep doing, not part of what is being waited for.
                 () -> loadAllEntrySlots(setup));
-        EntryStatus status = EntryStatus.forShip(this::exec, durableId).requireFound(
+        EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
 
         // The entry landed in the launch body's OWN cell — the C-1 resolution, matched gen-agnostically.
@@ -173,7 +173,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         int slotDim = status.slotDim;
         assertTrue("settled slot dim not reported: " + status, slotDim > Integer.MIN_VALUE);
         assertTrue("the settled ship's cell world is not live in a slot; status=" + status
-                + " countAll=" + exec("stellurgytest vs ship-count-all " + slotDim),
+                + " countAll=" + read("stellurgytest vs ship-count-all " + slotDim).raw(),
                 loadedShips(slotDim) >= 1);
     }
 
@@ -199,32 +199,32 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
     @Test
     public void aShipThatEnteredSpaceCanJumpToAnotherCellOnTheLiveStack() throws Exception {
 
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         String coords = placeFixture(FixtureSite.openAir(0, JUMP_SRC_X, JUMP_SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
 
-        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         double sx = src.x, sy = src.y, sz = src.z;
-        String heldInput = exec("stellurgytest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
+        String heldInput = arrange("stellurgytest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0").raw();
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
                 Reply.of(heldInput).bool("afcResolved"));
-        assertTrue("climb teleport failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz)).ok());
+        assertTrue("climb teleport failed", Reply.of(arrange("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
+                + (int) sx + " " + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + (int) sz).raw()).ok());
         long entryMark = events.mark();
-        exec("stellurgytest vs unpark-by-id 0 " + shipId);
+        arrange("stellurgytest vs unpark-by-id 0 " + shipId);
 
         awaitEnteredSpace(events, entryMark, durableId,
                 "precondition: the ship must enter space, or there is nothing to jump", SETTLE_TICKS,
                 () -> loadAllEntrySlots(setup));
-        EntryStatus status = EntryStatus.forShip(this::exec, durableId).requireFound(
+        EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         int slotDim = status.slotDim;
         String originCell = status.cellKey;
@@ -241,9 +241,9 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // Marked before the jump is commanded, for the reason the entry above is: the arrival is
         // announced once, and a mark taken after it would be waiting for a second jump.
         long jumpMark = events.mark();
-        String jump = exec("stellurgytest space jump id " + durableId + " "
+        String jump = act("stellurgytest space jump id " + durableId + " "
                 + (origin.sectorX() + 1)
-                + " " + origin.sectorY() + " " + origin.sectorZ() + " " + slotDim);
+                + " " + origin.sectorY() + " " + origin.sectorZ() + " " + slotDim).raw();
         assertTrue("the jump probe found no settled ship to move: " + jump, Reply.of(jump).bool("began"));
         // THIS ship departed. Without the id the verb jumps the cell's first settled row, so a cell
         // holding a second craft would carry that one away and report a successful jump.
@@ -275,10 +275,10 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
                 "the ship must arrive at the cell the jump was aimed at; origin=" + originCell
                         + " requested=" + targetCell, SETTLE_TICKS,
                 "ship", durableId, "destination", targetCell);
-        String arrived = exec("stellurgytest space entry-status id " + durableId);
+        String arrived = read("stellurgytest space entry-status id " + durableId).raw();
         assertEquals("the arrival was announced for " + targetCell
                 + ", so the ledger must carry that cell; last status=" + arrived
-                + " subsystem=" + SubsystemStatus.read(this::exec).raw(),
+                + " subsystem=" + SubsystemStatus.read(c -> read(c).raw()).raw(),
                 targetCell, extractString(arrived, "cellKey"));
 
         // A ledger row written by the arrival itself proves only what the arrival BELIEVES. The
@@ -288,12 +288,12 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // only slips a sector once that first tick lands. So bring the observer in now — after the
         // jump, never during it — and read the address again.
         int arrivedSlot = extractInt(arrived, "slotDim");
-        exec("stellurgytest vs load-ships " + arrivedSlot);
+        arrange("stellurgytest vs load-ships " + arrivedSlot);
         // The jump RE-ASSEMBLED the hull, so the physics id it had in the origin cell names nothing
         // here; the durable id is the one thing that crossed. Ask the ledger's own bridge for the new
         // one, and refuse to go on without it — the alternative below was "whatever ship is nearest
         // (0,200,0) in the arrival slot", which is an address no craft was ever put at.
-        String arrivedVsId = ShipIdentity.physicsIdOf(this::exec, arrivedSlot, durableId);
+        String arrivedVsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), arrivedSlot, durableId);
         final String[] pose = {""};
         /** How many ships the cell held at the instant the pose was sampled — for a failure only. */
         final int[] loadedInCell = {-1};
@@ -308,7 +308,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
         // and report stability about a ship that was never asked to move.
         GameTicks.observe(client(), GameTicks.world(arrivedSlot),
                 DRIFT_SAMPLES, DRIFT_TICKS_BETWEEN_SAMPLES, () -> {
-                    exec("stellurgytest vs load-ships " + arrivedSlot);
+                    arrange("stellurgytest vs load-ships " + arrivedSlot);
                     // THE POSE FIRST, with nothing between it and the load-ships above. Reading
                     // the count before it inserted one probe round-trip into that gap, and the
                     // ship unloaded inside the gap often enough to red a healthy run (measured).
@@ -318,16 +318,16 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
                     // ship is unloaded and reloaded between samples (measured: count 0 mid-
                     // observation on a healthy run), and a nearest-ship lookup answers such a
                     // sample with whatever else is loaded rather than with a miss.
-                    String poseNow = exec("stellurgytest vs ship-info " + arrivedSlot + " id " + arrivedVsId);
+                    String poseNow = read("stellurgytest vs ship-info " + arrivedSlot + " id " + arrivedVsId).raw();
                     // The count travels WITH the pose rather than gating on it: the reader of a
                     // failure needs to know whether he is looking at an unloaded sample. It is kept
                     // BESIDE the reply and not appended to it — a reply with a word glued onto the
                     // end is no longer the JSON it claims to be, and every reader of it then fails
                     // with a parse error about the world.
                     pose[0] = poseNow;
-                    loadedInCell[0] = extractInt(exec("stellurgytest vs ship-count " + arrivedSlot),
+                    loadedInCell[0] = extractInt(read("stellurgytest vs ship-count " + arrivedSlot).raw(),
                             "count");
-                    String held = exec("stellurgytest space entry-status id " + durableId);
+                    String held = read("stellurgytest space entry-status id " + durableId).raw();
                     ledgerRow[0] = held;
                     assertEquals("the arrived ship's address drifted out of the cell it flew to once"
                                     + " its flight computer began self-reporting its position;"
@@ -367,23 +367,23 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
                     Math.abs(actual[axis] - expected[axis]) <= CellSeam.CARRY_MARGIN);
         }
         assertEquals("nothing may still be in transit once the ledger reports arrival", 0,
-                SubsystemStatus.read(this::exec).transits);
+                SubsystemStatus.read(c -> read(c).raw()).transits);
     }
 
     @After
     public void cleanup() throws Exception {
-        exec("stellurgytest space entry-clear");
+        arrange("stellurgytest space entry-clear");
     }
 
     // --- helpers (mirror VSShipCrossingSpikeTest / VSShipTransitTest) -----------------------------
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(this::exec, setup);
+        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
     }
 
     /**
@@ -394,7 +394,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
 
@@ -412,7 +412,7 @@ public class VSShipEntryTest extends AbstractSharedServerTest {
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

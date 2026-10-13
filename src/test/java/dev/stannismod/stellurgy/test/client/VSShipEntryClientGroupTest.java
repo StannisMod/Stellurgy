@@ -176,24 +176,24 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
 
         // The low line every scenario here climbs through, stated before each one and read back: a
         // scenario that ran against Earth's own line would sit out its climb budget below it.
-        OrbitLine stated = OrbitLine.state(this::exec, 0, ORBIT_LINE);
+        OrbitLine stated = OrbitLine.state(c -> arrange(c).raw(), 0, ORBIT_LINE);
         assertEquals("the overworld's orbit line must be the one this family states: " + stated,
                 ORBIT_LINE, stated.line());
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         if (!status.registered) {
             // Nothing to hand back — the subsystem is not up, and the scenario's own arrangement says
             // so far more usefully than a reset would.
             return;
         }
         for (int cell : pressureCells) {
-            String released = exec("stellurgytest space release " + cell + " 0 0");
+            String released = arrange("stellurgytest space release " + cell + " 0 0").raw();
             assertTrue("a probe-held cell must be handed back between scenarios, or the next"
                     + " scenario's pool is full for a reason that has nothing to do with its own"
                     + " premise. cell=" + cell + " reply=" + released,
                     Reply.of(released).ok());
         }
-        scenario().record("spaceAtStart", exec("stellurgytest space subsystem-status").replace('\n', ' '));
+        scenario().record("spaceAtStart", read("stellurgytest space subsystem-status").raw().replace('\n', ' '));
     }
 
     // ── granted: he flies up, and arrives seated and in control ─────────────────────────────────
@@ -235,7 +235,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                     + " and one reading of his rendered altitude once the release has arrived.")
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                 + "config opts it in: " + status.raw(), status.registered);
 
@@ -294,7 +294,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         }
 
         // ---- ARRIVAL: the three play-reported symptoms, measured from the client. -------------
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(c -> read(c).raw());
         int[] pooledDims = statusAfter.slotDims();
         scenario().requireArranged("subsystem-status must list slot dims: " + statusAfter.raw(),
                 pooledDims.length > 0);
@@ -354,7 +354,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // child workdirs on close, so the only way to read the writers post-run is through the
         // test's own stdout. Both halves come from their side's event log, which test-only mixins
         // feed — the client half used to be a static-field read of a ring that production carried.
-        System.out.println("[ARRIVAL-TRACE server] " + exec("stellurgytest vs arrival-trace"));
+        System.out.println("[ARRIVAL-TRACE server] " + read("stellurgytest vs arrival-trace").raw());
         for (String writer : new String[]{"pos_jump", "vel_jump", "mount", "dismount"}) {
             System.out.println("[ARRIVAL-TRACE server " + writer + "] " + serverEvents().since(0, writer));
         }
@@ -385,9 +385,9 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // So the cruise is zeroed by probe — not by his keys, which are what is under test — and the
         // hull is given time to brake before the key is asked anything.
         String arrivedShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
-                this::exec, serverEvents(), clientDim, durableShipName, arrivalBudget * 5);
-        String zeroed = exec("stellurgytest vs ff-cruise-by-id " + clientDim + " " + arrivedShipId
-                + " 0 0 0");
+                c -> read(c).raw(), serverEvents(), clientDim, durableShipName, arrivalBudget * 5);
+        String zeroed = arrange("stellurgytest vs ff-cruise-by-id " + clientDim + " " + arrivedShipId
+                + " 0 0 0").raw();
         scenario().requireArranged("the arrived ship's cruise must be zeroed before his key is"
                 + " judged, or its own climb answers the question: " + zeroed,
                 Reply.of(zeroed).bool("afcResolved"));
@@ -418,9 +418,9 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         serverEvents().await(entryMark, "aboard_record_stamped", "a pilot who flew his own ship into a cell"
                 + " must be STAMPED with a durable aboard record - it is the only evidence the login"
                 + " restore has that he was ever aboard", arrivalBudget * 5);
-        String tag = exec("stellurgytest space aboard-tag " + BOT);
+        String tag = read("stellurgytest space aboard-tag " + BOT).raw();
         assertTrue("...and the record must READ as aboard once stamped: tag=" + tag + " riding="
-                        + bot().reportRidingEntity() + " status=" + exec("stellurgytest space subsystem-status"),
+                        + bot().reportRidingEntity() + " status=" + read("stellurgytest space subsystem-status").raw(),
                 Reply.of(tag).bool("tagged"));
     }
 
@@ -457,7 +457,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     @Test
     public void aFullPoolRefusesTheEntryAndLeavesThePilotSeated() throws Exception {
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                 + "config opts it in: " + status.raw(), status.registered);
 
@@ -494,7 +494,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             }
             // The reader refuses the reply that says NEITHER — an unregistered subsystem, which is
             // what the two-substring arrangement check was standing in for.
-            occupy = MaterializedCell.at(this::exec, cell + " 0 0");
+            occupy = MaterializedCell.at(c -> arrange(c).raw(), cell + " 0 0");
         }
         java.util.Set<Integer> held = slotsHeldByPressureCells();
         scenario().requireArranged("EVERY slot must be held by one of this scenario's own cells, or"
@@ -502,7 +502,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                 + " granted for a reason that has nothing to do with the refusal path. pool=" + pool
                 + " heldByThisScenario=" + held
                 + " lastOccupy=" + (occupy == null ? "none" : occupy.raw()), held.containsAll(pool));
-        MaterializedCell further = MaterializedCell.at(this::exec,
+        MaterializedCell further = MaterializedCell.at(c -> arrange(c).raw(),
                 pressureCells[pressureCells.length - 1] + " 0 0");
         scenario().requireArranged("instrument control: with every slot held by an OCCUPIED cell, a"
                 + " further occupy must be REFUSED - else the pool is not actually exhausted and the"
@@ -575,7 +575,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // reached the line, the trigger declined, the entry declined, or nobody was there to tell -
         // and this reading with the craft's altitude separates them. `lastDecision` NEVER-ASKED with
         // the craft under the ceiling is the first of them, and it exonerates the entry path.
-        String gate = exec("stellurgytest space entry-gate 0 " + shipUuid);
+        String gate = read("stellurgytest space entry-gate 0 " + shipUuid).raw();
 
         // THE PRECONDITION, before the verdict: a refusal can only be missing if a refusal was ever
         // ASKED FOR. The gate's own record says whether it was: no `entry_decided` since the mark means
@@ -591,9 +591,9 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
             // was TAKEN by the crossing (ledger grew, and the pilot is in a cell), it was UNLOADED
             // (still counted in the world, not loaded), it is GONE from the world entirely, or it
             // simply stopped climbing. One reading each, and only on the way to a failure.
-            SubsystemStatus spaceNow = SubsystemStatus.read(this::exec);
-            String loaded = exec("stellurgytest vs ship-count 0");
-            String all = exec("stellurgytest vs ship-count-all 0");
+            SubsystemStatus spaceNow = SubsystemStatus.read(c -> read(c).raw());
+            String loaded = read("stellurgytest vs ship-count 0").raw();
+            String all = read("stellurgytest vs ship-count-all 0").raw();
             JsonObject where = bot().reportWeather();
             int clientDim = where != null && where.has("dim") ? where.get("dim").getAsInt() : -9999;
             scenario().arrangementFailed("the entry gate recorded NO decision for this climb (the craft"
@@ -677,7 +677,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         final int bx = site.x, bz = site.z;
         // Stand the client well clear while the fixture is built, then beside it so it stays loaded.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
         Events events = serverEvents();
@@ -690,7 +690,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
                 + " a VS ship in the physics registry — its record is where this scenario's ship"
                 + " identity comes from, and every later question about the craft is keyed on it");
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (site.y + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (site.y + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -725,9 +725,9 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         liftClearOfThePad(shipUuid, PAD_CLEARANCE_BLOCKS);
 
         // Board post-assembly (the proven path - boarding variants have their own test).
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, shipUuid);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         awaitClientMount(seatMark, "the pilot's client must perform the seating before he flies",
@@ -743,15 +743,15 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         // this ASSERTS rather than digs — and for this class the pre-clear it replaces was cutting
         // a shaft through a forest canopy, since the refused leg's plot is wooded ground at
         // y=71..79 on the pinned seed.
-        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
-                "the craft that climbs to the orbit line, and the first blocks of that climb");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
+                "the craft that climbs to the orbit line, and the first blocks of that climb"));
     }
 
     // ── observation helpers ─────────────────────────────────────────────────────────────────────
 
     /** The pool's own slot dimension ids, from the subsystem's report. */
     private java.util.Set<Integer> slotDimsOfPool() throws Exception {
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         java.util.Set<Integer> dims = new java.util.LinkedHashSet<Integer>();
         for (int dim : status.slotDims()) {
             dims.add(dim);
@@ -769,7 +769,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     private java.util.Set<Integer> slotsHeldByPressureCells() throws Exception {
         java.util.Set<Integer> held = new java.util.LinkedHashSet<Integer>();
         for (int cell : pressureCells) {
-            String reply = exec("stellurgytest space cell-slot " + cell + " 0 0");
+            String reply = read("stellurgytest space cell-slot " + cell + " 0 0").raw();
             // absence is the answer: this is the wait, and "the flag is not there yet" is
             // the state it exists to sit through.
             if (!Reply.of(reply).boolOr("managerLoaded", false)) {
@@ -785,7 +785,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
 
     /** How many craft the space ledger holds right now. */
     private int ledgerSize() throws Exception {
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         
         scenario().requireArranged("subsystem-status must report the ledger: " + status.raw(),
                 true /* the reader refuses a status with no ledger count */);
@@ -817,7 +817,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     private String clientGateStats() throws Exception {
         return "delivery=" + seatDelivery()
                 + " wallMs=" + System.currentTimeMillis()
-                + " shipData=" + exec("stellurgytest vs player-ship-data")
+                + " shipData=" + read("stellurgytest vs player-ship-data").raw()
                 + " riding=" + bot().reportRidingEntity();
     }
 
@@ -843,8 +843,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
         if (!gate.has(AFC_X) || !gate.has(AFC_Y) || !gate.has(AFC_Z)) {
             return "(the gate readout named no flight computer, so its state cannot be read)";
         }
-        return exec("stellurgytest vs phys-diag 0 " + shipUuid + " "
-                + gate.integer(AFC_X) + " " + gate.integer(AFC_Y) + " " + gate.integer(AFC_Z));
+        return read("stellurgytest vs phys-diag 0 " + shipUuid + " "
+                + gate.integer(AFC_X) + " " + gate.integer(AFC_Y) + " " + gate.integer(AFC_Z)).raw();
     }
 
     private static boolean isRiding(JsonObject riding) {

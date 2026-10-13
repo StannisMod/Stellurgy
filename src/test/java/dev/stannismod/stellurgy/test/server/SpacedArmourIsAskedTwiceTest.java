@@ -52,7 +52,7 @@ public class SpacedArmourIsAskedTwiceTest extends AbstractSharedServerTest {
     private static final double MUZZLE_STANDOFF = 1.0D;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The claim, on the arrangement that makes it matter.
@@ -96,7 +96,7 @@ public class SpacedArmourIsAskedTwiceTest extends AbstractSharedServerTest {
 
     /** Enough to spend both charges and still be moving: the subject is the QUESTION, not the budget. */
     private long fire(int lane, double speed) throws Exception {
-        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (X - MUZZLE_STANDOFF) + " " + (Y + 0.5D) + " "
+        Reply fired = act("stellurgytest shot fire " + DIM + " " + (X - MUZZLE_STANDOFF) + " " + (Y + 0.5D) + " "
                 + (lane + 0.5D) + " " + speed + " 0 0 200000 1200 KINETIC 0.25 1.0").requireOk("fire down the lane");
         long id = fired.longInteger("id");
         assertTrue("the round was refused, so this leg measured nothing: " + fired, id >= 0);
@@ -104,14 +104,14 @@ public class SpacedArmourIsAskedTwiceTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, int lane, String block) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + Y + " " + lane + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + lane + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + lane + ": " + placed, placed.bool("placed"));
     }
 
     private void prepare(int lane) throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
                 + ((X + 40) >> 4) + " " + ((lane + 16) >> 4)).requireOk("warm the lane's chunks");
-        ask("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (lane - 3) + " " + (X + 40)
+        arrange("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (lane - 3) + " " + (X + 40)
                 + " " + (Y + 4) + " " + (lane + 3) + " minecraft:air").requireOk("clear the lane");
     }
 
@@ -119,7 +119,7 @@ public class SpacedArmourIsAskedTwiceTest extends AbstractSharedServerTest {
 
     /** A reactive charge that was asked spent itself, so the voxel it held is air. */
     private boolean gone(int x, int lane) throws Exception {
-        return "minecraft:air".equals(ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane)
+        return "minecraft:air".equals(read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane)
                 .requireOk("read a stage").text("block"));
     }
 }

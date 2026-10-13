@@ -111,20 +111,20 @@ public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
      * what fills the handle.</p>
      */
     private void flyOutAnyJumpLeftInTheAir() throws Exception {
-        SubsystemStatus stack = SubsystemStatus.read(this::exec)
+        SubsystemStatus stack = SubsystemStatus.read(c -> read(c).raw())
                 .requireRegistered("a scenario in this family cannot start without the space stack");
         if (stack.transits == 0) {
             return;
         }
         boolean flownOut = false;
         for (int i = 0; i < LIVABLE_FLIGHT_TICKS / 10L && !flownOut; i++) {
-            flownOut = TransitStatus.tick(this::exec, 10).inTransit == 0;
+            flownOut = TransitStatus.tick(c -> act(c).raw(), 10).inTransit == 0;
         }
         // A ARRANGEMENT failure: a leftover jump this reset could not fly out has disproved nothing
         // about transits — it is the world the next scenario needs not having been put back.
         scenario().requireArranged("a jump left in the air by an earlier scenario must be flown out"
                 + " before this one starts, or its arrival lands INSIDE this scenario and re-seats"
-                + " the bot into the destination cell: " + exec("stellurgytest space transit-status"),
+                + " the bot into the destination cell: " + arrange("stellurgytest space transit-status").raw(),
                 flownOut);
     }
 
@@ -145,7 +145,7 @@ public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
     /** {@code find-seat} keyed by identity: every scenario here builds at the SAME anchor in the
  *  SAME pooled slot, so the anchor is a question with several right answers. */
     private PilotSeat findSeat(int originDim, String shipId) throws Exception {
-        return PilotSeat.byId(this::exec, originDim, shipId);
+        return PilotSeat.byId(c -> read(c).raw(), originDim, shipId);
     }
 
     /**
@@ -164,7 +164,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         // ambiguity and then answers 0 for several different reasons, so the postcondition replaces
         // it and names what to look at: a craft that never registered, or one that registered and
         // did not load.
-        return ShipReadiness.requireLoaded(this::exec, dim,
+        return ShipReadiness.requireLoaded(c -> read(c).raw(), dim,
                 "this scenario's craft must be loaded before the transit is driven");
     }
 
@@ -223,7 +223,7 @@ private int waitForLoadedShip(int dim) throws Exception {
                 + " or nothing in the corridor can be addressed to this craft: " + boarded,
                 boardedShip != null && !boardedShip.isEmpty());
         parkedHullName = boardedShip;
-        int corridorDim = TransitStatus.read(this::exec).hyperDim;
+        int corridorDim = TransitStatus.read(c -> arrange(c).raw()).hyperDim;
         // The server's half is appended on the FAILURE path only, because the two logs answer
         // different questions and the client's alone cannot say whether the jump got as far as the
         // lane; on the happy path it would be a probe call per wait.
@@ -289,8 +289,8 @@ private int waitForLoadedShip(int dim) throws Exception {
      * ever took — the only field {@link #gameSeen} reads.
      */
     private String motionTrace(String afcKey) throws Exception {
-        String reply = exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.MotionTrace"
-                + " serverReading " + afcKey + " " + MOTION_TRACE_WINDOW_MS);
+        String reply = read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.MotionTrace"
+                + " serverReading " + afcKey + " " + MOTION_TRACE_WINDOW_MS).raw();
         return Reply.of("MotionTrace.serverReading", reply).text("returned");
     }
 
@@ -310,7 +310,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         // Build a PILOTED tier-2 ship in a fresh transit ORIGIN pool cell. The assembly is DEFERRED
         // rather than threaded — the spawn is queued and the ship manager drains that queue in its
         // own tick — so the ship + its seat are not queryable synchronously; poll for them below.
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
 
         // Wait for the async assembly to load the ship in the origin cell (count-all -> load-ships -> count).
@@ -324,14 +324,14 @@ private int waitForLoadedShip(int dim) throws Exception {
         seatTheBot(originDim, setup.requireShipId());
 
         // The mark is taken BEFORE the departure, so nothing the jump does can fall between two reads.
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         // And the CLIENT's own mark beside it, for the remount below: his client PERFORMS the mount
         // when the arrival tells it who is riding what, so that half is a record on the other log.
         long clientMark = clientEvents().mark();
 
         // Depart into hyperspace at the ship anchor (1,64,1 from transit-setup-piloted).
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // THE CONTRACT, as the server commits it: the whole jump, link by link and in order. This is
@@ -339,7 +339,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         events.assertChain(mark, "a seated crew member's jump must pick him up, cut the hull into the"
                 + " lane, seat him on the parked hull, cut the hull into its destination and put him"
                 + " back aboard before it settles", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
-        int targetDim = arrivedTargetDim(this::exec);
+        int targetDim = arrivedTargetDim(cmd -> arrange(cmd).raw());
 
         // ACCEPTANCE (client oracle): the client itself must PERFORM the remount and still have the
         // crew member on the ship's seat, in the TARGET cell. The server's re-seat is a link above;
@@ -359,7 +359,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         // in a lane that was its alone. Both are invisible from everything asserted above - a jump
         // that delivered a stranger's hull with this crew re-seated on it looks exactly like a
         // successful one from the client's side, which is how the positional cut survived so long.
-        String census = exec("stellurgytest vs arrival-trace");
+        String census = read("stellurgytest vs arrival-trace").raw();
         Reply cutMReply = Reply.of(census);
         assertTrue("the arrival must leave a cut census behind: " + census, cutMReply.has(ARRIVAL_CUT));
         String cut = cutMReply.text(ARRIVAL_CUT);
@@ -412,7 +412,7 @@ private int waitForLoadedShip(int dim) throws Exception {
     public void aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying() throws Exception {
 
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
 
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
@@ -427,12 +427,12 @@ private int waitForLoadedShip(int dim) throws Exception {
 
         // Both marks BEFORE the departure, one per log: the crossing is the server's fact and the
         // world rebuild and the re-seat are the client's, and the two logs number independently.
-        String botName = botName(this::exec);
-        Events events = transitEvents(this::exec);
+        String botName = botName(cmd -> read(cmd).raw());
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
 
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // THE CONTRACT: the crew travels with its ship. Both halves are production's own records —
@@ -478,7 +478,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         // in the air — and that is stated rather than assumed, after the last of those readings. One
         // status reply, read once: the premise and the subsystem's own oracle for where this crew
         // belongs are two fields of the SAME record, so nothing can drift between them.
-        TransitStatus inFlight = TransitStatus.read(this::exec);
+        TransitStatus inFlight = TransitStatus.read(c -> arrange(c).raw());
         scenario().requireArranged("the jump must still be IN FLIGHT when the seat is read, or this"
                 + " reads the ARRIVAL — where the crew is re-seated for a different reason entirely."
                 + " transit-status=" + inFlight.raw(), inFlight.inTransit >= 1);
@@ -491,13 +491,13 @@ private int waitForLoadedShip(int dim) throws Exception {
     // ---- migrated: VSCrewedArrivalReseatsWithNobodyToLoadTheShipE2ETest ----
 
     /**
-     * Run a probe and return ONLY its JSON envelope. The server writes its own log lines to the same
-     * stream, so joining every returned line hands the assertions whatever unrelated line happened to
-     * land in the window — including one that satisfies them.
+     * ONLY the JSON envelope of a probe's reply lines (each caller sends in its role). The server writes
+     * its own log lines to the same stream, so joining every returned line hands the assertions whatever
+     * unrelated line happened to land in the window — including one that satisfies them.
      */
-private String execEnvelope(String cmd) throws Exception {
+    private static String envelope(java.util.List<String> lines) {
         String envelope = "";
-        for (String line : serverClient().execute(cmd)) {
+        for (String line : lines) {
             int brace = line.indexOf('{');
             if (brace >= 0 && line.endsWith("}")) {
                 envelope = line.substring(brace);
@@ -535,7 +535,7 @@ private String execEnvelope(String cmd) throws Exception {
 
         Events arrangeLog = serverEvents();
         long setupMark = arrangeLog.markInstrumented();
-        TransitSetup setup = TransitSetup.of(execEnvelope("stellurgytest space transit-setup-piloted"));
+        TransitSetup setup = TransitSetup.of(envelope(serverClient().arrange("stellurgytest space transit-setup-piloted")));
         int originDim = setup.originDim;
 
         // ARRANGEMENT. The fixture's assembly is async, so wait for the ship to EXIST: the registry's
@@ -544,7 +544,7 @@ private String execEnvelope(String cmd) throws Exception {
         arrangeLog.awaitField(setupMark, "ship_spawned", "vsShip", setup.requireShipId(),
                 "the piloted origin ship must be spawned in the pool cell (dim " + originDim + ")", 200);
 
-        String botName = PlayerState.botName(this::execEnvelope);
+        String botName = PlayerState.botName(c -> envelope(serverClient().read(c)));
 
         // Put the bot in the origin cell FIRST, at the assembly anchor. That is what makes the origin ship
         // loaded — by a real player's proximity, VS's own mechanism — so even the arrangement needs no
@@ -555,7 +555,7 @@ private String execEnvelope(String cmd) throws Exception {
         // body's PROXIMITY, so the seat search below is asking about a world he has to be in.
         long enterMark = clientEvents().mark();
         long proximityLoadMark = arrangeLog.markInstrumented();
-        String enter = execEnvelope("stellurgytest space enter " + botName + " " + originDim + " 1 64 1");
+        String enter = envelope(serverClient().arrange("stellurgytest space enter " + botName + " " + originDim + " 1 64 1"));
         assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
         awaitClientDim(enterMark, originDim,
                 "the proximity load the seat search depends on is this body being THERE");
@@ -568,8 +568,8 @@ private String execEnvelope(String cmd) throws Exception {
         // described above) does not satisfy it. Then ONE read, failing as the ARRANGEMENT it is: a
         // seat this scenario could not find has said nothing about a crew member's arrival.
         awaitShipUsable(arrangeLog, proximityLoadMark, setup.requireShipId());
-        PilotSeat seat = PilotSeat.of(execEnvelope("stellurgytest vs find-seat " + originDim + " id "
-                + setup.requireShipId()));
+        PilotSeat seat = PilotSeat.of(envelope(serverClient().read("stellurgytest vs find-seat " + originDim + " id "
+                + setup.requireShipId())));
         if (!seat.found) {
             // Witness sensitivity: without a located seat the whole "still riding on the far side"
             // observation is vacuous, so this is refused before anything is done to the ship.
@@ -584,18 +584,18 @@ private String execEnvelope(String cmd) throws Exception {
         }
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
-        mountTheSeatDummy(this::execEnvelope, originDim, seatX, seatY, seatZ);
+        mountTheSeatDummy(c -> envelope(serverClient().arrange(c)), originDim, seatX, seatY, seatZ);
 
         // CONTROL: the client confirms it IS riding before the jump, so "riding after" carries information.
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
                 + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
 
-        Events events = transitEvents(this::execEnvelope);
+        Events events = transitEvents(c -> envelope(serverClient().read(c)));
         long mark = events.markInstrumented();
         // The CLIENT's own mark, for the remount link below — taken here, before the departure.
         long clientMark = clientEvents().mark();
 
-        String begin = execEnvelope("stellurgytest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
+        String begin = envelope(serverClient().act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED));
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // The leg under test: the whole chain, with NOTHING forcing the arriving ship loaded — no
@@ -604,7 +604,7 @@ private String execEnvelope(String cmd) throws Exception {
         // own account of what it is waiting on (`crew_reseat_blocked`) in the log it prints.
         events.assertChain(mark, "a crew member must be re-seated on arrival with NOTHING forcing the"
                 + " ship loaded", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
-        int targetDim = arrivedTargetDim(this::execEnvelope);
+        int targetDim = arrivedTargetDim(c -> envelope(serverClient().arrange(c)));
 
         JsonObject riding = ridingOnceTheClientHasRemountedAsTheSubject(clientMark,
                 CLIENT_REMOUNT_BUDGET_TICKS);
@@ -695,14 +695,14 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
                 .requireFound("the pilot seat must be found in the assembled ship, or the test is vacuous");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
-        String botName = botName(this::exec);
+        String botName = botName(cmd -> read(cmd).raw());
 
         int sx = (int) Math.round(seat.shipWorldX);
         int sy = (int) Math.round(seat.shipWorldY);
         int sz = (int) Math.round(seat.shipWorldZ);
         // The CLIENT's mark BEFORE the transfer is ordered — see the sibling arrangement above.
         long enterMark = clientEvents().mark();
-        String enter = exec("stellurgytest space enter " + botName + " " + originDim + " " + sx + " " + sy + " " + sz);
+        String enter = arrange("stellurgytest space enter " + botName + " " + originDim + " " + sx + " " + sy + " " + sz).raw();
         assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
         awaitClientDim(enterMark, originDim,
                 "the mount below seats him on a ship in that cell, and the client renders it");
@@ -714,13 +714,13 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
         // and then looked up in whatever world the server has the player in. Measured 2026-09-08 —
         // dummy alive in dim 3, player in dim 4, five retries against a lookup that could never
         // succeed. Read here so an arrangement that did not build says so as an arrangement.
-        PlayerState serverSide = PlayerState.read(this::exec);
+        PlayerState serverSide = PlayerState.read(c -> read(c).raw());
         scenario().requireArranged("the SERVER must have the player in the transit origin cell too —"
                 + " the client says " + originDim + " and the seat dummy is spawned there, so a"
                 + " server-side dim that differs makes the mount below unreachable rather than"
                 + " flaky: " + serverSide.raw(), serverSide.dim == originDim);
 
-        mountTheSeatDummy(this::exec, originDim, seatX, seatY, seatZ);
+        mountTheSeatDummy(cmd -> arrange(cmd).raw(), originDim, seatX, seatY, seatZ);
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
                 + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
     }
@@ -801,7 +801,7 @@ private String hud() throws Exception {
                 rd.get("skyPassEnabled").getAsBoolean());
 
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
@@ -829,10 +829,10 @@ private String hud() throws Exception {
         // ── THE JUMP ────────────────────────────────────────────────────────────────────────────
         // Both marks before the departure, one per log: the crossing is the server's fact, the world
         // rebuild that opens the sky window is the client's, and the two logs number independently.
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // The jump HAS STARTED, as the GAME's own event: `transit_departed`. What stood here was a
@@ -860,7 +860,7 @@ private String hud() throws Exception {
         // being drawn at all, so the corridor reading above would be about the far end. The loop this
         // replaces guarded the same straddle by re-reading the status mid-iteration, and it was a red
         // 3 runs in 4 before that guard existed.
-        TransitStatus stillFlying = TransitStatus.read(this::exec);
+        TransitStatus stillFlying = TransitStatus.read(c -> arrange(c).raw());
         scenario().requireArranged("the jump must still be IN FLIGHT after the render window, or the"
                         + " corridor reading above belongs to the ARRIVED craft rather than"
                         + " to the flight: transit-status=" + stillFlying,
@@ -941,7 +941,7 @@ private String hud() throws Exception {
             bot().releaseKey(SNEAK_KEY);
         }
         if (Events.records(clientEvents().since(clientMark, "dismount")).isEmpty()) {
-            exec("stellurgytest player dismount");
+            arrange("stellurgytest player dismount");
             awaitClientDismount(clientMark, "the crew member must actually leave his seat, or there"
                     + " is no crew member on his feet to carry", 80);
         }
@@ -967,7 +967,7 @@ private String hud() throws Exception {
             clientEvents().awaitMatching(captureMark, "deck_carry",
                     reply -> !Events.records(reply).isEmpty(), "for any body",
                     "the deck never took the dropped body", 240,
-                    () -> exec("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0"), 40);
+                    () -> arrange("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0").raw(), 40);
         } catch (AssertionError neverCaught) {
             // Not a verdict here either: the caller reads the capture and makes its own claims, and
             // one of them is about a body the deck did NOT take. Swallowing keeps that case its to
@@ -977,7 +977,7 @@ private String hud() throws Exception {
         // Nothing is asserted here and nothing is returned as a verdict: the caller reads the
         // capture for its own claims. That is the difference from the loop this replaces, which
         // handed back the reading it had just exited on for a caller to re-assert.
-        return DeckCapture.read(this::exec);
+        return DeckCapture.read(c -> read(c).raw());
     }
 
     /**
@@ -1122,7 +1122,7 @@ private String hud() throws Exception {
 
         // The void exempts creative and spectator on purpose, so the mode is SET rather than assumed:
         // in either of them this scenario could only ever come back "he survived".
-        exec("gamemode survival @a");
+        arrange("gamemode survival @a").raw();
 
         // Vanilla runs the sky pass only at renderDistanceChunks >= 4 and the harness pins the client
         // at 2, so without this the sky renderer never executes and every corridor reading below is
@@ -1133,7 +1133,7 @@ private String hud() throws Exception {
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
@@ -1172,11 +1172,11 @@ private String hud() throws Exception {
                         + " for " + cellAfcKey + ")",
                 cellTileTicksAfter > cellTileTicks);
 
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 "
-                + LIVABLE_FLIGHT_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 "
+                + LIVABLE_FLIGHT_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // Fly as far as hyperspace and then stop TOUCHING the transit — the server flies it from
@@ -1241,7 +1241,7 @@ private String hud() throws Exception {
         // SHARED world — every scenario in this class parks its craft in the same hyperspace — so a
         // lookup from them resolves the yard nearest that point, which is a different lane's ship
         // whenever the lanes are closer than the caller assumed.
-        String hyperShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), hyperDim, parkedHullName,
+        String hyperShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), hyperDim, parkedHullName,
                 100);
         PilotSeat hyperSeat = findSeat(hyperDim, hyperShipId);
         int afcX = hyperSeat.afcX;
@@ -1279,13 +1279,13 @@ private String hud() throws Exception {
         // window the jump can finish inside — and an arrival that lands here takes the deck out from
         // under him, which reads at `deck-capture` as exactly the same "not tracked" the void would
         // produce. Two opposite investigations behind one message; this line separates them.
-        TransitStatus stillFlying = TransitStatus.read(this::exec);
+        TransitStatus stillFlying = TransitStatus.read(c -> arrange(c).raw());
         scenario().requireArranged("the jump must still be IN FLIGHT after the void's whole budget,"
                 + " or this leg is reading a ARRIVAL rather than the void — the ship left with the"
                 + " deck he was standing on. transit-status=" + stillFlying.raw(),
                 stillFlying.inTransit >= 1);
         JsonObject aboardState = bot().reportState();
-        DeckCapture aboardCapture = DeckCapture.read(this::exec);
+        DeckCapture aboardCapture = DeckCapture.read(c -> read(c).raw());
         assertTrue("a crew member standing on his own deck in hyperspace must not be taken by the"
                 + " void — he is aboard, and the danger is for bodies that are not: client="
                 + aboardState + " capture=" + aboardCapture.raw(),
@@ -1318,12 +1318,12 @@ private String hud() throws Exception {
             // else, and the read below — "he must actually be off the hull" — is the assertion they
             // were deciding.
             long shoveMark = clientEvents().mark();
-            exec("tp @a " + (deckX + 30.0) + " " + deckY + " " + (deckZ + 30.0) + " 0 0");
+            arrange("tp @a " + (deckX + 30.0) + " " + deckY + " " + (deckZ + 30.0) + " 0 0");
             awaitClientPlacedNear(shoveMark, deckX + 30.0, deckZ + 30.0,
                     "the body must be off the hull ON THE CLIENT, which is the side whose resolver"
                             + " decides whether the deck still holds him");
         }
-        DeckCapture offHull = DeckCapture.read(this::exec);
+        DeckCapture offHull = DeckCapture.read(c -> read(c).raw());
         scenario().requireArranged("he must actually be off the hull, or the void has nothing to take: "
                 + offHull.raw(), !offHull.alreadyTracked);
 
@@ -1392,13 +1392,13 @@ private String hud() throws Exception {
                             + " left running parks a hull there with a crew record for a player who"
                             + " is no longer alive to be re-seated",
                     (int) (LIVABLE_FLIGHT_TICKS / 2L),
-                    () -> exec("stellurgytest space transit-tick 10"));
+                    () -> act("stellurgytest space transit-tick 10").raw());
         } catch (AssertionError never) {
             // ARRANGEMENT, like the family reset that does the same job before the NEXT scenario:
             // this scenario's own verdict was reached above, and a world it failed to put back is a
             // statement about the fixture rather than about the void.
             scenario().arrangementFailed(never.getMessage() + " | transit-status="
-                    + exec("stellurgytest space transit-status"));
+                    + arrange("stellurgytest space transit-status").raw());
         }
     }
 
@@ -1430,7 +1430,7 @@ private String hud() throws Exception {
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
 
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
@@ -1468,10 +1468,10 @@ private String hud() throws Exception {
         // ── THE JUMP ────────────────────────────────────────────────────────────────────────────
         // Both marks before the departure, one per log — the crossing is the server's fact, the
         // world rebuild is the client's, and the two logs number independently.
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // THE CONTRACT: a crossing carries whoever is aboard, standing included — both halves off
@@ -1483,7 +1483,7 @@ private String hud() throws Exception {
         // far end is the second crossing's subject and it re-establishes him for entirely different
         // reasons. One status reply, read once: the premise and the subsystem's own oracle for where
         // this crew belongs are two fields of the SAME record.
-        TransitStatus inFlight = TransitStatus.read(this::exec);
+        TransitStatus inFlight = TransitStatus.read(c -> arrange(c).raw());
         scenario().requireArranged("the jump must still be IN FLIGHT when his posture is read, or"
                 + " this reads the ARRIVAL rather than the carry: transit-status=" + inFlight.raw(),
                 inFlight.inTransit >= 1);
@@ -1499,7 +1499,7 @@ private String hud() throws Exception {
         // sibling of this scenario reds on exactly that gap — so on its own this clause would be
         // satisfied by the one thing it must not be satisfied by. The server holding a deck capture
         // for him says he is aboard on his FEET, which is the state the crossing enumerates on.
-        DeckCapture captureInFlight = DeckCapture.read(this::exec);
+        DeckCapture captureInFlight = DeckCapture.read(c -> read(c).raw());
         assertTrue("a crew member carried on his feet must be resolved on a deck in the corridor —"
                 + " without that, 'he is not riding' is his client not having a mount yet rather than"
                 + " a man standing on a hull: " + captureInFlight.raw(),
@@ -1522,7 +1522,7 @@ private String hud() throws Exception {
         events.assertChain(mark, "a crew member on his feet must be carried by BOTH crossings: seated"
                 + " on the parked hull for the flight, put back on his deck at the far end, and only"
                 + " then the arrival committed", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
-        int targetDim = arrivedTargetDim(this::exec);
+        int targetDim = arrivedTargetDim(cmd -> arrange(cmd).raw());
 
         // The CLIENT's half of the arrival: the server's placement is a link above; whether his own
         // client followed it into the target cell is a separate link, and it is a RECORD — the world
@@ -1536,13 +1536,13 @@ private String hud() throws Exception {
         // ONE reply, for both the verdict and the diagnosis. The chain above ended at the settle,
         // which the server commits only once everyone is back aboard, so this is a read of a state
         // production has already announced rather than a sample of one still converging.
-        DeckCapture captureOnArrival = DeckCapture.read(this::exec);
+        DeckCapture captureOnArrival = DeckCapture.read(c -> read(c).raw());
         // The arrival cell may hold other craft — that is exactly why the second crossing is not the
         // first one reached twice — so "back on the deck there" is only the clause's claim if it is
         // HIS deck. The physics id is re-derived from the ship's durable name because a crossing
         // mints a new one; the name is the handle that survives both crossings.
         captureOnArrival.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), targetDim, setup.requireDurableId(),
+                ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), targetDim, setup.requireDurableId(),
                         200),
                 "the deck he is put back on at the far end must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"
@@ -1608,9 +1608,9 @@ private String hud() throws Exception {
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
-        exec("gamemode survival @a");
+        arrange("gamemode survival @a");
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
@@ -1632,10 +1632,10 @@ private String hud() throws Exception {
         // ── INTO HYPERSPACE, then stop driving the jump ──────────────────────────────────────────
         // An un-ticked transit parks its ship in its lane indefinitely, which is the interval this
         // scenario is about: it needs the flight to still be happening while it reads the sky.
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
         int hyperDim = driveIntoCorridor(events, mark, clientMark);
 
@@ -1708,9 +1708,9 @@ private String hud() throws Exception {
     @Test
     public void aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet() throws Exception {
 
-        exec("gamemode survival @a");
+        arrange("gamemode survival @a");
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
@@ -1718,10 +1718,10 @@ private String hud() throws Exception {
         // Boards SEATED and jumps from the chair: that is what writes a SEATED departure record, and
         // the record is the subject here.
         seatTheBot(originDim, setup.requireShipId());
-        Events events = transitEvents(this::exec);
+        Events events = transitEvents(cmd -> read(cmd).raw());
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED).raw();
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // Fly as far as hyperspace and stop driving: the stand-up has to happen mid-flight, between the
@@ -1749,7 +1749,7 @@ private String hud() throws Exception {
         events.assertChain(mark, "a crew member who stood up mid-flight must be put back on his deck"
                 + " at the far end before the arrival is committed", JUMP_LINK_BUDGET_TICKS,
                 pilotedJumpChain());
-        int targetDim = arrivedTargetDim(this::exec);
+        int targetDim = arrivedTargetDim(cmd -> arrange(cmd).raw());
 
         // Is he still THERE — a separate question from his posture, and asked first. A body left
         // adrift on the cut hull has only the void's budget before hyperspace takes him, and that
@@ -1783,7 +1783,7 @@ private String hud() throws Exception {
         // deciding. Narrowed to him and to AFTER the arrival's re-seat, so an earlier hold in the
         // flight cannot answer. Not a wait on `deck_entered`: that one does not happen on the defect,
         // and its expiry would fail before the posture assertion the next comment puts first.
-        String botName = botName(this::exec);
+        String botName = botName(cmd -> read(cmd).raw());
         java.util.List<String> reseats = Events.records(events.since(mark, "crew_reseated"));
         scenario().requireArranged("the arrival's re-seat must be on record before its hold can be"
                 + " read: " + events.since(mark), !reseats.isEmpty());
@@ -1796,7 +1796,7 @@ private String hud() throws Exception {
                         + " hold was never armed or the recorder is dead: " + events.since(mark),
                 JUMP_LINK_BUDGET_TICKS);
         scenario().record("deckHoldEnded", holdEnd);
-        DeckCapture captureOnArrival = DeckCapture.read(this::exec);
+        DeckCapture captureOnArrival = DeckCapture.read(c -> read(c).raw());
         // ── THE CONTRACT, before the arrangement-shaped reading below ───────────────────────────
         // Posture first, deliberately: being off the deck is a CONSEQUENCE of having been seated, so a
         // red that leads with the missing deck capture describes the symptom's shadow. Riding at all is
@@ -1812,7 +1812,7 @@ private String hud() throws Exception {
         // hold other craft, so "on a deck" and "on the deck he stood up from" are different claims
         // and only the second is what a crossing is supposed to guarantee.
         captureOnArrival.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), targetDim, setup.requireDurableId(),
+                ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), targetDim, setup.requireDurableId(),
                         200),
                 "the deck he stands on after the arrival must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"

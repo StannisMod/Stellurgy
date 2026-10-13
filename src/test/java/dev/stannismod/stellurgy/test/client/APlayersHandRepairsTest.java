@@ -66,7 +66,7 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
             + " DESTROYED ... {...block:minecraft:stone,wasDestroyed:true...}\". 2026-09-30.")
     @Test
     public void aBlockAPlayerPutsIntoAHoleIsNotRecordedAsDestroyed() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int subjectX = X + 2, controlX = X + 4;
         post(subjectX);
@@ -77,7 +77,7 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
         // The control: a hole filled by something that announces nothing keeps its record. The
         // `place` verb sets the state and nothing else; `fill` is no use here, because it clears the
         // damage map itself as the harness's "this region is fresh".
-        Reply controlPlaced = ask("stellurgytest place " + DIM + " " + controlX + " " + Y + " " + Z
+        Reply controlPlaced = arrange("stellurgytest place " + DIM + " " + controlX + " " + Y + " " + Z
                 + " minecraft:stone");
         requireArranged("the control hole would not take a stone: " + controlPlaced,
                 controlPlaced.bool("placed"));
@@ -90,8 +90,8 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
 
         // The subject: the player puts a stone into the other hole, by hand.
         standBeside();
-        exec("clear " + PLAYER);
-        exec("give " + PLAYER + " minecraft:stone 1");
+        arrange("clear " + PLAYER);
+        arrange("give " + PLAYER + " minecraft:stone 1");
         bot().selectHotbar(0);
         long placed = server.markInstrumented();
         bot().rightClickBlock(subjectX, Y - 1, Z, EnumFacing.UP, EnumHand.MAIN_HAND);
@@ -125,29 +125,29 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
             + " {...from:2,to:0...} expected:&lt;1&gt; but was:&lt;0&gt;\".")
     @Test
     public void aWelderInAPlayersHandTakesOneStageOff() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int blockX = X + 6;
-        ask("stellurgytest fill " + DIM + " " + blockX + " " + Y + " " + Z + " " + blockX + " " + Y + " " + Z
+        arrange("stellurgytest fill " + DIM + " " + blockX + " " + Y + " " + Z + " " + blockX + " " + Y + " " + Z
                 + " minecraft:iron_block").requireOk("place the subject");
         Reply priced = stage(blockX);
         int twoStages = priced.integer("stageCost") * 2;
         requireArranged("the subject has no price, so it cannot be damaged by a known amount: " + priced,
                 twoStages > 0);
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
-        Reply shot = ask("stellurgytest damage impact " + DIM + " " + (blockX + 0.5D) + " " + (Y + 3.5D) + " "
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        Reply shot = act("stellurgytest damage impact " + DIM + " " + (blockX + 0.5D) + " " + (Y + 3.5D) + " "
                 + (Z + 0.5D) + " 0 -1 0 " + twoStages + " KINETIC 88103").requireOk("damage the subject");
         int damaged = stage(blockX).integer("stage");
         requireArranged("the subject must be damaged and standing, or there is nothing to weld: stage "
                 + damaged + " after " + shot, damaged >= 1 && damaged < priced.integer("maxStage"));
 
         // Survival: in creative the welder repairs for nothing, which is a different path.
-        exec("gamemode 0 " + PLAYER);
+        arrange("gamemode 0 " + PLAYER).raw();
         standBeside();
-        exec("clear " + PLAYER);
-        Reply.of(exec("stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 100000"))
+        arrange("clear " + PLAYER);
+        Reply.of(arrange("stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 100000").raw())
                 .requireOk("a charged welder in his hand");
-        exec("give " + PLAYER + " minecraft:iron_ingot 64");
+        arrange("give " + PLAYER + " minecraft:iron_ingot 64");
         bot().selectHotbar(0);
 
         long used = server.markInstrumented();
@@ -191,7 +191,7 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
     public void aDamagedBlockAPlayerBreaksLeavesNoDamageBehind() throws Exception {
         // The break and its record happen in the server's world, so the server half of the step is
         // that world's own clock; the client half counts the ticks in which it sends the press.
-        Events server = new Events(this::exec,
+        Events server = new Events(c -> read(c).raw(),
                 GameTicks.serverAndClient(serverClient(), GameTicks.world(DIM), bot()::waitWorldTicks), evictions);
         prepareSite();
         int subjectX = X + 2, controlX = X + 6;
@@ -201,7 +201,7 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
         int controlStage = damagePost(controlX, 88105);
 
         // The control: the damaged twin taken away by something that fires no event keeps its record.
-        Reply controlRemoved = ask("stellurgytest place " + DIM + " " + controlX + " " + Y + " " + Z
+        Reply controlRemoved = arrange("stellurgytest place " + DIM + " " + controlX + " " + Y + " " + Z
                 + " minecraft:air");
         requireArranged("the control post would not be removed: " + controlRemoved,
                 controlRemoved.bool("placed"));
@@ -217,8 +217,8 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
         // at once, firing the BreakEvent from tryHarvestBlock) rather than a dig held for as long as
         // the block's hardness asks. The mode change travels to the client ahead of the teleport
         // below on the same connection, so the placement link below also means the client has it.
-        exec("gamemode 1 " + PLAYER);
-        exec("clear " + PLAYER);
+        arrange("gamemode 1 " + PLAYER).raw();
+        arrange("clear " + PLAYER);
         bot().selectHotbar(0);
         // Stand three blocks north of the post, level with it, and face it: the rotation travels in
         // the placement itself, so the look the client applies is the one the teleport carried and
@@ -226,7 +226,7 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
         double standX = subjectX + 0.5D, standY = Y, standZ = Z - 2.5D;
         double dy = (Y + 0.5D) - (standY + EYE_HEIGHT), dz = (Z + 0.5D) - standZ;
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, dz));
-        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions), this::exec,
+        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions), c -> arrange(c).raw(),
                 "tp " + PLAYER + " " + standX + " " + standY + " " + standZ + " 0 " + pitch,
                 standX, standY, standZ, "the player must stand in front of the damaged post",
                 ROUND_TRIP_DEADLINE_TICKS);
@@ -281,8 +281,8 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
         int twoStages = priced.integer("stageCost") * 2;
         requireArranged("the post has no price, so it cannot be damaged by a known amount: " + priced,
                 twoStages > 0);
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
-        Reply shot = ask("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 3.5D) + " "
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        Reply shot = act("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 3.5D) + " "
                 + (Z + 0.5D) + " 0 -1 0 " + twoStages + " KINETIC " + impactId).requireOk("damage the post");
         Reply damaged = stage(x);
         requireArranged("the post at " + x + " must be damaged and standing: " + damaged + " after " + shot,
@@ -293,26 +293,26 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
 
     /** Air round the site, a stone floor to stand on, and the player's column held. */
     private void prepareSite() throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((X + 16) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
         // Warmed is loaded NOW, not held: the posts are shot before the player stands here, and a
         // chunk nobody holds can be unloaded in between — the damage engine then refuses the blow
         // with TARGET_UNLOADED (StructureDamageEngine, the isBlockLoaded check) instead of landing it.
         for (int cx = (X - 3) >> 4; cx <= (X + 9) >> 4; cx++) {
             for (int cz = (Z - 4) >> 4; cz <= (Z + 3) >> 4; cz++) {
-                ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + cz).requireOk("hold the site's chunk");
+                arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + cz).requireOk("hold the site's chunk");
             }
         }
-        ask("stellurgytest fill " + DIM + " " + (X - 3) + " " + Y + " " + (Z - 4) + " " + (X + 9) + " " + (Y + 5)
+        arrange("stellurgytest fill " + DIM + " " + (X - 3) + " " + Y + " " + (Z - 4) + " " + (X + 9) + " " + (Y + 5)
                 + " " + (Z + 3) + " minecraft:air").requireOk("clear the site");
-        Reply floor = ask("stellurgytest fill " + DIM + " " + (X - 3) + " " + (Y - 1) + " " + (Z - 4) + " "
+        Reply floor = arrange("stellurgytest fill " + DIM + " " + (X - 3) + " " + (Y - 1) + " " + (Z - 4) + " "
                 + (X + 9) + " " + (Y - 1) + " " + (Z + 3) + " minecraft:stone").requireOk("lay the floor");
         requireArranged("the floor placed nothing: " + floor, floor.integer("placed") > 0);
     }
 
     /** One stone block on the floor, the thing a weapon will empty. */
     private void post(int x) throws Exception {
-        ask("stellurgytest fill " + DIM + " " + x + " " + Y + " " + Z + " " + x + " " + Y + " " + Z
+        arrange("stellurgytest fill " + DIM + " " + x + " " + Y + " " + Z + " " + x + " " + Y + " " + Z
                 + " minecraft:stone").requireOk("place a post");
     }
 
@@ -320,8 +320,8 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
     private void destroyPost(int x, long impactId) throws Exception {
         Reply priced = stage(x);
         int oneBlock = priced.integer("stageCost") * Math.max(1, priced.integer("maxStage"));
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
-        Reply shot = ask("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 3.5D) + " "
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        Reply shot = act("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 3.5D) + " "
                 + (Z + 0.5D) + " 0 -1 0 " + oneBlock + " KINETIC " + impactId).requireOk("destroy the post");
         Reply hole = stage(x);
         requireArranged("the post at " + x + " was not destroyed into a recorded hole, so there is no hole"
@@ -331,19 +331,25 @@ public class APlayersHandRepairsTest extends AbstractOwnBootClientTest {
 
     /** Where the player stands: on the floor, two blocks in front of the posts, within reach. */
     private void standBeside() throws Exception {
-        exec("tp @a " + (X + 4.5D) + " " + Y + " " + (Z - 2.5D) + " 0 30");
+        arrange("tp @a " + (X + 4.5D) + " " + Y + " " + (Z - 2.5D) + " 0 30");
     }
 
     private Reply stage(int x) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z).requireOk("read a stage");
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z).requireOk("read a stage");
     }
 
-    /** A vanilla command, whose reply is chat rather than JSON and is not read. */
-    private String exec(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
+    }
+
+    /** A server command that CALLS a production entry a player, a tick or a packet would reach, sent in its role. */
+    private Reply act(String command) throws Exception {
+        return Reply.answering(command, serverClient().act(command));
     }
 }

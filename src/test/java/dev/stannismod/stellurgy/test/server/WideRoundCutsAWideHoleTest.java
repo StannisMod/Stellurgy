@@ -43,7 +43,7 @@ public class WideRoundCutsAWideHoleTest extends AbstractSharedServerTest {
     private static final double WIDE_RADIUS = 1.0D;
 
     private final Events events =
-            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @LegacyWitness(prose = "with {@code ShotSubstrate.bodyRadius} ({@code ShotSubstrate#bodyRadius} at {@code return Math.min(shot.getRadius(), StellurgyConfiguration.getCurrentConfig().shotBodyRadiusCap);}) sweeping every"
             + " body as the reference quarter-block, this fails at \"the wide round left the same one-block channel a"
@@ -86,7 +86,7 @@ public class WideRoundCutsAWideHoleTest extends AbstractSharedServerTest {
     // ---- driving
 
     private long fire(double x, int energy, double radius) throws Exception {
-        Reply fired = ask("stellurgytest shot fire " + DIM + " " + x + " " + (Y + 0.5D) + " " + (Z + 0.5D)
+        Reply fired = act("stellurgytest shot fire " + DIM + " " + x + " " + (Y + 0.5D) + " " + (Z + 0.5D)
                 + " 0.45 0 0 " + energy + " " + Weapons.ROUND_LIFETIME_TICKS + " KINETIC " + radius
                 + " 1.0").requireOk("fire a round");
         long id = fired.longInteger("id");
@@ -96,14 +96,14 @@ public class WideRoundCutsAWideHoleTest extends AbstractSharedServerTest {
 
     /** A slab five blocks tall and five wide, so a body a block across has neighbours to reach. */
     private void buildSlab(int fromX, int depth) throws Exception {
-        ask("stellurgytest fill " + DIM + " " + fromX + " " + (Y - 2) + " " + (Z - 2) + " "
+        arrange("stellurgytest fill " + DIM + " " + fromX + " " + (Y - 2) + " " + (Z - 2) + " "
                 + (fromX + depth - 1) + " " + (Y + 2) + " " + (Z + 2) + " minecraft:stone").requireOk("build the slab");
     }
 
     private void prepare(int wallX) throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((wallX - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((wallX - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((wallX + 24) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill " + DIM + " " + (wallX - 8) + " " + (Y - 4) + " " + (Z - 5) + " "
+        arrange("stellurgytest fill " + DIM + " " + (wallX - 8) + " " + (Y - 4) + " " + (Z - 5) + " "
                 + (wallX + 20) + " " + (Y + 5) + " " + (Z + 5) + " minecraft:air").requireOk("clear the site");
     }
 
@@ -142,14 +142,14 @@ public class WideRoundCutsAWideHoleTest extends AbstractSharedServerTest {
     }
 
     private boolean wasTouched(int x, int y, int z) throws Exception {
-        Reply state = ask("stellurgytest damage stage " + DIM + " " + x + " " + y + " " + z).requireOk("read a stage");
+        Reply state = read("stellurgytest damage stage " + DIM + " " + x + " " + y + " " + z).requireOk("read a stage");
         return "minecraft:air".equals(state.text("block")) || state.bool("wasDestroyed")
                 || state.integer("stage") > 0;
     }
 
     /** A budget worth this many whole blocks of the wall, read off the wall rather than assumed. */
     private int budgetForBlocks(int wallX, double blocks) throws Exception {
-        Reply state = ask("stellurgytest damage stage " + DIM + " " + wallX + " " + Y + " " + Z).requireOk("price the wall");
+        Reply state = read("stellurgytest damage stage " + DIM + " " + wallX + " " + Y + " " + Z).requireOk("price the wall");
         int budget = (int) (state.integer("stageCost") * Math.max(1, state.integer("maxStage")) * blocks);
         assertTrue("the wall block has no price, so no budget here means anything: " + state, budget > 0);
         return budget;

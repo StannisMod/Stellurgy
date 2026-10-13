@@ -136,7 +136,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
      */
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
-        exec("stellurgytest space entry-clear");
+        arrange("stellurgytest space entry-clear");
     }
 
     /** The slot the settle actually bound the cell to — the one place that decides it. */
@@ -313,15 +313,15 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
     public void aPilotInASlotCellSeesTheBodiesAndStars() throws Exception {
         // Command feedback must not reach the player's chat overlay: a chat line appearing between two
         // captures would be a difference this test did not cause.
-        exec("gamerule sendCommandFeedback false");
-        exec("gamerule logAdminCommands false");
+        arrange("gamerule sendCommandFeedback false").raw();
+        arrange("gamerule logAdminCommands false");
         // Pin the sky: the fog clear colour is fogColor * sunBrightness, so a drifting clock would move
         // the background under the measurements.
-        exec("gamerule doDaylightCycle false");
-        exec("weather clear");
-        exec("time set 6000");
+        arrange("gamerule doDaylightCycle false").raw();
+        arrange("weather clear");
+        arrange("time set 6000");
 
-        botName = PlayerState.botName(this::exec);
+        botName = PlayerState.botName(c -> read(c).raw());
 
         JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         int previousRenderDistance = rd.get("previous").getAsInt();
@@ -379,17 +379,17 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
             // Arrange the space stack, then settle a ship in the cell. The settle MATERIALIZES the cell,
             // and the slot it lands in is the answer this test uses everywhere below: the feed is keyed
             // with it and the pilot is put into it.
-            String setup = exec("stellurgytest space entry-setup 1");
+            String setup = arrange("stellurgytest space entry-setup 1").raw();
             assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
             cell = findEmptyCell();
-            String settle = exec("stellurgytest space ledger-settle " + cell + " 0");
+            String settle = arrange("stellurgytest space ledger-settle " + cell + " 0").raw();
             assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle, boundMReply.has(BOUND_DIM));
             slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // Night, so the cell's fog clear is dark and a white starfield can be seen against it.
-            exec("time set 18000");
+            arrange("time set 18000").raw();
 
             // ONE mark for this cell, taken BEFORE the transfer: the arrival and every sky frame are
             // read from it. It has to precede the transfer for a second reason — the renderer records
@@ -454,8 +454,8 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
                 // The radius is stated, not implied: since 2026-08-16 the sky sizes a body by the
                 // ANGLE it subtends, so a fixture that named no radius would draw six identical
                 // markers and the size legs below would be measuring nothing.
-                String poi = exec("stellurgytest space add-poi " + cell + " " + body[0] + " " + body[1] + " "
-                        + body[2] + " " + body[3] + " " + body[4] + " 7 " + body[5]);
+                String poi = arrange("stellurgytest space add-poi " + cell + " " + body[0] + " " + body[1] + " "
+                        + body[2] + " " + body[3] + " " + body[4] + " 7 " + body[5]).raw();
                 assertTrue("add-poi must register the body: " + poi, Reply.of(poi).ok());
             }
 
@@ -479,7 +479,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
 
             // Cross-side oracle: the SERVER's own feed, for this slot dim, carries exactly these bodies
             // on exactly these bearings. Everything below aims with the server's numbers.
-            String feed = exec("stellurgytest space bodies");
+            String feed = read("stellurgytest space bodies").raw();
             assertEquals("the server feed must carry the whole system for this slot dim: " + feed,
                     cellBodies.length, feedBodyCount(feed, slotDim));
             for (int i = 0; i < cellBodies.length; i++) {
@@ -661,23 +661,23 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
         int previousRenderDistance = rd.get("previous").getAsInt();
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
-        botName = PlayerState.botName(this::exec);
+        botName = PlayerState.botName(c -> read(c).raw());
         try {
-            String setup = exec("stellurgytest space entry-setup 1");
+            String setup = arrange("stellurgytest space entry-setup 1").raw();
             assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
 
             // A universe with clusters in it. Without <galaxyGen> a world has no galaxies, hence no
             // clusters, hence no gas — and an empty sky would be honest for the wrong reason.
-            String gen = exec("stellurgytest space gen-install 0.9 8");
+            String gen = arrange("stellurgytest space gen-install 0.9 8").raw();
             assertTrue("the procedural generator must install: " + gen, Reply.of(gen).ok());
 
             // The reader refuses a walk that found nothing, and refuses to answer a sector for one
             // — which is what the two checks this replaces each stood for.
-            NebulaSearch found = NebulaSearch.walk(this::exec, 512, 64)
+            NebulaSearch found = NebulaSearch.walk(c -> read(c).raw(), 512, 64)
                     .requireFound("the generator must be able to name a cell with a cloud in reach");
             String cloudCell = found.sectorX() + " 0 0";
 
-            String settle = exec("stellurgytest space ledger-settle " + cloudCell + " 0");
+            String settle = arrange("stellurgytest space ledger-settle " + cloudCell + " 0").raw();
             assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle,
@@ -685,12 +685,12 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
             int slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // The server's own answer for that cell, as the cross-side oracle: what it will send.
-            SkyNebulae feed = SkyNebulae.at(this::exec, found.sectorX(), 0, 0);
+            SkyNebulae feed = SkyNebulae.at(c -> read(c).raw(), found.sectorX(), 0, 0);
             int serverClouds = feed.drawn;
             assertTrue("the cell the finder chose must actually have a cloud in its sky: "
                     + feed.raw(), serverClouds >= 1);
 
-            exec("time set 18000");
+            arrange("time set 18000");
             long cloudMark = clientMark();
             seat(slotDim, CELL_CAPTURE_Y);
             ClientEvents.awaitDim(clientEvents(), cloudMark, slotDim,
@@ -731,7 +731,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
                     SKY_FRAME_BUDGET_TICKS);
         } finally {
             try {
-                exec("stellurgytest space gen-reset");
+                arrange("stellurgytest space gen-reset");
             } catch (Exception ignored) {
                 // the generator is a JVM global: a shared client run must not inherit this one
             }
@@ -759,7 +759,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
     private String findEmptyCell() throws Exception {
         StringBuilder tried = new StringBuilder();
         for (long sy = 4096L; sy > 0L && sy <= Integer.MAX_VALUE; sy *= 2L) {
-            CellInfo info = CellInfo.atSector(this::exec, 0L, sy, 0L);
+            CellInfo info = CellInfo.atSector(c -> read(c).raw(), 0L, sy, 0L);
             assertEquals("cell-info must answer about the very cell it was asked about, or the sector"
                             + " overflowed the probe's int parse and it silently answered about the"
                             + " origin: " + info.raw(),
@@ -983,7 +983,7 @@ public class BoundarySkyRendersInSlotCellTest extends AbstractSharedClientTest {
 
     /** Put the player at a known altitude in {@code dim} through the production transfer path. */
     private void seat(int dim, int y) throws Exception {
-        String enter = exec("stellurgytest space enter " + botName + " " + dim + " 0.5 " + y + " 0.5");
+        String enter = arrange("stellurgytest space enter " + botName + " " + dim + " 0.5 " + y + " 0.5").raw();
         assertTrue("space enter must succeed: " + enter, Reply.of(enter).ok());
     }
 

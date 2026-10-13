@@ -168,14 +168,14 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         // FIRST link, and the same one buildAndAssemble takes: the volume is EMPTY. In open air
         // this ASSERTS rather than digs, and the assertion is what was missing here — the fill
         // this replaces was fired and its answer thrown away.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 "invalid-no-engine", 2, 10,
                 "the engineless build the scan must reject stands in this volume");
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
 
-        String assemble = String.join("\n", client().execute(
+        String assemble = String.join("\n", client().act(
                 "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble of engineless rocket must fail: " + assemble,
                 Reply.of(assemble).has("error"));
@@ -230,19 +230,19 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         // baseZ..baseZ+5) — plus a halo, so detritus from a prior fixture in the same JVM is caught
         // here rather than inside the scan. It force-loads every chunk in the box on the way, which
         // is what the warmup it replaces was for.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 variant, 2, 10,
                 "the craft this scenario assembles and reads back stands in this volume");
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
 
-        String assemble = String.join("\n", client().execute(
+        String assemble = String.join("\n", client().act(
                 "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
                 Reply.of(assemble).ok());
 
-        String rocketList = String.join("\n", client().execute("stellurgytest rocket list 0"));
+        String rocketList = String.join("\n", client().read("stellurgytest rocket list 0"));
         // Pick the last id reported — rocket list grows as fixtures stack up
         // in the same JVM, so the most recently spawned rocket sits at the
         // end of the rocket array.
@@ -254,6 +254,6 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> String.join("\n", client().read(cmd)), id);
     }
 }

@@ -91,23 +91,23 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
                 moonDim != Integer.MIN_VALUE);
 
         assertTrue("the navigation console must place: ",
-                Reply.of(exec("stellurgytest nav place 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z)).ok());
-        String aimed = exec("stellurgytest nav target-body 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z + " " + moonDim);
+                Reply.of(arrange("stellurgytest nav place 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z).raw()).ok());
+        String aimed = arrange("stellurgytest nav target-body 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z + " " + moonDim).raw();
         assertTrue("the console must accept the moon as its target body: " + aimed,
                 Reply.of(aimed).ok());
 
-        long clockBefore = jsonLong(exec("stellurgytest space frame 0 0 0"), "clock");
+        long clockBefore = jsonLong(read("stellurgytest space frame 0 0 0").raw(), "clock");
         // How far leg B moved the overworld's clock back, so the finally can move it forward again.
         long overworldShift = 0L;
         try {
             // ---- LEG A: the positive control. Move the SPACE clock; the aim must follow it. ----
-            exec("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
-            long[] aimAtStart = targetAbs(exec("stellurgytest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z));
+            act("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z).raw();
+            long[] aimAtStart = targetAbs(read("stellurgytest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z).raw());
 
-            String moved = exec("stellurgytest space set-clock " + (clockBefore + SPLIT_TICKS));
+            String moved = arrange("stellurgytest space set-clock " + (clockBefore + SPLIT_TICKS)).raw();
             assertTrue("the space clock must move: " + moved, Reply.of(moved).ok());
-            exec("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
-            String afterSpaceMove = exec("stellurgytest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
+            act("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
+            String afterSpaceMove = read("stellurgytest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z).raw();
             long[] aimAfterSpaceMove = targetAbs(afterSpaceMove);
 
             double controlMove = distance(aimAtStart, aimAfterSpaceMove);
@@ -121,7 +121,7 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
             // The clock the defective aim read was proxy.getWorldTimeUniversal(0), which on this
             // tier's dedicated server IS the overworld's total time: putting the overworld SPLIT_TICKS
             // behind the space clock reproduces the driver without replacing anything.
-            String lagged = exec("stellurgytest space set-world-clock behind-space " + SPLIT_TICKS);
+            String lagged = arrange("stellurgytest space set-world-clock behind-space " + SPLIT_TICKS).raw();
             assertTrue("the overworld clock must move: " + lagged, Reply.of(lagged).ok());
             overworldShift = jsonLong(lagged, "overworld") - jsonLong(lagged, "before");
 
@@ -134,8 +134,8 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
                             + " overworld=" + worldClock + " split=" + (spaceClock - worldClock),
                     spaceClock - worldClock == SPLIT_TICKS);
 
-            exec("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
-            String afterLag = exec("stellurgytest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
+            act("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
+            String afterLag = read("stellurgytest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z).raw();
             long[] aimAfterLag = targetAbs(afterLag);
 
             double drift = distance(aimAfterSpaceMove, aimAfterLag);
@@ -153,9 +153,9 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
         } finally {
             // This server is shared with every other test in the fork: a shifted world clock or an
             // aged space clock is exactly the state that fails somebody else three classes later.
-            String restored = exec("stellurgytest space set-clock " + clockBefore);
+            String restored = arrange("stellurgytest space set-clock " + clockBefore).raw();
             if (overworldShift != 0L) {
-                exec("stellurgytest space set-world-clock "
+                arrange("stellurgytest space set-world-clock "
                         + (jsonLong(restored, "overworld") - overworldShift));
             }
         }
@@ -165,14 +165,14 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
 
     /** The dimension id of the first MOON in the overworld body's own cell, or {@link Integer#MIN_VALUE}. */
     private int findAMoon() throws Exception {
-        CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, 0);
+        CellInfo home = CellInfo.atSector(c -> read(c).raw(), 0, 0, 0, 0);
         if (home.dimCell == null) {
             return Integer.MIN_VALUE;
         }
         // Asked by the registry's OWN key rather than by splitting it into three numbers: the key's
         // shape is the registry's business, and a split that stops matching answers MIN_VALUE, which
         // this method's callers read as "the shipped universe has no such body".
-        CellInfo cell = CellInfo.atKey(this::exec, home.dimCell, 0);
+        CellInfo cell = CellInfo.atKey(c -> read(c).raw(), home.dimCell, 0);
         // Each body as its own object. The regex this replaces matched `dim` and `kind` in one
         // expression, so it held only while the two stayed adjacent and in that order.
         for (CellInfo.Body one : cell.systemBodies) {
@@ -227,10 +227,10 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
         // Ticks of the SERVER's own counter the clocks are watched across. The wait is on one counter
         // and the claims are about two others, so this is not circular.
         final int observedTicks = 60;
-        String first = exec("stellurgytest space clock");
+        String first = read("stellurgytest space clock").raw();
         dev.stannismod.stellurgy.test.GameTicks.advance(client(),
                 dev.stannismod.stellurgy.test.GameTicks.server(), observedTicks);
-        String second = exec("stellurgytest space clock");
+        String second = read("stellurgytest space clock").raw();
 
         long spaceMoved = jsonLong(second, "spaceClock") - jsonLong(first, "spaceClock");
         long worldMoved = jsonLong(second, "overworld") - jsonLong(first, "overworld");

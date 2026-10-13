@@ -219,9 +219,9 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         for (double[] candidateSpot : groundSpotsAround(ship, by + 1)) {
             // Exactly ONE cow may exist while probing: a rejected candidate left standing somewhere
             // supported would rotate legitimately and read as a red on the subject.
-            exec("kill @e[type=cow]");
+            arrange("kill @e[type=cow]").raw();
             int candidate = spawnSubject(candidateSpot[0], candidateSpot[1], candidateSpot[2]);
-            DeckCapture probe = DeckCapture.byId(this::exec, 0, candidate);
+            DeckCapture probe = DeckCapture.byId(c -> read(c).raw(), 0, candidate);
             if (probe.aboardByContainment) {
                 tried.append(String.format(java.util.Locale.ROOT,
                         "[%.1f,%.1f contain obst=%d terr=%s]", candidateSpot[0], candidateSpot[2],
@@ -232,7 +232,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
                 break;
             }
         }
-        exec("kill @e[type=cow]");
+        arrange("kill @e[type=cow]");
         scenario().requireArranged("no spot on the ground around this ship was INSIDE its box, unsupported by"
                         + " it AND standing on world terrain — leg A cannot be staged here. Contained"
                         + " candidates: " + tried + " | ship: " + ShipInfo.of(shipInfo()),
@@ -252,10 +252,10 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
                 s.drawn);
 
         String shipAtOpen = shipInfo();
-        DeckCapture contactAtOpen = DeckCapture.byId(this::exec, 0, subject);
+        DeckCapture contactAtOpen = DeckCapture.byId(c -> read(c).raw(), 0, subject);
         String legWindow = watchModelGate(60);
         String shipAtClose = shipInfo();
-        DeckCapture contactAtClose = DeckCapture.byId(this::exec, 0, subject);
+        DeckCapture contactAtClose = DeckCapture.byId(c -> read(c).raw(), 0, subject);
 
         long samples = (long) Events.number(legWindow, "samples");
         long rotated = (long) Events.number(legWindow, "rotated");
@@ -293,7 +293,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         int subject = spawnSubjectOnDeck(bx, by, bz);
         rollShip(bx, by, bz);
 
-        DeckCapture contact = DeckCapture.byId(this::exec, 0, subject);
+        DeckCapture contact = DeckCapture.byId(c -> read(c).raw(), 0, subject);
         assertTrue("the subject must be CARRIED by the ship for the control to mean anything: " + contact.raw(),
                 contact.shipSupportObstacles > 0);
         // "The ship" — this one, and no other. The subject is a mob, so the probe answers on its
@@ -454,7 +454,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
      *  did not draw it" reading is vacuous if there was nothing left to draw. */
     private String serverEntity(int subjectId) {
         try {
-            return exec("stellurgytest entity info 0 " + subjectId).replace('\n', ' ');
+            return read("stellurgytest entity info 0 " + subjectId).raw().replace('\n', ' ');
         } catch (Exception e) {
             return "entity-info-failed: " + e;
         }
@@ -477,7 +477,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
 
     private String blockAt(int x, int y, int z) throws Exception {
         return Reply.of("stellurgytest block at",
-                exec("stellurgytest block at 0 " + x + " " + y + " " + z)).text("block");
+                read("stellurgytest block at 0 " + x + " " + y + " " + z).raw()).text("block");
     }
 
     /** Whether the CLIENT world holds THIS subject, and where it puts it. Best effort: a probe
@@ -564,7 +564,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         double qxBefore = readDouble(infoBefore, Q_X), qzBefore = readDouble(infoBefore, Q_Z);
         double upBefore = 1.0 - 2.0 * (qxBefore * qxBefore + qzBefore * qzBefore);
         assertTrue("attitude hold must accept the steep roll",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL).raw()
                         ).bool("commanded"));
         advanceServerAndClient(ROLL_WINDOW_TICKS);
         // The ship's own up, world-frame, from the attitude quaternion the probe reports.
@@ -642,16 +642,16 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         int feet = (int) Math.floor(spot[1]);
         int x0 = (int) Math.floor(Math.min(spot[0], camX)) - 1, x1 = (int) Math.floor(Math.max(spot[0], camX)) + 1;
         int z0 = (int) Math.floor(Math.min(spot[2], camZ)) - 1, z1 = (int) Math.floor(Math.max(spot[2], camZ)) + 1;
-        String box = exec("stellurgytest fill 0 " + x0 + " " + feet + " " + z0 + " " + x1 + " " + (feet + 6)
-                + " " + z1 + " minecraft:air");
+        String box = arrange("stellurgytest fill 0 " + x0 + " " + feet + " " + z0 + " " + x1 + " " + (feet + 6)
+                + " " + z1 + " minecraft:air").raw();
         assertTrue("the camera-to-subject volume must clear: " + box, Reply.of(box).ok());
         int px = (int) Math.floor(camX), pz = (int) Math.floor(camZ);
-        String pad = exec("stellurgytest fill 0 " + px + " " + (feet + 2) + " " + pz + " " + px + " "
-                + (feet + 2) + " " + pz + " minecraft:stone");
+        String pad = arrange("stellurgytest fill 0 " + px + " " + (feet + 2) + " " + pz + " " + px + " "
+                + (feet + 2) + " " + pz + " minecraft:stone").raw();
         assertTrue("the camera needs a floor to stand on: " + pad, Reply.of(pad).ok());
 
         long moveMark = clientEvents().mark();
-        exec("tp @a " + (px + 0.5) + " " + (feet + 3) + " " + (pz + 0.5) + " 0 0");
+        arrange("tp @a " + (px + 0.5) + " " + (feet + 3) + " " + (pz + 0.5) + " 0 0");
         awaitClientPlacedNear(moveMark, px + 0.5, pz + 0.5,
                 "the camera is moved before it is aimed, and both are the client's");
         aimAt(spot[0], spot[1], spot[2]);
@@ -676,9 +676,9 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         int chosen = -1;
         StringBuilder tried = new StringBuilder();
         for (double y : new double[]{by + 4, by + 4.2, by + 5, by + 3.5, by + 6}) {
-            exec("kill @e[type=cow]");
+            arrange("kill @e[type=cow]");
             int candidate = spawnSubject(cx, y, cz);
-            DeckCapture probe = DeckCapture.byId(this::exec, 0, candidate);
+            DeckCapture probe = DeckCapture.byId(c -> read(c).raw(), 0, candidate);
             int obst = probe.shipSupportObstacles;
             tried.append(String.format(java.util.Locale.ROOT, "[y=%.1f obst=%d]", y, obst));
             if (obst > 0) {
@@ -702,7 +702,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         // The client mark goes BEFORE the spawn, so the body's arrival on this side cannot fall
         // between two reads - see the arrival gate for why that matters here in particular.
         subjectSpawnMark = clientMark();
-        String spawned = exec("stellurgytest vs drop-living 0 minecraft:cow " + x + " " + y + " " + z);
+        String spawned = arrange("stellurgytest vs drop-living 0 minecraft:cow " + x + " " + y + " " + z).raw();
         System.out.println("[modelgate] spawn raw: " + spawned.replace('\n', ' '));
         assertTrue("the subject mob must spawn: " + spawned, Reply.of(spawned).ok());
         // No settle: its arrival on the client is awaited as the client's own join record, from
@@ -714,7 +714,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
      *  to be moved to the fixture first. */
     private void lookAt(double x, double y, double z) throws Exception {
         long moveMark = clientEvents().mark();
-        exec("tp @a " + (x + 8) + " " + (y + 3) + " " + (z + 8) + " 0 0");
+        arrange("tp @a " + (x + 8) + " " + (y + 3) + " " + (z + 8) + " 0 0");
         // `aimAt` computes the look FROM the client's own position and then verifies it, so the move
         // has to have reached the client first: aiming from where it used to be produces a valid
         // aim at the wrong thing.
@@ -764,7 +764,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
     private double[] buildShip(int bx, int by, int bz) throws Exception {
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -784,7 +784,7 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
                 + " and not a guess at how long a value takes to settle)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -823,8 +823,8 @@ public class VSRemoteBodyModelGateTest extends AbstractSharedVsClientTest {
         FixtureSite site = FixtureSite.onGround(0, baseX, baseY, baseZ,
                 "a body stands on real world blocks beside the hull and must be DRAWN standing on"
                         + " them, and its support is resolved against those blocks");
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 12,
-                "the hull, and the deck a subject is staged on above this surveyed plot");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 12,
+                "the hull, and the deck a subject is staged on above this surveyed plot"));
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

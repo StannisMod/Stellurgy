@@ -68,8 +68,8 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
 
         // Pre-fill rocket's storage inventory tiles (the with-cargo
         // chest) with cobblestone via the dedicated probe.
-        String fillResp = exec("stellurgytest rocket storage-item-fill " + rocketId
-                + " minecraft:cobblestone 32");
+        String fillResp = arrange("stellurgytest rocket storage-item-fill " + rocketId
+                + " minecraft:cobblestone 32").raw();
         assertTrue("storage-item-fill must succeed: " + fillResp,
                 Reply.of(fillResp).ok());
         int tilesWithCap = extract(fillResp, TILES_WITH_CAP);
@@ -81,7 +81,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
                 totalPlaced > 0);
 
         // Sanity: storage-inventory probe agrees with fill result.
-        String preStorage = exec("stellurgytest rocket storage-inventory " + rocketId);
+        String preStorage = read("stellurgytest rocket storage-inventory " + rocketId).raw();
         // The CONTAINER is what this claim is about, and it is already addressed: the reply was
         // fetched for THIS rocket. Its contents are then an existence question — the fixture chose
         // no slot, and two stacks of one item is a stocked rocket, not an ambiguity.
@@ -90,8 +90,8 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
                         .holdsElement("items", "item", "minecraft:cobblestone"));
 
         // Link rocket to unloader.
-        String link = exec("stellurgytest infra link 0 " + ux + " " + uy + " " + uz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + ux + " " + uy + " " + uz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link,
                 Reply.of(link).bool("linked"));
 
@@ -99,19 +99,20 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         // chunk may contain multiple inventory tiles (engine TEs etc.)
         // that the unloader iterates first; 60 ticks comfortably cover
         // the first-empty-slot scan even on the longest TE list.
-        ok("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
+        Reply ticked = act("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
+        assertTrue("probe must succeed: resp=" + ticked, ticked.ok());
 
         // Unloader's own inventory must contain at least one cobblestone
         // — that's the player-visible "drain returning rocket" contract.
-        String postUnloader = exec("stellurgytest hatch read 0 " + ux + " " + uy + " " + uz);
-        String postStorage = exec("stellurgytest rocket storage-inventory " + rocketId);
+        String postUnloader = read("stellurgytest hatch read 0 " + ux + " " + uy + " " + uz).raw();
+        String postStorage = read("stellurgytest rocket storage-inventory " + rocketId).raw();
         assertTrue("the unloader's own inventory must hold what it drained: " + postUnloader,
                 Reply.of("stellurgytest hatch read", postUnloader)
                         .holdsElement("slots", "item", "minecraft:cobblestone"));
     }
 
     private void ok(String cmd) throws Exception {
-        String resp = exec(cmd);
+        String resp = arrange(cmd).raw();
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
                 Reply.of(resp).ok());
     }
@@ -122,8 +123,8 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
         // this ASSERTS rather than digs.
-        String assemble = RocketFixture.assembleAt(site, cmd -> exec(cmd), variant, 2, 10,
-                "the craft the unloader empties stands in this volume");
+        String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 10,
+                "the craft the unloader empties stands in this volume"));
         assertTrue("rocket assemble failed: " + assemble,
                 Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);

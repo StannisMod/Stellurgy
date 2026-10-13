@@ -62,13 +62,13 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         int x = BASE_X + xOffset, z = BASE_Z + zOffset;
         // Pre-clear so we can write the block cleanly even if a previous
         // test wrote something here (shared harness — JVM-shared state).
-        client().execute("stellurgytest place " + DIM + " " + x + " " + Y + " " + z
+        client().arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z
                 + " minecraft:air");
-        String place = ok(client().execute("stellurgytest place " + DIM + " " + x + " " + Y
+        String place = ok(client().arrange("stellurgytest place " + DIM + " " + x + " " + Y
                 + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") failed: " + place,
                 Reply.of(place).bool("placed"));
-        return ok(client().execute(
+        return ok(client().read(
                 "stellurgytest tile multiblock-state " + DIM + " " + x + " " + Y + " " + z));
     }
 
@@ -77,7 +77,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
      *  contract surface. */
     private String forceTickSafely(int xOffset, int zOffset, int ticks) throws Exception {
         int x = BASE_X + xOffset, z = BASE_Z + zOffset;
-        String resp = ok(client().execute(
+        String resp = ok(client().act(
                 "stellurgytest tile force-tick " + DIM + " " + x + " " + Y + " " + z
                         + " " + ticks));
         // The probe returns ok=true OR tile-not-ITickable (acceptable for

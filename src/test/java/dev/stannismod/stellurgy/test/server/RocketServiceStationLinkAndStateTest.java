@@ -71,20 +71,20 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         // Place service station in isolation (not adjacent to any rocket
         // fixture, no assemblers nearby).
         int sx = CX_NO_LINK, sy = CY_PAD, sz = CZ_PAD - 50;
-        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation");
+        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
 
         // Tick. Production performFunction guards on `linkedRocket instanceof
         // EntityRocket` before doing any work — null branch must be a no-op.
-        String tick = exec("stellurgytest tile force-tick 0 " + sx + " " + sy + " " + sz
-                + " 40");
+        String tick = act("stellurgytest tile force-tick 0 " + sx + " " + sy + " " + sz
+                + " 40").raw();
         assertTrue("force-tick on unlinked service station must succeed: " + tick,
                 Reply.of(tick).ok());
 
         // State probe must succeed and report linkedRocketId = -1.
-        String state = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String state = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("unlinked service station must report linkedRocketId=-1",
                 -1, extract(state, LINKED_ID));
         assertEquals("unlinked service station must report 0 parts-to-repair",
@@ -105,10 +105,11 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
             throws Exception {
         // Build + assemble a standard rocket fixture far from any other patch.
         // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away.
-        String assemble = RocketFixture.assembleAt(
+        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, CX_WITH_LINK, CZ_PAD),
+                c -> act(c).raw(), RocketFixture.placeAt(
                 FixtureSite.openAir(0, CX_WITH_LINK, CZ_PAD),
-                cmd -> exec(cmd), "simple", 2, 10,
-                "the fresh craft the service station is linked to stands in this volume");
+                c -> arrange(c).raw(), "simple", 2, 10,
+                "the fresh craft the service station is linked to stands in this volume"));
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
@@ -118,19 +119,19 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         // Place service station near the launchpad (not on it — the pad
         // is occupied). Position-isolated from CX_NO_LINK.
         int sx = CX_WITH_LINK + 10, sy = CY_PAD, sz = CZ_PAD;
-        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation");
+        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
 
         // Link.
-        String link = exec("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link,
                 Reply.of(link).ok());
 
         // Verify the service station now reports the rocket's entityId.
-        String state = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String state = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("linked service station must report rocket's entityId",
                 rocketId, extract(state, LINKED_ID));
 

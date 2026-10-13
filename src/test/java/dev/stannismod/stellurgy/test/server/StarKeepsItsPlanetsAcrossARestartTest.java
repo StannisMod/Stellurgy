@@ -123,7 +123,7 @@ public class StarKeepsItsPlanetsAcrossARestartTest extends AbstractMechanicsTest
     }
 
     private static String starGet(RealDedicatedServerHarness boot) throws Exception {
-        return String.join("\n", boot.client().execute("stellurgytest star get 0"));
+        return String.join("\n", boot.client().read("stellurgytest star get 0"));
     }
 
     /**

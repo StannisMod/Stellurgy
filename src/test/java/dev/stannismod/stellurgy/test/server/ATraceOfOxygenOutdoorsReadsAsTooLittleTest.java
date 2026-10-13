@@ -92,7 +92,7 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
                 "NoO2", before.text("type"));
 
         String add = "stellurgytest planet add-gas " + DIM + " oxygen " + TRACE_PPM * AirState.PER_PPM;
-        Reply.of(add, String.join("\n", harness.client().execute(add))).requireOk("add a trace of oxygen");
+        Reply.of(add, String.join("\n", harness.client().arrange(add))).requireOk("add a trace of oxygen");
 
         Reply after = outdoors();
         assertEquals("a trace of oxygen outdoors must read as too little oxygen, not as none: " + after,
@@ -105,7 +105,7 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
                 + restarted, "lowO2", restarted.text("type"));
 
         String info = "stellurgytest planet info " + DIM;
-        Reply planet = Reply.of(info, String.join("\n", harness.client().execute(info)));
+        Reply planet = Reply.of(info, String.join("\n", harness.client().read(info)));
         String composition = planet.object("gases");
         assertTrue("planet info must report the world's composition: " + planet, composition != null);
         Reply gases = Reply.of(composition);
@@ -116,11 +116,11 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanic
     /** The atmosphere at a point outdoors on the fixture world, as the world's own handler answers it. */
     private Reply outdoors() throws Exception {
         String load = "stellurgytest dim load " + DIM;
-        Reply loaded = Reply.of(load, String.join("\n", harness.client().execute(load)));
+        Reply loaded = Reply.of(load, String.join("\n", harness.client().arrange(load)));
         assertTrue("the fixture world must load: " + loaded, loaded.bool("loaded"));
 
         String get = "stellurgytest atmosphere get " + DIM + " " + OUTDOORS;
-        Reply atmosphere = Reply.of(get, String.join("\n", harness.client().execute(get)));
+        Reply atmosphere = Reply.of(get, String.join("\n", harness.client().read(get)));
         // Arrangement: the reading comes from the world's atmosphere handler — the path a player
         // standing there is judged by — and not from the probe's fallback to the dimension default.
         assertEquals("the outdoor reading must come from the world's own handler: " + atmosphere,

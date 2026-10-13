@@ -220,23 +220,23 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
     private void buildRoomWithVent(int cx, int ventOxygenMb) throws Exception {
         int by = cy, bz = cz;
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone").requireOk();
         for (int yy = by + 1; yy <= by + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone").requireOk();
 
         place(cx, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
         if (ventOxygenMb > 0) {
-            arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen " + ventOxygenMb);
+            arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen " + ventOxygenMb).requireOk();
         }
         forceTick(cx, 1);
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
         forceTick(cx, 5);
     }
 
@@ -244,8 +244,8 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
     private void runCombinerInto(int cx) throws Exception {
         placeSeparator(cx);
         injectEnergyAt(cx + 1, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cy + " " + cz + " oxygen 8000");
-        Reply flip = ask("stellurgytest block activate 0 " + (cx + 1) + " " + cy + " " + cz + " true");
+        arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cy + " " + cz + " oxygen 8000").requireOk();
+        Reply flip = act("stellurgytest block activate 0 " + (cx + 1) + " " + cy + " " + cz + " true");
         assertTrue("sneak-click failed: " + flip, flip.bool("handled"));
         forceTick(cx + 1, COMBINER_TICKS);
     }
@@ -255,14 +255,14 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block).requireOk();
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int cx, int n2, int o2, int co2, int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK).requireOk();
     }
 
     private void injectEnergyAt(int x, int amount) throws Exception {
@@ -271,14 +271,14 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
 
     /** Force-ticks a machine and CHECKS it was there: a missing tile reads exactly like inaction. */
     private void forceTick(int x, int ticks) throws Exception {
-        arrange("stellurgytest tile force-tick 0 " + x + " " + cy + " " + cz + " " + ticks);
+        act("stellurgytest tile force-tick 0 " + x + " " + cy + " " + cz + " " + ticks).requireOk();
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
     private int configInt(String key) throws Exception {
-        return arrange("stellurgytest config get " + key).integer("value");
+        return read("stellurgytest config get " + key).requireOk().integer("value");
     }
 }

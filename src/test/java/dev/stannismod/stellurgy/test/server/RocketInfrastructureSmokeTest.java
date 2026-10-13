@@ -42,13 +42,13 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // a RELATIVE geometry that was written as two absolute numbers.
         final FixtureSite rocketSite = FixtureSite.openAir(0, 850 + 20, 850);
         int sx = 850, sy = rocketSite.y + 1, sz = 850;
-        String place = String.join("\n", client().execute(
+        String place = String.join("\n", client().arrange(
                 "stellurgytest place 0 " + sx + " " + sy + " " + sz + " stellurgy:fuelingStation"));
         assertTrue("place fueling station failed: " + place,
                 Reply.of(place).bool("placed"));
 
         int rocketId = assembleFixture(rocketSite, "simple");
-        String link = String.join("\n", client().execute(
+        String link = String.join("\n", client().arrange(
                 "stellurgytest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("infra link probe errored: " + link, Reply.of(link).ok());
         assertTrue("station didn't accept rocket link: " + link, Reply.of(link).bool("linked"));
@@ -58,7 +58,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
                 Integer.parseInt(cmReply.text(CONN)) >= 1);
 
         // Idempotency: re-linking same infrastructure must NOT double-add.
-        String relink = String.join("\n", client().execute(
+        String relink = String.join("\n", client().arrange(
                 "stellurgytest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("re-link unexpectedly succeeded a second time: " + relink,
                 (!Reply.of(relink).bool("linked")));
@@ -84,8 +84,8 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         int fx = rocketSite.x - 8, fy = rocketSite.y + 1, fz = rocketSite.z;
         String at = " 0 " + fx + " " + fy + " " + fz;
 
-        String assemble = RocketFixture.assembleAt(rocketSite, cmd -> String.join("\n", client().execute(cmd)),
-                "simple", 2, 10, "the craft the fueling station fills stands in this volume");
+        String assemble = RocketFixture.assembleBuilt(rocketSite, cmd -> String.join("\n", client().act(cmd)), RocketFixture.placeAt(rocketSite, cmd -> String.join("\n", client().arrange(cmd)),
+                "simple", 2, 10, "the craft the fueling station fills stands in this volume"));
         Reply assembled = Reply.of("stellurgytest rocket assemble", assemble);
         assertTrue("rocket assemble probe errored: " + assemble, assembled.ok()
                 && ("SUCCESS".equals(assembled.text("status"))
@@ -93,10 +93,10 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         assertTrue("could not parse entityId: " + assemble, assembled.has(ENT_ID));
         int rocketId = assembled.integer(ENT_ID);
 
-        String placeFs = exec("stellurgytest place" + at + " stellurgy:fuelingStation");
+        String placeFs = arrange("stellurgytest place" + at + " stellurgy:fuelingStation").raw();
         assertTrue("fuelingStation place failed: " + placeFs, Reply.of(placeFs).bool("placed"));
 
-        String preFuel = exec("stellurgytest rocket fuel " + rocketId);
+        String preFuel = read("stellurgytest rocket fuel " + rocketId).raw();
         Reply preMono = monoEntry(preFuel);
         assertTrue("rocket fuel probe missing LIQUID_MONOPROPELLANT entry: " + preFuel, preMono != null);
         int initialFuel = preMono.integer("amount");
@@ -104,21 +104,21 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         assertTrue("fresh rocket should have ample mono-propellant capacity: cap=" + fuelCapacity
                 + " response=" + preFuel, fuelCapacity > ampleFuelMb);
 
-        String link = exec("stellurgytest infra link" + at + " " + rocketId);
+        String link = arrange("stellurgytest infra link" + at + " " + rocketId).raw();
         assertTrue("infra link failed: " + link, Reply.of(link).ok());
 
         // rocketFuel is the canonical LIQUID_MONOPROPELLANT in StellurgyConfiguration.registerFuel.
         // Forge's FluidRegistry stores names as registered; retry lower-cased before declaring the
         // inject broken.
-        String inject = exec("stellurgytest fluid inject" + at + " rocketFuel 8000");
+        String inject = arrange("stellurgytest fluid inject" + at + " rocketFuel 8000").raw();
         if (Reply.of("stellurgytest fluid inject", inject).refusedWith("fluid not registered")) {
-            inject = exec("stellurgytest fluid inject" + at + " rocketfuel 8000");
+            inject = arrange("stellurgytest fluid inject" + at + " rocketfuel 8000").raw();
         }
         assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
-        String energy = exec("stellurgytest energy inject" + at + " 100000");
+        String energy = arrange("stellurgytest energy inject" + at + " 100000").raw();
         assertTrue("energy inject failed: " + energy, Reply.of(energy).ok());
 
-        String preTank = exec("stellurgytest fluid stored" + at);
+        String preTank = read("stellurgytest fluid stored" + at).raw();
         assertTrue("station must report fluid present: " + preTank, Reply.of(preTank).bool("hasFluid"));
         // Summed across the station's tanks, asked by NAME: a station holding two fluids has two.
         int initialTank = FluidStored.of(preTank).amountOf(stationFuel);
@@ -128,15 +128,15 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // The clock-advancing variant: TileFuelingStation gates the transfer on
         // `worldTime % OP_THROTTLE_TICKS == 0`, so a frozen-clock force-tick would either never or
         // always pass that gate depending on the start time.
-        String tick = exec("stellurgytest tile force-tick-clock" + at + " 200");
+        String tick = act("stellurgytest tile force-tick-clock" + at + " 200").raw();
         assertTrue("station force-tick errored: " + tick, Reply.of(tick).ok());
 
-        String postTank = exec("stellurgytest fluid stored" + at);
+        String postTank = read("stellurgytest fluid stored" + at).raw();
         int finalTank = FluidStored.of(postTank).amountOf(stationFuel);
         assertTrue("station tank must drop after fueling-station tick burst (initial=" + initialTank
                 + " final=" + finalTank + " response=" + postTank + ")", initialTank - finalTank > 0);
 
-        String postFuel = exec("stellurgytest rocket fuel " + rocketId);
+        String postFuel = read("stellurgytest rocket fuel " + rocketId).raw();
         Reply postMono = monoEntry(postFuel);
         assertTrue("post-tick rocket fuel probe missing MONO entry: " + postFuel, postMono != null);
         int finalFuel = postMono.integer("amount");
@@ -166,8 +166,8 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
     @Test
     public void linkerRejectsInfrastructureBeyondMaxDistance() throws Exception {
         int fx = 900;
-        ok(client().execute("stellurgytest place 0 " + fx + " 65 900 stellurgy:fuelingStation"));
-        String fueling = String.join("\n", client().execute("stellurgytest infra info 0 " + fx + " 65 900"));
+        ok(client().arrange("stellurgytest place 0 " + fx + " 65 900 stellurgy:fuelingStation"));
+        String fueling = String.join("\n", client().read("stellurgytest infra info 0 " + fx + " 65 900"));
         assertTrue("fueling station must surface maxLinkDistance: " + fueling,
                 Reply.of(fueling).has("maxLinkDistance"));
         int fuelingMax = extractInt(fueling, "maxLinkDistance");
@@ -175,14 +175,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
                 fuelingMax > 0 && fuelingMax < FINITE_LINK_DISTANCE_BLOCKS);
 
         int lx = 910;
-        ok(client().execute("stellurgytest place 0 " + lx + " 65 900 stellurgy:loader 3"));
-        String loader = String.join("\n", client().execute("stellurgytest infra info 0 " + lx + " 65 900"));
+        ok(client().arrange("stellurgytest place 0 " + lx + " 65 900 stellurgy:loader 3"));
+        String loader = String.join("\n", client().read("stellurgytest infra info 0 " + lx + " 65 900"));
         int loaderMax = extractInt(loader, "maxLinkDistance");
         assertTrue("loader maxLinkDistance must be positive: " + loader, loaderMax > 0);
 
         int mx = 920;
-        ok(client().execute("stellurgytest place 0 " + mx + " 65 900 stellurgy:monitoringStation"));
-        String monitor = String.join("\n", client().execute("stellurgytest infra info 0 " + mx + " 65 900"));
+        ok(client().arrange("stellurgytest place 0 " + mx + " 65 900 stellurgy:monitoringStation"));
+        String monitor = String.join("\n", client().read("stellurgytest infra info 0 " + mx + " 65 900"));
         int monitorMax = extractInt(monitor, "maxLinkDistance");
         assertTrue("monitoring station maxLinkDistance must dwarf the loader's "
                 + "(loader=" + loaderMax + ", monitor=" + monitorMax + "): " + monitor,
@@ -203,19 +203,19 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         final FixtureSite rocketSite = FixtureSite.openAir(0, 1150 + 20, 1150);
         int lx = 1150, ly = rocketSite.y + 1, lz = 1150;
         // Loader meta=3 -> TileRocketLoader.
-        ok(client().execute("stellurgytest place 0 " + lx + " " + ly + " " + lz
+        ok(client().arrange("stellurgytest place 0 " + lx + " " + ly + " " + lz
                 + " stellurgy:loader 3"));
         int rocketId = assembleFixture(rocketSite, "with-cargo");
-        ok(client().execute("stellurgytest infra link 0 " + lx + " " + ly + " " + lz + " " + rocketId));
+        ok(client().arrange("stellurgytest infra link 0 " + lx + " " + ly + " " + lz + " " + rocketId));
 
         // Drop 32 cobblestone into the loader's input slot 0.
-        ok(client().execute("stellurgytest hatch fill 0 " + lx + " " + ly + " " + lz
+        ok(client().arrange("stellurgytest hatch fill 0 " + lx + " " + ly + " " + lz
                 + " 0 minecraft:cobblestone 32 0"));
 
         // Force-tick the loader so update() ferries the stack across.
-        ok(client().execute("stellurgytest tile force-tick 0 " + lx + " " + ly + " " + lz + " 5"));
+        ok(client().act("stellurgytest tile force-tick 0 " + lx + " " + ly + " " + lz + " 5"));
 
-        String postTransfer = String.join("\n", client().execute(
+        String postTransfer = String.join("\n", client().read(
                 "stellurgytest rocket storage-inventory " + rocketId));
         // Addressed by the FETCH — this rocket's storage — so its contents are an existence
         // question: the loader chose the slot, and two stacks of one item is a stocked rocket.
@@ -247,14 +247,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 variant, 2, 10,
                 "the craft this infrastructure links to stands in this volume");
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
 
-        String assemble = String.join("\n", client().execute(
+        String assemble = String.join("\n", client().act(
                 "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);

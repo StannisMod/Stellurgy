@@ -118,7 +118,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
         place(firstBoot, "affs:field_generator", SHIELD_SINK);
         place(firstBoot, "affs:shield_console", SHIELD_CONSOLE);
 
-        Reply priorityWrite = arrange(firstBoot,
+        Reply priorityWrite = act(firstBoot,
                 "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z + " " + ZONE_PRIORITY);
         assertEquals("priority write failed: " + priorityWrite,
                 ZONE_PRIORITY, priorityWrite.integer("priority"));
@@ -126,7 +126,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
         arrange(firstBoot, "stellurgytest shield console-bias 0 " + SHIELD_CONSOLE + " "
                 + Y + " " + Z + " " + RESISTANCE_BIAS);
 
-        arrange(firstBoot, "stellurgytest subnet solve lifesupport 0 2");
+        act(firstBoot, "stellurgytest subnet solve lifesupport 0 2");
         Reply ventilationBefore = subnet(firstBoot, DUCT_A);
         int cablesBefore = ventilationBefore.integer("cables");
         int sourcesBefore = ventilationBefore.integer("sources");
@@ -148,7 +148,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
         // does this; here it is explicit, because a probe that quietly loaded the chunk would be
         // changing the thing it measures.
         arrange(secondBoot, "stellurgytest chunk forceload 0 " + (VENT >> 4) + " " + (Z >> 4));
-        arrange(secondBoot, "stellurgytest subnet solve lifesupport 0 2");
+        act(secondBoot, "stellurgytest subnet solve lifesupport 0 2");
         Reply ventilationAfter = subnet(secondBoot, DUCT_A);
         assertEquals("the ventilation graph must come back with the same cable count — it is "
                 + "rebuilt from the world, and the world did not change: " + ventilationAfter,
@@ -159,12 +159,13 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
                 sinksBefore, ventilationAfter.integer("sinks"));
 
         // The settings, by contrast, are only here because their own tiles wrote them to NBT.
-        Reply priorityAfter = arrange(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z);
+        Reply priorityAfter = read(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z)
+                .requireOk();
         assertEquals("the vent's zone priority must survive the restart — it is the vent's own "
                         + "setting, not the network's: " + priorityAfter,
                 ZONE_PRIORITY, priorityAfter.integer("priority"));
 
-        Reply consoleAfter = ask(secondBoot, "stellurgytest shield console-info 0 " + SHIELD_CONSOLE
+        Reply consoleAfter = read(secondBoot, "stellurgytest shield console-info 0 " + SHIELD_CONSOLE
                 + " " + Y + " " + Z);
         assertEquals("the console's resistance bias must survive the restart, and it is the only "
                         + "thing that re-seeds the rebuilt shield network: " + consoleAfter,
@@ -216,7 +217,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
 
         // One tick, so the loop finds itself and spreads the energy over its members at one
         // temperature — which is the state a real ship would be saved in, not a lump in one pipe.
-        arrange(firstBoot, "stellurgytest subnet solve heat 0 1");
+        act(firstBoot, "stellurgytest subnet solve heat 0 1");
         Reply loopBefore = subnetHeat(firstBoot, PIPE_A);
         long loopHeatBefore = loopBefore.longInteger("heatStored");
         assertEquals("premise: all three blocks must be one loop: " + loopBefore,
@@ -236,7 +237,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
         // come from — nothing saved the loop.
         long fromBlocks = 0L;
         for (int x : new int[]{PIPE_A, PIPE_B, ACCUMULATOR}) {
-            Reply block = arrange(secondBoot, "stellurgytest heat read 0 " + x + " " + Y + " " + Z);
+            Reply block = read(secondBoot, "stellurgytest heat read 0 " + x + " " + Y + " " + Z).requireOk();
             assertTrue("the loop block at " + x + " must be back: " + block, block.bool("isLoopBlock"));
             fromBlocks += block.longInteger("heatStored");
         }
@@ -244,7 +245,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
                         + "the whole reason the energy lives on blocks and not in the network",
                 STORED_HEAT, fromBlocks);
 
-        arrange(secondBoot, "stellurgytest subnet solve heat 0 1");
+        act(secondBoot, "stellurgytest subnet solve heat 0 1");
         Reply loopAfter = subnetHeat(secondBoot, PIPE_A);
         assertEquals("the loop must be REBUILT with the same membership — nothing persisted it: "
                 + loopAfter, 3, loopAfter.integer("members"));
@@ -287,7 +288,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
         // ─────── Boot 1: a gun between two consoles, ordered through one of them ───────
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         FixtureSite site = FixtureSite.openAir(0, WEAPON_SITE, WEAPON_SITE);
-        site.requireClear(probe(firstBoot), 1, 2, "a gun between two weapon consoles");
+        site.requireClear(command -> String.join("\n", firstBoot.client().arrange(command)), 1, 2, "a gun between two weapon consoles");
         int y = site.y + 1;
         int z = site.z + 2;
         int gun = site.x + 2;
@@ -311,7 +312,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
         order(firstBoot, "stellurgytest weaponconsole holdfire" + console + "true");
         arrange(firstBoot, "stellurgytest fill 0 " + ordering + " " + y + " " + z + " " + ordering + " "
                 + y + " " + z + " minecraft:air");
-        Reply kept = arrange(firstBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z);
+        Reply kept = read(firstBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z).requireOk();
         requireArranged("premise: the remaining console must still see the ordered network: " + kept,
                 kept.bool("network") && WEAPON_CODE.equals(kept.text("code")) && kept.bool("holdFire"));
 
@@ -331,7 +332,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
                 "the gun told to hold fire before the restart never held after it",
                 Weapons.ARRANGEMENT_TICKS, "pos", Weapons.at(gun, y, z), "held", "true");
 
-        Reply orders = arrange(secondBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z);
+        Reply orders = read(secondBoot, "stellurgytest weaponconsole read 0 " + keeping + " " + y + " " + z).requireOk();
         assertEquals("the network's access code must survive the restart: " + orders,
                 WEAPON_CODE, orders.text("code"));
         assertEquals("and its hull rule: " + orders, WEAPON_RULE, orders.text("allegiance"));
@@ -341,7 +342,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
         assertEquals("(y): " + orders, targetY, orders.number("targetY"), 0.0D);
         assertEquals("(z): " + orders, targetZ, orders.number("targetZ"), 0.0D);
 
-        Reply gunRead = arrange(secondBoot, "stellurgytest turret read 0 " + gun + " " + y + " " + z);
+        Reply gunRead = read(secondBoot, "stellurgytest turret read 0 " + gun + " " + y + " " + z).requireOk();
         assertEquals("the gun must judge a body by the network's code after the restart, as it did"
                 + " before it: " + gunRead, WEAPON_CODE, gunRead.text("code"));
 
@@ -359,12 +360,8 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
     }
 
     private Events events(RealDedicatedServerHarness harness) {
-        return new Events(probe(harness),
+        return new Events(command -> String.join("\n", harness.client().read(command)),
                 ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), new EvictionReports());
-    }
-
-    private static Events.Probe probe(RealDedicatedServerHarness harness) {
-        return command -> String.join("\n", harness.client().execute(command));
     }
 
     /** A console order, refused unless the console was on a network and took it. */
@@ -381,7 +378,7 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
     }
 
     private Reply subnetHeat(RealDedicatedServerHarness harness, int x) throws Exception {
-        return ask(harness, "stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
+        return read(harness, "stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
     }
 
     private void place(RealDedicatedServerHarness harness, String block, int x) throws Exception {
@@ -390,14 +387,21 @@ public class SubsystemNetworkRestartTest extends AbstractMechanicsTest {
     }
 
     private Reply subnet(RealDedicatedServerHarness harness, int x) throws Exception {
-        return ask(harness, "stellurgytest subnet info lifesupport 0 " + x + " " + Y + " " + Z);
+        return read(harness, "stellurgytest subnet info lifesupport 0 " + x + " " + Y + " " + Z);
     }
 
-    private static Reply ask(RealDedicatedServerHarness harness, String command) throws Exception {
-        return Reply.of(command, String.join("\n", harness.client().execute(command)));
+    /** A verb that OBSERVES, sent in its role. */
+    private static Reply read(RealDedicatedServerHarness harness, String command) throws Exception {
+        return Reply.of(command, String.join("\n", harness.client().read(command)));
     }
 
+    /** A step of the arrangement, sent in its role and refused unless it reported ok. */
     private static Reply arrange(RealDedicatedServerHarness harness, String command) throws Exception {
-        return ask(harness, command).requireOk(command);
+        return Reply.of(command, String.join("\n", harness.client().arrange(command))).requireOk(command);
+    }
+
+    /** A production entry called, sent in its role and refused unless it reported ok. */
+    private static Reply act(RealDedicatedServerHarness harness, String command) throws Exception {
+        return Reply.of(command, String.join("\n", harness.client().act(command))).requireOk(command);
     }
 }

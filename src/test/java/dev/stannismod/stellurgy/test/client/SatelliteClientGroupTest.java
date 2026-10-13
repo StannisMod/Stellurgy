@@ -61,7 +61,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
 
         scenario().asserting("an unresolvable satellite type on the wire is dropped by the client");
         long clientMark = clientEvents().mark();
-        String announce = exec("stellurgytest satellite announce-unknown 0");
+        String announce = act("stellurgytest satellite announce-unknown 0").raw();
         assertTrue("announce-unknown probe must succeed: " + announce, Reply.of(announce).ok());
 
         // BOTH fields on ONE record: the type alone is satisfied by a lookup that RESOLVED, the
@@ -121,7 +121,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
         long serverMark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         try {
-            String resp = exec("stellurgytest satellite deploy-unresolved");
+            String resp = act("stellurgytest satellite deploy-unresolved").raw();
             assertTrue("deploy-unresolved probe must succeed: " + resp, Reply.of(resp).ok());
             assertTrue("the probe must have mounted the pilot: " + resp, Reply.of(resp).bool("mounted"));
 
@@ -138,7 +138,7 @@ public class SatelliteClientGroupTest extends AbstractSharedClientTest {
                     "the notice production sent must reach the pilot's chat as readable text",
                     messageBudgetTicks);
         } finally {
-            exec("stellurgytest player dismount");
+            arrange("stellurgytest player dismount");
         }
     }
 }

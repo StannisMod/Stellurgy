@@ -97,15 +97,15 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private Events serverEvents() {
-        return new Events(this::exec,
+        return new Events(c -> read(c).raw(),
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
 
     /** Stations the fake player in {@code dim} and starts {@code ticks} living updates there. */
     private void enterDim(int dim, int ticks) throws Exception {
-        String fake = exec("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5");
+        String fake = act("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5").raw();
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
-        assertTrue(Reply.of(exec("stellurgytest player tick-living " + ticks)).ok());
+        assertTrue(Reply.of(act("stellurgytest player tick-living " + ticks).raw()).ok());
     }
 
     /**
@@ -169,7 +169,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     public void aPlayerInTheOverworldResolvesBreathableAir() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);
         GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
-        String resp = exec("stellurgytest atmosphere for-player");
+        String resp = read("stellurgytest atmosphere for-player").raw();
         assertFalse("the gate must answer SOMETHING for a player in the overworld: " + resp,
                 field(PLAYER_ATMOS, resp).isEmpty());
         assertEquals("the overworld must resolve as breathable for a player standing in it: " + resp,
@@ -187,7 +187,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     public void aPlayerOnAnAirlessPlanetResolvesUnbreathableAir() throws Exception {
         startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
-        String resp = exec("stellurgytest atmosphere for-player");
+        String resp = read("stellurgytest atmosphere for-player").raw();
         assertFalse("the gate must answer SOMETHING for a player on a Stellurgy planet: " + resp,
                 field(PLAYER_ATMOS, resp).isEmpty());
         assertEquals("a planet declared with zero atmosphere must resolve as unbreathable for a "
@@ -212,7 +212,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
     public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
         startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
-        String onVacuum = exec("stellurgytest atmosphere for-player");
+        String onVacuum = read("stellurgytest atmosphere for-player").raw();
         String atmoVac = field(PLAYER_ATMOS, onVacuum);
         assertFalse("the airless planet must resolve to SOMETHING before the move: " + onVacuum,
                 atmoVac.isEmpty());
@@ -225,7 +225,7 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
         // leaves the same answer standing.
         enterDimAndAwaitResolution(DIM_AIR);
 
-        String onAir = exec("stellurgytest atmosphere for-player");
+        String onAir = read("stellurgytest atmosphere for-player").raw();
         assertEquals("the breathable planet must resolve as breathable after the move: " + onAir,
                 "true", field(PLAYER_BREATHABLE, onAir));
     }

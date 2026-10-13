@@ -93,6 +93,9 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
      * it, and every arrangement, read and named instrument a mechanics test is made of is answered.
      */
     @Pins("INV-ART-10")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#roleRefusalOf",
+            at = "if (role.admits(kind)) {", replacedBy = "if (true) {",
+            fails = "these were not: [`stellurgytest chunk forceload 0 0 0` RAN", on = "2026-10-13")
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#mechanicsRefusalOf",
             at = "if (ProbeVerbKind.of(args) == ProbeVerbKind.UNCLASSIFIED) {", replacedBy = "if (false) {",
             fails = "these were not: [`stellurgytest no-such-group no-such-action` RAN", on = "2026-10-13")
@@ -112,19 +115,25 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         List<String> notRefused = new ArrayList<>();
 
         // ---- the server: a verb nobody classified, static calls on no named instrument, NBT by command ----
-        expectServerRefusal(notRefused, "stellurgytest no-such-group no-such-action", "UNCLASSIFIED");
-        expectServerRefusal(notRefused, "stellurgytest clock-skew 5", "UNCLASSIFIED");
-        expectServerRefusal(notRefused, "stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager"
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest no-such-group no-such-action", "UNCLASSIFIED");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest clock-skew 5", "UNCLASSIFIED");
+        // ---- a command sent in a role that does not admit its kind; a root with no kind ----
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest chunk forceload 0 0 0", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ACT, "stellurgytest config set rocketRequireFuel true", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest tile force-tick 0 0 0 0 1", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "tp " + PLAYER + " 0 100 0", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "forge tps", "UNCLASSIFIED");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager"
                 + " getInstance", "STATIC_CALL");
-        expectServerRefusal(notRefused, "stellurgytest invoke-static dev.stannismod.stellurgy.test.client.ClientDimensions"
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.test.client.ClientDimensions"
                 + " forgeRegisteredOnClient 0", "STATIC_CALL");
-        expectServerRefusal(notRefused, "blockdata 0 64 0 {storedMomentumY:1.0d}", "COMMAND");
-        expectServerRefusal(notRefused, "entitydata @e[type=minecraft:item] {Age:0}", "COMMAND");
-        expectServerRefusal(notRefused, "give " + PLAYER + " minecraft:stone 1 0 {display:{Name:\"forged\"}}", "COMMAND");
-        expectServerRefusal(notRefused, "summon minecraft:zombie 0 80 0 {NoAI:1b}", "COMMAND");
-        expectServerRefusal(notRefused, "fill 0 90 0 0 90 0 minecraft:chest 0 replace {Lock:\"k\"}", "COMMAND");
-        expectServerRefusal(notRefused, "clear " + PLAYER + " minecraft:stone 0 1 {display:{}}", "COMMAND");
-        expectServerRefusal(notRefused, "replaceitem entity " + PLAYER + " slot.hotbar.0 minecraft:stone 1 0 {display:{}}",
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "blockdata 0 64 0 {storedMomentumY:1.0d}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "entitydata @e[type=minecraft:item] {Age:0}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give " + PLAYER + " minecraft:stone 1 0 {display:{Name:\"forged\"}}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "summon minecraft:zombie 0 80 0 {NoAI:1b}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "fill 0 90 0 0 90 0 minecraft:chest 0 replace {Lock:\"k\"}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "clear " + PLAYER + " minecraft:stone 0 1 {display:{}}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "replaceitem entity " + PLAYER + " slot.hotbar.0 minecraft:stone 1 0 {display:{}}",
                 "COMMAND");
 
         // ---- the client: a chain, a static call on no named instrument ----
@@ -133,17 +142,18 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectClientRefusal(notRefused, "invoke_static_int", "STATIC_TARGET",
                 () -> bot.invokeStaticInt("dev.stannismod.stellurgy.client.ClientProxy", "currentClientDimension", 0));
 
-        assertTrue("every probe verb with no kind, every static call on no named instrument, and every tile,"
+        assertTrue("every probe verb or root with no kind, every command sent in a role that does not admit its"
+                + " kind, every static call on no named instrument, and every tile,"
                 + " entity or item tag written by"
                 + " command, must be refused at the call in mechanics mode with the kind its judge gives it;"
                 + " these were not: " + notRefused, notRefused.isEmpty());
 
         // ---- the positive half, on the same judges ----
         List<String> notAnswered = new ArrayList<>();
-        expectServerAnswered(notAnswered, "stellurgytest invoke-static " + SERVER_LOG + " markReply");
-        expectServerAnswered(notAnswered, "give " + PLAYER + " minecraft:stone 1");
-        expectServerAnswered(notAnswered, "stellurgytest clock");
-        expectServerAnswered(notAnswered, "stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 1000");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static " + SERVER_LOG + " markReply");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give " + PLAYER + " minecraft:stone 1");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest clock");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 1000");
         try {
             JsonObject opened = bot.invokeStaticInt(CLIENT_WINDOW, "open");
             bot.invokeStaticInt(CLIENT_WINDOW, "close", Integer.parseInt(opened.get("returned").getAsString()));
@@ -159,9 +169,26 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         void run() throws Exception;
     }
 
-    private void expectServerRefusal(List<String> notRefused, String command, String kind) throws Exception {
+    /**
+     * {@code command} sent in {@code role} — one that ADMITS what the command is, so that the refusal judged is
+     * the mode's and not the role's.
+     */
+    private List<String> sent(com.github.stannismod.forge.testing.server.CommandRole role, String command)
+            throws Exception {
+        switch (role) {
+            case READ:
+                return server.client().read(command);
+            case ARRANGE:
+                return server.client().arrange(command);
+            default:
+                return server.client().act(command);
+        }
+    }
+
+    private void expectServerRefusal(List<String> notRefused, com.github.stannismod.forge.testing.server.CommandRole role,
+                                     String command, String kind) throws Exception {
         try {
-            server.client().execute(command);
+            sent(role, command);
             notRefused.add("`" + command + "` RAN");
         } catch (ServerCommandFailed failed) {
             JsonObject reply = failed.reply();
@@ -176,9 +203,10 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         }
     }
 
-    private void expectServerAnswered(List<String> notAnswered, String command) throws Exception {
+    private void expectServerAnswered(List<String> notAnswered, com.github.stannismod.forge.testing.server.CommandRole role,
+                                      String command) throws Exception {
         try {
-            String reply = String.join("\n", server.client().execute(command));
+            String reply = String.join("\n", sent(role, command));
             if (reply.contains("\"error\"")) {
                 notAnswered.add("`" + command + "` answered an error: " + reply);
             }

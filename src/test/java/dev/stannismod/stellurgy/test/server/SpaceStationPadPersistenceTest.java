@@ -85,7 +85,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
 
         // --- Boot 1: create station with three pads, lock auto-land + dock B
         String createStation = String.join("\n",
-                firstBoot.client().execute("stellurgytest station create 0"));
+                firstBoot.client().arrange("stellurgytest station create 0"));
         Reply created = Reply.of("stellurgytest station create", createStation);
         assertTrue("could not extract station id: " + createStation, created.has(STATION_ID));
         stationId = created.integer(STATION_ID);
@@ -97,7 +97,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
 
         // Dock must consume B (the only auto-land pad).
         String dock = String.join("\n",
-                firstBoot.client().execute("stellurgytest station dock " + stationId));
+                firstBoot.client().act("stellurgytest station dock " + stationId));
         assertTrue("boot1 dock must claim padB: " + dock,
                 Reply.of(dock).ok() && (Reply.of(dock).integer("x") == PAD_B_X));
 
@@ -109,7 +109,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
 
         // /save-all to force the world to flush before close — same as the
         // existing PersistenceRestartSmokeTest pattern.
-        firstBoot.client().execute("save-all flush");
+        firstBoot.client().act("save-all flush");
         firstBoot.close();
         firstBoot = null;
 
@@ -117,7 +117,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String stations = String.join("\n",
-                secondBoot.client().execute("stellurgytest station list"));
+                secondBoot.client().read("stellurgytest station list"));
         Reply.of(stations).element("stations", "id", String.valueOf(stationId));
 
         StationPads padsAfter = pads(secondBoot, stationId);
@@ -176,11 +176,11 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
                 padA.allowAutoLand);
 
         // Behavioural check: undock B -> next dock must reclaim B again.
-        String undock = String.join("\n", secondBoot.client().execute(
+        String undock = String.join("\n", secondBoot.client().arrange(
                 "stellurgytest station undock " + stationId + " 200 200"));
         assertTrue("post-restart undock must succeed: " + undock,
                 Reply.of(undock).ok());
-        String dock2 = String.join("\n", secondBoot.client().execute(
+        String dock2 = String.join("\n", secondBoot.client().act(
                 "stellurgytest station dock " + stationId));
         assertTrue("post-restart dock must reclaim padB: " + dock2,
                 Reply.of(dock2).ok() && (Reply.of(dock2).integer("x") == PAD_B_X));
@@ -207,7 +207,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
     public void autoLandFlagWithoutDockSurvivesRestart() throws Exception {
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
         String createStation = String.join("\n",
-                firstBoot.client().execute("stellurgytest station create 0"));
+                firstBoot.client().arrange("stellurgytest station create 0"));
         Reply created = Reply.of("stellurgytest station create", createStation);
         assertTrue("could not extract station id: " + createStation, created.has(STATION_ID));
         long stationId = created.integer(STATION_ID);
@@ -226,7 +226,7 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
         assertFalse("boot1 padA must report occupied=false: " + lonelyBefore.raw(),
                 lonelyBefore.occupied);
 
-        firstBoot.client().execute("save-all flush");
+        firstBoot.client().act("save-all flush");
         firstBoot.close();
         firstBoot = null;
 
@@ -242,12 +242,12 @@ public class SpaceStationPadPersistenceTest extends AbstractMechanicsTest {
     /** Every landing pad the station holds on one of the two boots, addressable by position. */
     private static StationPads pads(RealDedicatedServerHarness boot, long stationId)
             throws Exception {
-        return StationPads.byId(cmd -> String.join("\n", boot.client().execute(cmd)),
+        return StationPads.byId(cmd -> String.join("\n", boot.client().read(cmd)),
                 (int) stationId);
     }
 
     private static void ok(RealDedicatedServerHarness harness, String cmd) throws Exception {
-        String resp = String.join("\n", harness.client().execute(cmd));
+        String resp = String.join("\n", harness.client().arrange(cmd));
         assertEquals("probe " + cmd + " did not return ok: " + resp,
                 true, Reply.of(resp).ok());
     }

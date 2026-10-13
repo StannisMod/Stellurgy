@@ -201,7 +201,7 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
                 + "evidence of anything (shed=" + shedWhileClear + ")", shedWhileClear > 0);
 
         // Now put a block in its way, one above — inside any clearance the config can be set to.
-        Reply placed = arrange("stellurgytest place 0 " + radiatorX + " " + (y + 1) + " " + z + " minecraft:stone");
+        Reply placed = arrange("stellurgytest place 0 " + radiatorX + " " + (y + 1) + " " + z + " minecraft:stone").requireOk();
         assertTrue("obstruction place failed: " + placed, placed.bool("placed"));
 
         long charge = 100L * capacity;
@@ -257,7 +257,7 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
 
     /** The whole readout of one charged tick, for a caller that needs more than what left. */
     private Reply cycle(int x0, long charge) throws Exception {
-        Reply cycled = arrange("stellurgytest heat cycle 0 " + x0 + " " + y + " " + z + " " + charge + " 1");
+        Reply cycled = act("stellurgytest heat cycle 0 " + x0 + " " + y + " " + z + " " + charge + " 1").requireOk();
         requireArranged("heat cycle found no loop at " + x0 + ": " + cycled, cycled.bool("inLoop"));
         assertEquals("premise: the loop must have been charged with exactly what was asked: " + cycled,
                 charge, cycled.longInteger("charged"));
@@ -265,22 +265,22 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
     }
 
     private Reply heatRead(int x) throws Exception {
-        return arrange("stellurgytest heat read 0 " + x + " " + y + " " + z);
+        return read("stellurgytest heat read 0 " + x + " " + y + " " + z).requireOk();
     }
 
     private void place(int x, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         assertTrue(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
     private void solve(int ticks) throws Exception {
-        Reply solved = arrange("stellurgytest subnet solve heat 0 " + ticks);
+        Reply solved = act("stellurgytest subnet solve heat 0 " + ticks).requireOk();
         assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
     private Reply loopInfo(int x) throws Exception {
-        return ask("stellurgytest subnet info heat 0 " + x + " " + y + " " + z);
+        return read("stellurgytest subnet info heat 0 " + x + " " + y + " " + z);
     }
 
     private static double pow4(double v) {

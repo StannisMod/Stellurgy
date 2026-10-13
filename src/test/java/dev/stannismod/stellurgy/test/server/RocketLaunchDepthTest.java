@@ -67,7 +67,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
     private int buildAndAssemble(FixtureSite site) throws Exception {
@@ -75,19 +75,19 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // and not a clearing — the site stands in open air, so anything standing in it means the
         // arrangement is wrong, and saying so here is what keeps it from arriving later as a launch
         // that would not take off.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+        String assemble = RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)),
                 "simple", 2, 10,
-                "the rocket is built and launched in this volume");
+                "the rocket is built and launched in this volume"));
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse("No Stellurgy dimensions registered",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -109,7 +109,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 1000, 500));
 
-        String prog = ok(client().execute(
+        String prog = ok(client().arrange(
                 "stellurgytest rocket set-destination " + id + " " + destDim));
         assertTrue("set-destination must succeed: " + prog,
                 Reply.of(prog).ok());
@@ -118,7 +118,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
         // Launch with fuelFill=true + mode=instant -> real rocket.launch().
         // This MUST flip isInFlight to true and NOT report an error.
-        String launch = ok(client().execute(
+        String launch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("launch response must be ok=true: " + launch,
                 Reply.of(launch).ok());
@@ -143,7 +143,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // bails with "error.rocket.cannotGetThere".
         int id = buildAndAssemble(FixtureSite.openAir(0, 1100, 500));
 
-        String launch = ok(client().execute(
+        String launch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("launch probe must succeed (wiring is fine): " + launch,
                 Reply.of(launch).ok());
@@ -169,7 +169,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // (cheap, deterministic), then calling instant launch — the
         // second call must complete cleanly with isInFlight still true.
         int id = buildAndAssemble(FixtureSite.openAir(0, 1200, 500));
-        ok(client().execute("stellurgytest rocket launch " + id + " false force"));
+        ok(client().arrange("stellurgytest rocket launch " + id + " false force"));
 
         // Now invoke production launch() on the already-flying rocket.
         // The early-return at line 1761-1762 must prevent any state
@@ -178,7 +178,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // (which is INVALID_PLANET since we never programmed) must NOT
         // suddenly become anything else because the destination-lookup
         // branch is skipped by the early return.
-        String secondLaunch = ok(client().execute(
+        String secondLaunch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("second launch on in-flight rocket must still be probe-ok: "
                         + secondLaunch, Reply.of(secondLaunch).ok());
@@ -211,9 +211,9 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // configurations work. If a regression broke it, every
         // overworld->overworld flight would silently fail.
         int id = buildAndAssemble(FixtureSite.openAir(0, 1300, 500));
-        ok(client().execute("stellurgytest rocket set-destination " + id + " 0"));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " 0"));
 
-        String launch = ok(client().execute(
+        String launch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("launch wiring ok: " + launch, Reply.of(launch).ok());
 
@@ -264,7 +264,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      */
     @Before
     public void disposeOfCraftAnEarlierScenarioLaunched() throws Exception {
-        RocketList.clearFrom(this::exec, 0);
+        RocketList.clearFrom(c -> arrange(c).raw(), 0);
     }
 
     /**
@@ -273,7 +273,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * inside the call, which is a fact about the arrangement and must be said, not slept through.
      */
     private Events serverLog() {
-        return new Events(this::exec, ticks -> {
+        return new Events(c -> read(c).raw(), ticks -> {
             throw new AssertionError("a launch decision is taken inside the probe call, so nothing"
                     + " here waits; asked to advance " + ticks + " ticks");
         }, evictionReports());
@@ -322,13 +322,13 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      */
     private LaunchDecision launch(Events log, int rocket, int destination, boolean fillTanks)
             throws Exception {
-        String chip = exec("stellurgytest rocket set-destination " + rocket + " " + destination);
+        String chip = arrange("stellurgytest rocket set-destination " + rocket + " " + destination).raw();
         Reply programmed = Reply.of("stellurgytest rocket set-destination", chip);
         requireArranged("the guidance computer must carry a chip for dimension " + destination
                 + " before the launch: " + chip,
                 programmed.ok() && String.valueOf(destination).equals(programmed.text("chipDim")));
         long mark = log.mark();
-        String fired = exec("stellurgytest rocket launch " + rocket + " " + fillTanks + " instant");
+        String fired = act("stellurgytest rocket launch " + rocket + " " + fillTanks + " instant").raw();
         requireArranged("the launch verb must reach EntityRocket.launch: " + fired,
                 Reply.of("stellurgytest rocket launch", fired).ok());
         String id = String.valueOf(rocket);
@@ -355,18 +355,19 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * because an accepted launch sends the craft straight up through it.</p>
      */
     private int rocketAt(FixtureSite site, String what) throws Exception {
-        return RocketFixture.rocketEntityId(RocketFixture.assembleAt(site,
-                this::exec, "simple", 0, 255 - site.y, what));
+        return RocketFixture.rocketEntityId(RocketFixture.assembleBuilt(site,
+                c -> act(c).raw(), RocketFixture.placeAt(site,
+                c -> arrange(c).raw(), "simple", 0, 255 - site.y, what)));
     }
 
     /** {@code stellurgytest planet info} for one world, read as data. */
     private Reply planetInfo(int dim) throws Exception {
-        return Reply.of("stellurgytest planet info", exec("stellurgytest planet info " + dim));
+        return Reply.of("stellurgytest planet info", read("stellurgytest planet info " + dim).raw());
     }
 
     private Set<Integer> stellurgyWorlds() throws Exception {
         Set<Integer> worlds = new LinkedHashSet<>();
-        for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list"))
+        for (int dim : Reply.of("stellurgytest dim list", read("stellurgytest dim list").raw())
                 .intArray(AR_DIMS_ARRAY)) {
             worlds.add(dim);
         }
@@ -380,7 +381,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      */
     private int mint(String placement, String name) throws Exception {
         Set<Integer> before = stellurgyWorlds();
-        exec("stellurgy planet generate " + placement + " " + name);
+        arrange("stellurgy planet generate " + placement + " " + name);
         List<Integer> added = new ArrayList<>(stellurgyWorlds());
         added.removeAll(before);
         requireArranged("`/stellurgy planet generate " + placement + " " + name + "` must register"
@@ -411,14 +412,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * back unchanged.
      */
     private String configValue(String key) throws Exception {
-        Reply got = Reply.of("stellurgytest config get", exec("stellurgytest config get " + key));
+        Reply got = Reply.of("stellurgytest config get", read("stellurgytest config get " + key).raw());
         requireArranged("config key " + key + " must be readable: " + got, got.ok());
         return got.text("value");
     }
 
     private void setConfig(String key, String value) throws Exception {
         Reply set = Reply.of("stellurgytest config set",
-                exec("stellurgytest config set " + key + " " + value));
+                arrange("stellurgytest config set " + key + " " + value).raw());
         requireArranged("config key " + key + " must take " + value + ": " + set, set.ok());
     }
 
@@ -487,9 +488,9 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " above were about where it was sent: " + toOwnMoon.window, toOwnMoon.launched);
         } finally {
             if (farMoon != Integer.MIN_VALUE) {
-                exec("stellurgy planet delete " + farMoon);
+                arrange("stellurgy planet delete " + farMoon);
             }
-            exec("stellurgy planet delete " + far);
+            arrange("stellurgy planet delete " + far);
         }
     }
 
@@ -532,7 +533,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " stands on is: " + planetInfo(sibling), planetInfo(sibling).integer("parent") == 0);
             requireArranged("the far planet must be nobody's moon: " + planetInfo(far),
                     planetInfo(far).integer("parent") == Constants.INVALID_PLANET);
-            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            Reply loaded = Reply.of("stellurgytest dim load", arrange("stellurgytest dim load " + luna).raw());
             requireArranged("the moon's world must be loaded and held to stand a craft in: " + loaded,
                     loaded.bool("loaded"));
 
@@ -556,11 +557,11 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             assertTrue("a craft on a moon must be accepted for another moon of the same planet: "
                     + toSibling.window, toSibling.launched);
         } finally {
-            RocketList.clearFrom(this::exec, luna);
+            RocketList.clearFrom(c -> arrange(c).raw(), luna);
             if (sibling != Integer.MIN_VALUE) {
-                exec("stellurgy planet delete " + sibling);
+                arrange("stellurgy planet delete " + sibling);
             }
-            exec("stellurgy planet delete " + far);
+            arrange("stellurgy planet delete " + far);
         }
     }
 
@@ -791,7 +792,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             double gravity = planetInfo(luna).number("gravity");
             requireArranged("the moon's gravity must be below one gee and above none, so that the"
                     + " local ratio exceeds the one-gee ratio: " + gravity, gravity > 0 && gravity < 1);
-            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            Reply loaded = Reply.of("stellurgytest dim load", arrange("stellurgytest dim load " + luna).raw());
             requireArranged("the moon's world must be loaded to stand a craft in: " + loaded,
                     loaded.bool("loaded"));
             setConfig("advancedWeightSystem", "true");
@@ -822,7 +823,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " a threshold of " + between + " (its one-gee ratio is " + oneGeeRatio + ") must"
                     + " be let go from the moon: " + atBetween.window, atBetween.launched);
         } finally {
-            RocketList.clearFrom(this::exec, luna);
+            RocketList.clearFrom(c -> arrange(c).raw(), luna);
             setConfig("minLaunchTWR", minWas);
             setConfig("advancedWeightSystem", weightSystemWas);
         }
@@ -865,7 +866,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             double gravity = planetInfo(luna).number("gravity");
             requireArranged("the moon's gravity must be below one gee and above none, so that the"
                     + " local ratio exceeds the one-gee ratio: " + gravity, gravity > 0 && gravity < 1);
-            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            Reply loaded = Reply.of("stellurgytest dim load", arrange("stellurgytest dim load " + luna).raw());
             requireArranged("the moon's world must be loaded to stand a craft in: " + loaded,
                     loaded.bool("loaded"));
             setConfig("advancedWeightSystem", "true");
@@ -894,7 +895,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " gravity (" + localRatio + ") would clear it: " + atBetween.window,
                     TOO_HEAVY, atBetween.refusal);
         } finally {
-            RocketList.clearFrom(this::exec, luna);
+            RocketList.clearFrom(c -> arrange(c).raw(), luna);
             setConfig("minLaunchTWR", minWas);
             setConfig("gravityAffectsFuel", gravityWas);
             setConfig("advancedWeightSystem", weightSystemWas);
@@ -963,23 +964,23 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             int[] station = {pad.x + 8, pad.y + 1, pad.z};
             String at = " 0 " + station[0] + " " + station[1] + " " + station[2];
             requireArranged("the fuelling station must be placed: ", Reply.of("stellurgytest place",
-                    exec("stellurgytest place" + at + " stellurgy:fuelingStation")).ok());
+                    arrange("stellurgytest place" + at + " stellurgy:fuelingStation").raw()).ok());
             requireArranged("the station must take power: ", Reply.of("stellurgytest energy inject",
-                    exec("stellurgytest energy inject" + at + " 100000")).ok());
+                    arrange("stellurgytest energy inject" + at + " 100000").raw()).ok());
             requireArranged("the station must take the fuel: ", Reply.of("stellurgytest fluid inject",
-                    exec("stellurgytest fluid inject" + at + " rocketfuel 8000")).ok());
+                    arrange("stellurgytest fluid inject" + at + " rocketfuel 8000").raw()).ok());
             Reply link = Reply.of("stellurgytest infra link",
-                    exec("stellurgytest infra link" + at + " " + measuredCraft));
+                    arrange("stellurgytest infra link" + at + " " + measuredCraft).raw());
             requireArranged("the station must link to the craft: " + link, link.bool("linked"));
             requireArranged("the station must run: ", Reply.of("stellurgytest tile force-tick-clock",
-                    exec("stellurgytest tile force-tick-clock" + at + " 20")).ok());
+                    act("stellurgytest tile force-tick-clock" + at + " 20").raw()).ok());
 
             // Fill the tanks in a call of their own and launch WITHOUT the verb's fill: the verb's
             // fill reaches the gate's weight only a tick later (measured 2026-10-02: the same craft
             // weighed 7.40 on the launch that filled it and 13.15 on the next), so a ratio read on
             // the filling launch would describe the tanks before the fill.
             requireArranged("the tanks must fill: ", Reply.of("stellurgytest rocket fill-fuel",
-                    exec("stellurgytest rocket fill-fuel " + measuredCraft)).ok());
+                    arrange("stellurgytest rocket fill-fuel " + measuredCraft).raw()).ok());
             LaunchDecision wet = launch(log, measuredCraft, luna, false);
             requireArranged("with the threshold at Double.MAX_VALUE the gate must refuse both times,"
                     + " and its records carry the ratios: " + dry.window + " / " + wet.window,
@@ -989,13 +990,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             System.out.println("[launch-gate] dry " + dry.gate + " / wet " + wet.gate);
             requireArranged("fuel must weigh something for the two weights to differ: dry "
                     + dryRatio + ", wet " + wetRatio + "; tanks: "
-                    + exec("stellurgytest rocket fuel " + measuredCraft), wetRatio < dryRatio);
+                    + read("stellurgytest rocket fuel " + measuredCraft).raw(), wetRatio < dryRatio);
 
             setConfig("minLaunchTWR", Double.toString((dryRatio + wetRatio) / 2));
-            String assemble = RocketFixture.assembleAt(
+            String assemble = RocketFixture.assembleBuilt(plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET),
+                    c -> act(c).raw(), RocketFixture.placeAt(
                     plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET),
-                    this::exec, "simple", 0, 255 - site().y,
-                    "the identical craft the assembler judges at the new threshold");
+                    c -> arrange(c).raw(), "simple", 0, 255 - site().y,
+                    "the identical craft the assembler judges at the new threshold"));
             Reply built = Reply.of("stellurgytest rocket assemble", assemble);
             boolean assemblerBuilt = built.ok();
             System.out.println("[launch-gate] assembler at the midpoint: " + assemble);

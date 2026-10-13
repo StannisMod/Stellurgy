@@ -58,15 +58,15 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume");
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume"));
 
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
 
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest mission start-gas 0 " + lastId + " " + duration + " water"));
         assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
@@ -75,7 +75,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     }
 
     private double progressFromAdvance(long missionId, long ticks) throws Exception {
-        String r = ok(client().execute("stellurgytest mission advance " + missionId + " " + ticks));
+        String r = ok(client().arrange("stellurgytest mission advance " + missionId + " " + ticks));
         assertFalse("advance must not error: " + r, Reply.of(r).has("error"));
         Reply pmReply = Reply.of(r);
         assertTrue("missing progress in advance response: " + r, pmReply.has(PROGRESS));
@@ -136,7 +136,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     public void completionFiresAtProgressOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7300, 1000);
         MissionCompletion resp = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertTrue("complete-now must report transition (wasDeadBefore=false): " + resp.raw(),
                 !resp.wasDeadBefore);
         assertTrue("complete-now must mark mission dead: " + resp.raw(),
@@ -157,15 +157,15 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     public void completionPrunesMissionFromSatelliteRegistry() throws Exception {
         long mid = buildRocketAndStartGasMission(7400, 1000);
         MissionCompletion complete = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertTrue("complete-now must succeed: " + complete.raw(),
                 complete.completed);
 
         String state = "n/a";
         boolean pruned = false;
         for (int attempt = 0; attempt < 30; attempt++) {
-            ok(client().execute("stellurgytest satellite force-tick-dim 0"));
-            state = ok(client().execute("stellurgytest mission state " + mid));
+            ok(client().act("stellurgytest satellite force-tick-dim 0"));
+            state = ok(client().read("stellurgytest mission state " + mid));
             // absence is the answer: a mission that still EXISTS answers no `error` at all,
             // so "no error" is the not-yet-pruned state this loop is waiting out.
             if ("mission not found".equals(Reply.of(state).textOr("error", null))) {

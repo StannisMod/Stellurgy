@@ -92,15 +92,15 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
             why = "an absence of notices; nothing records one that was not sent.")
     public void theSeatAnswersTheClickerInsteadOfFailingSilently() throws Exception {
         // ---- Arrange: a platform with a single loose (unassembled, unlinked) pilot seat. -------
-        exec("stellurgytest chunk warmup 0 " + ((SEAT_X - 8) >> 4) + " " + ((SEAT_Z - 8) >> 4)
-                + " " + ((SEAT_X + 8) >> 4) + " " + ((SEAT_Z + 8) >> 4));
-        exec("stellurgytest fill 0 " + (SEAT_X - 3) + " " + (SEAT_Y - 1) + " " + (SEAT_Z - 3)
+        arrange("stellurgytest chunk warmup 0 " + ((SEAT_X - 8) >> 4) + " " + ((SEAT_Z - 8) >> 4)
+                + " " + ((SEAT_X + 8) >> 4) + " " + ((SEAT_Z + 8) >> 4)).raw();
+        arrange("stellurgytest fill 0 " + (SEAT_X - 3) + " " + (SEAT_Y - 1) + " " + (SEAT_Z - 3)
                 + " " + (SEAT_X + 3) + " " + (SEAT_Y - 1) + " " + (SEAT_Z + 3)
                 + " minecraft:obsidian");
-        exec("stellurgytest fill 0 " + (SEAT_X - 3) + " " + SEAT_Y + " " + (SEAT_Z - 3)
+        arrange("stellurgytest fill 0 " + (SEAT_X - 3) + " " + SEAT_Y + " " + (SEAT_Z - 3)
                 + " " + (SEAT_X + 3) + " " + (SEAT_Y + 4) + " " + (SEAT_Z + 3) + " minecraft:air");
-        String place = exec("stellurgytest fill 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z
-                + " " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z + " stellurgy:pilotSeat");
+        String place = arrange("stellurgytest fill 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z
+                + " " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z + " stellurgy:pilotSeat").raw();
         scenario().requireArranged("placing the pilot seat failed: " + place,
                 Reply.of(place).ok());
 
@@ -172,7 +172,7 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
 
         // ---- 3) Occupied refusal: no mount, one message naming the occupant. -------------------
         dismountAndConfirm(events);
-        String occupy = exec("stellurgytest vs seat-occupy 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
+        String occupy = arrange("stellurgytest vs seat-occupy 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z).raw();
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
                 Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted"));
         String occupantName = Reply.of("stellurgytest vs seat-occupy", occupy).text(OCCUPANT_NAME);
@@ -180,7 +180,7 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
         standBesideTheSeat();
         // The occupancy must still HOLD at the moment of the click — measured server-side, not
         // assumed from the occupy call an instant earlier.
-        String occupancy = exec("stellurgytest vs seat-status 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
+        String occupancy = read("stellurgytest vs seat-status 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z).raw();
         scenario().requireArranged("the NPC occupant must still be seated when the bot clicks (it was "
                         + "mounted a moment ago): " + occupancy,
                 // "the passenger list holds someone", asked of the list. The needle it replaces
@@ -239,12 +239,12 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
         // manages it. Gating "assembled" on the link ALONE suppressed the notice here and lit the
         // full tier-2 flight HUD on an inert pile of blocks; the gate is a live ship resolve.
         dismountAndConfirm(events);
-        String place2 = exec("stellurgytest fill 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
-                + " " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z + " stellurgy:pilotSeat");
+        String place2 = arrange("stellurgytest fill 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
+                + " " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z + " stellurgy:pilotSeat").raw();
         scenario().requireArranged("placing the second pilot seat failed: " + place2,
                 Reply.of(place2).ok());
-        String linked = exec("stellurgytest vs seat-link 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
-                + " " + LINKED_X + " " + (SEAT_Y + 1) + " " + LINKED_Z);
+        String linked = arrange("stellurgytest vs seat-link 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
+                + " " + LINKED_X + " " + (SEAT_Y + 1) + " " + LINKED_Z).raw();
         scenario().requireArranged("the seat must end up LINKED — without that this leg tests the same "
                         + "unlinked case as leg 1 and proves nothing: " + linked,
                 Reply.of(linked).bool("linked"));
@@ -299,7 +299,7 @@ public class VSPilotSeatMountMessagesTest extends AbstractSharedVsClientTest {
      */
     private void dismountAndConfirm(Events events) throws Exception {
         long mark = events.markInstrumented();
-        String probe = exec("stellurgytest player dismount");
+        String probe = arrange("stellurgytest player dismount").raw();
         Reply dismounted = Reply.of("stellurgytest player dismount", probe);
         scenario().requireArranged("the dismount probe must say what the bot was riding when it was"
                 + " asked — without that this cannot tell a dismount that was owed from one that was"

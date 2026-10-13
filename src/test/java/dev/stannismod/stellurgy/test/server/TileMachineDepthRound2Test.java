@@ -47,14 +47,14 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
 
     /** What the Forge energy capability at one block reports — refusing a block that is not there. */
     private EnergyStore energy(int x, int z) throws Exception {
-        return EnergyStore.at(cmd -> ok(client().execute(cmd)), DIM, x, Y, z);
+        return EnergyStore.at(cmd -> ok(client().read(cmd)), DIM, x, Y, z);
     }
 
     /** Same place() helper as round 1 — see {@link TileMachineDepthTest#place}
      *  for the air-pre-clear rationale. */
     private void place(String blockId, int x, int y, int z) throws Exception {
-        client().execute("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " minecraft:air");
-        String r = ok(client().execute(
+        client().arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " minecraft:air");
+        String r = ok(client().arrange(
                 "stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") at " + x + "," + y + "," + z + " failed: " + r,
                 Reply.of(r).bool("placed"));
@@ -86,7 +86,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // The hatch-read probe is the IInventory contract gate; size must be
         // strictly positive (the GUI binds slots by index — 0 slots = the
         // entire crafting matrix renders empty).
-        String hatch = ok(client().execute(
+        String hatch = ok(client().read(
                 "stellurgytest hatch read " + DIM + " " + x + " " + Y + " " + z));
         // Against the refusal rather than against two of its possible texts: the pair of
         // substrings passed for every OTHER refusal the probe can write.
@@ -121,7 +121,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
                         + "RocketAssemblingMachine): " + stored.raw(),
                 stored.hasEnergy);
 
-        String tickResp = ok(client().execute(
+        String tickResp = ok(client().act(
                 "stellurgytest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 3"));
         // The assembler family is ITickable; force-tick must succeed and not
         // crash on a not-yet-scanned (empty) build area.
@@ -146,7 +146,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // TileInventoryHatch implements IInventory — the hatch-read probe
         // discriminates by IInventory, so its success here pins the
         // parent-class contract surface.
-        String hatch = ok(client().execute(
+        String hatch = ok(client().read(
                 "stellurgytest hatch read " + DIM + " " + x + " " + Y + " " + z));
         assertFalse("landing pad must be IInventory-accessible (extends "
                         + "TileInventoryHatch): " + hatch,
@@ -173,7 +173,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // The fluid probe surfaces IFluidHandler presence; its error path is
         // "no tile entity" / "tile has no IFluidHandler". Anything else
         // (whether or not the tank is empty) confirms the cap survives.
-        String fluid = ok(client().execute(
+        String fluid = ok(client().read(
                 "stellurgytest fluid stored " + DIM + " " + x + " " + Y + " " + z));
         assertFalse("fueling station tank cap silently dropped: " + fluid,
                 Reply.of("stellurgytest fluid stored", fluid).refused());
@@ -216,7 +216,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         int x = BASE_X + 32, z = BASE_Z + 8;
         place("stellurgy:terraformer", x, Y, z);
 
-        String tickResp = ok(client().execute(
+        String tickResp = ok(client().act(
                 "stellurgytest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 3"));
         // Either the tile is ITickable and ticks cleanly, OR the probe
         // reports "tile not ITickable" (some libVulpes multiblock controllers

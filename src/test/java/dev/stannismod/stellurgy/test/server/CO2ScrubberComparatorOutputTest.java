@@ -43,8 +43,8 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
         int x = PX, y = PY, z = PZ;
         ok("stellurgytest place 0 " + x + " " + y + " " + z
                 + " stellurgy:oxygenScrubber");
-        String resp = exec("stellurgytest infra comparator-override 0 "
-                + x + " " + y + " " + z);
+        String resp = read("stellurgytest infra comparator-override 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("comparator-override must succeed: " + resp,
                 Reply.of(resp).ok());
         int value = extract(resp);
@@ -64,8 +64,8 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
         // damage starts at 0; max is Short.MAX_VALUE-1.
         ok("stellurgytest hatch fill 0 " + x + " " + y + " " + z
                 + " 0 stellurgy:carbonScrubberCartridge 1 0");
-        String resp = exec("stellurgytest infra comparator-override 0 "
-                + x + " " + y + " " + z);
+        String resp = read("stellurgytest infra comparator-override 0 "
+                + x + " " + y + " " + z).raw();
         assertTrue("comparator-override must succeed: " + resp,
                 Reply.of(resp).ok());
         int value = extract(resp);
@@ -77,7 +77,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     }
 
     private void ok(String cmd) throws Exception {
-        String resp = exec(cmd);
+        String resp = arrange(cmd).raw();
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
                 Reply.of(resp).ok());
     }

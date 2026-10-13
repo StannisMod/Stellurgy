@@ -32,7 +32,7 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
 
         // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
 
@@ -46,8 +46,8 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
         // fixture is a real craft and could take either.
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
-                + " " + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
+                + " " + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
 
         // NO PUMP. The fixture now runs on the server's own subsystem, so the jump is advanced by
@@ -58,7 +58,7 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
         // caught a moment.
         String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the jump never completed; the durable record now reads "
-                        + exec("stellurgytest space transit-export"),
+                        + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         // The dimension the arrival event was posted IN, which is the slot holding the target cell.
         int targetDim = extractInt(arrived, "dim");
@@ -66,15 +66,15 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
 
         // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near 0,200,0).
         assertTrue("transited ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
+                + read("stellurgytest vs ship-count-all " + targetDim).raw(), loadedShips(targetDim) >= 1);
         // This fixture is a bare cube with no flight computer, so it has no durable name to be
         // followed by — the one craft in the suite that genuinely cannot be asked for by identity.
         // What can be done is to stop guessing: the cell's ship count now NAMES what it counted, so
         // "exactly one ship here" and "and this is it" are one reading instead of a count followed by
         // a nearest-ship lookup that could answer about the other one.
-        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(c -> read(c).raw(), targetDim);
         assertTrue("arrived ship is not VS-managed in the target cell (transit did not re-VS);"
-                + " id=" + arrivedId, ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
+                + " id=" + arrivedId, ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
     }
 
     @org.junit.After
@@ -85,7 +85,7 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /**
      * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
@@ -97,7 +97,7 @@ public class VSShipTransitTest extends AbstractSharedServerTest {
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
     private static int extractInt(String json, String key) {

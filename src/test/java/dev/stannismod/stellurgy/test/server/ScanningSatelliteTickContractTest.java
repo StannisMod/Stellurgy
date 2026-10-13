@@ -57,7 +57,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     public void opticalPoweredTickEmitsDistanceTypeData() throws Exception {
         long satId = createSat("optical", 1000, 100_000, 1000);
 
-        String tickResp = String.join("\n", client().execute(
+        String tickResp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 100"));
         assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
@@ -67,7 +67,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                         + " postData=" + postData,
                 postData - preData >= 1);
 
-        String dataResp = String.join("\n", client().execute(
+        String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         assertEquals("optical satellite MUST emit DISTANCE-typed data — "
                         + "downstream mission gates branch on dataType; "
@@ -87,7 +87,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     public void densityPoweredTickEmitsAtmosphereDensityTypeData() throws Exception {
         long satId = createSat("density", 1000, 100_000, 1000);
 
-        String tickResp = String.join("\n", client().execute(
+        String tickResp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 100"));
         assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
@@ -97,7 +97,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                         + " postData=" + postData,
                 postData - preData >= 1);
 
-        String dataResp = String.join("\n", client().execute(
+        String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         assertEquals("density satellite MUST emit ATMOSPHEREDENSITY-typed data; "
                         + dataResp,
@@ -116,7 +116,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     public void massScannerPoweredTickEmitsMassTypeData() throws Exception {
         long satId = createSat("mass", 1000, 100_000, 1000);
 
-        String tickResp = String.join("\n", client().execute(
+        String tickResp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 100"));
         assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
@@ -126,7 +126,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                         + " postData=" + postData,
                 postData - preData >= 1);
 
-        String dataResp = String.join("\n", client().execute(
+        String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         assertEquals("mass satellite MUST emit MASS-typed data; " + dataResp,
                 "MASS", stringField(DATA_TYPE, dataResp, "dataType"));
@@ -148,7 +148,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     public void compositionPoweredTickEmitsCompositionTypeData() throws Exception {
         long satId = createSat("composition", 1000, 100_000, 1000);
 
-        String tickResp = String.join("\n", client().execute(
+        String tickResp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 100"));
         assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
@@ -158,7 +158,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                         + " postData=" + postData,
                 postData - preData >= 1);
 
-        String dataResp = String.join("\n", client().execute(
+        String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         assertEquals("composition satellite MUST emit COMPOSITION-typed data; "
                         + dataResp,
@@ -194,14 +194,14 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
             throws Exception {
         long satId = createSat("oreScanner", 200, 100_000, 1000);
 
-        String markers = String.join("\n", client().execute(
+        String markers = String.join("\n", client().read(
                 "stellurgytest satellite markers 0 " + satId));
         assertEquals("oreScanner MUST report isSatelliteData=false — it is a "
                         + "player-driven scanner, not a passive data emitter; "
                         + markers,
                 "false", stringField(IS_SAT_DATA, markers, "isSatelliteData"));
 
-        String dataResp = String.join("\n", client().execute(
+        String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         // absence is the answer: a reply with NO `error` is the success shape, and "the
         // verb refused, with this reason" is exactly what this claim measures.
@@ -210,7 +210,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                         + dataResp,
                 "not a SatelliteData subclass".equals(Reply.of(dataResp).textOr("error", null)));
 
-        String tickResp = String.join("\n", client().execute(
+        String tickResp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 10"));
         assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preStored = longField(PRE_STORED, tickResp, "preStored");
@@ -238,7 +238,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
      */
     @Test
     public void spyTelescopeCannotTickAndDirectTickEntityIsNoOp() throws Exception {
-        String createResp = String.join("\n", client().execute(
+        String createResp = String.join("\n", client().arrange(
                 "stellurgytest satellite create-spy-telescope 0"));
         assertTrue("create-spy-telescope failed: " + createResp,
                 Reply.of(createResp).ok());
@@ -254,7 +254,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
         // tickEntity body unconditionally). SpyTelescope's body is
         // empty (does NOT call super.tickEntity), so battery must not
         // change.
-        String tickResp = String.join("\n", client().execute(
+        String tickResp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + spyId + " 10"));
         assertTrue("tick probe failed: " + tickResp,
                 Reply.of(tickResp).ok());
@@ -271,7 +271,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
     // -- helpers ----------------------------------------------------------
 
     private long createSat(String type, int powerGen, int powerStorage, int maxData) throws Exception {
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().arrange(
                 "stellurgytest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,

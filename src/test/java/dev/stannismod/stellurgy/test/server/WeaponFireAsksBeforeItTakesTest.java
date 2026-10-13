@@ -37,7 +37,7 @@ public class WeaponFireAsksBeforeItTakesTest extends AbstractSharedServerTest {
     private static final int CONTROL_Z = Z + 2;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @LegacyWitness(prose = "with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}"
             + " ({@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}) disabled, this fails at \"a guarded block was destroyed"
@@ -56,7 +56,7 @@ public class WeaponFireAsksBeforeItTakesTest extends AbstractSharedServerTest {
         place(X, Z, "minecraft:stone");
         place(X, CONTROL_Z, "minecraft:stone");
         place(X + 4, Z, "minecraft:stone");
-        Reply guarded = ask("stellurgytest damage guard " + DIM + " " + X + " " + Y + " " + Z + " true");
+        Reply guarded = arrange("stellurgytest damage guard " + DIM + " " + X + " " + Y + " " + Z + " true");
         assertTrue("the veto listener refused to take the position: " + guarded, guarded.ok());
 
         try {
@@ -89,30 +89,30 @@ public class WeaponFireAsksBeforeItTakesTest extends AbstractSharedServerTest {
                     + " claim protects its first block and nothing it shields: " + behind + " "
                     + behindStage, behind.isEmpty() && !gone(behindStage));
         } finally {
-            ask("stellurgytest damage unguard-all").requireOk("drop the guard");
+            arrange("stellurgytest damage unguard-all").requireOk("drop the guard");
         }
     }
 
     // ---- driving
 
     private void prepare() throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((X + 32) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill " + DIM + " " + (X - 2) + " " + (Y - 2) + " " + (Z - 2) + " " + (X + 30)
+        arrange("stellurgytest fill " + DIM + " " + (X - 2) + " " + (Y - 2) + " " + (Z - 2) + " " + (X + 30)
                 + " " + (Y + 6) + " " + (Z + 2) + " minecraft:air").requireOk("clear the site");
         for (int cx = ((X - 16) >> 4); cx <= ((X + 32) >> 4); cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
     }
 
     private void place(int x, int z, String block) throws Exception {
-        ask("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " " + x + " " + Y + " " + z
+        arrange("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " " + x + " " + Y + " " + z
                 + " " + block).requireOk("place " + block);
     }
 
     /** A round with enough energy to take a stone block out in one arrival, fired from close range. */
     private long shoot(int targetX, int z) throws Exception {
-        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (targetX - 6) + " " + Y + " " + z
+        Reply fired = act("stellurgytest shot fire " + DIM + " " + (targetX - 6) + " " + Y + " " + z
                 + " 4 0 0 2000000 200").requireOk("fire at " + targetX + "," + z);
         long id = fired.longInteger("id");
         assertTrue("the launch was refused: " + fired, id >= 0L);
@@ -120,7 +120,7 @@ public class WeaponFireAsksBeforeItTakesTest extends AbstractSharedServerTest {
     }
 
     private Reply stage(int x, int z) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z).requireOk("read the stage");
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z).requireOk("read the stage");
     }
 
     /** Has this position been emptied - destroyed outright, or recorded as destroyed? */

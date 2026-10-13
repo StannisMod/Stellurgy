@@ -41,12 +41,12 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
     @Test
     public void aSettledShipDescendsIntoAPlanetDimViaTheCrossing() throws Exception {
 
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // --- Phase 1: ENTER a ship so it is settled in a slot cell (the proven entry path). ---
         String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
@@ -55,29 +55,29 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // pad sits in a world this class shares, so "the ship near (SRC_X,SRC_Y,SRC_Z)" is a question
         // a neighbour's craft can answer.
         String shipId = ShipIdentity.nameFromAssembly(asm);
-        String vsId = ShipIdentity.physicsIdOf(this::exec, 0, shipId);
+        String vsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, shipId);
 
-        ShipInfo src = ShipInfo.byId(this::exec, 0, vsId);
+        ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, vsId);
         double sx = src.x, sy = src.y, sz = src.z;
 
         // A held throttle on THIS ship's own flight computer => a pilot is flying.
-        String held = exec("stellurgytest vs ff-input-by-id 0 " + vsId + " 0 1 0 0 0 0");
+        String held = arrange("stellurgytest vs ff-input-by-id 0 " + vsId + " 0 1 0 0 0 0").raw();
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 Reply.of(held).bool("afcResolved"));
-        String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + vsId + " "
-                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz);
+        String tp = arrange("stellurgytest vs teleport-ship-by-id 0 " + vsId + " "
+                + (int) sx + " " + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + (int) sz).raw();
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         // Marked before the unpark, which is what lets the entry start: the arrival is announced
         // once, and a mark taken after it would wait for a second entry.
         long entryMark = events.mark();
-        exec("stellurgytest vs unpark-by-id 0 " + vsId);
+        arrange("stellurgytest vs unpark-by-id 0 " + vsId);
 
         // Linked on the record the entry publishes at its settle, rather than reading the ledger row
         // over and over until it agrees.
         awaitEnteredSpace(events, entryMark, shipId,
                 "precondition: the ship must enter space, or there is nothing to descend from",
                 SETTLE_TICKS, () -> loadAllEntrySlots(setup));
-        EntryStatus entryStatus = EntryStatus.forShip(this::exec, shipId).requireFound(
+        EntryStatus entryStatus = EntryStatus.forShip(c -> read(c).raw(), shipId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         int slotDim = entryStatus.slotDim;
         assertTrue("settled slot dim not reported: " + entryStatus.raw(),
@@ -86,7 +86,7 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // --- Phase 2: DESCEND that settled ship into the overworld. ---
         // CONTROL: the overworld holds no VS ship now (entry cut the source out) — a later "1" is the descent.
         assertEquals("witness sensitivity control — overworld must hold no VS ship before the descent",
-                0, extractInt(exec("stellurgytest vs ship-count-all " + TARGET_DIM), "count"));
+                0, extractInt(read("stellurgytest vs ship-count-all " + TARGET_DIM).raw(), "count"));
 
         // Nothing to stop feeding: the pilot input lives on the SHIP's own flight computer, and that
         // tile was cut out of dim 0 by the entry above. This used to clear a world-wide static that
@@ -105,8 +105,8 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         //
         // By id: this scenario knows which ship it flew up, and "the first settled ship in the slot"
         // is a different question that happens to have the same answer today.
-        exec("stellurgytest vs load-ships " + slotDim);
-        String afc = exec("stellurgytest space find-afc " + slotDim + " " + shipId);
+        arrange("stellurgytest vs load-ships " + slotDim).raw();
+        String afc = read("stellurgytest space find-afc " + slotDim + " " + shipId).raw();
         // `found` is missing only from the probe's "world or ledger not ready" reply, and
         // absence is the answer: not located, failing here with that reply.
         assertTrue("could not locate the ship's flight computer in the slot " + slotDim
@@ -117,13 +117,13 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
 
         // Marked BEFORE the command whose effect is awaited.
         long descentMark = events.mark();
-        String begin = exec("stellurgytest space descent-begin " + slotDim + " " + ax + " " + ay + " " + az
-                + " " + shipId + " " + TARGET_DIM);
+        String begin = act("stellurgytest space descent-begin " + slotDim + " " + ax + " " + ay + " " + az
+                + " " + shipId + " " + TARGET_DIM).raw();
         assertTrue("descent did not start: " + begin, Reply.of(begin).bool("started"));
 
         // The cut dropped the ship from the ledger at once (it has left the subsystem).
         assertEquals("the descending ship leaves the ledger on the cut", 0,
-                EntryStatus.wholeLedger(this::exec).ships);
+                EntryStatus.wholeLedger(c -> read(c).raw()).ships);
 
         // The crossing re-assembles the ship in the planet's world asynchronously, and production
         // announces when it has: this waits for THAT, by id, instead of sampling the loaded count
@@ -133,30 +133,30 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // counter -- diagnostic only, so nothing is lost by dropping it.
         events.awaitField(descentMark, "ship_entered_planet","ship", shipId,
                 "the ship never crossed into the planet's dimension via the descent; countAll="
-                        + exec("stellurgytest vs ship-count-all " + TARGET_DIM),
+                        + read("stellurgytest vs ship-count-all " + TARGET_DIM).raw(),
                 SETTLE_TICKS);
     }
 
     @After
     public void cleanup() throws Exception {
-        exec("stellurgytest space entry-clear");
+        arrange("stellurgytest space entry-clear");
     }
 
     // --- helpers (mirror VSShipEntryTest) --------------------------------------------------------
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(this::exec, setup);
+        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
     }
 
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
 
@@ -174,7 +174,7 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

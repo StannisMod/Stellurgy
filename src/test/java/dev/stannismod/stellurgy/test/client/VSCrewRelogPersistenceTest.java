@@ -120,7 +120,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // on 2026-09-15, in the tick-burst leg. `awaitCaptureHeldBy` states the whole chain.
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
                 + " after being put on it - nothing below is about a deck capture until there is"
@@ -155,8 +155,8 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         double h = Math.toRadians(170.0) / 2.0;
         double upYBefore = upYOf(shipInfo());
         scenario().requireArranged("the attitude hold must accept the roll command",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         long rollMark = lastClientTick();
         long rollReleaseMark = clientEvents().mark();
         // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
@@ -389,7 +389,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         double[] ship = buildShip(site);
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck while the"
                 + " ship is still upright - the capture is what carries his deck spot through the"
@@ -405,8 +405,8 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
 
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         // An attitude CONVERGING under the hold is a physical value and not a link — production
         // never decides it has arrived — so this is a WINDOW and one read. It was a poll whose exit
         // condition is the gate below, which is the one shape question 2 does not license however
@@ -431,7 +431,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
                 + " ticks). If those two are equal the attitude hold never started and the window is"
                 + " innocent; if they differ it was still slewing and the window is short.",
                 upY < INVERTED_UP_Y);
-        DeckCapture capBefore = DeckCapture.read(this::exec);
+        DeckCapture capBefore = DeckCapture.read(c -> read(c).raw());
         assertTrue("the player must still be captured on the inverted deck before the relog: "
                 + capBefore.raw(), capBefore.alreadyTracked);
         // The BEFORE half of "his capture came back on his ship" — pinned here so the after half has
@@ -466,7 +466,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         String modes = awaitCommittedAboardOnHisShip(events, relogMark,
                 "after a relog on an inverted deck the player must be captured ABOARD again, not"
                         + " held with world semantics wherever the inverted hull stopped him");
-        DeckCapture capNow = DeckCapture.read(this::exec);
+        DeckCapture capNow = DeckCapture.read(c -> read(c).raw());
         double postY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[relog] preY=" + preY + " postY=" + postY + " dY=" + (postY - preY)
                 + " modes=" + modes);
@@ -548,7 +548,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         double[] ship = buildShip(site);
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck before he"
                 + " walks on it - the walk he logs out carrying is only meaningful under a capture",
@@ -747,7 +747,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
      * derived from the body's own coordinates every time it is asked.</p>
      */
     private double[] deckPoint() throws Exception {
-        DeckCapture cap = DeckCapture.read(this::exec);
+        DeckCapture cap = DeckCapture.read(c -> read(c).raw());
         assertTrue("the deck capture must be live to report a ship-frame point: " + cap.raw(),
                 cap.alreadyTracked);
         // In WHOSE ship frame. The three numbers below are subspace coordinates of the ANCHOR ship,
@@ -972,7 +972,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             Events.assertInstrumentRan(log.since(mark, "deck_mode_committed"), "deck_mode_events",
                     "a capture MODE was committed at all after the relog");
             throw new AssertionError(never.getMessage() + " | server verdict "
-                    + exec("stellurgytest vs deck-capture"));
+                    + read("stellurgytest vs deck-capture").raw());
         }
     }
 
@@ -1017,7 +1017,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -1037,7 +1037,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
                 + " ship in the physics mod's own registry - not a rocket, and not nothing");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so the readiness link below"
                         + " is waiting on something only an arrived client can cause");
@@ -1073,8 +1073,8 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         //
         // HEIGHT 24 is the ENVELOPE: hull, deck, a body standing and walking on it, and the room the
         // hull rolls through.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
-                "the hull, the deck the crew member is held on, and the air he walks and rolls through");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 24,
+                "the hull, the deck the crew member is held on, and the air he walks and rolls through"));
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

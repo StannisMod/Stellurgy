@@ -55,16 +55,16 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), variant, 2, 10,
-                "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), variant, 2, 10,
+                "the craft is built and flown in this volume"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
     }
 
     private long startGasMission(int rocketId, long duration, String fluid, int intakePower) throws Exception {
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest mission start-gas 0 " + rocketId + " " + duration + " " + fluid
                         + " " + intakePower));
         assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
@@ -88,7 +88,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(8000);
         long mid = startGasMission(rid, 1000, "oxygen", 10);
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertTrue("completion must mark mission dead: " + cargo.raw(),
                 cargo.isDeadAfter);
         assertTrue("completion must report fired (wasDeadBefore=false): " + cargo.raw(),
@@ -106,7 +106,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(8100);
         long mid = startGasMission(rid, 1000, "water", 0);
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         // Either no rocket re-spawned, or no fluid entries — both
         // represent the no-fill branch (production also spawns the
         // rocket entity in this path; we pin the empty-fluid invariant).
@@ -123,7 +123,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(8200);
         long mid = startGasMission(rid, 1000, "water", 10);
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         // rocketCount > 0 confirms at least one rocket entity is in
         // the launch dim near the launch coords post-completion. The
         // type discrimination (StationDeployed vs plain) is checked
@@ -149,7 +149,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");
         long mid = startGasMission(rid, 1000, "oxygen", 10);
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         // fluidEntries > 0 — fill loop ran on at least one TE. Exact
         // count depends on whether the original EntityRocket still
         // lingers next to the freshly spawned StationDeployedRocket
@@ -178,21 +178,22 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     @Test
     public void aHarvesterIsOfferedExactlyTheGasesTheAirHolds() throws Exception {
         final int dim = 0;
-        PlanetAir.Probe probe = cmd -> ok(client().execute(cmd));
-        PlanetAir before = PlanetAir.snapshot(probe, dim);
+        PlanetAir.Probe reader = cmd -> ok(client().read(cmd));
+        PlanetAir.Probe arranger = cmd -> ok(client().arrange(cmd));
+        PlanetAir before = PlanetAir.snapshot(reader, dim);
         try {
-            run(probe, "stellurgytest atmosphere set-density " + dim + " 0");
-            assertEquals("air emptied, so nothing is there to offer", set(), offered(probe, dim));
+            run(arranger, "stellurgytest atmosphere set-density " + dim + " 0");
+            assertEquals("air emptied, so nothing is there to offer", set(), offered(reader, dim));
 
-            run(probe, "stellurgytest planet add-gas " + dim + " hydrogen 1");
+            run(arranger, "stellurgytest planet add-gas " + dim + " hydrogen 1");
             assertEquals("one nano-atmosphere of hydrogen is in the air, so hydrogen is offered",
-                    set("hydrogen"), offered(probe, dim));
+                    set("hydrogen"), offered(reader, dim));
 
-            run(probe, "stellurgytest planet add-gas " + dim + " oxygen 200000000");
+            run(arranger, "stellurgytest planet add-gas " + dim + " oxygen 200000000");
             assertEquals("oxygen joined the hydrogen, so both are offered and nothing else",
-                    set("hydrogen", "oxygen"), offered(probe, dim));
+                    set("hydrogen", "oxygen"), offered(reader, dim));
         } finally {
-            before.restore(probe);
+            before.restore(arranger);
         }
     }
 
@@ -239,11 +240,11 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      */
     @Test
     public void aHarvestPlannedAtTwiceThePartialPressureTakesHalfAsLong() throws Exception {
-        Reply found = arrange("stellurgytest space find-giant 8");
-        Reply realized = arrange("stellurgytest space realize " + found.text("cellKey") + " "
-                + found.integer("variant"));
+        Reply found = read("stellurgytest space find-giant 8").requireOk();
+        Reply realized = act("stellurgytest space realize " + found.text("cellKey") + " "
+                + found.integer("variant")).requireOk();
         int giant = realized.integer("dim");
-        Reply planet = ask("stellurgytest planet info " + giant);
+        Reply planet = read("stellurgytest planet info " + giant);
         String[] offered = planet.textArray("harvestable");
         requireArranged("the giant must offer a gas to harvest: " + planet, offered.length > 0);
         String gas = offered[0];
@@ -253,13 +254,13 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         // config verb does not expose it). A server running another id would leave onOrbitReached's
         // dimension check false, and the "exactly one mission" arrangement below would say so.
         int space = new dev.stannismod.stellurgy.api.StellurgyConfiguration().spaceDimId;
-        ask("stellurgytest dim time " + space);
-        Reply station = arrange("stellurgytest station create " + giant);
-        Reply info = arrange("stellurgytest station info " + station.integer("id"));
+        arrange("stellurgytest dim time " + space);
+        Reply station = arrange("stellurgytest station create " + giant).requireOk();
+        Reply info = read("stellurgytest station info " + station.integer("id")).requireOk();
         int x = info.integer("spawnX"), y = info.integer("spawnY"), z = info.integer("spawnZ");
 
         long atHeld = plannedDurationTicks(giant, space, x, y, z);
-        arrange("stellurgytest planet add-gas " + giant + " " + gas + " " + held);
+        arrange("stellurgytest planet add-gas " + giant + " " + gas + " " + held).requireOk();
         long atTwiceHeld = plannedDurationTicks(giant, space, x + 16, y, z);
 
         requireArranged("the shorter mission must be clear of the one-second floor `missionSeconds` clamps"
@@ -277,30 +278,30 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * gas mission that registered on {@code giant} as a result.
      */
     private long plannedDurationTicks(int giant, int space, int x, int y, int z) throws Exception {
-        arrange("stellurgytest fixture uv-rocket " + space + " " + x + " " + y + " " + z);
-        Reply rocket = arrange("stellurgytest rocket assemble " + space + " " + x + " " + y + " " + z);
+        arrange("stellurgytest fixture uv-rocket " + space + " " + x + " " + y + " " + z).requireOk();
+        Reply rocket = act("stellurgytest rocket assemble " + space + " " + x + " " + y + " " + z).requireOk();
         int id = rocket.integer("entityId");
-        Reply rocketInfo = ask("stellurgytest rocket info " + id);
+        Reply rocketInfo = read("stellurgytest rocket info " + id);
         requireArranged("the assembled craft must be a station-deployed rocket in the space dimension: "
                 + rocketInfo, rocketInfo.text("entityClass").endsWith("EntityStationDeployedRocket")
                 && rocketInfo.integer("dim") == space);
-        Reply tanks = ask("stellurgytest rocket storage-fluid " + id);
+        Reply tanks = read("stellurgytest rocket storage-fluid " + id);
         requireArranged("its tanks must be empty, so both missions plan the same harvest: " + tanks,
                 tanks.integer("totalAmount") == 0);
 
         Set<Integer> before = satelliteIds(giant);
-        arrange("stellurgytest rocket force-orbit-reached " + id);
+        arrange("stellurgytest rocket force-orbit-reached " + id).requireOk();
         Set<Integer> planned = satelliteIds(giant);
         planned.removeAll(before);
         requireArranged("reaching orbit over the giant must register exactly one mission on it: " + planned,
                 planned.size() == 1);
-        Reply mission = arrange("stellurgytest mission state " + planned.iterator().next());
+        Reply mission = read("stellurgytest mission state " + planned.iterator().next()).requireOk();
         return (long) mission.number("duration");
     }
 
     private Set<Integer> satelliteIds(int dim) throws Exception {
         Set<Integer> ids = new HashSet<>();
-        for (String satellite : ask("stellurgytest satellite list " + dim).objectArrayOrEmpty("satellites")) {
+        for (String satellite : read("stellurgytest satellite list " + dim).objectArrayOrEmpty("satellites")) {
             ids.add(Reply.of("satellite list", satellite).integer("id"));
         }
         return ids;

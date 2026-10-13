@@ -63,12 +63,12 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+        String assemble = RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)),
                 "simple", 2, 10,
-                "the craft is built and flown in this volume");
+                "the craft is built and flown in this volume"));
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
@@ -78,7 +78,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
     public void freeFlightStateSurvivesNbtRoundTrip() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 700));
 
-        String r = ok(client().execute("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
+        String r = ok(client().arrange("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
         assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // Flight mode survives.
@@ -109,7 +109,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
     public void legacySaveMissingFreeFlightKeysDefaultsSafely() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3340, 700));
 
-        String r = ok(client().execute("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
+        String r = ok(client().arrange("stellurgytest entity rocket-nbt-roundtrip 0 " + id));
         assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // A save with no ffQuat* keys must load as the upright identity attitude.
@@ -150,15 +150,15 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
             + " {@code weight:7.049999f} and the seat (2026-10-02).")
     @Test
     public void statsReadThroughTheApiFactoryWriteWhatTheRocketWrote() throws Exception {
-        String assemble = RocketFixture.assembleAt(site(), cmd -> ok(client().execute(cmd)),
-                "simple", 0, 255 - site().y, "the craft whose stats are written stands here");
+        String assemble = RocketFixture.assembleBuilt(site(), cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site(), cmd -> ok(client().arrange(cmd)),
+                "simple", 0, 255 - site().y, "the craft whose stats are written stands here"));
         int rocket = RocketFixture.rocketEntityId(assemble);
-        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), rocket);
+        RocketInfo info = RocketInfo.byId(cmd -> ok(client().read(cmd)), rocket);
         ArrangementFailure.requireArranged("the craft's stats must not be the defaults, or an equal"
                 + " pair would say nothing: thrust " + info.thrust, info.thrust > 0);
 
         Reply roundTrip = Reply.of("stellurgytest rocket stats-from-nbt",
-                ok(client().execute("stellurgytest rocket stats-from-nbt " + rocket)));
+                ok(client().read("stellurgytest rocket stats-from-nbt " + rocket)));
         ArrangementFailure.requireArranged("the factory round trip must run: " + roundTrip,
                 roundTrip.ok());
         assertEquals("StatsRocket.createFromNBT must give back the stats the rocket wrote, so that"

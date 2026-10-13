@@ -83,6 +83,33 @@ public final class Reply {
         return of("this probe reply", raw);
     }
 
+    /**
+     * The reply of a command that is NOT a probe verb — a vanilla or the mod's own command, which answers
+     * lines of text, not an object. It holds {@link #raw()} and nothing else: every field reader refuses on
+     * it, naming the command, for the reason {@link #of} refuses what it cannot parse.
+     */
+    public static Reply text(String command, String raw) {
+        return new Reply(command, String.valueOf(raw), null);
+    }
+
+    /**
+     * The reply {@code lines} make for {@code command}: a probe verb's object ({@link #of}), or the text of any
+     * other command ({@link #text}).
+     */
+    public static Reply answering(String command, java.util.List<String> lines) {
+        String raw = String.join("\n", lines);
+        String typed = command.startsWith("/") ? command.substring(1) : command;
+        return typed.startsWith("stellurgytest ") ? of(command, raw) : text(command, raw);
+    }
+
+    /** The parsed object, refusing on a {@link #text} reply, which has none. */
+    private JsonObject json() {
+        if (json == null) {
+            throw new AssertionError(command + " answered text, not a probe object, so it has no fields: " + raw);
+        }
+        return json;
+    }
+
     /** Whether the reply carries {@code field} with a value at all. */
     public boolean has(String field) {
         return primitiveOf(field) != null;
@@ -269,6 +296,11 @@ public final class Reply {
             ArrangementFailure.arrangementFailed(what + " — the verb did not report ok: " + raw);
         }
         return this;
+    }
+
+    /** {@link #requireOk(String)}, naming the command this reply answers. */
+    public Reply requireOk() {
+        return requireOk(command);
     }
 
     /**
@@ -545,18 +577,18 @@ public final class Reply {
      * that is a PREFIX of the first, so one of the two pairs could never have distinguished them.</p>
      */
     public int arrayLength(String field) {
-        return json.has(field) && json.get(field).isJsonArray()
-                ? json.getAsJsonArray(field).size() : -1;
+        return json().has(field) && json().get(field).isJsonArray()
+                ? json().getAsJsonArray(field).size() : -1;
     }
 
     /** One element of a numeric ARRAY field ({@code "pos":[x,y,z]}), or {@code NaN} when the reply
      *  carries no such array or it is shorter than {@code index}. */
     public double arrayNumber(String field, int index) {
-        if (!json.has(field) || !json.get(field).isJsonArray()) {
+        if (!json().has(field) || !json().get(field).isJsonArray()) {
             refuseIfOnlyNested(field);
             return Double.NaN;
         }
-        JsonArray array = json.getAsJsonArray(field);
+        JsonArray array = json().getAsJsonArray(field);
         if (index < 0 || index >= array.size()) {
             return Double.NaN;
         }
@@ -770,6 +802,14 @@ public final class Reply {
         return pos;
     }
 
+    /**
+     * The reply's text as the server sent it — the only reader a {@link #text} reply has, and for a probe
+     * object the unparsed rendering, for a caller that hands the reply on as a string.
+     */
+    public String raw() {
+        return raw;
+    }
+
     /** The whole reply, for a failure message — the reader never hides what it read. */
     @Override
     public String toString() {
@@ -777,11 +817,11 @@ public final class Reply {
     }
 
     private String primitiveOf(String field) {
-        if (!json.has(field) || json.get(field).isJsonNull()) {
+        if (!json().has(field) || json().get(field).isJsonNull()) {
             refuseIfOnlyNested(field);
             return null;
         }
-        JsonElement value = json.get(field);
+        JsonElement value = json().get(field);
         return value.isJsonPrimitive() ? value.getAsString() : value.toString();
     }
 
@@ -806,7 +846,7 @@ public final class Reply {
      * whatever the members hold" asks the member it means.</p>
      */
     private void refuseIfOnlyNested(String field) {
-        String path = nestedPathOf(json, field, "");
+        String path = nestedPathOf(json(), field, "");
         if (path != null) {
             throw new AssertionError(command + " carries no `" + field + "` of its own, but one"
                     + " lives at `" + path + "` — that is a field of a MEMBER, and reading it off"
@@ -817,20 +857,20 @@ public final class Reply {
 
     /** The array at {@code field}, or {@code null} when the reply carries no such array. */
     private JsonArray arrayOrNull(String field) {
-        if (!json.has(field) || !json.get(field).isJsonArray()) {
+        if (!json().has(field) || !json().get(field).isJsonArray()) {
             refuseIfOnlyNested(field);
             return null;
         }
-        return json.getAsJsonArray(field);
+        return json().getAsJsonArray(field);
     }
 
     /** The object at {@code field}, or {@code null} when the reply carries no such object. */
     private JsonObject objectOrNull(String field) {
-        if (!json.has(field) || !json.get(field).isJsonObject()) {
+        if (!json().has(field) || !json().get(field).isJsonObject()) {
             refuseIfOnlyNested(field);
             return null;
         }
-        return json.getAsJsonObject(field);
+        return json().getAsJsonObject(field);
     }
 
     /**

@@ -73,14 +73,14 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         // The block doesn't need a formed multiblock; scanForAssemblers
         // only checks `te instanceof TilePrecisionAssembler`.
         int ax = s.sx + 2, ay = s.sy, az = s.sz;
-        String placeAsm = exec("stellurgytest place 0 " + ax + " " + ay + " " + az
-                + " stellurgy:precisionassemblingmachine");
+        String placeAsm = arrange("stellurgytest place 0 " + ax + " " + ay + " " + az
+                + " stellurgy:precisionassemblingmachine").raw();
         assertTrue("precision assembler place failed: " + placeAsm,
                 Reply.of(placeAsm).bool("placed"));
 
         // Pre-state: scan hasn't run yet.
-        String preState = exec("stellurgytest infra service-state 0 "
-                + s.sx + " " + s.sy + " " + s.sz);
+        String preState = read("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz).raw();
         assertEquals("baseline: assemblersCount=0 before scan",
                 0, extract(preState, ASM_COUNT));
 
@@ -90,13 +90,13 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         // not the scan-discovery contract this test pins. `tile force-tick`
         // can't advance world time, so production's gate keeps the scan
         // from firing in a test-driven tick.
-        String scan = exec("stellurgytest infra service-scan-assemblers 0 "
-                + s.sx + " " + s.sy + " " + s.sz);
+        String scan = act("stellurgytest infra service-scan-assemblers 0 "
+                + s.sx + " " + s.sy + " " + s.sz).raw();
         assertTrue("service-scan-assemblers must succeed: " + scan,
                 Reply.of(scan).ok());
 
-        String postState = exec("stellurgytest infra service-state 0 "
-                + s.sx + " " + s.sy + " " + s.sz);
+        String postState = read("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz).raw();
         assertEquals("scanForAssemblers must discover the adjacent precision "
                         + "assembler block (5-block radius, instanceof check): "
                         + postState, 1, extract(postState, ASM_COUNT));
@@ -110,8 +110,8 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         SetupResult s = setupStationAndRocket(CX_NO_ASM);
 
         // Baseline: part queued, no assembler.
-        String pre = exec("stellurgytest infra service-state 0 "
-                + s.sx + " " + s.sy + " " + s.sz);
+        String pre = read("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz).raw();
         assertEquals("baseline: 1 part queued for repair",
                 1, extract(pre, PARTS_COUNT));
         assertEquals("baseline: no assemblers nearby",
@@ -119,13 +119,13 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
 
         // Force the scan probe — same side-channel as test 1, but with
         // no assembler in range it returns an empty list.
-        String scan = exec("stellurgytest infra service-scan-assemblers 0 "
-                + s.sx + " " + s.sy + " " + s.sz);
+        String scan = act("stellurgytest infra service-scan-assemblers 0 "
+                + s.sx + " " + s.sy + " " + s.sz).raw();
         assertTrue("scan probe must succeed even with no assembler: " + scan,
                 Reply.of(scan).ok());
 
-        String post = exec("stellurgytest infra service-state 0 "
-                + s.sx + " " + s.sy + " " + s.sz);
+        String post = read("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz).raw();
         assertEquals("scan with no nearby assembler must report assemblersCount=0: "
                         + post, 0, extract(post, ASM_COUNT));
         // Part stays queued — the contract being pinned is that the
@@ -151,26 +151,27 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away. The
         // halo is 7 rather than the default 2 because this scenario stands a service station beside
         // the craft and the old fill reached `baseX+12`; the volume has to cover both.
-        String assemble = RocketFixture.assembleAt(
+        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, baseX, CZ_PAD),
+                c -> act(c).raw(), RocketFixture.placeAt(
                 FixtureSite.openAir(0, baseX, CZ_PAD),
-                cmd -> exec(cmd), "simple", 7, 10,
-                "the craft the service station scans, and the ground the station stands on");
+                c -> arrange(c).raw(), "simple", 7, 10,
+                "the craft the service station scans, and the ground the station stands on"));
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
         int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
 
-        String inject = exec("stellurgytest infra inject-broken-part " + rocketId + " 5");
+        String inject = arrange("stellurgytest infra inject-broken-part " + rocketId + " 5").raw();
         assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());
 
         int sx = baseX + 10, sy = CY_PAD, sz = CZ_PAD;
-        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation");
+        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
-        String link = exec("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link, Reply.of(link).ok());
         return new SetupResult(sx, sy, sz);
     }

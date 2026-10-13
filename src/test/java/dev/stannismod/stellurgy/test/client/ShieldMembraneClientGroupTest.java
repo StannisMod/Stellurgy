@@ -83,11 +83,11 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientTest {
     public void aShieldHoldsOutAPlayerWhoCameFromOutsideEvenFromInsideAnother() throws Exception {
         FixtureSite here = site();
         // The working air: the walk, the player's height and the jolt of a hold, over both shells' rows.
-        here.requireClear(this::exec, 7, 6, "the air the player walks through between two shields");
+        here.requireClear(cmd -> arrange(cmd).raw(), 7, 6, "the air the player walks through between two shields");
         int floorY = here.y, z0 = here.z;
         int ax = here.x, bx = here.x + SPACING;
-        Reply floor = Reply.of(exec("stellurgytest fill " + plot().dim + " " + (ax - 7) + " " + floorY + " "
-                + (z0 - 2) + " " + (ax + 12) + " " + floorY + " " + (z0 + 4) + " minecraft:stone"));
+        Reply floor = Reply.of(arrange("stellurgytest fill " + plot().dim + " " + (ax - 7) + " " + floorY + " "
+                + (z0 - 2) + " " + (ax + 12) + " " + floorY + " " + (z0 + 4) + " minecraft:stone").raw());
         requireArranged("the floor could not be laid: " + floor, floor.ok());
 
         Events server = serverEvents();
@@ -107,10 +107,10 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientTest {
 
         // The four placements the scenario rests on, measured against the shields as production holds
         // them (each emitter's world centre and projected radius) and the player as the server holds him.
-        ShieldTile a = ShieldTile.at(this::exec, plot().dim, ax, floorY, z0);
-        ShieldTile b = ShieldTile.at(this::exec, plot().dim, bx, floorY, z0);
-        String name = PlayerState.botName(this::exec);
-        PlayerPosition standing = PlayerPosition.of(this::exec, name);
+        ShieldTile a = ShieldTile.at(c -> read(c).raw(), plot().dim, ax, floorY, z0);
+        ShieldTile b = ShieldTile.at(c -> read(c).raw(), plot().dim, bx, floorY, z0);
+        String name = PlayerState.botName(c -> read(c).raw());
+        PlayerPosition standing = PlayerPosition.of(c -> read(c).raw(), name);
         double half = FieldSurfaceMath.FIELD_HALF_THICKNESS;
         double toA = distanceToCentre(a, standing), toB = distanceToCentre(b, standing);
         // The same half-size FieldSurfaceMath#influenceBox gives the box an emitter scans.
@@ -144,7 +144,7 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientTest {
         } finally {
             bot().releaseKey(Keyboard.KEY_W);
         }
-        PlayerPosition after = PlayerPosition.of(this::exec, name);
+        PlayerPosition after = PlayerPosition.of(c -> read(c).raw(), name);
         double afterToB = distanceToCentre(b, after);
         System.out.println("FIXTURE shield-membrane: held " + held + "; after, " + afterToB + " from B");
         assertTrue("shield B held the player but did not keep him OUT: after the hold he stands "
@@ -175,8 +175,8 @@ public class ShieldMembraneClientGroupTest extends AbstractSharedClientTest {
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = Reply.of(exec("stellurgytest place " + plot().dim + " " + x + " " + y + " " + z + " "
-                + block));
+        Reply placed = Reply.of(arrange("stellurgytest place " + plot().dim + " " + x + " " + y + " " + z + " "
+                + block).raw());
         requireArranged("failed to place " + block + " at " + at(x, y, z) + ": " + placed,
                 placed.bool("placed"));
     }

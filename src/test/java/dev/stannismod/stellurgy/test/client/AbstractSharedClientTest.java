@@ -331,36 +331,36 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         // by the client reset, every gate in this method passes, and from here on no slot write
         // reaches the client, so each later scenario fails at its own equip naming an item instead
         // of the death. Measured 2026-10-03: six scenarios of one group, all downstream of one fall.
-        String bodyOnServer = String.join("\n", serverClient().execute("stellurgytest player health"));
+        String bodyOnServer = String.join("\n", serverClient().read("stellurgytest player health"));
         if (Reply.of(bodyOnServer).has("health") && Reply.of(bodyOnServer).number("health") <= 0) {
             org.junit.Assert.fail("a previous scenario KILLED the shared player, and no reset can bring"
                     + " that body back — this scenario and every one after it is downstream of that"
                     + " death. The last death the server recorded: "
                     + Events.lastRecord(serverEvents().since(0L, "player_died")) + "; server body: " + bodyOnServer);
         }
-        serverClient().execute("clear @a");
+        serverClient().arrange("clear @a");
         // The harness server runs gamemode=1 (RealDedicatedServerHarness writes it into
         // server.properties), and a scenario that needs survival — a vacuum-damage or a
         // stack-consumption one — drops the player into it. Left behind, the NEXT scenario runs
         // under a different mode than the one its green runs were taken on. Restoring the
         // documented default is a no-op for every scenario that never touches it.
-        serverClient().execute("gamemode creative @a");
+        serverClient().arrange("gamemode creative @a");
         // Same argument for health: a damage scenario leaves the player short, and the next one's
         // "the player started at full health" precondition is then false through no fault of its
         // own. Both are un-restored global mutations of the SHARED subject, which is the one thing
         // this base class exists to stop.
-        serverClient().execute("stellurgytest player set-health 20");
+        serverClient().arrange("stellurgytest player set-health 20");
         // Every trace window a failed predecessor left open, on BOTH sides, is released here — a
         // window belongs to the scenario that opened it, and this is where a scenario that died
         // before closing one hands it back. Each side records how many it discarded, so an
         // inherited window is visible in the log of the scenario that inherited it.
-        exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SideTrace"
-                + " discardServerWindows");
+        read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SideTrace"
+                + " discardServerWindows").raw();
         bot().invokeStaticInt("dev.stannismod.stellurgy.test.trace.SideTrace",
                 "discardClientWindows");
         // This scenario's pilot-input delivery chain, both halves, from here on. Twenty-one failure
         // messages print it; before it was a window, its counts were the JVM's since boot.
-        seatDelivery = SeatDelivery.open(this::exec, bot(), serverEvents(), clientEvents());
+        seatDelivery = SeatDelivery.open(c -> read(c).raw(), bot(), serverEvents(), clientEvents());
         // A family of scenarios can carry a channel this base knows nothing about — a seat the
         // player is still riding, a subsystem flag it switched on. It runs HERE, before the
         // teleport, because a player still bound to a vehicle is not moved by /tp: the plot
@@ -375,10 +375,10 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         // deck hold would pin him where he was). What was released is recorded, so a scenario that
         // inherited something can see what; that he is bound to nothing AFTERWARDS is asserted,
         // because a release nobody checks cannot be told from no release.
-        String released = exec("stellurgytest player release");
+        String released = act("stellurgytest player release").raw();
         assertTrue("the between-scenario release must run: " + released, Reply.of(released).ok());
         scenario.record("releasedAtStart", Reply.of(released).integer("releasedCount"));
-        String stillBound = exec("stellurgytest player bindings");
+        String stillBound = read("stellurgytest player bindings").raw();
         assertEquals("after the between-scenario release the player must be bound to nothing, or the"
                 + " next scenario inherits its predecessor's ship, cell or hold: " + stillBound,
                 0, Reply.of(stillBound).arrayLength("bound"));
@@ -405,7 +405,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
             // trip nobody here can bound, and `client_dimension_changed` is recorded where the
             // client finishes doing exactly that.
             long transferMark = clientEvents().mark();
-            serverClient().execute("stellurgytest tp " + plot.dim);
+            serverClient().arrange("stellurgytest tp " + plot.dim);
             // NO WAIT ON THE SERVER HALF, and that is a statement about the code rather than a
             // shortened budget: `PlayerList.transferPlayerToDimension` assigns `player.dimension`
             // in its first three lines and runs to the end on the server thread, and the probe
@@ -439,7 +439,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         // the absolute coordinates the client ends up holding — so the plot check below reads a
         // body that has demonstrably been placed, rather than one that has merely had long enough.
         long placedMark = clientEvents().mark();
-        serverClient().execute("tp @a " + (plot.centerX() + 0.5) + " " + (Plot.DEFAULT_Y + 1)
+        serverClient().arrange("tp @a " + (plot.centerX() + 0.5) + " " + (Plot.DEFAULT_Y + 1)
                 + " " + (plot.centerZ() + 0.5) + " 0 0");
         // Matched on WHERE, not merely on "a teleport happened": the packet is resent on every
         // movement rejection (the harness's own note on this seam says so), so a record alone would
@@ -459,7 +459,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         // and leaves `fallDistance` alone). The first scenario after a long one that switches to
         // survival and puts him on a block then lands the whole inheritance at once: measured
         // 2026-10-03, a 77-point `fall` death on a one-block step, after a slow GUI scenario.
-        String fallReset = exec("stellurgytest player set-fall-distance 0");
+        String fallReset = arrange("stellurgytest player set-fall-distance 0").raw();
         assertTrue("the between-scenario reset must clear the fall distance the previous scenario"
                 + " accumulated: " + fallReset, Reply.of(fallReset).ok());
 
@@ -483,7 +483,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         // the gate below waits for. It survives `resetClientState` — that resets the screen and the
         // chat, both client-owned display state, and does not touch the event log.
         long healthMark = clientEvents().mark();
-        serverClient().execute("stellurgytest player set-health 20");
+        serverClient().arrange("stellurgytest player set-health 20");
         // NO PACING BETWEEN THE WRITE AND THE RESET. The heal is gated below by a LINK on
         // `client_health_updated` since a mark taken BEFORE the write, so a packet still in flight
         // is what that wait is for; ten ticks here only decided whether the gate's cheap branch or
@@ -595,7 +595,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
                     + " a damage-observing scenario measures the previous one's leftovers; client"
                     + " reports " + health
                     + "; server reports "
-                    + String.join("\n", serverClient().execute("stellurgytest player health"))
+                    + String.join("\n", serverClient().read("stellurgytest player health"))
                     + "\n  damage taken during this reset: "
                     + serverEvents().since(hurtMark, "living_hurt"));
         }
@@ -632,7 +632,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
      * fallback fails loudly there instead of quietly moving a body nobody located.</p>
      */
     private int playerDimOnTheServer(int fallback) throws Exception {
-        String reply = exec("stellurgytest oxygen player " + HARNESS_ACCOUNT);
+        String reply = read("stellurgytest oxygen player " + HARNESS_ACCOUNT).raw();
         // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
         // default as an argument, so every call site names what a missing field means there.
         return Reply.of("stellurgytest oxygen player", reply).integerOr("dim", fallback);
@@ -783,7 +783,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
     /** A server probe asked from a diagnostic: its own failure must never replace the one being told. */
     private String askServer(String command) {
         try {
-            return String.valueOf(serverClient().execute(command));
+            return read(command).raw();
         } catch (Exception unavailable) {
             return "(unavailable: " + unavailable + ")";
         }
@@ -919,7 +919,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
      */
     protected final void standOnFloorTheClientHolds(double x, double y, double z, float yaw, float pitch,
                                                     String what) throws Exception {
-        ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), this::exec,
+        ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), c -> arrange(c).raw(),
                 "tp @a " + x + " " + y + " " + z + " " + yaw + " " + pitch, x, y, z, what,
                 PLACEMENT_LINK_BUDGET_TICKS);
     }
@@ -985,7 +985,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
             return;
         }
         long clearMark = clientEvents().mark();
-        exec("clear @a");
+        arrange("clear @a");
         try {
             clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
                     what, HAND_LINK_BUDGET_TICKS);
@@ -1083,7 +1083,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         // a command that DID notify would re-create the very tail it was fencing.
         String nonce = "arm-chat-fence-" + System.nanoTime();
         long fenceMark = clientEvents().mark();
-        exec("tellraw " + PlayerState.botName(this::exec) + " {\"text\":\"" + nonce + "\"}");
+        arrange("tellraw " + PlayerState.botName(c -> read(c).raw()) + " {\"text\":\"" + nonce + "\"}");
         clientEvents().awaitField(fenceMark, "client_chat_received", "text", nonce,
                 "the chat fence must reach this client, or nothing can say the backlog has landed",
                 CHAT_FENCE_TICKS);
@@ -1172,9 +1172,43 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         return shared.client.bot();
     }
 
-    /** Runs a server probe and joins its reply — the shape every Stellurgy client test already uses. */
-    protected final String exec(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /**
+     * Send a server command that OBSERVES, and read its reply: a probe verb's object, or any other command's
+     * text. Every command is sent in a role — this, {@link #arrange} or {@link #act}; the server refuses a
+     * command its role does not admit.
+     */
+    protected final Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
+    }
+
+    /** Send a server command that SETS THE SCENE (an arrangement, a build, a decided outcome) — see {@link #read}. */
+    protected final Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
+    }
+
+    /** Send a server command that CALLS a production entry a player, a tick or a packet would reach — see {@link #read}. */
+    protected final Reply act(String command) throws Exception {
+        return Reply.answering(command, serverClient().act(command));
+    }
+
+    /** This test's {@link #read}, {@link #arrange} and {@link #act}, for a helper that sends in more than one role. */
+    protected final ServerCommands commands() {
+        return new ServerCommands() {
+            @Override
+            public Reply read(String command) throws Exception {
+                return AbstractSharedClientTest.this.read(command);
+            }
+
+            @Override
+            public Reply arrange(String command) throws Exception {
+                return AbstractSharedClientTest.this.arrange(command);
+            }
+
+            @Override
+            public Reply act(String command) throws Exception {
+                return AbstractSharedClientTest.this.act(command);
+            }
+        };
     }
 
     /** This scenario's pilot-input delivery windows, opened by the between-scenario reset. */
@@ -1213,7 +1247,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
      * <p>A wait whose client is deliberately out of the world uses {@link #connectionEvents()}.</p>
      */
     protected final Events serverEvents() {
-        return new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks),
+        return new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks),
                 evictionReports());
     }
 
@@ -1226,7 +1260,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
      * {@link #serverEvents()}'s world ticks would stall for the whole window.</p>
      */
     protected final Events connectionEvents() {
-        return new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks),
+        return new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitTicks),
                 evictionReports());
     }
 
@@ -1364,7 +1398,7 @@ public abstract class AbstractSharedClientTest implements ScopedTest<SharedClien
         for (String command : s.stateBundle()) {
             String reply;
             try {
-                reply = exec(command);
+                reply = read(command).raw();
             } catch (Throwable t) {
                 reply = "<probe failed: " + t + ">";
             }

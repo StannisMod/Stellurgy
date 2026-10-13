@@ -41,33 +41,33 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
     @Test
     public void performFunctionOnUnlinkedPoweredStationIsSafeNoOp() throws Exception {
         int cx = X >> 4, cz = Z >> 4;
-        exec("stellurgytest chunk warmup 0 " + cx + " " + cz + " " + cx + " " + cz);
-        exec("stellurgytest fill 0 " + X + " " + Y + " " + Z + " " + X + " " + (Y + 1) + " "
+        arrange("stellurgytest chunk warmup 0 " + cx + " " + cz + " " + cx + " " + cz);
+        arrange("stellurgytest fill 0 " + X + " " + Y + " " + Z + " " + X + " " + (Y + 1) + " "
                 + Z + " minecraft:air");
 
-        String place = exec("stellurgytest place 0 " + X + " " + Y + " " + Z
-                + " stellurgy:serviceStation");
+        String place = arrange("stellurgytest place 0 " + X + " " + Y + " " + Z
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
 
         // Power it (performFunction's getEquivalentPower gate) but DO NOT link a
         // rocket — linkedRocket stays null.
-        exec("stellurgytest place 0 " + X + " " + (Y + 1) + " " + Z + " minecraft:redstone_block");
+        arrange("stellurgytest place 0 " + X + " " + (Y + 1) + " " + Z + " minecraft:redstone_block").raw();
 
         // Sanity: truly unlinked, empty repair queue.
-        String pre = exec("stellurgytest infra service-state 0 " + X + " " + Y + " " + Z);
+        String pre = read("stellurgytest infra service-state 0 " + X + " " + Y + " " + Z).raw();
         assertTrue("station must be unlinked: " + pre, (Reply.of(pre).integer("linkedRocketId") == -1));
         assertTrue("repair queue must be empty: " + pre, (Reply.of(pre).integer("partsToRepairCount") == 0));
 
         // The concern: performFunction must NOT reach tryStandaloneRepair's
         // ((EntityRocket) linkedRocket).storage with a null linkedRocket.
-        String pf = exec("stellurgytest infra service-perform-function 0 " + X + " " + Y + " " + Z);
+        String pf = act("stellurgytest infra service-perform-function 0 " + X + " " + Y + " " + Z).raw();
         assertTrue("performFunction on an unlinked powered station must be a safe "
                 + "no-op (no NPE/CCE reaching the standalone-repair path): " + pf,
                 Reply.of(pf).ok());
 
         // State still sane after the no-op.
-        String post = exec("stellurgytest infra service-state 0 " + X + " " + Y + " " + Z);
+        String post = read("stellurgytest infra service-state 0 " + X + " " + Y + " " + Z).raw();
         assertTrue("repair queue still empty after no-op performFunction: " + post,
                 (Reply.of(post).integer("partsToRepairCount") == 0));
     }

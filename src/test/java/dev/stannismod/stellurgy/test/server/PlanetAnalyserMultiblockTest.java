@@ -29,17 +29,17 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
 
     @Test
     public void planetAnalyserMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock planet-analyser 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock planet-analyser failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileAstrobodyDataProcessor tile at controller pos: " + info,
                 "TileAstrobodyDataProcessor", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -50,22 +50,22 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void planetAnalyserMultiblockInvalidatesWhenDataHatchRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock planet-analyser 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = join(client().execute(
+        String first = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
         // Centre data hatch at globalY = cy - 1, globalX = cx, globalZ = cz + 1.
-        String breakData = join(client().execute(
+        String breakData = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy - 1) + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not replace data hatch: " + breakData,
                 Reply.of(breakData).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after data-hatch removal — "
                         + "'D' char mapping broken: " + broken,
@@ -75,22 +75,22 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void planetAnalyserMultiblockInvalidatesWhenSlabRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock planet-analyser 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = join(client().execute(
+        String first = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
         // Slab next to controller at globalY = cy, globalX = cx + 1, globalZ = cz.
-        String breakSlab = join(client().execute(
+        String breakSlab = join(client().arrange(
                 "stellurgytest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace slab: " + breakSlab,
                 Reply.of(breakSlab).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after slab removal — "
                         + "slab OreDict lookup broken: " + broken,

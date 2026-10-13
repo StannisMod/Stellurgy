@@ -101,7 +101,7 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         // carries.
         long spawnMark = events.markInstrumented();
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
         String assemble = assembleFixture(site);
@@ -111,7 +111,7 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
                 spawnMark, "a with-pilot-seat assembly must create a VS ship in the registry");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -128,11 +128,11 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
 
         // Seat the bot, ramp a vertical cruise with the REAL key (Flight Assist is on by default:
         // holding the throttle ramps the setpoint; ~3 s of full deflection reaches cruise speed).
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo.raw(),
                 mountInfo.seatFound);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
         // The deflection below is a real key on a client that must already be riding; the setpoint
         // ramp it drives is what the whole scenario measures.
@@ -190,7 +190,7 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         // pilot's separate, deliberate choice.)
         double yDismount = shipY();
         long dismountMark = events.markInstrumented();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         // The computer must SEE the pilot leave before "it kept cruising" says anything: the
         // riderless dummy clears the computer's pilot input, and until that lands the ship is simply
         // still being flown. This is the link the 40-tick window used to hide — a red then read as
@@ -214,13 +214,13 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
 
         // Re-mounting must not interrupt (or reset) the executing cruise: the seat's dummy is
         // REUSED and the ship flies on while the returned pilot holds no key.
-        SeatMount remount = SeatMount.onShip(this::exec, 0, shipId);
+        SeatMount remount = SeatMount.onShip(c -> arrange(c).raw(), 0, shipId);
         assertTrue("seat-mount must still find the seat: " + remount.raw(),
                 remount.seatFound);
         assertTrue("the re-mount must REUSE the seat's single dummy: " + remount.raw(),
                 remount.reused);
         long remountOnClient = clientEvents().mark();
-        String mounted = exec("stellurgytest player mount-entity " + remount.requireDummyId());
+        String mounted = arrange("stellurgytest player mount-entity " + remount.requireDummyId()).raw();
         assertTrue("bot must re-mount the seat dummy: " + mounted,
                 Reply.of(mounted).bool("mounted"));
         // His CLIENT performs the seating too, and a client that resets the cruise on taking the
@@ -284,7 +284,7 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
         // air fill's own `placed`. Open air, so this ASSERTS rather than digging the shaft it
         // replaces — a craft that cruises out of a pit meets its rim, and the red then names the
         // cruise. The fill force-loads every chunk in the box, so the warmup lost nothing.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
-                "the hull, and the first blocks of the lane it cruises along");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
+                "the hull, and the first blocks of the lane it cruises along"));
     }
 }

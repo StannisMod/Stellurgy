@@ -57,15 +57,15 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
     public void restoreConfigAndDensity() throws Exception {
         // Restore in BOTH cases — even if the config was never flipped this
         // method completes the round-trip cleanly.
-        exec("stellurgytest config set allowTerraformNonStellurgy " + originalAllowNonStellurgy);
-        exec("stellurgytest terraforming set-density " + DIM + " " + originalDensity);
+        arrange("stellurgytest config set allowTerraformNonStellurgy " + originalAllowNonStellurgy).raw();
+        arrange("stellurgytest terraforming set-density " + DIM + " " + originalDensity);
     }
 
     /** With the config flipped, an overworld-placed terraformer with fuel +
      *  power must mutate dim 0's atmosphere density. */
     @Test
     public void overworldTerraformerWithNonStellurgyConfigFlipStepsDensity() throws Exception {
-        String flip = exec("stellurgytest config set allowTerraformNonStellurgy true");
+        String flip = arrange("stellurgytest config set allowTerraformNonStellurgy true").raw();
         assertTrue("config flip failed: " + flip,
                 Reply.of(flip).ok() && Reply.of(flip).bool("newValue"));
 
@@ -91,7 +91,7 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         // Explicit set to false (idempotent with the default) so a stale
         // value from a sibling test or harness boot can't masquerade as
         // a passing default-branch test.
-        String set = exec("stellurgytest config set allowTerraformNonStellurgy false");
+        String set = arrange("stellurgytest config set allowTerraformNonStellurgy false").raw();
         assertTrue("config set-false failed: " + set,
                 Reply.of(set).ok());
 
@@ -113,12 +113,12 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
     // ─── helpers ───────────────────────────────────────────────────────
 
     private String buildAndCompleteFixture(int cx) throws Exception {
-        String fixture = exec("stellurgytest fixture multiblock terraformer "
-                + DIM + " " + cx + " " + CY + " " + CZ);
+        String fixture = arrange("stellurgytest fixture multiblock terraformer "
+                + DIM + " " + cx + " " + CY + " " + CZ).raw();
         assertTrue("terraformer fixture build failed: " + fixture,
                 Reply.of(fixture).ok() && (Reply.of(fixture).integer("unresolved") == 0));
-        String tryComplete = exec("stellurgytest machine try-complete "
-                + DIM + " " + cx + " " + CY + " " + CZ);
+        String tryComplete = act("stellurgytest machine try-complete "
+                + DIM + " " + cx + " " + CY + " " + CZ).raw();
         assertTrue("terraformer structure failed to complete: " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
         return fixture;
@@ -130,14 +130,14 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         int px = m[0];
         int py = m[1];
         int pz = m[2];
-        String resp = exec("stellurgytest energy inject "
-                + DIM + " " + px + " " + py + " " + pz + " " + amount);
+        String resp = arrange("stellurgytest energy inject "
+                + DIM + " " + px + " " + py + " " + pz + " " + amount).raw();
         assertTrue("energy inject failed: " + resp, Reply.of(resp).ok());
     }
 
     private void enableMachine(int cx) throws Exception {
-        String resp = exec("stellurgytest machine set-enabled "
-                + DIM + " " + cx + " " + CY + " " + CZ + " true");
+        String resp = arrange("stellurgytest machine set-enabled "
+                + DIM + " " + cx + " " + CY + " " + CZ + " true").raw();
         assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled"));
     }
 
@@ -148,8 +148,8 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
             injectFluidAt(fixture, 1, "nitrogen", 16000);
             injectFluidAt(fixture, 2, "oxygen", 16000);
             injectFluidAt(fixture, 3, "oxygen", 16000);
-            String tick = exec("stellurgytest tile force-tick "
-                    + DIM + " " + cx + " " + CY + " " + CZ + " " + ticksPerIter);
+            String tick = act("stellurgytest tile force-tick "
+                    + DIM + " " + cx + " " + CY + " " + CZ + " " + ticksPerIter).raw();
             assertTrue("force-tick errored on iter " + i + ": " + tick,
                     Reply.of(tick).ok());
         }
@@ -164,21 +164,21 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         int lx = hatches[hatchIndex][0];
         int ly = hatches[hatchIndex][1];
         int lz = hatches[hatchIndex][2];
-        String resp = exec("stellurgytest fluid inject "
-                + DIM + " " + lx + " " + ly + " " + lz + " " + fluidName + " " + amount);
+        String resp = arrange("stellurgytest fluid inject "
+                + DIM + " " + lx + " " + ly + " " + lz + " " + fluidName + " " + amount).raw();
         assertTrue(fluidName + " inject failed at hatch " + hatchIndex + ": " + resp,
                 Reply.of(resp).ok());
     }
 
     private int readDensity() throws Exception {
-        String info = exec("stellurgytest terraforming info " + DIM);
+        String info = read("stellurgytest terraforming info " + DIM).raw();
         Reply mReply = Reply.of(info);
         assertTrue("no currentAtmosphere in terraforming info: " + info, mReply.has(CURRENT_ATMOS));
         return Integer.parseInt(mReply.text(CURRENT_ATMOS));
     }
 
     private boolean readBoolConfig(String key) throws Exception {
-        String resp = exec("stellurgytest config get " + key);
+        String resp = read("stellurgytest config get " + key).raw();
         Reply mReply = Reply.of(resp);
         assertTrue("config get " + key + " did not yield value: " + resp, mReply.has(CONFIG_VALUE));
         return Boolean.parseBoolean(mReply.text(CONFIG_VALUE));

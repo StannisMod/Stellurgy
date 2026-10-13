@@ -71,7 +71,7 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
 
     /** The sensor ticks in world {@link #DIM}, so its log is stepped by that world's clock. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), DIM, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), DIM, ticks), evictionReports());
 
     /** Each config key this scenario set, with the value it held before the scenario touched it. */
     private final Map<String, String> configBefore = new LinkedHashMap<>();
@@ -79,7 +79,7 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
     /** Whatever craft an earlier scenario left ticking in this world is not this one's to share. */
     @Before
     public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, DIM));
+        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), DIM));
     }
 
     @LegacyWitness(prose = "with {@code TacticalScan.isAboard}'s guard ({@code TacticalScan#isAboard} at {@code if (ownShipId == null)})"
@@ -105,13 +105,13 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         // The sensor goes on top of the pilot seat: the seat is a block this hull owns, and the block
         // above it is in the same chunk column of the yard. Whether it landed on THIS hull is then
         // read back from the same question production asks (registeredShipIdManagingBlock).
-        Reply seat = ask("stellurgytest vs find-seat " + DIM + " id " + hull).requireOk("find the hull's seat");
+        Reply seat = read("stellurgytest vs find-seat " + DIM + " id " + hull).requireOk("find the hull's seat");
         requireArranged("hull " + hull + " has no pilot seat to build on: " + seat, seat.bool("seatFound"));
         int sx = seat.integer("seatX"), sy = seat.integer("seatY") + 1, sz = seat.integer("seatZ");
-        Reply placed = ask("stellurgytest place " + DIM + " " + sx + " " + sy + " " + sz
+        Reply placed = arrange("stellurgytest place " + DIM + " " + sx + " " + sy + " " + sz
                 + " stellurgy:fireControlSensor").requireOk("place the sensor");
         requireArranged("the sensor was not placed: " + placed, placed.bool("placed"));
-        Reply owner = ask("stellurgytest vs managed-by " + DIM + " " + sx + " " + sy + " " + sz)
+        Reply owner = read("stellurgytest vs managed-by " + DIM + " " + sx + " " + sy + " " + sz)
                 .requireOk("ask which hull manages the sensor block");
         requireArranged("the sensor block is not a block of hull " + hull + ", so it is not a sensor on"
                 + " a ship: " + owner, hull.equals(owner.textOr("shipId", null)));
@@ -126,11 +126,11 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         // The two premises, read from the substrate's own containment (VSBridge.shipIdsAt — the very
         // test TacticalScan.isAboard makes): the deck spot is inside this hull's box, the open-air
         // spot inside no hull's box.
-        Reply onDeck = ask("stellurgytest vs ships-at " + DIM + " " + deck[0] + " " + deck[1] + " " + deck[2])
+        Reply onDeck = read("stellurgytest vs ships-at " + DIM + " " + deck[0] + " " + deck[1] + " " + deck[2])
                 .requireOk("ask which hulls contain the deck spot");
         requireArranged("the deck spot is not inside hull " + hull + "'s box: " + onDeck,
                 Arrays.asList(onDeck.textArray("ships")).contains(hull));
-        Reply inAir = ask("stellurgytest vs ships-at " + DIM + " " + air[0] + " " + air[1] + " " + air[2])
+        Reply inAir = read("stellurgytest vs ships-at " + DIM + " " + air[0] + " " + air[1] + " " + air[2])
                 .requireOk("ask which hulls contain the open-air spot");
         requireArranged("the open-air spot is inside a hull's box, so it is not off the ship: " + inAir,
                 inAir.integer("count") == 0);
@@ -194,11 +194,11 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         long mark = events.markInstrumented();
         // The fixture verb lays a 6x6 pad with its builder and tower one block outside it, and its
         // tallest part is that tower, six above the pad: a halo of 4 and a height of 12 contain it.
-        site.makeRoom(this::exec, 4, 12, "the craft the sensor is bolted to");
-        Reply fixture = ask("stellurgytest fixture rocket " + DIM + " " + site.x + " " + site.y + " " + site.z
+        site.makeRoom(c -> arrange(c).raw(), 4, 12, "the craft the sensor is bolted to");
+        Reply fixture = arrange("stellurgytest fixture rocket " + DIM + " " + site.x + " " + site.y + " " + site.z
                 + " with-pilot-seat").requireOk("lay the fixture");
         int[] builder = fixture.blockPos("builderPos");
-        Reply assembled = ask("stellurgytest rocket assemble " + DIM + " " + builder[0] + " " + builder[1]
+        Reply assembled = act("stellurgytest rocket assemble " + DIM + " " + builder[0] + " " + builder[1]
                 + " " + builder[2]).requireOk("assemble the fixture");
         requireArranged("the build did not become one ship (rockets " + assembled.integer("rocketCount")
                         + ", flight computers " + assembled.integer("afcCount") + "): " + assembled,
@@ -226,7 +226,7 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), DIM, 1);",
             why = "the one world tick between the two reads named above; the claim below names both.")
     private void parkStill(String hull) throws Exception {
-        ask("stellurgytest vs teleport-ship-by-id " + DIM + " " + hull + " " + PARK_X + " " + PARK_Y + " "
+        arrange("stellurgytest vs teleport-ship-by-id " + DIM + " " + hull + " " + PARK_X + " " + PARK_Y + " "
                 + PARK_Z).requireOk("park hull " + hull);
         Reply first = shipInfo(hull);
         GameTicks.advanceWorld(client(), DIM, 1);
@@ -244,13 +244,13 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
     }
 
     private Reply shipInfo(String hull) throws Exception {
-        Reply info = ask("stellurgytest vs ship-info " + DIM + " id " + hull);
+        Reply info = read("stellurgytest vs ship-info " + DIM + " id " + hull);
         requireArranged("hull " + hull + " is not loaded here: " + info, info.boolOr("managed", false));
         return info;
     }
 
     private double[] toWorld(String hull, double x, double y, double z) throws Exception {
-        Reply mapped = ask("stellurgytest vs to-world " + DIM + " id " + hull + " " + x + " " + y + " " + z)
+        Reply mapped = read("stellurgytest vs to-world " + DIM + " id " + hull + " " + x + " " + y + " " + z)
                 .requireOk("map a subspace point of the hull to the world");
         return new double[]{mapped.number("worldX"), mapped.number("worldY"), mapped.number("worldZ")};
     }
@@ -264,7 +264,7 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
      * and, unlike a zombie, does not catch fire in daylight — a burning body is a beacon.
      */
     private Creeper drop(double[] at, String what) throws Exception {
-        Reply spawned = ask("stellurgytest vs drop-living " + DIM + " minecraft:creeper " + at[0] + " " + at[1]
+        Reply spawned = arrange("stellurgytest vs drop-living " + DIM + " minecraft:creeper " + at[0] + " " + at[1]
                 + " " + at[2]);
         requireArranged("could not put down " + what + ": " + spawned,
                 spawned.bool("ok") && spawned.bool("found") && !spawned.bool("dead"));
@@ -282,11 +282,11 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         int cx2 = (int) Math.floor(Math.max(sensor[0], air[0]) + 16) >> 4;
         int cz1 = (int) Math.floor(sensor[2] - 16) >> 4;
         int cz2 = (int) Math.floor(sensor[2] + 16) >> 4;
-        ask("stellurgytest chunk warmup " + DIM + " " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
+        arrange("stellurgytest chunk warmup " + DIM + " " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                 .requireOk("load the chunks around the hull");
         for (int cx = cx1; cx <= cx2; cx++) {
             for (int cz = cz1; cz <= cz2; cz++) {
-                ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + cz).requireOk("hold a chunk");
+                arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + cz).requireOk("hold a chunk");
             }
         }
     }
@@ -297,17 +297,17 @@ public class ASensorAboardAShipTest extends AbstractSharedServerTest {
         if (!configBefore.containsKey(key)) {
             configBefore.put(key, configText(key));
         }
-        ask("stellurgytest config set " + key + " " + value).requireOk("set " + key);
+        arrange("stellurgytest config set " + key + " " + value).requireOk("set " + key);
     }
 
     private String configText(String key) throws Exception {
-        return ask("stellurgytest config get " + key).requireOk("read " + key).text("value");
+        return read("stellurgytest config get " + key).requireOk("read " + key).text("value");
     }
 
     @After
     public void restoreConfig() throws Exception {
         for (Map.Entry<String, String> key : configBefore.entrySet()) {
-            ask("stellurgytest config set " + key.getKey() + " " + key.getValue())
+            arrange("stellurgytest config set " + key.getKey() + " " + key.getValue())
                     .requireOk("restore " + key.getKey());
         }
         configBefore.clear();

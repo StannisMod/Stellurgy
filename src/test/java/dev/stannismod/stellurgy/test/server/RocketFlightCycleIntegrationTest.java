@@ -47,7 +47,7 @@ public class RocketFlightCycleIntegrationTest extends AbstractSharedServerTest {
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse("No Stellurgy dimensions registered",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -67,9 +67,9 @@ public class RocketFlightCycleIntegrationTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
@@ -111,10 +111,10 @@ public class RocketFlightCycleIntegrationTest extends AbstractSharedServerTest {
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 4000, 500));
 
-        Counts c0 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
+        Counts c0 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
 
-        ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
-        Counts c1 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " " + destDim));
+        Counts c1 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
         assertEquals("set-destination must not fire RocketLaunchEvent",
                 c0.launch, c1.launch);
         assertEquals("set-destination must not fire RocketReachesOrbitEvent",
@@ -122,8 +122,8 @@ public class RocketFlightCycleIntegrationTest extends AbstractSharedServerTest {
         assertEquals("set-destination must not fire RocketDismantleEvent",
                 c0.dismantle, c1.dismantle);
 
-        ok(client().execute("stellurgytest rocket launch " + id + " true instant"));
-        Counts c2 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
+        ok(client().act("stellurgytest rocket launch " + id + " true instant"));
+        Counts c2 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
         assertEquals("real launch must fire exactly one RocketLaunchEvent",
                 c1.launch + 1, c2.launch);
         assertEquals("launch must not fire RocketReachesOrbitEvent yet",
@@ -131,8 +131,8 @@ public class RocketFlightCycleIntegrationTest extends AbstractSharedServerTest {
         assertEquals("launch must not fire RocketDismantleEvent",
                 c1.dismantle, c2.dismantle);
 
-        ok(client().execute("stellurgytest rocket dismantle " + id));
-        Counts c3 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
+        ok(client().act("stellurgytest rocket dismantle " + id));
+        Counts c3 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
         assertEquals("dismantle must fire exactly one RocketDismantleEvent",
                 c2.dismantle + 1, c3.dismantle);
         assertEquals("dismantle must not fire any RocketLaunchEvent",
@@ -150,10 +150,10 @@ public class RocketFlightCycleIntegrationTest extends AbstractSharedServerTest {
         // events break mission integration), this test fails and the
         // assertion flips. Documents current contract.
         int id = buildAndAssemble(FixtureSite.openAir(0, 4100, 500));
-        Counts c0 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
-        ok(client().execute("stellurgytest rocket force-orbit-reached " + id));
-        ok(client().execute("stellurgytest rocket force-orbit-reached " + id));
-        Counts c1 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
+        Counts c0 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
+        ok(client().arrange("stellurgytest rocket force-orbit-reached " + id));
+        ok(client().arrange("stellurgytest rocket force-orbit-reached " + id));
+        Counts c1 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
         assertEquals("two force-orbit-reached calls must produce 2 events "
                 + "(no current idempotency guard in production)",
                 c0.orbit + 2, c1.orbit);
@@ -167,12 +167,12 @@ public class RocketFlightCycleIntegrationTest extends AbstractSharedServerTest {
         // posts a launch event during dismantle handling, this fails.
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 4200, 500));
-        ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
-        ok(client().execute("stellurgytest rocket launch " + id + " true instant"));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " " + destDim));
+        ok(client().act("stellurgytest rocket launch " + id + " true instant"));
 
-        Counts c0 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
-        ok(client().execute("stellurgytest rocket dismantle " + id));
-        Counts c1 = Counts.snapshot(client().execute("stellurgytest rocket event-counts"));
+        Counts c0 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
+        ok(client().act("stellurgytest rocket dismantle " + id));
+        Counts c1 = Counts.snapshot(client().read("stellurgytest rocket event-counts"));
 
         assertEquals("dismantle must NOT touch RocketLaunchEvent counter",
                 c0.launch, c1.launch);

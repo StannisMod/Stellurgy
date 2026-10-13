@@ -44,16 +44,16 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
     /** A run of pipe, with one block of {@code victim} standing against its middle, in clear air. */
     private void buildRig(int cx, String victim) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (y - 1) + " " + (z - 2)
-                + " " + (cx + PIPES + 2) + " " + (y + 2) + " " + (z + 2) + " minecraft:air");
+                + " " + (cx + PIPES + 2) + " " + (y + 2) + " " + (z + 2) + " minecraft:air").requireOk();
         for (int i = 0; i < PIPES; i++) {
             Reply placed = arrange("stellurgytest place 0 " + (cx + i) + " " + y + " " + z
-                    + " stellurgy:heatPipe");
+                    + " stellurgy:heatPipe").requireOk();
             assertTrue("pipe place failed: " + placed, placed.bool("placed"));
         }
         Reply victimPlaced = arrange("stellurgytest place 0 " + (cx + 1) + " " + (y + 1) + " " + z
-                + " " + victim);
+                + " " + victim).requireOk();
         assertTrue("victim place failed: " + victimPlaced, victimPlaced.bool("placed"));
-        Reply solved = arrange("stellurgytest subnet solve all 0 1");
+        Reply solved = act("stellurgytest subnet solve all 0 1").requireOk();
         assertEquals("the loop never solved: " + solved, 1, solved.integer("ticksSolved"));
     }
 
@@ -62,7 +62,7 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
     }
 
     private Reply materialAt(int x, int y) throws Exception {
-        return arrange("stellurgytest heat material 0 " + x + " " + y + " " + z);
+        return read("stellurgytest heat material 0 " + x + " " + y + " " + z).requireOk();
     }
 
     /**
@@ -72,23 +72,23 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      * the class, so it is put back as soon as the two ticks that need it have run.</p>
      */
     private void cookAt(int cx, long kelvin) throws Exception {
-        String pace = arrange("stellurgytest config get shipHeatMeltCheckTicks").text("value");
-        arrange("stellurgytest config set shipHeatMeltCheckTicks 1");
+        String pace = read("stellurgytest config get shipHeatMeltCheckTicks").requireOk().text("value");
+        arrange("stellurgytest config set shipHeatMeltCheckTicks 1").requireOk();
         try {
             cookWithTheSweepOnEveryTick(cx, kelvin);
         } finally {
-            arrange("stellurgytest config set shipHeatMeltCheckTicks " + pace);
+            arrange("stellurgytest config set shipHeatMeltCheckTicks " + pace).requireOk();
         }
     }
 
     private void cookWithTheSweepOnEveryTick(int cx, long kelvin) throws Exception {
-        Reply empty = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1");
+        Reply empty = act("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1").requireOk();
         requireArranged("premise: the pipes must form a loop: " + empty, empty.bool("inLoop"));
         long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass: " + empty, capacity > 0);
-        long ambient = arrange("stellurgytest config get shipHeatAmbientKelvin").longInteger("value");
+        long ambient = read("stellurgytest config get shipHeatAmbientKelvin").requireOk().longInteger("value");
         long charge = (kelvin - ambient) * capacity;
-        Reply cooked = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " 2");
+        Reply cooked = act("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " 2").requireOk();
         // The readback can legitimately find no loop: at a temperature past the PIPES' own material
         // the first swept tick takes them, which is the self-consumption scenario. Only a loop that
         // still exists is required to read the temperature it was charged to. The branch reads a

@@ -79,8 +79,8 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
     public void restoreConfig() throws Exception {
         // Restore so other tests (and the whitelist contract) aren't left
         // with the pinned mode / shrunk cap.
-        exec("stellurgytest config set oxygenVentSize " + originalVentSize);
-        exec("stellurgytest config set atmosphereHandleBitMask " + originalBitMask);
+        arrange("stellurgytest config set oxygenVentSize " + originalVentSize).raw();
+        arrange("stellurgytest config set atmosphereHandleBitMask " + originalBitMask);
     }
 
     /** Pins INV-ATM-08 (the blob is bounded by the vent size cap). */
@@ -111,41 +111,41 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
     // ─── helpers ───────────────────────────────────────────────────────
 
     private int readConfigInt(String key) throws Exception {
-        String resp = exec("stellurgytest config get " + key);
+        String resp = read("stellurgytest config get " + key).raw();
         Reply mReply = Reply.of(resp);
         assertTrue("could not read config " + key + ": " + resp, mReply.has(CFG_VALUE));
         return Integer.parseInt(mReply.text(CFG_VALUE));
     }
 
     private void setConfig(String key, int value) throws Exception {
-        String resp = exec("stellurgytest config set " + key + " " + value);
+        String resp = arrange("stellurgytest config set " + key + " " + value).raw();
         assertTrue("could not set config " + key + ": " + resp, Reply.of(resp).ok());
     }
 
     /** A fully enclosed 1×1×len air tube running +X from the vent, wrapped
      *  in a solid stone shell. */
     private void buildSealedCorridor(int cx, int len) throws Exception {
-        exec("stellurgytest fill " + DIM + " " + (cx - 1) + " " + (CY - 1) + " " + (CZ - 1)
+        arrange("stellurgytest fill " + DIM + " " + (cx - 1) + " " + (CY - 1) + " " + (CZ - 1)
                 + " " + (cx + len + 1) + " " + (CY + 2) + " " + (CZ + 1) + " minecraft:stone");
-        exec("stellurgytest fill " + DIM + " " + cx + " " + (CY + 1) + " " + CZ
+        arrange("stellurgytest fill " + DIM + " " + cx + " " + (CY + 1) + " " + CZ
                 + " " + (cx + len) + " " + (CY + 1) + " " + CZ + " minecraft:air");
     }
 
     private void sealVent(int cx) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + cx + " " + CY + " " + CZ
-                + " stellurgy:oxygenVent");
+        String resp = arrange("stellurgytest place " + DIM + " " + cx + " " + CY + " " + CZ
+                + " stellurgy:oxygenVent").raw();
         assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed"));
-        String e = exec("stellurgytest energy inject " + DIM + " " + cx + " " + CY + " " + CZ + " 1000000");
+        String e = arrange("stellurgytest energy inject " + DIM + " " + cx + " " + CY + " " + CZ + " 1000000").raw();
         assertTrue("energy inject failed: " + e, Reply.of(e).ok());
-        String o = exec("stellurgytest fluid inject " + DIM + " " + cx + " " + CY + " " + CZ + " oxygen 16000");
+        String o = arrange("stellurgytest fluid inject " + DIM + " " + cx + " " + CY + " " + CZ + " oxygen 16000").raw();
         assertTrue("oxygen inject failed: " + o, Reply.of(o).ok());
-        exec("stellurgytest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 1");
-        exec("stellurgytest vent reseal " + DIM + " " + cx + " " + CY + " " + CZ);
-        exec("stellurgytest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 5");
+        act("stellurgytest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 1");
+        arrange("stellurgytest vent reseal " + DIM + " " + cx + " " + CY + " " + CZ);
+        act("stellurgytest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 5");
     }
 
     private String atmosphereTypeAt(int x, int y, int z) throws Exception {
-        String info = exec("stellurgytest atmosphere get " + DIM + " " + x + " " + y + " " + z);
+        String info = read("stellurgytest atmosphere get " + DIM + " " + x + " " + y + " " + z).raw();
         Reply mReply = Reply.of(info);
         assertTrue("atmosphere type not found in: " + info, mReply.has(ATM_TYPE));
         return mReply.text(ATM_TYPE);

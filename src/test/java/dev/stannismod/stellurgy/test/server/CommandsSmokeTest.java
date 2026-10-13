@@ -24,7 +24,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
     @Pins("INV-CMD-07")
     @Test
     public void primaryCommandsAreRegistered() throws Exception {
-        String joined = String.join("\n", client().execute("stellurgytest commands list"));
+        String joined = String.join("\n", client().read("stellurgytest commands list"));
         // MEMBERSHIP of a list of names, asked of the list. As substrings over the rendering
         // these were satisfied by a name appearing anywhere — including inside a LONGER command
         // name, which is how `"ar"` could have been answered by `"stellurgytest"` had the quotes ever
@@ -44,7 +44,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
         // the server. The StellurgyCommandRoot tree prints its usage line
         // "/stellurgy [subcommand]" rather than the old WorldCommand
         // "Subcommands:" header.
-        String help = String.join("\n", client().execute("stellurgy help"));
+        String help = String.join("\n", client().read("stellurgy help"));
         assertTrue("Stellurgy help did not surface the command usage: " + help,
                 help.contains("/stellurgy") && help.contains("[subcommand]"));
     }

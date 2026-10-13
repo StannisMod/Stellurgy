@@ -141,15 +141,15 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         if (serverHarness == null) {
             return; // the arrangement never brought the pair up, so there is nothing of this scenario's
         }
-        exec("stellurgytest player dismount");
-        exec("stellurgytest player release");
+        arrange("stellurgytest player dismount");
+        act("stellurgytest player release");
         if (arrangedShipId != null) {
-            exec("stellurgytest space ledger-forget " + arrangedShipId);
+            arrange("stellurgytest space ledger-forget " + arrangedShipId);
         }
         if (scenarioSlotDim != Integer.MIN_VALUE) {
-            ShipReadiness.clearCraftFrom(this::exec, scenarioSlotDim);
+            ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), scenarioSlotDim);
         }
-        exec("stellurgytest tp " + OVERWORLD_DIM);
+        arrange("stellurgytest tp " + OVERWORLD_DIM);
     }
 
     /**
@@ -204,7 +204,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         String tag = standUpAndAwaitTheStandingRecord(serverEvents());
         requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
                 Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
-        DeckCapture capBefore = DeckCapture.read(this::exec);
+        DeckCapture capBefore = DeckCapture.read(c -> read(c).raw());
         requireArranged("he must be captured ABOARD the deck before the relog, or the leg is "
                         + "not about a restored deck capture at all: " + capBefore.raw(),
                 capBefore.alreadyTracked
@@ -212,7 +212,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         // On HIS deck. The capture's anchor is the PHYSICS id, and this scenario holds the durable
         // one, so the two are bridged by name rather than by asking what is standing at his feet.
         capBefore.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
+                ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), slotDim, arrangedShipId,
                         200),
                 "the capture the relog must restore is the one on THIS scenario's own deck");
 
@@ -237,7 +237,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         // LEFT RAW: the subject here IS the error shape. `PlayerPosition` refuses it — it must,
         // because read as a position that reply puts him at the origin of the overworld, and every
         // other site in this family is asserting which world he is in.
-        String offline = exec("stellurgytest player position-of " + BOT);
+        String offline = read("stellurgytest player position-of " + BOT).raw();
         // absence is the answer: a player who is still connected answers a POSITION and no
         // `error` at all, so "no error" is the world this claim is measured against.
         requireArranged("the server must see him GONE after the disconnect, or nothing below "
@@ -313,12 +313,12 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
                 Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
         // Read ONCE: the two-exec idiom this replaces diagnosed from a different sample than the one
         // that decided the line, and under load the two disagree.
-        DeckCapture capUpright = DeckCapture.read(this::exec);
+        DeckCapture capUpright = DeckCapture.read(c -> read(c).raw());
         requireArranged("he must be captured on the deck while the ship is still upright: "
                         + capUpright.raw(),
                 capUpright.alreadyTracked);
         capUpright.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
+                ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), slotDim, arrangedShipId,
                         200),
                 "the deck he stands on before the roll must be his own ship's");
 
@@ -349,15 +349,15 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         // from a mark taken before the command.
         Events rollLog = serverEvents();
         long rollMark = rollLog.markInstrumented();
-        String rolled = exec("stellurgytest vs point-at " + slotDim + " " + arrangedAfcPos
-                + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
+        String rolled = arrange("stellurgytest vs point-at " + slotDim + " " + arrangedAfcPos
+                + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0").raw();
         requireArranged("the roll must reach THIS ship's own flight computer: " + rolled,
                 Reply.of(rolled).bool("commanded"));
         // Read BY NAME, both times. This used to be "the ship nearest (0,0,0) in the slot", with a
         // one-ship count asserted first as its premise — but a count of one is not evidence that the
         // one is THIS craft, and the case where it is not is exactly the case where this scenario's
         // ship failed to load and something else did.
-        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
+        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), slotDim, arrangedShipId,
                 200);
         ArrangementFailure.arranged(() -> rollLog.awaitMatching(rollMark, "afc_attitude",
                 reply -> Events.recordsWhereAll(reply, "vsShip", rolledShipId, "via", "probe").stream()
@@ -366,7 +366,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
                 "the ship must be (near-)inverted before the relog, or this leg is silently the upright one"
                         + " again",
                 ROLL_TO_INVERTED_BUDGET_TICKS));
-        DeckCapture capInverted = DeckCapture.read(this::exec);
+        DeckCapture capInverted = DeckCapture.read(c -> read(c).raw());
         requireArranged("he must still be captured on the INVERTED deck: " + capInverted.raw(),
                 capInverted.alreadyTracked);
         // The INVERTED one — this ship, the one the roll above was addressed to. A capture that
@@ -389,7 +389,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
                 // ONE logout record saying both: two field tests are satisfied by a tagged logout
                 // beside a different record whose posture happens to be STANDING.
                 Events.anyRecordHasAll(loggedOut, "tagged", "true", "posture", "STANDING"));
-        String offline = exec("stellurgytest player position-of " + BOT);
+        String offline = read("stellurgytest player position-of " + BOT).raw();
         // absence is the answer: a player who is still connected answers a POSITION and no
         // `error` at all, so "no error" is the world this claim is measured against.
         requireArranged("the server must see him GONE after the disconnect: " + offline,
@@ -449,7 +449,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         Events events = serverEvents();
         long mark = events.markInstrumented();
 
-        String forgot = exec("stellurgytest space ledger-forget " + arrangedShipId);
+        String forgot = arrange("stellurgytest space ledger-forget " + arrangedShipId).raw();
         assertTrue("arrangement: the ledger must have KNOWN this ship before being told to forget it - "
                 + "otherwise the login below is about a ship that never existed: " + forgot,
                 readBool(forgot, "wasKnown"));
@@ -471,7 +471,7 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         // world it was in while the server has him in the overworld — a filed, pre-existing split of
         // the orphan path that this test must not read as the placement being broken.
         // `playerDimField` is quoted beside `playerDim` because they are maintained separately.
-        PlayerPosition serverPos = PlayerPosition.of(this::exec, BOT);
+        PlayerPosition serverPos = PlayerPosition.of(c -> read(c).raw(), BOT);
         JsonObject riding = bot().reportRidingEntity();
         assertEquals("the server must actually have placed him out of the cell, or the message is "
                         + "describing something that did not happen: " + serverPos.raw()

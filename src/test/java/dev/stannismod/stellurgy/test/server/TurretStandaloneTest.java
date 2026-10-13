@@ -51,7 +51,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @LegacyWitness(prose = "with {@code TileTurret#update} at {@code if (!onTarget || isHoldingFire() || !canFireNow())}'s automatic path made to return before"
             + " {@code launch}, this fails with \"a gun with a target, a charge and no network never fired — no"
@@ -120,7 +120,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
         long shotId = (long) Events.number(Weapons.awaitFired(events, aimed, bx, Y, Z,
                 "the gun aimed straight up never fired"), "shot");
 
-        Reply read = ask("stellurgytest shot read 0 " + shotId).requireOk("read the round");
+        Reply read = read("stellurgytest shot read 0 " + shotId).requireOk("read the round");
         assertTrue("the gun reported a shot the substrate does not have: " + read, read.bool("present"));
         Reply shot = Reply.of("the round", read.object("shot"));
         assertEquals("the round is not worth what the build says it is worth: " + shot,
@@ -216,8 +216,8 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
         buildSite(bx);
         long built = events.markInstrumented();
         buildGun(bx);
-        Reply.of(exec("stellurgytest turret target 0 " + bx + " " + Y + " " + Z + " " + (bx + 40.5D) + " "
-                + (Y + 0.5D) + " " + (Z + 0.5D))).requireOk("aim the gun at a point 40 blocks along +X");
+        Reply.of(arrange("stellurgytest turret target 0 " + bx + " " + Y + " " + Z + " " + (bx + 40.5D) + " "
+                + (Y + 0.5D) + " " + (Z + 0.5D)).raw()).requireOk("aim the gun at a point 40 blocks along +X");
 
         // The link that says the gun is assembled, on target and waiting: the automatic path only asks
         // the fire question once the mount answers "on target". The budget is a deadline for the
@@ -229,13 +229,13 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
         assertEquals("the gun was waiting for something other than energy: " + waiting, 0,
                 (int) Events.number(waiting, "energy"));
 
-        Reply killed = Reply.of(exec("stellurgytest turret drive 0 " + bx + " " + Y + " " + Z + " DEAD"))
+        Reply killed = Reply.of(arrange("stellurgytest turret drive 0 " + bx + " " + Y + " " + Z + " DEAD").raw())
                 .requireOk("kill the drive");
         assertEquals("the drive state was not the one that was set: " + killed, "DEAD",
                 killed.text("drive"));
 
         long charged = events.mark();
-        int energy = Reply.of(exec("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z))
+        int energy = Reply.of(arrange("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z).raw())
                 .requireOk("charge the gun").integer("energy");
         assertTrue("a full charge left the gun empty, so nothing is being refused for the drive's sake",
                 energy > 0);
@@ -253,7 +253,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
 
         // The control: the same gun, the same target, the same charge, and a working drive.
         long restored = events.mark();
-        Reply.of(exec("stellurgytest turret drive 0 " + bx + " " + Y + " " + Z + " WORKING"))
+        Reply.of(arrange("stellurgytest turret drive 0 " + bx + " " + Y + " " + Z + " WORKING").raw())
                 .requireOk("give the drive back");
         events.awaitRecordWithFields(restored, "turret_fired",
                 "the same gun with its drive given back never fired, so the silence above was not the"
@@ -283,7 +283,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
         charge(bx);
 
         // A wall across the line of fire, just past where the muzzle sits.
-        ask("stellurgytest fill 0 " + (bx + 6) + " " + (Y - 1) + " " + (Z - 2) + " " + (bx + 7) + " "
+        arrange("stellurgytest fill 0 " + (bx + 6) + " " + (Y - 1) + " " + (Z - 2) + " " + (bx + 7) + " "
                 + (Y + 2) + " " + (Z + 2) + " minecraft:stone").requireOk("build the wall");
         long walled = events.mark();
         target(bx, (bx + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D));
@@ -301,7 +301,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
 
         // The control: take the wall away and the same gun, same target, fires.
         long cleared = events.mark();
-        ask("stellurgytest fill 0 " + (bx + 6) + " " + (Y - 1) + " " + (Z - 2) + " " + (bx + 7) + " "
+        arrange("stellurgytest fill 0 " + (bx + 6) + " " + (Y - 1) + " " + (Z - 2) + " " + (bx + 7) + " "
                 + (Y + 2) + " " + (Z + 2) + " minecraft:air").requireOk("clear the wall");
         Weapons.awaitFired(events, cleared, bx, Y, Z, "with the obstruction gone the gun still refuses"
                 + " to fire, so the hold was not about the wall");
@@ -390,13 +390,13 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
         // A target it WOULD engage on its own, so "did not fire" is about the mode.
         long taken = events.mark();
         target(bx, (bx + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D));
-        Reply manual = ask("stellurgytest turret manual 0 " + bx + " " + Y + " " + Z + " true")
+        Reply manual = arrange("stellurgytest turret manual 0 " + bx + " " + Y + " " + Z + " true")
                 .requireOk("take manual control");
         assertTrue("the gun did not enter manual control: " + manual, manual.bool("manual"));
 
         // It obeys a hand-given bearing...
         long bearing = events.mark();
-        ask("stellurgytest turret bearing 0 " + bx + " " + Y + " " + Z + " -90 0").requireOk("hand it a bearing");
+        arrange("stellurgytest turret bearing 0 " + bx + " " + Y + " " + Z + " -90 0").requireOk("hand it a bearing");
         String arrived = events.awaitRecordWithFields(bearing, "turret_aim",
                 "the mount never arrived at the bearing it was handed", Weapons.SUBJECT_TICKS,
                 "pos", Weapons.at(bx, Y, Z), "onTarget", "true", "manual", "true");
@@ -405,7 +405,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
 
         // ...and fires when the trigger is pulled, once per pull.
         long pulled = events.mark();
-        Reply shot = ask("stellurgytest turret fire 0 " + bx + " " + Y + " " + Z).requireOk("pull the trigger");
+        Reply shot = act("stellurgytest turret fire 0 " + bx + " " + Y + " " + Z).requireOk("pull the trigger");
         assertTrue("the trigger did nothing: " + shot + " state: " + read(bx), shot.bool("fired"));
         List<String> perPull = Weapons.firedSince(events, pulled, bx, Y, Z);
         assertEquals("one pull fired other than one round: " + perPull, 1, perPull.size());
@@ -421,7 +421,7 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
 
         // Returning it to automatic re-engages the target it was given.
         long returned = events.mark();
-        ask("stellurgytest turret manual 0 " + bx + " " + Y + " " + Z + " false").requireOk("hand it back");
+        arrange("stellurgytest turret manual 0 " + bx + " " + Y + " " + Z + " false").requireOk("hand it back");
         charge(bx);
         String resumed = Weapons.awaitFired(events, returned, bx, Y, Z,
                 "the gun never went back to firing on its own");
@@ -452,27 +452,27 @@ public class TurretStandaloneTest extends AbstractSharedServerTest {
 
     /** Air around the site, and a chunk that stays loaded so the gun's own tile actually ticks. */
     private void buildSite(int bx) throws Exception {
-        ask("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((bx + 64) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill 0 " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60) + " "
+        arrange("stellurgytest fill 0 " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60) + " "
                 + (Y + 12) + " " + (Z + 4) + " minecraft:air").requireOk("clear the site");
-        ask("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (Z >> 4)).requireOk("hold the chunk");
+        arrange("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (Z >> 4)).requireOk("hold the chunk");
     }
 
     private void charge(int bx) throws Exception {
-        ask("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z).requireOk("charge the gun");
+        arrange("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z).requireOk("charge the gun");
     }
 
     private void target(int bx, String point) throws Exception {
-        ask("stellurgytest turret target 0 " + bx + " " + Y + " " + Z + " " + point).requireOk("aim the gun");
+        arrange("stellurgytest turret target 0 " + bx + " " + Y + " " + Z + " " + point).requireOk("aim the gun");
     }
 
     private Reply read(int bx) throws Exception {
-        return ask("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
+        return read("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + ": " + placed,
                 placed.bool("placed"));
     }

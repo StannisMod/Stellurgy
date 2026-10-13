@@ -100,12 +100,12 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
         // The guard has two branches and this one is only reachable while the station registry is
         // EMPTY. On a shared world that is a property of the run, not of the boot, so it is checked
         // rather than assumed — see the class javadoc.
-        String list = exec("stellurgytest station list");
+        String list = read("stellurgytest station list").raw();
         scenario().requireArranged("this scenario exercises the NO-STATION branch, so the registry"
                 + " must still be empty when it runs; it holds: " + list,
                 (Reply.of(list).arrayLength("stations") == 0));
 
-        PlayerState pre = PlayerState.read(this::exec);
+        PlayerState pre = PlayerState.read(c -> read(c).raw());
         scenario().requireArranged("baseline must be overworld dim 0; " + pre.raw(), 0 == pre.dim);
 
         scenario().asserting("the guard transfers a station-less player back to the overworld");
@@ -117,7 +117,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
         Events clientLog = clientEvents();
         long clientMark = clientLog.mark();
 
-        exec("stellurgytest tp " + SPACE_DIM);
+        arrange("stellurgytest tp " + SPACE_DIM);
 
         // The guard's own commit, on the server: it hands the body to a BasicTeleporter bound for
         // dim 0 (the no-station branch), and that teleporter's placement is the link. The
@@ -136,7 +136,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
                 "the player whose body the guard moved must SEE the overworld, not merely be"
                         + " reported there", GUARD_LINK_BUDGET_TICKS);
 
-        PlayerState after = PlayerState.read(this::exec);
+        PlayerState after = PlayerState.read(c -> read(c).raw());
         assertEquals("no-station fallback must transfer player back to overworld; player is in dim "
                 + after.dim + " — " + after.raw(), 0, after.dim);
     }
@@ -157,13 +157,13 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
     public void registeredStationTeleportTargetsStationSpawn() throws Exception {
         scenario().arranging("create a station orbiting the overworld")
                 .describeOnFailureWith("stellurgytest station list", "stellurgytest player health");
-        String createResp = exec("stellurgytest station create " + plot().dim);
+        String createResp = arrange("stellurgytest station create " + plot().dim).raw();
         scenario().requireArranged("station create must succeed: " + createResp,
                 !Reply.of(createResp).has("error"));
         int stationId = intField(STATION_ID, createResp, "station id");
         scenario().record("stationId", stationId);
 
-        StationInfo info = StationInfo.byId(this::exec, stationId);
+        StationInfo info = StationInfo.byId(c -> read(c).raw(), stationId);
         int spawnX = info.spawnX();
         int spawnY = info.spawnY();
         int spawnZ = info.spawnZ();
@@ -177,7 +177,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
         scenario().asserting("the guard puts an out-of-bounds player on the station's spawn");
         Events events = serverEvents();
         long mark = events.markInstrumented();
-        exec("stellurgytest tp " + SPACE_DIM);
+        arrange("stellurgytest tp " + SPACE_DIM);
         // ARRANGEMENT, and it is a LINK rather than a budget: vanilla /tp moves a body WITHIN the
         // world it is in, so the transfer into the space dim must have landed before the /tp below
         // is issued or the whole scenario runs in the overworld at the right coordinates. The
@@ -193,7 +193,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
         // where the guard must act on it — which is what makes the wait below a link and not a
         // sample taken after the fact.
         long guardMark = events.markInstrumented();
-        exec("tp @a 50000 100 50000");
+        arrange("tp @a 50000 100 50000");
 
         // THE GUARD'S OWN ACT, awaited as a record. This was a poll of the body's X until it had
         // moved a block, defended in place by the fact that the station branch commits through
@@ -233,7 +233,7 @@ public class SpaceDimGuardTest extends AbstractSharedClientTest {
                         + " station spawn — this is the act the scenario is about, and it is a"
                         + " discrete decision production takes, not a value that settles",
                 GUARD_LINK_BUDGET_TICKS);
-        PlayerState after = PlayerState.read(this::exec);
+        PlayerState after = PlayerState.read(c -> read(c).raw());
         int dim = after.dim;
         assertEquals("player must remain in the space dim — he should be teleported to the "
                 + "station's spawn, not back to overworld; dim=" + dim + " " + after,

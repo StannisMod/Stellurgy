@@ -50,7 +50,7 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
         stock(A, 0, 3, 100);
         stock(A, 1, 2, 200);
 
-        String copied = exec("stellurgytest nav copy " + A);
+        String copied = act("stellurgytest nav copy " + A).raw();
 
         assertTrue("the copy must report the three new addresses: " + copied,
                 (Reply.of(copied).integer("changed") == SOURCE_ADDRESSES));
@@ -65,10 +65,10 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
         placeComputer(A);
         stock(A, 0, 3, 300);
         stock(A, 1, 2, 400);
-        exec("stellurgytest nav copy " + A);
+        act("stellurgytest nav copy " + A);
 
-        String erased = exec("stellurgytest nav erase " + A);
-        NavStatus status = NavStatus.of(exec("stellurgytest nav status " + A));
+        String erased = act("stellurgytest nav erase " + A).raw();
+        NavStatus status = NavStatus.of(read("stellurgytest nav status " + A).raw());
 
         assertTrue("the source must be blank after an erase: " + erased,
                 (Reply.of(erased).integer("source") == 0));
@@ -78,7 +78,7 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
 
     @Test
     public void theJumpGateRefusesAShipWithNoNavigationComputer() throws Exception {
-        String verdict = exec("stellurgytest nav gate 0 500 82 500");
+        String verdict = arrange("stellurgytest nav gate 0 500 82 500").raw();
 
         assertTrue("a ship with no navigation computer cannot jump: " + verdict,
                 (!Reply.of(verdict).bool("allowed")));
@@ -89,10 +89,10 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
     @Test
     public void aLinkedComputerWithoutATargetStillRefuses() throws Exception {
         placeComputer(A);
-        exec("stellurgytest nav link " + A + " " + AFC);
-        exec("stellurgytest nav cleartarget " + A);
+        arrange("stellurgytest nav link " + A + " " + AFC);
+        arrange("stellurgytest nav cleartarget " + A);
 
-        String verdict = exec("stellurgytest nav gate 0 " + AFC);
+        String verdict = arrange("stellurgytest nav gate 0 " + AFC).raw();
 
         assertTrue("having a computer is not having a destination: " + verdict,
                 (!Reply.of(verdict).bool("allowed")));
@@ -106,10 +106,10 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
         // Knowing where you want to go is not a way of getting there. Before the hyperdrive family
         // existed this ship would have cleared the gate and then had nothing to jump WITH.
         placeComputer(A);
-        exec("stellurgytest nav link " + A + " " + AFC_NO_DRIVE);
-        exec("stellurgytest nav target " + A + " 7 0 0");
+        arrange("stellurgytest nav link " + A + " " + AFC_NO_DRIVE);
+        arrange("stellurgytest nav target " + A + " 7 0 0");
 
-        String verdict = exec("stellurgytest nav gate 0 " + AFC_NO_DRIVE);
+        String verdict = arrange("stellurgytest nav gate 0 " + AFC_NO_DRIVE).raw();
 
         assertTrue("a ship with no field generator cannot jump, however well it is aimed: " + verdict,
                 (!Reply.of(verdict).bool("allowed")));
@@ -119,12 +119,12 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
     @Test
     public void aComputerATargetAndAChargedDriveClearTheGate() throws Exception {
         placeComputer(A);
-        exec("stellurgytest nav link " + A + " " + AFC);
-        exec("stellurgytest nav target " + A + " 7 0 0");
-        exec("stellurgytest drive build 0 " + AFC);
-        exec("stellurgytest drive charge 0 " + AFC + " full");
+        arrange("stellurgytest nav link " + A + " " + AFC);
+        arrange("stellurgytest nav target " + A + " 7 0 0");
+        arrange("stellurgytest drive build 0 " + AFC);
+        arrange("stellurgytest drive charge 0 " + AFC + " full");
 
-        String verdict = exec("stellurgytest nav gate 0 " + AFC);
+        String verdict = arrange("stellurgytest nav gate 0 " + AFC).raw();
 
         assertTrue("computer aboard, position known, target set, a drive and the burst to open the "
                 + "window - nothing refuses this: " + verdict, Reply.of(verdict).bool("allowed"));
@@ -135,14 +135,14 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
     @Test
     public void anEmptyCapacitorRefusesTheJumpUntilItHasCharged() throws Exception {
         placeComputer(A);
-        exec("stellurgytest nav link " + A + " " + AFC);
-        exec("stellurgytest nav target " + A + " 7 0 0");
-        exec("stellurgytest drive build 0 " + AFC);
+        arrange("stellurgytest nav link " + A + " " + AFC);
+        arrange("stellurgytest nav target " + A + " 7 0 0");
+        arrange("stellurgytest drive build 0 " + AFC);
 
-        String flat = exec("stellurgytest drive charge 0 " + AFC + " empty");
-        String refused = exec("stellurgytest nav gate 0 " + AFC);
-        exec("stellurgytest drive charge 0 " + AFC + " full");
-        String allowed = exec("stellurgytest nav gate 0 " + AFC);
+        String flat = arrange("stellurgytest drive charge 0 " + AFC + " empty").raw();
+        String refused = arrange("stellurgytest nav gate 0 " + AFC).raw();
+        arrange("stellurgytest drive charge 0 " + AFC + " full");
+        String allowed = arrange("stellurgytest nav gate 0 " + AFC).raw();
 
         assertTrue("precondition: the bank really is empty: " + flat, (Reply.of(flat).integer("charge") == 0));
         assertTrue("without the burst the window does not open at all: " + refused,
@@ -155,14 +155,14 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
     @Test
     public void aHandTypedCoordinateIsAcceptedAsATarget() throws Exception {
         placeComputer(A);
-        exec("stellurgytest nav link " + A + " " + AFC);
+        arrange("stellurgytest nav link " + A + " " + AFC);
 
-        exec("stellurgytest drive build 0 " + AFC);
-        exec("stellurgytest drive charge 0 " + AFC + " full");
+        arrange("stellurgytest drive build 0 " + AFC);
+        arrange("stellurgytest drive charge 0 " + AFC + " full");
 
         // Nothing has ever surveyed sector 4242: aiming there is legal, and reckless, on purpose.
-        String aimed = exec("stellurgytest nav target " + A + " 4242 0 0");
-        String verdict = exec("stellurgytest nav gate 0 " + AFC);
+        String aimed = arrange("stellurgytest nav target " + A + " 4242 0 0").raw();
+        String verdict = arrange("stellurgytest nav gate 0 " + AFC).raw();
 
         assertTrue("an unsurveyed coordinate is still a coordinate: " + aimed,
                 "4242_0_0".equals(Reply.of(aimed).text("target")));
@@ -177,11 +177,11 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
         stock(A, 1, 3, 600);
         stock(B, 1, 2, 700);
 
-        String synced = exec("stellurgytest nav sync " + A + " 42");
-        NavStatus peerBefore = NavStatus.of(exec("stellurgytest nav status " + B));
-        exec("stellurgytest nav sync " + B + " 42");
-        NavStatus peer = NavStatus.of(exec("stellurgytest nav status " + B));
-        NavStatus self = NavStatus.of(exec("stellurgytest nav status " + A));
+        String synced = act("stellurgytest nav sync " + A + " 42").raw();
+        NavStatus peerBefore = NavStatus.of(read("stellurgytest nav status " + B).raw());
+        act("stellurgytest nav sync " + B + " 42");
+        NavStatus peer = NavStatus.of(read("stellurgytest nav status " + B).raw());
+        NavStatus self = NavStatus.of(read("stellurgytest nav status " + A).raw());
 
         assertTrue("the sync must report moving addresses: " + synced,
                 Reply.of(synced).has("changed"));
@@ -204,8 +204,8 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
         stock(A, 1, 3, 800);
         stock(B, 1, 2, 900);
 
-        String synced = exec("stellurgytest nav sync " + A + " 0");
-        NavStatus self = NavStatus.of(exec("stellurgytest nav status " + A));
+        String synced = act("stellurgytest nav sync " + A + " 0").raw();
+        NavStatus self = NavStatus.of(read("stellurgytest nav status " + A).raw());
 
         assertTrue("channel 0 must move nothing: " + synced, (Reply.of(synced).integer("changed") == 0));
         assertTrue("a computer nobody put on a channel must not pool its knowledge: " + self.raw(),
@@ -213,15 +213,15 @@ public class NavigationComputerTest extends AbstractSharedServerTest {
     }
 
     private void placeComputer(String at) throws Exception {
-        String placed = exec("stellurgytest nav place " + at);
+        String placed = arrange("stellurgytest nav place " + at).raw();
         assertTrue("the navigation computer must be placeable: " + placed, Reply.of(placed).ok());
-        exec("stellurgytest nav sync " + at + " 0"); // a fresh block starts on no channel
-        exec("stellurgytest nav cleartarget " + at);
+        act("stellurgytest nav sync " + at + " 0"); // a fresh block starts on no channel
+        arrange("stellurgytest nav cleartarget " + at).raw();
     }
 
     private void stock(String at, int slot, int addresses, int firstSector) throws Exception {
-        String stocked = exec("stellurgytest nav crystal " + at + " " + slot + " " + addresses
-                + " " + firstSector + " 1");
+        String stocked = arrange("stellurgytest nav crystal " + at + " " + slot + " " + addresses
+                + " " + firstSector + " 1").raw();
         assertTrue("the probe must stock the crystal: " + stocked, Reply.of(stocked).ok());
     }
 }

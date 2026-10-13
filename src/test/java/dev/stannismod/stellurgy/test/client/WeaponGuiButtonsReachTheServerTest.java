@@ -65,7 +65,7 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
             + " (2026-09-30, on the pre-fix tree; green once the press became a packet the same day).")
     @Test
     public void theConsolesHoldFireButtonHoldsTheBatteryOnTheServer() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int gunX = X + 3, consoleX = X + 4;
@@ -73,12 +73,12 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
         buildGun(gunX);
         Weapons.awaitAssembled(server, built, gunX, Y, Z, PARTS, "the gun never assembled");
         placeBlock("stellurgy:weaponConsole", consoleX, Y, Z);
-        ask("stellurgytest turret charge " + DIM + " " + gunX + " " + Y + " " + Z).requireOk("charge the gun");
+        arrange("stellurgytest turret charge " + DIM + " " + gunX + " " + Y + " " + Z).requireOk("charge the gun");
 
         // The console's target, given the way every other test gives it: the arrangement, not the
         // subject. The gun firing on it proves the console commands the gun before any button.
         long ordered = server.mark();
-        Reply applied = ask("stellurgytest weaponconsole target " + DIM + " " + consoleX + " " + Y + " " + Z
+        Reply applied = arrange("stellurgytest weaponconsole target " + DIM + " " + consoleX + " " + Y + " " + Z
                 + " " + (gunX + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("give the console a target");
         requireArranged("the console refused the target: " + applied, applied.bool("applied"));
         Weapons.awaitFired(server, ordered, gunX, Y, Z,
@@ -90,7 +90,7 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
 
         long pressed = server.mark();
         bot().clickButtonById(CONSOLE_HOLD_FIRE_BUTTON);
-        ask("stellurgytest turret charge " + DIM + " " + gunX + " " + Y + " " + Z).requireOk("recharge the gun");
+        arrange("stellurgytest turret charge " + DIM + " " + gunX + " " + Y + " " + Z).requireOk("recharge the gun");
         server.awaitRecordWithFields(pressed, "turret_hold_decided",
                 "the console's Hold Fire button was pressed and the battery never held fire on the"
                         + " server: the press never left the client",
@@ -128,7 +128,7 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
             + " ticks\" (2026-10-01).")
     @Test
     public void theConsolesScreenShowsTheServersNetwork() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int gunX = X + 3, consoleX = X + 4;
@@ -136,9 +136,9 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
         buildGun(gunX);
         Weapons.awaitAssembled(server, built, gunX, Y, Z, PARTS, "the gun never assembled");
         placeBlock("stellurgy:weaponConsole", consoleX, Y, Z);
-        ask("stellurgytest turret charge " + DIM + " " + gunX + " " + Y + " " + Z).requireOk("charge the gun");
+        arrange("stellurgytest turret charge " + DIM + " " + gunX + " " + Y + " " + Z).requireOk("charge the gun");
         String console = DIM + " " + consoleX + " " + Y + " " + Z;
-        Reply before = ask("stellurgytest weaponconsole read " + console).requireOk("read the console on the server");
+        Reply before = read("stellurgytest weaponconsole read " + console).requireOk("read the console on the server");
         requireArranged("the console is not commanding the one gun beside it on the server, so its"
                 + " screen has nothing to show: " + before, before.bool("network") && before.integer("guns") == 1);
 
@@ -149,7 +149,7 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
         String shown = client.awaitRecordWithFields(opened, "client_console_readout",
                 "the console's screen never showed the server's battery — one gun, not holding",
                 Weapons.SUBJECT_TICKS, "pos", Weapons.at(consoleX, Y, Z), "guns", "1", "holding", "false");
-        Reply after = ask("stellurgytest weaponconsole read " + console).requireOk("read the console again");
+        Reply after = read("stellurgytest weaponconsole read " + console).requireOk("read the console again");
         String screenStatus = Events.text(shown, "status");
         assertTrue("the console's screen shows network status '" + screenStatus + "', which the server's"
                         + " network was in neither before the screen opened ('" + before.text("status")
@@ -180,13 +180,13 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
             + " (2026-09-30, on the pre-fix tree; green once the press became a packet the same day).")
     @Test
     public void theSensorsModeButtonSwitchesTheSensorOnTheServer() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         prepareSite();
         int sensorX = X + 7;
         long placed = server.markInstrumented();
         placeBlock("stellurgy:fireControlSensor", sensorX, Y, Z);
-        ask("stellurgytest sensor charge " + DIM + " " + sensorX + " " + Y + " " + Z).requireOk("charge the sensor");
+        arrange("stellurgytest sensor charge " + DIM + " " + sensorX + " " + Y + " " + Z).requireOk("charge the sensor");
         String passive = server.awaitRecordWithFields(placed, "sensor_swept",
                 "the sensor never swept, so its mode was never decided on the server",
                 Weapons.ARRANGEMENT_TICKS, "pos", Weapons.at(sensorX, Y, Z));
@@ -210,14 +210,14 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
 
     /** Air round the site, a stone floor to stand on. */
     private void prepareSite() throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((X + 64) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill " + DIM + " " + (X - 3) + " " + Y + " " + (Z - 4) + " " + (X + 60) + " "
+        arrange("stellurgytest fill " + DIM + " " + (X - 3) + " " + Y + " " + (Z - 4) + " " + (X + 60) + " "
                 + (Y + 8) + " " + (Z + 3) + " minecraft:air").requireOk("clear the site");
-        ask("stellurgytest fill " + DIM + " " + (X - 3) + " " + (Y - 1) + " " + (Z - 4) + " " + (X + 12) + " "
+        arrange("stellurgytest fill " + DIM + " " + (X - 3) + " " + (Y - 1) + " " + (Z - 4) + " " + (X + 12) + " "
                 + (Y - 1) + " " + (Z + 3) + " minecraft:stone").requireOk("lay the floor");
         for (int cx = (X - 16) >> 4; cx <= (X + 64) >> 4; cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
     }
 
@@ -232,20 +232,21 @@ public class WeaponGuiButtonsReachTheServerTest extends AbstractOwnBootClientTes
 
     /** On the floor, a couple of blocks in front of the row, within reach of every block in it. */
     private void standBeside() throws Exception {
-        exec("tp @a " + (X + 4.5D) + " " + Y + " " + (Z - 2.5D) + " 0 30");
+        arrange("tp @a " + (X + 4.5D) + " " + Y + " " + (Z - 2.5D) + " 0 30");
     }
 
     private void placeBlock(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
         requireArranged("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    /** A vanilla command, whose reply is chat rather than JSON and is not read. */
-    private String exec(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
     }
 }

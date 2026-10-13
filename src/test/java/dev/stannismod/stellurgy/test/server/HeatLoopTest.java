@@ -178,7 +178,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
                     0L, off.longInteger("heatStored"));
             assertEquals("and must report no capacity to store it in: " + off,
                     0L, off.longInteger("heatCapacity"));
-            long ambient = ask("stellurgytest config get shipHeatAmbientKelvin").longInteger("value");
+            long ambient = read("stellurgytest config get shipHeatAmbientKelvin").longInteger("value");
             assertEquals("and must read the cabin's ambient, not a number of its own: " + off,
                     ambient * 1000L, off.longInteger("temperatureMilliK"));
         } finally {
@@ -265,32 +265,32 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * nothing.
      */
     private void solve(int ticks) throws Exception {
-        Reply solved = arrange("stellurgytest subnet solve all 0 " + ticks);
+        Reply solved = act("stellurgytest subnet solve all 0 " + ticks).requireOk();
         assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
     private void buildStaleRoom(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
 
         place(cx, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000").requireOk();
 
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1");
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5");
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5").requireOk();
 
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
     }
 
     private void placeDuct(int x) throws Exception {
@@ -306,7 +306,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block).requireOk();
         assertTrue(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
@@ -315,10 +315,10 @@ public class HeatLoopTest extends AbstractSharedServerTest {
     }
 
     private void setConfig(String key, String value) throws Exception {
-        arrange("stellurgytest config set " + key + " " + value);
+        arrange("stellurgytest config set " + key + " " + value).requireOk();
     }
 
     private Reply loopInfo(int x) throws Exception {
-        return ask("stellurgytest subnet info heat 0 " + x + " " + cy + " " + cz);
+        return read("stellurgytest subnet info heat 0 " + x + " " + cy + " " + cz);
     }
 }

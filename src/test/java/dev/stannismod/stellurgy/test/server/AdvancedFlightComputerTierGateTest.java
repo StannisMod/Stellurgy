@@ -69,7 +69,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
      */
     private String assembleFixture(FixtureSite site, String variant) throws Exception {
         String coords = placeFixture(site, variant);
-        String assemble = String.join("\n", client().execute("stellurgytest rocket assemble 0 " + coords));
+        String assemble = String.join("\n", client().act("stellurgytest rocket assemble 0 " + coords));
         assertTrue("assemble (" + variant + ") failed: " + assemble, Reply.of(assemble).ok());
         return assemble;
     }
@@ -85,14 +85,14 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        String warmup = String.join("\n", client().execute(
+        String warmup = String.join("\n", client().arrange(
                 "stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
         assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
 
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs - anything standing here means the arrangement is wrong,
         // and it is said now instead of arriving many links later as a scan that found nothing.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 variant, 2, 10,
                 "the craft is built and scanned in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];

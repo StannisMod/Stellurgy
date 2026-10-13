@@ -157,21 +157,21 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
     private void standOnOwnPlatformInSurvival() throws Exception {
         int dim = plot().dim;
         scenario().arranging("build a platform in open air and stand on it");
-        String fill = exec("stellurgytest fill " + dim + " " + plot().x(PAD_DX) + " " + PAD_Y + " "
+        String fill = arrange("stellurgytest fill " + dim + " " + plot().x(PAD_DX) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ) + " " + plot().x(PAD_DX + PAD_EDGE - 1) + " " + PAD_Y + " "
-                + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone");
+                + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone").raw();
         scenario().requireArranged("platform fill must succeed: " + fill,
                 Reply.of(fill).ok());
         long standMark = clientEvents().mark();
-        exec("tp @a " + (plot().x(STAND_DX) + 0.5) + " " + (PAD_Y + 1) + " "
+        arrange("tp @a " + (plot().x(STAND_DX) + 0.5) + " " + (PAD_Y + 1) + " "
                 + (plot().z(STAND_DZ) + 0.5));
         // Where he STANDS decides what atmosphere he is in, and the readings below are the client's.
         awaitClientPlacedNear(standMark, plot().x(STAND_DX) + 0.5, plot().z(STAND_DZ) + 0.5,
                 "the vacuum this scenario is about is the one at the player's own position");
 
         arrangeProbe("stellurgytest player clear-armor");
-        exec("gamerule naturalRegeneration false");
-        exec("gamemode survival @a");
+        arrange("gamerule naturalRegeneration false");
+        arrange("gamemode survival @a");
         advanceServerAndClient(10);
         double health = health(bot().reportState());
         scenario().record("healthOnPlatform", health);
@@ -183,7 +183,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
 
     /** Reads the dim's baseline density so {@link #restoreDim} can put it back. */
     private int snapshotDensity() throws Exception {
-        String planet = exec("stellurgytest planet info " + plot().dim);
+        String planet = read("stellurgytest planet info " + plot().dim).raw();
         return Reply.of("stellurgytest planet info", planet).integer(DENSITY);
     }
 
@@ -200,7 +200,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * {@code living_hurt}) after a mark taken before this call.</p>
      */
     private void setDensityAndConfirm(int density, boolean expectBreathable) throws Exception {
-        String set = exec("stellurgytest atmosphere set-density " + plot().dim + " " + density);
+        String set = arrange("stellurgytest atmosphere set-density " + plot().dim + " " + density).raw();
         scenario().requireArranged("set-density " + density + " failed: " + set,
                 Reply.of(set).ok());
         int readBack = snapshotDensity();
@@ -214,12 +214,12 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
         try {
             // The gases, not the pressure: a world emptied to vacuum cannot be thickened back by a
             // number, since its air no longer says what it was made of.
-            originalAir.restore(this::exec);
+            originalAir.restore(c -> arrange(c).raw());
         } catch (Exception ignored) {
             // Teardown only — the next scenario sets the density it needs and proves it took.
         }
         try {
-            exec("gamerule naturalRegeneration true");
+            arrange("gamerule naturalRegeneration true");
         } catch (Exception ignored) {
             // Same.
         }
@@ -227,7 +227,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
 
     /** Server-side chest air via the static "air" NBT route ({@code ItemAirUtils}). */
     private int readChestAir() throws Exception {
-        String resp = exec("stellurgytest player held-air");
+        String resp = arrange("stellurgytest player held-air").raw();
         Reply held = Reply.of("stellurgytest player held-air", resp);
         assertTrue("held-air response must include chestAir: " + resp, held.has(CHEST_AIR));
         return held.integer(CHEST_AIR);
@@ -239,7 +239,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * so the static-NBT probe reads 0 for it.
      */
     private int readChestAirComponentRoute() throws Exception {
-        String resp = exec("stellurgytest player held-air-component-route");
+        String resp = read("stellurgytest player held-air-component-route").raw();
         Reply held = Reply.of("stellurgytest player held-air-component-route", resp);
         assertTrue("held-air-component-route response must include chestAir: " + resp,
                 held.has(CHEST_AIR));
@@ -431,14 +431,14 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             why = "the atmosphere judges the player on his world's server ticks; the reads are the server's log"
                     + " and the server's chest reading.")
     public void breathableAtmosphereDoesNotDrainChestTank() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             standOnOwnPlatformInSurvival();
             setDensityAndConfirm(100, true);
 
             scenario().arranging("equip the suit chest with a full pressure tank");
             long equipMark = clientEvents().mark();
-            String equip = exec("stellurgytest player equip-space-chest 1000");
+            String equip = arrange("stellurgytest player equip-space-chest 1000").raw();
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
                     Reply.of(equip).ok());
             assertEquals("baseline chestAir", 1000, readChestAirComponentRoute());
@@ -492,12 +492,12 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " and the emptied tank.")
     @Test
     public void drainedChestTankTransitionsToVacuumDamage() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
             scenario().arranging("equip the suit chest with only three millibuckets of oxygen");
-            String equip = exec("stellurgytest player equip-space-chest 3");
+            String equip = arrange("stellurgytest player equip-space-chest 3").raw();
             scenario().requireArranged("equip-space-chest with low oxygen must succeed: " + equip,
                     Reply.of(equip).ok());
             assertEquals("baseline chestAir = 3", 3, readChestAirComponentRoute());
@@ -570,19 +570,19 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
         // The pad replaces one block of this scenario's own platform, so the player stands ON the
         // pad with solid ground either side of him.
         standOnOwnPlatformInSurvival();
-        String place = exec("stellurgytest place " + dim + " " + px + " " + py + " " + pz
-                + " stellurgy:oxygencharger");
+        String place = arrange("stellurgytest place " + dim + " " + px + " " + py + " " + pz
+                + " stellurgy:oxygencharger").raw();
         scenario().requireArranged("pad placement must succeed: " + place,
                 Reply.of(place).ok());
-        String inj = exec("stellurgytest fluid inject " + dim + " " + px + " " + py + " " + pz
-                + " oxygen 8000");
+        String inj = arrange("stellurgytest fluid inject " + dim + " " + px + " " + py + " " + pz
+                + " oxygen 8000").raw();
         scenario().requireArranged("fluid inject must succeed: " + inj, Reply.of(inj).ok());
 
         // initialOxygen=500: half of the pressure tank's 1000 mB capacity, which leaves headroom for
         // the pad to actually add fluid. Equipping a full tank short-circuits the pad's
         // canPerformFunction body (amtFluid = 0) and the test would measure nothing.
         long equipMark = clientEvents().mark();
-        String equip = exec("stellurgytest player equip-space-chest 500");
+        String equip = arrange("stellurgytest player equip-space-chest 500").raw();
         scenario().requireArranged("equip-space-chest must succeed: " + equip,
                 Reply.of(equip).ok());
 
@@ -602,7 +602,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
         Events events = serverEvents();
         long mark = events.markInstrumented();
         long fillClientMark = clientEvents().mark();
-        exec("tp @p " + (px + 0.5) + " " + (py + 1) + " " + (pz + 0.5));
+        arrange("tp @p " + (px + 0.5) + " " + (py + 1) + " " + (pz + 0.5));
 
         // The pad's own transfer, rather than a fixed window and a bigger number afterwards. A fill
         // that never happened used to be indistinguishable from three other things: a pad that never
@@ -645,13 +645,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             why = "the same absence window, on the player's own world clock. Both clocks: the verdict below also"
                     + " reads the CLIENT's chest air, synced from the server.")
     public void suitedPlayerInBreathableDimDoesNotLoseChestAir() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             standOnOwnPlatformInSurvival();
             setDensityAndConfirm(100, true);
 
             scenario().arranging("equip the enchanted air suit with a full buffer");
-            String equip = exec("stellurgytest player equip-airsuit 1000");
+            String equip = arrange("stellurgytest player equip-airsuit 1000").raw();
             scenario().requireArranged("equip-airsuit must succeed: " + equip,
                     Reply.of(equip).ok());
             assertEquals("baseline chest air", 1000, readChestAir());
@@ -695,13 +695,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " chest slot — no `client_slot_tag_set`\" — 2026-09-28.")
     @Test
     public void suitedPlayerInVacuumLosesChestAirOverTime() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
             scenario().arranging("equip the enchanted air suit with a full buffer");
             long equipMark = clientEvents().mark();
-            String equip = exec("stellurgytest player equip-airsuit 1000");
+            String equip = arrange("stellurgytest player equip-airsuit 1000").raw();
             scenario().requireArranged("equip-airsuit must succeed: " + equip,
                     Reply.of(equip).ok());
             assertEquals("baseline chest air before vacuum exposure", 1000, readChestAir());
@@ -736,7 +736,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
                     0, Events.countRecords(decisions, "immune", "false"));
             String hurts = events.since(mark, "living_hurt");
             assertEquals("a suited player must take no vacuum damage; what hurt him since the flip: "
-                    + hurts + " | suit-diag " + exec("stellurgytest player suit-diag"),
+                    + hurts + " | suit-diag " + read("stellurgytest player suit-diag").raw(),
                     0, Events.countRecords(hurts, "source", "Vacuum"));
 
             int chestAirAfter = readChestAir();
@@ -754,7 +754,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             // rather than a suit failure, and the message must say which — so the damage SOURCE
             // goes in the text beside the delta.
             assertTrue("suited player must not take vacuum damage; healthStart=" + healthStart
-                    + " healthAfter=" + healthAfter + " diag=" + exec("stellurgytest player suit-diag"),
+                    + " healthAfter=" + healthAfter + " diag=" + read("stellurgytest player suit-diag").raw(),
                     healthAfter >= healthStart);
         } finally {
             restoreDim(originalAir);
@@ -777,7 +777,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " witnessed; the empty drain log, the client's health and the chest reading are not.")
     @Test
     public void unsuitedPlayerInVacuumLosesNoAirAndTakesDamage() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -832,7 +832,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " 2026-09-30. The client-health link after it is not witnessed.")
     @Test
     public void vacuumDamageReachesTheClient() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -884,13 +884,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " chest slot — no `client_slot_tag_set`\" — 2026-09-28.")
     @Test
     public void vacuumDrainsOxygenFromChestSubInventoryTank() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
             scenario().arranging("equip the suit chest with a full pressure tank");
             long equipMark = clientEvents().mark();
-            String equip = exec("stellurgytest player equip-space-chest 1000");
+            String equip = arrange("stellurgytest player equip-space-chest 1000").raw();
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
                     Reply.of(equip).ok());
             scenario().requireArranged("equip-space-chest must report oxygen filled in tank: "
@@ -971,7 +971,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
                 + " " + ppm(790_000) + " " + ppm(50_000) + " " + ppm(160_000));
 
         String infoCommand = "stellurgytest vent info " + at;
-        Reply info = Reply.of(infoCommand, exec(infoCommand));
+        Reply info = read(infoCommand);
         scenario().record("ventInfo", info.toString());
         // What is asserted is the room's STATE, not the number that was written into it. The vent
         // holding the seal is powered and fuelled, so it is adding the oxygen it pays for the whole
@@ -1019,9 +1019,9 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
         scenario().requireArranged("the vent must place: " + placed, placed.bool("placed"));
         arrangeProbe("stellurgytest energy inject " + at + " 1000000");
         arrangeProbe("stellurgytest fluid inject " + at + " oxygen 16000");
-        arrangeProbe("stellurgytest tile force-tick " + at + " 1");
+        act("stellurgytest tile force-tick " + at + " 1").requireOk("tick the vent once");
         arrangeProbe("stellurgytest vent reseal " + at);
-        arrangeProbe("stellurgytest tile force-tick " + at + " 5");
+        act("stellurgytest tile force-tick " + at + " 5").requireOk("let the resealed vent settle");
         return at;
     }
 
@@ -1031,7 +1031,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * that was never built.
      */
     private Reply arrangeProbe(String command) throws Exception {
-        Reply reply = Reply.of(command, exec(command));
+        Reply reply = arrange(command);
         scenario().requireArranged(command + " must report ok: " + reply, reply.ok());
         return reply;
     }
@@ -1063,8 +1063,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * starts where the scenario says it does and not a second earlier.
      */
     private double openSurvivalWindow() throws Exception {
-        exec("gamerule naturalRegeneration false");
-        exec("gamemode survival @a");
+        arrange("gamerule naturalRegeneration false");
+        arrange("gamemode survival @a");
         double health = health(bot().reportState());
         scenario().record("healthAtWindowOpen", health);
         return health;
@@ -1105,7 +1105,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(80);",
             why = "the interval is how long the room at cabin temperature had to hurt.")
     public void overheatedZoneAirHurtsAnUnsuitedCrewman() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             setDensityAndConfirm(100, true);
             int veryHot = configInt("shipHeatCrewVeryHotKelvin");
@@ -1120,7 +1120,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             scenario().requireArranged("premise: a breathable room at cabin temperature must be an"
                     + " ordinary room: " + cabin, "PressurizedAir".equals(cabin));
             standInTheRoomUnhurt();
-            exec("stellurgytest player clear-armor");
+            arrange("stellurgytest player clear-armor");
 
             scenario().measuring("health in the same room while it is merely warm");
             double healthStart = openSurvivalWindow();
@@ -1133,7 +1133,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
 
             scenario().arranging("drive the same room's air past the crew threshold");
             // Who the room is about to hurt, by name, so the damage wait below is about THIS player.
-            Reply standing = Reply.of(exec("stellurgytest atmosphere for-player"));
+            Reply standing = Reply.of(read("stellurgytest atmosphere for-player").raw());
             scenario().requireArranged("the server must name the player standing in the room: "
                     + standing, standing.ok());
             String who = standing.text("player");
@@ -1178,8 +1178,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
 
     /** What a person standing in the room breathes, as the handler publishes it. */
     private String atmosphereInRoom() throws Exception {
-        String resp = exec("stellurgytest atmosphere get " + plot().dim + " " + plot().x(ROOM_DX) + " "
-                + (ROOM_Y + 1) + " " + plot().z(ROOM_DZ));
+        String resp = read("stellurgytest atmosphere get " + plot().dim + " " + plot().x(ROOM_DX) + " "
+                + (ROOM_Y + 1) + " " + plot().z(ROOM_DZ)).raw();
         Reply reply = Reply.of(resp);
         assertTrue("no atmosphere type in: " + resp, reply.has("type"));
         return reply.text("type");
@@ -1187,7 +1187,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
 
     /** A tuned threshold read off the server, so no assertion here restates one. */
     private int configInt(String key) throws Exception {
-        String resp = exec("stellurgytest config get " + key);
+        String resp = read("stellurgytest config get " + key).raw();
         Reply reply = Reply.of(resp);
         scenario().requireArranged("config get " + key + " failed: " + resp, reply.ok());
         assertTrue("no value in: " + resp, reply.has("value"));
@@ -1211,11 +1211,11 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " must be told it (he started at 20.0) — no `client_health_updated` below 20.0\", 2026-09-30.")
     @Test
     public void staleZoneAirHurtsAnUnsuitedPlayer() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             setDensityAndConfirm(100, true);
             String at = sealStaleZoneAndStandInIt();
-            exec("stellurgytest player clear-armor");
+            arrange("stellurgytest player clear-armor");
 
             scenario().measuring("health before the stale-air window");
             // Marked before the window opens: the claim is about damage taken IN it, and a mark
@@ -1230,7 +1230,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
                             + healthStart + ")",
                     LINK_BUDGET_TICKS);
             scenario().record("healthAfter", healthAfter)
-                    .record("ventInfoAfter", exec("stellurgytest vent info " + at));
+                    .record("ventInfoAfter", read("stellurgytest vent info " + at).raw());
         } finally {
             restoreDim(originalAir);
         }
@@ -1258,7 +1258,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " witnessed: the client's rendering of the drained suit, and the full-suit premise.")
     @Test
     public void staleZoneAirDrainsTheSuitAndNotTheCrew() throws Exception {
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
         try {
             setDensityAndConfirm(100, true);
             sealStaleZoneAndStandInIt();
@@ -1377,7 +1377,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
     @Test
     public void aSealedSuitKeepsPoisonedAirOut() throws Exception {
         int dim = plot().dim;
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), dim);
         try {
             standOnOwnPlatformInSurvival();
             Reply suit = arrangeProbe("stellurgytest player equip-space-chest");
@@ -1394,7 +1394,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             arrangeProbe("stellurgytest planet add-gas " + dim + " " + poison.name() + " "
                     + 4L * poison.hazardThreshold());
             String at = dim + " " + plot().x(STAND_DX) + " " + (PAD_Y + 1) + " " + plot().z(STAND_DZ);
-            Reply air = Reply.of("stellurgytest atmosphere get " + at, exec("stellurgytest atmosphere get " + at));
+            Reply air = Reply.of("stellurgytest atmosphere get " + at, read("stellurgytest atmosphere get " + at).raw());
             scenario().requireArranged("the air where he stands must be poisonous before the window means"
                             + " anything: " + air,
                     air.has("statements") && Arrays.asList(air.textArray("statements")).contains("TOXIC"));
@@ -1482,15 +1482,15 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
     @Test
     public void aHelmetAndTankWithoutTheRestOfTheSuitDoNotKeepPoisonedAirOut() throws Exception {
         int dim = plot().dim;
-        PlanetAir originalAir = PlanetAir.snapshot(this::exec, dim);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), dim);
         try {
             standOnOwnPlatformInSurvival();
             Reply suit = arrangeProbe("stellurgytest player equip-space-chest");
             String who = suit.text("player");
             scenario().requireArranged("the suit's tank must hold oxygen, or the gate would refuse for want"
                     + " of a supply rather than for the missing pieces: " + suit, suit.integer("chestAir") > 0);
-            exec("replaceitem entity @a slot.armor.legs minecraft:air");
-            exec("replaceitem entity @a slot.armor.feet minecraft:air");
+            arrange("replaceitem entity @a slot.armor.legs minecraft:air");
+            arrange("replaceitem entity @a slot.armor.feet minecraft:air");
 
             long mark = serverEvents().markInstrumented();
             // The same poisoning as the whole-suit scenario above, for the same reasons: carbon monoxide at

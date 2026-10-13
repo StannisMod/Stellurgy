@@ -68,7 +68,7 @@ public class ModPacketDeliveryClientGroupTest extends AbstractSharedClientTest {
         Events client = clientEvents();
         int handle = Integer.parseInt(bot().invokeStaticInt(ARMING, "open").get("returned").getAsString());
         long armed = client.mark();
-        Reply moved = Reply.of(exec("stellurgytest tp " + NETHER));
+        Reply moved = Reply.of(arrange("stellurgytest tp " + NETHER).raw());
         requireArranged("the server would not move the player to the nether: " + moved, moved.ok());
 
         String queued = client.awaitRecordWithFields(armed, "client_respawn_queued",

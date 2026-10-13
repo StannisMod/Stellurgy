@@ -41,7 +41,7 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
     private static final String RECORDER = "damage_occurrence_recorder";
 
     private final Events log =
-            new Events(this::exec,
+            new Events(c -> read(c).raw(),
                     ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
@@ -224,14 +224,14 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
     // ---- driving
 
     private void place(int lane, String block) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + X + " " + Y + " " + lane + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + X + " " + Y + " " + lane + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
     private void prepare(int lane) throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
                 + ((X + 16) >> 4) + " " + ((lane + 16) >> 4)).requireOk("warm the lane's chunks");
-        ask("stellurgytest fill " + DIM + " " + (X - 6) + " " + (Y - 1) + " " + (lane - 2) + " " + (X + 6)
+        arrange("stellurgytest fill " + DIM + " " + (X - 6) + " " + (Y - 1) + " " + (lane - 2) + " " + (X + 6)
                 + " " + (Y + 2) + " " + (lane + 2) + " minecraft:air").requireOk("clear the lane");
     }
 
@@ -239,13 +239,13 @@ public class AUnitHearsWhatBrokeItTest extends AbstractSharedServerTest {
 
     /** One blow along +X into the lane, as {@code damage impact}, read as data. */
     private Reply strike(int lane, int budget) throws Exception {
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
-        return ask("stellurgytest damage impact " + DIM + " " + (X - 2.5D) + " " + (Y + 0.5D) + " "
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        return act("stellurgytest damage impact " + DIM + " " + (X - 2.5D) + " " + (Y + 0.5D) + " "
                 + (lane + 0.5D) + " 1 0 0 " + budget + " KINETIC").requireOk("strike the lane");
     }
 
     private Reply stageAt(int lane) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + X + " " + Y + " " + lane);
+        return read("stellurgytest damage stage " + DIM + " " + X + " " + Y + " " + lane);
     }
 
     /**

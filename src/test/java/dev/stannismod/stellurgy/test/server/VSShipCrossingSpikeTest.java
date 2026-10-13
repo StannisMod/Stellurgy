@@ -47,13 +47,13 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // THE ONE SEAT PROBE HERE THAT CANNOT BE ADDRESSED, and the reason is the control itself:
         // there is no ship yet, so there is no id to name. Every other seat probe in this test asks
         // by identity.
-        String control = exec("stellurgytest vs seat-input 0 0 0 0 0 0 0");
+        String control = arrange("stellurgytest vs seat-input 0 0 0 0 0 0 0").raw();
         assertTrue("witness sensitivity control — seat probe must report seatFound:false before any ship: "
                 + control, !Reply.of(control).bool("seatFound"));
 
         // Build a piloted ship (pilot seat linked to an AFC) at the source and assemble it into a VS ship.
         String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
@@ -63,32 +63,32 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // identities in this test on purpose, and neither may stand in for the other. The durable
         // name is the one thing that spans them, and it is what the destination is found by.
         String durableId = ShipIdentity.nameFromAssembly(asm);
-        String srcShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String srcShipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
         assertTrue("source ship not managed by VS before crossing",
-                ShipInfo.loadedIn(this::exec, 0, srcShipId));
+                ShipInfo.loadedIn(c -> read(c).raw(), 0, srcShipId));
 
         // BASELINE: the seat resolves its flight computer, and we record the RELATIVE offset between them
         // (invariant under any rigid relocation — the number the crossing must preserve).
-        String pre = exec("stellurgytest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
+        String pre = arrange("stellurgytest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0").raw();
         assertTrue("pre-crossing: seat must be found: " + pre, Reply.of(pre).bool("seatFound"));
         assertTrue("pre-crossing: seat must be linked to its AFC: " + pre, Reply.of(pre).bool("seatLinked"));
         assertTrue("pre-crossing: seat must resolve its AFC: " + pre, Reply.of(pre).bool("afcResolved"));
         int[] preOffset = seatToAfcOffset(pre);
 
         // Put a rider aboard (an EntityDummy bound to the pilot seat).
-        SeatMount mount = SeatMount.onShip(this::exec, 0, srcShipId);
+        SeatMount mount = SeatMount.onShip(c -> arrange(c).raw(), 0, srcShipId);
         assertTrue("could not seat a rider on the source ship: " + mount.raw(), mount.seatFound);
 
         // Locate the ship's live world position, by identity, then cross it to the destination.
-        ShipInfo srcLive = ShipInfo.byId(this::exec, 0, srcShipId);
+        ShipInfo srcLive = ShipInfo.byId(c -> read(c).raw(), 0, srcShipId);
         double sx = srcLive.x, sy = srcLive.y, sz = srcLive.z;
 
         // The crossing CUTS a ship, so it is told which one; the source pose still travels with the
         // call because the riders aboard are gathered around it, but it no longer decides whose
         // blocks are taken.
-        String cross = exec("stellurgytest vs ship-repack 0 id " + srcShipId + " "
+        String cross = act("stellurgytest vs ship-repack 0 id " + srcShipId + " "
                 + (int) sx + " " + (int) sy + " " + (int) sz
-                + " " + DST_X + " " + DST_Y + " " + DST_Z);
+                + " " + DST_X + " " + DST_Y + " " + DST_Z).raw();
         assertTrue("crossing failed (NO-GO signal): " + cross, Reply.of(cross).ok());
         // No assertion on HOW the source stops being a ship. This used to require the crossing to have
         // deregistered it itself, which pinned the mechanism rather than the promise - and the mechanism
@@ -101,18 +101,18 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // The re-assembled ship must load again at the destination.
         int loadedAfter = loadedShips(0);
         assertTrue("the crossed VS ship never re-loaded at the destination; crossing=" + cross
-                + " countAll=" + exec("stellurgytest vs ship-count-all 0"), loadedAfter >= 1);
+                + " countAll=" + read("stellurgytest vs ship-count-all 0").raw(), loadedAfter >= 1);
         // The ARRIVED ship, found by the durable name that crossed with it. The physics id is new —
         // that is what a crossing does — but the name in the flight computer's NBT rode across
         // verbatim, so the destination is identified rather than approached.
-        String dstShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String dstShipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
         assertTrue("re-assembled ship is not managed by VS at the destination (crossing did not"
-                + " re-VS); id=" + dstShipId, ShipInfo.loadedIn(this::exec, 0, dstShipId));
+                + " re-VS); id=" + dstShipId, ShipInfo.loadedIn(c -> read(c).raw(), 0, dstShipId));
 
         // POST: the seat still resolves its AFC, at the SAME relative offset — the linked-TE state and the
         // ship's internal geometry survived the pack/paste round-trip. Asked of the ARRIVED ship by its
         // own id: the crossing mints a new one, so this is deliberately not srcShipId.
-        String post = exec("stellurgytest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
+        String post = arrange("stellurgytest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0").raw();
         assertTrue("post-crossing: seat must be found: " + post, Reply.of(post).bool("seatFound"));
         assertTrue("post-crossing: seat must still be linked to its AFC: " + post,
                 Reply.of(post).bool("seatLinked"));
@@ -136,7 +136,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
 
@@ -154,7 +154,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

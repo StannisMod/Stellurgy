@@ -40,7 +40,7 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
     private static final int FEED_EVERY_TICKS = 20;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * Hold a beam on a mirror and the gun is what the beam comes back to.
@@ -108,17 +108,17 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
     }
 
     private void buildSite() throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((GUN_X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((GUN_X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((GUN_X + 32) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill " + DIM + " " + (GUN_X - 8) + " " + (Y - 2) + " " + (Z - 4) + " "
+        arrange("stellurgytest fill " + DIM + " " + (GUN_X - 8) + " " + (Y - 2) + " " + (Z - 4) + " "
                 + (GUN_X + 28) + " " + (Y + 12) + " " + (Z + 4) + " minecraft:air").requireOk("clear the site");
         for (int cx = ((GUN_X - 16) >> 4); cx <= ((GUN_X + 28) >> 4); cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
     }
 
     private void aimAt(int targetX) throws Exception {
-        ask("stellurgytest turret target " + DIM + " " + GUN_X + " " + Y + " " + Z + " "
+        arrange("stellurgytest turret target " + DIM + " " + GUN_X + " " + Y + " " + Z + " "
                 + (targetX + 0.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("aim at the mirror");
         charge();
     }
@@ -128,17 +128,17 @@ public class AMirrorSendsTheBeamBackTest extends AbstractSharedServerTest {
      * gun gone by the end of the wait is this arrangement working rather than a failed feed.
      */
     private void charge() throws Exception {
-        exec("stellurgytest turret charge " + DIM + " " + GUN_X + " " + Y + " " + Z);
+        arrange("stellurgytest turret charge " + DIM + " " + GUN_X + " " + Y + " " + Z);
     }
 
     // ---- reading
 
     private Reply stageAt(int x) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 }

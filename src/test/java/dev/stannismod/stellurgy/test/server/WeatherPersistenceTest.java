@@ -92,7 +92,7 @@ public class WeatherPersistenceTest extends AbstractMechanicsTest {
     public void planetRainSurvivesRestartOnSameWorkDir() throws Exception {
         // First boot: set rain on the planet, verify the wrapper is in place.
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
-        firstBoot.client().execute("stellurgytest weather set " + FIXTURE_DIM + " rain 12000");
+        firstBoot.client().arrange("stellurgytest weather set " + FIXTURE_DIM + " rain 12000");
         DimWeather beforeStop = weather(firstBoot, FIXTURE_DIM);
         assertTrue("rain didn't take effect on first boot: " + beforeStop.raw(),
                 beforeStop.raining);
@@ -115,7 +115,7 @@ public class WeatherPersistenceTest extends AbstractMechanicsTest {
 
     /** One world's sky on one of the two boots, refusing a world that did not come up. */
     private static DimWeather weather(RealDedicatedServerHarness boot, int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", boot.client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", boot.client().arrange(cmd)), dim)
                 .requireDim(dim);
     }
 }

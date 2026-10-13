@@ -76,7 +76,7 @@ public class DimensionSplitBrainReconcileTest extends AbstractMechanicsTest {
     }
 
     private static Set<Integer> stellurgyDims(RealDedicatedServerHarness h) throws Exception {
-        String list = ok(h.client().execute("stellurgytest dim list"));
+        String list = ok(h.client().read("stellurgytest dim list"));
         Reply listed = Reply.of("stellurgytest dim list", list);
         assertTrue("dim list missing stellurgyDimensions: " + list, listed.has(AR_DIMS));
         Set<Integer> out = new HashSet<>();
@@ -92,7 +92,7 @@ public class DimensionSplitBrainReconcileTest extends AbstractMechanicsTest {
      * boot never reads.
      */
     private static void saveTheGalaxyWhereTheEditLands(RealDedicatedServerHarness h) throws Exception {
-        String save = ok(h.client().execute("stellurgytest server save-dimensions"));
+        String save = ok(h.client().act("stellurgytest server save-dimensions"));
         assertTrue("save-dimensions failed: " + save, Reply.of(save).bool("xmlExists"));
         String xmlPath = Reply.of("stellurgytest server save-dimensions", save).text("xmlPath")
                 .replace("\\\\", "/").replace('\\', '/');
@@ -141,7 +141,7 @@ public class DimensionSplitBrainReconcileTest extends AbstractMechanicsTest {
                         + " missing from " + after,
                 after.contains(target));
 
-        DimInfo info = DimInfo.forDim(cmd -> ok(secondBoot.client().execute(cmd)), target);
+        DimInfo info = DimInfo.forDim(cmd -> ok(secondBoot.client().read(cmd)), target);
         assertTrue("dim " + target + " must be a Stellurgy planet after reload, not the "
                         + "overworld fallback: " + info.raw(),
                 info.stellurgyPlanet);

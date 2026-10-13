@@ -97,7 +97,7 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
     @Test
     public void atmosphereGatesRainAndThunderRequiresRain() throws Exception {
 
-        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().read("stellurgytest dim list")));
         for (int dim : new int[]{DIM_THIN_RAIN, DIM_THICK_RAIN, DIM_DRY_THUNDER}) {
             assertTrue("fixture dim " + dim + " not registered: " + dimList,
                     dimList.holds(dim));
@@ -199,13 +199,13 @@ public class PlanetWeatherGateTest extends AbstractSharedServerTest {
 
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().arrange(cmd)), dim)
                 .requireDim(dim);
     }
 
     /** This boot's reader of the server's ordered event log — the harness is this class's own. */
     private Events serverEvents() {
-        return new Events(cmd -> String.join("\n", client().execute(cmd)),
+        return new Events(cmd -> String.join("\n", client().read(cmd)),
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
 }

@@ -50,17 +50,17 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
     @Test
     public void deconstructingUnlinkedElevatorIsASafeNoOpOnLinkTeardown() throws Exception {
         warmup(CX, CZ);
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock space-elevator 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock space-elevator failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileSpaceElevator tile at controller pos: " + info,
                 "TileSpaceElevator", MachineInfo.of(info).tileSimpleName());
 
-        String deconstruct = join(client().execute(
+        String deconstruct = join(client().act(
                 "stellurgytest machine deconstruct 0 " + CX + " " + CY + " " + CZ));
 
         // Contract: tearing down an elevator with no tether link must not
@@ -83,7 +83,7 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         int cz1 = (blockZ - 16) >> 4;
         int cx2 = (blockX + 16) >> 4;
         int cz2 = (blockZ + 16) >> 4;
-        String resp = join(client().execute(
+        String resp = join(client().arrange(
                 "stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
         assertTrue("chunk warmup failed: " + resp, Reply.of(resp).ok());
     }

@@ -57,7 +57,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
      */
     @Test
     public void frozenSaveIdentifiersMustNotBeRespelled() throws Exception {
-        String reg = String.join("\n", client().execute(
+        String reg = String.join("\n", client().read(
                 "stellurgytest registry lookup stellurgy:wirelessTransciever"));
         assertTrue("registry lookup probe errored: " + reg, Reply.of(reg).ok());
         assertTrue("FROZEN block registry name stellurgy:wirelesstransciever is gone — "
@@ -72,7 +72,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
 
         int baseX = 3000;
         placeAt(baseX);
-        String nbt = String.join("\n", client().execute(
+        String nbt = String.join("\n", client().read(
                 "stellurgytest tile nbt-id " + DIM + " " + baseX + " " + Y + " " + Z));
         assertTrue("tile nbt-id probe errored: " + nbt, Reply.of(nbt).ok());
         assertTrue("FROZEN tile entity id changed — tiles in existing chunks and inside packed "
@@ -99,7 +99,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
 
     private void placeAt(int... xs) throws Exception {
         for (int x : xs) {
-            String r = String.join("\n", client().execute(
+            String r = String.join("\n", client().arrange(
                     "stellurgytest place " + DIM + " " + x + " " + Y + " " + Z
                             + " stellurgy:wirelessTransciever"));
             assertTrue("place failed at x=" + x + ": " + r,
@@ -119,7 +119,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
     }
 
     private String info(int x) throws Exception {
-        return String.join("\n", client().execute(
+        return String.join("\n", client().read(
                 "stellurgytest pipe wireless-info " + DIM + " " + x + " " + Y + " " + Z));
     }
 

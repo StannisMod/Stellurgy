@@ -26,7 +26,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     private static final String RETURNED_PATTERN = "returned";
 
     private int createStation(int orbitingDim) throws Exception {
-        String resp = String.join("\n", client().execute("stellurgytest station create " + orbitingDim));
+        String resp = String.join("\n", client().arrange("stellurgytest station create " + orbitingDim));
         assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not parse station id from create response: " + resp, mReply.has(ID_PATTERN));
@@ -53,7 +53,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         assertNotEquals(b, c);
         assertNotEquals(a, c);
 
-        String list = String.join("\n", client().execute("stellurgytest station list"));
+        String list = String.join("\n", client().read("stellurgytest station list"));
         Reply.of(list).element("stations", "id", String.valueOf(a));
         Reply.of(list).element("stations", "id", String.valueOf(b));
         Reply.of(list).element("stations", "id", String.valueOf(c));
@@ -64,7 +64,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         int id = createStation(0);
 
         String setResp = String.join("\n",
-                client().execute("stellurgytest station fuel " + id + " set 500"));
+                client().arrange("stellurgytest station fuel " + id + " set 500"));
         int max = parseGroup(MAX_PATTERN, setResp, "max");
         int after = parseGroup(AFTER_PATTERN, setResp, "after");
         // setFuelAmount clamps to [0, max]; if max < 500 the after value will
@@ -83,14 +83,14 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     public void fuelAddRespectsMaxCapacity() throws Exception {
         int id = createStation(0);
         // Drain to zero first so we have a known baseline.
-        client().execute("stellurgytest station fuel " + id + " set 0");
+        client().arrange("stellurgytest station fuel " + id + " set 0");
 
         // SpaceStationObject.addFuel semantics: returns the amount actually
         // consumed (= inserted) AFTER the clamp to MAX_FUEL. Overshoot is
         // dropped silently. Surface this contract explicitly so the
         // "returned == clamp room" relationship is pinned.
         String addResp = String.join("\n",
-                client().execute("stellurgytest station fuel " + id + " add 999999"));
+                client().arrange("stellurgytest station fuel " + id + " add 999999"));
         int max = parseGroup(MAX_PATTERN, addResp, "max");
         int after = parseGroup(AFTER_PATTERN, addResp, "after");
         int returned = parseGroup(RETURNED_PATTERN, addResp, "returned");
@@ -105,14 +105,14 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     @Test
     public void fuelUseAllOrNothingWhenInsufficient() throws Exception {
         int id = createStation(0);
-        client().execute("stellurgytest station fuel " + id + " set 100");
+        client().arrange("stellurgytest station fuel " + id + " set 100");
 
         // SpaceStationObject.useFuel semantics: if amt > current, it returns
         // 0 WITHOUT consuming anything. Pin this contract — it's
         // non-obvious and a "convenience" rewrite that clamps to current
         // available fuel would silently change rocket-launch fuel maths.
         String useResp = String.join("\n",
-                client().execute("stellurgytest station fuel " + id + " use 999999"));
+                client().arrange("stellurgytest station fuel " + id + " use 999999"));
         int after = parseGroup(AFTER_PATTERN, useResp, "after");
         int returned = parseGroup(RETURNED_PATTERN, useResp, "returned");
 
@@ -127,10 +127,10 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     @Test
     public void fuelUseExactAmountDrains() throws Exception {
         int id = createStation(0);
-        client().execute("stellurgytest station fuel " + id + " set 100");
+        client().arrange("stellurgytest station fuel " + id + " set 100");
 
         String useResp = String.join("\n",
-                client().execute("stellurgytest station fuel " + id + " use 60"));
+                client().arrange("stellurgytest station fuel " + id + " use 60"));
         int after = parseGroup(AFTER_PATTERN, useResp, "after");
         int returned = parseGroup(RETURNED_PATTERN, useResp, "returned");
 
@@ -151,12 +151,12 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
     @Pins({"INV-STN-05", "INV-STN-22"})
     @Test
     public void stationCreateRegistersAndPersistsForList() throws Exception {
-        String before = String.join("\n", client().execute("stellurgytest station list"));
+        String before = String.join("\n", client().read("stellurgytest station list"));
         int id = createStation(0);
         assertFalse("the new station's id " + id + " was already listed before create: " + before,
                 Reply.of("stellurgytest station list", before).holdsElement("stations", "id", String.valueOf(id)));
 
-        String listAfter = String.join("\n", client().execute("stellurgytest station list"));
+        String listAfter = String.join("\n", client().read("stellurgytest station list"));
         Reply.of(listAfter).element("stations", "id", String.valueOf(id));
 
         // Read as NUMBERS: the substring form was a prefix, so `"orbitingPlanetId":0` was also
@@ -183,14 +183,14 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
         // Control: the station's own spawn resolves back to it — the reverse map still finds real
         // on-station positions after the radius-0 fix.
-        String atSpawn = String.join("\n", client().execute(
+        String atSpawn = String.join("\n", client().read(
                 "stellurgytest station at " + info.spawnX() + " " + info.spawnY() + " " + info.spawnZ()));
         assertTrue("control: the station spawn must resolve to its own station id " + stationId
                         + " (spawn=" + info.spawnX() + "," + info.spawnZ() + "): " + atSpawn,
                 String.valueOf(stationId).equals(Reply.of(atSpawn).text("stationAtPos")));
 
         // (100,·,100) reverse-maps to grid (0,0).
-        String atCentre = String.join("\n", client().execute("stellurgytest station at 100 64 100"));
+        String atCentre = String.join("\n", client().read("stellurgytest station at 100 64 100"));
         assertTrue("the central grid cell must resolve to no station (radius-0 index fix) — it "
                         + "collided with grid (-1,-1) on index 1 = station 1 via (2*0-1)^2. Got: " + atCentre,
                 // `has` answers false for an ABSENT field and for one whose value is JSON null.
@@ -199,6 +199,6 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
     /** What the server says about one station. */
     private StationInfo station(int stationId) throws Exception {
-        return StationInfo.byId(cmd -> String.join("\n", client().execute(cmd)), stationId);
+        return StationInfo.byId(cmd -> String.join("\n", client().read(cmd)), stationId);
     }
 }

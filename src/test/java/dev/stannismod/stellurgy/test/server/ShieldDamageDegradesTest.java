@@ -48,7 +48,7 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     private static final String STAGE_COST = "stageCost";
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * Pins INV-SHD-18 (a damaged emitter covers strictly less ground than the same emitter pristine).
@@ -200,8 +200,8 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
         long mark = events.markInstrumented();
         // Strength 1: enough to take the block it is centred in (dirt resists far less than one
         // ray's weakest start), and too weak to reach an emitter four blocks away.
-        Reply.of(exec("stellurgytest shield explode " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
-                + (Z + 0.5D) + " 1.0")).requireOk("set off the blast");
+        Reply.of(act("stellurgytest shield explode " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
+                + (Z + 0.5D) + " 1.0").raw()).requireOk("set off the blast");
         String at = (x + 0.5D) + "," + (Y + 0.5D) + "," + (Z + 0.5D);
         String heard = events.awaitRecordWithFields(mark, "shield_explosion_heard",
                 "the shield's explosion handler never heard the blast at " + x, 20, "at", at);
@@ -322,10 +322,10 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
             // The FEED is the point — an emitter left to drain goes dark on a slow loop, and this
             // test then fails about power while claiming to be about radius (seen under parallel load
             // 2026-08-17, green serially).
-            exec("stellurgytest energy inject " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 8000");
-            exec("stellurgytest tile force-tick " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 1");
-            exec("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 2");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 8000").raw();
+            act("stellurgytest tile force-tick " + DIM + " " + (ex - 1) + " " + Y + " " + Z + " 1");
+            act("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 2");
+            act("stellurgytest shield tick " + DIM);
         }
         return (int) readInt(RADIUS, readShield(ex));
     }
@@ -371,8 +371,8 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      */
     private void hit(int x) throws Exception {
         int budget = (int) Math.ceil(readInt(STAGE_COST, readStage(x)) * STAGES_PER_IMPACT);
-        String resp = exec("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
-                + (Z - 2.5D) + " 0 0 1 " + budget + " KINETIC " + nextImpactId());
+        String resp = act("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
+                + (Z - 2.5D) + " 0 0 1 " + budget + " KINETIC " + nextImpactId()).raw();
         Reply.of(resp).requireOk("declare the impact");
         assertTrue("the impact spent nothing — it is not reaching the block, and every assertion"
                 + " after this would be about an undamaged one: " + resp,
@@ -387,9 +387,9 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
             why = "each iteration is a feed plus one probe-driven solve pass.")
     private void powerUp(int gx, int ex) throws Exception {
         for (int i = 0; i < 16 && !Reply.of(readShield(ex)).bool("powered"); i++) {
-            exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + Z + " 4000");
-            exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + Z + " 1");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + Z + " 4000");
+            act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + Z + " 1");
+            act("stellurgytest shield tick " + DIM);
         }
         assertTrue("precondition: the shield at " + ex + " never powered up:\n" + readShield(ex),
                 Reply.of(readShield(ex)).bool("powered"));
@@ -401,9 +401,9 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      */
     private void requireLit(int ex) throws Exception {
         long max = readInt("shieldMax", readShield(ex));
-        Reply.of(exec("stellurgytest shield charge " + DIM + " " + ex + " " + Y + " " + Z + " " + max))
+        Reply.of(arrange("stellurgytest shield charge " + DIM + " " + ex + " " + Y + " " + Z + " " + max).raw())
                 .requireOk("fill the emitter's coil");
-        Reply.of(exec("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 1"))
+        Reply.of(act("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 1").raw())
                 .requireOk("tick the emitter so it re-reads whether it is lit");
         String now = readShield(ex);
         requireArranged("the emitter at " + ex + " is dark with a full coil, so no coverage reading"
@@ -411,17 +411,17 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     private void clearSite(int minX, int maxX) throws Exception {
-        Reply.of(exec("stellurgytest chunk warmup " + DIM + " " + (minX >> 4) + " " + ((Z - 8) >> 4) + " "
-                + (maxX >> 4) + " " + ((Z + 8) >> 4))).requireOk("warm the site's chunks");
+        Reply.of(arrange("stellurgytest chunk warmup " + DIM + " " + (minX >> 4) + " " + ((Z - 8) >> 4) + " "
+                + (maxX >> 4) + " " + ((Z + 8) >> 4)).raw()).requireOk("warm the site's chunks");
         // A lid first, then the clearing under it: the site lies under sand, and a cleared column with
         // sand above it fills again before the first shot (measured 2026-10-03: a sand block at
         // 1268,64,828, two blocks in front of the cable, stopped every round aimed at it). Until
         // kinetic rounds too poor for a stage were stopped by what they met, they passed through
         // that sand unseen.
-        Reply.of(exec("stellurgytest fill " + DIM + " " + minX + " " + (Y + 7) + " " + (Z - 6) + " " + maxX
-                + " " + (Y + 7) + " " + (Z + 6) + " minecraft:stone")).requireOk("roof the site");
-        Reply.of(exec("stellurgytest fill " + DIM + " " + minX + " " + (Y - 2) + " " + (Z - 6) + " " + maxX
-                + " " + (Y + 6) + " " + (Z + 6) + " minecraft:air")).requireOk("clear the site");
+        Reply.of(arrange("stellurgytest fill " + DIM + " " + minX + " " + (Y + 7) + " " + (Z - 6) + " " + maxX
+                + " " + (Y + 7) + " " + (Z + 6) + " minecraft:stone").raw()).requireOk("roof the site");
+        Reply.of(arrange("stellurgytest fill " + DIM + " " + minX + " " + (Y - 2) + " " + (Z - 6) + " " + maxX
+                + " " + (Y + 6) + " " + (Z + 6) + " minecraft:air").raw()).requireOk("clear the site");
     }
 
     // ---- reading the world
@@ -432,19 +432,19 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     }
 
     private String readZone(int x) throws Exception {
-        return exec("stellurgytest shield zone " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest shield zone " + DIM + " " + x + " " + Y + " " + Z).raw();
     }
 
     private String readShield(int x) throws Exception {
-        return exec("stellurgytest shield read " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest shield read " + DIM + " " + x + " " + Y + " " + Z).raw();
     }
 
     private String readStage(int x) throws Exception {
-        return exec("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z).raw();
     }
 
     private void place(String block, int x) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + Z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

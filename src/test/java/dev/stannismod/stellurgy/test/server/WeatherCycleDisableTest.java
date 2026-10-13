@@ -70,13 +70,9 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
         }
     }
 
-    private String cmd(String c) throws Exception {
-        return String.join("\n", client().execute(c));
-    }
-
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(this::cmd, dim).requireDim(dim);
+        return DimWeather.forDim(c -> arrange(c).raw(), dim).requireDim(dim);
     }
 
     /** Pins INV-WGEN-15 (with custom weather disabled the cycle defers to vanilla, and planet rain survives a restart). */
@@ -84,7 +80,7 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
     @Test
     public void customWeatherCycleRunsOnlyWhenConfigEnabled() throws Exception {
 
-        DimList dimList = DimList.of(cmd("stellurgytest dim list"));
+        DimList dimList = DimList.of(read("stellurgytest dim list").raw());
         assertTrue("fixture dim not registered: " + dimList, dimList.holds(FIXTURE_DIM));
 
         // Load the planet while custom weather is still ENABLED (boot default) so it
@@ -93,16 +89,16 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
         // overworld-isolated WorldInfo — isolating the updateWeather() gate from the
         // separate (already-tested) wrapping gate.
         // The flag is put back as this scenario found it: the server is shared with the class run.
-        String flagBefore = Reply.of(cmd("stellurgytest config get enableCustomPlanetWeather")).text("value");
+        String flagBefore = Reply.of(read("stellurgytest config get enableCustomPlanetWeather").raw()).text("value");
         try {
             customWeatherCycleRunsOnlyWhenConfigEnabledBody();
         } finally {
-            cmd("stellurgytest config set enableCustomPlanetWeather " + flagBefore);
+            arrange("stellurgytest config set enableCustomPlanetWeather " + flagBefore);
         }
     }
 
     private void customWeatherCycleRunsOnlyWhenConfigEnabledBody() throws Exception {
-        assertTrue(Reply.of(cmd("stellurgytest config set enableCustomPlanetWeather true")).ok());
+        assertTrue(Reply.of(arrange("stellurgytest config set enableCustomPlanetWeather true").raw()).ok());
         DimWeather wrapped = weather(FIXTURE_DIM);
         // Anchor on the probe's named worldInfoClass field, not a bare substring
         // of the whole response.
@@ -111,7 +107,7 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
 
         // Forced-clear marker (rain=-1, thunder=-1): the custom cycle, when it runs,
         // drives this planet to clear regardless of what we set.
-        String marker = cmd("stellurgytest weather set-marker " + FIXTURE_DIM + " -1 -1");
+        String marker = arrange("stellurgytest weather set-marker " + FIXTURE_DIM + " -1 -1").raw();
         assertTrue("set-marker failed: " + marker, Reply.of(marker).bool("usesCustomWorldInfo"));
 
         // --- config ON: the forced-clear cycle runs and suppresses the rain ---
@@ -119,9 +115,9 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
         // server tick clears it before we could observe it; the post-tick state is
         // the deterministic contract.)
         assertTrue("weather set rain failed",
-                Reply.of(cmd("stellurgytest weather set " + FIXTURE_DIM + " rain 12000")).ok());
+                Reply.of(arrange("stellurgytest weather set " + FIXTURE_DIM + " rain 12000").raw()).ok());
         assertTrue("tick-provider failed",
-                Reply.of(cmd("stellurgytest weather tick-provider " + FIXTURE_DIM + " 3")).ok());
+                Reply.of(act("stellurgytest weather tick-provider " + FIXTURE_DIM + " 3").raw()).ok());
         DimWeather onAfterTick = weather(FIXTURE_DIM);
         assertFalse("with custom planet weather ON, the forced-clear cycle must suppress the "
                 + "rain — got " + onAfterTick.raw(), onAfterTick.raining);
@@ -129,14 +125,14 @@ public class WeatherCycleDisableTest extends AbstractSharedServerTest {
         // --- config OFF (the fix): updateWeather delegates to vanilla; the custom
         // forced-clear cycle does NOT run, so rain we set takes and survives ticks.
         // This fails if the fix is reverted (the marker cycle would clear it).
-        assertTrue(Reply.of(cmd("stellurgytest config set enableCustomPlanetWeather false")).ok());
+        assertTrue(Reply.of(arrange("stellurgytest config set enableCustomPlanetWeather false").raw()).ok());
         assertTrue("weather set rain failed",
-                Reply.of(cmd("stellurgytest weather set " + FIXTURE_DIM + " rain 12000")).ok());
+                Reply.of(arrange("stellurgytest weather set " + FIXTURE_DIM + " rain 12000").raw()).ok());
         DimWeather offAfterSet = weather(FIXTURE_DIM);
         assertTrue("with custom planet weather OFF, set rain must take (no custom cycle to "
                 + "suppress it) — got " + offAfterSet.raw(), offAfterSet.raining);
         assertTrue("tick-provider failed",
-                Reply.of(cmd("stellurgytest weather tick-provider " + FIXTURE_DIM + " 3")).ok());
+                Reply.of(act("stellurgytest weather tick-provider " + FIXTURE_DIM + " 3").raw()).ok());
         DimWeather offAfterTick = weather(FIXTURE_DIM);
         assertTrue("with custom planet weather OFF, the rain must survive weather ticks "
                 + "(vanilla delegation, marker ignored) — got " + offAfterTick.raw(),

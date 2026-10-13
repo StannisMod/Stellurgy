@@ -25,10 +25,10 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
     @Test
     public void theSeatMountProbeReusesTheSeatsSingleDummy() throws Exception {
         int x = 3000, y = FixtureSite.OPEN_AIR_Y, z = 3000;
-        String warmup = String.join("\n", client().execute(
+        String warmup = String.join("\n", client().arrange(
                 "stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4)));
         assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
-        String place = String.join("\n", client().execute("stellurgytest fill 0 "
+        String place = String.join("\n", client().arrange("stellurgytest fill 0 "
                 + x + " " + y + " " + z + " " + x + " " + y + " " + z
                 + " stellurgy:pilotSeat"));
         assertTrue("placing the pilot seat failed: " + place, Reply.of(place).ok());
@@ -36,11 +36,11 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
         // The bare form is right here and nowhere else: this test PLACES the only pilot seat in the
         // world two statements above, and the reader's seat count is what says so in a failure.
         SeatMount first = SeatMount.firstLoadedSeat(
-                cmd -> String.join("\n", client().execute(cmd)), 0);
+                cmd -> String.join("\n", client().arrange(cmd)), 0);
         first.requireSeatFound("seat-mount must find the pilot seat just placed");
 
         SeatMount second = SeatMount.firstLoadedSeat(
-                cmd -> String.join("\n", client().execute(cmd)), 0);
+                cmd -> String.join("\n", client().arrange(cmd)), 0);
         second.requireSeatFound("seat-mount must find that same pilot seat again");
 
         assertEquals("a second mount on the same seat must REUSE its bound dummy, not spawn a "

@@ -157,7 +157,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         // subspace. Derived from the allocated base, never written as an address.
         final int buildSeatX = bx + 3, buildSeatY = by + 5, buildSeatZ = bz + 3;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -175,7 +175,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
                 + " queryable registry before anything can be aimed at it (the spawn is asynchronous)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what loads the ship here, so the settle below is measuring"
                         + " a craft only an arrived client can have brought into being");
@@ -236,7 +236,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
             lastStandMark = standMark;
             double standX = seatWorld[0] + STAND_OFF_X;
             double standZ = seatWorld[2];
-            exec("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + standZ + " 0 0");
+            arrange("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + standZ + " 0 0");
             awaitClientPlacedNear(standMark, standX, standZ,
                     "the stand beside the seat must reach the client before he aims from it");
             JsonObject state = bot().reportState();
@@ -339,7 +339,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
                         + " (the chain above), or the pilot sees himself standing on a deck he is in"
                         + " fact strapped into", 5 * budget,
                 " serverMountRecord=" + events.since(pressMark, "mount") + aimDiag);
-        String serverRiding = exec("stellurgytest player riding-entity");
+        String serverRiding = read("stellurgytest player riding-entity").raw();
         String boardDiag = " clientRiding=" + riding + " serverRiding=" + serverRiding
                 + " mouseOverAfter=" + bot().reportMouseOver() + aimDiag;
 
@@ -372,12 +372,12 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
      * time and not about which craft is being waited for.
      */
     private String shipInfoAtBase() throws Exception {
-        return exec("stellurgytest vs ship-info 0 id " + shipUuid);
+        return read("stellurgytest vs ship-info 0 id " + shipUuid).raw();
     }
 
     /** The seat's subspace address + live world position, resolved from the craft's IDENTITY. */
     private PilotSeat findSeat() throws Exception {
-        return PilotSeat.byId(this::exec, 0, shipUuid);
+        return PilotSeat.byId(c -> read(c).raw(), 0, shipUuid);
     }
 
     private static boolean isWorldReady(JsonObject report) {
@@ -404,8 +404,8 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // it matters for a RIGHT-CLICK subject in particular: a player on a pit's rim aims over the
         // block he means, and the miss reads as the interaction path refusing him.
-        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
-                "the hull, and the air the player stands and right-clicks in beside its seat");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
+                "the hull, and the air the player stands and right-clicks in beside its seat"));
     }
 
     // ---- the edit legs -------------------------------------------------------------------------
@@ -520,7 +520,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         // stone — and the GIVE is a link too, on the slot write that carries it.
         emptyTheHandOnClient("the bot's hand must be empty before it is given the stone to place");
         long giveMark = clientEvents().mark();
-        exec("give @a minecraft:stone 8");
+        arrange("give @a minecraft:stone 8");
         ArrangementFailure.arranged(() -> clientEvents().awaitField(giveMark, "client_slot_set", "item",
                 "minecraft:stone", "the given stone must reach the client's inventory before it can be"
                         + " placed", LINK_BUDGET_TICKS));
@@ -599,21 +599,21 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
 
         // The assembly runs with no observer near it, and the observer is a client.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it");
 
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
-                "the hull, and the air the player stands and clicks in on its deck");
+        String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
+                "the hull, and the air the player stands and clicks in on its deck"));
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 Reply.of(assemble).ok());
         shipUuid = ArrangementFailure.arranged(() -> awaitShipSpawned(events, spawnMark, "the assembly"
                 + " must create a VS ship before anything can be aimed at it (the spawn is asynchronous)"));
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's arrival is what loads the ship here");
         ArrangementFailure.arranged(() -> awaitShipUsable(events, spawnMark, shipUuid, LINK_BUDGET_TICKS));
@@ -640,7 +640,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
 
                 long standMark = clientEvents().mark();
                 double standX = seatWorld[0] + EDIT_STAND_OFF_X;
-                exec("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + seatWorld[2] + " 0 0");
+                arrange("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + seatWorld[2] + " 0 0");
                 awaitClientPlacedNear(standMark, standX, seatWorld[2],
                         "the stand on the deck must reach the client before he aims from it");
             }
@@ -669,7 +669,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
 
     /** The SERVER's reading of a block at a SUBSPACE position. */
     private String blockAt(int x, int y, int z) throws Exception {
-        return exec("stellurgytest block at 0 " + x + " " + y + " " + z);
+        return read("stellurgytest block at 0 " + x + " " + y + " " + z).raw();
     }
 
     /**

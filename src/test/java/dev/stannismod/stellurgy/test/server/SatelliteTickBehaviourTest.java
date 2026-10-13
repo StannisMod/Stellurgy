@@ -68,7 +68,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         int ticks = 10;
         long satId = createSat("oreScanner", powerGen, 10_000, 1000);
 
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " " + ticks));
         assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long pre = longField(PRE_STORED, resp, "preStored");
@@ -96,7 +96,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
         // Tick 10x — first tick alone (powerGen-1=999) already overshoots
         // powerStorage=500.
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 10"));
         assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long post = longField(POST_STORED, resp, "postStored");
@@ -121,7 +121,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
     public void dataSatelliteAccumulatesDataOverTime() throws Exception {
         long satId = createSat("composition", 1000, 100_000, 1000);
 
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 100"));
         assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long preData = longField(PRE_DATA, resp, "preData");
@@ -149,14 +149,14 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         // otherwise produce ~25 fires.
         long satId = createSat("composition", 1000, 100_000, 2);
 
-        client().execute("stellurgytest satellite tick 0 " + satId + " 500");
+        client().act("stellurgytest satellite tick 0 " + satId + " 500");
 
-        String dataResp = String.join("\n", client().execute(
+        String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         long maxData = longField(MAX_DATA, dataResp, "maxData");
 
         // Read postData via a fresh 0-tick run (gives us a snapshot).
-        String snap = String.join("\n", client().execute(
+        String snap = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 0"));
         long postData = longField(POST_DATA, snap, "postData");
         assertTrue("data must NOT exceed maxData cap even with many "
@@ -167,7 +167,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
     // -- helpers ----------------------------------------------------------
 
     private long createSat(String type, int powerGen, int powerStorage, int maxData) throws Exception {
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().arrange(
                 "stellurgytest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,

@@ -286,7 +286,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      */
     @Before
     public void openTheSeatDeliveryWindows() throws Exception {
-        seatDelivery = SeatDelivery.open(this::exec, client(), serverEvents(), clientEvents());
+        seatDelivery = SeatDelivery.open(c -> read(c).raw(), client(), serverEvents(), clientEvents());
     }
 
     /** This run's pilot-input delivery windows — see {@link SeatDelivery}. */
@@ -379,7 +379,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // mixins are not applied in e2e mode), so nothing but production can be what keeps it.
 
         // ---- LEG 0: the world this loop is walked in is the one the test asked for. -------------
-        String fuelCfg = exec("stellurgytest config get rocketRequireFuel");
+        String fuelCfg = read("stellurgytest config get rocketRequireFuel").raw();
         requireArranged("the seeded config file must have been PARSED. This reads the live "
                         + "field back through the same config object production uses, so a stale "
                         + "`true` here means the file was written in a syntax the config reader "
@@ -388,12 +388,12 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // The home world's line, stated in the planet file this world was created from (see
         // playerStart) and read back as production reads it. `stated` says the
         // file's <orbitHeight> is what production holds, not a line derived from Earth's radius.
-        OrbitLine homeLine = OrbitLine.of(this::exec, 0);
+        OrbitLine homeLine = OrbitLine.of(cmd -> read(cmd).raw(), 0);
         requireArranged("the home world's orbit line must be the one its planet file states — a"
                         + " line that is not `stated` means the seeded file was never loaded: " + homeLine,
                 homeLine.stated && homeLine.line() == ORBIT_LINE);
 
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(cmd -> read(cmd).raw());
         requireArranged("the production space subsystem must be REGISTERED — it owns the "
                         + "cells a ship arrives in, and without it the climb leg has nowhere to go: "
                         + status.raw(),
@@ -442,7 +442,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // is the one this telescope wrote, carried by hand.
         tLeg = System.currentTimeMillis();
         homeMoon = homeMoon();
-        String starter = exec("stellurgytest telescope starter 0");
+        String starter = read("stellurgytest telescope starter 0").raw();
         int[] starterDims = Reply.of("stellurgytest telescope starter", starter).intArray("crystalDims");
         assertTrue("a first crystal must carry the home world — without it the absence below is also"
                 + " what an empty crystal says: " + starter, containsInt(starterDims, 0));
@@ -477,7 +477,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + "route as a human drives it, and its completion signal has to be the ship "
                         + "itself: a tier-2 craft spawns no rocket entity, so the rocket list would "
                         + "report a healthy nothing. ships=" + ships
-                        + " spawnDiag=" + exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot")
+                        + " spawnDiag=" + read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot").raw()
                         + " builderEnergy=" + energyAt(builderPos),
                 ships >= 1);
         System.out.println("[M1] leg 2 (client-driven assembly) " + elapsed(tLeg) + " ships=" + ships);
@@ -497,7 +497,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // crosses three times; the durable name rides in the tile's NBT through every one of them,
         // so it is what leg 6 and the arrival-side seat lookups are keyed on. Without it those two
         // fell back to "the first settled row in the cell" and "whatever is nearest the pilot".
-        String nameReply = exec("stellurgytest vs ship-name 0 " + describeArgs(afcSub));
+        String nameReply = read("stellurgytest vs ship-name 0 " + describeArgs(afcSub)).raw();
         requireArranged("the built ship's flight computer must carry a durable name, or nothing"
                 + " after the first crossing can be addressed to this craft: " + nameReply,
                 Reply.of(nameReply).bool("found"));
@@ -547,7 +547,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + "CLIENT itself performs it — the crosshair was proven to be on that block "
                         + "and the seat agreed it belongs to a ship, so a silence here is the mount "
                         + "never happening on his side", budget, seatAim.diagnosis);
-        String serverRiding = exec("stellurgytest player riding-entity");
+        String serverRiding = read("stellurgytest player riding-entity").raw();
         assertTrue("a real use-key press aimed at the ship's PILOT SEAT must seat the pilot, as the "
                         + "CLIENT itself renders him. The crosshair was proven to be on that very "
                         + "block, so a red here is the interaction being refused rather than a missed "
@@ -589,7 +589,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         } finally {
             input().releaseKey(Keyboard.KEY_R);
         }
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfter = SubsystemStatus.read(cmd -> read(cmd).raw());
         String entryDecisions = events.since(entryMark, "entry_decided");
         // The RECORD again: `decision` is a field of an entry_decided record, and asking the reply
         // for it reads the envelope's top level, where it is not. The subject here is the window —
@@ -634,7 +634,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // NAMED. Without the id this asked for "the first settled row bound to this slot", which is
         // an iteration order over every ship the ledger holds — and the answer to a question about
         // somebody else's craft is indistinguishable from the answer to this one.
-        String afcProbe = exec("stellurgytest space find-afc " + slotDim + " " + builtShipName);
+        String afcProbe = read("stellurgytest space find-afc " + slotDim + " " + builtShipName).raw();
         requireArranged("the ship the pilot flew up must be findable in the space cell he "
                         + "arrived in — the ledger says he is here, so a ship that cannot be located "
                         + "means the arrival left no body behind: " + afcProbe,
@@ -643,7 +643,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // The reader refuses a ship the ledger has no entry for, and refuses to answer a cell for
         // one — which is what this arrangement check stood for, and it no longer has to ask the
         // probe a second time to say so.
-        String launchCell = LedgerEntry.forShip(this::exec, shipId)
+        String launchCell = LedgerEntry.forShip(cmd -> read(cmd).raw(), shipId)
                 .requireFound("the ledger must name the cell the jump departs FROM — without it the"
                         + " arrival assertion below cannot tell a jump from a no-op. shipId="
                         + shipId)
@@ -664,8 +664,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // own accept rate, so the window this leg opens is paid for by the ship's grid, the way a
         // player's generation pays for it. A bank short of its burst here is that grid failing to
         // feed it — the link between "he built power aboard" and "his drive can jump".
-        DriveInfo bank = DriveInfo.of(exec("stellurgytest drive observe " + slotDim + " "
-                + describeArgs(navAfcSub)));
+        DriveInfo bank = DriveInfo.of(read("stellurgytest drive observe " + slotDim + " "
+                + describeArgs(navAfcSub)).raw());
         System.out.println("[M1] drive bank fed by the ship's own grid: charge=" + bank.charge
                 + " burst=" + bank.burstCost + " capacity=" + bank.capacity);
         assertTrue("the ship's own power must have filled its jump bank by the time the pilot reaches"
@@ -726,7 +726,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         clientEvents().await(insertMark, "client_click_confirmed",
                 "the server must handle the click that puts the crystal into the console's SHIP slot",
                 SLOT_APPLIED_TICKS);
-        String navStatus = exec("stellurgytest nav status " + slotDim + " " + describeArgs(navSub));
+        String navStatus = read("stellurgytest nav status " + slotDim + " " + describeArgs(navSub)).raw();
         int listed = readIntOr(navStatus, NAV_SHIP_ADDRESSES, 0);
         assertTrue("putting a memory crystal into the console's SHIP slot must give the pilot a list "
                         + "of places he can fly to — the ship's addresses ARE that crystal's, so an "
@@ -766,7 +766,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                             + "buttons are the only way a pilot chooses where to go, and a press that "
                             + "is swallowed leaves him reading the target he picked last time",
                     budget * 5);
-            String picked = exec("stellurgytest nav status " + slotDim + " " + describeArgs(navSub));
+            String picked = read("stellurgytest nav status " + slotDim + " " + describeArgs(navSub)).raw();
             String cell = unquote(readString(picked, NAV_TARGET));
             considered.append(' ').append(candidate).append("->").append(cell)
                     .append(picked.substring(Math.max(0, picked.indexOf('{'))));
@@ -805,7 +805,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                 "pressing ARM must reach the navigation computer and be ANSWERED — that press is how "
                         + "a player commits to a destination, and an unarmed ship refuses the jump "
                         + "key outright", budget * 5);
-        String armedStatus = exec("stellurgytest nav status " + slotDim + " " + describeArgs(navSub));
+        String armedStatus = read("stellurgytest nav status " + slotDim + " " + describeArgs(navSub)).raw();
         // Two claims, so two asserts. `armDecision` is the console's answer to the press, read off
         // the event window; `armedStatus` is a live status fetched afterwards. Conjoined, a red said
         // only that one of the two was false and handed the reader two rendered replies to diff —
@@ -838,7 +838,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                 + " launchCell=" + launchCell + " pick=" + pickIndex + " targetDim=" + targetDim
                 + " target=" + targetCell
                 + " targetInfo=" + targetInfo + " considered=" + considered
-                + " drive=" + exec("stellurgytest drive observe " + slotDim + " " + describeArgs(navAfcSub)));
+                + " drive=" + read("stellurgytest drive observe " + slotDim + " " + describeArgs(navAfcSub)).raw());
 
         // ---- LEG 7: he fires the jump with the real jump key. -----------------------------------
         tLeg = System.currentTimeMillis();
@@ -853,7 +853,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         JsonObject reboarded = sitBackDown(events, slotDim, navAfcSub, budget);
         requireArranged("the pilot must be able to take his seat again after navigating — the "
                         + "jump he armed is fired from the controls, not from the deck. riding="
-                        + reboarded + " serverRiding=" + exec("stellurgytest player riding-entity"),
+                        + reboarded + " serverRiding=" + read("stellurgytest player riding-entity").raw(),
                 isRiding(reboarded));
 
         // The mark BEFORE the key: the arrival's ledger write is awaited from here.
@@ -883,8 +883,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                             + " turned down. presses=" + pressed
                             + " delivery=" + seatDelivery.reading()
                             + " riding=" + client().reportRidingEntity()
-                            + " drive=" + exec("stellurgytest drive observe " + slotDim + " "
-                            + describeArgs(navAfcSub)),
+                            + " drive=" + read("stellurgytest drive observe " + slotDim + " "
+                            + describeArgs(navAfcSub)).raw(),
                     "WARNED", outcome);
             jumpBranch = "confirm-then-commit";
             long confirmMark = events.mark();
@@ -894,7 +894,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             assertEquals("…and the CONFIRMING press must spool the drive: the gate's advisory is an"
                             + " 'are you sure', not a refusal, so a second press has to carry the"
                             + " ship. presses=" + confirmed + " drive="
-                            + exec("stellurgytest drive observe " + slotDim + " " + describeArgs(navAfcSub)),
+                            + read("stellurgytest drive observe " + slotDim + " " + describeArgs(navAfcSub)).raw(),
                     "SPOOLING", Events.text(Events.lastRecord(confirmed), "outcome"));
         }
         System.out.println("[M1] jump branch: " + jumpBranch + " firstPress=" + pressed);
@@ -923,12 +923,12 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                 break;
             }
         }
-        String ledgerAfterJump = exec("stellurgytest space ledger-get " + shipId);
+        String ledgerAfterJump = read("stellurgytest space ledger-get " + shipId).raw();
         assertTrue("a jump the pilot armed and fired must MOVE the ship to another cell — the whole "
                         + "point of the hyperdrive is that the craft is somewhere else afterwards. "
                         + "launchCell=" + launchCell + " arrivedCell=" + arrivedCell
                         + " target=" + targetCell + " ledger=" + ledgerAfterJump
-                        + " status=" + exec("stellurgytest space subsystem-status"),
+                        + " status=" + read("stellurgytest space subsystem-status").raw(),
                 !arrivedCell.equals(launchCell));
 
         // THE promise of the loop: the pilot picked a planet, and when the drive stops he is at that
@@ -936,7 +936,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // planet moves while the ship flies — that is precisely why the computer aims ahead of it.
         // A ship aimed at where the body WAS lands in a cell the body has left, which reads here as
         // an arrived cell whose own body list does not contain the destination.
-        CellInfo arrivedCellInfo = CellInfo.atKey(this::exec, arrivedCell);
+        CellInfo arrivedCellInfo = CellInfo.atKey(cmd -> read(cmd).raw(), arrivedCell);
         // The AT-CELL list, read as a list. What stood here took the field's rendered text, stripped
         // its brackets, and asked whether `"dim":N,` appeared in what was left — a substring of a
         // rendering of an array, pinning that `dim` is written first in each body and followed by a
@@ -958,7 +958,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
 
         // The pilot, observed from the CLIENT: same two questions leg 5 asks, because a jump is the
         // second world transition of the loop and a seat lost in it is lost just as silently.
-        SubsystemStatus statusAfterJump = SubsystemStatus.read(this::exec);
+        SubsystemStatus statusAfterJump = SubsystemStatus.read(cmd -> read(cmd).raw());
                 String jumpSlotDims = "," + joinInts(statusAfterJump.slotDims()) + ",";
         int jumpDim = awaitClientWorld(jumpClientMark, jumpSlotDims,
                 "the pilot who fired the jump must come out of it in a space cell too — a drive "
@@ -984,7 +984,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // (1) Arriving is not landing. The jump stands the ship off its destination, so the sky he
         // comes out under shows the moon OUTSIDE the radius its descent trigger fires inside — the
         // shell as the packet carries it, never a number this test derives.
-        String arrivalSky = exec("stellurgytest space bodies");
+        String arrivalSky = read("stellurgytest space bodies").raw();
         long[] moonAtArrival = skyReadingOf(arrivalSky, homeMoon.dim);
         requireArranged("the moon he jumped to must be in his sky on arrival: " + arrivalSky,
                 moonAtArrival != null);
@@ -1006,7 +1006,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                 budget * 5);
         // …and HE goes with it, still in his seat: the pilot's client follows the craft into the world
         // that holds the moon's zone, and the crossing's own seat chain says he never stood up.
-        final int zoneDim = shipSlotDim(exec("stellurgytest space bodies"));
+        final int zoneDim = shipSlotDim(read("stellurgytest space bodies").raw());
         final int cellDim = awaitClientWorldMatching(jumpClientMark, dim -> dim == zoneDim,
                 "the moon's zone world " + zoneDim,
                 "the pilot must be carried into the moon's zone WITH his ship — a carry that moves"
@@ -1034,13 +1034,13 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         requireArranged("the moon must be MOVING, or keeping station with it is no test at all:"
                 + " travel=" + sampleTravel + " over clock " + moonAt0[3] + ".." + moonAt1[3],
                 perTick > 0.0);
-        long[] before = skyReadingOf(exec("stellurgytest space bodies"), homeMoon.dim);
+        long[] before = skyReadingOf(read("stellurgytest space bodies").raw(), homeMoon.dim);
         long[] moonBefore = frameOf(homeMoon.cell, homeMoon.homeCell);
         int stationTicks = (int) Math.ceil(4.0 * before[0] / perTick);
         for (int given = 0; given < stationTicks; given += STATION_DOSE_PIECE_TICKS) {
             advanceServerAndClient(Math.min(STATION_DOSE_PIECE_TICKS, stationTicks - given));
         }
-        long[] after = skyReadingOf(exec("stellurgytest space bodies"), homeMoon.dim);
+        long[] after = skyReadingOf(read("stellurgytest space bodies").raw(), homeMoon.dim);
         long[] moonAfter = frameOf(homeMoon.cell, homeMoon.homeCell);
         double moonTravel = travel(moonBefore, moonAfter);
         requireArranged("the window must be long enough to tell the two cases apart: the moon"
@@ -1053,7 +1053,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + ") while the moon travelled " + moonTravel + " blocks over clock "
                         + moonBefore[3] + ".." + moonAfter[3],
                 drift < (moonTravel - 2.0 * before[0]) / 2.0);
-        String stillThere = LedgerEntry.forShip(this::exec, shipId)
+        String stillThere = LedgerEntry.forShip(cmd -> read(cmd).raw(), shipId)
                 .requireFound("the ledger must still hold the parked ship").cellKey();
         assertTrue("…and he is still in the moon's own zone after it: " + stillThere,
                 stillThere.startsWith(homeMoon.cell + "."));
@@ -1068,13 +1068,13 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // What the flight computer will see when it looks around this cell. It takes the NEAREST body
         // inside the descent radius, so that is the one the test must load and the one it must judge —
         // reading it here rather than deciding it keeps the test measuring the production choice.
-        String bodies = exec("stellurgytest space bodies");
+        String bodies = read("stellurgytest space bodies").raw();
         int nearestDim = nearestDescendTargetDim(bodies);
         // The cell he left is the control: it is a body's cell too (he took off from it), so if BOTH
         // read empty the registry cannot attribute any cell, and if only the destination does, the
         // console offered an address the rest of the game does not agree exists.
-        String arrivedInfo = exec("stellurgytest space cell-info " + cellArgs(arrivedCell));
-        String launchInfo = exec("stellurgytest space cell-info " + cellArgs(launchCell));
+        String arrivedInfo = read("stellurgytest space cell-info " + cellArgs(arrivedCell)).raw();
+        String launchInfo = read("stellurgytest space cell-info " + cellArgs(launchCell)).raw();
         assertTrue("an address the navigation console OFFERED, and the drive actually flew the pilot "
                         + "to, must still have at it the body whose address it was WHEN HE GETS "
                         + "THERE. A crystal that lists a planet, a gate that clears the jump to it and "
@@ -1215,7 +1215,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                             + "the range on both sides of every burst. rangeAtArrival=" + rangeAtArrival
                             + " best=" + bestRange + " rangeNow=" + range + " bursts=" + bursts
                             + " flown=" + flown
-                            + " ledger=" + exec("stellurgytest space ledger-get " + shipId)
+                            + " ledger=" + read("stellurgytest space ledger-get " + shipId).raw()
                             + " bodies=" + feed,
                     stalled < ARRIVED_BESIDE_IT_BLOCKS);
 
@@ -1259,11 +1259,11 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + "read the two ranges below against the descent radius before suspecting the "
                         + "approach. clientDim=" + descentDim + " cellDim=" + cellDim
                         + " rangeAtArrival=" + rangeAtArrival
-                        + " rangeNow=" + nearestDescendTargetDistance(exec("stellurgytest space bodies"))
+                        + " rangeNow=" + nearestDescendTargetDistance(read("stellurgytest space bodies").raw())
                         + " flown=" + flown
                         + " nearestBodyDim=" + nearestDim
-                        + " descentStatus=" + exec("stellurgytest space descent-status")
-                        + " ledger=" + exec("stellurgytest space ledger-get " + shipId)
+                        + " descentStatus=" + read("stellurgytest space descent-status").raw()
+                        + " ledger=" + read("stellurgytest space ledger-get " + shipId).raw()
                         + " bodies=" + bodies + " delivery=" + seatDelivery.reading(),
                 descentDim != cellDim);
         assertTrue("…and where it puts him down must be a real WORLD, with ground under it. The space "
@@ -1319,7 +1319,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + "he was supposed to fly down to. clientY=" + arrivalY
                         + " buildHeight=" + TerrainHeightFinder.MAX_BUILD_Y
                         + " clientDim=" + descentDim + " riding=" + landedRiding
-                        + " serverRiding=" + exec("stellurgytest player riding-entity")
+                        + " serverRiding=" + read("stellurgytest player riding-entity").raw()
                         + " | the pose the descent actually wrote: " + posed,
                 arrivalY > TerrainHeightFinder.MAX_BUILD_Y);
 
@@ -1342,7 +1342,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         tLeg = System.currentTimeMillis();
         events.markInstrumented();
         long latchClientMark = clientEvents().mark();
-        int destinationLine = OrbitLine.of(this::exec, descentDim).line();
+        int destinationLine = OrbitLine.of(cmd -> read(cmd).raw(), descentDim).line();
         // A link's ceiling, from the ship's own numbers: straight down from the arrival at
         // SHIP_MAX_SPEED (m/s, a twentieth of it per tick) after its 60-tick ramp from rest. Four
         // times that, so the ceiling is never a claim about how fast the box is.
@@ -1455,10 +1455,10 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * inside its zone.
      */
     private ZoneBody homeMoon() throws Exception {
-        CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, 0);
+        CellInfo home = CellInfo.atSector(c -> read(c).raw(), 0, 0, 0, 0);
         requireArranged("the registry places no home world, so it has no zone to hold a moon: "
                 + home, home.dimCell != null);
-        CellInfo system = CellInfo.atKey(this::exec, home.dimCell);
+        CellInfo system = CellInfo.atKey(c -> read(c).raw(), home.dimCell);
         for (CellInfo.Body body : system.systemBodies) {
             if (body.dim != 0 && body.descendTarget && body.cell != null
                     && body.cell.startsWith(home.dimCell + ".")) {
@@ -1488,7 +1488,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // On the home floor laid at leg 0: the multiblock spans x±2, y from the controller's -1 to
         // +3, z from the controller to +4, and he operates it from the floor north of it.
         int cx = observatoryAt[0], cy = observatoryAt[1], cz = observatoryAt[2];
-        String built = exec("stellurgytest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz);
+        String built = arrange("stellurgytest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz).raw();
         requireArranged("the observatory multiblock must stand: " + built, Reply.of(built).ok());
         System.out.println("[M1] observatory at (" + cx + "," + cy + "," + cz + "): " + built);
         return new int[]{cx, cy, cz};
@@ -1501,7 +1501,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      */
     private void handTheBlankCrystal() throws Exception {
         long giveMark = clientEvents().mark();
-        exec("give @a " + CRYSTAL_ITEM + " 1");
+        arrange("give @a " + CRYSTAL_ITEM + " 1");
         try {
             clientEvents().awaitMatching(giveMark, "client_slot_set",
                     reply -> Events.records(reply).stream().anyMatch(record ->
@@ -1535,11 +1535,11 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         for (String[] piece : SUIT) {
             long giveMark = clientEvents().mark();
             if ("stellurgy:spacechestplate".equals(piece[0])) {
-                String handed = exec("stellurgytest e2e filled-space-chest");
+                String handed = arrange("stellurgytest e2e filled-space-chest").raw();
                 requireArranged("the filled space chest must be handed to the player: " + handed,
                         Reply.of(handed).ok());
             } else {
-                exec("give @a " + piece[0] + " 1");
+                arrange("give @a " + piece[0] + " 1");
             }
             try {
                 clientEvents().awaitMatching(giveMark, "client_slot_set",
@@ -1643,7 +1643,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                 "the local radar, started by its own button, must finish", RADAR_RECORD_TICKS,
                 "pos", observatory[0] + "," + observatory[1] + "," + observatory[2],
                 "complete", "true");
-        return TelescopeReading.at(this::exec, where);
+        return TelescopeReading.at(c -> read(c).raw(), where);
     }
 
     /**
@@ -1703,7 +1703,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      */
     private long[] frameOf(String cellKey, String relativeToKey) throws Exception {
         Reply f = Reply.of("stellurgytest space frame",
-                exec("stellurgytest space frame " + cellKey + " " + relativeToKey));
+                read("stellurgytest space frame " + cellKey + " " + relativeToKey).raw());
         long[] at = new long[4];
         for (int i = 0; i < 3; i++) {
             at[i] = (long) f.arrayNumber("relative", i);
@@ -1784,7 +1784,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + "pilot aboard runs on the server, so a dismount the client never applied "
                         + "leaves him riding a seat the server says he left. riding="
                         + client().reportRidingEntity() + " serverRiding="
-                        + exec("stellurgytest player riding-entity")
+                        + read("stellurgytest player riding-entity").raw()
                         + " | dismounts since the key went down: "
                         + log.since(standMark, "dismount"),
                 !isRiding(client().reportRidingEntity()));
@@ -1961,9 +1961,9 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // carries the dimension (it was `ship_spawned`, which does not, that made this a loop) —
         // awaited over the chain, so a load undone by an unload does not answer. A usable hull is one
         // whose blocks are in its subspace, which is what the seat search needs. Then ONE search.
-        String hullId = ShipIdentity.awaitPhysicsIdOf(this::exec,
+        String hullId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
                 serverEvents(), dim, builtShipName, budget * 5);
-        lastSeatProbe = exec("stellurgytest vs find-seat " + dim + " id " + hullId);
+        lastSeatProbe = read("stellurgytest vs find-seat " + dim + " id " + hullId).raw();
         rememberAnchor(lastSeatProbe);
         return lastSeatProbe;
     }
@@ -2110,7 +2110,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         } finally {
             input().releaseKey(Keyboard.KEY_X);
         }
-        return exec("stellurgytest space bodies");
+        return read("stellurgytest space bodies").raw();
     }
 
     /**
@@ -2505,7 +2505,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // A GROUND site on the home floor: the volume above it is cleared and its count reported.
         // The height covers the craft plus the deck the player walks to reach its console; the climb
         // to the orbit line is production's business and no pre-clear could cover it.
-        int[] bp = RocketFixture.placeAt(site, this::exec, VARIANT, 2, 20,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 20,
                 "the jump-capable craft, and the deck the player boards and works it from");
         return new int[]{bp[0], bp[1],
                 bp[2]};
@@ -2539,11 +2539,11 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         site = FixtureSite.onGround(0, bx, by, bz, "the craft stands on the floor laid where the player"
                 + " spawned, because he walks to it");
         int x1 = fx - HOME_WEST, x2 = fx + HOME_EAST, z1 = fz - HOME_NORTH, z2 = fz + HOME_SOUTH;
-        String air = exec("stellurgytest fill 0 " + x1 + " " + (fy + 1) + " " + z1 + " " + x2 + " "
-                + (fy + HOME_AIR) + " " + z2 + " minecraft:air");
+        String air = arrange("stellurgytest fill 0 " + x1 + " " + (fy + 1) + " " + z1 + " " + x2 + " "
+                + (fy + HOME_AIR) + " " + z2 + " minecraft:air").raw();
         requireArranged("the air above the home floor must be cleared: " + air, Reply.of(air).ok());
-        String floor = exec("stellurgytest fill 0 " + x1 + " " + fy + " " + z1 + " " + x2 + " " + fy
-                + " " + z2 + " minecraft:iron_block");
+        String floor = arrange("stellurgytest fill 0 " + x1 + " " + fy + " " + z1 + " " + x2 + " " + fy
+                + " " + z2 + " minecraft:iron_block").raw();
         requireArranged("the home floor must be laid: " + floor, Reply.of(floor).ok());
         System.out.println("[M1] home site: spawned on " + describe(spawnFloor) + "; cleared "
                 + Reply.of(air).integer("placed") + " blocks above the floor (" + x1 + ".." + x2 + ", "
@@ -2565,11 +2565,11 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             double surface = deckTop - 0.5 * k;
             int fullTop = (int) Math.floor(surface) - 1;
             if (fullTop >= by + 1) {
-                exec("fill " + (bx + 1) + " " + (by + 1) + " " + z + " " + (bx + 2) + " " + fullTop + " "
+                arrange("fill " + (bx + 1) + " " + (by + 1) + " " + z + " " + (bx + 2) + " " + fullTop + " "
                         + z + " minecraft:stone");
             }
             if (surface != Math.floor(surface)) {
-                exec("fill " + (bx + 1) + " " + (fullTop + 1) + " " + z + " " + (bx + 2) + " "
+                arrange("fill " + (bx + 1) + " " + (fullTop + 1) + " " + z + " " + (bx + 2) + " "
                         + (fullTop + 1) + " " + z + " minecraft:stone_slab 0");
             }
         }
@@ -2697,7 +2697,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     }
 
     private Events serverEvents() {
-        return new Events(this::exec, GameTicks.serverAndClient(server(), GameTicks.server(), client()::waitWorldTicks),
+        return new Events(c -> read(c).raw(), GameTicks.serverAndClient(server(), GameTicks.server(), client()::waitWorldTicks),
                 evictionReports());
     }
 
@@ -2796,7 +2796,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         }
         JsonObject riding = client().reportRidingEntity();
         assertTrue(what + " clientRiding=" + riding
-                        + " serverRiding=" + exec("stellurgytest player riding-entity")
+                        + " serverRiding=" + read("stellurgytest player riding-entity").raw()
                         + " | he was taken off a mount and not put back. The SERVER's chain —"
                         + " dismounts=" + log.since(serverMark, "dismount")
                         + " ||| mounts=" + log.since(serverMark, "mount"),
@@ -2873,12 +2873,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         }
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", server().execute(cmd));
-    }
-
     private String energyAt(int[] pos) throws Exception {
-        return exec("stellurgytest energy stored 0 " + pos[0] + " " + pos[1] + " " + pos[2]);
+        return read("stellurgytest energy stored 0 " + pos[0] + " " + pos[1] + " " + pos[2]).raw();
     }
 
     /**
@@ -2888,7 +2884,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
     private PilotSeat findSeat() throws Exception {
         assertNotNull("the build must have named its ship before anything asks about that ship's"
                 + " seat", builtShipVsId);
-        return PilotSeat.byId(this::exec, 0, builtShipVsId);
+        return PilotSeat.byId(c -> read(c).raw(), 0, builtShipVsId);
     }
 
     /**
@@ -2905,7 +2901,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         if (shipAnchor == null) {
             return null;
         }
-        String hull = exec("stellurgytest vs ship-uuid " + dim + " " + builtShipName);
+        String hull = read("stellurgytest vs ship-uuid " + dim + " " + builtShipName).raw();
         // absence is the answer, as in the seat probe above: the loop waits for a hull to
         // carry the name.
         String namedHull = Reply.of("stellurgytest vs ship-uuid", hull).textOr("id", null);
@@ -2918,8 +2914,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             lastToWorldProbe = hull;
             return null;
         }
-        lastToWorldProbe = exec("stellurgytest vs to-world " + dim + " id " + namedHull
-                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
+        lastToWorldProbe = read("stellurgytest vs to-world " + dim + " id " + namedHull
+                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz)).raw();
         return readTripleD(lastToWorldProbe, "worldX", "worldY", "worldZ");
     }
 
@@ -3031,5 +3027,15 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             return null;
         }
         return new double[]{x, y, z};
+    }
+
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, server().read(command));
+    }
+
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, server().arrange(command));
     }
 }

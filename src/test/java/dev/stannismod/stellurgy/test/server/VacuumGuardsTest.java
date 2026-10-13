@@ -82,7 +82,7 @@ public class VacuumGuardsTest extends AbstractSharedServerTest {
      * populates; the per-player cache the living updates fill is not what either guard reads.
      */
     private void enterDim(int dim) throws Exception {
-        String fake = exec("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5");
+        String fake = act("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5").raw();
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
     }
 
@@ -90,7 +90,7 @@ public class VacuumGuardsTest extends AbstractSharedServerTest {
     @Test
     public void sleepInVacuumDimIsRefused() throws Exception {
         enterDim(DIM_VAC);
-        String resp = exec("stellurgytest player try-sleep");
+        String resp = act("stellurgytest player try-sleep").raw();
         assertEquals("sleep in vacuum dim must be refused with OTHER_PROBLEM; " + resp,
                 "OTHER_PROBLEM", stringField(SLEEP_RESULT, resp, "resultStatus"));
     }
@@ -99,7 +99,7 @@ public class VacuumGuardsTest extends AbstractSharedServerTest {
     @Test
     public void sleepInBreathableStellurgyDimNotRefusedByVacuumGate() throws Exception {
         enterDim(DIM_AIR);
-        String resp = exec("stellurgytest player try-sleep");
+        String resp = act("stellurgytest player try-sleep").raw();
         assertNotEquals("breathable Stellurgy dim must NOT be refused by the vacuum-sleep gate; "
                 + resp, "OTHER_PROBLEM", stringField(SLEEP_RESULT, resp, "resultStatus"));
     }
@@ -108,7 +108,7 @@ public class VacuumGuardsTest extends AbstractSharedServerTest {
     @Test
     public void flintInVacuumDimDoesNotIgnite() throws Exception {
         enterDim(DIM_VAC);
-        String resp = exec("stellurgytest player try-ignite");
+        String resp = act("stellurgytest player try-ignite").raw();
         assertEquals("flint right-click in vacuum dim must be canceled by "
                 + "PlanetEventHandler.blockRightClicked; " + resp,
                 "true", stringField(CANCELED, resp, "canceled"));
@@ -118,7 +118,7 @@ public class VacuumGuardsTest extends AbstractSharedServerTest {
     @Test
     public void flintInBreathableStellurgyDimDoesIgnite() throws Exception {
         enterDim(DIM_AIR);
-        String resp = exec("stellurgytest player try-ignite");
+        String resp = act("stellurgytest player try-ignite").raw();
         assertEquals("flint right-click in a breathable Stellurgy dim must NOT be canceled; "
                 + resp, "false", stringField(CANCELED, resp, "canceled"));
     }

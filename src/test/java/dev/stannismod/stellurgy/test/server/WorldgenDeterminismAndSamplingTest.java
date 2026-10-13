@@ -39,7 +39,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
     private static final String TOP_BLOCK_PATTERN = "topBlock";
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = String.join("\n", client().execute("stellurgytest dim list"));
+        String joined = String.join("\n", client().read("stellurgytest dim list"));
         Assume.assumeFalse(
                 "No Stellurgy dimensions registered — skipping (empty galaxy?)",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
@@ -66,7 +66,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         // every query — sample three distinct chunks and assert they don't
         // collapse to identical (topY,topBlock) triples.
         int dim = firstNonOverworldStellurgyDimOrSkip();
-        client().execute("stellurgytest dim load " + dim);
+        client().arrange("stellurgytest dim load " + dim);
 
         // Use wider chunk spread (0/64/128 in X) so adjacent biome boundaries
         // are crossed even on Stellurgy's flat moon-style planets. With (0,4,8)
@@ -74,11 +74,11 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         // legitimately collapsing topY+biome to identical and flaking the
         // assertion.
         String a = String.join("\n",
-                client().execute("stellurgytest worldgen sample " + dim + " 0 0"));
+                client().read("stellurgytest worldgen sample " + dim + " 0 0"));
         String b = String.join("\n",
-                client().execute("stellurgytest worldgen sample " + dim + " 64 64"));
+                client().read("stellurgytest worldgen sample " + dim + " 64 64"));
         String c = String.join("\n",
-                client().execute("stellurgytest worldgen sample " + dim + " 128 0"));
+                client().read("stellurgytest worldgen sample " + dim + " 128 0"));
 
         String topAandBandC =
                 group(TOP_Y_PATTERN, a, "topY") + "/"
@@ -130,7 +130,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
 
     private void assertCraterGateRejects(String generatorArg) throws Exception {
         final int spaceDim = -2;
-        String list = String.join("\n", client().execute("stellurgytest dim list"));
+        String list = String.join("\n", client().read("stellurgytest dim list"));
         int dim = Integer.MIN_VALUE;
         for (int d : Reply.of("stellurgytest dim list", list).intArray(AR_DIMS_ARRAY_PATTERN)) {
             if (d != 0 && d != -1 && d != spaceDim) {
@@ -142,9 +142,9 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         ArrangementFailure.requireArranged(
                 "a registered Stellurgy planet dim (valid biome/topBlock) is needed: " + list,
                 dim != Integer.MIN_VALUE);
-        client().execute("stellurgytest dim load " + dim);
+        client().arrange("stellurgytest dim load " + dim);
 
-        String r = String.join("\n", client().execute(
+        String r = String.join("\n", client().arrange(
                 ("stellurgytest worldgen crater-gate " + dim + " " + generatorArg).trim()));
         Reply reply = Reply.of(r);
         assertTrue("probe must run: " + r, reply.ok());

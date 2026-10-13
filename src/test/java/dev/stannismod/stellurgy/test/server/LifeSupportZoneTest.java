@@ -115,7 +115,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
         // Make the room stale: most of its oxygen already breathed into CO2.
         arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
-                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
 
         Reply before = ventInfo(cx);
         assertEquals("premise: the room is stale before the machine runs: " + before,
@@ -139,7 +139,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
         // Forge lowercases registry paths, so the id Java passes as "carbonDust" is stored — and
         // reported — as "carbondust".
-        Reply slot = ask("stellurgytest hatch read 0 " + (cx + 1) + " " + cyBase + " " + czBase);
+        Reply slot = read("stellurgytest hatch read 0 " + (cx + 1) + " " + cyBase + " " + czBase);
         assertTrue("the carbon it removed from the air must appear as dust: " + slot,
                 slot.element("slots", "item", "stellurgy:carbondust").integer("count") >= 1);
     }
@@ -172,7 +172,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         forceTickAndReseal(cx);
 
         arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
-                + " " + ppm(730_000) + " " + ppm(210_000) + " " + ppm(60_000));
+                + " " + ppm(730_000) + " " + ppm(210_000) + " " + ppm(60_000)).requireOk();
 
         Reply ventAloneBefore = ventInfo(cx);
         GameTicks.advance(client(), GameTicks.server(), 20);
@@ -214,7 +214,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         forceTickAndReseal(cx);
 
         arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
-                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
 
         placeSeparator(cx);
         injectEnergyAt(cx + 1, 1_000_000);
@@ -230,7 +230,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         assertTrue("and must not touch the oxygen the crew are breathing: " + after,
                 after.longInteger("airO2") >= ppm(60_000));
 
-        Reply tank = ask("stellurgytest fluid stored 0 " + (cx + 1) + " " + cyBase + " " + czBase);
+        Reply tank = read("stellurgytest fluid stored 0 " + (cx + 1) + " " + cyBase + " " + czBase);
         assertTrue("the gas it removed must be in its tank as carbon dioxide: " + tank,
                 tank.element("tanks", "fluid", "carbon_dioxide").longInteger("amount") > 0);
     }
@@ -259,7 +259,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         // A room whose oxygen has been stripped out: still pressurised by its nitrogen, but not
         // breathable. This is the state a split-mode separator leaves behind.
         arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
-                + " " + ppm(790_000) + " " + ppm(60_000) + " 0");
+                + " " + ppm(790_000) + " " + ppm(60_000) + " 0").requireOk();
         Reply before = ventInfo(cx);
         assertEquals("premise: the room must start un-breathable: " + before,
                 "lowO2", before.text("blobAtmosphere"));
@@ -267,7 +267,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         placeSeparator(cx);
         injectEnergyAt(cx + 1, 1_000_000);
         arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cyBase + " "
-                + czBase + " oxygen 8000");
+                + czBase + " oxygen 8000").requireOk();
 
         flipMode(cx + 1);
         Reply mode = separatorInfo(cx + 1);
@@ -318,12 +318,12 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         forceTickAndReseal(cx);
 
         arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
-                + " " + ppm(790_000) + " " + start + " 0");
+                + " " + ppm(790_000) + " " + start + " 0").requireOk();
 
         placeSeparator(cx);
         injectEnergyAt(cx + 1, 1_000_000);
         arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cyBase + " "
-                + czBase + " oxygen 8000");
+                + czBase + " oxygen 8000").requireOk();
 
         flipMode(cx + 1);
         // Far longer than the two operations the gap needs: the machine must stop by decision,
@@ -364,13 +364,13 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         clearAirPocket(cx);
         placeJettisonPort(cx);
 
-        Reply loaded = ask("stellurgytest jettison load 0 " + cx + " " + cyBase + " " + czBase
+        Reply loaded = arrange("stellurgytest jettison load 0 " + cx + " " + cyBase + " " + czBase
                 + " stellurgy:carbonDust 1");
         assertTrue("the port must accept a stack: " + loaded, loaded.ok());
 
         forceTick(cx, 25);
 
-        Reply info = ask("stellurgytest jettison info 0 " + cx + " " + cyBase + " " + czBase);
+        Reply info = read("stellurgytest jettison info 0 " + cx + " " + cyBase + " " + czBase);
         assertEquals("a port with a clear exit must report no obstruction: " + info,
                 0, info.integer("obstruction"));
         assertEquals("and its slot must be empty afterwards: " + info, 0, info.integer("heldCount"));
@@ -396,14 +396,14 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         // Wall it in on every side, so the outcome does not depend on which way the port was placed.
         arrange("stellurgytest fill 0 " + (cx - 1) + " " + (cyBase - 1) + " " + (czBase - 1)
                 + " " + (cx + 1) + " " + (cyBase + 1) + " " + (czBase + 1)
-                + " minecraft:stone");
+                + " minecraft:stone").requireOk();
         placeJettisonPort(cx);
 
         arrange("stellurgytest jettison load 0 " + cx + " " + cyBase + " " + czBase
-                + " stellurgy:carbonDust 1");
+                + " stellurgy:carbonDust 1").requireOk();
         forceTick(cx, 25);
 
-        Reply info = ask("stellurgytest jettison info 0 " + cx + " " + cyBase + " "
+        Reply info = read("stellurgytest jettison info 0 " + cx + " " + cyBase + " "
                 + czBase);
         assertTrue("a walled-in port must report where the obstruction is: " + info,
                 info.integer("obstruction") > 0);
@@ -414,9 +414,9 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     /** Open sky around the port, on a stone floor, so its exit is clear whichever way it faces. */
     private void clearAirPocket(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 4) + " " + (cyBase - 1) + " " + (czBase - 4)
-                + " " + (cx + 4) + " " + (cyBase + 4) + " " + (czBase + 4) + " minecraft:air");
+                + " " + (cx + 4) + " " + (cyBase + 4) + " " + (czBase + 4) + " minecraft:air").requireOk();
         arrange("stellurgytest fill 0 " + (cx - 4) + " " + (cyBase - 2) + " " + (czBase - 4)
-                + " " + (cx + 4) + " " + (cyBase - 2) + " " + (czBase + 4) + " minecraft:stone");
+                + " " + (cx + 4) + " " + (cyBase - 2) + " " + (czBase + 4) + " minecraft:stone").requireOk();
     }
 
     private void placeJettisonPort(int cx) throws Exception {
@@ -426,15 +426,15 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     private void buildSealableRoom(int cx) throws Exception {
         int by = cyBase, bz = czBase;
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone").requireOk();
         for (int yy = by + 1; yy <= by + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone").requireOk();
     }
 
     private void placeVent(int cx) throws Exception {
@@ -451,7 +451,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + cyBase + " " + czBase + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cyBase + " " + czBase + " " + block).requireOk();
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
@@ -465,7 +465,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
     private void injectOxygen(int cx, int amount) throws Exception {
         arrange("stellurgytest fluid inject 0 " + cx + " " + cyBase + " " + czBase
-                + " oxygen " + amount);
+                + " oxygen " + amount).requireOk();
     }
 
     /**
@@ -478,32 +478,32 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      * ticked at all.
      */
     private void forceTick(int x, int ticks) throws Exception {
-        arrange("stellurgytest tile force-tick 0 " + x + " " + cyBase + " " + czBase + " " + ticks);
+        act("stellurgytest tile force-tick 0 " + x + " " + cyBase + " " + czBase + " " + ticks).requireOk();
     }
 
     private void forceTickAndReseal(int cx) throws Exception {
         forceTick(cx, 1);
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cyBase + " " + czBase);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cyBase + " " + czBase).requireOk();
         forceTick(cx, 5);
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cyBase + " " + czBase);
+        return read("stellurgytest vent info 0 " + cx + " " + cyBase + " " + czBase);
     }
 
     private Reply separatorInfo(int x) throws Exception {
-        return ask("stellurgytest separator info 0 " + x + " " + cyBase + " " + czBase);
+        return read("stellurgytest separator info 0 " + x + " " + cyBase + " " + czBase);
     }
 
     /** The production toggle: a sneak-right-click on the block, through the block's own
      *  onBlockActivated. Calling toggleMode() on the tile would skip the dispatch that decides
      *  whether a click means "open me" or "flip me", which is the part a player uses. */
     private void flipMode(int x) throws Exception {
-        Reply resp = ask("stellurgytest block activate 0 " + x + " " + cyBase + " " + czBase + " true");
+        Reply resp = act("stellurgytest block activate 0 " + x + " " + cyBase + " " + czBase + " true");
         assertTrue("sneak-click failed: " + resp, resp.bool("handled"));
     }
 
     private long configValue(String key) throws Exception {
-        return arrange("stellurgytest config get " + key).longInteger("value");
+        return read("stellurgytest config get " + key).requireOk().longInteger("value");
     }
 }

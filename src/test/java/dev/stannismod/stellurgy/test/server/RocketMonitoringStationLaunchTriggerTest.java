@@ -63,7 +63,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         // rising edge fires the event cleanly, observable via the
         // prelaunch-cancel-counts.observed counter (which arm-... also
         // resets to 0).
-        ok(client().execute("stellurgytest rocket arm-prelaunch-cancel"));
+        ok(client().arrange("stellurgytest rocket arm-prelaunch-cancel"));
     }
 
     private static String join(java.util.List<String> resp) {
@@ -80,7 +80,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
      *  prepareLaunch() call that reaches line 1706 of EntityRocket
      *  bumps this. */
     private int observedPreLaunchEvents() throws Exception {
-        String resp = join(client().execute(
+        String resp = join(client().read(
                 "stellurgytest rocket prelaunch-cancel-counts"));
         Reply mReply = Reply.of(resp);
         assertTrue("observed count must be present: " + resp, mReply.has(OBSERVED));
@@ -89,11 +89,11 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
 
     /** Run a single update() tick on the monitoring station tile. */
     private void tickMonitor(int x, int y, int z) throws Exception {
-        ok(client().execute("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1"));
+        ok(client().act("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1"));
     }
 
     private boolean monitorWasPowered(int x, int y, int z) throws Exception {
-        String resp = join(client().execute(
+        String resp = join(client().read(
                 "stellurgytest infra monitor-info 0 " + x + " " + y + " " + z));
         Reply mReply = Reply.of(resp);
         assertTrue("monitor-info must include wasPowered: " + resp, mReply.has(WAS_POWERED));
@@ -101,7 +101,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     }
 
     private boolean monitorEquivalentPower(int x, int y, int z) throws Exception {
-        String resp = join(client().execute(
+        String resp = join(client().read(
                 "stellurgytest infra monitor-info 0 " + x + " " + y + " " + z));
         Reply mReply = Reply.of(resp);
         assertTrue("monitor-info must include equivalentPower: " + resp, mReply.has(EQUIVALENT_POWER));
@@ -112,13 +112,13 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
      *  raises {@code world.isBlockIndirectlyGettingPowered(monitor.pos)}
      *  to a non-zero level. */
     private void powerOn(int x, int y, int z) throws Exception {
-        ok(client().execute("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
+        ok(client().arrange("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
                 + " minecraft:redstone_block"));
     }
 
     /** Replace the adjacent redstone block with air, dropping power. */
     private void powerOff(int x, int y, int z) throws Exception {
-        ok(client().execute("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
+        ok(client().arrange("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
                 + " minecraft:air"));
     }
 
@@ -128,9 +128,9 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
         // this ASSERTS rather than digs.
-        String assemble = RocketFixture.assembleAt(site, cmd -> join(client().execute(cmd)),
+        String assemble = RocketFixture.assembleBuilt(site, cmd -> join(client().act(cmd)), RocketFixture.placeAt(site, cmd -> join(client().arrange(cmd)),
                 "simple", 2, 10,
-                "the craft whose launch the station triggers stands in this volume");
+                "the craft whose launch the station triggers stands in this volume"));
         assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("entityId missing: " + assemble, emReply.has(ENT_ID));
@@ -146,10 +146,10 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         // geometry that was written as two absolute numbers.
         final FixtureSite rocketSite = FixtureSite.openAir(0, 9500 + 20, 9500);
         int mx = 9500, my = rocketSite.y + 1, mz = 9500;
-        ok(client().execute("stellurgytest place 0 " + mx + " " + my + " " + mz
+        ok(client().arrange("stellurgytest place 0 " + mx + " " + my + " " + mz
                 + " stellurgy:monitoringStation"));
         int rocketId = assembleFixture(rocketSite);
-        ok(client().execute("stellurgytest infra link 0 " + mx + " " + my + " " + mz
+        ok(client().arrange("stellurgytest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId));
 
         // Sanity baseline: no redstone, no wasPowered.
@@ -200,10 +200,10 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         // The pair moves together; see the sibling scenario above.
         final FixtureSite rocketSite = FixtureSite.openAir(0, 9520 + 20, 9500);
         int mx = 9520, my = rocketSite.y + 1, mz = 9500;
-        ok(client().execute("stellurgytest place 0 " + mx + " " + my + " " + mz
+        ok(client().arrange("stellurgytest place 0 " + mx + " " + my + " " + mz
                 + " stellurgy:monitoringStation"));
         int rocketId = assembleFixture(rocketSite);
-        ok(client().execute("stellurgytest infra link 0 " + mx + " " + my + " " + mz
+        ok(client().arrange("stellurgytest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId));
 
         int before = observedPreLaunchEvents();

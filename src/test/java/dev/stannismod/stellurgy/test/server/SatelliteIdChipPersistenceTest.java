@@ -58,7 +58,7 @@ public class SatelliteIdChipPersistenceTest extends AbstractMechanicsTest {
     public void satelliteIdSurvivesRestartOnSameWorkDir() throws Exception {
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
-        String create = String.join("\n", firstBoot.client().execute(
+        String create = String.join("\n", firstBoot.client().arrange(
                 "stellurgytest satellite create 0 composition 200 4000 2048"));
         assertTrue("satellite create failed on first boot: " + create,
                 Reply.of(create).ok());
@@ -66,7 +66,7 @@ public class SatelliteIdChipPersistenceTest extends AbstractMechanicsTest {
         assertTrue("create response missing satellite id: " + create, mReply.has(ID));
         long satId = Long.parseLong(mReply.text(ID));
 
-        String preStop = String.join("\n", firstBoot.client().execute(
+        String preStop = String.join("\n", firstBoot.client().read(
                 "stellurgytest satellite info 0 " + satId));
         assertTrue("pre-stop satellite info must report composition: " + preStop,
                 "composition".equals(Reply.of(preStop).text("type")));
@@ -75,7 +75,7 @@ public class SatelliteIdChipPersistenceTest extends AbstractMechanicsTest {
         firstBoot = null;
 
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
-        String postBoot = String.join("\n", secondBoot.client().execute(
+        String postBoot = String.join("\n", secondBoot.client().read(
                 "stellurgytest satellite info 0 " + satId));
         assertTrue("satellite must survive restart and resolve by id "
                 + satId + ": " + postBoot, "composition".equals(Reply.of(postBoot).text("type")));

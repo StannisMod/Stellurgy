@@ -58,12 +58,12 @@ public class NavLookupNamesItsOwnShipTest extends AbstractSharedServerTest {
         // one. Reset in @After (shared-harness contract).
 
 
-        String asmA = exec("stellurgytest rocket assemble 0 "
-                + placeFixture(FixtureSite.openAir(0, SHIP_A_X, SHIP_A_Z), "with-nav-computer"));
+        String asmA = act("stellurgytest rocket assemble 0 "
+                + placeFixture(FixtureSite.openAir(0, SHIP_A_X, SHIP_A_Z), "with-nav-computer")).raw();
         requireArranged("with VS an AFC-bearing build must route to a ship (no rocket): "
                 + asmA, (Reply.of(asmA).integer("rocketCount") == 0));
-        String asmB = exec("stellurgytest rocket assemble 0 "
-                + placeFixture(FixtureSite.openAir(0, SHIP_B_X, SHIP_B_Z), "with-nav-computer"));
+        String asmB = act("stellurgytest rocket assemble 0 "
+                + placeFixture(FixtureSite.openAir(0, SHIP_B_X, SHIP_B_Z), "with-nav-computer")).raw();
         requireArranged("the second craft did not become a ship either: " + asmB,
                 (Reply.of(asmB).integer("rocketCount") == 0));
         requireArranged("the ships never loaded", loadedShips(0) >= SHIPS_FOR_AMBIGUITY);
@@ -71,7 +71,7 @@ public class NavLookupNamesItsOwnShipTest extends AbstractSharedServerTest {
         // ARRANGEMENT CHECK, before anything is asked: there must be TWO registered ships, or the
         // question this test exists to ask ("which one does the lookup answer for") does not exist
         // in this world and both assertions below would pass vacuously.
-        String all = exec("stellurgytest vs ship-count-all 0");
+        String all = read("stellurgytest vs ship-count-all 0").raw();
         requireArranged("fewer than two ships are registered, so no lookup can pick the "
                 + "wrong one and this run cannot exhibit the defect: " + all,
                 extractInt(all, "count") >= SHIPS_FOR_AMBIGUITY);
@@ -81,8 +81,8 @@ public class NavLookupNamesItsOwnShipTest extends AbstractSharedServerTest {
         // defect used to arrange its own demonstration: the bound was defended by "the other craft is
         // 64 blocks away", which is a statement about distance and not about how many hulls a box
         // holds.
-        String shipA = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asmA));
-        String shipB = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asmB));
+        String shipA = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, ShipIdentity.nameFromAssembly(asmA));
+        String shipB = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, ShipIdentity.nameFromAssembly(asmB));
         requireArranged("both bases resolved to the SAME ship (" + shipA + "), so the two "
                 + "craft did not become two ships and there is nothing to confuse",
                 !shipA.equals(shipB));
@@ -100,7 +100,7 @@ public class NavLookupNamesItsOwnShipTest extends AbstractSharedServerTest {
         int[] afc = flightComputerOf(shipId);
         requireArranged("ship " + label + " (" + shipId + ") has no resolvable flight "
                 + "computer, so its navigation cannot be asked about at all", afc != null);
-        String gate = exec("stellurgytest nav gate 0 " + afc[0] + " " + afc[1] + " " + afc[2]);
+        String gate = arrange("stellurgytest nav gate 0 " + afc[0] + " " + afc[1] + " " + afc[2]).raw();
         assertTrue("ship " + label + " carries a navigation computer built into it, and its own "
                         + "jump gate reports it has none — the lookup answered about some other "
                         + "craft's shipyard. ship=" + shipId + " neighbour=" + otherShipId
@@ -115,7 +115,7 @@ public class NavLookupNamesItsOwnShipTest extends AbstractSharedServerTest {
      */
     private int[] flightComputerOf(String shipId) throws Exception {
         Reply reply = Reply.of("stellurgytest vs seat-input-by-id",
-                exec("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 0 0 0 0 0"));
+                arrange("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 0 0 0 0 0").raw());
         if (!reply.has("afcX")) {
             return null;
         }
@@ -129,7 +129,7 @@ public class NavLookupNamesItsOwnShipTest extends AbstractSharedServerTest {
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
 
@@ -147,7 +147,7 @@ public class NavLookupNamesItsOwnShipTest extends AbstractSharedServerTest {
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

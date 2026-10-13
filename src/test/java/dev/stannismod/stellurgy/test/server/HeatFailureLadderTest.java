@@ -187,13 +187,13 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
         assertEquals("and the pilot must be told which of the refusals this is: " + hot,
                 "msg.jumpgate.driveoverheated", hot.text("message"));
 
-        Reply pressed = arrange("stellurgytest drive press 0 " + ship);
+        Reply pressed = act("stellurgytest drive press 0 " + ship).requireOk();
         assertFalse("a refused jump must not wind the drive up: " + pressed, pressed.bool("spooling"));
         Reply afterPress = driveInfo(ship);
         assertEquals("and must cost the pilot nothing - this refusal is above the commit line: "
                 + afterPress, chargeBefore, afterPress.longInteger("charge"));
 
-        Reply shed = arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
+        Reply shed = act("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1").requireOk();
         requireArranged("premise: the drive's pipes must still be a loop: " + shed, shed.bool("inLoop"));
         assertTrue("premise: the loop must actually have shed what it was holding: " + shed,
                 shed.longInteger("temperatureMilliK") < refusal * 1000L);
@@ -237,52 +237,52 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
         roomY = site.y + 2;
         roomZ = site.z + 2;
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone").requireOk();
         for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
             arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
-                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
-                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone").requireOk();
 
         Reply vent = arrange("stellurgytest place 0 " + roomX + " " + roomY + " " + roomZ
-                + " stellurgy:oxygenVent");
+                + " stellurgy:oxygenVent").requireOk();
         assertTrue("vent place failed: " + vent, vent.bool("placed"));
         arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
-        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ).requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5").requireOk();
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int n2, int o2, int co2, int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
-                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK).requireOk();
     }
 
     /** What a person standing in the compartment breathes, as the handler publishes it. */
     private String atmosphereInRoom() throws Exception {
-        return ask("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ)
+        return read("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ)
                 .text("type");
     }
 
     private Reply driveInfo(String afc) throws Exception {
-        return ask("stellurgytest drive info 0 " + afc);
+        return arrange("stellurgytest drive info 0 " + afc);
     }
 
     /** A ship that can jump: a drive, a full bank, a navigation computer, a target, armed. */
     private void buildArmedShip(String afc, String nav) throws Exception {
-        arrange("stellurgytest drive build 0 " + afc + " 4 8 0 0 0");
-        arrange("stellurgytest drive charge 0 " + afc + " full");
-        arrange("stellurgytest nav place " + nav);
-        Reply linked = arrange("stellurgytest nav link " + nav + " " + afc);
+        arrange("stellurgytest drive build 0 " + afc + " 4 8 0 0 0").requireOk();
+        arrange("stellurgytest drive charge 0 " + afc + " full").requireOk();
+        arrange("stellurgytest nav place " + nav).requireOk();
+        Reply linked = arrange("stellurgytest nav link " + nav + " " + afc).requireOk();
         requireArranged("the navigation computer must be linked to the drive: " + linked,
                 linked.bool("linked"));
-        arrange("stellurgytest nav target " + nav + " 7 0 0");
-        Reply armed = arrange("stellurgytest drive arm 0 " + afc + " on");
+        arrange("stellurgytest nav target " + nav + " 7 0 0").requireOk();
+        Reply armed = act("stellurgytest drive arm 0 " + afc + " on").requireOk();
         assertTrue("the ship must be armed, or the gate refuses for a different reason: " + armed,
                 armed.bool("armed"));
     }
@@ -294,23 +294,23 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      */
     private void layCoolantAlongTheGenerator() throws Exception {
         for (int i = 0; i < PIPES; i++) {
-            Reply placed = arrange("stellurgytest place 0 " + pipeAt(i) + " stellurgy:heatPipe");
+            Reply placed = arrange("stellurgytest place 0 " + pipeAt(i) + " stellurgy:heatPipe").requireOk();
             assertTrue("pipe place failed at " + pipeAt(i) + ": " + placed, placed.bool("placed"));
         }
-        Reply solved = arrange("stellurgytest subnet solve all 0 1");
+        Reply solved = act("stellurgytest subnet solve all 0 1").requireOk();
         assertEquals("the loop never solved, so it does not exist yet: " + solved,
                 1, solved.integer("ticksSolved"));
     }
 
     /** Charge the drive's loop past {@code refusalKelvin} in one call, and answer what it reached. */
     private Reply cook(int refusalKelvin) throws Exception {
-        Reply empty = arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
+        Reply empty = act("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1").requireOk();
         requireArranged("premise: the drive's pipes must form a loop: " + empty, empty.bool("inLoop"));
         long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass to charge: " + empty, capacity > 0);
         int ambient = configInt("shipHeatAmbientKelvin");
         long charge = (refusalKelvin + 100L - ambient) * capacity;
-        return arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " " + charge + " 1");
+        return act("stellurgytest heat cycle 0 " + pipeAt(0) + " " + charge + " 1").requireOk();
     }
 
     /** The i-th pipe of the drive's coolant run: above the generator, running away from the coils. */
@@ -323,6 +323,6 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
     }
 
     private int configInt(String key) throws Exception {
-        return arrange("stellurgytest config get " + key).integer("value");
+        return read("stellurgytest config get " + key).requireOk().integer("value");
     }
 }

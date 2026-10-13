@@ -114,7 +114,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
      */
     private void controlARealShipDoesTakeOrders() throws Exception {
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (SHIP_X + 600) + " 120 " + (SHIP_Z + 600) + " 0 0");
+        arrange("tp @a " + (SHIP_X + 600) + " 120 " + (SHIP_Z + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, SHIP_X + 600, SHIP_Z + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -132,7 +132,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
                 "assembly must create a VS ship in the queryable registry (async spawn)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (SHIP_X + 0.5) + " " + (SHIP_Y + 6) + " " + (SHIP_Z + 0.5) + " 0 0");
+        arrange("tp @a " + (SHIP_X + 0.5) + " " + (SHIP_Y + 6) + " " + (SHIP_Z + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, SHIP_X + 0.5, SHIP_Z + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -147,13 +147,13 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
                 + " answer, and the control leg would indict the harness's keys instead: "
                 + controlInfo, ShipInfo.isLoaded(controlInfo));
 
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, controlShipId);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, controlShipId);
         scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo.raw(),
                 mountInfo.seatFound);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo.raw(),
                 true /* the reader refuses a reply with no dummy */);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         scenario().requireArranged("the bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // "Let the mount replicate" is a record on the client's own log. The control below presses a
@@ -208,7 +208,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         // input to that seat and leave leg 2 green for the wrong reason. Ten ticks could only ever
         // be too few, and when they were, nothing said so.
         long offMark = clientEvents().mark();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         awaitClientDismount(offMark, "leg 2 must start with him off the REAL ship — its silence is"
                 + " only evidence if there is no other seat his input could have reached",
                 SEAT_LINK_BUDGET_TICKS);
@@ -231,24 +231,24 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
                     + " reached a seat\" is only a claim once it has had time to land. Overshoot only lengthens"
                     + " the absence window — the strict direction.")
     private void theUnassembledCraftDoesNot() throws Exception {
-        exec("stellurgytest chunk warmup 0 " + ((CRAFT_X - 8) >> 4) + " " + ((CRAFT_Z - 8) >> 4)
+        arrange("stellurgytest chunk warmup 0 " + ((CRAFT_X - 8) >> 4) + " " + ((CRAFT_Z - 8) >> 4)
                 + " " + ((CRAFT_X + 8) >> 4) + " " + ((CRAFT_Z + 8) >> 4));
-        exec("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + (CRAFT_Y - 1) + " " + (CRAFT_Z - 3)
+        arrange("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + (CRAFT_Y - 1) + " " + (CRAFT_Z - 3)
                 + " " + (CRAFT_X + 3) + " " + (CRAFT_Y - 1) + " " + (CRAFT_Z + 3) + " minecraft:obsidian");
-        exec("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + CRAFT_Y + " " + (CRAFT_Z - 3)
+        arrange("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + CRAFT_Y + " " + (CRAFT_Z - 3)
                 + " " + (CRAFT_X + 3) + " " + (CRAFT_Y + 4) + " " + (CRAFT_Z + 3) + " minecraft:air");
-        String seat = exec("stellurgytest fill 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
-                + " " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z + " stellurgy:pilotSeat");
+        String seat = arrange("stellurgytest fill 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
+                + " " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z + " stellurgy:pilotSeat").raw();
         scenario().requireArranged("placing the pilot seat failed: " + seat, Reply.of(seat).ok());
-        String afc = exec("stellurgytest fill 0 " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
+        String afc = arrange("stellurgytest fill 0 " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
                 + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
-                + " stellurgy:advancedFlightComputer");
+                + " stellurgy:advancedFlightComputer").raw();
         scenario().requireArranged("placing the flight computer failed: " + afc, Reply.of(afc).ok());
 
         // Link the two WITHOUT assembling: exactly what the assembler leaves behind when the
         // physics mod rejects the spawn. A real failed assembly cannot be arranged deterministically.
-        String linked = exec("stellurgytest vs seat-link 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
-                + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z);
+        String linked = arrange("stellurgytest vs seat-link 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
+                + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z).raw();
         scenario().requireArranged("the seat must end up LINKED — an unlinked seat is refused for a "
                         + "reason that has nothing to do with this bug: " + linked,
                 Reply.of(linked).bool("linked"));
@@ -370,7 +370,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         assertTrue("the refused pilot must still be SEATED — the craft is deaf, not ejecting",
                 isRiding(bot().reportRidingEntity()));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ---- Instruments ----------------------------------------------------------------------------
@@ -416,9 +416,9 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
      * above it this scenario watches for a craft that must NOT move.
      */
     private String assembleShip() throws Exception {
-        return RocketFixture.assembleAt(FixtureSite.openAir(0, SHIP_X, SHIP_Z), this::exec,
+        return RocketFixture.assembleBuilt(FixtureSite.openAir(0, SHIP_X, SHIP_Z), c -> act(c).raw(), RocketFixture.placeAt(FixtureSite.openAir(0, SHIP_X, SHIP_Z), c -> arrange(c).raw(),
                 "with-pilot-seat", 2, 16,
-                "the loose craft that must take no orders, and the air it must not climb into");
+                "the loose craft that must take no orders, and the air it must not climb into"));
     }
 
     // ---- Observation helpers ---------------------------------------------------------------------

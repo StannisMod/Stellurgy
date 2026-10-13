@@ -42,7 +42,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse("No Stellurgy dimensions registered",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -62,9 +62,9 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
@@ -77,7 +77,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // and findRocket(id) returns null.
         int id = buildAndAssemble(FixtureSite.openAir(0, 7000, 500));
 
-        String explodeResp = ok(client().execute("stellurgytest rocket explode " + id));
+        String explodeResp = ok(client().arrange("stellurgytest rocket explode " + id));
         assertTrue("explode probe must succeed: " + explodeResp,
                 Reply.of(explodeResp).ok());
         // The atomic probe-response contract is the reliable assertion:
@@ -99,15 +99,15 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // must NOT transition to in-flight.
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 7200, 500));
-        ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " " + destDim));
         // The subject is the FUEL gate, so fuel is required for this launch: the shared harness world
         // starts with the requirement off, and the assembly above was judged without it.
-        try (ConfigFlag fuelRequired = ConfigFlag.set(c -> String.join("\n", client().execute(c)),"rocketRequireFuel", true)) {
-            ok(client().execute("stellurgytest rocket drain-fuel " + id));
+        try (ConfigFlag fuelRequired = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
+            ok(client().arrange("stellurgytest rocket drain-fuel " + id));
             // launch with fillFuel=false to keep tanks empty.
-            ok(client().execute("stellurgytest rocket launch " + id + " false instant"));
+            ok(client().act("stellurgytest rocket launch " + id + " false instant"));
 
-            RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+            RocketInfo info = RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
             assertFalse("zero-fuel launch must be refused by the fuel gate "
                             + "(isInFlight stays false): " + info.raw(),
                     info.inFlight);

@@ -37,12 +37,12 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     private static final String WEIGHT = "weight";
 
     private void reset() throws Exception {
-        String r = String.join("\n", client().execute("stellurgytest weight reset"));
+        String r = String.join("\n", client().arrange("stellurgytest weight reset"));
         assertTrue("weight reset failed: " + r, Reply.of(r).ok());
     }
 
     private double itemWeight(String id, int count) throws Exception {
-        String r = String.join("\n", client().execute("stellurgytest weight item " + id + " " + count));
+        String r = String.join("\n", client().read("stellurgytest weight item " + id + " " + count));
         assertTrue("item " + id + " not registered: " + r, Reply.of(r).bool("registered"));
         Reply mReply = Reply.of(r);
         assertTrue("no weight field for " + id + ": " + r, mReply.has(WEIGHT));
@@ -50,7 +50,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     }
 
     private double fluidWeight(String name, int amount) throws Exception {
-        String r = String.join("\n", client().execute("stellurgytest weight fluid " + name + " " + amount));
+        String r = String.join("\n", client().read("stellurgytest weight fluid " + name + " " + amount));
         assertTrue("fluid " + name + " not registered: " + r, Reply.of(r).bool("registered"));
         Reply mReply = Reply.of(r);
         assertTrue("no weight field for fluid " + name + ": " + r, mReply.has(WEIGHT));
@@ -85,7 +85,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         double material = itemWeight("minecraft:stone", 1);
         assertTrue("baseline material weight must differ from the override sentinel", material != OVERRIDE_SENTINEL);
 
-        String set = String.join("\n", client().execute("stellurgytest weight set minecraft:stone 99.0"));
+        String set = String.join("\n", client().read("stellurgytest weight set minecraft:stone 99.0"));
         assertTrue("weight set failed: " + set, Reply.of(set).ok());
 
         assertEquals("explicit individual override must win over the material table",
@@ -95,12 +95,12 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     @Test
     public void regexBeatsMaterialButIndividualBeatsRegex() throws Exception {
         reset();
-        String reg = String.join("\n", client().execute("stellurgytest weight set-regex minecraft:gla.* 3.0"));
+        String reg = String.join("\n", client().read("stellurgytest weight set-regex minecraft:gla.* 3.0"));
         assertTrue("set-regex failed: " + reg, Reply.of(reg).ok());
         assertEquals("regex rule must win over the material table",
                 3.0, itemWeight("minecraft:glass", 1), 1e-4);
 
-        String set = String.join("\n", client().execute("stellurgytest weight set minecraft:glass 50.0"));
+        String set = String.join("\n", client().read("stellurgytest weight set minecraft:glass 50.0"));
         assertTrue("weight set failed: " + set, Reply.of(set).ok());
         assertEquals("individual override must win over a matching regex rule",
                 50.0, itemWeight("minecraft:glass", 1), 1e-4);
@@ -114,7 +114,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         double base = fluidWeight("water", 1000);
         assertTrue("fluid weight must be positive: " + base, base > 0);
 
-        String sc = String.join("\n", client().execute("stellurgytest weight fuel-scale 2.0"));
+        String sc = String.join("\n", client().arrange("stellurgytest weight fuel-scale 2.0"));
         assertTrue("fuel-scale failed: " + sc, Reply.of(sc).ok());
 
         assertEquals("fluid weight must scale by fuelMassScale",
@@ -142,7 +142,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         FixtureSite at = site();
         String where = at.dim + " " + at.x + " " + at.y + " " + at.z;
         try {
-            String placed = String.join("\n", client().execute("stellurgytest place " + where + " minecraft:chest"));
+            String placed = String.join("\n", client().arrange("stellurgytest place " + where + " minecraft:chest"));
             ArrangementFailure.requireArranged("the chest must be placed: " + placed,
                     Reply.of(placed).ok() && Reply.of(placed).bool("placed"));
             Reply empty = chestAt(at);
@@ -151,7 +151,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
             double emptyTotal = empty.number("total");
             double block = emptyTotal - empty.number("content");
 
-            String stowed = String.join("\n", client().execute("stellurgytest vs stow " + where
+            String stowed = String.join("\n", client().arrange("stellurgytest vs stow " + where
                     + " minecraft:iron_block 64"));
             ArrangementFailure.requireArranged("the iron must go into the chest: " + stowed,
                     Reply.of(stowed).ok() && Reply.of(stowed).integer("stowed") == 64);
@@ -174,12 +174,12 @@ public class WeightSystemTest extends AbstractSharedServerTest {
                     block, tripled.number("total") - tripled.number("content"), 1e-3);
         } finally {
             reset();
-            client().execute("stellurgytest place " + where + " minecraft:air");
+            client().arrange("stellurgytest place " + where + " minecraft:air");
         }
     }
 
     private Reply chestAt(FixtureSite at) throws Exception {
-        String r = String.join("\n", client().execute(
+        String r = String.join("\n", client().read(
                 "stellurgytest weight te " + at.dim + " " + at.x + " " + at.y + " " + at.z));
         Reply reply = Reply.of(r);
         assertTrue("weight te failed: " + r, reply.ok());
@@ -187,7 +187,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     }
 
     private void setContentScale(double k) throws Exception {
-        String r = String.join("\n", client().execute("stellurgytest weight content-scale " + k));
+        String r = String.join("\n", client().arrange("stellurgytest weight content-scale " + k));
         assertTrue("content-scale failed: " + r, Reply.of(r).ok());
     }
 }

@@ -95,7 +95,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      */
     private static final int UNFED_WINDOW_TICKS = 100;
 
-    private final Events events = new Events(this::exec,
+    private final Events events = new Events(c -> read(c).raw(),
             ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
@@ -104,7 +104,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      */
     @Before
     public void emptySky() throws Exception {
-        ShipReadiness.clearCraftFrom(this::exec, DIM);
+        ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), DIM);
     }
 
     /** The jump craft as assembled, and where its machines stand relative to its flight computer. */
@@ -137,25 +137,25 @@ public class HyperdriveTest extends AbstractSharedServerTest {
     }
 
     private JumpCraft jumpCraft(FixtureSite site, String variant, String what) throws Exception {
-        Reply fixture = AssembledCraft.lay(site, this::exec, variant, HALO, HEIGHT, what);
+        Reply fixture = AssembledCraft.lay(site, c -> arrange(c).raw(), variant, HALO, HEIGHT, what);
         String bay = fixture.object("jumpBayFromFlightComputer");
         requireArranged(what + " — the fixture must say where its drive machines stand: " + fixture,
                 bay != null);
-        return new JumpCraft(AssembledCraft.assemble(site, this::exec, events, fixture, what),
+        return new JumpCraft(AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what),
                 Reply.of(bay));
     }
 
     /** What the craft's drive is, as the ship's own answer. */
     private DriveInfo drive(JumpCraft ship) throws Exception {
-        return DriveInfo.at(this::exec, ship.craft.flightComputer());
+        return DriveInfo.at(c -> arrange(c).raw(), ship.craft.flightComputer());
     }
 
     /** Build machines onto the assembled craft; the probe links none of them. */
     private Reply extend(JumpCraft ship, int coils, int cells, int sinks, int emitters, int dampeners,
                          String what) throws Exception {
-        Reply built = Reply.of("stellurgytest drive extend", exec("stellurgytest drive extend "
+        Reply built = Reply.of("stellurgytest drive extend", arrange("stellurgytest drive extend "
                 + ship.craft.flightComputer() + " " + coils + " " + cells + " " + sinks + " "
-                + emitters + " " + dampeners));
+                + emitters + " " + dampeners).raw());
         requireArranged(what + " — every machine asked for must be built onto the ship: " + built,
                 built.ok() && built.blockPosArray("coils").length == coils
                         && built.blockPosArray("cells").length == cells
@@ -170,36 +170,36 @@ public class HyperdriveTest extends AbstractSharedServerTest {
     private void remove(JumpCraft ship, String machine, String what) throws Exception {
         int[] p = ship.at(machine);
         String at = p[0] + " " + p[1] + " " + p[2];
-        Reply fill = Reply.of(exec("stellurgytest fill " + DIM + " " + at + " " + at + " minecraft:air"));
+        Reply fill = Reply.of(arrange("stellurgytest fill " + DIM + " " + at + " " + at + " minecraft:air").raw());
         requireArranged(what + " — the " + machine + " must come off the ship: " + fill,
                 fill.ok() && fill.integer("placed") == 1);
     }
 
     /** Fill or drain the bank through its fixture seam: the level is arrangement here, not subject. */
     private void charge(JumpCraft ship, String level, String what) throws Exception {
-        Reply.of(exec("stellurgytest drive charge " + ship.craft.flightComputer() + " " + level))
+        Reply.of(arrange("stellurgytest drive charge " + ship.craft.flightComputer() + " " + level).raw())
                 .requireOk(what + " — the bank must be set " + level);
     }
 
     /** Type a destination into the ship's own navigation console. */
     private void aim(JumpCraft ship, String destination, String what) throws Exception {
-        Reply aimed = Reply.of(exec("stellurgytest nav target " + ship.machine("navigationComputer")
-                + " " + destination));
+        Reply aimed = Reply.of(arrange("stellurgytest nav target " + ship.machine("navigationComputer")
+                + " " + destination).raw());
         requireArranged(what + " — the console must take the destination: " + aimed,
                 aimed.ok() && aimed.has("target"));
     }
 
     /** The arm switch at the console; answers whether it is armed afterwards. */
     private boolean arm(JumpCraft ship, boolean on) throws Exception {
-        Reply armed = Reply.of(exec("stellurgytest drive arm " + ship.craft.flightComputer()
-                + (on ? " on" : " off")));
+        Reply armed = Reply.of(act("stellurgytest drive arm " + ship.craft.flightComputer()
+                + (on ? " on" : " off")).raw());
         requireArranged("the console must answer the arm switch: " + armed, armed.ok());
         return armed.bool("armed");
     }
 
     /** One press of the helm's jump key; answers whether the drive is winding up afterwards. */
     private boolean press(JumpCraft ship) throws Exception {
-        Reply pressed = Reply.of(exec("stellurgytest drive press " + ship.craft.flightComputer()));
+        Reply pressed = Reply.of(act("stellurgytest drive press " + ship.craft.flightComputer()).raw());
         requireArranged("the helm must answer the key: " + pressed, pressed.ok());
         return pressed.bool("spooling");
     }
@@ -570,7 +570,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
     public void aRefusedJumpNeverSpendsTheCharge() throws Exception {
         JumpCraft ship = readyCraft("the jump craft whose destination is cleared");
         requireArranged("the console must arm", arm(ship, true));
-        Reply.of(exec("stellurgytest nav cleartarget " + ship.machine("navigationComputer")))
+        Reply.of(arrange("stellurgytest nav cleartarget " + ship.machine("navigationComputer")).raw())
                 .requireOk("the destination must be cleared at the console");
 
         long before = drive(ship).charge;
@@ -630,8 +630,8 @@ public class HyperdriveTest extends AbstractSharedServerTest {
         extend(ship, 0, 0, 0, 0, DAMPENERS_ADDED, "dampeners onto the craft");
         DriveInfo dark = drive(ship);
 
-        Reply fed = Reply.of("stellurgytest drive push", exec("stellurgytest drive push "
-                + ship.craft.flightComputer() + " " + OFFER + " dampeners"));
+        Reply fed = Reply.of("stellurgytest drive push", arrange("stellurgytest drive push "
+                + ship.craft.flightComputer() + " " + OFFER + " dampeners").raw());
         requireArranged("every dampener must expose a port the grid can push into: " + fed,
                 fed.ok() && fed.integer("ports") == dark.dampeners);
         DriveInfo lit = drive(ship);
@@ -702,7 +702,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
 
         // `push` answers what the PORTS did, not what the drive is, so it is read as its own reply.
         Reply pushed = Reply.of("stellurgytest drive push",
-                exec("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER));
+                arrange("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER).raw());
         requireArranged("the bank must expose an energy port for the ship to push into: " + pushed,
                 pushed.ok() && pushed.longInteger("ports") > 0L);
         long accepted = pushed.longInteger("accepted");
@@ -715,7 +715,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
                 + ")", accepted < filled.capacity);
 
         Reply again = Reply.of("stellurgytest drive push",
-                exec("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER));
+                arrange("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER).raw());
         assertTrue("and a second push adds to the first: " + again, again.longInteger("charge") > accepted);
     }
 
@@ -753,7 +753,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
         int[] capacitor = ship.at("capacitor");
 
         long unloadMark = events.mark();
-        ShipReadiness.letShipsUnload(this::exec, "the ship's own unload is what writes its chunks to disk");
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(), "the ship's own unload is what writes its chunks to disk");
         try {
             events.awaitRecordWithField(unloadMark, "ship_unloaded", "vsShip", ship.craft.physicsId,
                     "the ship must unload once nothing holds it", AssembledCraft.LINK_BUDGET_TICKS);
@@ -762,10 +762,10 @@ public class HyperdriveTest extends AbstractSharedServerTest {
                     AssembledCraft.LINK_BUDGET_TICKS, "dim", String.valueOf(DIM),
                     "cx", String.valueOf(capacitor[0] >> 4), "cz", String.valueOf(capacitor[2] >> 4));
         } finally {
-            ShipReadiness.holdShipsLoaded(this::exec, "the ship is asked for again");
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "the ship is asked for again");
         }
         long loadMark = events.mark();
-        exec("stellurgytest vs load-ships " + DIM);
+        arrange("stellurgytest vs load-ships " + DIM);
         events.awaitRecordWithField(loadMark, "ship_usable", "vsShip", ship.craft.physicsId,
                 "the ship must come back when it is asked for", AssembledCraft.LINK_BUDGET_TICKS);
 

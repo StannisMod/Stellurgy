@@ -39,10 +39,6 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
 
     private static final String STATUS = "status";
 
-    private String cmd(String c) throws Exception {
-        return String.join("\n", client().execute(c));
-    }
-
     /** Build the simple fixture at the given pad and return the raw assemble response. */
     private String buildAndAssemble(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the
@@ -50,14 +46,14 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        client().execute("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
+        client().arrange("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        return RocketFixture.assembleAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        return RocketFixture.assembleBuilt(site, cmd -> String.join("\n", client().act(cmd)), RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 "simple", 2, 10,
-                "the craft is built and flown in this volume");
+                "the craft is built and flown in this volume"));
     }
 
     private static String status(String assembleResponse) {
@@ -83,18 +79,20 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
             + " fuel required even though its tanks cannot reach orbit\".")
     @Test
     public void aShipIsNotHeldToTheClimbToOrbitThatARocketIs() throws Exception {
-        try (ConfigFlag fuelRequired = ConfigFlag.set(this::cmd, "rocketRequireFuel", true)) {
+        try (ConfigFlag fuelRequired = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
             // The fixtures' own extent: two blocks round the pad, ten above it.
-            String rocket = RocketFixture.assembleAt(FixtureSite.openAir(0, 3520, 3400),
-                    c -> String.join("\n", client().execute(c)), "with-fluid-cargo", 2, 10,
-                    "the rocket is built in this volume");
+            String rocket = RocketFixture.assembleBuilt(FixtureSite.openAir(0, 3520, 3400),
+                    c -> String.join("\n", client().act(c)), RocketFixture.placeAt(FixtureSite.openAir(0, 3520, 3400),
+                    c -> String.join("\n", client().arrange(c)), "with-fluid-cargo", 2, 10,
+                    "the rocket is built in this volume"));
             assertEquals("control: a rocket with cargo in place of tanks must be refused for want of "
                     + "the climb to orbit, or the ship below proves nothing: " + rocket,
                     "NOFUEL", status(rocket));
 
-            String ship = RocketFixture.assembleAt(FixtureSite.openAir(0, 3580, 3400),
-                    c -> String.join("\n", client().execute(c)), "with-pilot-deck", 2, 10,
-                    "the ship is built in this volume");
+            String ship = RocketFixture.assembleBuilt(FixtureSite.openAir(0, 3580, 3400),
+                    c -> String.join("\n", client().act(c)), RocketFixture.placeAt(FixtureSite.openAir(0, 3580, 3400),
+                    c -> String.join("\n", client().arrange(c)), "with-pilot-deck", 2, 10,
+                    "the ship is built in this volume"));
             assertTrue("a ship must assemble with fuel required even though its tanks cannot reach "
                     + "orbit: " + ship, Reply.of(ship).ok());
             assertEquals("…and it must be a SHIP, not a rocket entity: " + ship,
@@ -106,7 +104,7 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
     @Pins("INV-RASM-06")
     @Test
     public void validRocketAssemblesWhenFuelNotRequired() throws Exception {
-        try (ConfigFlag restored = ConfigFlag.set(this::cmd, "rocketRequireFuel", true)) {
+        try (ConfigFlag restored = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
             // Positive control: the simple fixture assembles with fuel required.
             // The assemble probe reports "ok":true only when the SCAN status was
             // SUCCESS; the "status" field it echoes is the POST-assemble status
@@ -117,7 +115,7 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
 
             // Contract: flipping fuel off must NOT block assembly. Pre-fix the
             // scan returned NOFUEL (the regression) and "ok":true was absent.
-            assertTrue(Reply.of(cmd("stellurgytest config set rocketRequireFuel false")).ok());
+            assertTrue(Reply.of(arrange("stellurgytest config set rocketRequireFuel false").raw()).ok());
             String off = buildAndAssemble(FixtureSite.openAir(0, 3460, 3400));
             assertTrue("with rocketRequireFuel=false a valid rocket must still assemble "
                     + "(no fuel-adequacy gate); scan status was " + status(off) + ": " + off,

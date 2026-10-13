@@ -42,7 +42,7 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
     private static final String ROCKET_LIST_ID = "id";
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> String.join("\n", client().read(cmd)), id);
     }
 
     @Test
@@ -71,7 +71,7 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        String warmup = String.join("\n", client().execute(
+        String warmup = String.join("\n", client().arrange(
                 "stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
         assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
 
@@ -79,19 +79,19 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 variant, 2, 10,
                 "the craft is built and flown in this volume");
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
 
-        String assemble = String.join("\n", client().execute(
+        String assemble = String.join("\n", client().act(
                 "stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
                 Reply.of(assemble).ok());
 
-        String rocketList = String.join("\n", client().execute("stellurgytest rocket list 0"));
+        String rocketList = String.join("\n", client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
         assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
         int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;

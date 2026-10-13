@@ -42,8 +42,8 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
 
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 "
-                + DIRECT_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 "
+                + DIRECT_JUMP_SPEED).raw();
         assertTrue("the short jump must begin: " + begin, Reply.of(begin).bool("began"));
         assertEquals("a direct crossing is not a flight — nothing may be in transit the moment it "
                         + "starts, because there is no flight to be in the middle of: " + begin,
@@ -70,8 +70,8 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
 
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 "
-                + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 "
+                + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began"));
         assertEquals("a slow jump IS a flight, and reports one: " + begin,
                 1, extractInt(begin, "inTransit"));
@@ -115,18 +115,18 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
         long jumpMark = events.markInstrumented();
         // `body 0` aims at the home planet's own address; the speed makes any distance one tick of
         // flight, so the route is the direct crossing — asserted below off the arrival record.
-        String begin = exec("stellurgytest space transit-begin " + setup.originDim + " 1 64 1 "
-                + ONE_TICK_JUMP_SPEED + " body 0");
+        String begin = act("stellurgytest space transit-begin " + setup.originDim + " 1 64 1 "
+                + ONE_TICK_JUMP_SPEED + " body 0").raw();
         assertTrue("the short jump at the home planet must begin: " + begin,
                 Reply.of(begin).bool("began"));
         String arrived = events.awaitRecordWithFields(jumpMark, "ship_transit_ended",
                 "the jump at the home planet never ended; the durable record reads "
-                        + exec("stellurgytest space transit-export"),
+                        + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", durableId, "route", "DIRECT");
         int slotDim = extractInt(arrived, "dim");
 
         GameTicks.advanceWorld(client(), slotDim, STANDOFF_WATCH_TICKS);
-        String bodies = exec("stellurgytest space bodies");
+        String bodies = read("stellurgytest space bodies").raw();
         String row = null;
         for (String ship : Reply.of("stellurgytest space bodies", bodies).objectArray("ships")) {
             // Read bare: the producer always writes `ship` on every ledger row.
@@ -197,26 +197,26 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
         // sibling scenario arriving by the same route in the same window satisfies it.
         String arrived = events.awaitRecordWithFields(mark, "ship_transit_ended",
                 "the ship never reached the target cell by the " + route + " route; the durable"
-                        + " record now reads " + exec("stellurgytest space transit-export"),
+                        + " record now reads " + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", durableId, "route", route);
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
+                + read("stellurgytest vs ship-count-all " + targetDim).raw(), loadedShips(targetDim) >= 1);
         // Identified by the craft this scenario BUILT, which is now what the wait above is keyed
         // on. "The only loaded ship in this cell" stood here and was an accident: it worked while
         // an earlier scenario's hull unloaded once nobody was near it, and stopped the day a test
         // server began holding ships loaded — the cell then held two and the read could not say
         // which was this jump's. Re-reading the id off the record stood here next, and it answered
         // whichever ship the route-only wait had matched.
-        String arrivedId = ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim());
+        String arrivedId = ShipIdentity.physicsIdOf(c -> read(c).raw(), targetDim, durableId.trim());
         assertTrue("the arrived ship is not VS-managed in the target cell; id=" + arrivedId,
-                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
+                ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
         return arrived;
     }
 
     private TransitSetup setUpPilotedShip() throws Exception {
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         // A crossing resolves its ship by IDENTITY, never by the anchor every transit fixture
         // shares, so a setup that minted no durable name cannot be crossed at all.
@@ -244,13 +244,13 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /** On the SERVER's clock: the world asked about is the one that may not be ticking yet. */
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
     private static String extractString(String json, String key) {

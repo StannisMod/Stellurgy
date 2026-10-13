@@ -42,7 +42,7 @@ public final class TestClient implements Closeable {
 
     /**
      * Adopt the accepted control connection to the server JVM's bridge; from here on
-     * {@link #execute(String)} goes over it.
+     * every command ({@link #read}, {@link #arrange}, {@link #act}) goes over it.
      *
      * <p>The caller is {@code RealDedicatedServerHarness}, which has already read the child's
      * {@code READY} line, so the socket handed here is live and idle.</p>
@@ -61,7 +61,7 @@ public final class TestClient implements Closeable {
         }
     }
 
-    /** Whether a bridge is connected — i.e. whether {@link #execute(String)} is on the socket path. */
+    /** Whether a bridge is connected — i.e. whether a command can be sent at all. */
     public boolean hasBridge() {
         synchronized (bridgeLock) {
             return bridgeSocket != null;
@@ -69,7 +69,9 @@ public final class TestClient implements Closeable {
     }
 
     /**
-     * Run a server command and return its reply — over the control bridge, which is the only channel.
+     * Run a server command that OBSERVES and return its reply — over the control bridge, which is the only
+     * channel. Every command is sent in a {@link CommandRole} — this method, {@link #arrange} or {@link #act};
+     * there is no role-less send — and the role travels with it to the server.
      *
      * <p>The reply is exactly the messages the command addressed to its sender: nothing is broadcast
      * to chat, nothing is sliced out of the log, and two concurrent calls cannot take each other's
@@ -84,8 +86,26 @@ public final class TestClient implements Closeable {
      * A branch no caller reaches is not a fallback, and keeping it kept all four defects alive
      * behind a flag nobody set.</p>
      */
-    public List<String> execute(String command) throws IOException, InterruptedException {
-        List<String> overBridge = executeOverBridge(command);
+    public List<String> read(String command) throws IOException, InterruptedException {
+        return execute(CommandRole.READ, command);
+    }
+
+    /** Run a server command that sets the scene — see {@link #read} for the channel and the reply. */
+    public List<String> arrange(String command) throws IOException, InterruptedException {
+        return execute(CommandRole.ARRANGE, command);
+    }
+
+    /**
+     * Run a server command that calls a production entry a player, a tick or a packet would reach — see
+     * {@link #read} for the channel and the reply.
+     */
+    public List<String> act(String command) throws IOException, InterruptedException {
+        return execute(CommandRole.ACT, command);
+    }
+
+    /** Run {@code command} in {@code role}; the three public methods are the only callers. */
+    private List<String> execute(CommandRole role, String command) throws IOException, InterruptedException {
+        List<String> overBridge = executeOverBridge(role, command);
         if (overBridge != null) {
             return overBridge;
         }
@@ -97,12 +117,12 @@ public final class TestClient implements Closeable {
 
     /**
      * One request/response exchange over the bridge, or {@code null} when none is connected — which
-     * {@link #execute(String)} turns into a failure, since there is no other channel to fall to.
+     * {@link #execute} turns into a failure, since there is no other channel to fall to.
      *
      * <p>A bridge that is connected but fails mid-exchange is torn down and the call fails: a broken
      * channel must not be indistinguishable from a healthy one.</p>
      */
-    private List<String> executeOverBridge(String command) {
+    private List<String> executeOverBridge(CommandRole role, String command) {
         Objects.requireNonNull(command, "command");
         synchronized (bridgeLock) {
             if (bridgeSocket == null) {
@@ -110,6 +130,7 @@ public final class TestClient implements Closeable {
             }
             JsonObject request = new JsonObject();
             request.addProperty("command", command);
+            request.addProperty("role", role.wire());
             try {
                 bridgeWriter.write(request.toString());
                 bridgeWriter.newLine();

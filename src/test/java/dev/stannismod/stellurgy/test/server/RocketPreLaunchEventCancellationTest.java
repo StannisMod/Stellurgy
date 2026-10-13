@@ -67,7 +67,7 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         // Belt-and-braces: even if @Test threw before its finally ran,
         // disarm here. A leaked-armed canceller would break every
         // subsequent rocket-launch test in the shared harness.
-        exec("stellurgytest rocket disarm-prelaunch-cancel");
+        arrange("stellurgytest rocket disarm-prelaunch-cancel").raw();
     }
 
     @Test
@@ -76,16 +76,16 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         try {
             // Arm the canceller. Subsequent prepareLaunch calls fire
             // the event; the test listener cancels it.
-            String arm = exec("stellurgytest rocket arm-prelaunch-cancel");
+            String arm = arrange("stellurgytest rocket arm-prelaunch-cancel").raw();
             assertTrue("arm probe failed: " + arm,
                     Reply.of(arm).bool("armed"));
 
-            String launch = exec("stellurgytest rocket launch " + entityId + " true prepare");
+            String launch = act("stellurgytest rocket launch " + entityId + " true prepare").raw();
             assertTrue("rocket launch (prepare mode) must not error even when "
                             + "cancelled: " + launch,
                     Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
-            RocketInfo info = RocketInfo.byId(this::exec, entityId);
+            RocketInfo info = RocketInfo.byId(c -> read(c).raw(), entityId);
             assertEquals("cancelled prepareLaunch must leave LAUNCH_COUNTER "
                             + "at its default (-1) — countdown must NOT have "
                             + "started: " + info.raw(),
@@ -96,13 +96,13 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
 
             // The listener must have observed the event and cancelled it —
             // proves the test toggle actually wired through.
-            String counts = exec("stellurgytest rocket prelaunch-cancel-counts");
+            String counts = read("stellurgytest rocket prelaunch-cancel-counts").raw();
             assertTrue("listener observed count must be >= 1: " + counts,
                     extract(counts, OBSERVED) >= 1);
             assertTrue("listener cancelled count must be >= 1: " + counts,
                     extract(counts, CANCELLED) >= 1);
         } finally {
-            exec("stellurgytest rocket disarm-prelaunch-cancel");
+            arrange("stellurgytest rocket disarm-prelaunch-cancel");
         }
     }
 
@@ -111,14 +111,14 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         int entityId = buildAndAssemble(CX_NO_CANCEL);
         // Explicit disarm (idempotent with default) so a stale @After
         // from an unrelated test ordering can't leak armed state in.
-        exec("stellurgytest rocket disarm-prelaunch-cancel");
+        arrange("stellurgytest rocket disarm-prelaunch-cancel").raw();
 
-        String launch = exec("stellurgytest rocket launch " + entityId + " true prepare");
+        String launch = act("stellurgytest rocket launch " + entityId + " true prepare").raw();
         assertTrue("rocket launch (prepare mode) must succeed when not cancelled: "
                         + launch,
                 Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
-        RocketInfo info = RocketInfo.byId(this::exec, entityId);
+        RocketInfo info = RocketInfo.byId(c -> read(c).raw(), entityId);
         assertEquals("uncancelled prepareLaunch must seed LAUNCH_COUNTER to 200 "
                         + "(the countdown tick budget): " + info.raw(),
                 200, info.launchCounter);
@@ -131,9 +131,10 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         // said it "reproduces RocketAssemblySmokeTest's hygiene without depending on its helper" —
         // which is the copied-idiom shape exactly: the copy came over, the reason stayed behind,
         // and both fills threw away the one number they measured. There is a shared builder now.
-        String assemble = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, CZ),
-                cmd -> exec(cmd), "simple", 2, 10,
-                "the craft whose pre-launch event this scenario cancels stands in this volume");
+        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, baseX, CZ),
+                c -> act(c).raw(), RocketFixture.placeAt(FixtureSite.openAir(0, baseX, CZ),
+                c -> arrange(c).raw(), "simple", 2, 10,
+                "the craft whose pre-launch event this scenario cancels stands in this volume"));
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
 

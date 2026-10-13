@@ -55,7 +55,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
     private static String g(String field, String s, String label) {
@@ -65,7 +65,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse("No Stellurgy dimensions registered",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -85,9 +85,9 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
@@ -115,9 +115,9 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // harness has no player to keep arbitrary Stellurgy dims hot, and Forge's
         // changeDimension chain bails silently if initDimension fails
         // (return value not checked by reachSpaceManned).
-        ok(client().execute("stellurgytest chunk forceload " + destDim + " 0 0"));
-        ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
-        ok(client().execute("stellurgytest rocket launch " + id + " true instant"));
+        ok(client().arrange("stellurgytest chunk forceload " + destDim + " 0 0"));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " " + destDim));
+        ok(client().act("stellurgytest rocket launch " + id + " true instant"));
 
         RocketInfo launchedInfo = rocketInfo(id);
         assertTrue("launch must set isInFlight=true (precondition for transition test): "
@@ -125,10 +125,10 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
                 launchedInfo.inFlight);
 
         // Force orbit reached -> triggers transition.
-        ok(client().execute("stellurgytest rocket force-orbit-reached " + id));
+        ok(client().arrange("stellurgytest rocket force-orbit-reached " + id));
 
         // Find the rocket by UUID — must now be in destDim.
-        String byUuid = ok(client().execute("stellurgytest rocket find-by-uuid " + uuid));
+        String byUuid = ok(client().read("stellurgytest rocket find-by-uuid " + uuid));
         assertTrue("rocket must be findable by UUID after transition: " + byUuid,
                 Reply.of(byUuid).ok());
         int dimAfter = Integer.parseInt(g(DIM_FIELD, byUuid, "dim"));
@@ -157,16 +157,16 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // harness has no player to keep arbitrary Stellurgy dims hot, and Forge's
         // changeDimension chain bails silently if initDimension fails
         // (return value not checked by reachSpaceManned).
-        ok(client().execute("stellurgytest chunk forceload " + destDim + " 0 0"));
-        ok(client().execute("stellurgytest rocket set-destination " + id + " " + destDim));
-        ok(client().execute("stellurgytest rocket launch " + id + " true instant"));
-        ok(client().execute("stellurgytest rocket force-orbit-reached " + id));
+        ok(client().arrange("stellurgytest chunk forceload " + destDim + " 0 0"));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " " + destDim));
+        ok(client().act("stellurgytest rocket launch " + id + " true instant"));
+        ok(client().arrange("stellurgytest rocket force-orbit-reached " + id));
 
         // Pull all the assertion fields out of the find-by-uuid response
         // atomically — calling "rocket info <id>" afterwards is racy
         // because the destination dim/chunk may unload before the second
         // round-trip lands (no player anchor in the dest dim).
-        String byUuid = ok(client().execute("stellurgytest rocket find-by-uuid " + uuid));
+        String byUuid = ok(client().read("stellurgytest rocket find-by-uuid " + uuid));
         assertTrue("rocket must be findable post-transition: " + byUuid,
                 Reply.of(byUuid).ok());
         int sxAfter = Integer.parseInt(g(STORAGE_SIZE_X, byUuid, "sizeX after"));
@@ -197,17 +197,17 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // Actually simpler: skip launch() (it would set destDim from the
         // chip and call canTravelTo). Just force in-flight + bogus destDim
         // + force-orbit-reached.
-        ok(client().execute("stellurgytest rocket launch " + id + " true force"));
-        ok(client().execute("stellurgytest rocket force-dest-dim " + id + " -12345"));
+        ok(client().arrange("stellurgytest rocket launch " + id + " true force"));
+        ok(client().arrange("stellurgytest rocket force-dest-dim " + id + " -12345"));
 
         // force-orbit-reached invokes onOrbitReached -> reachSpaceManned
         // -> changeDimension(-12345) -> canTravelTo guard returns null.
-        String resp = ok(client().execute("stellurgytest rocket force-orbit-reached " + id));
+        String resp = ok(client().arrange("stellurgytest rocket force-orbit-reached " + id));
         assertTrue("force-orbit-reached must not crash on invalid destDim: " + resp,
                 Reply.of(resp).ok());
 
         // Rocket must still be findable by UUID, dim unchanged.
-        String byUuid = ok(client().execute("stellurgytest rocket find-by-uuid " + uuid));
+        String byUuid = ok(client().read("stellurgytest rocket find-by-uuid " + uuid));
         assertTrue("rocket must still exist after invalid-dim transition attempt: " + byUuid,
                 Reply.of(byUuid).ok());
         int dimAfter = Integer.parseInt(g(DIM_FIELD, byUuid, "dim after"));

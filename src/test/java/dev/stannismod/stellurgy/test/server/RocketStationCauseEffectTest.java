@@ -62,19 +62,19 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+        String assemble = RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)),
                 "simple", 2, 10,
-                "the craft is built and flown in this volume");
+                "the craft is built and flown in this volume"));
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
     }
 
     private int createStation() throws Exception {
-        String resp = ok(client().execute("stellurgytest station create 0"));
+        String resp = ok(client().arrange("stellurgytest station create 0"));
         assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         Reply created = Reply.of("stellurgytest station create", resp);
         assertTrue("could not parse station id: " + resp, created.has(STATION_ID_FROM_CREATE));
@@ -85,8 +85,8 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
     public void overrideLandingStationFlipsPadOccupied() throws Exception {
         // Setup: a station with one auto-land-enabled pad.
         int stationId = createStation();
-        ok(client().execute("stellurgytest station add-pad " + stationId + " 50 50 alpha"));
-        ok(client().execute("stellurgytest station set-autoland " + stationId + " 50 50 true"));
+        ok(client().arrange("stellurgytest station add-pad " + stationId + " 50 50 alpha"));
+        ok(client().arrange("stellurgytest station set-autoland " + stationId + " 50 50 true"));
 
         // Build a rocket. The rocket itself stays on overworld; we just
         // need its guidance computer to invoke overrideLandingStation.
@@ -97,7 +97,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         //     -> setFallbackDestination(spaceDim, getStationLocation(station, true))
         //     -> getStationLocation calls station.getNextLandingPad(true)
         //     -> next free auto-land pad gets setOccupied(true).
-        String override = ok(client().execute(
+        String override = ok(client().act(
                 "stellurgytest rocket override-landing " + rocketId + " " + stationId));
         assertTrue("override-landing probe must succeed: " + override,
                 Reply.of(override).ok());
@@ -118,11 +118,11 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         // -> calls getNextLandingPad(true) which filters by allowedForAutoLand.
         // No pad qualifies -> returns null -> setOccupied is NEVER reached.
         int stationId = createStation();
-        ok(client().execute("stellurgytest station add-pad " + stationId + " 60 60 beta"));
+        ok(client().arrange("stellurgytest station add-pad " + stationId + " 60 60 beta"));
         // intentionally NOT calling set-autoland — pad stays opt-out.
 
         int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2100, 500));
-        ok(client().execute("stellurgytest rocket override-landing " + rocketId + " " + stationId));
+        ok(client().act("stellurgytest rocket override-landing " + rocketId + " " + stationId));
 
         // Pad beta must STILL be occupied=false because no auto-land
         // candidate was available.
@@ -140,12 +140,12 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         // getNextLandingPad(true) iteration loop.
         int stationId = createStation();
         for (int z : new int[]{70, 71, 72}) {
-            ok(client().execute("stellurgytest station add-pad " + stationId + " 70 " + z + " p" + z));
-            ok(client().execute("stellurgytest station set-autoland " + stationId + " 70 " + z + " true"));
+            ok(client().arrange("stellurgytest station add-pad " + stationId + " 70 " + z + " p" + z));
+            ok(client().arrange("stellurgytest station set-autoland " + stationId + " 70 " + z + " true"));
         }
 
         int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2200, 500));
-        ok(client().execute("stellurgytest rocket override-landing " + rocketId + " " + stationId));
+        ok(client().act("stellurgytest rocket override-landing " + rocketId + " " + stationId));
 
         // Counted over the PARSED pads. What stood here counted the substring `"occupied":true`
         // in the reply text and said so out loud — "the probe's output format is stable enough for
@@ -165,6 +165,6 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
 
     /** Every landing pad the station holds, addressable by position. */
     private StationPads pads(int stationId) throws Exception {
-        return StationPads.byId(cmd -> ok(client().execute(cmd)), stationId);
+        return StationPads.byId(cmd -> ok(client().read(cmd)), stationId);
     }
 }

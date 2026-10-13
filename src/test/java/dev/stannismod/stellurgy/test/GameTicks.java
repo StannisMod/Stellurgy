@@ -132,7 +132,7 @@ public final class GameTicks {
      * in the tree is built on, so that story would have been told by every wait at once.</p>
      */
     private static long field(TestClient client, String command, String who) throws Exception {
-        String reply = String.join("\n", client.execute(command));
+        String reply = String.join("\n", client.read(command));
         JsonElement parsed;
         try {
             parsed = new JsonParser().parse(reply);

@@ -31,7 +31,7 @@ import java.util.zip.ZipFile;
  * closure of the test-source classes it references (helpers, nested and anonymous classes, lambdas' bodies,
  * field and annotation types, an intermediate base), and refuses every reference that leaves the test
  * source for an owner outside the e2e's ALLOWLIST: the player's input, the client reads, the e2e base's own
- * protected API, the server facade's {@code execute}, JUnit's assertions, and plain JDK value, collection,
+ * protected API, the server facade's {@code read}, {@code arrange} and {@code act}, JUnit's assertions, and plain JDK value, collection,
  * string and math types. Reflection, class loading, system properties and the process, threads, files and
  * sockets, JUnit rules and runners, and every other member of the harness are refused by name.</p>
  *
@@ -57,7 +57,7 @@ import java.util.zip.ZipFile;
  * in its one advance method only.</p>
  *
  * <p><b>What it does not see.</b> What an ALLOWED call does with its arguments (a string sent through
- * {@code execute} is judged by the server's gate, an input event by the client bridge); a call a mixin or
+ * {@code read}, {@code arrange} or {@code act} is judged by the server's gate, an input event by the client bridge); a call a mixin or
  * an instrument makes to a game method that writes, beyond the field writes and the setters (by name)
  * refused here -- the game's methods are too many to classify, and an instrument's calls into the game are
  * listed by name instead; a record type a recorder hands on through a parameter; a failure an e2e turns
@@ -753,7 +753,7 @@ final class E2EConfinement {
         if (isFramework(r.owner)) {
             return frameworkAdmits(r.owner, r.member) ? null
                     : "the harness outside an e2e's surface (PlayerInput, ClientReads, the e2e base's protected API,"
-                    + " TestClient#execute, PlayerStart)";
+                    + " TestClient#read/arrange/act, PlayerStart)";
         }
         if (r.opcode == Opcodes.INVOKEDYNAMIC) {
             return lambdaBootstrap(r) ? null : "an invokedynamic bootstrap other than the lambda factory";
@@ -945,7 +945,8 @@ final class E2EConfinement {
             case "client/ClientReads":
                 return true;
             case "server/TestClient":
-                return "<class>".equals(member) || "execute".equals(member);
+                return "<class>".equals(member) || "read".equals(member) || "arrange".equals(member)
+                        || "act".equals(member);
             case "junit/AbstractPlayerE2ETest":
                 switch (member) {
                     case "<class>":

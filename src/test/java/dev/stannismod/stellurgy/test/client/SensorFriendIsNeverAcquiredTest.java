@@ -78,37 +78,37 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractOwnBootClientTest {
             + " fired, but not on an acquisition: {...acquired:false...}\" (2026-09-30).")
     @Test
     public void aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes() throws Exception {
-        Events server = new Events(this::server,
+        Events server = new Events(c -> read(c).raw(),
                 GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         // Built around the player rather than the player moved to it: a tp into a cleared site drops
         // him, and a battery tracking a falling target is a different experiment.
-        Reply player = ask("stellurgytest player position-of " + PLAYER);
+        Reply player = read("stellurgytest player position-of " + PLAYER);
         int px = (int) Math.floor(player.number("playerPosX"));
         int py = (int) Math.floor(player.number("playerPosY"));
         int pz = (int) Math.floor(player.number("playerPosZ"));
         int bx = px + BATTERY_OFFSET;
         int sx = bx + 1;
 
-        server("gamerule doMobSpawning false");
-        ask("stellurgytest chunk warmup 0 " + ((px - 16) >> 4) + " " + ((pz - 16) >> 4) + " "
+        arrange("gamerule doMobSpawning false");
+        arrange("stellurgytest chunk warmup 0 " + ((px - 16) >> 4) + " " + ((pz - 16) >> 4) + " "
                 + ((bx + 16) >> 4) + " " + ((pz + 16) >> 4)).requireOk("warm the site's chunks");
         // The whole corridor, not just the battery's footprint: the muzzle sits five and a half
         // blocks along the aim and the line-of-fire check refuses a shot into terrain.
-        ask("stellurgytest fill 0 " + (px - 2) + " " + py + " " + (pz - 2) + " " + (bx + 4) + " "
+        arrange("stellurgytest fill 0 " + (px - 2) + " " + py + " " + (pz - 2) + " " + (bx + 4) + " "
                 + (py + 8) + " " + (pz + 2) + " minecraft:air").requireOk("clear the corridor");
-        ask("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (pz >> 4)).requireOk("hold the chunk");
+        arrange("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (pz >> 4)).requireOk("hold the chunk");
         long built = server.markInstrumented();
         buildBattery(bx, py, pz);
         Weapons.awaitAssembled(server, built, bx, py, pz, PARTS,
                 "the gun never assembled, so nothing below would mean anything");
-        ask("stellurgytest turret charge 0 " + bx + " " + py + " " + pz).requireOk("charge the gun");
-        ask("stellurgytest sensor charge 0 " + sx + " " + py + " " + pz).requireOk("charge the sensor");
-        ask("stellurgytest turret code 0 " + bx + " " + py + " " + pz + " ALPHA").requireOk("code the gun");
-        ask("stellurgytest sensor code 0 " + sx + " " + py + " " + pz + " ALPHA").requireOk("code the sensor");
+        arrange("stellurgytest turret charge 0 " + bx + " " + py + " " + pz).requireOk("charge the gun");
+        arrange("stellurgytest sensor charge 0 " + sx + " " + py + " " + pz).requireOk("charge the sensor");
+        arrange("stellurgytest turret code 0 " + bx + " " + py + " " + pz + " ALPHA").requireOk("code the gun");
+        arrange("stellurgytest sensor code 0 " + sx + " " + py + " " + pz + " ALPHA").requireOk("code the sensor");
 
         // The player carries the installation's own code, and is therefore not a target at all.
-        server("clear " + PLAYER);
-        server("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
+        arrange("clear " + PLAYER).raw();
+        arrange("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
         long friend = server.mark();
         List<String> friendSweeps = sweeps(server, friend, sx, py, pz);
         for (String sweep : friendSweeps) {
@@ -117,8 +117,8 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractOwnBootClientTest {
         }
 
         // Same player, same place, same battery. Only the code changes.
-        server("clear " + PLAYER);
-        server("stellurgytest arrange coded-item " + PLAYER + " BRAVO");
+        arrange("clear " + PLAYER).raw();
+        arrange("stellurgytest arrange coded-item " + PLAYER + " BRAVO");
         // Marked AFTER the new code is in his hand, exactly as the friend leg was: every sweep of
         // this window is one taken while he carried somebody else's code.
         long foe = server.mark();
@@ -175,20 +175,21 @@ public class SensorFriendIsNeverAcquiredTest extends AbstractOwnBootClientTest {
     }
 
     private Reply read(int bx, int by, int bz) throws Exception {
-        return ask("stellurgytest turret read 0 " + bx + " " + by + " " + bz);
+        return read("stellurgytest turret read 0 " + bx + " " + by + " " + bz);
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    /** A vanilla command, whose reply is chat rather than JSON and is not read. */
-    private String server(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, server(command));
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
     }
 }

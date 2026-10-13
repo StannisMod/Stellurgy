@@ -123,9 +123,9 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
         }
     }
 
-    private String exec(String command) throws Exception {
+    /** The JSON object a probe answered, out of the lines it was sent back as (each caller sends in its role). */
+    private static String envelope(List<String> lines) {
         String envelope = "";
-        List<String> lines = harness.client().execute(command);
         for (String line : lines) {
             int brace = line.indexOf('{');
             if (brace >= 0 && line.endsWith("}")) {
@@ -162,7 +162,7 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
      * addressing a server that has stopped.</p>
      */
     private Events serverEvents() {
-        return new Events(this::exec,
+        return new Events(c -> envelope(harness.client().read(c)),
                 ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
@@ -200,18 +200,18 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
         // Marked before the fixture is built: the registry add awaited below happens INSIDE
         // `piloted`, so a mark taken after it would be waiting for a second ship.
         long buildMark = serverEvents().mark();
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> envelope(harness.client().arrange(c)));
         int originDim = setup.originDim;
         requireRegistered(buildMark, setup, originDim);
 
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = envelope(harness.client().act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED));
         assertTrue("the departure crossing must put the ship into hyperspace: " + begin,
                 readBool(begin, "began"));
 
         // READ, not driven. This scenario needs the jump to still be IN FLIGHT when the server
         // goes down, and the server is now advancing it on its own tick -- so a pump here would
         // be pushing this test's own subject towards the exit for the sake of a field read.
-        String tick = exec("stellurgytest space transit-status");
+        String tick = envelope(harness.client().arrange("stellurgytest space transit-status"));
         TransitStatus parked = TransitStatus.of(tick);
         int hyperDimBefore = parked.hyperDim;
         int inTransit = parked.inTransit;
@@ -220,7 +220,7 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
 
         // THE CONTROL, and it is not optional: if no ship reached hyperspace on this boot, "no ship
         // after the restart" would be the arrangement's own answer rather than the product's.
-        int parkedBefore = readIntOr(exec("stellurgytest vs ship-count-all " + hyperDimBefore), "count", -1);
+        int parkedBefore = readIntOr(envelope(harness.client().read("stellurgytest vs ship-count-all " + hyperDimBefore)), "count", -1);
         requireArranged("a ship must actually be registered in hyperspace (dim "
                 + hyperDimBefore + ") before the restart - found " + parkedBefore, parkedBefore >= 1);
 
@@ -228,7 +228,7 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
         // hull sitting in a lane. It is the arrangement's job because the probe stack builds its own
         // transit manager: without the claim the boot reconciliation is right to collect the hull, and
         // this test would be measuring an abandoned ship rather than a jump in flight.
-        String claim = exec("stellurgytest space transit-claim");
+        String claim = envelope(harness.client().arrange("stellurgytest space transit-claim"));
         requireArranged("production must take the claim, or nothing on the far side of the"
                 + " restart is restoring a jump: " + claim,
                 readBool(claim, "ok") && readIntOr(claim, "claimed", 0) >= 1);
@@ -247,7 +247,7 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
 
         // ── boot 2: a brand new server JVM, same world root ──────────────────────────────────────
         harness = RealDedicatedServerHarness.startWith(harnessBoot(), root, false);
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> envelope(harness.client().read(c)));
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is"
                 + " exercising it: " + status.raw(), status.registered);
 
@@ -264,10 +264,10 @@ public class HyperspaceSurvivesARestartTest extends AbstractMechanicsTest {
         // Re-derive hyperspace's id on THIS boot rather than reusing boot 1's: the id is minted per
         // boot by a free-id scan, and the whole point of naming the folder after the world is that
         // the content no longer depends on which id the scan lands on.
-        TransitSetup.piloted(this::exec); // the probe stack must come up on boot 2, or nothing below reads anything
-        int hyperDimAfter = TransitStatus.read(this::exec).hyperDim;
+        TransitSetup.piloted(c -> envelope(harness.client().arrange(c))); // the probe stack must come up on boot 2, or nothing below reads anything
+        int hyperDimAfter = TransitStatus.read(c -> envelope(harness.client().arrange(c))).hyperDim;
 
-        int parkedAfter = readIntOr(exec("stellurgytest vs ship-count-all " + hyperDimAfter), "count", -1);
+        int parkedAfter = readIntOr(envelope(harness.client().read("stellurgytest vs ship-count-all " + hyperDimAfter)), "count", -1);
         assertEquals("a ship parked in hyperspace must still be parked in hyperspace after a real"
                 + " restart - that is what makes a jump something a restart is survivable BY."
                 + " Hyperspace was dim " + hyperDimBefore + " on boot 1 and dim " + hyperDimAfter

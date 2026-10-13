@@ -37,7 +37,7 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
     private static final double SPEED = 0.45D;
 
     private final Events events =
-            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * A mirror returns a beam and is SMASHED by a solid round, and the difference is the kind in the
@@ -235,7 +235,7 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
     // ---- driving
 
     private long fire(int lane, int energy, String kind) throws Exception {
-        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
+        Reply fired = act("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
                 + (lane + 0.5D) + " " + SPEED + " 0 0 " + energy + " " + Weapons.ROUND_LIFETIME_TICKS
                 + " " + kind + " 0.25 1.0")
                 .requireOk("fire down lane " + lane);
@@ -249,7 +249,7 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
     }
 
     private void placeAt(int x, int lane, String block) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + Y + " " + lane + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + lane + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + lane + ": " + placed, placed.bool("placed"));
     }
 
@@ -259,11 +259,11 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
         // it solid or empty. Measured 2026-09-29 on this class: a slug fired down the mirror lane once
         // the beam leg had finished met nothing at all and EXPIRED with the film untouched.
         for (int cx = (X - 16) >> 4; cx <= (X + 40) >> 4; cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (lane >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (lane >> 4)).requireOk("hold a chunk");
         }
-        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
                 + ((X + 40) >> 4) + " " + ((lane + 16) >> 4)).requireOk("warm the lane's chunks");
-        ask("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (lane - 3) + " " + (X + 40)
+        arrange("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (lane - 3) + " " + (X + 40)
                 + " " + (Y + 4) + " " + (lane + 3) + " minecraft:air").requireOk("clear the lane");
     }
 
@@ -295,6 +295,6 @@ public class ArmourBlocksAnswerForThemselvesTest extends AbstractSharedServerTes
     }
 
     private Reply stageAt(int x, int lane) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
     }
 }

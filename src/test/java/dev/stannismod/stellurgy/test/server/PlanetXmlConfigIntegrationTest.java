@@ -93,12 +93,12 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
 
         // `holds` refuses a reply carrying no `stellurgyDimensions` of its own, so the malformed-reply
         // claim that used to stand here as a separate line is the same claim, made where it bites.
-        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().read("stellurgytest dim list")));
         assertTrue("fixture dim " + FIXTURE_DIM + " not in stellurgyDimensions: " + dimList,
                 dimList.holds(FIXTURE_DIM));
 
         String planetInfo = String.join("\n",
-                client().execute("stellurgytest planet info " + FIXTURE_DIM));
+                client().read("stellurgytest planet info " + FIXTURE_DIM));
         assertTrue("planet info errored: " + planetInfo,
                 !Reply.of(planetInfo).has("error"));
 
@@ -120,7 +120,7 @@ public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
         // This fixture states no <galaxyGen>: the shipped procedural galaxy, read off the generator the
         // running universe has in force. (The file WITH a <galaxyGen> is PlanetDefsAuthoringTest's.)
         Reply inForce = Reply.of("stellurgytest space gen-config",
-                String.join("\n", client().execute("stellurgytest space gen-config")));
+                String.join("\n", client().read("stellurgytest space gen-config")));
         assertEquals("a planetDefs.xml with no <galaxyGen> must run the shipped procedural galaxy: "
                 + inForce, "ClusteredGalaxyGenerator", inForce.text("generator"));
         assertEquals("built from the shipped configuration: " + inForce,

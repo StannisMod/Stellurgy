@@ -39,8 +39,8 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
     private Reply placeAndRead(String block) throws Exception {
         FixtureSite site = clearedSite(1, 2, block + " standing alone in open air");
         String at = site.dim + " " + site.x + " " + (site.y + 1) + " " + site.z;
-        arrange("stellurgytest place " + at + " " + block);
-        Reply read = arrange("stellurgytest heat material " + at);
+        arrange("stellurgytest place " + at + " " + block).requireOk();
+        Reply read = read("stellurgytest heat material " + at).requireOk();
         requireArranged("premise: the position must hold " + block + ": " + read,
                 block.equals(read.text("block")));
         return read;
@@ -109,7 +109,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
             + " expected:&lt;500000&gt; but was:&lt;1000000&gt;\", 2026-09-30.")
     @Test
     public void aSlabInTheHandIsTheSameHalfBlockAsASlabOnTheGround() throws Exception {
-        Reply held = arrange("stellurgytest heat item minecraft:stone_slab");
+        Reply held = read("stellurgytest heat item minecraft:stone_slab").requireOk();
 
         assertEquals("an item the ore dictionary cannot name still has the shape of what it places: "
                 + held, WHOLE_BLOCK / 2, held.longInteger("volumeMilliLitres"));

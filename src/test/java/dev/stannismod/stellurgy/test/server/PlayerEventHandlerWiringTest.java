@@ -66,7 +66,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
     }
 
     private int firstStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse(
                 "No Stellurgy dimensions registered — skipping",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
@@ -95,13 +95,13 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // subscribed to the event bus" smoke we have at the headless
         // server layer. The counter increments inside ServerTickEvent.END;
         // if @Mod init failed to subscribe, the value freezes at zero.
-        String first = ok(client().execute("stellurgytest event tick-counter"));
+        String first = ok(client().read("stellurgytest event tick-counter"));
         long t1 = parseGroup(TIME_PATTERN, first, "time");
         long w1 = parseGroup(WORLD_TIME_PATTERN, first, "worldTotalTime");
 
         GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);
 
-        String second = ok(client().execute("stellurgytest event tick-counter"));
+        String second = ok(client().read("stellurgytest event tick-counter"));
         long t2 = parseGroup(TIME_PATTERN, second, "time");
         long w2 = parseGroup(WORLD_TIME_PATTERN, second, "worldTotalTime");
 
@@ -130,7 +130,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         //   - gravity != 1.0 (a non-default value) — implies the planet
         //     XML was actually parsed and applied
         int dim = firstStellurgyDimOrSkip();
-        String resp = ok(client().execute("stellurgytest event dim-side-effects " + dim));
+        String resp = ok(client().arrange("stellurgytest event dim-side-effects " + dim));
 
         assertTrue("Stellurgy dim must be loaded for side-effect probing: " + resp,
                 Reply.of(resp).bool("loaded"));
@@ -154,7 +154,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // The overworld is registered as Stellurgy planet "Earth" on this dev
         // fixture set, so we can't use dim 0 here; pick the first non-Stellurgy
         // forge dim that's NOT in the stellurgyDimensions array.
-        String dimList = ok(client().execute("stellurgytest dim list"));
+        String dimList = ok(client().read("stellurgytest dim list"));
         Reply listed = Reply.of("stellurgytest dim list", dimList);
         Assume.assumeTrue("dim list missing stellurgyDimensions array", listed.has(AR_DIMS_ARRAY));
         java.util.Set<Integer> stellurgyDims = new java.util.HashSet<>();
@@ -167,7 +167,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         Assume.assumeTrue("no non-Stellurgy vanilla dim available to counter-test against",
                 nonStellurgyDim != Integer.MIN_VALUE);
 
-        String resp = ok(client().execute("stellurgytest event dim-side-effects " + nonStellurgyDim));
+        String resp = ok(client().arrange("stellurgytest event dim-side-effects " + nonStellurgyDim));
         assertTrue("non-Stellurgy dim " + nonStellurgyDim + " must be loaded: " + resp,
                 Reply.of(resp).bool("loaded"));
         assertTrue("non-Stellurgy dim " + nonStellurgyDim + " must NOT be classified as Stellurgy planet: " + resp,

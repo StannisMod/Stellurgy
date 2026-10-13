@@ -93,7 +93,7 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
         // `dimList.contains("9402")` — and those digits match anywhere in the blob: the negative
         // claim below would fail for a tick time carrying them, and the positive one above would
         // pass with the dimension absent as long as something printed 94010 or 19401.
-        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().read("stellurgytest dim list")));
         assertTrue("well-formed planet must survive a dirty planetDefs.xml: " + dimList,
                 dimList.holds(GOOD_DIM));
         assertFalse("malformed planet must be skipped, not registered: " + dimList,
@@ -101,7 +101,7 @@ public class PlanetDefsFaultToleranceTest extends AbstractSharedServerTest {
 
         // The good planet is fully functional, not just listed.
         String info = String.join("\n",
-                client().execute("stellurgytest planet info " + GOOD_DIM));
+                client().read("stellurgytest planet info " + GOOD_DIM));
         assertTrue("good planet must round-trip its config: " + info,
                 "GoodPlanet".equals(Reply.of(info).text("name")));
     }

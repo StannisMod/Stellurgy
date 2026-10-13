@@ -393,14 +393,14 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
     public void aCraftFreshFromThePlanetFlownIntoItsMoonsSphereIsCarriedIntoTheMoonsZone()
             throws Exception {
         Moon luna = arrangeACraftBesideTheMoon();
-        EntryStatus launched = EntryStatus.forShip(this::exec, luna.durableId).requireFound(
+        EntryStatus launched = EntryStatus.forShip(c -> read(c).raw(), luna.durableId).requireFound(
                 "the craft entered space, so the ledger must hold its row");
         assertEquals("arrangement: a craft fresh from the planet must be named by the planet's own "
                 + "cell: " + launched, luna.planetKey, launched.cellKey);
         assertEquals("arrangement: ...which is a GALACTIC cell, or this is not the branch under test: "
                 + launched, null, GalacticCoord.fromCellKey(launched.cellKey).zone());
         int slot = launched.slotDim;
-        String vsId = ShipIdentity.physicsIdOf(this::exec, slot, luna.durableId);
+        String vsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), slot, luna.durableId);
         stopTheCraft(slot, vsId, luna.durableId);
 
         // CONTROL: beside the moon, outside its sphere, the controller leaves the craft alone. Without
@@ -411,7 +411,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         moveTo(slot, vsId, besidePose[0], besidePose[1], besidePose[2]);
         assertNotCarriedAway(launched, "moved beside the moon, outside its sphere");
         release(slot, vsId);
-        ShipInfo besideHull = ShipInfo.byId(this::exec, slot, vsId);
+        ShipInfo besideHull = ShipInfo.byId(c -> read(c).raw(), slot, vsId);
         assertEquals("arrangement: the craft is not where it was moved to: " + besideHull.raw(),
                 besidePose[0], besideHull.x, CONTINUITY_SLACK);
         double beside = distance(new double[] {besideHull.x, besideHull.y, besideHull.z},
@@ -457,8 +457,8 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                 decidedOn[0] - moonAtCarry[0], arrived.lx, slack);
         assertEquals("...along Y: " + arrived, decidedOn[1] - moonAtCarry[1], arrived.ly, slack);
         assertEquals("...along Z: " + arrived, decidedOn[2] - moonAtCarry[2], arrived.lz, slack);
-        ShipInfo hull = ShipInfo.byId(this::exec, arrived.slotDim,
-                ShipIdentity.physicsIdOf(this::exec, arrived.slotDim, luna.durableId));
+        ShipInfo hull = ShipInfo.byId(c -> read(c).raw(), arrived.slotDim,
+                ShipIdentity.physicsIdOf(c -> read(c).raw(), arrived.slotDim, luna.durableId));
         assertEquals("the arrived ship is not where its own ledger row puts it, along X: "
                 + hull.raw() + " vs " + arrived, arrived.lx, hull.x, SETTLE_SLACK);
         assertEquals("...along Y: " + hull.raw() + " vs " + arrived, arrived.ly, hull.y, SETTLE_SLACK);
@@ -470,7 +470,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * ({@code space zone-sphere} → {@code fromGalacticCell}), asserted to be about that cell.
      */
     private double[] moonInPlanetCell(Moon moon) throws Exception {
-        Reply sphere = Reply.of(exec("stellurgytest space zone-sphere " + moon.moonKey));
+        Reply sphere = Reply.of(read("stellurgytest space zone-sphere " + moon.moonKey).raw());
         assertTrue("arrangement: production reads no sphere for the moon " + moon.moonKey + ": "
                 + sphere, sphere.bool("found"));
         assertEquals("arrangement: the moon's position must be read in the planet's own cell: "
@@ -567,35 +567,35 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
 
     /** A craft built here and flown into space through the real on-ramp, and the moon it will visit. */
     private Moon arrangeACraftBesideTheMoon() throws Exception {
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
-        int[] pad = RocketFixture.placeAt(site(), this::exec, "with-pilot-seat", 4, 12,
+        int[] pad = RocketFixture.placeAt(site(), c -> arrange(c).raw(), "with-pilot-seat", 4, 12,
                 "the craft this scenario builds stands in this volume");
-        String asm = exec("stellurgytest rocket assemble 0 " + pad[0] + " " + pad[1] + " " + pad[2]);
+        String asm = act("stellurgytest rocket assemble 0 " + pad[0] + " " + pad[1] + " " + pad[2]).raw();
         assertEquals("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 0, Reply.of(asm).integer("rocketCount"));
         String durableId = ShipIdentity.nameFromAssembly(asm);
-        String padVsId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
-        ShipInfo onPad = ShipInfo.byId(this::exec, 0, padVsId);
+        String padVsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
+        ShipInfo onPad = ShipInfo.byId(c -> read(c).raw(), 0, padVsId);
 
-        String held = exec("stellurgytest vs ff-input-by-id 0 " + padVsId + " 0 1 0 0 0 0");
+        String held = arrange("stellurgytest vs ff-input-by-id 0 " + padVsId + " 0 1 0 0 0 0").raw();
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 Reply.of(held).bool("afcResolved"));
-        assertTrue("climb teleport failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 "
-                + padVsId + " " + (int) onPad.x + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) onPad.z)).ok());
+        assertTrue("climb teleport failed", Reply.of(arrange("stellurgytest vs teleport-ship-by-id 0 "
+                + padVsId + " " + (int) onPad.x + " " + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + (int) onPad.z).raw()).ok());
         // Marked BEFORE the unpark, which is what lets the entry start: it is announced once.
         long entryMark = events.mark();
-        exec("stellurgytest vs unpark-by-id 0 " + padVsId);
+        arrange("stellurgytest vs unpark-by-id 0 " + padVsId);
         awaitEnteredSpace(events, entryMark, durableId,
                 "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS,
-                () -> EntrySlots.loadAll(this::exec, setup));
-        EntryStatus launched = EntryStatus.forShip(this::exec, durableId).requireFound(
+                () -> EntrySlots.loadAll(c -> arrange(c).raw(), setup));
+        EntryStatus launched = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the entry was announced, so the ledger must hold this craft's row");
 
         // The launch planet is the body whose dimension the craft left (0); its moon is the MOON
         // whose zone is that planet's own cell. A moon's name is a path containing its parent's, so
         // this is a lookup, not a proximity guess.
-        Reply system = Reply.of(exec("stellurgytest space cell-info " + launched.cellKey)).requireOk(
+        Reply system = Reply.of(read("stellurgytest space cell-info " + launched.cellKey).raw()).requireOk(
                 "cell-info of the launch cell");
         String planetKey = null;
         String moonKey = null;
@@ -622,7 +622,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         assertNotNull("arrangement: the launch planet " + planetKey + " has no moon in its zone: "
                 + system, moonKey);
 
-        Reply sphere = Reply.of(exec("stellurgytest space zone-sphere " + moonKey));
+        Reply sphere = Reply.of(read("stellurgytest space zone-sphere " + moonKey).raw());
         assertTrue("arrangement: production reads no sphere for the moon " + moonKey + ": " + sphere,
                 sphere.bool("found"));
         long radius = sphere.longInteger("radius");
@@ -637,18 +637,18 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      */
     private Placed jumpTo(Moon moon, String cellKey, long offsetX) throws Exception {
         long jumpMark = events.mark();
-        Reply jump = Reply.of(exec("stellurgytest space jump-key id " + moon.durableId + " " + cellKey
-                + " " + moon.launchSlot + " 5000000 " + offsetX + " 0 0"))
+        Reply jump = Reply.of(act("stellurgytest space jump-key id " + moon.durableId + " " + cellKey
+                + " " + moon.launchSlot + " 5000000 " + offsetX + " 0 0").raw())
                 .requireOk("jump-key to " + cellKey);
         assertTrue("the jump to " + cellKey + " did not begin: " + jump, jump.bool("began"));
         events.awaitRecordWithFields(jumpMark, "ship_transit_ended",
                 "the craft must arrive in the cell it was aimed at; " + jump, SETTLE_TICKS,
                 "ship", moon.durableId, "destination", jump.text("toCell"));
-        EntryStatus ledger = EntryStatus.forShip(this::exec, moon.durableId).requireFound(
+        EntryStatus ledger = EntryStatus.forShip(c -> read(c).raw(), moon.durableId).requireFound(
                 "the jump was announced, so the ledger must hold this craft's row");
-        String vsId = ShipIdentity.physicsIdOf(this::exec, ledger.slotDim, moon.durableId);
+        String vsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), ledger.slotDim, moon.durableId);
         stopTheCraft(ledger.slotDim, vsId, moon.durableId);
-        return new Placed(ledger, vsId, ShipInfo.byId(this::exec, ledger.slotDim, vsId));
+        return new Placed(ledger, vsId, ShipInfo.byId(c -> read(c).raw(), ledger.slotDim, vsId));
     }
 
     /** Move a placed craft along X to {@code toX} from the moon, within its cell, and prove it moved. */
@@ -662,7 +662,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         moveTo(slot, from.vsId, toX, (long) from.pose.y, toZ);
         assertNotCarriedAway(from.ledger, "moved to " + toX + " from the moon");
         release(slot, from.vsId);
-        ShipInfo moved = ShipInfo.byId(this::exec, slot, from.vsId);
+        ShipInfo moved = ShipInfo.byId(c -> read(c).raw(), slot, from.vsId);
         assertEquals("arrangement: the craft is not where it was moved to: " + moved.raw(),
                 toX, moved.x, CONTINUITY_SLACK);
         return new Placed(from.ledger, from.vsId, moved);
@@ -695,14 +695,14 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * in the slot, three scenarios out of three — so anything taken here races it.
      */
     private void moveTo(int slot, String vsId, long x, long y, long z) throws Exception {
-        assertTrue("the move within the cell failed", Reply.of(exec("stellurgytest vs "
-                + "teleport-ship-by-id " + slot + " " + vsId + " " + x + " " + y + " " + z)).ok());
+        assertTrue("the move within the cell failed", Reply.of(arrange("stellurgytest vs "
+                + "teleport-ship-by-id " + slot + " " + vsId + " " + x + " " + y + " " + z).raw()).ok());
     }
 
     /** Release a craft that was moved and LEFT where it is to the physics again. */
     private void release(int slot, String vsId) throws Exception {
         assertTrue("the moved craft could not be released to the physics — it is not in its slot",
-                Reply.of(exec("stellurgytest vs unpark-by-id " + slot + " " + vsId)).ok());
+                Reply.of(arrange("stellurgytest vs unpark-by-id " + slot + " " + vsId).raw()).ok());
     }
 
     /**
@@ -711,7 +711,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * a hull missing from the slot it was moved in.
      */
     private void assertNotCarriedAway(EntryStatus before, String where) throws Exception {
-        EntryStatus now = EntryStatus.forShip(this::exec, before.shipId).requireFound(
+        EntryStatus now = EntryStatus.forShip(c -> read(c).raw(), before.shipId).requireFound(
                 "the craft just moved within its cell must still have its ledger row");
         assertEquals("the craft's own flight computer carried it out of " + before.cellKey + " when "
                 + where + ", a pose it must be left at: " + now, before.cellKey, now.cellKey);
@@ -730,7 +730,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                             + "must be granted a carry once it has " + crossed, SETTLE_TICKS,
                     "ship", durableId, "granted", "true");
         } catch (AssertionError noGrant) {
-            Reply asked = Reply.of(exec("stellurgytest space seam-carry " + slot + " id " + durableId));
+            Reply asked = Reply.of(act("stellurgytest space seam-carry " + slot + " id " + durableId).raw());
             throw new AssertionError("production does not agree the craft has " + crossed + ": its "
                     + "flight computer was granted no carry, and the controller asked directly answers "
                     + asked + " — wouldCarry:false is the decision, wouldCarry:true is a trigger that "
@@ -758,7 +758,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         String record = Events.recordsWhere(events.awaitField(mark, "ship_entered_cell", "ship",
                 durableId, "the carry was granted (" + granted + "), so the craft must settle where "
                         + "it was aimed", SETTLE_TICKS), "ship", durableId).get(0);
-        EntryStatus ledger = EntryStatus.forShip(this::exec, durableId).requireFound(
+        EntryStatus ledger = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the carry was announced, so the ledger must hold this craft's row");
         assertEquals("the ledger no longer names the cell the carry announced — the craft was carried "
                 + "again after it arrived: " + ledger, Events.text(record, "destination"),
@@ -778,8 +778,8 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         assertEquals("...along Z: " + c.ledger, decidedOn[2], c.ledger.lz, CONTINUITY_SLACK);
 
         // A ledger row written by the carry itself says only what the carry believes.
-        ShipInfo arrived = ShipInfo.byId(this::exec, c.ledger.slotDim,
-                ShipIdentity.physicsIdOf(this::exec, c.ledger.slotDim, durableId));
+        ShipInfo arrived = ShipInfo.byId(cmd -> read(cmd).raw(), c.ledger.slotDim,
+                ShipIdentity.physicsIdOf(cmd -> read(cmd).raw(), c.ledger.slotDim, durableId));
         System.out.println("[zone-sphere] decided on " + java.util.Arrays.toString(decidedOn)
                 + " | named " + c.ledger.cellKey + " at (" + c.ledger.lx + "," + c.ledger.ly + ","
                 + c.ledger.lz + ") | arrived pose (" + arrived.x + "," + arrived.y + "," + arrived.z
@@ -799,13 +799,13 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      */
     private Placed moveIntoTheBandAndAssertStays(Moon moon, int slot, long toX, String craft)
             throws Exception {
-        String vsId = ShipIdentity.physicsIdOf(this::exec, slot, moon.durableId);
-        EntryStatus ledger = EntryStatus.forShip(this::exec, moon.durableId).requireFound(
+        String vsId = ShipIdentity.physicsIdOf(c -> read(c).raw(), slot, moon.durableId);
+        EntryStatus ledger = EntryStatus.forShip(c -> read(c).raw(), moon.durableId).requireFound(
                 "the carried craft must still have its ledger row");
         // ON the axis: the arrival ring stands the craft off the moon by twice its descent shell (for
         // Luna ~14 000 blocks, at a bearing drawn from the ship's id), and the band is only a few
         // hundred blocks deep on its outer side, so an X placed with that Z kept misses it.
-        Placed band = moveWithin(new Placed(ledger, vsId, ShipInfo.byId(this::exec, slot, vsId)), toX, 0L);
+        Placed band = moveWithin(new Placed(ledger, vsId, ShipInfo.byId(c -> read(c).raw(), slot, vsId)), toX, 0L);
         // And the DISTANCE is still what is asserted, not the X: Y is kept as the craft came.
         assertTrue("arrangement: the craft must stand INSIDE the hysteresis band ("
                         + moon.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION) + " .. "
@@ -825,7 +825,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * apart first.
      */
     private void assertStays(int slot, String durableId, String craft) throws Exception {
-        Reply decision = Reply.of(exec("stellurgytest space seam-carry " + slot + " id " + durableId));
+        Reply decision = Reply.of(act("stellurgytest space seam-carry " + slot + " id " + durableId).raw());
         assertFalse("the craft was refused rather than judged, so nothing was asked: " + decision,
                 decision.has("reason"));
         assertFalse(craft + " must be left where it is: " + decision, decision.bool("wouldCarry"));
@@ -842,11 +842,11 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
         // a paste, and a controller that arms for a craft it should leave alone carries it right
         // then — before this test's control can ask it anything.
         assertTrue("the throttle could not be released — the craft's ledger row is now "
-                        + EntryStatus.forShip(this::exec, durableId),
-                Reply.of(exec("stellurgytest vs ff-input-by-id " + slot + " " + vsId
-                        + " 0 0 0 0 0 0")).bool("afcResolved"));
-        Reply stopped = Reply.of(exec("stellurgytest vs ff-cruise-by-id " + slot + " " + vsId
-                + " 0 0 0"));
+                        + EntryStatus.forShip(c -> read(c).raw(), durableId),
+                Reply.of(arrange("stellurgytest vs ff-input-by-id " + slot + " " + vsId
+                        + " 0 0 0 0 0 0").raw()).bool("afcResolved"));
+        Reply stopped = Reply.of(arrange("stellurgytest vs ff-cruise-by-id " + slot + " " + vsId
+                + " 0 0 0").raw());
         assertTrue("the cruise could not be commanded: " + stopped, stopped.bool("afcResolved"));
         assertTrue("the computer still holds a cruise after being told to stop: " + stopped,
                 Math.abs(stopped.number("cruiseForward")) < EXACTLY_ZERO
@@ -880,7 +880,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
             + " {...carried:false...}\" (2026-10-06).")
     @Test
     public void aCraftKeepsStationWithABigPlanetOutToItsSphereAndLeavesPastIt() throws Exception {
-        Reply planets = Reply.of(exec("stellurgytest space zone-planets " + TERRITORIES_SEARCHED))
+        Reply planets = Reply.of(read("stellurgytest space zone-planets " + TERRITORIES_SEARCHED).raw())
                 .requireOk("list the field's planets and their spheres");
         String giant = null;
         long extent = 0L;
@@ -899,7 +899,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                 giant != null && extent > MIN_SPHERE_IN_HALF_CELLS * GalacticCoord.HALF_CELL);
 
         long between = (GalacticCoord.HALF_CELL + extent) / 2L;
-        Reply inBand = Reply.of(exec("stellurgytest space zone-membership " + giant + " " + between))
+        Reply inBand = Reply.of(read("stellurgytest space zone-membership " + giant + " " + between).raw())
                 .requireOk("ask the crossing about a craft inside the sphere");
         requireArranged("the in-band craft must stand past the realized half-cell and inside the sphere,"
                         + " measured where the registry puts it: " + inBand,
@@ -909,7 +909,7 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                 + " zone: " + inBand, inBand.bool("carried"));
 
         long beyond = (long) (extent * (1d + 10d * CellSeam.SPHERE_CARRY_FRACTION)) + 1L;
-        Reply outside = Reply.of(exec("stellurgytest space zone-membership " + giant + " " + beyond))
+        Reply outside = Reply.of(read("stellurgytest space zone-membership " + giant + " " + beyond).raw())
                 .requireOk("ask the crossing about a craft past the sphere");
         System.out.println("[zone-extent] in band " + inBand + " | outside " + outside);
         requireArranged("the outside craft must stand past the sphere's outward threshold, measured where the"
@@ -921,10 +921,10 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        exec("stellurgytest space entry-clear");
+        arrange("stellurgytest space entry-clear");
     }
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 }

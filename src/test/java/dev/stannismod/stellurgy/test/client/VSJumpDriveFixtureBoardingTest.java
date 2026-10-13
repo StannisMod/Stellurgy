@@ -161,7 +161,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         craftY = by + 1;
         craftZ = bz + 3;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -183,7 +183,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
                 + " asynchronous)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 10) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 10) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what loads this craft, so the settle below is measuring a"
                         + " ship only an arrived client can have brought into being");
@@ -230,7 +230,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // A block that rode into subspace but never got welded to the flight computer is invisible to
         // its own ship: the drive resolves its machines from the computer outward, so this leg is
         // what says the assembler did its welding rather than merely its moving.
-        DriveInfo drive = DriveInfo.at(this::exec,
+        DriveInfo drive = DriveInfo.at(c -> arrange(c).raw(),
                 "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
         assertTrue("the assembled ship must have a FIELD GENERATOR aboard — drivePower is measured "
                         + "off the generator, so a zero here is a generator the ship cannot see: "
@@ -250,9 +250,9 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // bare controller could. Drain it and read the recovery rate back out of the cooldown, then
         // compare against the controller's own rate — a shape ("the sinks are contributing"), with
         // no balance number pinned on either side of the comparison.
-        String emptied = exec("stellurgytest drive charge 0 " + afcSub[0] + " " + afcSub[1] + " "
-                + afcSub[2] + " empty");
-        DriveInfo cooled = DriveInfo.at(this::exec,
+        String emptied = arrange("stellurgytest drive charge 0 " + afcSub[0] + " " + afcSub[1] + " "
+                + afcSub[2] + " empty").raw();
+        DriveInfo cooled = DriveInfo.at(c -> arrange(c).raw(),
                 "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
         long cooldown = cooled.cooldownTicks;
         long burst = cooled.burstCost;
@@ -268,14 +268,14 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
                 cooldown >= 0L && burst > 0L
                         && observedRate > DriveTuning.CAPACITOR_BASE_ACCEPT_RATE * 2L);
 
-        String gate = exec("stellurgytest nav gate 0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        String gate = arrange("stellurgytest nav gate 0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]).raw();
         assertTrue("the ship must find its own NAVIGATION COMPUTER from the flight computer. That "
                         + "search is by the console's stored link back to this computer and adopts "
                         + "nothing, so it is the assembler's welding that is under test here: " + gate,
                 Reply.of(gate).bool("navComputer"));
 
         int[] navSub = add(afcSub, offNav);
-        NavStatus navStatus = NavStatus.at(this::exec, 0, navSub[0], navSub[1], navSub[2]);
+        NavStatus navStatus = NavStatus.at(c -> read(c).raw(), 0, navSub[0], navSub[1], navSub[2]);
         assertTrue("and the console itself must report that link: " + navStatus.raw(),
                 navStatus.linked);
 
@@ -326,7 +326,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         JsonObject riding = awaitClientMount(seatPressOnClient,
                 "the CLIENT must mount the pilot after a boarding the SERVER has already recorded"
                         + " (the chain above)", 5 * budget,
-                " serverRiding=" + exec("stellurgytest player riding-entity")
+                " serverRiding=" + read("stellurgytest player riding-entity").raw()
                         + " serverMountRecord=" + events.since(seatPressMark, "mount")
                         + seatAim.diagnosis);
         assertTrue("the pilot must still be aboard when the seat is read — his client mounted him"
@@ -376,8 +376,8 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
                         + "the pilot to touch, and unlike the seat its whole answer IS the screen — a "
                         + "console that swallows the press leaves the pilot with no way to aim the "
                         + "ship at all. screen=\"" + screen + "\" clientGuiOpens=" + opened
-                        + " serverSideModuleBuild=" + exec("stellurgytest nav modules 0 " + navSub[0] + " "
-                                + navSub[1] + " " + navSub[2])
+                        + " serverSideModuleBuild=" + act("stellurgytest nav modules 0 " + navSub[0] + " "
+                                + navSub[1] + " " + navSub[2]).raw()
                         + navAim.diagnosis,
                 screen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
 
@@ -443,7 +443,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
             // The stand REACHING the client is a link: the reading below is of where he was put, and
             // twenty ticks stood here as a guess at the trip.
             long standMark = clientEvents().mark();
-            exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
+            arrange("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
             awaitClientPlacedNear(standMark, standWorld[0], standWorld[2],
                     "the stand on the deck square must reach the client before he aims from it");
 
@@ -517,7 +517,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
     private void assertComponentAboard(int[] afcSub, int[] offset, String blockId, String what)
             throws Exception {
         int[] sub = add(afcSub, offset);
-        String aboard = exec("stellurgytest block at 0 " + sub[0] + " " + sub[1] + " " + sub[2]);
+        String aboard = read("stellurgytest block at 0 " + sub[0] + " " + sub[1] + " " + sub[2]).raw();
         // Compared case-insensitively: the registry lowercases what the mod registered, so the id a
         // probe reads back is never spelled the way the source spells it.
         assertTrue("the " + what + " must have joined the ship: the flood fill out of the flight "
@@ -529,7 +529,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
                         .equals(readGroup(aboard, BLOCK_ID).toLowerCase(Locale.ROOT)));
 
         int[] lifted = liftedBuildPos(offset);
-        String onPad = exec("stellurgytest block at 0 " + lifted[0] + " " + lifted[1] + " " + lifted[2]);
+        String onPad = read("stellurgytest block at 0 " + lifted[0] + " " + lifted[1] + " " + lifted[2]).raw();
         assertTrue("CONTROL: …and it must be GONE from the pad. A " + what + " still standing at "
                         + describe(lifted) + " is a block the physics mod declined to take, and the "
                         + "reading above would then be of some other ship's machine: " + onPad,
@@ -548,12 +548,12 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
 
     /** This scenario's own craft, reported by name rather than by what stands near its base. */
     private String shipInfoAtBase() throws Exception {
-        return exec("stellurgytest vs ship-info 0 id " + scenarioShipId);
+        return read("stellurgytest vs ship-info 0 id " + scenarioShipId).raw();
     }
 
     /** The seat's subspace address, its flight computer's, and the ship's live world position. */
     private String findSeat() throws Exception {
-        return exec("stellurgytest vs find-seat 0 id " + scenarioShipId);
+        return read("stellurgytest vs find-seat 0 id " + scenarioShipId).raw();
     }
 
     /**
@@ -571,8 +571,8 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // Mapped through THIS ship's transform. The positional form asks which hulls contain the
         // anchor and maps through the first of them, and ships do not collide — so a point inside two
         // craft produces a plausible world position through the wrong one.
-        String mapped = exec("stellurgytest vs to-world 0 id " + scenarioShipId
-                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
+        String mapped = read("stellurgytest vs to-world 0 id " + scenarioShipId
+                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz)).raw();
         return readTripleD(mapped, TO_WORLD);
     }
 
@@ -609,7 +609,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         if (!bySneak) {
             // The guaranteed route, and here the link is REQUIRED: a probe dismount that produces
             // no client dismount is an arrangement that did not happen, not a slow one.
-            exec("stellurgytest player dismount");
+            arrange("stellurgytest player dismount").raw();
             awaitClientDismount(clientMark, "the pilot must leave the seat before reaching for the"
                     + " console — a seated player's use press goes to the ship, not to the block he"
                     + " is looking at. Neither the sneak key nor the probe dismount got him off it.",
@@ -635,8 +635,8 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
         // The height goes past this fixture's 12: the jump-drive variant is the tallest in the
         // catalogue and the pilot walks its deck, so the envelope is the hull plus the room above it.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 20,
-                "the jump-drive hull, and the deck the pilot boards it across");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 20,
+                "the jump-drive hull, and the deck the pilot boards it across"));
     }
 
     // ---- tiny parsing ---------------------------------------------------------------------------

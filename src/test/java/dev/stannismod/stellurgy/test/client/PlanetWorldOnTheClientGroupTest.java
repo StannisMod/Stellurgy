@@ -141,7 +141,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             // Both records land after the world is gone.
             Events leaving = clientConnectionEvents();
             long kickMark = leaving.mark();
-            String kicked = exec("kick " + PLAYER + " c031-remote-disconnect");
+            String kicked = arrange("kick " + PLAYER + " c031-remote-disconnect").raw();
 
             // The chain production commits: the mod's disconnect handler ran, and from inside it the
             // registry was emptied.
@@ -186,7 +186,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
      */
     @Test
     public void joiningPlayerIsToldTheSpawnPointOfTheWorldItJoined() throws Exception {
-        DimInfo original = DimInfo.forDim(this::exec, 0);
+        DimInfo original = DimInfo.forDim(c -> read(c).raw(), 0);
         try {
             Events server = connectionEvents();
             long logoutMark = server.mark();
@@ -194,8 +194,8 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             server.await(logoutMark, "player_logged_out",
                     "the client must have left before the spawn moves, or /setworldspawn's broadcast"
                             + " reaches him and the login carries nothing", SPAWN_LINK_BUDGET_TICKS);
-            String set = exec("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z);
-            DimInfo oracle = DimInfo.forDim(this::exec, 0);
+            String set = arrange("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z).raw();
+            DimInfo oracle = DimInfo.forDim(c -> read(c).raw(), 0);
             assertTrue("server-side overworld spawn must be the value we set (setworldspawn output="
                             + set + "): " + oracle.raw(),
                     oracle.spawnX() == SPAWN_A_X && oracle.spawnY() == SPAWN_A_Y && oracle.spawnZ() == SPAWN_A_Z);
@@ -212,7 +212,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             assertEquals("client player spawn Y after login: " + spawn, SPAWN_A_Y, spawn.get("bedY").getAsInt());
             assertEquals("client player spawn Z after login: " + spawn, SPAWN_A_Z, spawn.get("bedZ").getAsInt());
         } finally {
-            exec("setworldspawn " + original.spawnX() + " " + original.spawnY() + " " + original.spawnZ());
+            arrange("setworldspawn " + original.spawnX() + " " + original.spawnY() + " " + original.spawnZ());
         }
     }
 
@@ -228,18 +228,18 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             + " after the transfer, with the positive control before it green, 2026-09-28.")
     @Test
     public void transferredPlayerIsToldTheDestinationDimensionSpawnPoint() throws Exception {
-        DimInfo original = DimInfo.forDim(this::exec, 0);
+        DimInfo original = DimInfo.forDim(c -> read(c).raw(), 0);
         try {
             // Positive control through vanilla's own broadcast: a failure here is the probe or the client.
             long broadcast = clientEvents().mark();
-            exec("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z);
+            arrange("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z);
             JsonObject synced = waitForClientSpawn(broadcast, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
             assertSpawnEquals("POSITIVE CONTROL: a broadcast SPacketSpawnPosition must reach the client",
                     synced, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
 
             // Now move the spawn SILENTLY — no packet. The client must still hold A.
             long silentMark = clientEvents().mark();
-            String silent = exec("stellurgytest dim set-spawn 0 " + SPAWN_B_X + " " + SPAWN_B_Y + " " + SPAWN_B_Z);
+            String silent = arrange("stellurgytest dim set-spawn 0 " + SPAWN_B_X + " " + SPAWN_B_Y + " " + SPAWN_B_Z).raw();
             assertTrue("silent set-spawn must have taken effect server-side: " + silent,
                     Reply.of(silent).ok()
                             && String.valueOf(SPAWN_B_X).equals(Reply.of(silent).text("spawnX"))
@@ -247,16 +247,16 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
                             && String.valueOf(SPAWN_B_Z).equals(Reply.of(silent).text("spawnZ")));
 
             // A planet's WorldInfo delegates spawn to the overworld, so the destination's spawn is B.
-            String load = exec("stellurgytest dim load " + SPAWN_DIM);
+            String load = arrange("stellurgytest dim load " + SPAWN_DIM).raw();
             assertTrue("destination dim must load before it can be inspected: " + load,
                     Reply.of(load).bool("loaded"));
-            DimInfo destOracle = DimInfo.forDim(this::exec, SPAWN_DIM);
+            DimInfo destOracle = DimInfo.forDim(c -> read(c).raw(), SPAWN_DIM);
             assertTrue("destination server-side spawn must be B: " + destOracle.raw(),
                     destOracle.spawnX() == SPAWN_B_X && destOracle.spawnY() == SPAWN_B_Y
                             && destOracle.spawnZ() == SPAWN_B_Z);
 
             long toPlanet = clientEvents().mark();
-            exec("stellurgytest tp " + SPAWN_DIM);
+            arrange("stellurgytest tp " + SPAWN_DIM);
             awaitClientDim(toPlanet, SPAWN_DIM, "the spawn read below is otherwise the world he LEFT");
             JsonObject onPlanet = waitForClientSpawn(toPlanet, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
             // One connection delivers in order: a packet sent by the silent set-spawn lands BEFORE the
@@ -274,12 +274,12 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             assertSpawnEquals("client world spawn after cross-dim transfer", onPlanet, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
 
             long toOverworld = clientEvents().mark();
-            exec("stellurgytest tp 0");
+            arrange("stellurgytest tp 0");
             awaitClientDim(toOverworld, 0, "the spawn read below is otherwise the world he LEFT");
             assertSpawnEquals("client world spawn after transferring back to the overworld",
                     waitForClientSpawn(toOverworld, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z), SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
         } finally {
-            exec("setworldspawn " + original.spawnX() + " " + original.spawnY() + " " + original.spawnZ());
+            arrange("setworldspawn " + original.spawnX() + " " + original.spawnY() + " " + original.spawnZ());
         }
     }
 
@@ -327,9 +327,9 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
                     + " sent in the window's last tick and not yet applied.")
     public void weatherIsolatedAcrossDimsThroughRealClient() throws Exception {
         try {
-            String setA = exec("stellurgytest weather set " + SYNC_A + " rain 12000");
+            String setA = arrange("stellurgytest weather set " + SYNC_A + " rain 12000").raw();
             assertTrue("set rain on dim A failed: " + setA, Reply.of(setA).ok());
-            String setB = exec("stellurgytest weather set " + SYNC_B + " clear 12000");
+            String setB = arrange("stellurgytest weather set " + SYNC_B + " clear 12000").raw();
             assertTrue("set clear on dim B failed: " + setB, Reply.of(setB).ok());
             // The wrapper on BOTH dims: without it the isolation below could pass because vanilla shared
             // weather happened to differ on this sample tick.
@@ -344,7 +344,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
 
             Events clientLog = clientEvents();
             long toA = clientLog.mark();
-            exec("stellurgytest tp " + SYNC_A);
+            arrange("stellurgytest tp " + SYNC_A);
             awaitClientDim(toA, SYNC_A, "the weather read below is the weather of the world he is IN");
             // rainStrength is server-driven, every ramp step a packet the client applies.
             String toldA = clientLog.awaitMatching(toA, "client_game_state_changed",
@@ -359,7 +359,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
                     onA.get("rainStrength").getAsFloat() > 0f);
 
             long toB = clientLog.mark();
-            exec("stellurgytest tp " + SYNC_B);
+            arrange("stellurgytest tp " + SYNC_B);
             awaitClientDim(toB, SYNC_B, "the weather read below is the weather of the world he is IN");
             JsonObject onB = bot().reportWeather();
             assertTrue("client should be in dim B after goto: " + onB,
@@ -376,10 +376,10 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
 
             // Phantom fade: dim C's WorldServer is constructed mid-teleport while the OVERWORLD rains, its
             // constructor seeding rainingStrength from the raining overworld unless re-seeded after wrap.
-            String setOver = exec("stellurgytest weather set 0 rain 12000");
+            String setOver = arrange("stellurgytest weather set 0 rain 12000").raw();
             assertTrue("set rain on overworld failed: " + setOver, Reply.of(setOver).ok());
             long toC = clientLog.mark();
-            exec("stellurgytest tp " + SYNC_C);
+            arrange("stellurgytest tp " + SYNC_C);
             awaitClientDim(toC, SYNC_C, "the weather read below is the weather of the world he is IN");
             advanceWorldAndClient(SYNC_C, FADE_WINDOW_TICKS);
             String toldC = clientLog.since(toC, "client_game_state_changed");
@@ -400,7 +400,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             DimWeather overAfter = serverWeather(0);
             assertTrue("overworld should still be raining: " + overAfter.raw(), overAfter.raining);
         } finally {
-            exec("stellurgytest weather set 0 clear 12000");
+            arrange("stellurgytest weather set 0 clear 12000");
         }
     }
 
@@ -420,16 +420,16 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
     public void slashWeatherOnPlanetRainsThePlanetNotTheOverworld() throws Exception {
         // /weather (and the redirect target) require permission level 2 — granted as an admin would, and
         // taken back at the end: the server is shared with the class run.
-        exec("op " + PLAYER);
+        arrange("op " + PLAYER).raw();
         try {
-            exec("stellurgytest weather set 0 clear 12000");
-            exec("stellurgytest weather set " + REDIRECT_DIM + " clear 12000");
+            arrange("stellurgytest weather set 0 clear 12000");
+            arrange("stellurgytest weather set " + REDIRECT_DIM + " clear 12000");
             DimWeather before = serverWeather(REDIRECT_DIM);
             assertTrue("planet must be wrapped before the command test: " + before.raw(), before.usesStellurgyWorldInfo());
             assertFalse("planet must start clear: " + before.raw(), before.raining);
 
             long transferMark = clientEvents().mark();
-            exec("stellurgytest tp " + REDIRECT_DIM);
+            arrange("stellurgytest tp " + REDIRECT_DIM);
             awaitClientDim(transferMark, REDIRECT_DIM, "he must be standing on the planet before he types the"
                     + " command, since the redirect is keyed to the world he is IN");
 
@@ -470,7 +470,7 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
             assertFalse("overworld must remain clear after planet /weather clear: " + overworldAfterClear.raw(),
                     overworldAfterClear.raining);
         } finally {
-            exec("deop " + PLAYER);
+            arrange("deop " + PLAYER);
         }
     }
 
@@ -482,6 +482,6 @@ public class PlanetWorldOnTheClientGroupTest extends AbstractSharedClientTest {
 
     /** What the SERVER says one world's sky is doing, as opposed to what the client is shown. */
     private DimWeather serverWeather(int dim) throws Exception {
-        return DimWeather.forDim(this::exec, dim).requireDim(dim);
+        return DimWeather.forDim(c -> arrange(c).raw(), dim).requireDim(dim);
     }
 }

@@ -46,7 +46,7 @@ public class FirstShotIntoAFreshWallTest extends AbstractSharedServerTest {
     private static final int PRECEDING_FLIGHT_TICKS = 30;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @LegacyWitness(prose = "with {@code ShotSubstrate#step} at {@code boolean structureFirst = first.isStructure();}'s {@code structureFirst} forced false (a round"
             + " that never sees a wall), this fails with \"a round fired once into a wall it flew down the middle"
@@ -60,34 +60,34 @@ public class FirstShotIntoAFreshWallTest extends AbstractSharedServerTest {
         // A PRECEDING scenario, because two standalone versions of this test went green without one:
         // rounds fired down another lane and left to fly, exactly as the scenario before the failing
         // one does.
-        ask("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (Z3 - 3) + " "
+        arrange("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (Z3 - 3) + " "
                 + (X + 40) + " " + (Y + 4) + " " + (Z3 + 3) + " minecraft:air").requireOk("clear the preceding lane");
-        ask("stellurgytest fill " + DIM + " " + X + " " + Y + " " + Z3 + " " + (X + WALL_DEPTH - 1)
+        arrange("stellurgytest fill " + DIM + " " + X + " " + Y + " " + Z3 + " " + (X + WALL_DEPTH - 1)
                 + " " + Y + " " + Z3 + " minecraft:glass_pane").requireOk("build the preceding wall");
-        ask("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " " + (Z3 + 0.5D)
+        act("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " " + (Z3 + 0.5D)
                 + " 0.45 0 0 3000 1200 KINETIC 0.25 1.0").requireOk("fire the preceding round");
         GameTicks.advance(client(), GameTicks.server(), PRECEDING_FLIGHT_TICKS);
 
-        ask("stellurgytest shot clear " + DIM).requireOk("clear the air");
+        arrange("stellurgytest shot clear " + DIM).requireOk("clear the air");
         for (int cx = (X - 16) >> 4; cx <= (X + 32) >> 4; cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
-        ask("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (Z - 3) + " " + (X + 40)
+        arrange("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (Z - 3) + " " + (X + 40)
                 + " " + (Y + 4) + " " + (Z + 3) + " minecraft:air").requireOk("clear the lane");
-        ask("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (Z2 - 3) + " " + (X + 40)
+        arrange("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (Z2 - 3) + " " + (X + 40)
                 + " " + (Y + 4) + " " + (Z2 + 3) + " minecraft:air").requireOk("clear the second lane");
-        ask("stellurgytest fill " + DIM + " " + X + " " + Y + " " + Z + " " + (X + WALL_DEPTH - 1) + " " + Y
+        arrange("stellurgytest fill " + DIM + " " + X + " " + Y + " " + Z + " " + (X + WALL_DEPTH - 1) + " " + Y
                 + " " + Z + " minecraft:stone").requireOk("build the wall");
-        ask("stellurgytest fill " + DIM + " " + X + " " + Y + " " + Z2 + " " + (X + WALL_DEPTH - 1) + " "
+        arrange("stellurgytest fill " + DIM + " " + X + " " + Y + " " + Z2 + " " + (X + WALL_DEPTH - 1) + " "
                 + Y + " " + Z2 + " minecraft:stone").requireOk("build the second wall");
 
         // Priced off the wall itself: rich enough that failing to mark it cannot be a budget story.
-        Reply priced = ask("stellurgytest damage stage " + DIM + " " + X + " " + Y + " " + Z)
+        Reply priced = read("stellurgytest damage stage " + DIM + " " + X + " " + Y + " " + Z)
                 .requireOk("price the wall");
         int budget = priced.integer("stageCost") * Math.max(1, priced.integer("maxStage")) * 20;
 
         long fired = events.markInstrumented();
-        Reply shot = ask("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
+        Reply shot = act("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
                 + (Z + 0.5D) + " 0.45 0 0 " + budget + " 1200 KINETIC 0.25 1.0").requireOk("fire the round");
 
         try {

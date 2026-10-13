@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.command.test;
 
+import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * What a {@code /stellurgytest} verb IS — the table beside {@link TestProbeCommand}'s dispatch, and the only
@@ -52,7 +54,9 @@ import java.util.Locale;
  * argument: {@code planet orbit-line} is a read and {@code planet state-orbit-line} is not, and
  * {@code drive charge status} is a charge whatever its last word says. Where a later word or an argument
  * changes what a verb does ({@code rocket launch}'s mode, {@code energy inject}'s simulate flag,
- * {@code shield priority} with or without a value), the row carries the kind of its most writing form.
+ * {@code shield priority} with or without a value), the row carries the kind of its most writing form, which is
+ * what an e2e is judged by, and {@link #kindsOf} adds the other, so the {@link CommandRole} a test sends it in
+ * may be either.
  * {@code player exec-as-player} and {@code exec-as-named} run a command through the command manager, which
  * posts that command's own event, so the inner command is judged on its own row.</p>
  */
@@ -98,8 +102,34 @@ enum ProbeVerbKind {
         return admittedInE2E;
     }
 
-    /** The kind of the verb {@code args} names (the words after {@code stellurgytest}). */
+    /**
+     * The kind of the verb {@code args} names (the words after {@code stellurgytest}): its row's, which for a
+     * SPLIT row is the kind of its most writing form.
+     */
     static ProbeVerbKind of(String[] args) {
+        String verb = matched(args);
+        return verb == null ? UNCLASSIFIED : row(verb);
+    }
+
+    /**
+     * Every kind the verb {@code args} names: its row's, and for a SPLIT row the second kind it declares — a
+     * verb whose later word or argument chooses between two forms is admitted in the role of either.
+     */
+    static Set<ProbeVerbKind> kindsOf(String[] args) {
+        String verb = matched(args);
+        if (verb == null) {
+            return EnumSet.of(UNCLASSIFIED);
+        }
+        Set<ProbeVerbKind> kinds = EnumSet.of(row(verb));
+        ProbeVerbKind second = splitSecondKind(verb);
+        if (second != null) {
+            kinds.add(second);
+        }
+        return kinds;
+    }
+
+    /** The leading words of {@code args} that have a row, the longest first; {@code null} when none has. */
+    private static String matched(String[] args) {
         for (int words = Math.min(3, args.length); words >= 1; words--) {
             StringBuilder verb = new StringBuilder();
             for (int i = 0; i < words; i++) {
@@ -108,12 +138,41 @@ enum ProbeVerbKind {
                 }
                 verb.append(args[i].toLowerCase(Locale.ROOT));
             }
-            ProbeVerbKind kind = row(verb.toString());
-            if (kind != null) {
-                return kind;
+            if (row(verb.toString()) != null) {
+                return verb.toString();
             }
         }
-        return UNCLASSIFIED;
+        return null;
+    }
+
+    /**
+     * The second kind of a SPLIT row — a verb a later word or an argument turns into one of two forms — or
+     * {@code null}. The row itself carries the more writing form; this is the other. Matching stays on the
+     * leading words: which form a call takes is the role its sender declared, checked to be one of the two.
+     */
+    private static ProbeVerbKind splitSecondKind(String verb) {
+        switch (verb) {
+            // A query without its value or its flag: a priority read, a dump's contents, a pad's choice
+            // without committing it, a simulated inject, a toggle's or a mode's status.
+            case "energy inject":
+            case "heat dump":
+            case "shield priority":
+            case "space auto-takeoff":
+            case "station dock":
+            case "vent priority":
+            case "vs shiplocal":
+                return READ;
+            // Its `instant` and `prepare` modes call production's own launch; `force` puts the rocket in flight.
+            case "rocket launch":
+                return TRIGGER;
+            // `ticksExisted`, `posY` and `motionY` are plain writes; `orbit` and `flight` are outcomes.
+            case "rocket set-state":
+            // Without its tick count a spawn; with it, the entity's own update runs.
+            case "entity spawn":
+                return ARRANGE;
+            default:
+                return null;
+        }
     }
 
     /** The table. {@code null} for a verb with no row of exactly these words. */

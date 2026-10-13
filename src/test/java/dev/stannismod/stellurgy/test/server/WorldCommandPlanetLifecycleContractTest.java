@@ -36,7 +36,7 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
      */
     private Set<Integer> dimIds() throws Exception {
         Set<Integer> ids = new HashSet<>();
-        for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list")).intArray("stellurgyDimensions")) {
+        for (int dim : Reply.of("stellurgytest dim list", read("stellurgytest dim list").raw()).intArray("stellurgyDimensions")) {
             ids.add(dim);
         }
         return ids;
@@ -45,14 +45,14 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
     @Test
     public void planetGenerateAddsExactlyOneEntryToRegistry() throws Exception {
         Set<Integer> before = dimIds();
-        exec("ar planet generate 0 GenTestA");
+        arrange("ar planet generate 0 GenTestA");
         Set<Integer> after = dimIds();
         try {
             after.removeAll(before);
             assertEquals("planet generate must add exactly one dim — diff was " + after,
                     1, after.size());
         } finally {
-            for (Integer id : after) exec("ar planet delete " + id);
+            for (Integer id : after) arrange("ar planet delete " + id).raw();
         }
     }
 
@@ -75,7 +75,7 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
     @Test
     public void aGeneratedMoonOrbitsInsideItsParentsSphereOfInfluence() throws Exception {
         Set<Integer> before = dimIds();
-        exec("ar planet generate 0 GenTestParent");
+        arrange("ar planet generate 0 GenTestParent");
         Set<Integer> made = dimIds();
         made.removeAll(before);
         try {
@@ -83,7 +83,7 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
                     "planet generate must add exactly one parent planet — diff was " + made, made.size() == 1);
             int parentDim = made.iterator().next();
             Set<Integer> beforeMoon = dimIds();
-            exec("ar planet generate " + parentDim + " moon GenTestMoon");
+            arrange("ar planet generate " + parentDim + " moon GenTestMoon");
             Set<Integer> moonDiff = dimIds();
             moonDiff.removeAll(beforeMoon);
             made.addAll(moonDiff);
@@ -91,9 +91,9 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
                     "planet generate … moon must add exactly one dim — diff was " + moonDiff, moonDiff.size() == 1);
             int moonDim = moonDiff.iterator().next();
 
-            Reply parent = Reply.of(exec("stellurgytest planet info " + parentDim));
-            Reply moon = Reply.of(exec("stellurgytest planet info " + moonDim));
-            Reply star = Reply.of(exec("stellurgytest star get " + parent.integer("starId")));
+            Reply parent = Reply.of(read("stellurgytest planet info " + parentDim).raw());
+            Reply moon = Reply.of(read("stellurgytest planet info " + moonDim).raw());
+            Reply star = Reply.of(read("stellurgytest star get " + parent.integer("starId")).raw());
             dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
                     "the generated body must be a moon of the generated planet: " + moon,
                     moon.integer("parent") == parentDim);
@@ -113,27 +113,27 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
                     + surface + ") and inside the parent's sphere of influence (" + soi + "): " + moon
                     + " / parent " + parent, orbit > surface && orbit < soi);
         } finally {
-            for (Integer id : made) exec("ar planet delete " + id);
+            for (Integer id : made) arrange("ar planet delete " + id).raw();
         }
     }
 
     @Test
     public void planetGenerateNamesNewDimensionFromArg() throws Exception {
         Set<Integer> before = dimIds();
-        exec("ar planet generate 0 GenTestNamed");
+        arrange("ar planet generate 0 GenTestNamed");
         Set<Integer> diff = dimIds();
         diff.removeAll(before);
         try {
             assertEquals(1, diff.size());
         } finally {
-            for (Integer id : diff) exec("ar planet delete " + id);
+            for (Integer id : diff) arrange("ar planet delete " + id).raw();
         }
     }
 
     @Test
     public void planetDeleteRemovesEntryFromRegistry() throws Exception {
         Set<Integer> before = dimIds();
-        exec("ar planet generate 0 GenTestDel");
+        arrange("ar planet generate 0 GenTestDel");
         Set<Integer> diff = dimIds();
         diff.removeAll(before);
         assertEquals(1, diff.size());
@@ -141,7 +141,7 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
         assertTrue("precondition: planetExists must be true after generate",
                 planetExists(newId));
 
-        exec("ar planet delete " + newId);
+        arrange("ar planet delete " + newId);
 
         assertFalse("planetExists must be false after delete",
                 planetExists(newId));
@@ -158,14 +158,14 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
     public void planetResetRestoresAtmosphereDensityBaselineForOverworld() throws Exception {
         int original = planetIntField(0, "atmosphereDensity");
         try {
-            exec("ar planet set 0 atmosphereDensity 37");
-            exec("ar planet reset 0");
+            arrange("ar planet set 0 atmosphereDensity 37");
+            arrange("ar planet reset 0");
             assertEquals("after reset the field must equal the Stellurgy-init baseline",
                     100, planetIntField(0, "atmosphereDensity"));
         } finally {
             // Restore to whatever the harness had before — defends against
             // a future test ordering that depends on the pre-test value.
-            exec("ar planet set 0 atmosphereDensity " + original);
+            arrange("ar planet set 0 atmosphereDensity " + original).raw();
         }
     }
 }

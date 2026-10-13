@@ -47,7 +47,7 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The claim is about what is true BETWEEN ticks, so it is read off the round's own history rather
@@ -241,7 +241,7 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
     public void aRoundTooPoorForAStageIsStoppedByTheBlockItMeets() throws Exception {
         int colX = 1600;
         prepare(colX);
-        ask("stellurgytest fill " + DIM + " " + colX + " " + (Y - 2) + " " + Z + " " + colX + " " + (Y + 1) + " " + Z
+        arrange("stellurgytest fill " + DIM + " " + colX + " " + (Y - 2) + " " + Z + " " + colX + " " + (Y + 1) + " " + Z
                 + " minecraft:stone").requireOk("raise the column");
         int stageCost = stageAt(colX).integer("stageCost");
         requireArranged("the column has no price, so no budget can be chosen under it", stageCost > 1);
@@ -254,7 +254,7 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
         String ended = events.awaitRecordWithField(fired, "shot_ended", "shot", id,
                 "the round never ended within its own lifetime", lifetime + 40);
 
-        Reply end = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the ended round");
+        Reply end = read("stellurgytest shot read " + DIM + " " + id).requireOk("read the ended round");
         System.out.println("FIXTURE armour-holds: stageCost=" + stageCost + " energy=" + (stageCost / 2)
                 + " ended=" + ended + " read=" + end);
         // How far past the column's near face the round ended, along its own direction of travel (+X):
@@ -294,7 +294,7 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
         int firstX = 1540;
         int secondX = firstX + 4;
         prepare(firstX);
-        ask("stellurgytest fill " + DIM + " " + firstX + " " + (Y - 1) + " " + (Z - 1) + " " + (secondX + 2)
+        arrange("stellurgytest fill " + DIM + " " + firstX + " " + (Y - 1) + " " + (Z - 1) + " " + (secondX + 2)
                 + " " + (Y + 1) + " " + (Z + 1) + " minecraft:air").requireOk("clear the gap");
         place("minecraft:stone", firstX);
         place("minecraft:stone", secondX);
@@ -316,7 +316,7 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
                         + " impact, which is the one failure a single-plate test cannot see",
                 Weapons.SUBJECT_TICKS, "dim", String.valueOf(DIM), "pos", Weapons.at(secondX, Y, Z));
 
-        Reply read = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the round");
+        Reply read = read("stellurgytest shot read " + DIM + " " + id).requireOk("read the round");
         assertTrue("the round did not survive the second plate, so nothing is known about the far"
                 + " side: " + read, read.bool("present"));
         Reply past = Reply.of("the round", read.object("shot"));
@@ -333,7 +333,7 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
 
     /** The round's id, or the substrate's own {@code -1} when it refused to admit one. */
     private long fire(double x, double speed, int energy, double radius, int lifetime) throws Exception {
-        return ask("stellurgytest shot fire " + DIM + " " + x + " " + (Y + 0.5D) + " " + (Z + 0.5D)
+        return act("stellurgytest shot fire " + DIM + " " + x + " " + (Y + 0.5D) + " " + (Z + 0.5D)
                 + " " + speed + " 0 0 " + energy + " " + lifetime + " KINETIC " + radius + " 1.0")
                 .requireOk("fire a round").longInteger("id");
     }
@@ -345,9 +345,9 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
     }
 
     private void prepare(int wallX) throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((wallX - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((wallX - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((wallX + 24) >> 4) + " " + ((Z + 16) >> 4)).requireOk("chunk warmup");
-        ask("stellurgytest fill " + DIM + " " + (wallX - 8) + " " + (Y - 2) + " " + (Z - 3) + " "
+        arrange("stellurgytest fill " + DIM + " " + (wallX - 8) + " " + (Y - 2) + " " + (Z - 3) + " "
                 + (wallX + 20) + " " + (Y + 4) + " " + (Z + 3) + " minecraft:air").requireOk("clear the site");
     }
 
@@ -377,11 +377,11 @@ public class ShotBoresOverTimeTest extends AbstractSharedServerTest {
     }
 
     private Reply stageAt(int x) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
     }
 
     private void place(String block, int x) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
         assertTrue("failed to place " + block + " at " + x + ": " + placed, placed.bool("placed"));
     }
 }

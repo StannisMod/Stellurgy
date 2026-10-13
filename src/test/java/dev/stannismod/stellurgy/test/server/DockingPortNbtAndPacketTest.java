@@ -77,7 +77,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
     private void warmup(int blockX, int blockZ) throws Exception {
         int cx = blockX >> 4;
         int cz = blockZ >> 4;
-        String resp = join(client().execute(
+        String resp = join(client().arrange(
                 "stellurgytest chunk warmup 0 " + (cx - 1) + " " + (cz - 1)
                         + " " + (cx + 1) + " " + (cz + 1)));
         assertTrue("chunk warmup failed: " + resp,
@@ -89,7 +89,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
      *  init), not {@code dockingPort} — the registry name and the
      *  tile-entity class name don't have to match in Forge. */
     private void placeDockingPort(int x, int y, int z) throws Exception {
-        String resp = join(client().execute(
+        String resp = join(client().arrange(
                 "stellurgytest place 0 " + x + " " + y + " " + z
                         + " stellurgy:stationMarker"));
         assertTrue("stationMarker place failed at (" + x + "," + y + "," + z
@@ -114,13 +114,13 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         warmup(x, z);
         placeDockingPort(x, y, z);
 
-        String setIds = join(client().execute(
+        String setIds = join(client().arrange(
                 "stellurgytest docking-port set-ids 0 " + x + " " + y + " " + z
                         + " portA stationB"));
         assertTrue("set-ids must succeed: " + setIds,
                 Reply.of(setIds).ok());
 
-        String rt = join(client().execute(
+        String rt = join(client().read(
                 "stellurgytest docking-port nbt-roundtrip 0 " + x + " " + y + " " + z));
         assertTrue("nbt-roundtrip must succeed: " + rt,
                 Reply.of(rt).ok());
@@ -147,7 +147,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         warmup(x, z);
         placeDockingPort(x, y, z);
 
-        String rt = join(client().execute(
+        String rt = join(client().read(
                 "stellurgytest docking-port nbt-roundtrip 0 " + x + " " + y + " " + z));
         assertTrue("nbt-roundtrip must succeed: " + rt,
                 Reply.of(rt).ok());
@@ -171,11 +171,11 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         placeDockingPort(x, y, z);
 
         // Set myId so the packet has something to encode.
-        assertTrue(Reply.of(join(client().execute(
+        assertTrue(Reply.of(join(client().arrange(
                 "stellurgytest docking-port set-ids 0 " + x + " " + y + " " + z
                         + " gamma omega"))).ok());
 
-        String rt = join(client().execute(
+        String rt = join(client().read(
                 "stellurgytest docking-port packet-roundtrip 0 " + x + " " + y + " "
                         + z + " 0"));
         assertTrue("packet-roundtrip id=0 must succeed: " + rt,
@@ -197,11 +197,11 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         warmup(x, z);
         placeDockingPort(x, y, z);
 
-        assertTrue(Reply.of(join(client().execute(
+        assertTrue(Reply.of(join(client().arrange(
                 "stellurgytest docking-port set-ids 0 " + x + " " + y + " " + z
                         + " alpha beta"))).ok());
 
-        String rt = join(client().execute(
+        String rt = join(client().read(
                 "stellurgytest docking-port packet-roundtrip 0 " + x + " " + y + " "
                         + z + " 1"));
         assertTrue("packet-roundtrip id=1 must succeed: " + rt,

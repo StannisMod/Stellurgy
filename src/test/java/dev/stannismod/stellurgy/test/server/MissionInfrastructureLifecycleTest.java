@@ -57,16 +57,16 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
     }
 
     private long startGasMission(int rocketId, long duration) throws Exception {
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest mission start-gas 0 " + rocketId + " " + duration + " oxygen 10"));
         assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
@@ -86,7 +86,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int ix = baseX;
         int iy = FixtureSite.OPEN_AIR_Y;
         int iz = baseZ;
-        ok(client().execute("stellurgytest place 0 " + ix + " " + iy + " " + iz
+        ok(client().arrange("stellurgytest place 0 " + ix + " " + iy + " " + iz
                 + " stellurgy:monitoringStation"));
         return new int[]{ix, iy, iz};
     }
@@ -102,13 +102,13 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int rid = buildAndAssembleRocket(baseX);
         long mid = startGasMission(rid, 1000);
         int[] ipos = placeMonitoringStation(baseX, 600);
-        String link = ok(client().execute("stellurgytest mission link-infra " + mid
+        String link = ok(client().arrange("stellurgytest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertFalse("link-infra must not error: " + link, Reply.of(link).has("error"));
         assertTrue("link-infra must report linked=true: " + link,
                 Reply.of(link).bool("linked"));
 
-        String state = ok(client().execute("stellurgytest mission infra-state 0 "
+        String state = ok(client().read("stellurgytest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertFalse("infra-state must not error: " + state, Reply.of(state).has("error"));
         assertTrue("infra must report hasMission=true after link: " + state,
@@ -137,22 +137,22 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int rid = buildAndAssembleRocket(baseX);
         long mid = startGasMission(rid, 1000);
         int[] ipos = placeMonitoringStation(baseX, 600);
-        String link = ok(client().execute("stellurgytest mission link-infra " + mid
+        String link = ok(client().arrange("stellurgytest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked"));
 
         // Sanity: pre-completion tile reports the mission.
-        String preState = ok(client().execute("stellurgytest mission infra-state 0 "
+        String preState = ok(client().read("stellurgytest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertTrue("pre-completion infra must report hasMission=true: " + preState,
                 Reply.of(preState).bool("hasMission"));
 
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
 
         // Post-completion tile.mission cleared by production's unlinkMission().
-        String postState = ok(client().execute("stellurgytest mission infra-state 0 "
+        String postState = ok(client().read("stellurgytest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertFalse("infra-state must not error: " + postState,
                 Reply.of(postState).has("error"));
@@ -187,15 +187,15 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int rid = buildAndAssembleRocket(baseX);
         long mid = startGasMission(rid, 1000);
         int[] ipos = placeMonitoringStation(baseX, 600);
-        String link = ok(client().execute("stellurgytest mission link-infra " + mid
+        String link = ok(client().arrange("stellurgytest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked"));
 
         MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
 
-        String relink = ok(client().execute("stellurgytest mission rocket-relink-state 0"));
+        String relink = ok(client().read("stellurgytest mission rocket-relink-state 0"));
         assertFalse("rocket-relink-state must not error: " + relink,
                 Reply.of(relink).has("error"));
         // At least one EntityStationDeployedRocket exists in launch dim

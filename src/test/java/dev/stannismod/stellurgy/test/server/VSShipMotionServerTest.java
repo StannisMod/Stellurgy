@@ -69,7 +69,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @After
     public void cleanup() throws Exception {
@@ -139,7 +139,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         //    needs requesting and `requested:0` is the honest answer — which the old pin read as a
         //    failure. `requested` says what this call had to do; `alreadyLoaded` says what it found
         //    done. Either way the postcondition is one ship loaded in this world.
-        String load = exec("stellurgytest vs load-ships 0");
+        String load = arrange("stellurgytest vs load-ships 0").raw();
         assertTrue("load-ships must account for the ship, either as a queued load or as one already"
                 + " loaded: " + load,
                 (Reply.of(load).integer("requested") == 1) || (Reply.of(load).integer("alreadyLoaded") == 1));
@@ -148,7 +148,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         //    name. The identity used to be re-derived here from a bounded lookup at the build spot,
         //    defended as "provably the only one there" — a premise about this fixture rather than
         //    about the lookup, and the build site is in a world every server-tier class shares.
-        final String[] shipId = {ShipIdentity.physicsIdOf(this::exec, 0,
+        final String[] shipId = {ShipIdentity.physicsIdOf(c -> read(c).raw(), 0,
                 ShipIdentity.nameFromAssembly(assemble))};
         // Linked on the physics object's own load, which is what "the ship became loaded" MEANS:
         // `ship_loaded` is written from the PhysicsObject constructor and carries the substrate's
@@ -157,7 +157,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // readings that had to agree, taken at whatever moments the loop happened to take them.
         events.awaitField(loadMark, "ship_loaded", "vsShip", shipId[0],
                 "the ship must become loaded after the force-load", LOAD_TICKS);
-        String loadedInfo = exec("stellurgytest vs ship-info 0 id " + shipId[0]);
+        String loadedInfo = read("stellurgytest vs ship-info 0 id " + shipId[0]).raw();
         double zBefore = ShipInfo.of(loadedInfo).z;
         assertTrue("the substrate announced this hull loaded, so it must have a pose to report: "
                         + loadedInfo + ", all=" + all,
@@ -170,10 +170,10 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // written, so the write is not a command; the probe surface says as much in one line beside
         // `force-vel-by-id` ("a velocity setpoint alone does nothing"). Asserting it here, rather
         // than deleting it, is what stops the class quietly going back to the setpoint.
-        String setpoint = exec("stellurgytest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
+        String setpoint = arrange("stellurgytest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ).raw();
         assertTrue("push-ship-by-id must find the ship: " + setpoint, Reply.of(setpoint).bool("pushed"));
         GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
-        double zAfterSetpoint = ShipInfo.byId(this::exec, 0, shipId[0]).z;
+        double zAfterSetpoint = ShipInfo.byId(c -> read(c).raw(), 0, shipId[0]).z;
         assertTrue("a raw velocity setpoint must NOT be mistaken for a working drive: the ship moved "
                         + (zAfterSetpoint - zBefore) + " blocks (z " + zBefore + " -> "
                         + zAfterSetpoint + ") on a bare setpoint, which means this"
@@ -185,11 +185,11 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // velocity that the ship's OWN flight computer realizes as force, once per physics tick, for
         // as long as it stands — so this is one command and then time, not a setpoint re-written
         // every tick against a substrate that keeps discarding it.
-        String drive = exec("stellurgytest vs force-vel-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
+        String drive = arrange("stellurgytest vs force-vel-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ).raw();
         assertTrue("the command must reach THIS ship's own flight computer: " + drive,
                 Reply.of(drive).bool("afcResolved"));
         long driven = GameTicks.advanceObserved(client(), GameTicks.server(), DRIVE_TICKS);
-        double zAfter = ShipInfo.byId(this::exec, 0, shipId[0]).z;
+        double zAfter = ShipInfo.byId(c -> read(c).raw(), 0, shipId[0]).z;
         double requiredDisplacement = MIN_DISPLACEMENT_PER_DRIVE * driven / DRIVE_TICKS;
 
         // A strict displacement, not merely "changed": it pins that VS integrated the commanded
@@ -204,7 +204,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     }
 
     private int shipCount(String sub) throws Exception {
-        Reply mReply = Reply.of(exec("stellurgytest vs " + sub + " 0"));
+        Reply mReply = Reply.of(read("stellurgytest vs " + sub + " 0").raw());
         return mReply.has("count") ? mReply.integer("count") : -1;
     }
 
@@ -216,12 +216,12 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // air, so this ASSERTS rather than digs, and it still force-loads every chunk in the box on
         // the way through — so the warmup this replaces lost nothing. The height covers the hull
         // plus the lane it is commanded along, not the pad.
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 2, 10,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 10,
                 "the craft is built here and then driven horizontally out of this volume");
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
-        String assemble = exec("stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz);
+        String assemble = act("stellurgytest rocket assemble 0 " + bx + " " + by + " " + bz).raw();
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
         return assemble;
     }

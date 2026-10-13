@@ -60,7 +60,7 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
     private static final int MOVE_AGAIN_X = 6700, MOVE_AGAIN_Y = 150, MOVE_AGAIN_Z = 9100;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** Each config key a scenario set, with the value it held before; emptied by {@link #restoreConfig}. */
     private final java.util.Map<String, Double> configBefore = new java.util.LinkedHashMap<>();
@@ -68,14 +68,14 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
     /** A craft left behind goes on ticking in the world the next scenario runs in. */
     @Before
     public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
+        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
     }
 
     /** The probe's own contract for `config set`: a test puts back what it changed. */
     @org.junit.After
     public void restoreConfig() throws Exception {
         for (java.util.Map.Entry<String, Double> key : configBefore.entrySet()) {
-            ask("stellurgytest config set " + key.getKey() + " " + key.getValue()).requireOk("restore " + key.getKey());
+            arrange("stellurgytest config set " + key.getKey() + " " + key.getValue()).requireOk("restore " + key.getKey());
         }
         configBefore.clear();
     }
@@ -83,9 +83,9 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
     /** Set a numeric config key for this scenario, remembering what it held the first time. */
     private void config(String key, double value) throws Exception {
         if (!configBefore.containsKey(key)) {
-            configBefore.put(key, ask("stellurgytest config get " + key).requireOk("read " + key).number("value"));
+            configBefore.put(key, read("stellurgytest config get " + key).requireOk("read " + key).number("value"));
         }
-        ask("stellurgytest config set " + key + " " + value).requireOk("set " + key);
+        arrange("stellurgytest config set " + key + " " + value).requireOk("set " + key);
     }
 
     @LegacyWitness(prose = "with {@code StructureCrossing#firstAlong} at {@code for (Map.Entry<String, AxisAlignedBB> ship : ships.entrySet())}'s loop over candidate ships skipped (only"
@@ -98,10 +98,10 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
             + " was fired down through\" (2026-09-30). The block-damaged verdict before it passed on that run.")
     @Test
     public void aShotFindsAMovedShipsHullInItsOwnFrameAndDamagesTheRightBlock() throws Exception {
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
-        ask("stellurgytest shot clear 0").requireOk("clear the air");
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        arrange("stellurgytest shot clear 0").requireOk("clear the air");
 
-        WarShip ship = WarShip.build(events, this::exec, FixtureSite.openAir(0, SRC_X, SRC_Z), null,
+        WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, SRC_X, SRC_Z), null,
                 "the craft the round is fired at");
         ship.parkAt(FAR_X, FAR_Y, FAR_Z, ON_THE_HULL);
 
@@ -139,9 +139,9 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
         requireArranged("the target block has no price, so the round's budget would be meaningless: "
                 + before, energy > 0);
         long id = fire(world[0] + " " + (world[1] + 30.0D) + " " + world[2] + " 0 " + (-SPEED) + " 0 " + energy + " 40");
-        ask("stellurgytest shield tick 0").requireOk("step the substrate");
+        act("stellurgytest shield tick 0").requireOk("step the substrate");
 
-        Reply read = ask("stellurgytest shot read 0 " + id).requireOk("read the round");
+        Reply read = read("stellurgytest shot read 0 " + id).requireOk("read the round");
         long left = read.bool("present") ? Reply.of("the round", read.object("shot")).longInteger("energy") : -1L;
         assertTrue("the shot is still in the air with its budget untouched after a step that crossed the"
                 + " hull — a segment computed in the world frame finds nothing where a ship visibly is,"
@@ -207,9 +207,9 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(), 2);",
             why = "the ticks between the two reads described above; every verdict below names both.")
     public void aRoundDrillingAHullGoesWhereTheShipGoes() throws Exception {
-        ask("stellurgytest shot clear 0").requireOk("clear the air");
+        arrange("stellurgytest shot clear 0").requireOk("clear the air");
 
-        WarShip ship = WarShip.build(events, this::exec, FixtureSite.openAir(0, MOVE_SRC_X, MOVE_SRC_Z), null,
+        WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, MOVE_SRC_X, MOVE_SRC_Z), null,
                 "the craft the round lodges in");
         ship.parkAt(MOVE_FAR_X, MOVE_FAR_Y, MOVE_FAR_Z, ON_THE_HULL);
         int[] sub = ship.seat();
@@ -243,8 +243,8 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
         Reply lodged = null;
         int approachSteps = (int) Math.ceil(approach / speed) + 5;
         for (int tick = 0; tick < approachSteps && lodged == null; tick++) {
-            ask("stellurgytest shield tick 0").requireOk("step the substrate");
-            Reply read = ask("stellurgytest shot read 0 " + id).requireOk("read the round");
+            act("stellurgytest shield tick 0").requireOk("step the substrate");
+            Reply read = read("stellurgytest shot read 0 " + id).requireOk("read the round");
             // the producer always writes `present` on an ok `shot read`, whether the round is flying
             // or has ended, so refusing on a missing one is the right failure.
             if (!read.bool("present")) {
@@ -257,7 +257,7 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
             }
         }
         requireArranged("the round never came to be inside the hull — with nothing lodged there is no"
-                + " frame question to ask: " + ask("stellurgytest shot read 0 " + id), lodged != null);
+                + " frame question to ask: " + read("stellurgytest shot read 0 " + id), lodged != null);
 
         double hullX = lodged.number("hullX");
         double hullY = lodged.number("hullY");
@@ -266,7 +266,7 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
         double beforeZ = lodged.number("z");
 
         // The ship manoeuvres with the round still in it.
-        ask("stellurgytest vs teleport-ship-by-id 0 " + ship.vsShip + " " + MOVE_AGAIN_X + " " + MOVE_AGAIN_Y
+        arrange("stellurgytest vs teleport-ship-by-id 0 " + ship.vsShip + " " + MOVE_AGAIN_X + " " + MOVE_AGAIN_Y
                 + " " + MOVE_AGAIN_Z).requireOk("move the ship with the round in it");
 
         double seatBottomY = ship.toWorld(sub[0], sub[1], sub[2])[1];
@@ -301,7 +301,7 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
                     + both, 0.0D, after.number("x") - beforeX, halfway);
         }
 
-        ask("stellurgytest shot clear 0").requireOk("clear the air");
+        arrange("stellurgytest shot clear 0").requireOk("clear the air");
     }
 
     /**
@@ -309,7 +309,7 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
      * still within the seat block, whose underside stands at {@code seatBottomY} in the world.
      */
     private Reply lodgedAfterTheMove(long id, String when, double seatBottomY) throws Exception {
-        Reply read = ask("stellurgytest shot read 0 " + id).requireOk("read the round");
+        Reply read = read("stellurgytest shot read 0 " + id).requireOk("read the round");
         assertTrue("the round ended once the ship moved, " + when + ": " + read, read.bool("present"));
         Reply shot = Reply.of("the round", read.object("shot"));
         requireArranged("the round came out of the seat's underside (y " + shot.number("y") + " below "
@@ -320,14 +320,14 @@ public class ShotHitsShipHullTest extends AbstractSharedServerTest {
     }
 
     private long fire(String spec) throws Exception {
-        Reply fired = ask("stellurgytest shot fire 0 " + spec).requireOk("fire a round");
+        Reply fired = act("stellurgytest shot fire 0 " + spec).requireOk("fire a round");
         long id = fired.longInteger("id");
         requireArranged("the launch was refused, so nothing else here means anything: " + fired, id > 0);
         return id;
     }
 
     private Reply stage(int x, int y, int z) throws Exception {
-        return ask("stellurgytest damage stage 0 " + x + " " + y + " " + z).requireOk("read a stage");
+        return read("stellurgytest damage stage 0 " + x + " " + y + " " + z).requireOk("read a stage");
     }
 
     private static double sq(double v) {

@@ -48,7 +48,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        int[] bp = RocketFixture.placeAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
         return new int[]{
                 bp[0],
@@ -67,7 +67,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
     @Test
     public void missingStatusKeyDecodesToUnscannedNotSuccess() throws Exception {
         int[] pos = placeAssembler(9600);
-        String resp = ok(client().execute("stellurgytest assembler nbt-roundtrip 0 "
+        String resp = ok(client().read("stellurgytest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2] + " dropStatus"));
         assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
@@ -84,7 +84,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
     @Test
     public void outOfRangeStatusOrdinalDoesNotCrashLoad() throws Exception {
         int[] pos = placeAssembler(9700);
-        String resp = ok(client().execute("stellurgytest assembler nbt-roundtrip 0 "
+        String resp = ok(client().read("stellurgytest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2] + " setStatus=999"));
         assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
@@ -102,7 +102,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
     @Test
     public void plainRoundtripPreservesStatus() throws Exception {
         int[] pos = placeAssembler(9800);
-        String resp = ok(client().execute("stellurgytest assembler nbt-roundtrip 0 "
+        String resp = ok(client().read("stellurgytest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2]));
         assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 

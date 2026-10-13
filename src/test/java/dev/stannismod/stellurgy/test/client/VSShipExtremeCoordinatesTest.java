@@ -216,7 +216,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // where the pose band is realized, and it carries no orbit line to take the craft off the
         // altitude this whole scenario is about — see the class javadoc for what staging it in the
         // overworld cost. ──
-        cellDim = TransitSetup.empty(this::exec).originDim;
+        cellDim = TransitSetup.empty(c -> arrange(c).raw()).originDim;
 
         // Held loaded BEFORE the craft exists, and the reason is worth keeping even though the lever
         // is no longer pulled here. A craft assembled in a cell has no player anywhere near it — the
@@ -242,13 +242,13 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
 
         // Put the CLIENT in the cell too: every tracking assertion below is about what this client
         // renders, and a client in another world renders none of it.
-        PilotSeat seat = PilotSeat.byId(this::exec, cellDim, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), cellDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled craft");
         long enterMark = clientEvents().mark();
-        String enter = exec("stellurgytest space enter " + botName() + " " + cellDim
+        String enter = arrange("stellurgytest space enter " + botName() + " " + cellDim
                 + " " + (int) Math.round(seat.shipWorldX)
                 + " " + (int) Math.round(seat.shipWorldY)
-                + " " + (int) Math.round(seat.shipWorldZ));
+                + " " + (int) Math.round(seat.shipWorldZ)).raw();
         scenario().requireArranged("space enter into the origin cell must succeed: " + enter,
                 Reply.of(enter).ok());
         // WAS `waitTicks(20)` and a read of the weather report's dim — a budget between the
@@ -256,7 +256,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         awaitClientDim(enterMark, cellDim,
                 "everything below is arranged on the client's side of the boundary");
 
-        SeatMount mountInfo = SeatMount.onShip(this::exec, cellDim, shipId);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), cellDim, shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo.raw(),
                 mountInfo.seatFound);
         // The reader's own id. The `Reply` this replaces was labelled `seat-mount-at` while reading
@@ -270,7 +270,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // budget could only ever be too short, never wrong in a way that says so.
         long seatMountMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy",
-                Reply.of(exec("stellurgytest player mount-entity " + dummyId)).bool("mounted"));
+                Reply.of(arrange("stellurgytest player mount-entity " + dummyId).raw()).bool("mounted"));
         awaitClientMount(seatMountMark, "the client must FOLLOW the seat boarding before anything"
                         + " below is asked of a pilot — every leg here is about what a SEATED body"
                         + " does when its craft moves", CLIENT_REMOUNT_BUDGET_TICKS,
@@ -297,8 +297,8 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // it, and a mark taken afterwards cannot see an edge that has already passed.
         long riderMark = clientEvents().mark();
         long riderServerMark = serverEvents().markInstrumented();
-        String tpY = exec("stellurgytest vs teleport-ship-by-id " + cellDim + " " + shipId
-                + " " + BX + " " + EXTREME_Y + " " + BZ);
+        String tpY = arrange("stellurgytest vs teleport-ship-by-id " + cellDim + " " + shipId
+                + " " + BX + " " + EXTREME_Y + " " + BZ).raw();
         assertTrue("teleport-ship to extreme Y must succeed: " + tpY, Reply.of(tpY).ok());
         // THE PREMISE THIS SCENARIO DIED OF, now asserted. In an ordinary world the teleport above is
         // followed by the entry on-ramp taking the craft into a cell under a NEW identity, and every
@@ -311,7 +311,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 + " teleport — a crossing here would replace it with a new identity and everything"
                 + " below would describe a different ship: " + stayed,
                 ShipInfo.isLoaded(stayed));
-        String unparked = exec("stellurgytest vs unpark-by-id " + cellDim + " " + shipId);
+        String unparked = arrange("stellurgytest vs unpark-by-id " + cellDim + " " + shipId).raw();
         assertTrue("the teleport leaves the ship PARKED by VS's own recipe, and a parked ship cannot"
                 + " be flown — the unpark must take: " + unparked, Reply.of(unparked).ok());
         // Both verbs above run on the server thread before they answer, so this read is of the
@@ -380,10 +380,10 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // red unattributable. Well inside the face, so the seam cannot carry the craft mid-leg.
         long secondMark = clientEvents().mark();
         long secondServerMark = serverEvents().markInstrumented();
-        String tp2 = exec("stellurgytest vs teleport-ship-by-id " + cellDim + " " + shipId
-                + " " + (BX + SECOND_RELOCATION_X) + " " + EXTREME_Y + " " + BZ);
+        String tp2 = arrange("stellurgytest vs teleport-ship-by-id " + cellDim + " " + shipId
+                + " " + (BX + SECOND_RELOCATION_X) + " " + EXTREME_Y + " " + BZ).raw();
         assertTrue("the second teleport must succeed: " + tp2, Reply.of(tp2).ok());
-        String unparked2 = exec("stellurgytest vs unpark-by-id " + cellDim + " " + shipId);
+        String unparked2 = arrange("stellurgytest vs unpark-by-id " + cellDim + " " + shipId).raw();
         assertTrue("the second teleport leaves the craft PARKED, and a parked craft cannot be flown"
                 + " — a red below would then be about the park, not about the physics: " + unparked2,
                 Reply.of(unparked2).ok());
@@ -407,7 +407,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // nothing else.
         climbLeg("after a second relocation");
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     /**
@@ -494,7 +494,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // Third witness on divergence: the SERVER-side player position separates "the seat glue died
         // server-side" (server player static too) from "the client stopped carrying him" (server
         // player climbed, client did not).
-        String serverPlayer = exec("stellurgytest player health");
+        String serverPlayer = read("stellurgytest player health").raw();
         assertTrue("[" + label + "] the CLIENT must carry the rider with the ship it shows (" + carry
                 + "); server player: " + serverPlayer + " | " + carry.raw,
                 carry.riderClimb > 1.0 && carry.riderDrift < RIDER_TRACKS_SHIP_BLOCKS
@@ -507,7 +507,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // 2026-09-30 on a hull that tracks its ramp: velY 12.1 blocks/s after the teleport, the
         // rider 3.0 blocks "ahead" of a ship read three calls earlier. Asserted on the computer's
         // read-back, not on the command having been delivered.
-        String stopped = exec("stellurgytest vs ff-cruise-by-id " + cellDim + " " + shipId + " 0 0 0");
+        String stopped = arrange("stellurgytest vs ff-cruise-by-id " + cellDim + " " + shipId + " 0 0 0").raw();
         Reply held = Reply.of(stopped);
         scenario().requireArranged("[" + label + "] the cruise the climb left behind must be let go"
                         + " before the next leg, or that leg is flown by a climbing craft: " + stopped,
@@ -537,18 +537,18 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         for (int i = 0; i < nameThenValue.length; i += 2) {
             String name = nameThenValue[i];
             // Vanilla answers a bare `gamerule <name>` with "<name> = <value>".
-            String reply = exec("gamerule " + name).trim();
+            String reply = read("gamerule " + name).raw().trim();
             int eq = reply.lastIndexOf(" = ");
             scenario().requireArranged("gamerule " + name + " must report its value: " + reply, eq >= 0);
             before.put(name, reply.substring(eq + 3).trim());
-            exec("gamerule " + name + " " + nameThenValue[i + 1]);
+            arrange("gamerule " + name + " " + nameThenValue[i + 1]);
         }
         return before;
     }
 
     private void restoreGamerules(java.util.Map<String, String> before) throws Exception {
         for (java.util.Map.Entry<String, String> rule : before.entrySet()) {
-            exec("gamerule " + rule.getKey() + " " + rule.getValue());
+            arrange("gamerule " + rule.getKey() + " " + rule.getValue());
         }
     }
 
@@ -587,7 +587,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             };
             for (double[] c : cases) {
                 boolean expectMove = c[2] != 0d;
-                String reply = exec("stellurgytest player far-tp " + farFmt(c[0]) + " 200 " + farFmt(c[1]));
+                String reply = arrange("stellurgytest player far-tp " + farFmt(c[0]) + " 200 " + farFmt(c[1])).raw();
                 double from = Reply.of(reply).number("fromX");
                 double to = Reply.of(reply).number("posX");
                 boolean moved = Math.abs(to - c[0]) < FAR_ARRIVAL_TOLERANCE;
@@ -602,7 +602,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 // Park him back near the origin so the next case starts from a known place — the one his
                 // own client has been put at, not merely the one the server has written.
                 long parkMark = clientEvents().mark();
-                exec("stellurgytest player far-tp 0.5 200 0.5");
+                arrange("stellurgytest player far-tp 0.5 200 0.5");
                 awaitClientPlacedNear(parkMark, 0.5, 0.5, "the park near the origin between two delivery cases");
             }
 
@@ -698,13 +698,13 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 String farShipId;
                 try {
                     farShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
-                            this::exec, rungLog, 0, durableName, 200);
+                            c -> read(c).raw(), rungLog, 0, durableName, 200);
                 } catch (AssertionError neverLoaded) {
                     verdicts.put(x, "the ship never LOADED with the client present: "
                             + farOneLine(neverLoaded.getMessage()));
                     continue;
                 }
-                String lastInfo = exec("stellurgytest vs ship-info 0 id " + farShipId);
+                String lastInfo = read("stellurgytest vs ship-info 0 id " + farShipId).raw();
                 if (!ShipInfo.isLoaded(lastInfo)) {
                     verdicts.put(x, "the ship was usable and then not loaded at the next read: "
                             + farOneLine(lastInfo));
@@ -720,13 +720,13 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
 
                 // NAME the ship: the bare form takes the first loaded pilot seat, and at 16M it mounted
                 // the pilot onto the ORIGIN ship's seat.
-                SeatMount mountInfo = SeatMount.onShip(this::exec, 0, farShipId);
+                SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, farShipId);
                 if (!mountInfo.seatFound) {
                     verdicts.put(x, "the pilot seat was not findable: " + farOneLine(mountInfo.raw()));
                     continue;
                 }
                 long mountMark = clientEvents().mark();
-                String mounted = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+                String mounted = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
                 // absence is the answer, as above: one row's verdict, not the sweep's end.
                 if (!Reply.of(mounted).boolOr("mounted", false)) {
                     verdicts.put(x, "the bot could not mount the seat dummy: " + farOneLine(mounted));
@@ -750,7 +750,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
 
                 // No settle: the dismount reaches his client on the same connection ahead of the next
                 // rung's delivery, and that delivery is awaited on the client.
-                exec("stellurgytest player dismount");
+                arrange("stellurgytest player dismount").raw();
             }
         } finally {
             // The report is the deliverable and worth MOST when the leg died mid-ladder, so it is
@@ -780,7 +780,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             writeSpikeReport("far-coordinate-ship.txt", built.toString());
             out = built;
             try {
-                exec("stellurgytest player dismount");
+                arrange("stellurgytest player dismount");
             } catch (Exception ignored) {
                 // teardown must not mask the finding
             }
@@ -836,7 +836,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         return "the CLIENT never began riding the seat after " + ridingTicks + " ticks (last report: " + last + ")"
                 + " | client state: " + farOneLine(clientState)
                 + " | client sees near him: " + farOneLine(clientEntities)
-                + " | server holds the dummy at: " + farOneLine(exec("stellurgytest entity info 0 " + dummyId));
+                + " | server holds the dummy at: " + farOneLine(read("stellurgytest entity info 0 " + dummyId).raw());
     }
 
     /**
@@ -853,7 +853,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         if (!(serverDelta > 1.0d)) {
             // A third witness separates "the seat glue died" from "the ship would not move".
             return "the vertical-up key did not lift the ship (serverLift=" + farFmt(serverDelta)
-                    + "); server player: " + farOneLine(exec("stellurgytest player health"));
+                    + "); server player: " + farOneLine(read("stellurgytest player health").raw());
         }
         // The rider and the ship he rides, as the CLIENT placed them in the same tick, up to the
         // record in which it has shown the ship climbing more than a block — a link, so the verdict
@@ -880,19 +880,19 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         final int baseY = FixtureSite.OPEN_AIR_Y;
         int cx1 = (x - 32) >> 4, cz1 = (FAR_ARENA_Z - 32) >> 4;
         int cx2 = (x + 32) >> 4, cz2 = (FAR_ARENA_Z + 32) >> 4;
-        String warm = exec("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
+        String warm = arrange("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).raw();
         if (!Reply.of(warm).ok()) {
             return "chunk warmup failed: " + farOneLine(warm);
         }
         // A stone pad below and air above: 16M is ocean, and the fixture must not be built into water.
-        exec("stellurgytest fill 0 " + (x - 8) + " " + (baseY - 1) + " " + (FAR_ARENA_Z - 8) + " "
-                + (x + 12) + " " + (baseY - 1) + " " + (FAR_ARENA_Z + 12) + " minecraft:stone");
-        String clear = exec("stellurgytest fill 0 " + (x - 8) + " " + baseY + " " + (FAR_ARENA_Z - 8) + " "
-                + (x + 12) + " " + (baseY + 14) + " " + (FAR_ARENA_Z + 12) + " minecraft:air");
+        arrange("stellurgytest fill 0 " + (x - 8) + " " + (baseY - 1) + " " + (FAR_ARENA_Z - 8) + " "
+                + (x + 12) + " " + (baseY - 1) + " " + (FAR_ARENA_Z + 12) + " minecraft:stone").raw();
+        String clear = arrange("stellurgytest fill 0 " + (x - 8) + " " + baseY + " " + (FAR_ARENA_Z - 8) + " "
+                + (x + 12) + " " + (baseY + 14) + " " + (FAR_ARENA_Z + 12) + " minecraft:air").raw();
         if (!Reply.of(clear).ok()) {
             return "pre-clear failed: " + farOneLine(clear);
         }
-        String pad = exec("stellurgytest block at 0 " + x + " " + (baseY - 1) + " " + FAR_ARENA_Z);
+        String pad = read("stellurgytest block at 0 " + x + " " + (baseY - 1) + " " + FAR_ARENA_Z).raw();
         // The id, compared — `contains("stone")` also accepts cobblestone and sandstone. Read bare: the
         // world was loaded a line above, and on that branch the producer always writes `block`.
         if (!"minecraft:stone".equals(Reply.of(pad).text("block"))) {
@@ -909,8 +909,8 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * @return the assemble reply, or {@code null} if the fixture itself never landed
      */
     private String assembleFarFixture(int x) throws Exception {
-        String fixture = exec("stellurgytest fixture rocket 0 " + x + " " + FixtureSite.OPEN_AIR_Y + " "
-                + FAR_ARENA_Z + " " + VARIANT);
+        String fixture = arrange("stellurgytest fixture rocket 0 " + x + " " + FixtureSite.OPEN_AIR_Y + " "
+                + FAR_ARENA_Z + " " + VARIANT).raw();
         if (!Reply.of(fixture).ok()) {
             System.out.println("[SPIKE ship] fixture at x=" + x + " failed: " + farOneLine(fixture));
             return null;
@@ -920,7 +920,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             System.out.println("[SPIKE ship] fixture at x=" + x + " gave no builderPos: " + farOneLine(fixture));
             return null;
         }
-        return exec("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
+        return act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
     }
 
     /**
@@ -932,7 +932,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
     private String deliverToFarRung(int x) throws Exception {
         final int deliveryY = FixtureSite.OPEN_AIR_Y + 6;
         try {
-            ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), this::exec,
+            ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), c -> arrange(c).raw(),
                     "stellurgytest player far-tp " + farFmt(x + 0.5d) + " " + deliveryY + " "
                             + farFmt(FAR_ARENA_Z + 0.5d),
                     x + 0.5d, deliveryY, FAR_ARENA_Z + 0.5d,
@@ -942,7 +942,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                     + farOneLine(notPlaced.getMessage());
         }
         // absence is the answer: a sweep row with no server position is that row's inconclusive.
-        double lastX = Reply.of(exec("stellurgytest player health")).numberOr("posX", Double.NaN);
+        double lastX = Reply.of(read("stellurgytest player health").raw()).numberOr("posX", Double.NaN);
         if (Math.abs(lastX - (x + 0.5d)) < FAR_ARRIVAL_TOLERANCE) {
             return null;
         }
@@ -956,7 +956,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * rung's ship, which looks exactly like a clean far-coordinate result.
      */
     private double farShipY(String farShipId) throws Exception {
-        String last = exec("stellurgytest vs ship-info 0 id " + farShipId);
+        String last = read("stellurgytest vs ship-info 0 id " + farShipId).raw();
         if (ShipInfo.isLoaded(last)) {
             double py = ShipInfo.of(last).y;
             if (!Double.isNaN(py)) {
@@ -1026,7 +1026,7 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         // number the pre-clear it replaces was throwing away. The cell this builds in is void, so
         // there is no terrain to escape — what the band buys here is ONE definition of where a
         // fixture stands, shared with every other class, instead of a 64 nobody chose.
-        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
-                "the craft that is then flown to the far edge of the realized pose band");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
+                "the craft that is then flown to the far edge of the realized pose band"));
     }
 }

@@ -43,12 +43,12 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
 
     @Test
     public void observatoryMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock observatory 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock observatory failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileObservatory tile at controller pos: " + info,
                 "TileObservatory", MachineInfo.of(info).tileSimpleName());
@@ -64,7 +64,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void observatoryMultiblockInvalidatesWhenCentralLensIsRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -74,7 +74,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
 
         // Central lens at y=1 of the structure -> globalY = cy + 2, globalX = cx,
         // globalZ = cz + 2 (per handleFixtureObservatory). Replace it with stone.
-        String breakLens = join(client().execute(
+        String breakLens = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy + 2) + " " + (cz + 2) + " minecraft:stone"));
         assertTrue("could not replace lens: " + breakLens,
                 Reply.of(breakLens).ok());
@@ -88,7 +88,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void observatoryMultiblockInvalidatesWhenMotorIsRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -98,7 +98,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
 
         // Motor at base layer -> globalY = cy - 1, globalX = cx, globalZ = cz + 2
         // (per handleFixtureObservatory motorPos).
-        String breakMotor = join(client().execute(
+        String breakMotor = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy - 1) + " " + (cz + 2) + " minecraft:stone"));
         assertTrue("could not replace motor: " + breakMotor,
                 Reply.of(breakMotor).ok());
@@ -112,7 +112,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void observatoryMultiblockInvalidatesWhenAirChamberIsFilled() throws Exception {
         int cx = CX + 90, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -123,7 +123,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         // y=2 hollow chamber centre — must be air. Fill it with stone to break.
         // globalY = cy + 1, globalX = cx, globalZ = cz + 1 (interior air cell,
         // not the lens — that's at globalZ = cz + 3).
-        String fillAir = join(client().execute(
+        String fillAir = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy + 1) + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not fill air chamber: " + fillAir,
                 Reply.of(fillAir).ok());

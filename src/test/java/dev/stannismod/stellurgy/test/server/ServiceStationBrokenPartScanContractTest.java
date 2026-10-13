@@ -90,7 +90,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
     public void injectedBrokenPartAppearsInPartsToRepairAfterLink() throws Exception {
         AssembledRocket rf = buildAndAssembleRocket(CX_SINGLE);
 
-        String inject = exec("stellurgytest infra inject-broken-part " + rf.rocketId + " 5");
+        String inject = arrange("stellurgytest infra inject-broken-part " + rf.rocketId + " 5").raw();
         assertTrue("inject must succeed for advRocketmotor (simple variant has 2): "
                         + inject, Reply.of(inject).ok());
         assertEquals("inject must report stage=5", 5, extract(inject, STAGE));
@@ -102,7 +102,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         placeServiceStation(sx, sy, sz);
         linkStation(sx, sy, sz, rf.rocketId);
 
-        String state = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String state = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("post-link scan must surface exactly 1 worn part: " + state,
                 1, extract(state, PARTS_COUNT));
         assertEquals("initialPartToRepairCount must mirror parts at link time: "
@@ -119,10 +119,10 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
     public void multipleInjectionsAreAllScanned() throws Exception {
         AssembledRocket rf = buildAndAssembleRocket(CX_MULTI);
 
-        String inject1 = exec("stellurgytest infra inject-broken-part " + rf.rocketId + " 3");
+        String inject1 = arrange("stellurgytest infra inject-broken-part " + rf.rocketId + " 3").raw();
         assertTrue("first inject must succeed: " + inject1,
                 Reply.of(inject1).ok());
-        String inject2 = exec("stellurgytest infra inject-broken-part " + rf.rocketId + " 7");
+        String inject2 = arrange("stellurgytest infra inject-broken-part " + rf.rocketId + " 7").raw();
         assertTrue("second inject must succeed (simple has 2 engines): "
                         + inject2, Reply.of(inject2).ok());
 
@@ -130,7 +130,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         placeServiceStation(sx, sy, sz);
         linkStation(sx, sy, sz, rf.rocketId);
 
-        String state = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String state = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("both injected parts must surface: " + state,
                 2, extract(state, PARTS_COUNT));
         assertEquals("initialPartToRepairCount must be 2: " + state,
@@ -149,11 +149,11 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         placeServiceStation(sx, sy, sz);
         linkStation(sx, sy, sz, rf.rocketId);
         assertEquals("baseline: freshly-linked rocket has no worn parts",
-                0, extract(exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz),
+                0, extract(read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw(),
                         PARTS_COUNT));
 
         // Now mark a part as worn AFTER linking.
-        String inject = exec("stellurgytest infra inject-broken-part " + rf.rocketId + " 5");
+        String inject = arrange("stellurgytest infra inject-broken-part " + rf.rocketId + " 5").raw();
         assertTrue("inject must succeed post-link: " + inject,
                 Reply.of(inject).ok());
 
@@ -161,15 +161,15 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         // edge-triggered (on linkRocket), not level-triggered.
         assertEquals("post-link injection must NOT be auto-visible — "
                         + "scan is link-time, not tick-time",
-                0, extract(exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz),
+                0, extract(read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw(),
                         PARTS_COUNT));
 
         // After re-scan, the new worn part surfaces.
-        String relink = exec("stellurgytest infra service-relink 0 " + sx + " " + sy + " " + sz);
+        String relink = act("stellurgytest infra service-relink 0 " + sx + " " + sy + " " + sz).raw();
         assertTrue("service-relink probe must succeed: " + relink,
                 Reply.of(relink).ok());
         assertEquals("after explicit re-scan the new worn part is visible",
-                1, extract(exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz),
+                1, extract(read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw(),
                         PARTS_COUNT));
     }
 
@@ -188,9 +188,10 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
     private AssembledRocket buildAndAssembleRocket(int baseX) throws Exception {
         // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away.
         // Halo 7: this scenario stands a service station ten blocks east of the craft.
-        String assemble = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, CZ_PAD),
-                cmd -> exec(cmd), "simple", 7, 10,
-                "the craft whose worn parts the station scans, and the ground it stands on");
+        String assemble = RocketFixture.assembleBuilt(FixtureSite.openAir(0, baseX, CZ_PAD),
+                c -> act(c).raw(), RocketFixture.placeAt(FixtureSite.openAir(0, baseX, CZ_PAD),
+                c -> arrange(c).raw(), "simple", 7, 10,
+                "the craft whose worn parts the station scans, and the ground it stands on"));
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
@@ -199,15 +200,15 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
     }
 
     private void placeServiceStation(int sx, int sy, int sz) throws Exception {
-        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation");
+        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
     }
 
     private void linkStation(int sx, int sy, int sz, int rocketId) throws Exception {
-        String link = exec("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link,
                 Reply.of(link).ok());
     }

@@ -149,28 +149,48 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
         return scope.harness(this);
     }
 
-    /** Send a command to the shared server and return the concatenated console response. */
-    protected final String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
-    /** Send a command and read its reply as DATA — refusing, naming the command, if the verb did
-     *  not answer one JSON object. */
-    protected final Reply ask(String cmd) throws Exception {
-        return Reply.of(cmd, exec(cmd));
-    }
-
     /**
-     * Send a command that is a STEP OF THE ARRANGEMENT, and refuse as an arrangement failure unless
-     * the verb reported {@code ok}.
+     * Send a command that OBSERVES to the shared server, and read its reply: a probe verb's object, refusing
+     * (naming the command) if the verb did not answer one, or any other command's text. Every command is sent
+     * in a role — this, {@link #arrange} or {@link #act}; the server refuses a command its role does not admit.
      *
-     * <p>A reply dropped on the floor cannot say that the step did not happen: a fill into an
-     * unloaded world, a force-tick of a tile that is not there and an energy inject into the wrong
-     * block all answer an {@code error}, and an unread one lets the scenario go on to measure a world
-     * that was never built — and report what it measures as the mechanic.</p>
+     * <p>Where the call is a step of the arrangement, say so with {@link Reply#requireOk()}: a reply dropped
+     * on the floor cannot say that the step did not happen — a fill into an unloaded world, a force-tick of a
+     * tile that is not there and an energy inject into the wrong block all answer an {@code error}, and an
+     * unread one lets the scenario go on to measure a world that was never built.</p>
      */
+    protected final Reply read(String cmd) throws Exception {
+        return Reply.answering(cmd, client().read(cmd));
+    }
+
+    /** Send a command that SETS THE SCENE (an arrangement, a build, a decided outcome) — see {@link #read}. */
     protected final Reply arrange(String cmd) throws Exception {
-        return ask(cmd).requireOk(cmd);
+        return Reply.answering(cmd, client().arrange(cmd));
+    }
+
+    /** Send a command that CALLS a production entry a player, a tick or a packet would reach — see {@link #read}. */
+    protected final Reply act(String cmd) throws Exception {
+        return Reply.answering(cmd, client().act(cmd));
+    }
+
+    /** This test's {@link #read}, {@link #arrange} and {@link #act}, for a helper that sends in more than one role. */
+    protected final ServerCommands commands() {
+        return new ServerCommands() {
+            @Override
+            public Reply read(String command) throws Exception {
+                return AbstractSharedServerTest.this.read(command);
+            }
+
+            @Override
+            public Reply arrange(String command) throws Exception {
+                return AbstractSharedServerTest.this.arrange(command);
+            }
+
+            @Override
+            public Reply act(String command) throws Exception {
+                return AbstractSharedServerTest.this.act(command);
+            }
+        };
     }
 
     /**
@@ -207,7 +227,7 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
         // `stellurgytest dim list` reports `DimensionManager.getRegisteredDimensions()`, the very
         // collection `/ar planet list` iterates, as a list of integers — so `DIM9` cannot match
         // `DIM90` the way a chat line could.
-        return DimList.from(this::exec).holds(dim);
+        return DimList.from(c -> read(c).raw()).holds(dim);
     }
 
     /**
@@ -215,7 +235,7 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
      * CALLER's: this verb is handed a field name, so it cannot know what a missing one means.
      */
     private String planetInfoField(int dim, String field) throws Exception {
-        String src = exec("stellurgytest planet info " + dim);
+        String src = read("stellurgytest planet info " + dim).raw();
         String value = Reply.of("stellurgytest planet info", src).textOr(field, null);
         if (value == null) {
             throw new AssertionError("field \"" + field + "\" not found in: " + src);
@@ -269,7 +289,7 @@ public abstract class AbstractSharedServerTest implements ScopedTest<SharedServe
      */
     protected final FixtureSite clearedSite(int halo, int height, String what) throws Exception {
         FixtureSite site = site();
-        site.requireClear(this::exec, halo, height, what);
+        site.requireClear(c -> arrange(c).raw(), halo, height, what);
         return site;
     }
 }

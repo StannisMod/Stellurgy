@@ -37,7 +37,7 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
     }
 
     private long createWeatherSat() throws Exception {
-        String resp = ok(client().execute("stellurgytest satellite create 0 weatherController 100 1000 1000"));
+        String resp = ok(client().arrange("stellurgytest satellite create 0 weatherController 100 1000 1000"));
         assertTrue("weather satellite create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("no id in create response: " + resp, mReply.has(ID));
@@ -56,7 +56,7 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
     public void tickWithUnloadedWorldDoesNotCrashAndPreservesQueue() throws Exception {
         long satId = createWeatherSat();
 
-        String resp = ok(client().execute("stellurgytest satellite weather-tick-unloaded 0 " + satId));
+        String resp = ok(client().act("stellurgytest satellite weather-tick-unloaded 0 " + satId));
 
         // An NPE reaches a caller as a REFUSAL: the command's top-level catch renders it as
         // `{"error":"NullPointerException: …"}`. So the claim is made against that field. The

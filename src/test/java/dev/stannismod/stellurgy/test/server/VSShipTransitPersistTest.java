@@ -39,7 +39,7 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
 
         // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
@@ -49,8 +49,8 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // while we re-cut its snapshot (the save-point cut is of a PARKED ship).
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
-                + " " + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
+                + " " + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
 
         // Re-cut the parked ship's block snapshot, ONCE.
@@ -68,18 +68,18 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // (measured across this tier at one fork and at six). A retry around a synchronous command
         // turns "it failed" into "it failed several times", which is the same verdict later and with
         // less to say about why.
-        String lastRefresh = exec("stellurgytest space transit-refresh");
+        String lastRefresh = act("stellurgytest space transit-refresh").raw();
         assertTrue("the parked hyperspace ship was never re-cut into a persisted snapshot; last="
                 + lastRefresh, extractInt(lastRefresh, "refreshed") >= 1);
 
-        String lastExport = exec("stellurgytest space transit-export");
+        String lastExport = read("stellurgytest space transit-export").raw();
         assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "
                 + "paste: " + lastExport, Reply.of(lastExport).bool("hasSnapshot"));
 
         // Simulate a restart in-process: rebuild the transit from the exported record alone (the live
         // manager, and its parked hyperspace ship, are thrown away). Note: this reuses the in-memory record;
         // the on-disk NBT round-trip is unit-pinned separately (ShipLedgerDataTest + TransitRecordTest).
-        String restore = exec("stellurgytest space transit-restore");
+        String restore = arrange("stellurgytest space transit-restore").raw();
         assertTrue("restore did not recreate the in-flight transit: " + restore,
                 (Reply.of(restore).integer("inTransit") == 1));
 
@@ -88,7 +88,7 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // so the arrival production announces IS the proof that path ran.
         String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the restored jump never completed; the durable record now reads "
-                        + exec("stellurgytest space transit-export"),
+                        + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
@@ -97,14 +97,14 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
         // ONLY through the persisted snapshot — the live ship was discarded.
         assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
-                + "); countAll=" + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
+                + "); countAll=" + read("stellurgytest vs ship-count-all " + targetDim).raw(), loadedShips(targetDim) >= 1);
         // Named rather than approached: the cell's ship count now carries the ids it counted, so
         // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
         // this replaced would answer in the same shape if the cell held two.
-        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(c -> read(c).raw(), targetDim);
         assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly"
                 + " failed); id=" + arrivedId,
-                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
+                ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
     }
 
     @org.junit.After
@@ -115,7 +115,7 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /**
      * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
@@ -126,7 +126,7 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
     private static int extractInt(String json, String key) {

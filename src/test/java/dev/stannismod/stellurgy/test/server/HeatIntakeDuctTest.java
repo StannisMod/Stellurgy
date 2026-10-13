@@ -157,13 +157,13 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
         for (int i = 4; i < 8; i++) {
             place(cx + i, cy + 1, "stellurgy:heatPipe", null);
         }
-        Reply solved = arrange("stellurgytest subnet solve heat 0 1");
+        Reply solved = act("stellurgytest subnet solve heat 0 1").requireOk();
         assertEquals("solve failed: " + solved, 1, solved.integer("ticksSolved"));
     }
 
     private Reply cycleHotLoop(int cx, long charge) throws Exception {
-        Reply cycled = arrange("stellurgytest heat cycle 0 " + (cx + 4) + " " + (cy + 1) + " " + cz
-                + " " + charge + " 1");
+        Reply cycled = act("stellurgytest heat cycle 0 " + (cx + 4) + " " + (cy + 1) + " " + cz
+                + " " + charge + " 1").requireOk();
         requireArranged("heat cycle found no loop: " + cycled, cycled.bool("inLoop"));
         assertEquals("premise: the loop must have been charged with exactly what was asked: " + cycled,
                 charge, cycled.longInteger("charged"));
@@ -173,34 +173,34 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
     private void buildRoomWithVent(int cx) throws Exception {
         int by = cy, bz = cz;
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone").requireOk();
         for (int yy = by + 1; yy <= by + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone").requireOk();
 
         place(cx, cy, "stellurgy:oxygenVent", null);
         injectEnergyAt(cx, cy, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1");
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5");
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5").requireOk();
     }
 
     private void place(int x, int y, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + cz + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         assertTrue(block + " place failed at " + x + "," + y + ": " + resp, resp.bool("placed"));
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int cx, int n2, int o2, int co2, int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK).requireOk();
     }
 
     private void injectEnergyAt(int x, int y, int amount) throws Exception {
@@ -208,6 +208,6 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 }

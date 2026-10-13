@@ -77,7 +77,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + "): that is a penetration, not a full pay.", drop < storedBefore);
 
         // No charge => no impediment (D134-2): drain the coil and the SAME strike now passes untouched.
-        exec("stellurgytest shield charge " + DIM + " " + ex + " " + Y + " " + gz + " 0");
+        arrange("stellurgytest shield charge " + DIM + " " + ex + " " + Y + " " + gz + " 0").raw();
         String downResult = strike(ex, gz, impactEnergy, "RADIANT");
         assertTrue("a down shield still intercepted the strike — it must be a barrier only while charged:\n"
                 + downResult, (!Reply.of(downResult).bool("intercepted")));
@@ -237,13 +237,13 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private String strike(int ex, int gz, int impactEnergy, String kind) throws Exception {
-        return exec(strikeCommand(ex, gz, impactEnergy, kind));
+        return act(strikeCommand(ex, gz, impactEnergy, kind)).raw();
     }
 
     /** The same strike, additionally DECLARING the travelling body it carries at that world velocity. */
     private String strike(int ex, int gz, int impactEnergy, String kind, double vx, double vy, double vz)
             throws Exception {
-        return exec(strikeCommand(ex, gz, impactEnergy, kind) + " " + vx + " " + vy + " " + vz);
+        return act(strikeCommand(ex, gz, impactEnergy, kind) + " " + vx + " " + vy + " " + vz).raw();
     }
 
     private String strikeCommand(int ex, int gz, int impactEnergy, String kind) {
@@ -258,19 +258,19 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private ShieldTile read(int x, int z) throws Exception {
-        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+        return ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }
 
     private void chargeIteration(int gx, int gz) throws Exception {
-        exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-        exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-        exec("stellurgytest shield tick " + DIM);
+        arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+        act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+        act("stellurgytest shield tick " + DIM);
     }
 
     private static long readStored(String json) {

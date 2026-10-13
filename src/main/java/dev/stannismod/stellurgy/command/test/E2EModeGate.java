@@ -73,6 +73,12 @@ final class E2EModeGate {
             "com.github.stannismod.forge.testing.server.bridge.ForgeTestServerBootstrap$CollectingCommandSender";
 
     /**
+     * What separates the bridge sender's name from the {@link CommandRole} its command was sent in
+     * ({@code ForgeTestBridge/act}). The harness's own spelling, restated: a protocol.
+     */
+    static final char HARNESS_BRIDGE_ROLE_SEPARATOR = '/';
+
+    /**
      * How far from the player a build may lay a block, on each axis, in blocks: 32.
      *
      * <p>Measured from what the one e2e there is lays around its player: its home site clears the air 32
@@ -246,13 +252,10 @@ final class E2EModeGate {
             return;
         }
         ICommandSender sender = event.getSender();
-        String why;
         if (mode == Mode.MECHANICS) {
             tally.saw(Tally.keyOf(event.getCommand(), event.getParameters()));
-            why = mechanicsRefusalOf(event.getCommand(), event.getParameters());
-        } else {
-            why = refusalOf(event.getCommand(), event.getParameters(), sender);
         }
+        String why = judged(event.getCommand(), event.getParameters(), sender);
         if (why == null) {
             inFlight.put(event, new Admitted(event.getCommand(), event.getParameters()));
             return;
@@ -280,8 +283,7 @@ final class E2EModeGate {
         String[] args = event.getParameters() != null ? event.getParameters() : admitted.args;
         String why = null;
         if (!event.isCanceled()) {
-            why = mode == Mode.MECHANICS ? mechanicsRefusalOf(admitted.command, args)
-                    : refusalOf(admitted.command, args, sender);
+            why = judged(admitted.command, args, sender);
         }
         if (why == null) {
             // As before the second judgement: a console verdict for an admitted command is an e2e server's.
@@ -292,6 +294,112 @@ final class E2EModeGate {
         }
         // The same refusal object, marked as the second judgement: what was admitted is not what runs.
         refuse(event, sender, admitted.command, args, "{\"judgedAsItWillRun\":true," + why.substring(1));
+    }
+
+    /**
+     * Why {@code command} with {@code args} from {@code sender} is refused on this server, as a JSON object;
+     * {@code null} when it is admitted: first the role a harness command was sent in, then this mode's own
+     * judgement.
+     */
+    private String judged(ICommand command, String[] args, ICommandSender sender) {
+        String why = roleRefusalOf(command, args, sender);
+        if (why != null) {
+            return why;
+        }
+        return mode == Mode.MECHANICS ? mechanicsRefusalOf(command, args) : refusalOf(command, args, sender);
+    }
+
+    /**
+     * Why the role a harness bridge command was sent in does not admit what the command is, as a JSON
+     * object; {@code null} when it does, or when the sender is not the harness's bridge (a player, the
+     * console, a command a command runs). The role travels in the bridge sender's name, after
+     * {@link #HARNESS_BRIDGE_ROLE_SEPARATOR}. A probe verb's kinds are its {@link ProbeVerbKind} row's; a
+     * command of any other root has the kinds {@link #rootKinds} gives it. An unclassified probe verb is left
+     * to the mode's judgement, which refuses it naming why; so is a root with no kind on an e2e server, which
+     * refuses every root it does not name. On a mechanics server a bridge command of a root with no kind is
+     * refused here — only the bridge's: the console's {@code stop} and a player's own commands are not sent
+     * in a role.
+     */
+    String roleRefusalOf(ICommand command, String[] args, ICommandSender sender) {
+        if (!HARNESS_BRIDGE_SENDER.equals(sender.getClass().getName())) {
+            return null;
+        }
+        String name = command.getName().toLowerCase(Locale.ROOT);
+        boolean probe = "stellurgytest".equals(name);
+        String verb = probe ? verbOf(args) : name;
+        String sent = sender.getName();
+        int separator = sent.indexOf(HARNESS_BRIDGE_ROLE_SEPARATOR);
+        CommandRole role = separator < 0 ? null : CommandRole.named(sent.substring(separator + 1));
+        if (role == null) {
+            return refusal(name, verb, "NO_ROLE", "a harness command is sent in a role -- read, arrange or act --"
+                    + " and this one names none (the bridge sender is " + sent + ")");
+        }
+        Set<ProbeVerbKind> kinds = probe ? ProbeVerbKind.kindsOf(args) : rootKinds(name);
+        if (kinds.contains(ProbeVerbKind.UNCLASSIFIED)) {
+            return probe || servesAnE2E ? null : refusal(name, verb, ProbeVerbKind.UNCLASSIFIED.name(),
+                    "no kind is declared for this command root, so no role admits it");
+        }
+        for (ProbeVerbKind kind : kinds) {
+            if (role.admits(kind)) {
+                return null;
+            }
+        }
+        return refusal(name, verb, "ROLE", "sent to " + role.name().toLowerCase(Locale.ROOT) + ", but it is "
+                + kinds + ": read admits READ and a named instrument, arrange admits ARRANGE, BUILD and DECIDE,"
+                + " act admits TRIGGER");
+    }
+
+    /**
+     * The kinds of a command that is not the probe, by its root: what the vanilla and the mod's own commands a
+     * test sends ARE, read as {@link ProbeVerbKind} reads a verb. A root with two forms (a query and a set) has
+     * both kinds; a root with no row is {@link ProbeVerbKind#UNCLASSIFIED}.
+     */
+    static Set<ProbeVerbKind> rootKinds(String root) {
+        switch (root) {
+            case "testforblock":
+            case "testfor":
+            case "list":
+            case "help":
+                return EnumSet.of(ProbeVerbKind.READ);
+            // `time query` and `gamerule <name>` read; `time set|add` and `gamerule <name> <value>` write. The
+            // mod's own commands (`ar`, `stellurgy`) list and look up as well as set and move.
+            case "time":
+            case "gamerule":
+            case "ar":
+            case "stellurgy":
+                return EnumSet.of(ProbeVerbKind.READ, ProbeVerbKind.ARRANGE);
+            // The save path every autosave takes, with the persistence hooks it reaches.
+            case "save-all":
+                return EnumSet.of(ProbeVerbKind.TRIGGER);
+            case "tp":
+            case "teleport":
+            case "give":
+            case "clear":
+            case "kill":
+            case "summon":
+            case "setblock":
+            case "fill":
+            case "replaceitem":
+            case "setworldspawn":
+            case "spawnpoint":
+            case "weather":
+            case "gamemode":
+            case "difficulty":
+            case "effect":
+            case "xp":
+            case "op":
+            case "deop":
+            case "kick":
+            case "tellraw":
+            case "say":
+            case "save-on":
+            case "save-off":
+            case "blockdata":
+            case "entitydata":
+                return EnumSet.of(ProbeVerbKind.ARRANGE);
+            default:
+                return EnumSet.of(ProbeVerbKind.UNCLASSIFIED);
+        }
     }
 
     /** What the HIGHEST listener admitted: the command the handler will run, and the array it judged. */

@@ -43,7 +43,7 @@ public class AffsVendorSmokeTest extends AbstractSharedServerTest {
         StringBuilder failures = new StringBuilder();
         for (Map.Entry<String, Integer> e : blocks.entrySet()) {
             int x = baseX + e.getValue();
-            String resp = join(client().execute(
+            String resp = join(client().arrange(
                     "stellurgytest place 0 " + x + " " + y + " " + z + " " + e.getKey()));
             // absence is the answer: the place verb writes `placed` only on its success
             // path, and this suite RECORDS a failure per block rather than ending on the

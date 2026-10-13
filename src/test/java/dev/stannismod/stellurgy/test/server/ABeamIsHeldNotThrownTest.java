@@ -45,7 +45,7 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
     private static final int CYCLE_TICKS = 28;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The claim the whole family exists for: keeping it on the same spot digs DEEPER, with no second
@@ -186,7 +186,7 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
 
         charge(CLEARED_X);
         long cleared = events.mark();
-        ask("stellurgytest turret cleartarget " + DIM + " " + CLEARED_X + " " + Y + " " + Z)
+        arrange("stellurgytest turret cleartarget " + DIM + " " + CLEARED_X + " " + Y + " " + Z)
                 .requireOk("take the gun's target away");
         String dark = events.awaitRecordWithFields(cleared, "turret_beam_announced",
                 "the beam gun's target was cleared and its beam was never announced dark: the players"
@@ -215,26 +215,26 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
     }
 
     private void buildSite(int bx) throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((bx + 64) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill " + DIM + " " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60)
+        arrange("stellurgytest fill " + DIM + " " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60)
                 + " " + (Y + 12) + " " + (Z + 4) + " minecraft:air").requireOk("clear the site");
         for (int cx = (bx >> 4); cx <= ((bx + 40) >> 4); cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
     }
 
     private void fill(int fromX, int toX, String block) throws Exception {
-        ask("stellurgytest fill " + DIM + " " + fromX + " " + Y + " " + Z + " " + toX + " " + Y + " " + Z
+        arrange("stellurgytest fill " + DIM + " " + fromX + " " + Y + " " + Z + " " + toX + " " + Y + " " + Z
                 + " " + block).requireOk("build the wall");
     }
 
     private void charge(int bx) throws Exception {
-        ask("stellurgytest turret charge " + DIM + " " + bx + " " + Y + " " + Z).requireOk("feed the gun");
+        arrange("stellurgytest turret charge " + DIM + " " + bx + " " + Y + " " + Z).requireOk("feed the gun");
     }
 
     private void aimAt(int bx, int targetX) throws Exception {
-        ask("stellurgytest turret target " + DIM + " " + bx + " " + Y + " " + Z + " " + (targetX + 0.5D)
+        arrange("stellurgytest turret target " + DIM + " " + bx + " " + Y + " " + Z + " " + (targetX + 0.5D)
                 + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("aim the gun");
     }
 
@@ -260,7 +260,7 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
     private int depthOf(int wallX) throws Exception {
         int depth = 0;
         for (int i = 0; i < WALL_DEPTH; i++) {
-            Reply state = ask("stellurgytest damage stage " + DIM + " " + (wallX + i) + " " + Y + " " + Z)
+            Reply state = read("stellurgytest damage stage " + DIM + " " + (wallX + i) + " " + Y + " " + Z)
                     .requireOk("read a stage of the wall");
             // the producer always writes `wasDestroyed`, `block` and `stage` on an ok `damage stage`
             // reply, so a reply without them is a broken probe and refusing here is the right failure.
@@ -273,11 +273,11 @@ public class ABeamIsHeldNotThrownTest extends AbstractSharedServerTest {
     }
 
     private Reply read(int bx) throws Exception {
-        return ask("stellurgytest turret read " + DIM + " " + bx + " " + Y + " " + Z).requireOk("read the gun");
+        return read("stellurgytest turret read " + DIM + " " + bx + " " + Y + " " + Z).requireOk("read the gun");
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 }

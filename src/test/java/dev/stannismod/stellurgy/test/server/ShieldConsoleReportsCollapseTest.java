@@ -80,8 +80,8 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
 
         // Take the source away. The network can no longer move anything, and the console must say so.
         arrange("stellurgytest fill " + DIM + " " + source + " " + y + " " + z + " "
-                + source + " " + y + " " + z + " minecraft:air");
-        arrange("stellurgytest shield tick " + DIM);
+                + source + " " + y + " " + z + " minecraft:air").requireOk();
+        act("stellurgytest shield tick " + DIM).requireOk();
 
         Reply collapsed = consoleInfo(console, z);
         assertFalse("a console whose network lost its last source must stop reporting it as live: "
@@ -91,11 +91,11 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
     }
 
     private void place(String block, int x, int z) throws Exception {
-        Reply resp = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        Reply resp = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block).requireOk();
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
     private Reply consoleInfo(int x, int z) throws Exception {
-        return ask("stellurgytest shield console-info " + DIM + " " + x + " " + y + " " + z);
+        return read("stellurgytest shield console-info " + DIM + " " + x + " " + y + " " + z);
     }
 }

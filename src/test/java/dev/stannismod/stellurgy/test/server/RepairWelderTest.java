@@ -146,26 +146,26 @@ public class RepairWelderTest extends AbstractSharedServerTest {
      */
     private int placeAndDamage(int x, int y, int z, String block, int stages, int impactId) throws Exception {
         place(x, y, z, block);
-        int stageCost = extractInt(exec("stellurgytest damage stage 0 " + x + " " + y + " " + z), "stageCost");
+        int stageCost = extractInt(read("stellurgytest damage stage 0 " + x + " " + y + " " + z).raw(), "stageCost");
         assertTrue("no stage cost for " + block, stageCost > 0);
-        String shot = exec("stellurgytest damage impact 0 " + (x + 0.5) + " " + (y + 4) + " " + (z + 0.5)
-                + " 0 -1 0 " + (stageCost * stages) + " KINETIC " + impactId);
+        String shot = act("stellurgytest damage impact 0 " + (x + 0.5) + " " + (y + 4) + " " + (z + 0.5)
+                + " 0 -1 0 " + (stageCost * stages) + " KINETIC " + impactId).raw();
         assertTrue("the shot missed the subject block: " + shot, readLong(shot, "spent") > 0);
-        return extractInt(exec("stellurgytest damage stage 0 " + x + " " + y + " " + z), "stage");
+        return extractInt(read("stellurgytest damage stage 0 " + x + " " + y + " " + z).raw(), "stage");
     }
 
     private void place(int x, int y, int z, String block) throws Exception {
-        Reply.of(exec("stellurgytest chunk warmup 0 " + ((x - 2) >> 4) + " " + ((z - 2) >> 4) + " "
-                + ((x + 20) >> 4) + " " + ((z + 2) >> 4))).requireOk("warm the site's chunks");
-        Reply.of(exec("stellurgytest fill 0 " + (x - 1) + " " + y + " " + (z - 1) + " " + (x + 1) + " "
-                + (y + 6) + " " + (z + 1) + " minecraft:air")).requireOk("clear the site");
-        Reply.of(exec("stellurgytest fill 0 " + x + " " + y + " " + z + " " + x + " " + y + " " + z + " "
-                + block)).requireOk("place " + block);
+        Reply.of(arrange("stellurgytest chunk warmup 0 " + ((x - 2) >> 4) + " " + ((z - 2) >> 4) + " "
+                + ((x + 20) >> 4) + " " + ((z + 2) >> 4)).raw()).requireOk("warm the site's chunks");
+        Reply.of(arrange("stellurgytest fill 0 " + (x - 1) + " " + y + " " + (z - 1) + " " + (x + 1) + " "
+                + (y + 6) + " " + (z + 1) + " minecraft:air").raw()).requireOk("clear the site");
+        Reply.of(arrange("stellurgytest fill 0 " + x + " " + y + " " + z + " " + x + " " + y + " " + z + " "
+                + block).raw()).requireOk("place " + block);
     }
 
     private String weld(int x, int y, int z, int charge, String material, int count) throws Exception {
-        String reply = exec("stellurgytest damage weld 0 " + x + " " + y + " " + z + " " + charge
-                + " " + material + " " + count);
+        String reply = act("stellurgytest damage weld 0 " + x + " " + y + " " + z + " " + charge
+                + " " + material + " " + count).raw();
         Reply.of(reply).requireOk("weld the block");
         return reply;
     }

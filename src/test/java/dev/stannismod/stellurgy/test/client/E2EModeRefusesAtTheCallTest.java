@@ -246,60 +246,60 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         int pz = (int) Math.floor(standing.get("playerZ").getAsDouble());
         String beside = (px + 2) + " " + (py + 3) + " " + (pz + 2);
         List<String> notAnswered = new ArrayList<>();
-        expectServerAnswered(notAnswered, "give @a minecraft:stone 1", false);
-        expectServerAnswered(notAnswered, "fill " + beside + " " + beside + " minecraft:stone", false);
-        expectServerAnswered(notAnswered, "stellurgytest place 0 " + (px + 3) + " " + (py + 3) + " " + (pz + 3)
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give @a minecraft:stone 1", false);
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "fill " + beside + " " + beside + " minecraft:stone", false);
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest place 0 " + (px + 3) + " " + (py + 3) + " " + (pz + 3)
                 + " minecraft:iron_block", true);
         // ---- round 5: a build has a place — his dimension, within reach, absolute, the named fixture only ----
-        expectServerRefusal(notRefused, "stellurgytest place 0 " + (px + PAST_REACH) + " " + py + " " + pz
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest place 0 " + (px + PAST_REACH) + " " + py + " " + pz
                 + " minecraft:stone", "OUT_OF_REACH");
-        expectServerRefusal(notRefused, "stellurgytest fill 0 " + px + " " + (py + 1) + " " + pz + " " + px + " "
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest fill 0 " + px + " " + (py + 1) + " " + pz + " " + px + " "
                 + (py + PAST_REACH) + " " + pz + " minecraft:air", "OUT_OF_REACH");
-        expectServerRefusal(notRefused, "stellurgytest place -1 " + beside + " minecraft:stone",
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest place -1 " + beside + " minecraft:stone",
                 "NOT_THE_PLAYERS_DIMENSION");
-        expectServerRefusal(notRefused, "fill ~1 ~1 ~1 ~1 ~1 ~1 minecraft:stone", "ARGUMENTS");
-        expectServerRefusal(notRefused, "stellurgytest fixture rocket 0 " + beside + " simple", "NOT_THE_NAMED_FIXTURE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "fill ~1 ~1 ~1 ~1 ~1 ~1 minecraft:stone", "ARGUMENTS");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest fixture rocket 0 " + beside + " simple", "NOT_THE_NAMED_FIXTURE");
 
         // ---- the server: probe verbs, vanilla and other roots, static calls ----
-        expectServerRefusal(notRefused, "stellurgytest drive charge status", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest drive charge status", "ARRANGE");
         String assembled = String.join(" ", "turret", "charge");
-        expectServerRefusal(notRefused, "stellurgytest " + assembled + " 0 300 84 300", "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest turret target 0 300 84 300 320.5 84.5 300.5", "ARRANGE");
-        expectServerRefusal(notRefused, new MissionHelper().finishingCommand(), "DECIDE");
-        expectServerRefusal(notRefused, "stellurgytest tile force-tick 0 300 84 300 1", "TRIGGER");
-        expectServerRefusal(notRefused, "stellurgytest fixture machine lathe 0 " + beside, "ARRANGE");
-        expectServerRefusal(notRefused, MissionHelper.CHARGE, "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest planet state-orbit-line 0 255", "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest config set rocketRequireFuel true", "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest tp 0 0 100 0", "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest no-such-group no-such-action", "UNCLASSIFIED");
-        expectServerRefusal(notRefused, "stellurgytest vs permaload true", "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest vs permaload false", "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest invoke-static " + MOD_CLASS_SERVER + " perTick 20",
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest " + assembled + " 0 300 84 300", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest turret target 0 300 84 300 320.5 84.5 300.5", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, new MissionHelper().finishingCommand(), "DECIDE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ACT, "stellurgytest tile force-tick 0 300 84 300 1", "TRIGGER");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest fixture machine lathe 0 " + beside, "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, MissionHelper.CHARGE, "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest planet state-orbit-line 0 255", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest config set rocketRequireFuel true", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest tp 0 0 100 0", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest no-such-group no-such-action", "UNCLASSIFIED");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest vs permaload true", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest vs permaload false", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static " + MOD_CLASS_SERVER + " perTick 20",
                 "STATIC_CALL");
         // ---- round 4: what a package rule, a tag, a block id and a misfiled row let through ----
-        expectServerRefusal(notRefused, "stellurgytest invoke-static " + TEST_STATIC_NOT_AN_INSTRUMENT_SERVER
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static " + TEST_STATIC_NOT_AN_INSTRUMENT_SERVER
                 + " reset", "STATIC_CALL");
-        expectServerRefusal(notRefused, "stellurgytest invoke-static java.lang.System clearProperty forge.test.mode",
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static java.lang.System clearProperty forge.test.mode",
                 "STATIC_CALL");
-        expectServerRefusal(notRefused, "give @a minecraft:stone 1 0 {display:{Name:\"forged\"}}", "COMMAND");
-        expectServerRefusal(notRefused, "give @a minecraft:bedrock 1", "UNOBTAINABLE");
-        expectServerRefusal(notRefused, "give @a libvulpes:creativePowerBattery 1", "UNOBTAINABLE");
-        expectServerRefusal(notRefused, "clear @a minecraft:stone 0 1 {display:{}}", "COMMAND");
-        expectServerRefusal(notRefused, "fill 300 90 300 300 90 300 minecraft:chest 0 destroy {Lock:\"k\"}",
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give @a minecraft:stone 1 0 {display:{Name:\"forged\"}}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give @a minecraft:bedrock 1", "UNOBTAINABLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give @a libvulpes:creativePowerBattery 1", "UNOBTAINABLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "clear @a minecraft:stone 0 1 {display:{}}", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "fill 300 90 300 300 90 300 minecraft:chest 0 destroy {Lock:\"k\"}",
                 "COMMAND");
-        expectServerRefusal(notRefused, "fill 300 90 300 300 90 300 bedrock", "UNOBTAINABLE");
-        expectServerRefusal(notRefused, "stellurgytest place 0 300 90 300 minecraft:bedrock", "UNOBTAINABLE");
-        expectServerRefusal(notRefused, "stellurgytest fill 0 300 90 300 300 90 300 libvulpes:creativePowerBattery",
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "fill 300 90 300 300 90 300 bedrock", "UNOBTAINABLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest place 0 300 90 300 minecraft:bedrock", "UNOBTAINABLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest fill 0 300 90 300 300 90 300 libvulpes:creativePowerBattery",
                 "UNOBTAINABLE");
-        expectServerRefusal(notRefused, "stellurgytest drive info 0 300 84 300", "ARRANGE");
-        expectServerRefusal(notRefused, "stellurgytest chunk forceload 0 18 18", "ARRANGE");
-        expectServerRefusal(notRefused, SPAWN_A_ZOMBIE, "COMMAND");
-        expectServerRefusal(notRefused, "tp @a 300 85 300", "COMMAND");
-        expectServerRefusal(notRefused, "/tp @a 300 85 300", "COMMAND");
-        expectServerRefusal(notRefused, "execute @a ~ ~ ~ tp @s 0 100 0", "COMMAND");
-        expectServerRefusal(notRefused, "stellurgy goto 5", "COMMAND");
-        expectServerRefusal(notRefused, "forge tps", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest drive info 0 300 84 300", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest chunk forceload 0 18 18", "ARRANGE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, SPAWN_A_ZOMBIE, "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "tp @a 300 85 300", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "/tp @a 300 85 300", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "execute @a ~ ~ ~ tp @s 0 100 0", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy goto 5", "COMMAND");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "forge tps", "COMMAND");
 
         // ---- the client: the verbs that name their target or write what input would have produced ----
         expectClientRefusal(notRefused, "interact_block", "BYPASS", () -> bot.interactBlock(1, 2, 3));
@@ -341,19 +341,19 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectClientRefusal(notRefused, "set_frame_rate", "ARGUMENTS", () -> bot.setFrameRate(15));
         expectClientRefusal(notRefused, "input", "ARGUMENTS", () -> bot.input().typeText(THREE_PRESSES_OF_ONE_KEY));
         // ---- round 5: after his first input (any of the above) the walk has begun, and no build runs ----
-        expectServerRefusal(notRefused, "stellurgytest place 0 " + beside + " minecraft:stone", "AFTER_THE_WALK_BEGAN");
-        expectServerRefusal(notRefused, "give @a minecraft:stone 1", "AFTER_THE_WALK_BEGAN");
-        expectServerRefusal(notRefused, "fill " + beside + " " + beside + " minecraft:stone", "AFTER_THE_WALK_BEGAN");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest place 0 " + beside + " minecraft:stone", "AFTER_THE_WALK_BEGAN");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give @a minecraft:stone 1", "AFTER_THE_WALK_BEGAN");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "fill " + beside + " " + beside + " minecraft:stone", "AFTER_THE_WALK_BEGAN");
 
         assertTrue("every act an e2e may not perform must be refused at the call, with the kind its gate"
                 + " gives it; these were not: " + notRefused, notRefused.isEmpty());
 
         // ---- the positive half, on the same gates: what an e2e is made of is answered ----
-        expectServerAnswered(notAnswered, "stellurgytest space bodies", true);
-        expectServerAnswered(notAnswered, "stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot", true);
-        expectServerAnswered(notAnswered, "stellurgytest planet orbit-line 0", false);
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest space bodies", true);
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot", true);
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest planet orbit-line 0", false);
         // `drive observe` answers about an empty block too (`afc:false`), so no `ok` is asked of it.
-        expectServerAnswered(notAnswered, "stellurgytest drive observe 0 300 84 300", false);
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest drive observe 0 300 84 300", false);
         try {
             JsonObject state = bot.reads().reportState();
             if (!state.get("worldReady").getAsBoolean()) {
@@ -382,7 +382,7 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
                 + notAnswered, notAnswered.isEmpty());
 
         // ---- the console: a refused command typed into the server's stdin is refused, not a crash ----
-        Events serverLog = new Events(command -> String.join("\n", server.client().execute(command)),
+        Events serverLog = new Events(command -> String.join("\n", server.client().read(command)),
                 GameTicks.serverAndClient(server.client(), GameTicks.server(), bot.reads()::waitWorldTicks),
                 evictions);
         long beforeConsole = serverLog.mark();
@@ -403,7 +403,7 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
                 "a command the e2e gate refuses, typed into the server's console, must be refused by being"
                         + " cancelled and TOLD — a refusal thrown at the console lands in the server's own tick",
                 CONSOLE_JUDGED_TICKS);
-        String afterConsole = String.join("\n", server.client().execute("stellurgytest clock"));
+        String afterConsole = String.join("\n", server.client().read("stellurgytest clock"));
         assertTrue("...and the server must still be running and answering after it: alive="
                         + server.client().isAlive() + " clock=" + afterConsole,
                 server.client().isAlive() && Reply.of("stellurgytest clock", afterConsole).has("tick"));
@@ -426,9 +426,26 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         }
     }
 
-    private void expectServerRefusal(List<String> notRefused, String command, String kind) throws Exception {
+    /**
+     * {@code command} sent in {@code role} — one that ADMITS what the command is, so that the refusal judged is
+     * the mode's and not the role's.
+     */
+    private List<String> sent(com.github.stannismod.forge.testing.server.CommandRole role, String command)
+            throws Exception {
+        switch (role) {
+            case READ:
+                return server.client().read(command);
+            case ARRANGE:
+                return server.client().arrange(command);
+            default:
+                return server.client().act(command);
+        }
+    }
+
+    private void expectServerRefusal(List<String> notRefused, com.github.stannismod.forge.testing.server.CommandRole role,
+                                     String command, String kind) throws Exception {
         try {
-            server.client().execute(command);
+            sent(role, command);
             notRefused.add("`" + command + "` RAN");
         } catch (ServerCommandFailed failed) {
             judgeServerRefusal(notRefused, command, kind, failed.reply());
@@ -462,9 +479,10 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         }
     }
 
-    private void expectServerAnswered(List<String> notAnswered, String command, boolean repliesOk) throws Exception {
+    private void expectServerAnswered(List<String> notAnswered, com.github.stannismod.forge.testing.server.CommandRole role,
+                                      String command, boolean repliesOk) throws Exception {
         try {
-            String reply = String.join("\n", server.client().execute(command));
+            String reply = String.join("\n", sent(role, command));
             if (repliesOk && !Reply.of(command, reply).ok()) {
                 notAnswered.add("`" + command + "` answered without ok: " + reply);
             }

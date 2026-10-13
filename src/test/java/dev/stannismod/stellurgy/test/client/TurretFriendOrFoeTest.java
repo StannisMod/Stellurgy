@@ -50,36 +50,36 @@ public class TurretFriendOrFoeTest extends AbstractOwnBootClientTest {
             + " its own access code\" on a decision reading {@code permitted:true, friendly:true} (2026-10-04).")
     @Test
     public void aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot() throws Exception {
-        Events server = new Events(this::server,
+        Events server = new Events(c -> read(c).raw(),
                 GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         // Build the gun AROUND the player rather than teleporting the player to the gun. A tp into
         // a freshly cleared site drops him, and a gun tracking a falling target pins its elevation
         // arc and stops firing — which is indistinguishable from the refusal this test is about.
-        Reply player = ask("stellurgytest player position-of " + PLAYER);
+        Reply player = read("stellurgytest player position-of " + PLAYER);
         int px = (int) Math.floor(player.number("playerPosX"));
         int py = (int) Math.floor(player.number("playerPosY"));
         int pz = (int) Math.floor(player.number("playerPosZ"));
         int gx = px + GUN_OFFSET;
 
-        ask("stellurgytest chunk warmup 0 " + ((px - 16) >> 4) + " " + ((pz - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((px - 16) >> 4) + " " + ((pz - 16) >> 4) + " "
                 + ((gx + 16) >> 4) + " " + ((pz + 16) >> 4)).requireOk("warm the site's chunks");
         // Clear the whole corridor between the player and the gun, not just the gun's own footprint.
         // The muzzle sits `reach + 1.5` blocks along the aim — about five and a half blocks towards
         // the player — and the line-of-fire check refuses a shot into terrain.
-        ask("stellurgytest fill 0 " + (px - 2) + " " + py + " " + (pz - 2) + " " + (gx + 4) + " "
+        arrange("stellurgytest fill 0 " + (px - 2) + " " + py + " " + (pz - 2) + " " + (gx + 4) + " "
                 + (py + 8) + " " + (pz + 2) + " minecraft:air").requireOk("clear the corridor");
-        ask("stellurgytest chunk forceload 0 " + (gx >> 4) + " " + (pz >> 4)).requireOk("hold the chunk");
+        arrange("stellurgytest chunk forceload 0 " + (gx >> 4) + " " + (pz >> 4)).requireOk("hold the chunk");
         long built = server.markInstrumented();
         buildGun(gx, py, pz);
         Weapons.awaitAssembled(server, built, gx, py, pz, PARTS, "the gun never assembled");
-        ask("stellurgytest turret charge 0 " + gx + " " + py + " " + pz).requireOk("charge the gun");
-        ask("stellurgytest turret code 0 " + gx + " " + py + " " + pz + " ALPHA").requireOk("set the code");
+        arrange("stellurgytest turret charge 0 " + gx + " " + py + " " + pz).requireOk("charge the gun");
+        arrange("stellurgytest turret code 0 " + gx + " " + py + " " + pz + " ALPHA").requireOk("set the code");
 
         // The player carries the installation's own code, and is therefore a friend.
-        server("clear " + PLAYER);
-        server("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
+        arrange("clear " + PLAYER).raw();
+        arrange("stellurgytest arrange coded-item " + PLAYER + " ALPHA");
         long friend = server.mark();
-        ask("stellurgytest turret target-player 0 " + gx + " " + py + " " + pz + " " + PLAYER)
+        arrange("stellurgytest turret target-player 0 " + gx + " " + py + " " + pz + " " + PLAYER)
                 .requireOk("point the gun at the player");
 
         // The fire decision is asked only once the mount is on its target: the record of it taken
@@ -96,9 +96,9 @@ public class TurretFriendOrFoeTest extends AbstractOwnBootClientTest {
 
         // Same gun, same player, same target — only the credential changes.
         long foe = server.mark();
-        server("clear " + PLAYER);
-        server("stellurgytest arrange coded-item " + PLAYER + " BRAVO");
-        ask("stellurgytest turret charge 0 " + gx + " " + py + " " + pz).requireOk("recharge the gun");
+        arrange("clear " + PLAYER);
+        arrange("stellurgytest arrange coded-item " + PLAYER + " BRAVO");
+        arrange("stellurgytest turret charge 0 " + gx + " " + py + " " + pz).requireOk("recharge the gun");
         Weapons.awaitFired(server, foe, gx, py, pz,
                 "the gun would not fire on a player carrying somebody else's code either — the hold"
                         + " was not about the credential: " + read(gx, py, pz));
@@ -114,20 +114,21 @@ public class TurretFriendOrFoeTest extends AbstractOwnBootClientTest {
     }
 
     private Reply read(int gx, int gy, int gz) throws Exception {
-        return ask("stellurgytest turret read 0 " + gx + " " + gy + " " + gz);
+        return read("stellurgytest turret read 0 " + gx + " " + gy + " " + gz);
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    /** A vanilla command, whose reply is chat rather than JSON and is not read. */
-    private String server(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, server(command));
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
     }
 }

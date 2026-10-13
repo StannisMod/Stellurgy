@@ -67,7 +67,7 @@ public final class PlayerInput {
             return;
         }
         try {
-            walkServer.execute(com.github.stannismod.forge.testing.E2EMode.WALK_BEGINS_COMMAND);
+            walkServer.arrange(com.github.stannismod.forge.testing.E2EMode.WALK_BEGINS_COMMAND);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted while telling the server the player's walk began", interrupted);

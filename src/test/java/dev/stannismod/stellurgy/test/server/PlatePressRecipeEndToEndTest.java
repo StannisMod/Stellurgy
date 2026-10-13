@@ -43,7 +43,7 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         TestClient c = client();
         // Build fixture + capture the resolved output id.
         String fixture = String.join("\n",
-                c.execute("stellurgytest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
+                c.arrange("stellurgytest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Extract the resolved output item + ingredient block ids.
@@ -61,14 +61,14 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         // spawnEntity(EntityItem with recipe output). Adjacent (not above) is
         // also valid; using ABOVE because shouldBeExtended explicitly
         // re-checks pos.up() neighbours and that path is unambiguous.
-        String activate = String.join("\n", c.execute(
+        String activate = String.join("\n", c.arrange(
                 "stellurgytest place 0 " + x + " " + (y + 1) + " " + z + " minecraft:redstone_block"));
         assertTrue("redstone block placement failed: " + activate,
                 Reply.of(activate).bool("placed"));
 
         // Scan for EntityItem within 2 blocks of (x+0.5, y-0.5, z+0.5) —
         // the spawn position from BlockSmallPlatePress.checkForMove.
-        String scan = String.join("\n", c.execute(
+        String scan = String.join("\n", c.read(
                 "stellurgytest entity scan-items 0 " + (x + 0.5) + " " + (y - 0.5) + " " + (z + 0.5) + " 2"));
         assertTrue("entity scan-items failed: " + scan, Reply.of(scan).ok());
         // The scan is addressed by its own box — this press, radius 2 — so what it holds is an
@@ -83,7 +83,7 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         // checkForMove) or as `minecraft:piston_extension` (transient during
         // piston-head extension). The contract: it is NO LONGER the
         // ingredient block.
-        String ingredientRead = String.join("\n", c.execute(
+        String ingredientRead = String.join("\n", c.read(
                 "stellurgytest block at 0 " + x + " " + (y - 1) + " " + z));
         assertTrue("ingredient block " + ingredientBlockId + " still present at "
                         + x + "," + (y - 1) + "," + z + " — press did not consume it: "

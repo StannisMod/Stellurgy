@@ -29,11 +29,11 @@ public final class WarShip {
     public final String vsShip;
 
     private final Events log;
-    private final Events.Probe probe;
+    private final ServerCommands commands;
 
-    private WarShip(Events log, Events.Probe probe, String durable, String vsShip) {
+    private WarShip(Events log, ServerCommands commands, String durable, String vsShip) {
         this.log = log;
-        this.probe = probe;
+        this.commands = commands;
         this.durable = durable;
         this.vsShip = vsShip;
     }
@@ -47,14 +47,14 @@ public final class WarShip {
      * Lay the with-pilot-seat fixture at {@code site}, run {@code before}, assemble, and wait for THIS
      * craft to be registered and loaded.
      */
-    public static WarShip build(Events log, Events.Probe probe, FixtureSite site, BeforeAssembly before,
+    public static WarShip build(Events log, ServerCommands commands, FixtureSite site, BeforeAssembly before,
                                 String what) throws Exception {
         long mark = log.mark();
-        int[] builder = RocketFixture.placeAt(site, probe, "with-pilot-seat", 4, 12, what);
+        int[] builder = RocketFixture.placeAt(site, c -> commands.arrange(c).raw(), "with-pilot-seat", 4, 12, what);
         if (before != null) {
             before.run(builder);
         }
-        String asm = RocketFixture.assembleBuilt(site, probe, builder);
+        String asm = RocketFixture.assembleBuilt(site, c -> commands.act(c).raw(), builder);
         assertTrue("an AFC-bearing build must become a ship, not a rocket: " + asm,
                 Reply.of("stellurgytest rocket assemble", asm).integer("rocketCount") == 0);
         String durable = ShipIdentity.nameFromAssembly(asm);
@@ -64,28 +64,27 @@ public final class WarShip {
         log.awaitField(mark, "ship_loaded", "vsShip", vsShip,
                 what + " — hull " + vsShip + " reached the registry and never became a loaded ship",
                 LINK_TICKS);
-        return new WarShip(log, probe, durable, vsShip);
+        return new WarShip(log, commands, durable, vsShip);
     }
 
     /** The substrate's report on this hull, by id; refuses one it no longer manages. */
     public Reply info() throws Exception {
-        Reply info = Reply.of("stellurgytest vs ship-info",
-                probe.exec("stellurgytest vs ship-info 0 id " + vsShip));
+        Reply info = commands.read("stellurgytest vs ship-info 0 id " + vsShip);
         assertTrue("hull " + vsShip + " is not managed any more: " + info, info.bool("managed"));
         return info;
     }
 
     /** Where this craft's pilot seat is, in SUBSPACE — a block of the ship whose address is known. */
     public int[] seat() throws Exception {
-        Reply seat = Reply.of("stellurgytest vs find-seat", probe.exec("stellurgytest vs find-seat 0 id " + vsShip));
+        Reply seat = commands.read("stellurgytest vs find-seat 0 id " + vsShip);
         assertTrue("could not locate the seat of hull " + vsShip + ": " + seat, seat.bool("seatFound"));
         return new int[]{seat.integer("seatX"), seat.integer("seatY"), seat.integer("seatZ")};
     }
 
     /** A subspace block of this craft, mapped into the WORLD through this hull's own transform. */
     public double[] toWorld(int sx, int sy, int sz) throws Exception {
-        Reply mapped = Reply.of("stellurgytest vs to-world", probe.exec("stellurgytest vs to-world 0 id "
-                + vsShip + " " + sx + " " + sy + " " + sz)).requireOk("map a subspace block to the world");
+        Reply mapped = commands.read("stellurgytest vs to-world 0 id "
+                + vsShip + " " + sx + " " + sy + " " + sz).requireOk("map a subspace block to the world");
         return new double[]{mapped.number("worldX"), mapped.number("worldY"), mapped.number("worldZ")};
     }
 
@@ -112,8 +111,8 @@ public final class WarShip {
             + " (2026-09-30).")
     public void parkAt(int x, int y, int z, double tolerance) throws Exception {
         long mark = log.markInstrumented();
-        Reply tp = Reply.of("stellurgytest vs teleport-ship-by-id", probe.exec(
-                "stellurgytest vs teleport-ship-by-id 0 " + vsShip + " " + x + " " + y + " " + z));
+        Reply tp = commands.arrange(
+                "stellurgytest vs teleport-ship-by-id 0 " + vsShip + " " + x + " " + y + " " + z);
         tp.requireOk("teleport hull " + vsShip);
         String adopted = log.awaitRecordWithField(mark, "ship_teleport_adopted", "vsShip", vsShip,
                 "hull " + vsShip + " was teleported to " + x + "," + y + "," + z

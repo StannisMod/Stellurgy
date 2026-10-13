@@ -177,7 +177,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      * scenario staged in a cell world (or one that crosses into another) must use.
      */
     protected final String shipInfoById(int dim, String shipId) throws Exception {
-        return exec("stellurgytest vs ship-info " + dim + " id " + shipId);
+        return read("stellurgytest vs ship-info " + dim + " id " + shipId).raw();
     }
 
     /** How long a client is given to re-establish a rider's mount after a dimension change. 80
@@ -535,12 +535,12 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
         scenario().record("liftFrom", fromY);
         scenario().record("liftClearance", clearanceBlocks);
 
-        String moved = exec("stellurgytest vs teleport-ship-by-id " + dim + " " + shipId
-                + " " + x + " " + toY + " " + z);
+        String moved = arrange("stellurgytest vs teleport-ship-by-id " + dim + " " + shipId
+                + " " + x + " " + toY + " " + z).raw();
         scenario().requireArranged("the lift off the pad must take, or the craft flies its whole"
                 + " window in ground contact: " + moved, Reply.of(moved).ok());
         GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);
-        String unparked = exec("stellurgytest vs unpark-by-id " + dim + " " + shipId);
+        String unparked = arrange("stellurgytest vs unpark-by-id " + dim + " " + shipId).raw();
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
                 + " recipe, and a parked ship cannot be flown: " + unparked,
                 Reply.of(unparked).ok());
@@ -649,7 +649,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      * about whoever moved next.</p>
      */
     protected final String botName() throws Exception {
-        return PlayerState.botName(this::exec);
+        return PlayerState.botName(c -> read(c).raw());
     }
 
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */
@@ -676,7 +676,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
         // unconditional wait would burn its budget on every single scenario in the family.
         JsonObject wasRiding = bot().reportRidingEntity();
         long clientMark = clientEvents().mark();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         // Release every per-tile PROBE command channel on the server. They name one ship each and
         // cannot bleed onto a neighbour, but they deliberately OUTRANK the pilot channel, so a
         // scenario that left one in force hands the next scenario a computer that ignores its own
@@ -688,7 +688,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
         // throttle was still held on a channel that belonged to nobody.
         //
         // Asserted, not trusted: a clear nobody checks is indistinguishable from no clear.
-        String afcCleared = exec("stellurgytest vs afc-clear");
+        String afcCleared = arrange("stellurgytest vs afc-clear").raw();
         assertTrue("the flight computer's bring-up channels must be cleared between"
                 + " scenarios, or a later scenario's ship flies under an earlier one's throttle;"
                 + " probe replied " + afcCleared, Reply.of(afcCleared).ok());
@@ -719,7 +719,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
         // craft. And the count is printed rather than asserted — a scenario that built nothing
         // legitimately clears nothing, and a number nobody can predict is not a contract.
         System.out.println("[reset] craft cleared from this family's world: "
-                + dev.stannismod.stellurgy.test.ShipReadiness.clearCraftFrom(this::exec, 0));
+                + dev.stannismod.stellurgy.test.ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
     }
 
     private static boolean isRiding(JsonObject riding) {
@@ -804,7 +804,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
      * @return the single reply, for the caller's own flag assertions and failure messages
      */
     protected final DeckCapture deckCaptureOfThisShip(String shipId, String what) throws Exception {
-        DeckCapture capture = DeckCapture.read(this::exec);
+        DeckCapture capture = DeckCapture.read(c -> read(c).raw());
         String reply = capture.raw();
         try {
             capture.requireAnchoredOn(shipId, what);
@@ -821,18 +821,18 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
                     // verdict above is the SERVER's. Printing them side by side unlabelled is how a
                     // single position gets read as a disagreement between the sides (2026-09-16).
                     + " | the body, CLIENT: " + bot().reportState()
-                    + " | the body, SERVER: " + exec("stellurgytest vs player-ship-data")
+                    + " | the body, SERVER: " + read("stellurgytest vs player-ship-data").raw()
                     // ...and WHAT that hull is made of. A craft can be loaded, posed and present
                     // while containing nothing: `blocks:0` is a registry remnant, and a hull with no
                     // blocks has no world box for a containment query to answer with. The pose alone
                     // cannot tell that apart from a body standing in the wrong place.
-                    + " | the registry: " + exec("stellurgytest vs ships-registered 0")
+                    + " | the registry: " + read("stellurgytest vs ships-registered 0").raw()
                     // ...and WHERE THE NEIGHBOURS ARE. This scenario passes ALONE and fails after its
                     // siblings have run (measured 2026-09-16), so the hulls they left behind are part
                     // of the arrangement whether the scenario means them to be or not. A containment
                     // question is answered against all of them, and the reply's `containingShipIds`
                     // names only the ones that matched — never the ones that were asked.
-                    + " | every loaded hull: " + exec("stellurgytest vs ships-loaded 0"), notHeld);
+                    + " | every loaded hull: " + read("stellurgytest vs ships-loaded 0").raw(), notHeld);
         }
         return capture;
     }
@@ -953,7 +953,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
         // The reader REFUSES a reply carrying no entityId, which is what this method's own check
         // asserted: a window armed on the wrong body is silent in exactly the way a body nobody
         // asked about is.
-        int entityId = DeckCapture.read(this::exec).entityId;
+        int entityId = DeckCapture.read(c -> read(c).raw()).entityId;
         closeDeckGateWindow(); // one gate window per scenario at a time; a new arming ends the last
         deckGateWindow = ClientWindow.open(bot(), DECK_GATE_WINDOW, entityId, recordsEach);
         return entityId;
@@ -1014,7 +1014,7 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
             throws Exception {
         openDeckGateWindow(recordsEach);
         try {
-            exec("tp @a " + x + " " + y + " " + z + " 0 0");
+            arrange("tp @a " + x + " " + y + " " + z + " 0 0");
             String placed = ClientEvents.awaitPlacedNear(clientEvents(), clientMark, x, z,
                     "the teleport over the deck must land on the client before a landing can be"
                             + " about the place it was sent to", tickBudget);

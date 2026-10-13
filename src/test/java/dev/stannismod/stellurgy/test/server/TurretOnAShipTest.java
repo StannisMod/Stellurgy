@@ -47,12 +47,12 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
     private static final int BARRELS = 4;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** A craft left behind goes on ticking in the world the next scenario runs in. */
     @Before
     public void disposeOfEarlierCraft() throws Exception {
-        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
+        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0));
     }
 
     /**
@@ -75,9 +75,9 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
             + " more than the gun's standoff (5.5) plus the most it can have flown in 3 steps (10.98)\".")
     @Test
     public void aGunOnAShipFiresIntoTheWorldRatherThanIntoTheShipyard() throws Exception {
-        ask("stellurgytest shot clear 0").requireOk("clear the air");
+        arrange("stellurgytest shot clear 0").requireOk("clear the air");
 
-        WarShip ship = WarShip.build(events, this::exec, FixtureSite.openAir(0, SRC_X, SRC_Z), null,
+        WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, SRC_X, SRC_Z), null,
                 "the craft the gun is bolted to");
         ship.parkAt(FAR_X, FAR_Y, FAR_Z, ON_THE_HULL);
 
@@ -96,10 +96,10 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
         Reply info = ship.info();
         double worldX = info.number("posX"), worldY = info.number("posY"), worldZ = info.number("posZ");
 
-        ask("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
+        arrange("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
         // A target in the WORLD, well clear of the hull.
         long aimed = events.mark();
-        ask("stellurgytest turret target 0 " + gunX + " " + gunY + " " + gunZ + " " + (worldX + 60.0D) + " "
+        arrange("stellurgytest turret target 0 " + gunX + " " + gunY + " " + gunZ + " " + (worldX + 60.0D) + " "
                 + worldY + " " + worldZ).requireOk("aim the gun");
         String fired = Weapons.awaitFired(events, aimed, gunX, gunY, gunZ, "a gun aboard a ship never fired");
         long shotId = (long) Events.number(fired, "shot");
@@ -107,7 +107,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
         // THE assertion: the round is in the world, near the hull — not at the shipyard address the
         // gun's own BlockPos would have given it. Read by the round's own id: a global list would
         // answer about every sibling's round as well.
-        Reply read = ask("stellurgytest shot read 0 " + shotId).requireOk("read the round");
+        Reply read = read("stellurgytest shot read 0 " + shotId).requireOk("read the round");
         // The round was admitted a probe round trip ago with a lifetime of hundreds of ticks, aimed
         // into open air: it is still flying, and one that is not has already failed the contract.
         assertTrue("the round this gun just fired is no longer in the air: " + read, read.bool("present"));
@@ -124,8 +124,8 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
         // taken `age` steps (ShotSubstrate.step: one move per age), each no longer than its velocity
         // at that step, which gravity alone changes by `gravity` a step on a parked hull — so its path
         // is at most age * muzzleSpeed + gravity * age * (age + 1) / 2.
-        Reply gunNow = ask("stellurgytest turret read 0 " + gunX + " " + gunY + " " + gunZ).requireOk("read the gun");
-        Reply mapped = ask("stellurgytest vs to-world 0 id " + ship.vsShip + " " + (gunX + 0.5D) + " "
+        Reply gunNow = read("stellurgytest turret read 0 " + gunX + " " + gunY + " " + gunZ).requireOk("read the gun");
+        Reply mapped = read("stellurgytest vs to-world 0 id " + ship.vsShip + " " + (gunX + 0.5D) + " "
                 + (gunY + 0.5D) + " " + (gunZ + 0.5D)).requireOk("map the gun's centre into the world");
         double[] centre = new double[]{mapped.number("worldX"), mapped.number("worldY"), mapped.number("worldZ")};
         int age = shot.integer("age");
@@ -171,9 +171,9 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
     @Wait(shape = Wait.Shape.WINDOW, at = "Reply before = ship.info();",
             why = "the hull's own displacement over ticks the box actually delivered, read twice.")
     public void aRoundFromAMovingHullCarriesTheHullsMotionPerTick() throws Exception {
-        ask("stellurgytest shot clear 0").requireOk("clear the air");
+        arrange("stellurgytest shot clear 0").requireOk("clear the air");
 
-        WarShip ship = WarShip.build(events, this::exec, FixtureSite.openAir(0, MOVING_SRC_X, MOVING_SRC_Z),
+        WarShip ship = WarShip.build(events, commands(), FixtureSite.openAir(0, MOVING_SRC_X, MOVING_SRC_Z),
                 null, "the hull the gun is bolted to");
         ship.parkAt(MOVING_X, MOVING_Y, MOVING_Z, ON_THE_HULL);
 
@@ -182,11 +182,11 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
         long built = events.markInstrumented();
         buildGun(gunX, gunY, gunZ);
         Weapons.awaitAssembled(events, built, gunX, gunY, gunZ, PARTS, "the gun aboard the hull never assembled");
-        ask("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
+        arrange("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
 
         // Fly it: the computer realizes the command as force every physics tick, for as long as it stands.
-        ask("stellurgytest vs unpark-by-id 0 " + ship.vsShip).requireOk("give the hull its physics back");
-        Reply drive = ask("stellurgytest vs force-vel-by-id 0 " + ship.vsShip + " " + COMMANDED_SPEED + " 0 0");
+        arrange("stellurgytest vs unpark-by-id 0 " + ship.vsShip).requireOk("give the hull its physics back");
+        Reply drive = arrange("stellurgytest vs force-vel-by-id 0 " + ship.vsShip + " " + COMMANDED_SPEED + " 0 0");
         requireArranged("the command never reached this hull's own flight computer: " + drive,
                 drive.bool("afcResolved"));
         GameTicks.advanceObserved(client(), GameTicks.server(), SETTLE_TICKS);
@@ -205,7 +205,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
         // Across the course, well clear of the hull: the round's own motion is along Z, so whatever
         // it carries along X is the hull's.
         long aimed = events.markInstrumented();
-        ask("stellurgytest turret target 0 " + gunX + " " + gunY + " " + gunZ + " "
+        arrange("stellurgytest turret target 0 " + gunX + " " + gunY + " " + gunZ + " "
                 + after.number("posX") + " " + after.number("posY") + " " + (after.number("posZ") + 80.0D))
                 .requireOk("aim the gun across the hull's course");
         Weapons.awaitFired(events, aimed, gunX, gunY, gunZ, "the gun aboard the moving hull never fired");
@@ -276,12 +276,12 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
      * weapons network — and the network on the rule given.
      */
     private Engagement arrangeEngagement(int lane, String allegiance) throws Exception {
-        ask("stellurgytest shot clear 0").requireOk("clear the air");
+        arrange("stellurgytest shot clear 0").requireOk("clear the air");
         int srcZ = SRC_LANE_Z + lane * LANE_STEP;
-        WarShip shooter = WarShip.build(events, this::exec, FixtureSite.openAir(0, SHOOTER_SRC_X, srcZ),
+        WarShip shooter = WarShip.build(events, commands(), FixtureSite.openAir(0, SHOOTER_SRC_X, srcZ),
                 null, "the hull the battery stands on");
         shooter.parkAt(ENGAGE_X, ENGAGE_Y, ENGAGE_Z, ON_THE_HULL);
-        WarShip quarry = WarShip.build(events, this::exec, FixtureSite.openAir(0, QUARRY_SRC_X, srcZ),
+        WarShip quarry = WarShip.build(events, commands(), FixtureSite.openAir(0, QUARRY_SRC_X, srcZ),
                 null, "the hull the battery is told to engage");
         quarry.parkAt(ENGAGE_X + QUARRY_OFFSET, ENGAGE_Y, ENGAGE_Z, ON_THE_HULL);
 
@@ -290,7 +290,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
         long built = events.markInstrumented();
         buildGun(gunX, gunY, gunZ);
         Weapons.awaitAssembled(events, built, gunX, gunY, gunZ, PARTS, "the battery's gun never assembled");
-        ask("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
+        arrange("stellurgytest turret charge 0 " + gunX + " " + gunY + " " + gunZ).requireOk("charge the gun");
 
         int consoleX = gunX + 1;
         long placed = events.mark();
@@ -299,18 +299,18 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
                 "the weapons network never rebuilt after the console was placed", Weapons.ARRANGEMENT_TICKS,
                 "domain", "Weapon", "dim", "0");
         Engagement engagement = new Engagement(shooter, quarry, gunX, gunY, gunZ, consoleX);
-        Reply network = ask("stellurgytest weaponconsole read " + engagement.console()).requireOk("read the console");
+        Reply network = read("stellurgytest weaponconsole read " + engagement.console()).requireOk("read the console");
         requireArranged("the console touching the gun is not commanding it: " + network,
                 network.bool("network") && network.integer("guns") == 1);
         requireArranged("the console would not take the rule " + allegiance,
-                ask("stellurgytest weaponconsole allegiance " + engagement.console() + " " + allegiance)
+                arrange("stellurgytest weaponconsole allegiance " + engagement.console() + " " + allegiance)
                         .requireOk("set the rule").bool("applied"));
         return engagement;
     }
 
     /** Where the gun is pointing this tick and how far that is from the quarry's own position. */
     private double targetFromQuarry(Engagement engagement) throws Exception {
-        Reply gun = ask("stellurgytest turret read " + engagement.gun()).requireOk("read the gun");
+        Reply gun = read("stellurgytest turret read " + engagement.gun()).requireOk("read the gun");
         requireArranged("the gun holds no target at all: " + gun, gun.bool("hasTarget"));
         Reply quarry = engagement.quarry.info();
         return Math.sqrt(sq(gun.number("targetX") - quarry.number("posX"))
@@ -332,7 +332,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
 
         long ordered = events.markInstrumented();
         requireArranged("the console would not take a ship order",
-                ask("stellurgytest weaponconsole ship " + engagement.console() + " " + engagement.quarry.vsShip)
+                arrange("stellurgytest weaponconsole ship " + engagement.console() + " " + engagement.quarry.vsShip)
                         .requireOk("order the battery onto the quarry").bool("applied"));
         Weapons.awaitFired(events, ordered, engagement.gunX, engagement.gunY, engagement.gunZ,
                 "a battery ordered onto a ship never fired on it");
@@ -362,7 +362,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
     @Test
     public void aHullWhoseWeaponsCarryOurCodeIsSparedOnlyUnderThatRule() throws Exception {
         Engagement engagement = arrangeEngagement(1, "CODE_ON_WEAPONS");
-        ask("stellurgytest weaponconsole code " + engagement.console() + " ALPHA").requireOk("our code");
+        arrange("stellurgytest weaponconsole code " + engagement.console() + " ALPHA").requireOk("our code");
         // The quarry's own console, set to the same code: its weapons vouch for it.
         int[] quarrySeat = engagement.quarry.seat();
         long placed = events.mark();
@@ -372,11 +372,11 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
                 "domain", "Weapon", "dim", "0");
         String quarryConsole = "0 " + (quarrySeat[0] + 2) + " " + quarrySeat[1] + " " + quarrySeat[2];
         requireArranged("the quarry's console took no code",
-                ask("stellurgytest weaponconsole code " + quarryConsole + " ALPHA").requireOk("their code")
+                arrange("stellurgytest weaponconsole code " + quarryConsole + " ALPHA").requireOk("their code")
                         .bool("applied"));
 
         long ordered = events.markInstrumented();
-        ask("stellurgytest weaponconsole ship " + engagement.console() + " " + engagement.quarry.vsShip)
+        arrange("stellurgytest weaponconsole ship " + engagement.console() + " " + engagement.quarry.vsShip)
                 .requireOk("order the battery onto the quarry");
         String spared = events.awaitRecordWithFields(ordered, "turret_fire_decided",
                 "the battery never decided about the hull its code vouches for", Weapons.SUBJECT_TICKS,
@@ -385,7 +385,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
                 "false", Events.text(spared, "permitted"));
 
         long switched = events.markInstrumented();
-        ask("stellurgytest weaponconsole allegiance " + engagement.console() + " NONE").requireOk("no friends");
+        arrange("stellurgytest weaponconsole allegiance " + engagement.console() + " NONE").requireOk("no friends");
         String engaged = events.awaitRecordWithFields(switched, "turret_fire_decided",
                 "under \"no ship is a friend\" the battery never decided about the same hull again",
                 Weapons.SUBJECT_TICKS, "pos", Weapons.at(engagement.gunX, engagement.gunY, engagement.gunZ),
@@ -405,7 +405,7 @@ public class TurretOnAShipTest extends AbstractSharedServerTest {
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + ": " + placed,
                 placed.bool("placed"));
     }

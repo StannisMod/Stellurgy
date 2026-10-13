@@ -39,16 +39,16 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
     }
 
     private long startOreMission(int rocketId, float drillingPower) throws Exception {
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest mission start-ore 0 " + rocketId + " 1000 " + drillingPower));
         assertFalse("start-ore must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
@@ -64,13 +64,13 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(9300);
         long mid = startOreMission(rid, 0.0f);
 
-        String strip = ok(client().execute("stellurgytest mission strip-guidance " + mid));
+        String strip = ok(client().arrange("stellurgytest mission strip-guidance " + mid));
         assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
         assertTrue("guidance computer must be gone: " + strip,
                 (!Reply.of(strip).bool("hasGuidanceComputer")));
 
         MissionCompletion complete = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertFalse("completing an ore mission with a missing guidance computer "
                         + "must not NPE the server tick (C049): " + complete.raw(),
                 complete.threw("NullPointerException"));
@@ -86,11 +86,11 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         int rid = buildAndAssembleRocket(9400);
         long mid = startOreMission(rid, 1.0f);
 
-        String strip = ok(client().execute("stellurgytest mission strip-guidance " + mid));
+        String strip = ok(client().arrange("stellurgytest mission strip-guidance " + mid));
         assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
 
         MissionCompletion complete = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+                cmd -> ok(client().arrange(cmd)), mid);
         assertFalse("completing with a missing guidance computer must not NPE: " + complete.raw(),
                 complete.threw("NullPointerException"));
         assertTrue("complete-now must report success: " + complete.raw(),

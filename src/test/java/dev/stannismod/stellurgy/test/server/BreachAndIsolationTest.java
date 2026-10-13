@@ -111,8 +111,8 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
         // (`TileOxygenVent.getRequested`), so a room of fresh air asks for nothing whether it is
         // sealed or open to space. Breathed-down air is what makes "it stopped asking" a reading.
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
-                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
-        arrange("stellurgytest subnet solve lifesupport 0 2");
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
+        act("stellurgytest subnet solve lifesupport 0 2").requireOk();
 
         Reply connected = subnetInfo(cx + 1);
         assertEquals("premise: a sealed room must be a sink on the ventilation network: " + connected,
@@ -122,7 +122,7 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
         breach(cx);
         forceTick(cx, 5);
-        arrange("stellurgytest subnet solve lifesupport 0 2");
+        act("stellurgytest subnet solve lifesupport 0 2").requireOk();
 
         // Read at the VENT, not at the duct: the duct and the plant stay a network of their own
         // whatever happens to the vent, so only the vent's own position can say that it is still in
@@ -151,15 +151,15 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
         // One long hall, a vent at each end, and a doorway between them.
         arrange("stellurgytest fill 0 " + (west - 2) + " " + (cy - 1) + " " + (cz - 2)
-                + " " + (east + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+                + " " + (east + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
             arrange("stellurgytest fill 0 " + (west - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (east + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (east + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (west - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (east + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (east + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (west - 2) + " " + (cy + 3) + " " + (cz - 2)
-                + " " + (east + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (east + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
 
         commissionVent(west);
         commissionVent(east);
@@ -174,10 +174,10 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
         // pass the comparison with no door at all.
         int wall = (west + east) / 2;
         arrange("stellurgytest fill 0 " + wall + " " + (cy + 1) + " " + (cz - 1)
-                + " " + wall + " " + (cy + 2) + " " + (cz - 1) + " minecraft:stone");
+                + " " + wall + " " + (cy + 2) + " " + (cz - 1) + " minecraft:stone").requireOk();
         arrange("stellurgytest fill 0 " + wall + " " + (cy + 1) + " " + (cz + 1)
-                + " " + wall + " " + (cy + 2) + " " + (cz + 1) + " minecraft:stone");
-        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz);
+                + " " + wall + " " + (cy + 2) + " " + (cz + 1) + " minecraft:stone").requireOk();
+        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz).requireOk();
         forceTick(west, 5);
         Reply gapped = ventInfo(west);
         int throughTheDoorway = gapped.integer("blobSize");
@@ -187,8 +187,8 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
         // Now close a bulkhead in the doorway.
         arrange("stellurgytest fill 0 " + wall + " " + (cy + 1) + " " + cz
-                + " " + wall + " " + (cy + 2) + " " + cz + " stellurgy:airlock_door");
-        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz);
+                + " " + wall + " " + (cy + 2) + " " + cz + " stellurgy:airlock_door").requireOk();
+        arrange("stellurgytest vent reseal 0 " + west + " " + cy + " " + cz).requireOk();
         forceTick(west, 5);
 
         // A door that did NOT seal leaves one zone that has lost at most the door's own two cells;
@@ -205,32 +205,32 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
 
     private void buildSealedRoom(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
         commissionVent(cx);
     }
 
     private void commissionVent(int cx) throws Exception {
         place(cx, "stellurgy:oxygenVent");
         arrange("stellurgytest energy inject 0 " + cx + " " + cy + " " + cz + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000").requireOk();
         forceTick(cx, 1);
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
         forceTick(cx, 5);
     }
 
     /** Open the ceiling. One block is a hull breach. */
     private void breach(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + cx + " " + (cy + 3) + " " + cz + " "
-                + cx + " " + (cy + 3) + " " + cz + " minecraft:air");
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+                + cx + " " + (cy + 3) + " " + cz + " minecraft:air").requireOk();
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
     }
 
     private void placeDuct(int x) throws Exception {
@@ -242,19 +242,19 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
     }
 
     private void place(int x, String block) throws Exception {
-        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block);
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block).requireOk();
         assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
     private void forceTick(int cx, int ticks) throws Exception {
-        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + ticks);
+        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + ticks).requireOk();
     }
 
     private Reply ventInfo(int cx) throws Exception {
-        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
+        return read("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
     private Reply subnetInfo(int x) throws Exception {
-        return ask("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
+        return read("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
     }
 }

@@ -184,7 +184,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
             Events.assertInstrumentRan(log.since(mark, "deck_mode_committed"), "deck_mode_events",
                     "the deck committed a capture MODE at all");
             throw new AssertionError(never.getMessage() + " | server verdict "
-                    + exec("stellurgytest vs deck-capture"));
+                    + read("stellurgytest vs deck-capture").raw());
         }
     }
 
@@ -218,12 +218,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // him ABOARD in the cockpit of the inverted ship.
         buildAndBoardShip(site);
         double h = Math.toRadians(170.0) / 2.0;
-        double upBefore = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
+        double upBefore = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId).upY();
         assertTrue("attitude hold must accept the inversion",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
-        double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
+        double upAfter = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId).upY();
         scenario().requireArranged("the hull must be upside down before the pilot is released inside"
                         + " it, or this is the upright case again: upY " + upBefore + " -> " + upAfter
                         + " over " + INVERSION_SLEW_TICKS + " server ticks",
@@ -235,7 +235,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // could only print the last sample of a server verdict.
         Events events = serverEvents();
         long dismountMark = events.markInstrumented();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
                 + " inverted ship", "dismount", "deck_entered");
         // ...and ABOARD, not stood on the outer hull. Production commits the mode itself at every
@@ -252,7 +252,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // window. Both used to be statics: nine census fields and five seed counters, one set per
         // JVM, so on a shared client they carried whatever body ran last — and the seed counters were
         // lifetime totals, which cannot say whether THIS dismount's seed landed.
-        System.out.println("[interior] census standing: server=" + exec("stellurgytest vs subspace-census")
+        System.out.println("[interior] census standing: server=" + read("stellurgytest vs subspace-census").raw()
                 + " client={ship=" + censusField("ship")
                 + " tracked=" + censusField("tracked")
                 + " subPos=" + censusField("subPos")
@@ -283,7 +283,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // test then measured its own ejection, not the contract.
         Events clientEvents = clientEvents();
         long releaseMark = clientEvents.mark();
-        exec("tp @a ~ ~0.6 ~");
+        arrange("tp @a ~ ~0.6 ~");
 
         // Subject validity (fixture geometry by measurement): the released body must still BE
         // inside the ship's block region, or the run is measuring a doorway ejection.
@@ -387,11 +387,11 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         String releasesAfter = clientEvents.since(releaseMark, "deck_released");
         boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
-        DeckCapture capEnd = DeckCapture.read(this::exec);
+        DeckCapture capEnd = DeckCapture.read(c -> read(c).raw());
         System.out.println("[interior] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
                 + settledY + " reclaim=" + reclaimed + " modes=" + modesAfter.raw()
                 + " releasesSinceReclaim=" + releasesAfter
-                + " censusEnd(server)=" + exec("stellurgytest vs subspace-census")
+                + " censusEnd(server)=" + read("stellurgytest vs subspace-census").raw()
                 + " :: " + trace);
 
         // The interior-boarding contract: the deck reclaims the released body - it is carried
@@ -464,12 +464,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // deck reclaims it without standing support and carries it back AGAINST world gravity.
         buildAndBoardShip(site, "with-roofed-deck");
         double h = Math.toRadians(170.0) / 2.0;
-        double upBeforeInversion = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
+        double upBeforeInversion = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId).upY();
         assertTrue("attitude hold must accept the inversion",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
-        ShipInfo inverted = ShipInfo.byId(this::exec, 0, scenarioShipId);
+        ShipInfo inverted = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId);
         // WHY -sqrt(1/2): the step below moves the body world-DOWN, and it only reaches the cavity
         // if world-down is MOSTLY ship-up — the component along the hull's up axis larger than the
         // one across the deck plane, i.e. past 135 degrees. That is where "a half-turned attitude
@@ -484,7 +484,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // the MODE off production's own commit.
         Events events = serverEvents();
         long dismountMark = events.markInstrumented();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
                 + " inverted roofed ship", "dismount", "deck_entered");
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
@@ -500,7 +500,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         double regionMaxY = parseRegionMaxY(regionStr);
         System.out.println("[cavity] stand sub0=" + censusField("subPos")
                 + " region=" + regionStr + " regionNonAir=" + censusField("regionNonAir")
-                + " server=" + exec("stellurgytest vs subspace-census"));
+                + " server=" + read("stellurgytest vs subspace-census").raw());
         assertTrue("the assembled ship must include the roof (region " + regionStr
                 + " must reach >= 4 blocks above the stand at subY=" + sub0[1] + ")",
                 regionMaxY >= sub0[1] + 4.0);
@@ -532,7 +532,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // step lands, whatever the deck does a tick later — which is the subject below.
         Events clientEvents = clientEvents();
         long releaseMark = clientEvents.mark();
-        exec("tp @a ~ ~-1.2 ~");
+        arrange("tp @a ~ ~-1.2 ~");
         String applied = clientEvents.await(releaseMark, "client_pos_look_applied",
                 "the displacement must land on the client", DECK_LINK_BUDGET_TICKS);
         double appliedY = Events.number(Events.lastRecord(applied), "y");
@@ -604,7 +604,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
         double[] subEnd = parseSub(censusField("subPos"));
-        DeckCapture capEnd = DeckCapture.read(this::exec);
+        DeckCapture capEnd = DeckCapture.read(c -> read(c).raw());
         // Every release in the displacement window, each with the gate that performed it: a
         // `noDeckBelow` or `noHullContact` here would say the enclosure term did NOT hold the body,
         // which is the failure this scenario is about and is not visible in a height alone.
@@ -733,12 +733,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // below would switch the flight it starts back off.
         buildAndBoardShip(site);
         double h = Math.toRadians(60.0) / 2.0;
-        double upBefore = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
+        double upBefore = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId).upY();
         assertTrue("attitude hold must accept the roll",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);
-        double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
+        double upAfter = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId).upY();
         scenario().requireArranged("the hull must be rolled past the angle the ascent bounds can"
                         + " discriminate at (53.1 degrees): upY " + upBefore + " -> " + upAfter
                         + " over " + ROLL_SLEW_TICKS + " server ticks",
@@ -747,7 +747,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // Same arrangement chain as the two interior scenarios.
         Events events = serverEvents();
         long dismountMark = events.markInstrumented();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the rolled deck",
                 "dismount", "deck_entered");
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
@@ -789,7 +789,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
             for (int i = 0; i < FLY_ABOARD_DOSE_SAMPLES; i++) {
                 bot().waitWorldTicks(2);
                 samples++;
-                DeckCapture cap = DeckCapture.read(this::exec);
+                DeckCapture cap = DeckCapture.read(c -> read(c).raw());
                 // Anchored on THIS scenario's craft, per sample: the count below is a claim about
                 // one body keeping one ship's interior frame through the climb, and a sample taken
                 // against another hull in the same airspace is not evidence for it.
@@ -888,7 +888,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                         + " the ship's geometry — a body merely hovering at the right height was"
                         + " never seated by anything", DECK_LINK_BUDGET_TICKS);
         advanceServerAndClient(10);
-        capEnd = DeckCapture.read(this::exec);
+        capEnd = DeckCapture.read(c -> read(c).raw());
         subSeated = parseSub(censusField("subPos"));
         // The descend leg parks the body over the SEAT column, so deck gravity may seat it on
         // the seat block's top - one block above the deck stand. Either landing is "seated on
@@ -902,7 +902,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                 && !capEnd.hullStand
                 && capEnd.anchoredOn(scenarioShipId)
                 && subSeated[1] <= sub0[1] + 1.4;
-        exec("gamemode survival @a"); // leave the shared world as the other tests expect it
+        arrange("gamemode survival @a"); // leave the shared world as the other tests expect it
         // WHERE it came to rest. The CONTACT is the link above; this is the geometry, and the two
         // are different claims: a body can touch the hull and be held there by the outer-hull
         // fallback (`hullStand`), or touch a neighbour's craft (hence the anchor check), or come
@@ -942,17 +942,17 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // By identity. The positional form resolves the yard through the ship NEAREST the base — no
         // containment test and no distance bound — so on this shared world it can seat the bot on a
         // neighbour's craft and say seatFound:true doing it.
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, scenarioShipId)
                 .requireFound("find-seat must locate the pilot seat inside THIS scenario's ship ("
                         + scenarioShipId + ", built at " + bx + "," + by + "," + bz + ")");
-        String mountInfo = exec("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
-                + seat.seatY + " " + seat.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ).raw();
         int dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         // The CLIENT's mark before the mount, because the reply above is the SERVER's receipt and
         // every caller of this helper goes on to drive the bot as a seated pilot.
         long seatClientMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                Reply.of(exec("stellurgytest player mount-entity " + dummyId)).bool("mounted"));
+                Reply.of(arrange("stellurgytest player mount-entity " + dummyId).raw()).bool("mounted"));
         awaitClientMount(seatClientMark, "the bot must be seated as HIS OWN CLIENT renders him"
                 + " before this helper hands the ship back — the server reporting a mount is the"
                 + " other process", DECK_LINK_BUDGET_TICKS, " mountInfo=" + mountInfo);
@@ -963,7 +963,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -972,7 +972,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // never be on a shared world.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory reset");
+        read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory reset");
         String assemble = assembleFixture(site, variant);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
@@ -988,12 +988,12 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
                     "the tier-2 assembly must become a VS ship in the queryable registry");
         } catch (AssertionError neverSpawned) {
             throw new AssertionError(neverSpawned.getMessage()
-                    + " | spawn-diag: " + exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot").replace('\n', ' ')
+                    + " | spawn-diag: " + read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot").raw().replace('\n', ' ')
                     + " | assemble said: " + assemble.replace('\n', ' '), neverSpawned);
         }
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -1010,7 +1010,7 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // not the state it needs. The mark is `spawnMark`, taken before the assembly: readiness is an
         // EDGE that fires once, so a mark taken here could miss it entirely.
         awaitShipUsable(events, spawnMark, scenarioShipId);
-        ShipInfo info = ShipInfo.byId(this::exec, 0, scenarioShipId);
+        ShipInfo info = ShipInfo.byId(c -> read(c).raw(), 0, scenarioShipId);
         double[] where = new double[]{info.x, info.y, info.z};
 
         // Fixture completeness by measurement: how many blocks did the assembled ship actually
@@ -1023,24 +1023,24 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // from a settled short count — but the substrate registers a ship only after injecting its
         // blocks, in the same tick (`WorldServerShipManager.spawnNewShips`), so by the
         // `ship_spawned` awaited above there is no relocation left to be in progress.
-        exec("tp @a " + (bx + 3.5) + " " + (by + 6) + " " + (bz + 3.5) + " 0 0");
-        String census1 = exec("stellurgytest vs subspace-census");
+        arrange("tp @a " + (bx + 3.5) + " " + (by + 6) + " " + (bz + 3.5) + " 0 0").raw();
+        String census1 = read("stellurgytest vs subspace-census").raw();
         // The deck is built at (rocketX+-2, rocketY+3, rocketZ+-2) with rocket=(base+3,base+1,base+3),
         // i.e. world (bx+1..bx+5, by+4, bz+1..bz+5) before assembly relocates it into the ship.
-        String leftover = exec("testforblock " + (bx + 3) + " " + (by + 4) + " " + (bz + 3)
-                + " minecraft:iron_block")
-                + " | " + exec("testforblock " + (bx + 5) + " " + (by + 4) + " " + (bz + 5)
-                + " minecraft:iron_block");
+        String leftover = read("testforblock " + (bx + 3) + " " + (by + 4) + " " + (bz + 3)
+                + " minecraft:iron_block").raw()
+                + " | " + read("testforblock " + (bx + 5) + " " + (by + 4) + " " + (bz + 5)
+                + " minecraft:iron_block").raw();
         System.out.println("[interior] census postBuild=" + census1);
         System.out.println("[interior] leftoverDeckAtBase=" + leftover);
         // Roofed-variant diagnostic: iron left at the roof plane after assembly means the roof
         // did not join the ship - pre-lift (by+9) = never scanned, post-lift (by+10) = scanned
         // but dropped by the assembly's connectivity flood-fill.
         System.out.println("[interior] leftoverRoofAtBase="
-                + exec("testforblock " + (bx + 3) + " " + (by + 9) + " " + (bz + 3)
-                        + " minecraft:iron_block")
-                + " | " + exec("testforblock " + (bx + 3) + " " + (by + 10) + " " + (bz + 3)
-                        + " minecraft:iron_block"));
+                + read("testforblock " + (bx + 3) + " " + (by + 9) + " " + (bz + 3)
+                        + " minecraft:iron_block").raw()
+                + " | " + read("testforblock " + (bx + 3) + " " + (by + 10) + " " + (bz + 3)
+                        + " minecraft:iron_block").raw());
         return where;
     }
 
@@ -1067,9 +1067,9 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
         // body is released in the cavity under that roof. It also has to fit: `stellurgytest fill` caps a
         // volume at 32768 and a 42x42 footprint leaves room for 18 layers (31752), so a taller box
         // here would be refused by the probe rather than by a reviewer.
-        return RocketFixture.assembleAt(site, this::exec, variant, 18, 18,
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 18, 18,
                 "the hull, the cockpit cavity a body is released inside, and the whole volume the"
-                        + " assembly flood can escape into");
+                        + " assembly flood can escape into"));
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

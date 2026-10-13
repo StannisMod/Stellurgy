@@ -35,8 +35,8 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
         place("affs:shield_cable", x, z);
         place("affs:field_generator", x + 1, z);
 
-        ShieldTile cable = ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
-        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, x + 1, Y, z);
+        ShieldTile cable = ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
+        ShieldTile emitter = ShieldTile.at(c -> read(c).raw(), DIM, x + 1, Y, z);
         assertTrue("expected a cable at the probed position:\n" + cable.raw(), cable.is(ShieldTile.CABLE));
         assertTrue("expected an emitter at the probed position:\n" + emitter.raw(),
                 emitter.is(ShieldTile.EMITTER));
@@ -52,7 +52,7 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + ": " + resp, Reply.of(resp).bool("placed"));
     }
 

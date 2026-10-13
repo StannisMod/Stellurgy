@@ -34,7 +34,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
     private static final int PARTS = 6;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * A console points two guns at once, and the guns were not commanded individually.
@@ -67,7 +67,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
                 + " network: " + seen, 2, seen.integer("guns"));
 
         long ordered = events.mark();
-        Reply applied = ask("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
+        Reply applied = arrange("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
                 + (base + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("give the console a target");
         assertTrue("the console refused the target: " + applied, applied.bool("applied"));
 
@@ -107,13 +107,13 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
                 placeConsoleAndAwaitNetwork(base + 1).integer("guns"));
 
         long ordered = events.mark();
-        ask("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
+        arrange("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
                 + (base + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("give the console a target");
         Weapons.awaitFired(events, ordered, base, Y, Z,
                 "the gun never fired before hold-fire, so the test would prove nothing");
 
         long held = events.mark();
-        ask("stellurgytest weaponconsole holdfire 0 " + (base + 1) + " " + Y + " " + Z + " true")
+        arrange("stellurgytest weaponconsole holdfire 0 " + (base + 1) + " " + Y + " " + Z + " true")
                 .requireOk("hold fire");
         charge(base);
         // The gun asks "am I holding fire" once it is on target, before it would ask to fire; the
@@ -133,7 +133,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
         assertTrue("the battery kept firing while holding fire (marks " + held + ".." + heldEnd + ")",
                 Weapons.firedSince(events, held, base, Y, Z).isEmpty());
 
-        Reply state = ask("stellurgytest weaponconsole read 0 " + (base + 1) + " " + Y + " " + Z)
+        Reply state = read("stellurgytest weaponconsole read 0 " + (base + 1) + " " + Y + " " + Z)
                 .requireOk("read the console");
         assertTrue("holding fire lost the target: tracking and shooting are separate decisions, so a"
                 + " battery watching an approaching ship must not have to forget it to stop"
@@ -141,7 +141,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
 
         // And releasing it resumes, which is what says the hold was the reason.
         long released = events.mark();
-        ask("stellurgytest weaponconsole holdfire 0 " + (base + 1) + " " + Y + " " + Z + " false")
+        arrange("stellurgytest weaponconsole holdfire 0 " + (base + 1) + " " + Y + " " + Z + " false")
                 .requireOk("release the hold");
         Weapons.awaitFired(events, released, base, Y, Z,
                 "the battery did not resume when hold-fire was released");
@@ -182,13 +182,13 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
                 placeConsoleAndAwaitNetwork(base + 1).integer("guns"));
 
         long ordered = events.mark();
-        ask("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
+        arrange("stellurgytest weaponconsole target 0 " + (base + 1) + " " + Y + " " + Z + " "
                 + (base + 40.5D) + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("give the console a target");
         Weapons.awaitFired(events, ordered, base, Y, Z,
                 "the gun never fired on the console's target, so its removal proves nothing");
 
         long removed = events.mark();
-        ask("stellurgytest fill 0 " + (base + 1) + " " + Y + " " + Z + " " + (base + 1) + " " + Y + " "
+        arrange("stellurgytest fill 0 " + (base + 1) + " " + Y + " " + Z + " " + (base + 1) + " " + Y + " "
                 + Z + " minecraft:air").requireOk("remove the console");
         // The rebuild that notices the console is gone happens on the network's own tick; what it
         // costs the gun is its command, which the mount records the tick it loses it.
@@ -276,11 +276,11 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
                     Weapons.at(west, y, z) + "|" + Weapons.at(gap, y, z) + "|" + Weapons.at(east, y, z));
         }
 
-        Reply first = ask("stellurgytest weaponconsole read 0 " + gap + " " + y + " " + eastLastRow)
+        Reply first = read("stellurgytest weaponconsole read 0 " + gap + " " + y + " " + eastLastRow)
                 .requireOk("read the joining console of the first row");
         assertEquals("the joined battery in the first row must take the order given last — the east"
                 + " console's: " + first, "w636-last", first.text("code"));
-        Reply second = ask("stellurgytest weaponconsole read 0 " + gap + " " + y + " " + westLastRow)
+        Reply second = read("stellurgytest weaponconsole read 0 " + gap + " " + y + " " + westLastRow)
                 .requireOk("read the joining console of the second row");
         assertEquals("and in the second row too, where the last order came from the west console: "
                 + second, "w636-last", second.text("code"));
@@ -290,7 +290,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
 
     /** Give the console at this position an access code, refusing unless it is on a network. */
     private void code(int x, int y, int z, String code) throws Exception {
-        Reply set = ask("stellurgytest weaponconsole code 0 " + x + " " + y + " " + z + " " + code)
+        Reply set = arrange("stellurgytest weaponconsole code 0 " + x + " " + y + " " + z + " " + code)
                 .requireOk("give the console at " + Weapons.at(x, y, z) + " a code");
         requireArranged("the console at " + Weapons.at(x, y, z) + " is on no network, so the code was"
                 + " not an order: " + set, set.bool("applied"));
@@ -307,7 +307,7 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
         events.awaitRecordWithFields(placed, "subsystem_network_rebuilt",
                 "the weapons network never rebuilt after the console was placed",
                 Weapons.ARRANGEMENT_TICKS, "domain", "Weapon", "dim", "0");
-        return ask("stellurgytest weaponconsole read 0 " + consoleX + " " + Y + " " + Z)
+        return read("stellurgytest weaponconsole read 0 " + consoleX + " " + Y + " " + Z)
                 .requireOk("read the console");
     }
 
@@ -321,23 +321,23 @@ public class WeaponConsoleTest extends AbstractSharedServerTest {
     }
 
     private void buildSite(int bx) throws Exception {
-        ask("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((bx + 64) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill 0 " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60) + " "
+        arrange("stellurgytest fill 0 " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " " + (bx + 60) + " "
                 + (Y + 12) + " " + (Z + 4) + " minecraft:air").requireOk("clear the site");
-        ask("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (Z >> 4)).requireOk("hold the chunk");
+        arrange("stellurgytest chunk forceload 0 " + (bx >> 4) + " " + (Z >> 4)).requireOk("hold the chunk");
     }
 
     private void charge(int bx) throws Exception {
-        ask("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z).requireOk("charge the gun");
+        arrange("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z).requireOk("charge the gun");
     }
 
     private Reply read(int bx) throws Exception {
-        return ask("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
+        return read("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + ": " + placed,
                 placed.bool("placed"));
     }

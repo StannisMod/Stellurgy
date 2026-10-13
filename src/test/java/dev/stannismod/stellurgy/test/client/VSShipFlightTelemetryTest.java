@@ -396,7 +396,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // in a space cell: in this world air drag alone takes a spin under the line within the brake
         // dose, so a stop asked here is answered with or without a brake (measured 2026-09-28).
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount").raw();
         reportClientHealth("seatedPilotSeesLiveVelocityAndHisCursorTurnsTheShip");
     }
 
@@ -440,35 +440,35 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
             why = "the brake is the flight computer's, with the centred input linked above; the read is the"
                     + " server's ship report.")
     public void aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim() throws Exception {
-        scenarioDim = TransitSetup.empty(this::exec).originDim;
+        scenarioDim = TransitSetup.empty(c -> arrange(c).raw()).originDim;
         final FixtureSite site = FixtureSite.openAir(scenarioDim, 40, 40);
         Events events = serverEvents();
-        String assembled = RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
-                "the craft the pilot turns and then stops");
+        String assembled = RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
+                "the craft the pilot turns and then stops"));
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 Reply.of(assembled).integer("rocketCount") == 0);
-        ShipReadiness.requireLoaded(this::exec, scenarioDim,
+        ShipReadiness.requireLoaded(c -> read(c).raw(), scenarioDim,
                 "this scenario's craft must be loaded in its cell before anyone sits in it");
-        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, scenarioDim,
+        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, scenarioDim,
                 ShipIdentity.nameFromAssembly(assembled), 200);
-        PilotSeat seat = PilotSeat.byId(this::exec, scenarioDim, scenarioShipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), scenarioDim, scenarioShipId)
                 .requireFound("the pilot seat inside THIS scenario's ship");
 
         // Into the cell, at the craft: it has just been assembled and nothing has commanded it, so
         // its world pose is where it was built.
         long enterMark = clientEvents().mark();
         scenario().requireArranged("the bot must enter the cell",
-                Reply.of(exec("stellurgytest space enter " + PlayerState.botName(this::exec) + " "
+                Reply.of(arrange("stellurgytest space enter " + PlayerState.botName(c -> read(c).raw()) + " "
                         + scenarioDim + " " + Math.round(seat.shipWorldX) + " "
-                        + Math.round(seat.shipWorldY) + " " + Math.round(seat.shipWorldZ))).bool("ok"));
+                        + Math.round(seat.shipWorldY) + " " + Math.round(seat.shipWorldZ)).raw()).bool("ok"));
         awaitClientDim(enterMark, scenarioDim, "the client must follow the bot into the cell");
 
         // Seated on the PILOT seat, and taken by the client's ship-pilot input path as its pilot.
-        String mountInfo = exec("stellurgytest vs seat-mount-at " + scenarioDim + " " + seat.seatX + " "
-                + seat.seatY + " " + seat.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at " + scenarioDim + " " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ).raw();
         int dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + dummyId);
+        String mount = arrange("stellurgytest player mount-entity " + dummyId).raw();
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         awaitClientMount(seatMark, "the client must be riding the pilot seat", SEAT_LINK_BUDGET_TICKS,
@@ -513,7 +513,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // physics recorder is a stale computer still commanding beside the live one.
         String pilotInputs = events.since(centreMark, "pilot_input_set");
         String cursorAfter = clientEvents().since(cursorMark, "flight_cursor");
-        PilotSeat seatNow = PilotSeat.byId(this::exec, scenarioDim, scenarioShipId);
+        PilotSeat seatNow = PilotSeat.byId(c -> read(c).raw(), scenarioDim, scenarioShipId);
         assertTrue("with the flight cursor centred the ship must STOP turning and stay stopped — in a"
                         + " cell, where no air can stop it instead: it was spinning at " + spinning
                         + " rad/s, and after " + BRAKE_SETTLE_TICKS + " ticks its worst rate over the"
@@ -525,13 +525,13 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                         + matchingRecords(pilotInputs, "\"input\":\"idle\"")
                         + ", every input since the centring began: " + pilotInputs
                         + "\n  who drove the ship: " + (seatNow.hasAfc
-                                ? exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.MotionTrace"
+                                ? read("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.MotionTrace"
                                         + " serverReading " + scenarioDim + " " + seatNow.afcX
-                                        + " " + seatNow.afcY + " " + seatNow.afcZ + " 20000")
+                                        + " " + seatNow.afcY + " " + seatNow.afcZ + " 20000").raw()
                                 : "(no afc address in: " + seatNow.raw() + ")"),
                 worst <= CURSOR_DEADZONE_OMEGA);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ---- Test 2: the camera turns with the ship, and the eye stays out of the deck ------------
@@ -626,7 +626,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         assertTrue("a rendered frame from inside a solid block is one flat colour; the pilot must see "
                 + "the world (distinct colours=" + distinctColours(frame) + ")", distinctColours(frame) > DISTINCT_COLOURS_OF_A_VIEW);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         reportClientHealth("anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck");
     }
 
@@ -655,8 +655,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // Roll the deck steeply. Past 45 degrees the world-frame drag anisotropy dominates: the pull
         // toward the deck acquires a world X/Z component damped four times harder than its world Y one.
         double half = Math.toRadians(75.0) / 2.0;
-        String point = exec("stellurgytest vs point-by-id 0 " + scenarioShipId
-                + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
+        String point = arrange("stellurgytest vs point-by-id 0 " + scenarioShipId
+                + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half)).raw();
         assertTrue("attitude hold must accept the roll: " + point, Reply.of(point).bool("commanded"));
         advanceServerAndClient(200);
 
@@ -686,7 +686,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // The stronger arrangement gate the on-demand form allows: not "the number is not the
         // sentinel" but "the measurement ran, for this body" — which is the reader's own refusal,
         // and it says which of the TWO states an `available:false` could be.
-        ShipFrameCheck rolledStats = ShipFrameCheck.byId(this::exec, 0, crewId)
+        ShipFrameCheck rolledStats = ShipFrameCheck.byId(c -> read(c).raw(), 0, crewId)
                 .requireMeasured("the ship-frame check must MEASURE the two frames for this crew"
                         + " member before their agreement can mean anything");
         double tcUp = rolledStats.upDisagreement();
@@ -707,7 +707,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 + drift + " blocks across it", drift < CREW_STAYS_PUT_BLOCKS);
 
         // And he must still be standing on it, not falling.
-        PlayerShipData data = PlayerShipData.byId(this::exec, 0, crewId);
+        PlayerShipData data = PlayerShipData.byId(c -> read(c).raw(), 0, crewId);
         assertTrue("the crew member must still be resting on the deck: " + data.raw(),
                 data.onGround);
         reportClientHealth("crewStaysOnASteeplyRolledDeckInsteadOfBeingFlungIntoACorner");
@@ -750,9 +750,9 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // This isolates the fall-through's real driver: ship ANGULAR VELOCITY, not the inversion angle (a
         // STATICALLY inverted deck rides fine - the 75deg test). Reproduces the maintainer's ~174deg case,
         // which was a ship oscillating/hunting near the unstable inverted attitude (nonzero omega).
-        exec("stellurgytest vs spin-ship-by-id 0 " + scenarioShipId + " 2.0 0.0 0.0");
+        arrange("stellurgytest vs spin-ship-by-id 0 " + scenarioShipId + " 2.0 0.0 0.0").raw();
         advanceServerAndClient(30);
-        exec("stellurgytest vs spin-ship-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
+        arrange("stellurgytest vs spin-ship-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
 
         String released = events.since(spinMark, "deck_released");
         // A LOW count and a dead recorder produce the same number, so the recorder is asked first.
@@ -807,7 +807,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // A body settled on the actual deck - the exact thing the pilot stands on.
         int standId = dropStandAndAwaitItsCapture(ship);
 
-        PlayerShipData onDeck = PlayerShipData.byId(this::exec, 0, standId);
+        PlayerShipData onDeck = PlayerShipData.byId(c -> read(c).raw(), 0, standId);
         assertTrue("the body must have settled on the deck: " + onDeck.raw(),
                 onDeck.onGround && onDeck.shipLoaded);
         // On THIS scenario's deck. `deckY` below is taken out of this same reply and every later
@@ -817,8 +817,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 "the body must have settled on the deck of the ship this scenario built");
         double deckY = onDeck.playerY;
         assertTrue("a body on the deck must be resolved in the ship frame: "
-                + exec("stellurgytest vs would-take-over 0 " + standId),
-                Reply.of(exec("stellurgytest vs would-take-over 0 " + standId)).bool("handles"));
+                + read("stellurgytest vs would-take-over 0 " + standId).raw(),
+                Reply.of(read("stellurgytest vs would-take-over 0 " + standId).raw()).bool("handles"));
 
         // Now make the ship "grounded": lay a world stone floor right under the deck, so the deck has
         // real terrain close beneath it - the overlap that broke the playtest. A body on the deck must
@@ -840,8 +840,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // was left rolled ~46° (qx 0.39), 1.26 blocks lower and turning at 0.64 rad/s, and the body on
         // it 2 blocks down — a collision, not the gate this scenario is about.
         scenario().requireArranged("must lay the world floor under the deck",
-                Reply.of(exec("stellurgytest fill 0 " + sx + " " + fy + " " + sz + " "
-                        + sx + " " + fy + " " + sz + " minecraft:stone")).ok());
+                Reply.of(arrange("stellurgytest fill 0 " + sx + " " + fy + " " + sz + " "
+                        + sx + " " + fy + " " + sz + " minecraft:stone").raw()).ok());
         advanceServerAndClient(60);
 
         String releases = events.since(floorMark, "deck_released");
@@ -855,9 +855,9 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                         + " stands over. Every release recorded since the floor went in: " + releases,
                 matchingRecords(releases, "\"e\":" + standId + ",", "steppedOntoTerrain") == 0);
 
-        PlayerShipData afterFloor = PlayerShipData.byId(this::exec, 0, standId);
+        PlayerShipData afterFloor = PlayerShipData.byId(c -> read(c).raw(), 0, standId);
         double yAfter = afterFloor.playerY;
-        String handles = exec("stellurgytest vs would-take-over 0 " + standId);
+        String handles = read("stellurgytest vs would-take-over 0 " + standId).raw();
         System.out.println("[tier2] grounded-deck: deckY=" + deckY + " afterFloor y=" + yAfter
                 + " floorTop=" + (fy + 1) + " would-take-over=" + handles);
         assertTrue("a body on the deck of a grounded ship must stay resolved in the ship frame, not be "
@@ -928,7 +928,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // Stand up. A parked ship that has been flown holds station while unmanned: the flight computer
         // commands a ZERO world velocity and holds the attitude - the exact path this bug lives on.
         long dismountMark = events.markInstrumented();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         // Two links the 60-tick wait used to hide, and both are premises for the measurement below:
         // the computer is told the pilot has gone, and it then DECIDES to hold station. "It did not
         // sink" says nothing about a station hold that was never armed — an inert computer does not
@@ -971,7 +971,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         assertTrue("a station-keeping ship must hold its altitude: it drifted " + (yEnd - yStart)
                 + " blocks over ~6 s (the bug sank ~1 block)", Math.abs(yEnd - yStart) < STATION_KEEPING_MAX_DRIFT_BLOCKS);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         reportClientHealth("aStationKeepingShipHoldsAltitudeInsteadOfSinking");
     }
 
@@ -990,7 +990,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -1007,7 +1007,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
                 "a with-pilot-seat assembly must create a VS ship in the queryable registry");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -1042,14 +1042,14 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // By identity: the positional form resolves the yard of the ship NEAREST the base, over the
         // whole registry and with no distance bound, so a neighbour's craft answers it in the same
         // shape. This scenario was told which ship it built.
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, scenarioShipId)
                 .requireFound("find-seat must locate the pilot seat inside THIS scenario's ship ("
                         + scenarioShipId + ", built at " + bx + "," + by + "," + bz + ")");
-        String mountInfo = exec("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
-                + seat.seatY + " " + seat.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ).raw();
         int dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + dummyId);
+        String mount = arrange("stellurgytest player mount-entity " + dummyId).raw();
         assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
         // Two facts every scenario then leans on, each the CLIENT's own record: he is riding the
         // dummy, and the ship-pilot input path has taken him as its pilot. The second is a
@@ -1082,7 +1082,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(holdTicks);",
             why = "how long the cut is held — the key is sampled per client tick and sent.")
     private void cutTheCruise(int holdTicks, String what) throws Exception {
-        String before = exec("stellurgytest vs ff-cruise-read-by-id " + scenarioDim + " " + scenarioShipId);
+        String before = read("stellurgytest vs ff-cruise-read-by-id " + scenarioDim + " " + scenarioShipId).raw();
         // afcResolved is written on every branch of the verb; the three numbers only when it is
         // true, so they are read only then. An unresolved computer owes no record here, and the
         // caller's own read after the cut is what reports it.
@@ -1269,11 +1269,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /** This scenario's ship, asked by identity — captured once by {@link #buildShip}. */
     private ShipInfo shipInfo() throws Exception {
         assertTrue("shipInfo() before buildShip() captured an identity", scenarioShipId != null);
-        return ShipInfo.byId(this::exec, scenarioDim, scenarioShipId);
+        return ShipInfo.byId(c -> read(c).raw(), scenarioDim, scenarioShipId);
     }
 
     private double[] localOf(int entityId) throws Exception {
-        PlayerShipData json = PlayerShipData.byId(this::exec, 0, entityId);
+        PlayerShipData json = PlayerShipData.byId(c -> read(c).raw(), 0, entityId);
         // TWO different failures wear the same message unless they are split, and the reader now
         // splits them: a subject that is NOT THERE is an arrangement failure it raises by type, and
         // a body whose ship frame did not resolve is the AssertionError `localX()` throws. What was
@@ -1352,8 +1352,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     private int dropStandAndAwaitItsCapture(double[] ship) throws Exception {
         Events events = serverEvents();
         long dropMark = events.markInstrumented();
-        int crewId = readInt(exec("stellurgytest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
-                + " " + ship[2]), ENTITY_ID);
+        int crewId = readInt(arrange("stellurgytest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
+                + " " + ship[2]).raw(), ENTITY_ID);
         // Keyed on the body AND on the ship: the entity needle alone says a deck took him, never
         // which deck, and every reading below is expressed in the taking ship's own frame.
         events.awaitRecordWithFields(dropMark, "deck_entered",
@@ -1366,12 +1366,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // deck took it moved on an unresolved tick and never writes one — so the state is read
         // first, and the landing is awaited only when one is still owed. Once captured, a body's
         // moves are the resolver's, so an airborne captured body cannot land unrecorded.
-        PlayerShipData resting = PlayerShipData.byId(this::exec, 0, crewId);
+        PlayerShipData resting = PlayerShipData.byId(c -> read(c).raw(), 0, crewId);
         if (!resting.onGround) {
             events.awaitField(dropMark, "deck_contact", "e", String.valueOf(crewId),
                     "the dropped body (entity " + crewId + ") must LAND on the deck that took it",
                     200);
-            resting = PlayerShipData.byId(this::exec, 0, crewId);
+            resting = PlayerShipData.byId(c -> read(c).raw(), 0, crewId);
         }
         scenario().requireArranged("the dropped body must come to REST on the deck before its drift"
                 + " across that deck can mean anything: " + resting.raw(),
@@ -1402,8 +1402,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         //
         // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping on
         // it, and the room a craft rolled upside down by the mouse sweeps.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
-                "the hull, the deck a body rides, and the air the craft rolls and climbs through");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 24,
+                "the hull, the deck a body rides, and the air the craft rolls and climbs through"));
     }
 
     // ---- who is sent the readout ---------------------------------------------------------------
@@ -1464,14 +1464,14 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     public void aShipsReadoutReachesItsPilotAndNotAPassenger() throws Exception {
         FixtureSite site = site();
         long serverMark = serverEvents().mark();
-        site.makeRoom(this::exec, 2, 12, "a decked craft with a pilot seat, and a body on its deck");
-        Reply fixture = Reply.of(exec("stellurgytest fixture rocket " + site.dim + " " + site.x + " "
-                + site.y + " " + site.z + " with-pilot-deck"));
+        site.makeRoom(c -> arrange(c).raw(), 2, 12, "a decked craft with a pilot seat, and a body on its deck");
+        Reply fixture = Reply.of(arrange("stellurgytest fixture rocket " + site.dim + " " + site.x + " "
+                + site.y + " " + site.z + " with-pilot-deck").raw());
         requireArranged("the decked craft must be laid: " + fixture,
                 fixture.ok() && fixture.blockPos("builderPos") != null);
         int[] builder = fixture.blockPos("builderPos");
-        Reply press = Reply.of(exec("stellurgytest rocket assemble " + site.dim + " " + builder[0] + " "
-                + builder[1] + " " + builder[2]));
+        Reply press = Reply.of(act("stellurgytest rocket assemble " + site.dim + " " + builder[0] + " "
+                + builder[1] + " " + builder[2]).raw());
         requireArranged("the decked craft can hover and must be built on the first press: " + press,
                 press.ok() && press.bool("built"));
         String durable = press.text("shipId");
@@ -1489,10 +1489,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         String afcZ = Events.text(model, "afcZ");
 
         // THE HELM.
-        Reply seat = Reply.of(exec("stellurgytest vs seat-mount " + site.dim + " id " + physicsId));
+        Reply seat = Reply.of(arrange("stellurgytest vs seat-mount " + site.dim + " id " + physicsId).raw());
         requireArranged("the craft's own pilot seat must be found: " + seat, seat.bool("seatFound"));
         long helmMark = clientEvents().mark();
-        Reply mounted = Reply.of(exec("stellurgytest player mount-entity " + seat.integer("dummyId")));
+        Reply mounted = Reply.of(arrange("stellurgytest player mount-entity " + seat.integer("dummyId")).raw());
         requireArranged("the player must be seated at the helm: " + mounted,
                 mounted.ok() && mounted.bool("mounted"));
         // The client seating him is the helm leg's premise, not its subject: an arrangement.
@@ -1512,7 +1512,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
         // THE DECK.
         long deckMark = clientEvents().mark();
-        Reply off = Reply.of(exec("stellurgytest player dismount"));
+        Reply off = Reply.of(arrange("stellurgytest player dismount").raw());
         requireArranged("the player must come off the helm: " + off, off.ok());
         // Likewise the deck leg's premise: he is off the helm on the client.
         ArrangementFailure.arranged(() -> awaitClientDismount(deckMark, "the client must take him off the helm",

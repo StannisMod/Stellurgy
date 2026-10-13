@@ -17,7 +17,7 @@ public class SpaceSlotVsSupportTest extends AbstractSharedServerTest {
 
     @Test
     public void vsShipSupportAttachesToAPoolWorld() throws Exception {
-        String r = exec("stellurgytest space vs-cap deep");
+        String r = arrange("stellurgytest space vs-cap deep").raw();
         assertTrue("vs-cap must complete: " + r, Reply.of(r).ok());
         assertTrue("VS ship support (per-world ship manager) must attach to a pool world: " + r,
                 Reply.of(r).bool("vsShipSupport"));

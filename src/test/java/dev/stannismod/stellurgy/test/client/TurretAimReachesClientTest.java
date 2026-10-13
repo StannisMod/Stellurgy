@@ -52,14 +52,14 @@ public class TurretAimReachesClientTest extends AbstractOwnBootClientTest {
             + " (2026-09-30).")
     @Test
     public void theBearingTheServerCommandsArrivesAtTheClient() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
-        ask("stellurgytest chunk warmup 0 " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((X + 16) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
-        ask("stellurgytest fill 0 " + (X - 3) + " " + (Y - 1) + " " + (Z - 3) + " " + (X + 3) + " "
+        arrange("stellurgytest fill 0 " + (X - 3) + " " + (Y - 1) + " " + (Z - 3) + " " + (X + 3) + " "
                 + (Y + 6) + " " + (Z + 3) + " minecraft:air").requireOk("clear the site");
         // Stand next to it, so the client is tracking this chunk and its tile.
-        serverClient().execute("tp @a " + (X + 4) + ".5 " + Y + " " + (Z + 0.5D));
+        serverClient().arrange("tp @a " + (X + 4) + ".5 " + Y + " " + (Z + 0.5D));
 
         long placed = client.mark();
         long built = server.markInstrumented();
@@ -77,7 +77,7 @@ public class TurretAimReachesClientTest extends AbstractOwnBootClientTest {
         // Point it hard to one side: a bearing the mount has to travel to, not one it is already at.
         long aimed = client.mark();
         long ordered = server.mark();
-        ask("stellurgytest turret target 0 " + X + " " + Y + " " + Z + " " + (X + 40.5D) + " "
+        arrange("stellurgytest turret target 0 " + X + " " + Y + " " + Z + " " + (X + 40.5D) + " "
                 + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("aim the gun");
 
         String serverArrived = Weapons.awaitOnTarget(server, ordered, X, Y, Z,
@@ -109,15 +109,17 @@ public class TurretAimReachesClientTest extends AbstractOwnBootClientTest {
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
     }
 }

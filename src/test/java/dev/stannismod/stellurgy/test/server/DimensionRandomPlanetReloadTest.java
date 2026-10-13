@@ -69,7 +69,7 @@ public class DimensionRandomPlanetReloadTest extends AbstractMechanicsTest {
     }
 
     private static int stellurgyDimCount(RealDedicatedServerHarness h) throws Exception {
-        String list = ok(h.client().execute("stellurgytest dim list"));
+        String list = ok(h.client().read("stellurgytest dim list"));
         Reply listed = Reply.of("stellurgytest dim list", list);
         assertTrue("dim list missing stellurgyDimensions: " + list, listed.has(AR_DIMS));
         return listed.intArray(AR_DIMS).length;
@@ -82,7 +82,7 @@ public class DimensionRandomPlanetReloadTest extends AbstractMechanicsTest {
      */
     private static void saveTheGalaxyWhereTheEditLands(RealDedicatedServerHarness h, SavedWorldEdit edit)
             throws Exception {
-        String save = ok(h.client().execute("stellurgytest server save-dimensions"));
+        String save = ok(h.client().act("stellurgytest server save-dimensions"));
         assertTrue("save-dimensions failed: " + save, Reply.of(save).bool("xmlExists"));
         String xmlPath = Reply.of("stellurgytest server save-dimensions", save).text("xmlPath")
                 .replace("\\\\", "/").replace('\\', '/');

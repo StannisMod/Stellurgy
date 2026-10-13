@@ -190,18 +190,18 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
     public void sleepingOnAPlanetSetsSpawnAndWakesYouWithoutBringingMorning() throws Exception {
         // The premise, MEASURED rather than seeded: this scenario is about the default, so a build
         // whose default changed must fail here rather than quietly measure the other side.
-        String shipped = exec("stellurgytest config get " + FLAG);
+        String shipped = read("stellurgytest config get " + FLAG).raw();
         scenario().requireArranged("this scenario is about the SHIPPED default of " + FLAG
                 + ", so it reads it instead of writing it: " + shipped,
                 (!Reply.of(shipped).bool("value")));
 
-        exec("gamerule doMobSpawning false");
+        arrange("gamerule doMobSpawning false");
         stageSleepingSite(DIM_LOCKED);
 
         // Stage planet-night THROUGH the flag, then lock it again before anyone sleeps: staging needs
         // /time set to reach the planet, which is the very thing under test.
         setFlag(true);
-        exec("time set " + STAGED_NIGHT);
+        arrange("time set " + STAGED_NIGHT);
         setFlag(false);
         GameTicks.advanceWorld(serverClient(), DIM_LOCKED, SKYLIGHT_WORLD_TICKS);
 
@@ -278,13 +278,13 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
 
         // trySleep's mob scan (±8 around the bed) must stay empty; the mid-air platform handles
         // existing worldgen mobs, this handles new spawns.
-        exec("gamerule doMobSpawning false");
+        arrange("gamerule doMobSpawning false").raw();
         stageSleepingSite(DIM_SKIP);
 
         // Night on every clock: vanilla /time set writes ALL loaded worlds, and on the wrapped planet
         // that lands in the per-dim state. Phase 20000/30000 ≈ 0.67 is night on the planet;
         // 20000/24000 is night in the overworld.
-        exec("time set " + STAGED_NIGHT);
+        arrange("time set " + STAGED_NIGHT).raw();
         GameTicks.advanceWorld(serverClient(), DIM_SKIP, SKYLIGHT_WORLD_TICKS);
 
         JsonObject before = dimTimeJson(DIM_SKIP);
@@ -376,24 +376,24 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
             why = "a player's position is his client's to move, so a platform that is not there shows as the fall"
                     + " his client simulates over these ticks.")
     private void stageSleepingSite(int dim) throws Exception {
-        String weather = exec("stellurgytest weather set " + dim + " clear 12000");
+        String weather = arrange("stellurgytest weather set " + dim + " clear 12000").raw();
         scenario().requireArranged("could not clear the planet's weather: " + weather,
                 Reply.of(weather).ok());
-        String platform = exec("stellurgytest fill " + dim + " 4 " + PLAT_Y + " 4 12 " + PLAT_Y
-                + " 12 minecraft:stone");
+        String platform = arrange("stellurgytest fill " + dim + " 4 " + PLAT_Y + " 4 12 " + PLAT_Y
+                + " 12 minecraft:stone").raw();
         scenario().requireArranged("the sleeping platform was not built, so there is nothing to lie"
                 + " down on: " + platform, Reply.of(platform).ok());
-        String foot = exec("stellurgytest place " + dim + " " + BED_X + " " + BED_Y + " " + BED_FOOT_Z
-                + " minecraft:bed 0");
+        String foot = arrange("stellurgytest place " + dim + " " + BED_X + " " + BED_Y + " " + BED_FOOT_Z
+                + " minecraft:bed 0").raw();
         scenario().requireArranged("the bed's FOOT was not placed: " + foot,
                 Reply.of(foot).ok());
-        String head = exec("stellurgytest place " + dim + " " + BED_X + " " + BED_Y + " " + BED_HEAD_Z
-                + " minecraft:bed 8");
+        String head = arrange("stellurgytest place " + dim + " " + BED_X + " " + BED_Y + " " + BED_HEAD_Z
+                + " minecraft:bed 8").raw();
         scenario().requireArranged("the bed's HEAD was not placed: " + head,
                 Reply.of(head).ok());
 
         long transferMark = clientEvents().mark();
-        exec("stellurgytest tp " + dim);
+        arrange("stellurgytest tp " + dim);
         awaitClientDim(transferMark, dim);
 
         // WAIT FOR THE EVENT the client records when it APPLIES a chunk's data — the first instant it
@@ -426,7 +426,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
                     reply -> Events.anyRecordHasAll(reply, "cx", "0", "cz", "0"),
                     "for the chunk at (0, 0)",
                     "the platform's chunk data never reached this client", 300,
-                    () -> exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5"));
+                    () -> arrange("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5").raw());
         } catch (AssertionError never) {
             scenario().arrangementFailed("the client never applied the platform's chunk data, so it"
                     + " keeps simulating a fall through blocks the server has: "
@@ -436,7 +436,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
         // Vanilla console /tp (same-dim) puts the player on the platform, a bed-reach-range step
         // north of the bed head (|Δz| = 2.5 ≤ 3).
         long placedMark = clientEvents().mark();
-        exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
+        arrange("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
         awaitClientPlacedNear(placedMark, 8.5, 7.5,
                 "the player's own client must stand him on the platform - his movement is his");
         bot().waitWorldTicks(20);
@@ -445,7 +445,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
         // terrain, and every downstream observation then describes a player standing in a field
         // somewhere else. The bed reach is ~4.5 blocks, so anything past a couple of blocks of settle
         // has already broken the scenario.
-        String where = exec("stellurgytest oxygen player " + PLAYER);
+        String where = read("stellurgytest oxygen player " + PLAYER).raw();
         double standingY = readDouble(where, "posY");
         scenario().requireArranged("the player is not on the sleeping platform (expected y≈" + BED_Y
                         + ", got " + standingY + "). He cannot reach the bed from there and the"
@@ -463,7 +463,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
      * other one's contract.
      */
     private void setFlag(boolean allowed) throws Exception {
-        String set = exec("stellurgytest config set " + FLAG + " " + allowed);
+        String set = arrange("stellurgytest config set " + FLAG + " " + allowed).raw();
         scenario().requireArranged("the time-skip flag must actually be " + allowed
                 + " — every claim in this class is about which side of it is in force: " + set,
                 String.valueOf(allowed).equals(Reply.of(set).text("newValue")));
@@ -475,7 +475,7 @@ public class PlanetBedSleepClientGroupTest extends AbstractSharedClientTest {
     // was asked about and cannot be scrolled past.
 
     private JsonObject dimTimeJson(int dim) throws Exception {
-        String raw = exec("stellurgytest dim time " + dim);
+        String raw = arrange("stellurgytest dim time " + dim).raw();
         int start = raw.indexOf('{');
         assertTrue("dim time probe must return JSON: " + raw, start >= 0);
         return new JsonParser().parse(raw.substring(start)).getAsJsonObject();

@@ -77,22 +77,22 @@ public class FluidTankNBTRoundTripsAcrossRestartTest extends AbstractMechanicsTe
         // ─────── Boot 1: place tank, inject oxygen, save & shut down ───────
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
-        String place = String.join("\n", firstBoot.client().execute(
+        String place = String.join("\n", firstBoot.client().arrange(
                 "stellurgytest place 0 " + TX + " " + TY + " " + TZ + " stellurgy:liquidTank"));
         assertTrue("liquidTank place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String preInject = String.join("\n", firstBoot.client().execute(
+        String preInject = String.join("\n", firstBoot.client().read(
                 "stellurgytest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must expose IFluidHandler capability: " + preInject,
                 Reply.of(preInject).bool("hasFluid"));
 
-        String inject = String.join("\n", firstBoot.client().execute(
+        String inject = String.join("\n", firstBoot.client().arrange(
                 "stellurgytest fluid inject 0 " + TX + " " + TY + " " + TZ + " oxygen " + INJECT_AMOUNT));
         assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
 
         // Verify the inject landed in-memory before we save the world.
-        String storedBefore = String.join("\n", firstBoot.client().execute(
+        String storedBefore = String.join("\n", firstBoot.client().read(
                 "stellurgytest fluid stored 0 " + TX + " " + TY + " " + TZ));
         String fluidBefore = fluidOrFail(storedBefore, "fluidName (boot 1)");
         int amountBefore = theTank(storedBefore, "amount (boot 1)").amount(0);
@@ -112,7 +112,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest extends AbstractMechanicsTe
         // The chunk at (TX>>4, TZ>>4) may not be force-loaded after restart;
         // a /stellurgytest probe at the tank's exact coords pulls the chunk into
         // memory before reading.
-        String storedAfter = String.join("\n", secondBoot.client().execute(
+        String storedAfter = String.join("\n", secondBoot.client().read(
                 "stellurgytest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must still expose IFluidHandler after restart: " + storedAfter,
                 Reply.of(storedAfter).bool("hasFluid"));

@@ -81,7 +81,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
     }
 
     private void requireClearInCell(Cell cell, int x0, String what) throws Exception {
-        FixtureSite.openAir(cell.dim, x0, z).requireClear(this::exec, HALO, 3, what);
+        FixtureSite.openAir(cell.dim, x0, z).requireClear(c -> arrange(c).raw(), HALO, 3, what);
     }
 
     /** `getStateFromMeta` maps this to a cell radiating UP, so nothing but sky is in front of it. */
@@ -276,11 +276,11 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
             for (int i = 0; i < 15; i++) {
                 arrange("stellurgytest energy inject " + cell.dim + " " + generatorX + " " + y + " " + z
                         + " 4000");
-                arrange("stellurgytest tile force-tick " + cell.dim + " " + generatorX + " " + y + " " + z
-                        + " 1");
-                arrange("stellurgytest shield tick " + cell.dim);
+                act("stellurgytest tile force-tick " + cell.dim + " " + generatorX + " " + y + " " + z
+                        + " 1").requireOk();
+                act("stellurgytest shield tick " + cell.dim).requireOk();
             }
-            Reply emitter = ask("stellurgytest shield read " + cell.dim + " " + emitterX + " " + y + " " + z);
+            Reply emitter = read("stellurgytest shield read " + cell.dim + " " + emitterX + " " + y + " " + z);
             requireArranged("premise: the emitter never came up, so nothing below is a test of a shield: "
                     + emitter, emitter.bool("powered"));
 
@@ -330,11 +330,11 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * a real star at its real distance rather than something this test invented.
      */
     private Cell occupyHomeCell() throws Exception {
-        String cellKey = ask("stellurgytest space cell-info 0 0 0 0").text("dimCell");
+        String cellKey = read("stellurgytest space cell-info 0 0 0 0").text("dimCell");
         String[] sectors = cellKey.split("_");
         assertEquals("a cell key is a sector triple: " + cellKey, 3, sectors.length);
         String args = sectors[0] + " " + sectors[1] + " " + sectors[2];
-        Reply occupied = arrange("stellurgytest space occupy " + args);
+        Reply occupied = arrange("stellurgytest space occupy " + args).requireOk();
         requireArranged("the cell must materialize, or there is no space environment to test in: "
                 + occupied, occupied.bool("worldLoaded"));
         return new Cell(args, occupied.integer("slotDim"));
@@ -342,7 +342,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
 
     /** Hand the slot back. A test that holds a pool slot is a test that breaks somebody else's. */
     private void release(Cell cell) throws Exception {
-        arrange("stellurgytest space release " + cell.args);
+        arrange("stellurgytest space release " + cell.args).requireOk();
     }
 
     /** A straight run of {@value #LOOP_LENGTH} blocks with {@code radiators} cells at the far end. */
@@ -368,7 +368,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
         // "the run is built" is `inNetwork` and not `ok`.
         Reply info = loopInfo(dim, x0);
         requireArranged("the run must be built before it is solved: " + info, info.bool("inNetwork"));
-        Reply solved = arrange("stellurgytest subnet solve heat " + dim + " 1");
+        Reply solved = act("stellurgytest subnet solve heat " + dim + " 1").requireOk();
         assertEquals("solve failed in dim " + dim + ": " + solved, 1, solved.integer("ticksSolved"));
     }
 
@@ -380,8 +380,8 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * ticks — and here that gap would quietly deliver a whole star's worth of flux into the answer.</p>
      */
     private Reply cycle(int dim, int x0, long charge) throws Exception {
-        Reply cycled = arrange("stellurgytest heat cycle " + dim + " " + x0 + " " + y + " " + z + " " + charge
-                + " 1");
+        Reply cycled = act("stellurgytest heat cycle " + dim + " " + x0 + " " + y + " " + z + " " + charge
+                + " 1").requireOk();
         requireArranged("heat cycle found no loop at " + x0 + " in dim " + dim + ": " + cycled,
                 cycled.bool("inLoop"));
         assertEquals("premise: the loop must have been charged with exactly what was asked: " + cycled,
@@ -391,15 +391,15 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
 
     private void place(int dim, int x, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         assertTrue(block + " place failed at " + x + " in dim " + dim + ": " + resp, resp.bool("placed"));
     }
 
     private void setConfig(String key, String value) throws Exception {
-        arrange("stellurgytest config set " + key + " " + value);
+        arrange("stellurgytest config set " + key + " " + value).requireOk();
     }
 
     private Reply loopInfo(int dim, int x) throws Exception {
-        return ask("stellurgytest subnet info heat " + dim + " " + x + " " + y + " " + z);
+        return read("stellurgytest subnet info heat " + dim + " " + x + " " + y + " " + z);
     }
 }

@@ -89,12 +89,12 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
     private void setAir(AirMix mix) throws Exception {
         int oxygen = mix == AirMix.THIN ? THIN_OXYGEN : NORMAL_OXYGEN;
         arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
-                + " " + ppm(1_000_000 - oxygen) + " " + ppm(oxygen) + " 0");
+                + " " + ppm(1_000_000 - oxygen) + " " + ppm(oxygen) + " 0").requireOk();
     }
 
     /** What a person standing in the room breathes, and what the air itself says about burning. */
     private Reply atmosphere() throws Exception {
-        return ask("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ);
+        return read("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ);
     }
 
     /** The oxygen in the room's composition — a member of {@code gases}, keyed by gas name. */
@@ -109,23 +109,23 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
         roomY = site.y + 2;
         roomZ = site.z + 2;
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone").requireOk();
         for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
             arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
-                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
-                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone").requireOk();
 
         Reply vent = arrange("stellurgytest place 0 " + roomX + " " + roomY + " " + roomZ
-                + " stellurgy:oxygenVent");
+                + " stellurgy:oxygenVent").requireOk();
         assertTrue("vent place failed: " + vent, vent.bool("placed"));
         arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
-        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ).requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5").requireOk();
     }
 }

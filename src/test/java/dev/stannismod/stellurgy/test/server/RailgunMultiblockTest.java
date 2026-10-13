@@ -50,17 +50,17 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
 
     @Test
     public void railgunMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock railgun 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock railgun failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileRailgun tile at controller pos: " + info,
                 "TileRailgun", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -71,23 +71,23 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void railgunMultiblockInvalidatesWhenCoreColumnBroken() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock railgun 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = join(client().execute(
+        String first = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
         // Top of the core column (y=0 layer struct cell at globalY = cy + 10,
         // globalX = cx, globalZ = cz + 3). Replace with stone.
-        String breakCore = join(client().execute(
+        String breakCore = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy + 10) + " " + (cz + 3) + " minecraft:stone"));
         assertTrue("could not break core column: " + breakCore,
                 Reply.of(breakCore).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after core column removal — "
                         + "validator broken: " + broken,
@@ -97,23 +97,23 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void railgunMultiblockInvalidatesWhenTransitionLayerBroken() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock railgun 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = join(client().execute(
+        String first = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
         // Centre of the y=9 transition layer (titanium centre at globalY = cy+1,
         // globalX = cx, globalZ = cz + 3). Replace with stone.
-        String breakTitanium = join(client().execute(
+        String breakTitanium = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + (cy + 1) + " " + (cz + 3) + " minecraft:stone"));
         assertTrue("could not break titanium centre: " + breakTitanium,
                 Reply.of(breakTitanium).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after transition-layer titanium removal — "
                         + "validator broken: " + broken,

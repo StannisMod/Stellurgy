@@ -104,7 +104,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
         assertEquals("premise: every cell must be working while the ship is lit: " + lit,
                 RADIATORS, lit.integer("radiatingCells"));
 
-        Reply shut = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " on");
+        Reply shut = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " on").requireOk();
         assertTrue("silencing failed: " + shut, shut.bool("silent"));
 
         Reply silentCycle = cycle(charge);
@@ -145,7 +145,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
                 charge, silentCycle.longInteger("heatStored"));
 
         // And it is a state a pilot can leave: opening the sinks must restore the ship it was.
-        Reply opened = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " off");
+        Reply opened = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " off").requireOk();
         assertFalse("an opened array is not running silent: " + opened, opened.bool("silent"));
         Reply reopened = cycle(charge);
         assertTrue("a ship that went dark must be able to come back: " + reopened + " | " + opened,
@@ -230,31 +230,31 @@ public class RunningSilentTest extends AbstractSharedServerTest {
         roomY = site.y + 2;
         roomZ = site.z + 2;
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone").requireOk();
         for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
             arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
-                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
-                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone").requireOk();
 
         place(roomX - 1, roomY + 1, roomZ - 1, "stellurgy:heatPipe", null);
         place(roomX + 1, roomY + 1, roomZ + 1, "stellurgy:heatPipe", null);
 
         place(roomX, roomY, roomZ, "stellurgy:oxygenVent", null);
         arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
-        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ).requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5").requireOk();
     }
 
     /** Put the room's air at a stated temperature, leaving its gases alone. */
     private void setAir(int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
-                + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK);
+                + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK).requireOk();
     }
 
     private Reply signature() throws Exception {
@@ -264,30 +264,30 @@ public class RunningSilentTest extends AbstractSharedServerTest {
     /** The probe answers `isBody:false` with every figure zero where there is no body, so that is
      *  refused here rather than read as a ship that radiates nothing. */
     private Reply signature(int x, int y, int z) throws Exception {
-        Reply resp = arrange("stellurgytest heat signature 0 " + x + " " + y + " " + z);
+        Reply resp = read("stellurgytest heat signature 0 " + x + " " + y + " " + z).requireOk();
         requireArranged("no body at " + x + " " + y + " " + z + ": " + resp, resp.bool("isBody"));
         return resp;
     }
 
     /** Charge the loop and advance one tick in ONE call - see `heat cycle` on why it must be one. */
     private Reply cycle(long charge) throws Exception {
-        Reply cycled = arrange("stellurgytest heat cycle 0 " + xShip + " " + y + " " + z + " " + charge + " 1");
+        Reply cycled = act("stellurgytest heat cycle 0 " + xShip + " " + y + " " + z + " " + charge + " 1").requireOk();
         requireArranged("heat cycle found no loop: " + cycled, cycled.bool("inLoop"));
         return cycled;
     }
 
     private Reply loopInfo() throws Exception {
-        return ask("stellurgytest subnet info heat 0 " + xShip + " " + y + " " + z);
+        return read("stellurgytest subnet info heat 0 " + xShip + " " + y + " " + z);
     }
 
     private void place(int x, int y, int z, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         assertTrue(block + " place failed at " + x + " " + y + " " + z + ": " + resp, resp.bool("placed"));
     }
 
     private void solve(int ticks) throws Exception {
-        Reply solved = arrange("stellurgytest subnet solve heat 0 " + ticks);
+        Reply solved = act("stellurgytest subnet solve heat 0 " + ticks).requireOk();
         assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 }

@@ -269,7 +269,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         final int bx = siteB.x, by = siteB.y, bz = siteB.z;
 
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
+        arrange("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
         // The observer has to be away ON THE CLIENT, which is the side that pulls chunks in; the
         // server moving him is a different fact and the one the ten ticks were standing in for.
         awaitClientPlacedNear(awayMark, ax + 600, az + 600,
@@ -298,9 +298,9 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         // BOTH stay loaded with one client that cannot stand in two places — the test server holds
         // them, and this leg asks which ship a lookup names, never whether a ship stays loaded.
-        exec("stellurgytest vs load-ships 0");
+        arrange("stellurgytest vs load-ships 0").raw();
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");
+        arrange("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, ax + 0.5, az + 0.5,
                 "the client must be standing over ship A before anything is asked about it — a"
                         + " client that has not arrived pulls no chunks and loads no ship");
@@ -324,10 +324,10 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // exists to expose, used to arrange it: the move resolved "nearest to A's base" and the
         // unpark "nearest to A's new pose" — which is 8 blocks from B, so the unpark had two
         // candidates and no way to say which it took.
-        String moved = exec("stellurgytest vs teleport-ship-by-id 0 " + idA
-                + " " + (bx + 8) + " " + (by + 40) + " " + (bz + 8));
+        String moved = arrange("stellurgytest vs teleport-ship-by-id 0 " + idA
+                + " " + (bx + 8) + " " + (by + 40) + " " + (bz + 8)).raw();
         scenario().record("teleportA", moved);
-        exec("stellurgytest vs unpark-by-id 0 " + idA);
+        arrange("stellurgytest vs unpark-by-id 0 " + idA);
         // No advance before the reads: both verbs run on the server thread before they answer, so
         // the id-keyed report below reads the teleport's own write.
 
@@ -356,7 +356,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // What survives is the half that is still checkable and is the reason the removal happened:
         // the probe must REFUSE the positional spelling rather than quietly answering about
         // somebody's craft.
-        String positional = exec("stellurgytest vs ship-info 0 " + ax + " " + ay + " " + az);
+        String positional = read("stellurgytest vs ship-info 0 " + ax + " " + ay + " " + az).raw();
         scenario().record("positionalRefused", positional);
         // Asked as a FIELD and not as a substring: what makes a reply a ship report is that it
         // carries `managed` at all, so the absence of that field is the claim — and this must not go
@@ -431,7 +431,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // same pass of the ship manager's tick, so once that record is in, there is no spawn
         // left in flight for the approach to collide with.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        arrange("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
                 "the whole point of this leg is that NO observer is near the build during the"
                         + " spawn, and the observer being away is a fact about the client");
@@ -450,7 +450,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // Now walk the client ONTO the ship's projected location. A real client near the
         // ship pulls its chunks in and VS loads it — the thing testServer never does.
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so the readiness link below"
                         + " is waiting on something only a client that got here can cause");
@@ -475,7 +475,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         double yAfter = yBefore;
         double maxClimb = 0.0;
         double velY = 0.0;
-        String upCmd = exec("stellurgytest vs force-vel-by-id 0 " + shipId + " 0 8 0");
+        String upCmd = arrange("stellurgytest vs force-vel-by-id 0 " + shipId + " 0 8 0").raw();
         assertTrue("force-vel must reach THIS ship's own flight computer: " + upCmd,
                 Reply.of(upCmd).bool("commanded"));
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
@@ -500,7 +500,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         double[] qBefore = readQuat(shipInfoById(shipId));
         double dot = 1.0;
         double minDot = 1.0;
-        String turnCmd = exec("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
+        String turnCmd = arrange("stellurgytest vs force-rot-by-id 0 " + shipId + " 0 1.0 0").raw();
         assertTrue("force-rot must reach THIS ship's own flight computer: " + turnCmd,
                 Reply.of(turnCmd).bool("commanded"));
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
@@ -534,8 +534,8 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                 + qHoldFrom[2] * target[2] + qHoldFrom[3] * target[3]);
         // ONE command: `point-by-id` engages an attitude HOLD that stands until `force-clear` — the
         // re-send each tick was measured unnecessary on 2026-09-23.
-        String pointCmd = exec("stellurgytest vs point-by-id 0 " + shipId
-                + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]);
+        String pointCmd = arrange("stellurgytest vs point-by-id 0 " + shipId
+                + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]).raw();
         assertTrue("point must reach THIS ship's own flight computer: " + pointCmd,
                 Reply.of(pointCmd).bool("commanded"));
         advanceServerAndClient(ATTITUDE_WINDOW_TICKS);
@@ -556,7 +556,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // computer's PROBE channel, which deliberately outranks the pilot channel — so leaving it in
         // force would make the FF rung measure the attitude hold that is still commanded, not the
         // throttle. Asserted: a release nobody checks is indistinguishable from no release.
-        String released = exec("stellurgytest vs force-clear-by-id 0 " + shipId);
+        String released = arrange("stellurgytest vs force-clear-by-id 0 " + shipId).raw();
         scenario().requireArranged("the probe command must be released before the FF path is measured: "
                 + released, Reply.of(released).bool("cleared"));
 
@@ -566,8 +566,8 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // Addressed by SHIP (the input used to go to a server-wide static, which no pilot has), and
         // sent ONCE: the computer keeps a pilot input until it is handed another, so the per-tick
         // re-send added only traffic.
-        String ffCmd = exec("stellurgytest vs ff-input-by-id 0 " + shipId
-                + " 0 1 0 0 0 0"); // throttleVertical = full up
+        String ffCmd = arrange("stellurgytest vs ff-input-by-id 0 " + shipId
+                + " 0 1 0 0 0 0").raw(); // throttleVertical = full up
         // `afcResolved` is missing only from the "world not loaded" reply, and
         // absence is the answer: no computer took the throttle, failed below with that reply.
         if (!Reply.of(ffCmd).boolOr("afcResolved", false)) {
@@ -605,7 +605,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // Put the observer AT the build site and keep it there through assembly + spawn — the
         // double-load window the sister test avoids. If the guard is absent, VS faults here.
         long standMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(standMark, BX + 0.5, BZ + 0.5,
                 "this leg's whole subject is an observer PRESENT through the spawn, so his being"
                         + " here is the arrangement rather than something to allow time for");
@@ -655,7 +655,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         // Assemble far from any observer (double-load window), then approach to load.
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        arrange("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
                 "the assembly below must happen with no observer near it, and the observer is a"
                         + " client");
@@ -669,7 +669,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
                 "the client's arrival is what loads the ship here, so the readiness link below is"
                         + " waiting on something only an arrived client can cause");
@@ -689,7 +689,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // `seat-input` takes whichever pilot seat it lists first — a command that answers
         // afcResolved:true from somebody else's ship while this one sits still. Sent ONCE: the seat
         // hands the computer an input the computer keeps until it is handed another.
-        String lastSeat = exec("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0"); // full up
+        String lastSeat = arrange("stellurgytest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0").raw(); // full up
         assertTrue("seat-input must find THIS ship's pilot seat: " + lastSeat,
                 Reply.of(lastSeat).bool("seatFound"));
         assertTrue("the pilot seat must resolve its linked flight computer (offset intact "
@@ -742,7 +742,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         final int BX = site.x, BY = site.y, BZ = site.z;
 
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        arrange("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
                 "the assembly below must happen with no observer near it, and the observer is a"
                         + " client");
@@ -759,7 +759,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
         // Approach so the client loads the ship (and its seat/AFC tiles).
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        arrange("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
                 "the seat and flight computer reach this client only because it is standing here");
 
@@ -776,13 +776,13 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // Sit the bot on THIS ship's pilot seat: resolve the seat inside the ship this scenario
         // NAMES — the anchored form resolved the yard nearest a point, which is a different ship
         // whenever a neighbour's is nearer — then mount that subspace block.
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, shipId)
                 .requireFound("find-seat must resolve THIS ship's subspace seat");
-        String mountInfo = exec("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
-                + seat.seatY + " " + seat.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ).raw();
         int dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + dummyId);
+        String mount = arrange("stellurgytest player mount-entity " + dummyId).raw();
         assertTrue("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // "Let the mount replicate" is the right sentence and ten ticks were the wrong way to say
@@ -922,7 +922,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
                         + "(camYawAfter=" + camYawAfter + " shipNose=" + shipNoseYaw + ")",
                 angDiff(camYawAfter, shipNoseYaw) < CAMERA_ON_THE_NOSE_DEG);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ── shared helpers ───────────────────────────────────────────────────────
@@ -972,7 +972,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
 
     private int count(String sub) throws Exception {
         String command = "stellurgytest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integer(COUNT);
+        return read(command).integer(COUNT);
     }
 
     private double[] readVec(String shipInfoJson) {
@@ -996,7 +996,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // the scenarios below fly, rotate and ride the craft out of this volume.
-        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
-                "the hull, and the first blocks of the lane it flies and rotates through");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
+                "the hull, and the first blocks of the lane it flies and rotates through"));
     }
 }

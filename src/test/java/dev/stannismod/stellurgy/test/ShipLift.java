@@ -55,21 +55,21 @@ public final class ShipLift {
     @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(server, dim, UNPARKED_TICKS);",
             why = "from the teleport's write to the read below, over ticks of physics running unparked; the gate"
                     + " names where the craft was sent and where it is.")
-    public static ShipInfo toAltitude(Events.Probe probe, Events serverLog, TestClient server, int dim,
+    public static ShipInfo toAltitude(ServerCommands commands, Events serverLog, TestClient server, int dim,
                                       String shipId, int toY, String what) throws Exception {
-        ShipInfo onThePad = ShipInfo.byId(probe::exec, dim, shipId);
+        ShipInfo onThePad = ShipInfo.byId(c -> commands.read(c).raw(), dim, shipId);
         long teleportMark = serverLog.markInstrumented();
-        String moved = probe.exec("stellurgytest vs teleport-ship-by-id " + dim + " " + shipId
+        Reply moved = commands.arrange("stellurgytest vs teleport-ship-by-id " + dim + " " + shipId
                 + " " + onThePad.x + " " + toY + " " + onThePad.z);
-        requireArranged(what + " — the lift to y=" + toY + " must take: " + moved, Reply.of(moved).ok());
+        requireArranged(what + " — the lift to y=" + toY + " must take: " + moved, moved.ok());
         ArrangementFailure.arranged(() -> serverLog.awaitRecordWithFields(teleportMark, "ship_pose_adopted",
                 what + " — the game tick must adopt the lifted pose before the craft is unparked",
                 ADOPTION_LINK_TICKS, "vsShip", shipId, "dim", String.valueOf(dim)));
-        String unparked = probe.exec("stellurgytest vs unpark-by-id " + dim + " " + shipId);
+        Reply unparked = commands.arrange("stellurgytest vs unpark-by-id " + dim + " " + shipId);
         requireArranged(what + " — the rigid teleport leaves the ship PARKED, and a parked ship is"
-                + " not simulated: " + unparked, Reply.of(unparked).ok());
+                + " not simulated: " + unparked, unparked.ok());
         GameTicks.advanceWorld(server, dim, UNPARKED_TICKS);
-        ShipInfo lifted = ShipInfo.byId(probe::exec, dim, shipId);
+        ShipInfo lifted = ShipInfo.byId(c -> commands.read(c).raw(), dim, shipId);
         System.out.println("[lift] dim " + dim + " sent to y=" + toY + ", reports y=" + lifted.y
                 + " after " + UNPARKED_TICKS + " ticks unparked (stood at y=" + onThePad.y + ")");
         requireArranged(what + " — the craft was sent to y=" + toY + " and reports y=" + lifted.y

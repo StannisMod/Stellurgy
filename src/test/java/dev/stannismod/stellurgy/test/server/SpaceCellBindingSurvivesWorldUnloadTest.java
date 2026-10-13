@@ -45,19 +45,19 @@ public class SpaceCellBindingSurvivesWorldUnloadTest extends AbstractSharedServe
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @Test
     public void aBoundCellKeepsItsWorldAndARevisitRepairsOneThatWentAnyway() throws Exception {
         // ── Leg 1: the control. With the pool's hold cleared, Forge's sweep takes the world. ──
-        MaterializedCell occupied = MaterializedCell.at(this::exec, UNHELD_CELL)
+        MaterializedCell occupied = MaterializedCell.at(c -> arrange(c).raw(), UNHELD_CELL)
                 .requireMaterialized("the cell must materialize");
         assertTrue("a freshly materialized cell must have a world: " + occupied.raw(),
                 occupied.worldLoaded());
 
         // Marked before the hold is dropped, which is what lets the sweep take the world.
         long unheldMark = events.mark();
-        String dropped = exec("stellurgytest space release " + UNHELD_CELL + " drop-hold");
+        String dropped = arrange("stellurgytest space release " + UNHELD_CELL + " drop-hold").raw();
         assertTrue("release must clear the hold: " + dropped, Reply.of(dropped).bool("holdDropped"));
 
         String gone = awaitWorldGone(unheldMark, UNHELD_CELL, occupied.slotDim());
@@ -66,18 +66,18 @@ public class SpaceCellBindingSurvivesWorldUnloadTest extends AbstractSharedServe
                 Reply.of(gone).bool("managerLoaded"));
 
         // ── Leg 2: the repair. A binding whose world went away is live again on the next visit. ──
-        MaterializedCell revisit = MaterializedCell.at(this::exec, UNHELD_CELL)
+        MaterializedCell revisit = MaterializedCell.at(c -> arrange(c).raw(), UNHELD_CELL)
                 .requireMaterialized("the revisit must materialize the cell again");
         assertTrue("materializing a cell must leave it live in a world, whatever happened to the slot "
                         + "while nobody was occupying it: " + revisit.raw(),
                 revisit.worldLoaded());
 
         // ── Leg 3: the hold. Same sequence, hold left in place: the sweep must not get this one. ──
-        MaterializedCell held = MaterializedCell.at(this::exec, HELD_CELL)
+        MaterializedCell held = MaterializedCell.at(c -> arrange(c).raw(), HELD_CELL)
                 .requireMaterialized("the second cell must materialize");
         assertTrue("and it must be live in a world: " + held.raw(), held.worldLoaded());
         long heldMark = events.mark();
-        exec("stellurgytest space release " + HELD_CELL);
+        arrange("stellurgytest space release " + HELD_CELL);
 
         String unloads = unloadRecordsOver(heldMark);
         assertEquals("a cell still bound to its slot must keep that slot's world for the whole"
@@ -85,7 +85,7 @@ public class SpaceCellBindingSurvivesWorldUnloadTest extends AbstractSharedServe
                         + " end of it. `world_unloaded` from seq " + heldMark + " across "
                         + SWEEP_BUDGET_TICKS + " server ticks: " + unloads,
                 0, Events.countRecords(unloads, "dim", String.valueOf(held.slotDim())));
-        String stillThere = exec("stellurgytest space cell-slot " + HELD_CELL);
+        String stillThere = read("stellurgytest space cell-slot " + HELD_CELL).raw();
         assertTrue("a cell still bound to its slot must keep that slot's world, even with no occupant, "
                         + "no player and no chunks — leg 1 proves the sweep would otherwise take it: "
                         + stillThere,
@@ -110,7 +110,7 @@ public class SpaceCellBindingSurvivesWorldUnloadTest extends AbstractSharedServe
                 "Forge must unload the unheld cell's slot world, or this run's control leg"
                         + " exercised nothing and the held leg below would pass on any build",
                 SWEEP_BUDGET_TICKS);
-        return exec("stellurgytest space cell-slot " + cell);
+        return read("stellurgytest space cell-slot " + cell).raw();
     }
 
     /**

@@ -59,11 +59,11 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
             + " green on the same run. 2026-09-30.")
     @Test
     public void anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore() throws Exception {
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
         int X = OBLIQUE_X;
         buildSolidTarget(X);
 
-        Reply inside = ask("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z).requireOk("price the target");
+        Reply inside = read("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z).requireOk("price the target");
         int stageCost = inside.integer("stageCost");
         int maxStage = inside.integer("maxStage");
         requireArranged("no stage cost inside the target, so nothing here could be damaged: " + inside,
@@ -72,7 +72,7 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
 
         // Enough budget to work through a run of blocks, so the chain is long enough to have holes.
         int budget = 10 * maxStage * stageCost;
-        Reply report = ask("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
+        Reply report = act("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
                 + (Z + 0.5D) + " " + DIR_X + " 0 " + DIR_Z + " " + budget + " KINETIC 91001")
                 .requireOk("declare the oblique impact");
         requireArranged("the oblique impact struck nothing at all — the arrangement, not the engine, is"
@@ -117,15 +117,15 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
         // The control for the change, and the reason it is safe: where the ray is parallel to an axis
         // a sampled path and a traversed one are the same list of blocks. If this ever moves, the fix
         // changed something it had no business changing.
-        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
+        arrange("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
         int X = STRAIGHT_X;
         buildSolidTarget(X);
 
-        Reply inside = ask("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z).requireOk("price the target");
+        Reply inside = read("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z).requireOk("price the target");
         int stageCost = inside.integer("stageCost");
         int maxStage = inside.integer("maxStage");
         int wanted = 5;
-        Reply report = ask("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
+        Reply report = act("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
                 + (Z + 0.5D) + " 1 0 0 " + (wanted * maxStage * stageCost) + " KINETIC 91002")
                 .requireOk("declare the straight impact");
         requireArranged("the straight impact struck nothing:\n" + report,
@@ -159,7 +159,7 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
 
     /** Every damage record inside the target, as {x,y,z}. */
     private List<int[]> damagedBlocks(int X) throws Exception {
-        Reply records = ask("stellurgytest damage records 0 " + (X - 4) + " " + (Y - 2) + " " + (Z - HALF)
+        Reply records = read("stellurgytest damage records 0 " + (X - 4) + " " + (Y - 2) + " " + (Z - HALF)
                 + " " + (X + DEPTH + 4) + " " + (Y + 2) + " " + (Z + HALF)).requireOk("read the damage records");
         List<int[]> out = new ArrayList<>();
         for (String entry : records.objectArray("entries")) {
@@ -175,16 +175,16 @@ public class DiagonalBoreTest extends AbstractSharedServerTest {
      * damage records — cannot be read as this one's.
      */
     private void buildSolidTarget(int X) throws Exception {
-        ask("stellurgytest chunk warmup 0 " + ((X - 8) >> 4) + " " + ((Z - HALF - 4) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((X - 8) >> 4) + " " + ((Z - HALF - 4) >> 4) + " "
                 + ((X + DEPTH + 8) >> 4) + " " + ((Z + HALF + 4) >> 4)).requireOk("warm the target's chunks");
-        ask("stellurgytest fill 0 " + (X - 8) + " " + (Y - 2) + " " + (Z - HALF - 2) + " " + (X - 1) + " "
+        arrange("stellurgytest fill 0 " + (X - 8) + " " + (Y - 2) + " " + (Z - HALF - 2) + " " + (X - 1) + " "
                 + (Y + 2) + " " + (Z + HALF + 2) + " minecraft:air").requireOk("clear the approach");
         // Air first, then stone. The probe's fill clears the damage map over its region as it goes
         // (TestProbeCommand's fill, "this region is fresh"), so neither pass leaves an earlier
         // crater's records on the fresh blocks.
-        ask("stellurgytest fill 0 " + X + " " + (Y - 2) + " " + (Z - HALF) + " " + (X + DEPTH) + " "
+        arrange("stellurgytest fill 0 " + X + " " + (Y - 2) + " " + (Z - HALF) + " " + (X + DEPTH) + " "
                 + (Y + 2) + " " + (Z + HALF) + " minecraft:air").requireOk("clear the target");
-        ask("stellurgytest fill 0 " + X + " " + (Y - 2) + " " + (Z - HALF) + " " + (X + DEPTH) + " "
+        arrange("stellurgytest fill 0 " + X + " " + (Y - 2) + " " + (Z - HALF) + " " + (X + DEPTH) + " "
                 + (Y + 2) + " " + (Z + HALF) + " minecraft:stone").requireOk("build the target");
     }
 }

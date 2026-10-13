@@ -40,7 +40,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
 
     /** What the Forge energy capability at one block reports — refusing a block that is not there. */
     private EnergyStore energy(int x, int z) throws Exception {
-        return EnergyStore.at(cmd -> ok(client().execute(cmd)), DIM, x, Y, z);
+        return EnergyStore.at(cmd -> ok(client().read(cmd)), DIM, x, Y, z);
     }
 
     private static String ok(java.util.List<String> resp) {
@@ -55,8 +55,8 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
      */
     private void place(String blockId, int x, int y, int z) throws Exception {
         // Clear first.
-        client().execute("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " minecraft:air");
-        String r = ok(client().execute(
+        client().arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " minecraft:air");
+        String r = ok(client().arrange(
                 "stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") at " + x + "," + y + "," + z + " failed: " + r,
                 Reply.of(r).bool("placed"));
@@ -79,7 +79,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
 
         // Force-tick — should not crash, even with no daylight on dim 0
         // at world spawn (production handles "no sky" gracefully).
-        String tickResp = ok(client().execute(
+        String tickResp = ok(client().act(
                 "stellurgytest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 5"));
         assertTrue("solar generator force-tick must not error: " + tickResp,
                 Reply.of(tickResp).ok());
@@ -94,7 +94,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         // class via tileClass field (probe reports it on every call).
         // Capability check via /stellurgytest fluid (existing probe) is the
         // strongest evidence the tank actually exposes IFluidHandler.
-        String tankResp = ok(client().execute(
+        String tankResp = ok(client().read(
                 "stellurgytest fluid stored " + DIM + " " + x + " " + Y + " " + z));
         // Probe returns either {"ok":true,...} or {"error":…}. The claim is that the tile is
         // THERE, so it is made against the refusal itself rather than against the rendering: a
@@ -123,7 +123,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         int x = BASE_X + 8, z = BASE_Z;
         place("stellurgy:guidanceComputer", x, Y, z);
 
-        String hatchResp = ok(client().execute(
+        String hatchResp = ok(client().read(
                 "stellurgytest hatch read " + DIM + " " + x + " " + Y + " " + z));
         Reply hatch = Reply.of("stellurgytest hatch read", hatchResp);
         assertFalse("guidance computer must accept hatch-read probe: " + hatchResp,
@@ -151,7 +151,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         assertTrue("tileClass should mention OxygenVent: " + storedResp.raw(),
                 "TileOxygenVent".equals(storedResp.tileSimpleName()));
 
-        String tickResp = ok(client().execute(
+        String tickResp = ok(client().act(
                 "stellurgytest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 2"));
         assertTrue("oxygenVent force-tick must not error: " + tickResp,
                 !Reply.of(tickResp).has("error"));
@@ -162,7 +162,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         int x = BASE_X + 16, z = BASE_Z;
         place("stellurgy:blockPump", x, Y, z);
 
-        String fluidResp = ok(client().execute(
+        String fluidResp = ok(client().read(
                 "stellurgytest fluid stored " + DIM + " " + x + " " + Y + " " + z));
         // Pump implements IFluidHandler — the probe must reach it. Against the refusal itself,
         // as above: any other refusal used to read as success here.

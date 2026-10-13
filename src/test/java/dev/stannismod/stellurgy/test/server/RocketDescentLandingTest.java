@@ -46,7 +46,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
     private final Events events =
-            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(cmd -> ok(client().read(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
@@ -59,7 +59,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
     private static int gi(String field, String s, String label) {
@@ -82,9 +82,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
-                "the craft is built in this volume and then teleported to its descent altitude");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(client().arrange(cmd)), "simple", 2, 10,
+                "the craft is built in this volume and then teleported to its descent altitude"));
+        String list = ok(client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
@@ -99,7 +99,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int cz = worldZ >> 4;
         for (int dxc = -1; dxc <= 1; dxc++) {
             for (int dzc = -1; dzc <= 1; dzc++) {
-                ok(client().execute(
+                ok(client().arrange(
                         "stellurgytest chunk forceload " + dim + " " + (cx + dxc) + " " + (cz + dzc)));
             }
         }
@@ -128,7 +128,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         // Marked before the set-state: the gate may fire on the very next tick.
         long mark = events.markInstrumented();
-        ok(client().execute("stellurgytest rocket set-state " + id
+        ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=" + (DESCENT_TIMER + 1)
                 + " posY=300 motionY=0"));
 
@@ -166,7 +166,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         forceLoadChunksAround(0, baseX, baseZ);
 
         long mark = events.markInstrumented();
-        String set = ok(client().execute("stellurgytest rocket set-state " + id
+        String set = ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=5 posY=300 motionY=0"));
         int ticksBefore = gi(TICKS_EXISTED, set, "ticksExisted as set");
 
@@ -216,7 +216,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
-        String set = ok(client().execute("stellurgytest rocket set-state " + id
+        String set = ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + DESCENT_START_Y + " motionY=0"));
         double posYBefore = Reply.of(set).number("posY");
@@ -252,14 +252,14 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
-        ok(client().execute("stellurgytest fill 0 " + (baseX - 2) + " " + baseY + " " + (baseZ - 2)
+        ok(client().arrange("stellurgytest fill 0 " + (baseX - 2) + " " + baseY + " " + (baseZ - 2)
                 + " " + (baseX + 2) + " " + baseY + " " + (baseZ + 2) + " minecraft:stone"));
 
-        String countsBefore = ok(client().execute("stellurgytest rocket event-counts-full"));
+        String countsBefore = ok(client().read("stellurgytest rocket event-counts-full"));
         int landedBefore = gi(LANDED_COUNT, countsBefore, "landed before");
 
         long mark = events.mark();
-        ok(client().execute("stellurgytest rocket set-state " + id
+        ok(client().arrange("stellurgytest rocket set-state " + id
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (baseY + 2) + " motionY=-10"));
 
@@ -269,7 +269,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 "the rocket must touch down on the stone floor under real ticking", GATE_TICKS,
                 "e", String.valueOf(id));
 
-        String countsAfter = ok(client().execute("stellurgytest rocket event-counts-full"));
+        String countsAfter = ok(client().read("stellurgytest rocket event-counts-full"));
         int landedAfter = gi(LANDED_COUNT, countsAfter, "landed after");
         assertTrue("RocketLandedEvent must fire on ground collision under real ticks: "
                 + landedBefore + " -> " + landedAfter, landedAfter > landedBefore);
@@ -292,7 +292,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         int posY = (int) rocketInfo(id).posY;
 
-        String dismantleResp = ok(client().execute("stellurgytest rocket dismantle " + id));
+        String dismantleResp = ok(client().act("stellurgytest rocket dismantle " + id));
         assertTrue("dismantle must succeed: " + dismantleResp,
                 Reply.of(dismantleResp).ok());
 
@@ -301,7 +301,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         for (int dx = -2; dx <= 2 && !foundNonAir; dx++) {
             for (int dz = -2; dz <= 2 && !foundNonAir; dz++) {
                 for (int dy = 0; dy <= 4 && !foundNonAir; dy++) {
-                    String blockResp = ok(client().execute(
+                    String blockResp = ok(client().read(
                             "stellurgytest block at 0 " + (site.x + dx) + " " + (posY + dy)
                                     + " " + (site.z + dz)));
                     // the producer always writes `isAir` for a loaded dimension, and this asks

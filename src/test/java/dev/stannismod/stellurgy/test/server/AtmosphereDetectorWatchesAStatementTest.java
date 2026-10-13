@@ -120,17 +120,17 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         // Fresh territory: the seal is a flood fill over real blocks, and an unloaded chunk is not
         // one. Warmed first so that a room failing to seal means something about the room.
         arrange("stellurgytest chunk warmup 0 " + ((cx - 4) >> 4) + " " + ((cz - 4) >> 4)
-                + " " + ((cx + 4) >> 4) + " " + ((cz + 4) >> 4));
+                + " " + ((cx + 4) >> 4) + " " + ((cz + 4) >> 4)).requireOk();
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + by + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + by + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = by + 1; yy <= by + 2; yy++) {
             arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (cz - 2)
-                + " " + (cx + 2) + " " + (by + 3) + " " + (cz + 2) + " minecraft:stone");
+                + " " + (cx + 2) + " " + (by + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
     }
 
     /**
@@ -150,11 +150,11 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         // reaches the vent through the floor block beneath the detector — is never the thing that
         // decides whether the room is a zone. See the class note.
         arrange("stellurgytest fill 0 " + cx + " " + (cy - 1) + " " + cz
-                + " " + cx + " " + (cy - 1) + " " + cz + " minecraft:redstone_block");
-        arrange("stellurgytest place 0 " + cx + " " + cy + " " + cz + " stellurgy:oxygenVent");
+                + " " + cx + " " + (cy - 1) + " " + cz + " minecraft:redstone_block").requireOk();
+        arrange("stellurgytest place 0 " + cx + " " + cy + " " + cz + " stellurgy:oxygenVent").requireOk();
         arrange("stellurgytest energy inject 0 " + cx + " " + cy + " " + cz + " 1000000");
         GameTicks.advance(client(), GameTicks.server(), SEAL_TICKS);
-        Reply air = ask("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
+        Reply air = read("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
         assertTrue("premise: the room must actually be a sealed zone with gases in it: " + air,
                 air.has("gases"));
     }
@@ -162,12 +162,12 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     /** Part of the room's shell, with air on the inward side for it to read. */
     private void placeDetector(int cx) throws Exception {
         arrange("stellurgytest place 0 " + (cx + 1) + " " + airY() + " " + cz
-                + " stellurgy:oxygenDetection");
+                + " stellurgy:oxygenDetection").requireOk();
     }
 
     private void setMode(int cx, String assertion) throws Exception {
         arrange("stellurgytest atmosphere detector-set-mode 0 " + (cx + 1) + " " + airY()
-                + " " + cz + " " + assertion);
+                + " " + cz + " " + assertion).requireOk();
     }
 
     private void setAir(int cx, int n2Ppm, int o2Ppm, int co2Ppm, String... extraGases)
@@ -181,7 +181,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     }
 
     private Reply output(int cx) throws Exception {
-        return ask("stellurgytest atmosphere detector-output 0 " + (cx + 1) + " " + airY() + " " + cz);
+        return read("stellurgytest atmosphere detector-output 0 " + (cx + 1) + " " + airY() + " " + cz);
     }
 
     /**
@@ -195,7 +195,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         // The air the detector is about to judge must still be the ROOM's: a position that has
         // dropped out of the zone reads the overworld's open air, and a verdict on that is a verdict
         // about whatever unsealed the room.
-        Reply air = ask("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
+        Reply air = read("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
         requireArranged("the room must still be a sealed zone when the detector is asked about it: "
                 + air, air.has("gases"));
         // MADE to sample, not waited for. Production gates the detector's sample on
@@ -205,7 +205,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         // once, on demand. One call, one read, and no budget anywhere: the answer does not depend
         // on how fast this box is.
         arrange("stellurgytest atmosphere detector-force-sample 0 "
-                + (cx + 1) + " " + airY() + " " + cz);
+                + (cx + 1) + " " + airY() + " " + cz).requireOk();
         Reply out = output(cx);
         assertEquals(why + " (after a forced sample): " + out, expected, out.bool("powered"));
     }

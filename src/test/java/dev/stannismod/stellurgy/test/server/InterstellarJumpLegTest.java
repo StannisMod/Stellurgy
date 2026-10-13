@@ -89,12 +89,12 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
     @Test
     public void aJumpToAnotherStarSystemArrivesAndCostsMoreTimeThanAHop() throws Exception {
 
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // A ship that reached space the way a ship does: built, assembled, flown past the ceiling.
         String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
@@ -103,21 +103,21 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         // call below is addressed to one of the two: the overworld this class builds in is shared, so
         // "the ship near the pad" is a question with more than one true answer.
         String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
 
-        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         int sx = (int) src.x;
         int sy = (int) src.y;
         int sz = (int) src.z;
-        String held = exec("stellurgytest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
+        String held = arrange("stellurgytest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0").raw();
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 Reply.of(held).bool("afcResolved"));
-        assertTrue("climb teleport failed", Reply.of(exec("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
-                + sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + sz)).ok());
+        assertTrue("climb teleport failed", Reply.of(arrange("stellurgytest vs teleport-ship-by-id 0 " + shipId + " "
+                + sx + " " + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + sz).raw()).ok());
         // Marked BEFORE the unpark, because the unpark is what starts the entry and the settle is
         // announced once.
         long entryMark = events.mark();
-        exec("stellurgytest vs unpark-by-id 0 " + shipId);
+        arrange("stellurgytest vs unpark-by-id 0 " + shipId);
 
         EntryStatus status = awaitEntered(entryMark, setup, SETTLE_TICKS, durableId);
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last="
@@ -139,7 +139,7 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         requireArranged("a one-sector hop must arrive, or nothing below is about distance."
                 + " Fix the scaffolding before reading the far leg.", hopTicks >= 0);
 
-        EntryStatus afterHop = EntryStatus.forShip(this::exec, durableId);
+        EntryStatus afterHop = EntryStatus.forShip(c -> read(c).raw(), durableId);
         String hopCell = afterHop.cellKey;
         int hopSlot = afterHop.slotDim;
         dev.stannismod.stellurgy.space.GalacticCoord hopOrigin =
@@ -174,8 +174,8 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         // Marked before the jump command: the arrival is announced once, and a mark taken after the
         // command has already been given is a window the record can have passed through.
         long jumpMark = events.mark();
-        String jump = exec("stellurgytest space jump id " + durableId + " "
-                + tsx + " " + tsy + " " + tsz + " " + slotDim + " " + FLIGHT_SPEED);
+        String jump = act("stellurgytest space jump id " + durableId + " "
+                + tsx + " " + tsy + " " + tsz + " " + slotDim + " " + FLIGHT_SPEED).raw();
         assertTrue("[" + label + "] the jump probe found no settled ship to move: " + jump,
                 Reply.of(jump).bool("began"));
         assertEquals("[" + label + "] the jump named a different ship than this scenario's: " + jump,
@@ -193,19 +193,19 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
             // silent is the finding, and only this method's caller knows which one it asked for.
             System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after "
                     + (clock() - departed) + " ticks; " + neverArrived.getMessage()
-                    + " ledger=" + EntryStatus.forShip(this::exec, durableId).raw()
-                    + " subsystem=" + SubsystemStatus.read(this::exec).raw());
+                    + " ledger=" + EntryStatus.forShip(c -> read(c).raw(), durableId).raw()
+                    + " subsystem=" + SubsystemStatus.read(c -> read(c).raw()).raw());
             return -1L;
         }
         long elapsed = clock() - departed;
         assertEquals("[" + label + "] nothing may still be in transit once the ledger reports arrival",
-                0, SubsystemStatus.read(this::exec).transits);
+                0, SubsystemStatus.read(c -> read(c).raw()).transits);
         return elapsed;
     }
 
     /** The space clock the transit is priced on — the same counter production integrates against. */
     private long clock() throws Exception {
-        Reply mReply = Reply.of(exec("stellurgytest space frame 0 0 0"));
+        Reply mReply = Reply.of(read("stellurgytest space frame 0 0 0").raw());
         return mReply.has("clock") ? (long) mReply.number("clock") : -1L;
     }
 
@@ -225,7 +225,7 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
         WorldCommandFixtures.awaitEnteredSpace(events, mark, durableId,
                 "the ship must finish entering space", budgetTicks,
                 () -> loadAllEntrySlots(setup));
-        return EntryStatus.forShip(this::exec, durableId);
+        return EntryStatus.forShip(c -> read(c).raw(), durableId);
     }
 
     /**
@@ -259,24 +259,24 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        exec("stellurgytest space entry-clear");
+        arrange("stellurgytest space entry-clear");
     }
 
     // --- helpers (mirror VSShipEntryTest) --------------------------------------------------------
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(this::exec, setup);
+        EntrySlots.loadAll(c -> arrange(c).raw(), setup);
     }
 
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
 
@@ -294,7 +294,7 @@ public class InterstellarJumpLegTest extends AbstractSharedServerTest {
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

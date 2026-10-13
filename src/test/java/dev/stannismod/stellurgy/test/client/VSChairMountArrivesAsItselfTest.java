@@ -79,24 +79,24 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
 
         // ---- ARRANGE: a floor, a chair on it, and the player standing next to the chair. --------
         scenario().requireArranged("chunk warmup failed",
-                Reply.of(exec("stellurgytest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
-                        + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4))).ok());
+                Reply.of(arrange("stellurgytest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
+                        + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4)).raw()).ok());
         scenario().requireArranged("floor fill failed",
-                Reply.of(exec("stellurgytest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
-                        + (FX + 2) + " " + FY + " " + (FZ + 2) + " minecraft:stone")
+                Reply.of(arrange("stellurgytest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
+                        + (FX + 2) + " " + FY + " " + (FZ + 2) + " minecraft:stone").raw()
                         ).ok());
         scenario().requireArranged("clearing the space above the floor failed",
-                Reply.of(exec("stellurgytest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
-                        + (FX + 2) + " " + (FY + 3) + " " + (FZ + 2) + " minecraft:air")
+                Reply.of(arrange("stellurgytest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
+                        + (FX + 2) + " " + (FY + 3) + " " + (FZ + 2) + " minecraft:air").raw()
                         ).ok());
         // The chair block carries the HOST mod's domain, not the physics engine's: vendored code
         // registers under the container it is loaded in. An unknown block id fills air here and
         // still reports success, which is why the placement is read back below.
-        String chair = exec("stellurgytest fill 0 " + CX + " " + CY + " " + CZ + " "
-                + CX + " " + CY + " " + CZ + " stellurgy:passenger_chair");
+        String chair = arrange("stellurgytest fill 0 " + CX + " " + CY + " " + CZ + " "
+                + CX + " " + CY + " " + CZ + " stellurgy:passenger_chair").raw();
         scenario().requireArranged("the chair block must be placeable: " + chair,
                 Reply.of(chair).ok());
-        String rightAfter = exec("stellurgytest block at 0 " + CX + " " + CY + " " + CZ);
+        String rightAfter = read("stellurgytest block at 0 " + CX + " " + CY + " " + CZ).raw();
         scenario().requireArranged("the chair must actually be in the world once the fill reports"
                 + " success: " + rightAfter, CHAIR_BLOCK.equals(
                         Reply.of("stellurgytest block at", rightAfter).text("block")));
@@ -111,7 +111,7 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
                         + " off it is out of reach of the chair (expected y~" + (FY + 1)
                         + ", measured " + standY + "): " + stood,
                 Math.abs(standY - (FY + 1)) <= ON_THE_PLATFORM_BLOCKS);
-        String placed = exec("stellurgytest block at 0 " + CX + " " + CY + " " + CZ);
+        String placed = read("stellurgytest block at 0 " + CX + " " + CY + " " + CZ).raw();
         scenario().requireArranged("the chair block must still be there when the player reaches for"
                 + " it: " + placed, CHAIR_BLOCK.equals(
                         Reply.of("stellurgytest block at", placed).text("block")));
@@ -127,7 +127,7 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
 
         // ---- The server's view: the truth the client is supposed to reproduce. Read FIRST, so
         // that a client already dead to this very defect still leaves the arrangement on record. --
-        String serverSide = exec("stellurgytest entity near 0 " + CX + " " + CY + " " + CZ + " 8");
+        String serverSide = read("stellurgytest entity near 0 " + CX + " " + CY + " " + CZ + " 8").raw();
         int chairEntityId = -1;
         String chairEntityClass = null;
         for (String near : Reply.of("stellurgytest entity near", serverSide).objectArray(ENTITIES)) {

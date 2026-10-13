@@ -60,12 +60,12 @@ public class BeamReachesClientTest extends AbstractOwnBootClientTest {
             + " recorded before the near gun's (2026-09-29).")
     @Test
     public void aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot() throws Exception {
-        Events server = new Events(this::exec, GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
+        Events server = new Events(c -> read(c).raw(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
         Events client = ClientEvents.of(bot(), GameTicks.serverAndClient(serverClient(), GameTicks.server(), bot()::waitWorldTicks), evictions);
 
         // The player stands beside the near gun for the whole scenario, so which gun is in range
         // never changes while anything burns.
-        serverClient().execute("tp @a " + (NEAR_X + 4) + ".5 " + (Y + 1) + " " + (Z + 0.5D));
+        serverClient().arrange("tp @a " + (NEAR_X + 4) + ".5 " + (Y + 1) + " " + (Z + 0.5D));
 
         long built = server.markInstrumented();
         buildBeamGun(FAR_X);
@@ -122,12 +122,12 @@ public class BeamReachesClientTest extends AbstractOwnBootClientTest {
 
     /** The reference beam gun: a controller with emitters on it and cooling around it. */
     private void buildBeamGun(int bx) throws Exception {
-        ask("stellurgytest chunk warmup " + DIM + " " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup " + DIM + " " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((bx + 48) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the gun's chunks");
-        ask("stellurgytest fill " + DIM + " " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " "
+        arrange("stellurgytest fill " + DIM + " " + (bx - 4) + " " + (Y - 2) + " " + (Z - 4) + " "
                 + (bx + 40) + " " + (Y + 12) + " " + (Z + 4) + " minecraft:air").requireOk("clear the site");
         for (int cx = ((bx - 16) >> 4); cx <= ((bx + 40) >> 4); cx++) {
-            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
         place("stellurgy:turret", bx, Y, Z);
         for (int i = 1; i <= 3; i++) {
@@ -140,32 +140,34 @@ public class BeamReachesClientTest extends AbstractOwnBootClientTest {
     /** Something to burn into, and an order to burn into it. */
     private void aimAlongTheWall(int bx) throws Exception {
         int wallX = bx + 20;
-        ask("stellurgytest fill " + DIM + " " + wallX + " " + Y + " " + Z + " " + (wallX + 5) + " " + Y
+        arrange("stellurgytest fill " + DIM + " " + wallX + " " + Y + " " + Z + " " + (wallX + 5) + " " + Y
                 + " " + Z + " minecraft:iron_block").requireOk("build the wall");
-        ask("stellurgytest turret target " + DIM + " " + bx + " " + Y + " " + Z + " " + (wallX + 0.5D)
+        arrange("stellurgytest turret target " + DIM + " " + bx + " " + Y + " " + Z + " " + (wallX + 0.5D)
                 + " " + (Y + 0.5D) + " " + (Z + 0.5D)).requireOk("aim the gun at its wall");
     }
 
     // ---- reading
 
     private Reply read(int bx) throws Exception {
-        return ask("stellurgytest turret read " + DIM + " " + bx + " " + Y + " " + Z);
+        return read("stellurgytest turret read " + DIM + " " + bx + " " + Y + " " + Z);
     }
 
     private void charge(int bx) throws Exception {
-        ask("stellurgytest turret charge " + DIM + " " + bx + " " + Y + " " + Z).requireOk("charge the gun");
+        arrange("stellurgytest turret charge " + DIM + " " + bx + " " + Y + " " + Z).requireOk("charge the gun");
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", serverClient().execute(command));
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, serverClient().read(command));
     }
 
-    private Reply ask(String command) throws Exception {
-        return Reply.of(command, exec(command));
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, serverClient().arrange(command));
     }
 }

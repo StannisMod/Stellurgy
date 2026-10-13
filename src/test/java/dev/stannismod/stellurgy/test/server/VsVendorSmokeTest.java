@@ -40,7 +40,7 @@ public class VsVendorSmokeTest extends AbstractSharedServerTest {
     /** A ship registry that answers at all — the integration is wired, not merely on the classpath. */
     @Test
     public void theShipRegistryAnswersForALoadedWorld() throws Exception {
-        List<String> lines = client().execute("stellurgytest vs ship-count 0");
+        List<String> lines = client().read("stellurgytest vs ship-count 0");
         String resp = String.join("\n", lines);
         assertTrue("with VS present the ship registry must answer for the overworld (a count of 0 is "
                 + "a fine answer; no answer is not): " + resp, Reply.of(resp).has("count"));

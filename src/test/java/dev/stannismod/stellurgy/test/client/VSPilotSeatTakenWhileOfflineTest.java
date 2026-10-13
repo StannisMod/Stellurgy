@@ -99,7 +99,7 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
         // The registry's own record of the ship being added, since a mark taken before the assembly
@@ -119,17 +119,17 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         // Keep the ship observable while nobody is online: the offline window below leaves the
         // server empty, and an unloaded ship would fail every probe the arrangement depends on.
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "every probe below is about a ship this client is standing over");
 
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, shipUuid);
         final int seatX = mountInfo.seatX();
         final int seatY = mountInfo.seatY();
         final int seatZ = mountInfo.seatZ();
         // The CLIENT's own mark, one statement before the mount that produces the record.
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // A LINK, where ten ticks used to stand: the server mounts him and the client PERFORMS the
@@ -167,19 +167,19 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
 
         // With no player near them the ship's chunks can drop out from under the probes below —
         // force them back in before acting on the seat.
-        exec("stellurgytest chunk warmup 0 " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
-                + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4));
+        arrange("stellurgytest chunk warmup 0 " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
+                + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)).raw();
 
         // Vanilla takes a seated player's mount WITH him into his player data — witnessed here
         // because the occupy below must therefore spawn the seat's fresh (single) dummy, and
         // because it is exactly what the returning login will try to re-spawn back into the world.
-        String seatWhileGone = exec("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
+        String seatWhileGone = read("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ).raw();
         scenario().requireArranged("with its pilot offline the seat must have NO bound dummy left "
                 + "(vanilla persists the mount inside the player's own data): " + seatWhileGone,
                 (!Reply.of(seatWhileGone).bool("dummyFound")));
 
         // ---- ACT 2: someone takes the seat while he is offline. ---------------------------------
-        String occupy = exec("stellurgytest vs seat-occupy 0 " + seatX + " " + seatY + " " + seatZ);
+        String occupy = arrange("stellurgytest vs seat-occupy 0 " + seatX + " " + seatY + " " + seatZ).raw();
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
                 Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted"));
         // The occupant's NAME was read here, for a message assertion that no longer exists. The uuid
@@ -193,7 +193,7 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         Reply omReply = Reply.of(occupy);
         scenario().requireArranged("seat-occupy must report the occupant's uuid: " + occupy, omReply.has(OCCUPANT_UUID));
         final String occupantUuid = omReply.text(OCCUPANT_UUID);
-        String occupancy = exec("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
+        String occupancy = read("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ).raw();
         // The PASSENGER whose uuid this is — the occupant the scenario just seated. `uuid` belongs
         // to a passenger row, and a seat can report more than one.
         Reply.of("stellurgytest vs seat-status", occupancy)
@@ -229,7 +229,7 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
                 + " be reconciled off the duplicate mount vanilla re-spawned for him",
                 LOGIN_LINK_BUDGET_TICKS);
 
-        String seatAfter = exec("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
+        String seatAfter = read("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ).raw();
         JsonObject riding = bot().reportRidingEntity();
         String observed = "seatStatus=" + seatAfter + " riding=" + riding;
 
@@ -292,13 +292,13 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
      *  glues itself to the seat's world image every tick, so the occupant's dummy IS the seat's
      *  live world-frame oracle (the seat BLOCK's own coordinates are ship-subspace). */
     private double[] seatWorldPosition(int seatX, int seatY, int seatZ) throws Exception {
-        String status = exec("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
+        String status = read("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ).raw();
         Reply seat = Reply.of("stellurgytest vs seat-status", status);
         assertTrue("seat-status must expose the bound dummy for the position oracle: " + status,
                 seat.has(DUMMY_ID));
         // The reader refuses a dummy the world no longer holds, which is what the `has` check stood
         // for: an absent position is not the origin, and this method's callers compare coordinates.
-        EntityState at = EntityState.byId(this::exec, 0, seat.integer(DUMMY_ID))
+        EntityState at = EntityState.byId(c -> read(c).raw(), 0, seat.integer(DUMMY_ID))
                 .requireAlive("the seat's bound dummy must still exist to locate the seat");
         return new double[]{at.posX(), at.posY(), at.posZ()};
     }
@@ -309,8 +309,8 @@ public class VSPilotSeatTakenWhileOfflineTest extends AbstractSharedVsClientTest
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // it raises an ArrangementFailure, the same type scenario().requireArranged does.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
-                "the hull whose seat is taken and re-taken across a relog");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
+                "the hull whose seat is taken and re-taken across a relog"));
     }
 
     private static boolean isRiding(JsonObject riding) {

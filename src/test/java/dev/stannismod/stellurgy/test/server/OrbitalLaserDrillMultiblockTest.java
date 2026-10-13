@@ -34,19 +34,19 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
 
     @Test
     public void orbitalLaserDrillMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock orbital-laser-drill 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock orbital-laser-drill failed: " + fixture,
                 Reply.of(fixture).ok());
         assertTrue("fixture didn't place any blocks: " + fixture,
                 Reply.of(fixture).has("placed") && !(Reply.of(fixture).integer("placed") == 0));
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileOrbitalLaserDrill tile at controller pos: " + info,
                 "TileOrbitalLaserDrill", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -65,11 +65,11 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         // The capability + tick path is the necessary precondition for any
         // future end-to-end laser-drill behavioural test.
         int cx = CX + 80, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock orbital-laser-drill 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
@@ -89,7 +89,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         // (b) Force-tick the controller 20x — must not throw. Production
         // update() pulls drill state, checks completeStructure, batteries,
         // mode, target — many code paths exercised.
-        String tick = join(client().execute(
+        String tick = join(client().act(
                 "stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 20"));
         assertTrue("force-tick must not error: " + tick,
                 Reply.of(tick).ok());
@@ -106,7 +106,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void orbitalLaserDrillMultiblockInvalidatesWhenLensCellRemoved() throws Exception {
         int cx = CX + 40, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock orbital-laser-drill 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -116,12 +116,12 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         // Exact offset coordinates depend on the controller offset 'c' at
         // structure[2][2][1]; the lens cell at structure[2][4][4] resolves to
         // global (cx - 3, cy, cz + 2).
-        String breakLens = join(client().execute(
+        String breakLens = join(client().arrange(
                 "stellurgytest place 0 " + (cx - 3) + " " + cy + " " + (cz + 2) + " minecraft:stone"));
         assertTrue("could not replace lens cell: " + breakLens,
                 Reply.of(breakLens).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("orbital-laser-drill validated despite missing lens cell: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
@@ -133,6 +133,6 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
 
     /** What the Forge energy capability at one block reports — refusing a block that is not there. */
     private EnergyStore energy(int x, int y, int z) throws Exception {
-        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
+        return EnergyStore.at(cmd -> join(client().read(cmd)), 0, x, y, z);
     }
 }

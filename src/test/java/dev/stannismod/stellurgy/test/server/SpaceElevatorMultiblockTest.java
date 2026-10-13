@@ -35,17 +35,17 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
     @Test
     public void spaceElevatorMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
         warmup(CX, CZ);
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock space-elevator 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock space-elevator failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileSpaceElevator tile at controller pos: " + info,
                 "TileSpaceElevator", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -57,7 +57,7 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
     public void spaceElevatorMultiblockInvalidatesWhenAdvStructureAdjacentToMotorRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
         warmup(cx, cz);
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock space-elevator 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
@@ -66,12 +66,12 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         // multiblock variants, and replacing a hidden block via setBlockState
         // can NPE through TileMotor/TilePowerInput's deconstruct hooks. Pin
         // the validator directly on the broken layout.
-        String breakAdj = join(client().execute(
+        String breakAdj = join(client().arrange(
                 "stellurgytest place 0 " + (cx + 1) + " " + cy + " " + (cz + 5) + " minecraft:stone"));
         assertTrue("could not replace adv-structure: " + breakAdj,
                 Reply.of(breakAdj).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing adv-structure east of motor: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
@@ -81,17 +81,17 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
     public void spaceElevatorMultiblockInvalidatesWhenSlabRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
         warmup(cx, cz);
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock space-elevator 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Break BEFORE first try-complete (see sibling test).
-        String breakSlab = join(client().execute(
+        String breakSlab = join(client().arrange(
                 "stellurgytest place 0 " + cx + " " + cy + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not replace slab: " + breakSlab,
                 Reply.of(breakSlab).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing slab in outer ring: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
@@ -112,7 +112,7 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         int cz1 = (blockZ - 16) >> 4;
         int cx2 = (blockX + 16) >> 4;
         int cz2 = (blockZ + 16) >> 4;
-        String resp = join(client().execute(
+        String resp = join(client().arrange(
                 "stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
         assertTrue("chunk warmup failed: " + resp, Reply.of(resp).ok());
     }

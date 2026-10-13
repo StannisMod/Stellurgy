@@ -272,13 +272,13 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
 
         // The subsystem must actually be up, or the run silently degrades into a different
         // configuration than the one a player is in and its result would mean nothing.
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                         + "config is what opts it in: " + status.raw(),
                 status.registered);
 
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -292,7 +292,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // RECORD — the pos-look packet the teleport arrives as — so it is awaited rather than
         // counted out in ticks, and the mark is taken before the command that must produce it.
         long standMark = clientEvents().mark();
-        exec("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
+        arrange("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
         clientEvents().await(standMark, "client_pos_look_applied",
                 "the stand-beside-the-craft teleport must be APPLIED on the client before anything"
                         + " is asked of it or clicked through it", CLIENT_TERRAIN_BUDGET_TICKS);
@@ -751,7 +751,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * this variant possible at all.
      */
     private String boardByProbe() throws Exception {
-        SeatMount mountInfo = SeatMount.firstLoadedSeat(this::exec, 0);
+        SeatMount mountInfo = SeatMount.firstLoadedSeat(c -> arrange(c).raw(), 0);
         scenario().requireArranged("the seat probe must FIND the loose pilot seat before assembly: "
                 + mountInfo.raw(), mountInfo.seatFound);
 
@@ -764,7 +764,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
                         && mountInfo.seatY() == seatY
                         && mountInfo.seatZ() == seatZ);
 
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // No settle: the caller links on both sides' mount records from marks it took before this.
@@ -967,7 +967,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // this ASSERTS rather than digs. It matters here because the player WALKS to the loose
         // craft and clicks its seat before anything is assembled — a pit puts him on a rim a metre
         // above the block he is aiming at, and the red then reads as the right-click path.
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 2, 16,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
                 "the loose craft, and the air the player stands and clicks in beside it");
         builderX = bp[0];
         builderY = bp[1];
@@ -976,6 +976,6 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
 
     /** Turns the loose blocks placed by {@link #buildLooseFixture} into a ship. */
     private String assembleFixture() throws Exception {
-        return exec("stellurgytest rocket assemble 0 " + builderX + " " + builderY + " " + builderZ);
+        return act("stellurgytest rocket assemble 0 " + builderX + " " + builderY + " " + builderZ).raw();
     }
 }

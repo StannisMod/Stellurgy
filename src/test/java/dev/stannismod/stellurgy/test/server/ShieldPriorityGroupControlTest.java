@@ -41,21 +41,21 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         int console = base + 4;
         place("affs:shield_console", console, z);
 
-        assertTrue(Reply.of(exec(group(console, z, "create aft 7"))).ok());
-        assertTrue(Reply.of(exec(group(console, z, "assign aft " + e1 + " " + Y + " " + z))).ok());
-        assertTrue(Reply.of(exec(group(console, z, "assign aft " + e2 + " " + Y + " " + z))).ok());
+        assertTrue(Reply.of(arrange(group(console, z, "create aft 7")).raw()).ok());
+        assertTrue(Reply.of(arrange(group(console, z, "assign aft " + e1 + " " + Y + " " + z)).raw()).ok());
+        assertTrue(Reply.of(arrange(group(console, z, "assign aft " + e2 + " " + Y + " " + z)).raw()).ok());
 
         assertEquals("group priority must be pushed into member emitter 1", 7, readPriority(e1, z));
         assertEquals("group priority must be pushed into member emitter 2", 7, readPriority(e2, z));
         assertEquals("the emitter must report the group that lists it", "aft", read(e1, z).group());
 
         // One edit retunes the whole group — the D134-5 point ("all power to the rear shields").
-        assertTrue(Reply.of(exec(group(console, z, "priority aft 3"))).ok());
+        assertTrue(Reply.of(arrange(group(console, z, "priority aft 3")).raw()).ok());
         assertEquals("raising the group must retune member 1", 3, readPriority(e1, z));
         assertEquals("raising the group must retune member 2", 3, readPriority(e2, z));
 
         // The SETTING is emitter-owned: deleting the naming layer must not retune anything.
-        assertTrue(Reply.of(exec(group(console, z, "delete aft"))).ok());
+        assertTrue(Reply.of(arrange(group(console, z, "delete aft")).raw()).ok());
         assertEquals("deleting the group silently retuned emitter 1 — the setting is emitter-owned",
                 3, readPriority(e1, z));
         assertEquals("deleting the group silently retuned emitter 2 — the setting is emitter-owned",
@@ -76,26 +76,26 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         place("affs:shield_console", consoleB, z);
 
         // Created at console A...
-        assertTrue(Reply.of(exec(group(consoleA, z, "create bow 5"))).ok());
-        assertTrue(Reply.of(exec(group(consoleA, z, "assign bow " + emitter + " " + Y + " " + z))).ok());
+        assertTrue(Reply.of(arrange(group(consoleA, z, "create bow 5")).raw()).ok());
+        assertTrue(Reply.of(arrange(group(consoleA, z, "assign bow " + emitter + " " + Y + " " + z)).raw()).ok());
 
         // ...visible at console B, because both are views of ONE domain-level config.
-        String listedAtB = exec(group(consoleB, z, "list"));
+        String listedAtB = arrange(group(consoleB, z, "list")).raw();
         // `name` IS a group's identity — this scenario named it "bow" itself — so this addresses
         // the object it created, and two groups answering to one name would be the defect the
         // refusal reports rather than an ambiguous read.
         Reply.of("stellurgytest shield group list", listedAtB).element("groups", "name", "bow");
 
         // ...and editable at console B, with the effect landing on the emitter.
-        assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 9"))).ok());
+        assertTrue(Reply.of(arrange(group(consoleB, z, "priority bow 9")).raw()).ok());
         assertEquals("an edit made at the second console did not reach the emitter", 9, readPriority(emitter, z));
 
         // Destroying console A loses nothing: the group still exists and still edits.
-        assertTrue(Reply.of(exec("stellurgytest place " + DIM + " " + consoleA + " " + Y + " " + z + " minecraft:air")
+        assertTrue(Reply.of(arrange("stellurgytest place " + DIM + " " + consoleA + " " + Y + " " + z + " minecraft:air").raw()
                 ).bool("placed"));
-        String afterBreak = exec(group(consoleB, z, "list"));
+        String afterBreak = arrange(group(consoleB, z, "list")).raw();
         Reply.of(afterBreak).element("groups", "name", "bow");
-        assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 2"))).ok());
+        assertTrue(Reply.of(arrange(group(consoleB, z, "priority bow 2")).raw()).ok());
         assertEquals("the surviving console cannot retune after the other was destroyed",
                 2, readPriority(emitter, z));
     }
@@ -110,11 +110,11 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         int console = base + 3;
         place("affs:shield_console", console, z);
 
-        assertTrue(Reply.of(exec(group(console, z, "create hull 4"))).ok());
-        assertTrue(Reply.of(exec(group(console, z, "assign hull " + emitter + " " + Y + " " + z))).ok());
+        assertTrue(Reply.of(arrange(group(console, z, "create hull 4")).raw()).ok());
+        assertTrue(Reply.of(arrange(group(console, z, "assign hull " + emitter + " " + Y + " " + z)).raw()).ok());
         String codeBefore = read(emitter, z).accessCode();
 
-        String rotated = exec("stellurgytest shield rotate-code " + DIM + " " + console + " " + Y + " " + z);
+        String rotated = arrange("stellurgytest shield rotate-code " + DIM + " " + console + " " + Y + " " + z).raw();
         assertTrue("rotation failed:\n" + rotated, Reply.of(rotated).ok());
         String newCode = readString(rotated, "code");
         assertFalse("the rotated code is empty — nothing was regenerated", newCode.isEmpty());
@@ -136,7 +136,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     }
 
     private ShieldTile read(int x, int z) throws Exception {
-        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+        return ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
     }
 
     private int readPriority(int x, int z) throws Exception {
@@ -149,7 +149,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

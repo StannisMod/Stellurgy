@@ -79,7 +79,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
         String lastLoad = "";
         for (int drawn = 0; drawn < MAX_BODIES_DRAWN && newDim == -1; drawn++) {
             Set<Integer> before = stellurgyDims();
-            exec("ar planet generate 0 Phase1aTerraformer" + drawn);
+            arrange("ar planet generate 0 Phase1aTerraformer" + drawn);
             Set<Integer> diff = stellurgyDims();
             diff.removeAll(before);
             assertEquals("planet generate must add exactly one dim — diff=" + diff,
@@ -89,7 +89,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
 
             // Force-load the new dim so subsequent block/fluid/energy probes can find a live
             // WorldServer for it. A body that cannot load has no surface; draw the next one.
-            lastLoad = exec("stellurgytest dim load " + dim);
+            lastLoad = arrange("stellurgytest dim load " + dim).raw();
             if (Reply.of(lastLoad).bool("loaded")) {
                 newDim = dim;
             }
@@ -102,7 +102,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
     public void cleanupPlanet() throws Exception {
         for (int dim : generated) {
             try {
-                exec("ar planet delete " + dim);
+                arrange("ar planet delete " + dim);
             } catch (Exception ignored) {
                 // Best-effort cleanup; harness teardown will reclaim anyway.
             }
@@ -138,8 +138,8 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
         // DIAGNOSTIC — dump the controller's internal aggregator state so
         // a failure points directly at integration (P/L hatches not added)
         // vs cycle (currentTime not incrementing).
-        String preState = exec("stellurgytest machine controller-state "
-                + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ);
+        String preState = read("stellurgytest machine controller-state "
+                + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ).raw();
         assertTrue("controller-state probe missing batteries readout — " + preState,
                 Reply.of(preState).bool("batteriesPresent"));
 
@@ -150,7 +150,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
         // before=1600 after=1600 while its two siblings passed, which is what a fixture at the
         // ceiling looks like, not a terraformer that does not work.) The subject is whether a
         // powered, fuelled terraformer MOVES the density; where it starts is arrangement.
-        exec("ar planet set " + newDim + " atmosphereDensity 100");
+        arrange("ar planet set " + newDim + " atmosphereDensity 100").raw();
         int densityBefore = readDensity();
         assertTrue("arrangement: the planet must start below the terraformer's ceiling, got "
                 + densityBefore, densityBefore < TERRAFORMER_CEILING);
@@ -170,8 +170,8 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
         }
         int densityAfter = readDensity();
 
-        String postState = exec("stellurgytest machine controller-state "
-                + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ);
+        String postState = read("stellurgytest machine controller-state "
+                + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ).raw();
         assertNotEquals("powered + fueled terraformer did not move density"
                         + " (before=" + densityBefore + " after=" + densityAfter + ")"
                         + "; preState=" + preState
@@ -226,8 +226,8 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
         enableMachine(CX_NO_POWER);
         // Wipe the aggregator AFTER integrateTile populated it, so the
         // controller observes an empty battery list each tick.
-        String drain = exec("stellurgytest machine clear-batteries " + newDim
-                + " " + CX_NO_POWER + " " + CY + " " + CZ);
+        String drain = arrange("stellurgytest machine clear-batteries " + newDim
+                + " " + CX_NO_POWER + " " + CY + " " + CZ).raw();
         assertTrue("clear-batteries probe failed: " + drain,
                 Reply.of(drain).bool("cleared"));
 
@@ -252,12 +252,12 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
     // ─── helpers ───────────────────────────────────────────────────────
 
     private String buildAndCompleteFixture(int cx) throws Exception {
-        String fixture = exec("stellurgytest fixture multiblock terraformer "
-                + newDim + " " + cx + " " + CY + " " + CZ);
+        String fixture = arrange("stellurgytest fixture multiblock terraformer "
+                + newDim + " " + cx + " " + CY + " " + CZ).raw();
         assertTrue("terraformer fixture build failed: " + fixture,
                 Reply.of(fixture).ok() && (Reply.of(fixture).integer("unresolved") == 0));
-        String tryComplete = exec("stellurgytest machine try-complete "
-                + newDim + " " + cx + " " + CY + " " + CZ);
+        String tryComplete = act("stellurgytest machine try-complete "
+                + newDim + " " + cx + " " + CY + " " + CZ).raw();
         assertTrue("terraformer structure failed to complete: " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
         return fixture;
@@ -269,8 +269,8 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
         int px = m[0];
         int py = m[1];
         int pz = m[2];
-        String resp = exec("stellurgytest energy inject "
-                + newDim + " " + px + " " + py + " " + pz + " " + amount);
+        String resp = arrange("stellurgytest energy inject "
+                + newDim + " " + px + " " + py + " " + pz + " " + amount).raw();
         assertTrue("energy inject failed: " + resp, Reply.of(resp).ok());
     }
 
@@ -280,7 +280,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  dim-load handshake has regressed and the powered-cycle assertions
      *  below would fail for an irrelevant reason. */
     private void assertDimIsNativeStellurgyPlanet() throws Exception {
-        DimInfo info = DimInfo.forDim(this::exec, newDim);
+        DimInfo info = DimInfo.forDim(c -> read(c).raw(), newDim);
         assertTrue("dim info missing isStellurgyPlanet:true — " + info.raw(), info.stellurgyPlanet);
         // The terraformer gate also needs WorldProviderPlanet, asked of the field that names the
         // provider: the `contains` this replaces would have been answered by the save folder or by
@@ -299,9 +299,9 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
     private void injectFluidAt(String fixture, int hatchIndex, String fluidName,
                                int amount) throws Exception {
         int[] pos = nthLiquidInputPos(fixture, hatchIndex);
-        String resp = exec("stellurgytest fluid inject "
+        String resp = arrange("stellurgytest fluid inject "
                 + newDim + " " + pos[0] + " " + pos[1] + " " + pos[2]
-                + " " + fluidName + " " + amount);
+                + " " + fluidName + " " + amount).raw();
         assertTrue(fluidName + " inject failed at hatch " + hatchIndex + ": " + resp,
                 Reply.of(resp).ok());
     }
@@ -320,19 +320,19 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
     }
 
     private void enableMachine(int cx) throws Exception {
-        String resp = exec("stellurgytest machine set-enabled "
-                + newDim + " " + cx + " " + CY + " " + CZ + " true");
+        String resp = arrange("stellurgytest machine set-enabled "
+                + newDim + " " + cx + " " + CY + " " + CZ + " true").raw();
         assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled"));
     }
 
     private void forceTick(int cx, int ticks) throws Exception {
-        String resp = exec("stellurgytest tile force-tick "
-                + newDim + " " + cx + " " + CY + " " + CZ + " " + ticks);
+        String resp = act("stellurgytest tile force-tick "
+                + newDim + " " + cx + " " + CY + " " + CZ + " " + ticks).raw();
         assertTrue("force-tick errored: " + resp, Reply.of(resp).ok());
     }
 
     private int readDensity() throws Exception {
-        String info = exec("stellurgytest terraforming info " + newDim);
+        String info = read("stellurgytest terraforming info " + newDim).raw();
         Reply mReply = Reply.of(info);
         assertTrue("no currentAtmosphere in terraforming info: " + info, mReply.has(CURRENT_ATMOS));
         return Integer.parseInt(mReply.text(CURRENT_ATMOS));
@@ -345,7 +345,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      */
     private Set<Integer> stellurgyDims() throws Exception {
         Set<Integer> ids = new HashSet<>();
-        for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list")).intArray("stellurgyDimensions")) {
+        for (int dim : Reply.of("stellurgytest dim list", read("stellurgytest dim list").raw()).intArray("stellurgyDimensions")) {
             ids.add(dim);
         }
         return ids;

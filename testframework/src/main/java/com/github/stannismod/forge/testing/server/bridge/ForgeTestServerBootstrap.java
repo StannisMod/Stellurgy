@@ -38,7 +38,7 @@ import java.util.concurrent.*;
  *
  * <p>Protocol, line-delimited JSON, one object per line, identical in shape to the client bridge:
  * the child writes the literal line {@code READY} once on connect; a request is
- * {@code {"command":"stellurgytest beacon list 2"}}; a response is {@code {"ok":true,"lines":[…]}} or
+ * {@code {"command":"stellurgytest beacon list 2","role":"read"}}; a response is {@code {"ok":true,"lines":[…]}} or
  * {@code {"ok":false,"error":"…"}}.</p>
  *
  * <p>What it is silent about: it reports only what the command sent to its sender. Anything the
@@ -171,12 +171,19 @@ public final class ForgeTestServerBootstrap {
         throw new IOException("Timed out connecting the Forge test server bridge", last);
     }
 
-    /** Dispatch one parsed request object. The only verb is {@code command}. */
+    /**
+     * Dispatch one parsed request object. The only verb is {@code command}, and it carries the
+     * {@code role} it was sent in ({@link com.github.stannismod.forge.testing.server.CommandRole}): there is
+     * no role-less request.
+     */
     private static JsonObject handleRequest(JsonObject request) {
         if (!request.has("command")) {
             return error("Missing required key: command");
         }
-        return executeCommand(request.get("command").getAsString());
+        if (!request.has("role")) {
+            return error("Missing required key: role -- every command is sent in a role (read, arrange, act)");
+        }
+        return executeCommand(request.get("command").getAsString(), request.get("role").getAsString());
     }
 
     /**
@@ -200,13 +207,13 @@ public final class ForgeTestServerBootstrap {
      * vanilla's behaviour for every scheduled task and not something this bridge can override; a
      * caller sending commands after {@code stop} is already outside the guarantee.</p>
      */
-    private static JsonObject executeCommand(final String command) {
+    private static JsonObject executeCommand(final String command, String role) {
         final MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
         if (server == null) {
             return error("No MinecraftServer instance yet");
         }
 
-        final CollectingCommandSender sender = new CollectingCommandSender(server);
+        final CollectingCommandSender sender = new CollectingCommandSender(server, role);
         Callable<Integer> call = () -> Integer.valueOf(
                 server.getCommandManager().executeCommand(sender, command));
         FutureTask<Integer> task = new FutureTask<Integer>(call);
@@ -267,9 +274,12 @@ public final class ForgeTestServerBootstrap {
 
         private final MinecraftServer server;
         private final List<String> lines = new ArrayList<String>();
+        /** The role the request was sent in; the consuming mod's gate reads it off {@link #getName()}. */
+        private final String role;
 
-        CollectingCommandSender(MinecraftServer server) {
+        CollectingCommandSender(MinecraftServer server, String role) {
             this.server = server;
+            this.role = role;
         }
 
         /** The captured reply, in the order the command produced it. */
@@ -279,9 +289,13 @@ public final class ForgeTestServerBootstrap {
             }
         }
 
+        /**
+         * {@code ForgeTestBridge/<role>}: the role travels in the name, the one thing a server-side judge can
+         * read off any sender without compiling against this class. A protocol, restated by the consumer.
+         */
         @Override
         public String getName() {
-            return "ForgeTestBridge";
+            return "ForgeTestBridge/" + role;
         }
 
         @Override

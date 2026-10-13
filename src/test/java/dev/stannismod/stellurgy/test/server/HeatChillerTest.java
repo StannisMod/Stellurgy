@@ -186,7 +186,7 @@ public class HeatChillerTest extends AbstractSharedServerTest {
         requireArranged("premise: the hot loop must be above ambient, or there is no gradient to work "
                 + "against: " + hot, gradientCharge > 0);
         Reply set = arrange("stellurgytest heat set 0 " + coldAnchor(x0) + " " + y + " " + z + " "
-                + gradientCharge);
+                + gradientCharge).requireOk();
         requireArranged("premise: the cold loop's block must take the charge: " + set,
                 set.bool("isLoopBlock") && set.longInteger("heatStored") == gradientCharge);
         solve(1);
@@ -237,14 +237,14 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * answers no {@code ok}; a reply that is not a battery reading carries no {@code hasEnergy:true}.
      */
     private long chillerEnergy(int x0) throws Exception {
-        Reply stored = ask("stellurgytest energy stored 0 " + (x0 + RUN_LENGTH) + " " + y + " " + z);
+        Reply stored = read("stellurgytest energy stored 0 " + (x0 + RUN_LENGTH) + " " + y + " " + z);
         requireArranged("premise: the chiller must expose its battery: " + stored, stored.bool("hasEnergy"));
         return stored.longInteger("energyStored");
     }
 
     /** Charge a loop and advance it, atomically — the world ticks between probe calls. */
     private Reply cycle(int x, long charge, int ticks) throws Exception {
-        Reply resp = arrange("stellurgytest heat cycle 0 " + x + " " + y + " " + z + " " + charge + " " + ticks);
+        Reply resp = act("stellurgytest heat cycle 0 " + x + " " + y + " " + z + " " + charge + " " + ticks).requireOk();
         requireArranged("heat cycle found no loop at " + x + ": " + resp, resp.bool("inLoop"));
         requireArranged("premise: the loop must hold exactly what was asked: " + resp,
                 charge == resp.longInteger("charged"));
@@ -253,16 +253,16 @@ public class HeatChillerTest extends AbstractSharedServerTest {
 
     private void place(int x, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         requireArranged(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
     private void solve(int ticks) throws Exception {
-        Reply solved = arrange("stellurgytest subnet solve heat 0 " + ticks);
+        Reply solved = act("stellurgytest subnet solve heat 0 " + ticks).requireOk();
         requireArranged("solve failed: " + solved, ticks == solved.integer("ticksSolved"));
     }
 
     private Reply loopInfo(int x) throws Exception {
-        return ask("stellurgytest subnet info heat 0 " + x + " " + y + " " + z);
+        return read("stellurgytest subnet info heat 0 " + x + " " + y + " " + z);
     }
 }

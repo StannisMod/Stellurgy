@@ -75,7 +75,7 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
     public void theSeatMountTurnsWithItsShip() throws Exception {
 
         String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("the pilot-seat build must route to a ship, not a rocket: " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source ship never assembled/loaded", loadedShips(0) >= 1);
@@ -83,31 +83,31 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
         // The craft this scenario built, by the name its assembler minted, and the physics id that
         // name maps to. The build site is in a world every server-tier class shares.
         String durableId = ShipIdentity.nameFromAssembly(asm);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableId);
 
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship, or nothing below is measured");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
-        String mountAt = exec("stellurgytest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ);
+        String mountAt = arrange("stellurgytest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ).raw();
         assertTrue("the seat's mount dummy must spawn: " + mountAt, Reply.of(mountAt).ok());
 
         // Where the ship points BEFORE the turn, and where its mount thinks it points. Asked by the
         // id resolved above: a lookup at the build site was defended as "the one positional lookup
         // this scenario can defend — the ship has not moved", but not having moved is a fact about
         // THIS craft and says nothing about how many others are standing there.
-        double shipYawBefore = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
+        double shipYawBefore = shipYawOf(ShipInfo.byId(c -> read(c).raw(), 0, shipId));
         double mountYawBefore = mountYaw(seatX, seatY, seatZ);
 
         // ── TURN THE SHIP ───────────────────────────────────────────────────────────────────────
         // Commanded on an UNMANNED ship: a seated pilot's own input would overwrite the attitude
         // target every tick. The ship hovers while the controller slews it round.
         assertTrue("the attitude hold must accept the yaw command",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + shipId
-                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + shipId
+                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0").raw()).bool("commanded"));
 
         GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
-        double shipYawAfter = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
+        double shipYawAfter = shipYawOf(ShipInfo.byId(c -> read(c).raw(), 0, shipId));
 
         // The gate: unless the SHIP really turned, "the mount agrees with the ship" is a comparison
         // of two zeroes and would be green on a build where nothing writes the mount at all.
@@ -137,7 +137,7 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
 
     /** The mount's own yaw, off the seat block it is bound to. */
     private double mountYaw(int seatX, int seatY, int seatZ) throws Exception {
-        String status = exec("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
+        String status = read("stellurgytest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ).raw();
         assertTrue("the seat's bound mount must be found for its rotation to be read: " + status,
                 Reply.of(status).bool("dummyFound"));
         return extractDouble(status, "dummyYaw");
@@ -163,7 +163,7 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
+        return ShipReadiness.loadedCount(c -> read(c).raw(), dim);
     }
 
 
@@ -181,7 +181,7 @@ public class VSSeatDummyFacesTheShipTest extends AbstractSharedServerTest {
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }

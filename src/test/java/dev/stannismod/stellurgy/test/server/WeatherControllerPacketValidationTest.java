@@ -51,7 +51,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
     }
 
     private long createWeatherSat() throws Exception {
-        String resp = ok(client().execute("stellurgytest satellite create 0 weatherController 100 1000 1000"));
+        String resp = ok(client().arrange("stellurgytest satellite create 0 weatherController 100 1000 1000"));
         assertTrue("weather satellite create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("no id in create response: " + resp, mReply.has(ID));
@@ -71,7 +71,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
     public void serverClampsOutOfRangeFloodLevelAndMode() throws Exception {
         long satId = createWeatherSat();
 
-        String apply = ok(client().execute(
+        String apply = ok(client().act(
                 "stellurgytest satellite weather-apply 0 " + satId + " 5 100000"));
         assertTrue("weather-apply failed: " + apply, Reply.of(apply).ok());
 
@@ -94,7 +94,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
     public void serverClampsNegativeFloodLevel() throws Exception {
         long satId = createWeatherSat();
 
-        String apply = ok(client().execute(
+        String apply = ok(client().act(
                 "stellurgytest satellite weather-apply 0 " + satId + " 1 -50"));
         assertTrue("weather-apply failed: " + apply, Reply.of(apply).ok());
 
@@ -109,7 +109,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
     public void serverAcceptsInRangeValuesUnchanged() throws Exception {
         long satId = createWeatherSat();
 
-        String apply = ok(client().execute(
+        String apply = ok(client().act(
                 "stellurgytest satellite weather-apply 0 " + satId + " 2 90"));
         assertTrue("weather-apply failed: " + apply, Reply.of(apply).ok());
 

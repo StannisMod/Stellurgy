@@ -105,7 +105,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
      */
     @org.junit.After
     public void clearCraft() throws Exception {
-        ShipReadiness.clearCraftFrom(this::exec, 0);
+        ShipReadiness.clearCraftFrom(c -> arrange(c).raw(), 0);
     }
 
     // --- the unloaded source ------------------------------------------------------------------------
@@ -135,7 +135,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
             + " and cannot say which hand collected: the one this test was written for is not the only one.")
     @Test
     public void aCrossingOutOfAnUnloadedSourceLeavesNoRegistryEntry() throws Exception {
-        ShipReadiness.letShipsUnload(this::exec,
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(),
                 "this scenario's subject IS a registered ship nobody has loaded; held loaded, it would"
                 + " silently become a copy of the loaded-source legs");
         try {
@@ -154,8 +154,8 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
             // id captured while the craft was loaded: translating the durable name now would force-load
             // the ship and undo the arrangement.
             long crossMark = events.mark();
-            String cross = exec("stellurgytest vs ship-repack 0 id " + shipId + " " + UNLOADED_X + " " + BUILD_Y
-                    + " " + UNLOADED_Z + " " + (UNLOADED_X + HOP) + " " + SKY_Y + " " + UNLOADED_Z);
+            String cross = act("stellurgytest vs ship-repack 0 id " + shipId + " " + UNLOADED_X + " " + BUILD_Y
+                    + " " + UNLOADED_Z + " " + (UNLOADED_X + HOP) + " " + SKY_Y + " " + UNLOADED_Z).raw();
             assertTrue("the crossing itself failed, so this test measures nothing: " + cross,
                     Reply.of(cross).ok());
             // Two registry changes, both on later world ticks: the cut source collected, the paste
@@ -187,7 +187,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
                             + "and it is written to disk with the world.",
                     registryBefore, registryAfter);
         } finally {
-            ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "this scenario's opt-out ends with it");
         }
     }
 
@@ -202,14 +202,14 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
      */
     @Test
     public void aBlocklessRecordNobodyDeregisteredIsSweptFromTheRegistry() throws Exception {
-        ShipReadiness.letShipsUnload(this::exec,
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(),
                 "the planted record must stand in a world where nothing holds ships loaded");
         try {
             int registryBefore = queryableShips();
 
             long plantMark = events.mark();
-            String planted = exec("stellurgytest vs strand-blockless-record 0 "
-                    + UNLOADED_X + " " + BUILD_Y + " " + UNLOADED_Z);
+            String planted = arrange("stellurgytest vs strand-blockless-record 0 "
+                    + UNLOADED_X + " " + BUILD_Y + " " + UNLOADED_Z).raw();
             assertTrue("the fault injection itself failed, so this leg measures nothing: " + planted,
                     Reply.of(planted).ok());
             assertEquals("the plant must actually have put a record in the registry — read on the "
@@ -224,7 +224,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
                             + " registry went " + registryBefore + " -> " + queryableShips()
                             + "; planted=" + planted, WAIT_TICKS);
         } finally {
-            ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "this scenario's opt-out ends with it");
         }
     }
 
@@ -236,13 +236,13 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
     private String buildUnloadableShip() throws Exception {
         long buildMark = events.mark();
         String coords = placeFixture(FixtureSite.openAir(0, UNLOADED_X, UNLOADED_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         durableShipId = ShipIdentity.nameFromAssembly(asm);
         events.awaitField(buildMark, "ship_spawned", "stellurgyShip", durableShipId,
                 "the ship never entered VS's registry: " + counters(), WAIT_TICKS);
-        return ShipIdentity.physicsIdOf(this::exec, 0, durableShipId);
+        return ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableShipId);
     }
 
     /**
@@ -282,13 +282,13 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
                 "the arrival must be dropped by the load controller — nothing holds ships loaded in"
                         + " this scenario — before a pump can load it for the read: " + counters(),
                 WAIT_TICKS);
-        exec("stellurgytest vs load-ships 0");
+        arrange("stellurgytest vs load-ships 0");
         // READ INTO A LOCAL: Java evaluates an assertion's MESSAGE before its condition, and the
         // message's probe calls would spend the tick the hull is resident (measured 2026-09-22).
-        boolean arrived = ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, UNLOADED_Z, POSE_TOLERANCE);
+        boolean arrived = ShipIdentity.aLoadedShipIsAt(c -> read(c).raw(), 0, x, y, UNLOADED_Z, POSE_TOLERANCE);
         assertTrue("the arrival was registered, dropped and pumped, but no loaded ship stands within "
                         + POSE_TOLERANCE + " of " + x + "," + y + "," + UNLOADED_Z + ": " + counters()
-                        + " | loaded hulls now: " + exec("stellurgytest vs ships-loaded 0"),
+                        + " | loaded hulls now: " + read("stellurgytest vs ships-loaded 0").raw(),
                 arrived);
     }
 
@@ -329,7 +329,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
         // Marked before the assemble: the registry add is made inside it, and is announced once.
         long buildMark = events.mark();
         String coords = placeFixture(FixtureSite.openAir(0, baseX, BASE_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        String asm = act("stellurgytest rocket assemble 0 " + coords).raw();
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
         durableShipId = ShipIdentity.nameFromAssembly(asm);
@@ -350,19 +350,19 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
         // The crossing CUTS a ship, so it is told which one. The positional form resolves the yard as
         // "whatever craft is nearest", and this class exists to prove no ship is LEFT BEHIND — so the
         // leftovers it hunts for are precisely what such a lookup would reach for.
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableShipId);
-        return exec("stellurgytest vs ship-repack 0 id " + shipId + " " + sx + " " + sy + " " + BASE_Z
-                + " " + dx + " " + dy + " " + BASE_Z);
+        String shipId = ShipIdentity.physicsIdOf(c -> read(c).raw(), 0, durableShipId);
+        return act("stellurgytest vs ship-repack 0 id " + shipId + " " + sx + " " + sy + " " + BASE_Z
+                + " " + dx + " " + dy + " " + BASE_Z).raw();
     }
 
     // --- observation --------------------------------------------------------------------------------
 
     private int loadedShips() throws Exception {
-        return extractInt(exec("stellurgytest vs ship-count 0"), "count");
+        return extractInt(read("stellurgytest vs ship-count 0").raw(), "count");
     }
 
     private int queryableShips() throws Exception {
-        return extractInt(exec("stellurgytest vs ship-count-all 0"), "count");
+        return extractInt(read("stellurgytest vs ship-count-all 0").raw(), "count");
     }
 
     /** Both counters together: the pair is the diagnosis, either one alone is just a number. */
@@ -379,7 +379,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
      * preferred another. Same claim, no lookup that can pick the wrong craft to test.</p>
      */
     private boolean shipIsAt(int x, int y) throws Exception {
-        return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
+        return ShipIdentity.aLoadedShipIsAt(c -> read(c).raw(), 0, x, y, BASE_Z, POSE_TOLERANCE);
     }
 
     /**
@@ -415,7 +415,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
 
     /**
@@ -432,7 +432,7 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
      * they are what this scenario's green runs were taken over.</p>
      */
     private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }
@@ -500,16 +500,16 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
         // Nothing holds a ship loaded on a headless server once permanent loading is off: there is no
         // player for the world's own pass to measure a distance to, so it drops the craft by itself.
-        ShipReadiness.letShipsUnload(this::exec, "the un-naming half is the subject: the craft has to be"
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(), "the un-naming half is the subject: the craft has to be"
                 + " dropped by the world's own pass");
         String window;
         try {
             awaitAnnounced(mark, shipId, "UNLOADED", "dropping the ship object must be announced");
         } finally {
-            ShipReadiness.holdShipsLoaded(this::exec, "the LOADED edge is the last subject: the craft has"
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "the LOADED edge is the last subject: the craft has"
                     + " to be fetched back — and this scenario's opt-out ends with it");
         }
-        exec("stellurgytest vs load-ships 0");
+        arrange("stellurgytest vs load-ships 0");
         window = awaitAnnounced(mark, shipId, "LOADED", "coming back must be announced");
 
         assertEquals("a craft that has just been built must be announced as ASSEMBLED exactly once: "
@@ -546,10 +546,10 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
         // The production crossing: the blocks are cut out and pasted elsewhere, and the craft is
         // re-registered around them. Told WHICH craft to cut; the source pose is only where the
         // riders are gathered.
-        ShipInfo source = ShipInfo.byId(this::exec, 0, shipId);
-        String repack = exec("stellurgytest vs ship-repack 0 id " + shipId + " "
+        ShipInfo source = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
+        String repack = act("stellurgytest vs ship-repack 0 id " + shipId + " "
                 + (int) source.x + " " + (int) source.y + " " + (int) source.z + " "
-                + (NAMING_CROSS_X + HOP) + " " + FixtureSite.OPEN_AIR_Y + " " + NAMING_Z);
+                + (NAMING_CROSS_X + HOP) + " " + FixtureSite.OPEN_AIR_Y + " " + NAMING_Z).raw();
         requireArranged("the crossing must actually run, or nothing below is a paste: " + repack,
                 Reply.of(repack).ok());
         // The identity the craft came out under, as the crossing itself reports it.
@@ -599,11 +599,11 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
         ArrangementFailure.arranged(() -> awaitAnnounced(mark, shipId, "ASSEMBLED",
                 "the craft must exist before it can cross"));
 
-        ShipInfo source = ShipInfo.byId(this::exec, 0, shipId);
+        ShipInfo source = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         long crossMark = events.mark();
-        String repack = exec("stellurgytest vs ship-repack 0 id " + shipId + " "
+        String repack = act("stellurgytest vs ship-repack 0 id " + shipId + " "
                 + (int) source.x + " " + (int) source.y + " " + (int) source.z + " "
-                + (NAMING_DEPART_X + HOP) + " " + FixtureSite.OPEN_AIR_Y + " " + NAMING_Z);
+                + (NAMING_DEPART_X + HOP) + " " + FixtureSite.OPEN_AIR_Y + " " + NAMING_Z).raw();
         requireArranged("the crossing must actually cut and paste the craft, or nothing below is a"
                 + " departure: " + repack, Reply.of(repack).ok());
         String arrivedAs = Reply.of("stellurgytest vs ship-repack", repack).text("shipUuid");
@@ -640,11 +640,11 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
     /** Build and assemble a craft on its own lane, and answer its physics identity once it is named. */
     private String buildAnnouncedShipAt(int baseX) throws Exception {
-        String asm = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, NAMING_Z), this::exec,
-                "with-pilot-seat", 4, 12, "the craft whose naming edges are counted stands in this volume");
+        String asm = RocketFixture.assembleBuilt(FixtureSite.openAir(0, baseX, NAMING_Z), c -> act(c).raw(), RocketFixture.placeAt(FixtureSite.openAir(0, baseX, NAMING_Z), c -> arrange(c).raw(),
+                "with-pilot-seat", 4, 12, "the craft whose naming edges are counted stands in this volume"));
         requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
                 Reply.of(asm).integer("rocketCount") == 0);
-        return ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
+        return ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, 0,
                 ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
     }
 }

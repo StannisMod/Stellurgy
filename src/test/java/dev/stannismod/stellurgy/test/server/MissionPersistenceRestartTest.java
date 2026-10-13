@@ -89,9 +89,9 @@ public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
         final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
-        RocketFixture.assembleAt(site, cmd -> ok(boot.client().execute(cmd)), "simple", 2, 10,
-                "the craft whose mission must survive the restart is built in this volume");
-        String list = ok(boot.client().execute("stellurgytest rocket list 0"));
+        RocketFixture.assembleBuilt(site, cmd -> ok(boot.client().act(cmd)), RocketFixture.placeAt(site, cmd -> ok(boot.client().arrange(cmd)), "simple", 2, 10,
+                "the craft whose mission must survive the restart is built in this volume"));
+        String list = ok(boot.client().read("stellurgytest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
@@ -106,7 +106,7 @@ public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         int rid = buildAndAssembleRocket(firstBoot, 9500);
-        String start = ok(firstBoot.client().execute(
+        String start = ok(firstBoot.client().arrange(
                 "stellurgytest mission start-gas 0 " + rid + " " + expectedDuration + " oxygen 10"));
         assertFalse("start-gas failed in boot1: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
@@ -118,7 +118,7 @@ public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
 
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
-        String state = ok(secondBoot.client().execute("stellurgytest mission state " + missionId));
+        String state = ok(secondBoot.client().read("stellurgytest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,
                 Reply.of(state).has("error"));
         assertTrue("mission type must be gas after reboot: " + state,
@@ -146,7 +146,7 @@ public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
         firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         int rid = buildAndAssembleRocket(firstBoot, 9600);
-        String start = ok(firstBoot.client().execute(
+        String start = ok(firstBoot.client().arrange(
                 "stellurgytest mission start-ore 0 " + rid + " " + expectedDuration + " 1.0"));
         assertFalse("start-ore failed in boot1: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
@@ -158,7 +158,7 @@ public class MissionPersistenceRestartTest extends AbstractMechanicsTest {
 
         secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
-        String state = ok(secondBoot.client().execute("stellurgytest mission state " + missionId));
+        String state = ok(secondBoot.client().read("stellurgytest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,
                 Reply.of(state).has("error"));
         assertTrue("mission type must be ore after reboot: " + state,

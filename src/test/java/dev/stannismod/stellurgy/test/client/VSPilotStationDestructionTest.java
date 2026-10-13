@@ -94,8 +94,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         Events events = serverEvents();
         long breakMark = events.markInstrumented();
         long breakClientMark = clientEvents().mark();
-        String broke = exec("stellurgytest fill 0 " + ship.seatX + " " + ship.seatY + " " + ship.seatZ
-                + " " + ship.seatX + " " + ship.seatY + " " + ship.seatZ + " minecraft:air");
+        String broke = arrange("stellurgytest fill 0 " + ship.seatX + " " + ship.seatY + " " + ship.seatZ
+                + " " + ship.seatX + " " + ship.seatY + " " + ship.seatZ + " minecraft:air").raw();
         assertTrue("breaking the seat block failed: " + broke, Reply.of(broke).ok());
         try {
             // The release, as the three links breakBlock commits in ITS OWN source order: it
@@ -170,8 +170,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         Events events = serverEvents();
         long breakMark = events.markInstrumented();
         long breakClientMark = clientEvents().mark();
-        String broke = exec("stellurgytest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
-                + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air");
+        String broke = arrange("stellurgytest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
+                + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air").raw();
         assertTrue("breaking the flight computer block failed: " + broke,
                 Reply.of(broke).ok());
 
@@ -239,7 +239,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -256,7 +256,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
                 "assembly must create a VS ship in the queryable registry (async spawn)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what loads the ship, so the readiness link below is"
                         + " waiting on something only an arrived client can cause");
@@ -272,7 +272,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
 
         // Resolve the seat + computer SUBSPACE blocks now, while the ship still sits at its build
         // site (subspace addresses are stationary; the ship's world pose is about to change).
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, ship.id)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, ship.id)
                 .requireFound("find-seat must resolve the ship's subspace seat");
         ship.seatX = seat.seatX;
         ship.seatY = seat.seatY;
@@ -286,11 +286,11 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // addressed by the subspace block find-seat just resolved FOR THIS SHIP: `vs seat-mount`
         // takes the first pilot seat in the world with no position filter, which mounts a
         // neighbour's ship once several scenarios share a world.
-        String mountInfo = exec("stellurgytest vs seat-mount-at 0 " + ship.seatX + " " + ship.seatY
-                + " " + ship.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at 0 " + ship.seatX + " " + ship.seatY
+                + " " + ship.seatZ).raw();
         ship.dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + ship.dummyId);
+        String mount = arrange("stellurgytest player mount-entity " + ship.dummyId).raw();
         assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
         // The lift below is commanded by a real key held on a client that must already be riding;
         // ten ticks were a bet on that, and this whole class is about what happens to a pilot.
@@ -407,7 +407,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // air fill's own `placed`. Open air, so this ASSERTS rather than digs — a craft climbing on
         // a held key out of a ten-block pit meets its rim, and the red then accuses the destruction
         // handler this class exists to test.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
-                "the hull, and the first blocks of the lane it climbs before the seat is broken");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), VARIANT, 2, 16,
+                "the hull, and the first blocks of the lane it climbs before the seat is broken"));
     }
 }

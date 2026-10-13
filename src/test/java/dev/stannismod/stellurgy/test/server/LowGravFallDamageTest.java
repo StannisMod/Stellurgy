@@ -71,7 +71,7 @@ public class LowGravFallDamageTest extends AbstractSharedServerTest {
      * next command reads the write itself.
      */
     private void stationFake(int dim) throws Exception {
-        String fake = exec("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5");
+        String fake = act("stellurgytest player ensure-fake " + dim + " 8.5 120 8.5").raw();
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
     }
 
@@ -79,7 +79,7 @@ public class LowGravFallDamageTest extends AbstractSharedServerTest {
     @Test
     public void overworldDoesNotScaleFallDistance() throws Exception {
         stationFake(0);
-        String resp = exec("stellurgytest player try-fall 20");
+        String resp = act("stellurgytest player try-fall 20").raw();
         assertEquals("overworld must NOT be an IPlanetaryProvider; " + resp,
                 false, boolField(IS_PLANETARY, resp));
         assertEquals("overworld fall distance must be unchanged by the Stellurgy handler; " + resp,
@@ -90,7 +90,7 @@ public class LowGravFallDamageTest extends AbstractSharedServerTest {
     @Test
     public void lowGravDimScalesFallDistanceByGravityMultiplier() throws Exception {
         stationFake(DIM_LOW_GRAV);
-        String resp = exec("stellurgytest player try-fall 20");
+        String resp = act("stellurgytest player try-fall 20").raw();
         assertEquals("low-grav Stellurgy dim must report as IPlanetaryProvider; " + resp,
                 true, boolField(IS_PLANETARY, resp));
         double input = doubleField(INPUT_DIST, resp);

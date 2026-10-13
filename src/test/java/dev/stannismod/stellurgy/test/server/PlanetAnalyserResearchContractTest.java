@@ -54,14 +54,14 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
     @Test
     public void poweredAnalyserIncrementsChipCompositionFromDataBus() throws Exception {
         // 1) Assemble the analyser via fixture.
-        String fixture = exec("stellurgytest fixture multiblock planet-analyser 0 "
-                + CX + " " + CY + " " + CZ);
+        String fixture = arrange("stellurgytest fixture multiblock planet-analyser 0 "
+                + CX + " " + CY + " " + CZ).raw();
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Validate structure — required so libVulpes' integrateTile populates
         // dataCables[] (the field the analyser reads from).
-        String tryComplete = exec("stellurgytest machine try-complete 0 "
-                + CX + " " + CY + " " + CZ);
+        String tryComplete = act("stellurgytest machine try-complete 0 "
+                + CX + " " + CY + " " + CZ).raw();
         assertTrue("analyser must validate (precondition for dataCables[] "
                         + "to be populated): " + tryComplete,
                 Reply.of(tryComplete).bool("isComplete"));
@@ -71,9 +71,9 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         // dataCables[0]=COMPOSITION depends on libVulpes' integrateTile
         // iteration order — feeding all 3 sidesteps the question.
         for (int dx = -1; dx <= 1; dx++) {
-            String seed = exec("stellurgytest infra databus-set-data 0 "
+            String seed = arrange("stellurgytest infra databus-set-data 0 "
                     + (CX + dx) + " " + (CY - 1) + " " + (CZ + 1)
-                    + " COMPOSITION 30");
+                    + " COMPOSITION 30").raw();
             assertTrue("databus-set-data must succeed at dx=" + dx
                             + ": " + seed,
                     Reply.of(seed).ok());
@@ -82,20 +82,20 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         // 3) Inject 100k RF into the power-input plug at (cx+1, cy-1, cz).
         // requiredPowerPerTick = 100 -> 100k buys 1000 ticks of headroom
         // (~50 research cycles, well above the 1 we need).
-        String energy = exec("stellurgytest energy inject 0 "
-                + (CX + 1) + " " + (CY - 1) + " " + CZ + " 100000");
+        String energy = arrange("stellurgytest energy inject 0 "
+                + (CX + 1) + " " + (CY - 1) + " " + CZ + " 100000").raw();
         assertTrue("energy inject must succeed: " + energy,
                 Reply.of(energy).ok());
 
         // 4) Drop an AsteroidChip with UUID=1L into slot 0 of the controller.
-        String load = exec("stellurgytest infra astrobody-load-chip 0 "
-                + CX + " " + CY + " " + CZ);
+        String load = arrange("stellurgytest infra astrobody-load-chip 0 "
+                + CX + " " + CY + " " + CZ).raw();
         assertTrue("astrobody-load-chip must succeed: " + load,
                 Reply.of(load).ok());
 
         // Baseline: chip should report composition=0 before research.
-        String pre = exec("stellurgytest infra astrobody-chip-data 0 "
-                + CX + " " + CY + " " + CZ);
+        String pre = read("stellurgytest infra astrobody-chip-data 0 "
+                + CX + " " + CY + " " + CZ).raw();
         assertTrue("chip-data must succeed pre-research: " + pre,
                 Reply.of(pre).ok());
         int compositionBefore = extract(pre, COMPOSITION_PAT);
@@ -106,22 +106,22 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         // 5) Set researchingAtmosphere=true (bit 1) — this also calls
         // attemptAllResearchStart inside the probe, which arms
         // atmosphereProgress=0 (consuming 1 COMPOSITION from the DataBus).
-        String setR = exec("stellurgytest infra astrobody-set-research 0 "
-                + CX + " " + CY + " " + CZ + " 1");
+        String setR = act("stellurgytest infra astrobody-set-research 0 "
+                + CX + " " + CY + " " + CZ + " 1").raw();
         assertTrue("astrobody-set-research must succeed: " + setR,
                 Reply.of(setR).ok());
 
         // 6) Force-tick the controller 30 times. Per maxResearchTime=10
         // each research cycle is 10 ticks of ramp + 1 increment;
         // 30 ticks comfortably covers 2 cycles.
-        String tick = exec("stellurgytest tile force-tick 0 "
-                + CX + " " + CY + " " + CZ + " 30");
+        String tick = act("stellurgytest tile force-tick 0 "
+                + CX + " " + CY + " " + CZ + " 30").raw();
         assertTrue("force-tick must succeed: " + tick,
                 Reply.of(tick).ok());
 
         // 7) Read chip data, assert composition grew by >= 1.
-        String post = exec("stellurgytest infra astrobody-chip-data 0 "
-                + CX + " " + CY + " " + CZ);
+        String post = read("stellurgytest infra astrobody-chip-data 0 "
+                + CX + " " + CY + " " + CZ).raw();
         assertTrue("chip-data must succeed post-research: " + post,
                 Reply.of(post).ok());
         int compositionAfter = extract(post, COMPOSITION_PAT);

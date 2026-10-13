@@ -275,19 +275,19 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
 
     /** The unified stage reader at a wall's first block: stage, max stage, and what a stage costs there. */
     private String stage(int x, int z) throws Exception {
-        return exec("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z);
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z).raw();
     }
 
     private String impact(double x, double z, double dx, double dy, double dz, int budget, String kind,
                           long impactId) throws Exception {
-        return exec("stellurgytest damage impact " + DIM + " " + x + " " + (Y + 0.5D) + " " + z
-                + " " + dx + " " + dy + " " + dz + " " + budget + " " + kind + " " + impactId);
+        return act("stellurgytest damage impact " + DIM + " " + x + " " + (Y + 0.5D) + " " + z
+                + " " + dx + " " + dy + " " + dz + " " + budget + " " + kind + " " + impactId).raw();
     }
 
     /** A run of blocks along +X at the test's own row, the wall an impact is fired into. */
     private void buildWall(String block, int x, int z, int thickness) throws Exception {
-        String resp = exec("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " "
-                + (x + thickness - 1) + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " "
+                + (x + thickness - 1) + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to build the " + block + " wall at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).ok());
         assertTrue("the " + block + " wall placed no blocks, so every assertion below would be about "
@@ -297,7 +297,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     private void clearImpactMemory() throws Exception {
         // The dedup memory is server-lifetime state on a shared server; a scenario that does not
         // clear it can be refused for an id another scenario happened to use.
-        exec("stellurgytest damage clear-impacts");
+        arrange("stellurgytest damage clear-impacts").raw();
     }
 
     private static long readLong(String json, String key) {

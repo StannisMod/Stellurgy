@@ -47,7 +47,7 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
     private static final int PARTS = 6;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** Each key this scenario has set, with the value it held before; emptied by {@link #restoreConfig}. */
     private final java.util.Map<String, String> configBefore = new java.util.LinkedHashMap<>();
@@ -87,7 +87,7 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
         // when the flag is switched off, or the edge is already behind the mark.
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged("acquisition was already"
                 + " switched off before this scenario switched it off, so its refusal edge lies behind"
-                + " the mark", "true".equals(ask("stellurgytest config get enableFireControlSensor")
+                + " the mark", "true".equals(read("stellurgytest config get enableFireControlSensor")
                 .requireOk("read enableFireControlSensor").text("value")));
         long off = events.mark();
         config("enableFireControlSensor", "false");
@@ -204,8 +204,8 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
 
         // Same sensor, same zombie, same distance — it switches the light on.
         long active = events.mark();
-        ask("stellurgytest sensor charge 0 " + (base + 1) + " " + Y + " " + Z).requireOk("charge the sensor");
-        ask("stellurgytest sensor mode 0 " + (base + 1) + " " + Y + " " + Z + " active")
+        arrange("stellurgytest sensor charge 0 " + (base + 1) + " " + Y + " " + Z).requireOk("charge the sensor");
+        arrange("stellurgytest sensor mode 0 " + (base + 1) + " " + Y + " " + Z + " active")
                 .requireOk("switch the sensor to active");
 
         String lit = events.awaitMatching(active, "sensor_swept",
@@ -248,9 +248,9 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
         int sx = X + 400;
         int interval = 7;
         config("fireControlSensorScanIntervalTicks", String.valueOf(interval));
-        ask("stellurgytest chunk warmup 0 " + ((sx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((sx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((sx + 16) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the sensor's chunk");
-        ask("stellurgytest chunk forceload 0 " + (sx >> 4) + " " + (Z >> 4)).requireOk("hold the sensor's chunk");
+        arrange("stellurgytest chunk forceload 0 " + (sx >> 4) + " " + (Z >> 4)).requireOk("hold the sensor's chunk");
         fill(sx - 2, Y - 1, Z - 2, sx + 2, Y + 2, Z + 2, "minecraft:air");
 
         long placed = events.markInstrumented();
@@ -315,7 +315,7 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
         place("stellurgy:gunCooling", bx, Y, Z + 1);
         place("stellurgy:gunCooling", bx, Y, Z - 1);
         place("stellurgy:fireControlSensor", bx + 1, Y, Z);
-        ask("stellurgytest sensor charge 0 " + (bx + 1) + " " + Y + " " + Z).requireOk("charge the sensor");
+        arrange("stellurgytest sensor charge 0 " + (bx + 1) + " " + Y + " " + Z).requireOk("charge the sensor");
     }
 
     /** A floored, roofed, cleared corridor: no daylight, no terrain in the line of fire, no falling. */
@@ -324,19 +324,19 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
         // A roofed corridor is a dark room, and a dark room breeds contacts nobody put there. The
         // only thing this battery is allowed to notice is the zombie this test spawns.
         gameRule("doMobSpawning", "false");
-        ask("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+        arrange("stellurgytest chunk warmup 0 " + ((bx - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((far + 16) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the corridor's chunks");
         fill(bx - 4, Y, Z - 4, far, Y + 6, Z + 4, "minecraft:air");
         fill(bx - 4, Y - 1, Z - 4, far, Y - 1, Z + 4, "minecraft:stone");
         fill(bx - 4, Y + 7, Z - 4, far, Y + 7, Z + 4, "minecraft:stone");
         // Everything has to keep ticking, including the zombie at the far end.
         for (int cx = (bx - 16) >> 4; cx <= (far + 16) >> 4; cx++) {
-            ask("stellurgytest chunk forceload 0 " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
+            arrange("stellurgytest chunk forceload 0 " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
     }
 
     private void spawnZombie(int bx) throws Exception {
-        Reply resp = ask("stellurgytest entity spawn 0 " + (bx + 0.5D) + " " + Y + " " + (Z + 0.5D)
+        Reply resp = arrange("stellurgytest entity spawn 0 " + (bx + 0.5D) + " " + Y + " " + (Z + 0.5D)
                 + " minecraft:zombie");
         assertTrue("could not spawn the target: " + resp, resp.bool("spawned"));
     }
@@ -348,10 +348,10 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
      */
     private void config(String key, String value) throws Exception {
         if (!configBefore.containsKey(key)) {
-            configBefore.put(key, ask("stellurgytest config get " + key).requireOk("read " + key)
+            configBefore.put(key, read("stellurgytest config get " + key).requireOk("read " + key)
                     .text("value"));
         }
-        ask("stellurgytest config set " + key + " " + value).requireOk("set " + key);
+        arrange("stellurgytest config set " + key + " " + value).requireOk("set " + key);
     }
 
     /**
@@ -360,49 +360,49 @@ public class FireControlSensorTest extends AbstractSharedServerTest {
      */
     private void gameRule(String rule, String value) throws Exception {
         if (!gameRulesBefore.containsKey(rule)) {
-            gameRulesBefore.put(rule, ask("stellurgytest gamerule get " + rule).requireOk("read " + rule)
+            gameRulesBefore.put(rule, read("stellurgytest gamerule get " + rule).requireOk("read " + rule)
                     .text("value"));
         }
-        exec("gamerule " + rule + " " + value);
+        arrange("gamerule " + rule + " " + value);
         assertEquals("the game rule did not take: ", value,
-                ask("stellurgytest gamerule get " + rule).requireOk("read " + rule).text("value"));
+                read("stellurgytest gamerule get " + rule).requireOk("read " + rule).text("value"));
     }
 
     /** Put back every key and game rule this scenario set, to what it held before it touched it. */
     @After
     public void restoreConfig() throws Exception {
         for (java.util.Map.Entry<String, String> key : configBefore.entrySet()) {
-            Reply restored = ask("stellurgytest config set " + key.getKey() + " " + key.getValue())
+            Reply restored = arrange("stellurgytest config set " + key.getKey() + " " + key.getValue())
                     .requireOk("restore " + key.getKey());
             System.out.println("[config] restored " + restored);
         }
         configBefore.clear();
         for (java.util.Map.Entry<String, String> rule : gameRulesBefore.entrySet()) {
-            exec("gamerule " + rule.getKey() + " " + rule.getValue());
+            arrange("gamerule " + rule.getKey() + " " + rule.getValue());
             assertEquals("a game rule was not put back: " + rule.getKey(), rule.getValue(),
-                    ask("stellurgytest gamerule get " + rule.getKey()).requireOk("read " + rule.getKey())
+                    read("stellurgytest gamerule get " + rule.getKey()).requireOk("read " + rule.getKey())
                             .text("value"));
         }
         gameRulesBefore.clear();
     }
 
     private void charge(int bx) throws Exception {
-        ask("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z).requireOk("charge the gun");
+        arrange("stellurgytest turret charge 0 " + bx + " " + Y + " " + Z).requireOk("charge the gun");
     }
 
     // ---- probes
 
     private Reply read(int bx) throws Exception {
-        return ask("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
+        return read("stellurgytest turret read 0 " + bx + " " + Y + " " + Z).requireOk("read the gun");
     }
 
     private void fill(int x1, int y1, int z1, int x2, int y2, int z2, String block) throws Exception {
-        ask("stellurgytest fill 0 " + x1 + " " + y1 + " " + z1 + " " + x2 + " " + y2 + " " + z2 + " "
+        arrange("stellurgytest fill 0 " + x1 + " " + y1 + " " + z1 + " " + x2 + " " + y2 + " " + z2 + " "
                 + block).requireOk("fill with " + block);
     }
 
     private void place(String block, int x, int y, int z) throws Exception {
-        Reply placed = ask("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
+        Reply placed = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + ": " + placed,
                 placed.bool("placed"));
     }

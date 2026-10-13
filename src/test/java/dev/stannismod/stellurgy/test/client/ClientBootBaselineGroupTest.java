@@ -142,7 +142,7 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientTest {
         // broadcast radius by construction.
         int x = plot().centerX(), y = dev.stannismod.stellurgy.test.Plot.DEFAULT_Y + 1, z = plot().centerZ();
         long soundMark = clientEvents().mark();
-        String played = exec("stellurgytest sound play 0 " + x + " " + y + " " + z + " combustionRocket");
+        String played = read("stellurgytest sound play 0 " + x + " " + y + " " + z + " combustionRocket").raw();
         assertTrue("sound play probe failed: " + played, Reply.of(played).ok());
         assertTrue("combustionRocket must be present in ForgeRegistries at send time: " + played,
                 Reply.of(played).bool("registered"));

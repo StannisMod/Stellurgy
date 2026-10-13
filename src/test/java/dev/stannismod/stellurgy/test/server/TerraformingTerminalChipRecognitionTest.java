@@ -75,17 +75,17 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
                 -1L, satId);
 
         // Apply redstone via an adjacent redstone_block on the east face.
-        String redstone = exec("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
-                + " minecraft:redstone_block");
+        String redstone = arrange("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
+                + " minecraft:redstone_block").raw();
         assertTrue("redstone_block place failed: " + redstone,
                 Reply.of(redstone).bool("placed"));
 
         // One force-tick is enough — update() reads redstone + slot 0
         // then mutates was_enabled_last_tick and the block state in the
         // same call.
-        exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1");
+        act("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1").raw();
 
-        String info = exec("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z);
+        String info = read("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z).raw();
         assertEquals("hasValidBiomeChanger must be true after chip load: " + info,
                 "true", extract(info, HAS_VALID));
         assertEquals("redstone reach must be true after redstone_block placed: " + info,
@@ -105,9 +105,9 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         assertNotEquals(-1L, satId);
 
         // No redstone source placed.
-        exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1");
+        act("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1").raw();
 
-        String info = exec("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z);
+        String info = read("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z).raw();
         assertEquals("chip is still valid — recognition is independent of power: "
                         + info, "true", extract(info, HAS_VALID));
         assertEquals("redstone power must be reported as off: " + info,
@@ -123,18 +123,18 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
     @Test
     public void emptySlotReportsInvalidChipAndIdle() throws Exception {
         int x = CX_EMPTY, y = CY, z = CZ;
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
                 + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:terraformingTerminal");
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:terraformingTerminal").raw();
         assertTrue("terraformingTerminal place failed: " + place,
                 Reply.of(place).bool("placed"));
         // Apply redstone — proves the gate is on the chip side, not on
         // power side.
-        exec("stellurgytest place 0 " + (x + 1) + " " + y + " " + z + " minecraft:redstone_block");
-        exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1");
+        arrange("stellurgytest place 0 " + (x + 1) + " " + y + " " + z + " minecraft:redstone_block").raw();
+        act("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1");
 
-        String info = exec("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z);
+        String info = read("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z).raw();
         assertEquals("empty slot must report hasValidBiomeChanger=false: " + info,
                 "false", extract(info, HAS_VALID));
         assertEquals("redstone is present but doesn't help without a chip: " + info,
@@ -149,15 +149,15 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
      *  programmed chip into slot 0. Returns the satellite id (or -1 on
      *  failure — caller asserts). */
     private long setupTerminalWithValidChip(int x, int y, int z) throws Exception {
-        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+        arrange("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
                 + " " + (x >> 4) + " " + (z >> 4));
-        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
-                + " stellurgy:terraformingTerminal");
+        String place = arrange("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:terraformingTerminal").raw();
         assertTrue("terraformingTerminal place failed: " + place,
                 Reply.of(place).bool("placed"));
 
         // Build + register a SatelliteBiomeChanger on dim 0.
-        String build = exec("stellurgytest satellite-builder build 0 biomeChanger");
+        String build = arrange("stellurgytest satellite-builder build 0 biomeChanger").raw();
         assertTrue("biomeChanger satellite build failed: " + build,
                 Reply.of(build).ok());
         Reply mReply = Reply.of(build);
@@ -166,8 +166,8 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         }
         long satId = Long.parseLong(mReply.text(SAT_ID));
 
-        String load = exec("stellurgytest terraforming terminal-load-chip 0 " + x + " " + y + " " + z
-                + " " + satId);
+        String load = arrange("stellurgytest terraforming terminal-load-chip 0 " + x + " " + y + " " + z
+                + " " + satId).raw();
         assertTrue("terminal-load-chip failed: " + load, Reply.of(load).ok());
         return satId;
     }

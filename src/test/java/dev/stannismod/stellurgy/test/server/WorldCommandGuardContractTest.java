@@ -30,7 +30,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     @Pins("INV-CMD-02")
     @Test
     public void addTorchRefusesConsoleSender() throws Exception {
-        String resp = exec("ar addTorch");
+        String resp = arrange("ar addTorch").raw();
         assertTrue("addTorch must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
@@ -40,7 +40,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     public void setGravityRefusesConsoleSenderWithUsage() throws Exception {
         // setGravity resolves the sender via getCommandSenderEntity() (null on
         // console) and falls through to wrongUsage(), printing its usage line.
-        String resp = exec("ar setGravity 0.5");
+        String resp = arrange("ar setGravity 0.5").raw();
         assertTrue("setGravity must refuse console with usage — got: " + resp,
                 resp.contains("sets your gravity"));
     }
@@ -49,7 +49,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     @Pins("INV-CMD-02")
     @Test
     public void fillDataRefusesConsoleSender() throws Exception {
-        String resp = exec("ar fillData distance");
+        String resp = arrange("ar fillData distance").raw();
         assertTrue("fillData must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
@@ -58,7 +58,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     @Test
     public void gotoRefusesConsoleSender() throws Exception {
         // goto is now a tree; the dimension leaf carries the player guard.
-        String resp = exec("ar goto dimension 0");
+        String resp = arrange("ar goto dimension 0").raw();
         assertTrue("goto must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
@@ -68,7 +68,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     public void fetchRefusesConsoleSender() throws Exception {
         // fetch resolves the destination (the command sender) as a player first,
         // so a console sender is rejected before the target lookup.
-        String resp = exec("ar fetch nonExistentPlayerName123");
+        String resp = arrange("ar fetch nonExistentPlayerName123").raw();
         assertTrue("fetch must refuse console — got: " + resp, resp.contains(NO_PLAYER));
     }
 
@@ -76,7 +76,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
     public void giveStationWithUnknownPlayerNameEmitsNotFoundMessage() throws Exception {
         // give is now under the `station` subtree; an unknown target player is
         // reported by vanilla getPlayer's PlayerNotFoundException.
-        String resp = exec("ar station give 7 nonExistentPlayerName123");
+        String resp = arrange("ar station give 7 nonExistentPlayerName123").raw();
         assertTrue("station give must report player not found — got: " + resp,
                 resp.toLowerCase().contains("found"));
     }
@@ -86,7 +86,7 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
      *  invalid-subcommand key instead). */
     @Test
     public void unknownTopLevelSubcommandDoesNotEmitHelpEnvelope() throws Exception {
-        String resp = exec("ar definitelyNotARealSubcommand");
+        String resp = arrange("ar definitelyNotARealSubcommand").raw();
         assertFalse("unknown sub must NOT echo the help header — got: " + resp,
                 resp.contains("Subcommands:"));
     }

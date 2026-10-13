@@ -293,7 +293,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     /** Stand the bot above and beside its own plot's build site, clear of the pad. */
     private void tpNearBuildSite() throws Exception {
         long mark = clientEvents().mark();
-        exec("tp @a " + (baseX() + 10) + " " + (BASE_Y + 15) + " " + (baseZ() + 10) + " 0 0");
+        arrange("tp @a " + (baseX() + 10) + " " + (BASE_Y + 15) + " " + (baseZ() + 10) + " 0 0");
         // The far side of a teleport is the CLIENT applying it, and that is what the assembly below
         // needs: the bot has to be clear of the pad on the side that renders and collides.
         awaitClientPlacedNear(mark, baseX() + 10, baseZ() + 10,
@@ -303,7 +303,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     /** Stand the bot on its own plot's pad, within {@code mount-entity} range of the rocket. */
     private void tpOntoPad() throws Exception {
         long mark = clientEvents().mark();
-        exec("tp @a " + (baseX() + 0.5) + " " + (BASE_Y + 1) + " " + (baseZ() + 0.5) + " 0 0");
+        arrange("tp @a " + (baseX() + 0.5) + " " + (BASE_Y + 1) + " " + (baseZ() + 0.5) + " 0 0");
         // `mount-entity` is a RANGE check against where the player is, so the placement has to have
         // landed before the mount is issued — five ticks were a bet on that round trip.
         awaitClientPlacedNear(mark, baseX() + 0.5, baseZ() + 0.5,
@@ -322,7 +322,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // The site is in the open-air band now, so the column starts empty and this ASSERTS that,
         // on the air fill's own `placed`, rather than digging and hoping.
         final FixtureSite site = site();
-        int[] bp = RocketFixture.placeAt(site, this::exec, "simple", 2, 50,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), "simple", 2, 50,
                 "the rocket is assembled here and climbs fifty blocks up this column");
 
         // ONE assemble, and the retry that stood here is gone. It re-laid the fixture and assembled
@@ -335,7 +335,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // A retry of an operation that "sometimes" fails is a wait on something that does not
         // always happen, and it converts the failure into a pause. If this goes red, the reply names
         // the refusal — and a refusal on a freshly laid pad is a finding, not weather.
-        String assemble = RocketFixture.assembleBuilt(site, this::exec, bp);
+        String assemble = RocketFixture.assembleBuilt(site, c -> act(c).raw(), bp);
         assertTrue("the assembler must build the rocket laid on its pad one command earlier: "
                 + assemble, Reply.of(assemble).ok());
 
@@ -375,11 +375,11 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
         System.out.println("[reset] rockets cleared from this class's world: "
-                + RocketList.clearFrom(this::exec, 0));
+                + RocketList.clearFrom(c -> arrange(c).raw(), 0));
     }
 
     private int rocketIdInThisPlot() throws Exception {
-        String list = exec("stellurgytest rocket list 0");
+        String list = read("stellurgytest rocket list 0").raw();
         java.util.List<RocketList.Entry> mine = RocketList.inPlot(list, plot());
         // The AGE is in the message because it is what an ambiguous answer turns on: two craft here
         // are either this scenario building twice (both young) or somebody else's craft that moved
@@ -396,7 +396,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(this::exec, id);
+        return RocketInfo.byId(c -> read(c).raw(), id);
     }
 
     // ---- the rocket's engine state as EVENTS -------------------------------------------------
@@ -529,16 +529,16 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // Move bot adjacent to the rocket so mount-entity has line-of-sight.
         tpOntoPad();
 
-        exec("stellurgytest player mount-entity " + rocketId);
+        arrange("stellurgytest player mount-entity " + rocketId);
 
         // Pre-launch: flip mode to FREE_FLIGHT. This is the toggle contract
         // exercised by the M keybind path on a real client.
-        exec("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
+        arrange("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT").raw();
 
         // start-free-flight: bypass classic countdown.
         Events events = serverEvents();
         long launchMark = events.markInstrumented();
-        String start = exec("stellurgytest rocket start-free-flight " + rocketId);
+        String start = arrange("stellurgytest rocket start-free-flight " + rocketId).raw();
         assertTrue("start-free-flight must succeed: " + start,
                 Reply.of(start).ok());
         // The probe response itself reflects the immediate isInFlight=true
@@ -554,7 +554,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 "start-free-flight must put THIS rocket in flight");
 
         // Cleanup.
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount").raw();
     }
 
     @Test
@@ -567,15 +567,15 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         int rocketId = buildAndAssemble();
         tpOntoPad();
 
-        exec("stellurgytest player mount-entity " + rocketId);
-        exec("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
-        exec("stellurgytest rocket start-free-flight " + rocketId);
+        arrange("stellurgytest player mount-entity " + rocketId);
+        arrange("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
+        arrange("stellurgytest rocket start-free-flight " + rocketId);
 
         // Push full vertical throttle. This is the same FreeFlightInput
         // payload that the M-key + Z-key keybind chain sends on a real
         // client press-and-hold.
-        exec("stellurgytest rocket free-flight-input " + rocketId
-                + " 0.0 1.0 0.0 0.0 0.0");
+        act("stellurgytest rocket free-flight-input " + rocketId
+                + " 0.0 1.0 0.0 0.0 0.0").raw();
 
         // Snapshot motion BEFORE ticks (right after start).
         double myBefore = rocketInfo(rocketId).motionY;
@@ -597,8 +597,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 myAfter > myBefore);
 
         // Cleanup.
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0").raw();
+        arrange("stellurgytest player dismount");
     }
 
     // ===== FF flight controls (TWR-based thrust) =========================
@@ -608,11 +608,11 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         tpNearBuildSite();
         int rocketId = buildAndAssemble();
         tpOntoPad();
-        exec("stellurgytest player mount-entity " + rocketId);
-        exec("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
+        arrange("stellurgytest player mount-entity " + rocketId);
+        arrange("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         Events events = serverEvents();
         long launchMark = events.markInstrumented();
-        exec("stellurgytest rocket start-free-flight " + rocketId);
+        arrange("stellurgytest rocket start-free-flight " + rocketId);
         // The launch is a COMMIT and the log records it, so it is waited for as one: the flag write
         // cannot be missed between two samples, and a re-land inside the window is a SECOND record
         // rather than an invisible flip.
@@ -640,7 +640,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                             "inFlight", "true").isEmpty(),
                     "putting THIS rocket back in flight",
                     "the takeoff kick must leave the rocket airborne long enough to be flown", 6,
-                    () -> exec("stellurgytest rocket start-free-flight " + rocketId), 2);
+                    () -> arrange("stellurgytest rocket start-free-flight " + rocketId).raw(), 2);
             return rocketId;
         } catch (AssertionError neverLit) {
             // Fall through to the diagnosis below, which prints what the rocket itself says.
@@ -670,7 +670,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // hop and re-land like the old /10000-scaled thrust did.
         int rocketId = mountFreshFreeFlightRocket();
 
-        String inputResp = exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
+        String inputResp = act("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0").raw();
         assertTrue("vertical input must apply: " + inputResp, Reply.of(inputResp).bool("applied"));
 
         double yBefore = rocketInfo(rocketId).posY;
@@ -684,8 +684,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("rocket must still be in flight while climbing: " + after.raw(),
                 after.inFlight);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @Test
@@ -704,7 +704,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         RocketInfo before = rocketInfo(rocketId);
         final double xb = before.posX;
         final double zb = before.posZ;
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 1 1 0 0 0");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 1 1 0 0 0");
         advanceServerAndClient(windowTicks(6, 10));
         RocketInfo moved = rocketInfo(rocketId);
         double xa = moved.posX;
@@ -718,8 +718,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                         + " (zBefore=" + zb + " zAfter=" + za + ")",
                 (za - zb) > 0);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @Test
@@ -730,7 +730,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // on to stay airborne while yawing (yaw rotates regardless of thrust).
         int rocketId = mountFreshFreeFlightRocket();
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 1 0 0");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 1 1 0 0");
         double yawBefore = rocketInfo(rocketId).rotationYaw;
         advanceServerAndClient(8);
         double yawAfter = rocketInfo(rocketId).rotationYaw;
@@ -739,8 +739,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                         + "(before=" + yawBefore + " after=" + yawAfter + ")",
                 Math.abs(yawAfter - yawBefore) > YAW_TURNED_DEG);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     // ===== REAL keypress path (no server input probe) ====================
@@ -799,7 +799,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                         + "(client=" + cliY + " server=" + svrYAfter + ")",
                 Math.abs(cliY - svrYAfter) < CLIENT_TRACKS_SERVER_BLOCKS);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     @LegacyWitness(prose = "with the client FF branch of {@code EntityRocket#onUpdate} at"
@@ -834,7 +834,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // knowledge. A change is owed: the input just applied moves the craft off its hover, and
         // the setpoint beside the actual starts ramping.
         long climbSeenMark = clientEvents().mark();
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
         awaitHudLine(climbSeenMark, line -> hudVrt(line, 2) > 0,
                 "drawing a positive VRT actual",
                 "the client must be told the craft is climbing before its per-tick render is sampled");
@@ -852,13 +852,13 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
             if (cur - prev > 1e-4) moved++;
             prev = cur;
         }
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
 
         assertTrue("FF client render must advance on (almost) every tick rather than "
                         + "freeze-then-jump (moved " + moved + "/" + samples + ")",
                 moved >= samples - 2);
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ===== HUD =========================================================
@@ -897,8 +897,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("FF HUD must show the Flight Assist state: " + hud,
                 hud.contains("Flight Assist"));
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @Test
@@ -919,8 +919,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // then, and the assertion failed on a HUD that was correct for the moment it was read. A
         // live read of a transient state is a race that no wait can win — a longer one loses harder.
         long hudMark = clientEvents().mark();
-        exec("stellurgytest player mount-entity " + rocketId);
-        exec("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
+        arrange("stellurgytest player mount-entity " + rocketId);
+        arrange("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         String hud = Events.text(Events.lastRecord(clientEvents().awaitMatching(hudMark, "ff_hud",
                 seen -> !Events.recordsContainingAll(seen, "Free Flight Mode", "ENGINES OFF").isEmpty(),
                 "carrying the pre-launch title AND the engine-start hint",
@@ -935,7 +935,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("pre-launch FF HUD must show the classic-mode toggle hint: " + hud,
                 hud.contains("Classic mode"));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     @Test
@@ -946,22 +946,22 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // rocketRequireFuel) while thrust is applied across real server ticks — so fuel is REQUIRED
         // for the whole scenario, assembly included: the burn rate is fixed when the rocket is
         // assembled, and the shared harness world starts with the requirement off.
-        try (ConfigFlag fuelRequired = ConfigFlag.set(this::exec, "rocketRequireFuel", true)) {
+        try (ConfigFlag fuelRequired = ConfigFlag.set(commands(), "rocketRequireFuel", true)) {
             int rocketId = mountFreshFreeFlightRocket();
 
-            int fuelBefore = primaryFuelAmount(exec("stellurgytest rocket fuel " + rocketId));
+            int fuelBefore = primaryFuelAmount(read("stellurgytest rocket fuel " + rocketId).raw());
             assertTrue("rocket must report a primary fuel amount", fuelBefore >= 0);
 
-            exec("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
+            act("stellurgytest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
             advanceServerAndClient(20);
-            int fuelAfter = primaryFuelAmount(exec("stellurgytest rocket fuel " + rocketId));
+            int fuelAfter = primaryFuelAmount(read("stellurgytest rocket fuel " + rocketId).raw());
             assertTrue("rocket must still report a primary fuel amount", fuelAfter >= 0);
             assertTrue("FF thrust must drain primary fuel through the live loop; "
                             + "before=" + fuelBefore + " after=" + fuelAfter,
                     fuelAfter < fuelBefore);
 
-            exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-            exec("stellurgytest player dismount");
+            act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+            arrange("stellurgytest player dismount");
         }
     }
 
@@ -999,7 +999,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // for hours earlier, met again from the other side.
         long offMark = clientEvents().mark();
         boolean wasRiding = bot().reportRidingEntity().get("riding").getAsBoolean();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         bot().closeScreen();
         if (wasRiding) {
             clientEvents().await(offMark, "dismount",
@@ -1081,8 +1081,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("rocket must stay in flight (override must not have frozen control): "
                 + info.raw(), info.inFlight);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @Test
@@ -1116,8 +1116,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("Q must strafe +X at yaw 0 (xBefore=" + xBefore + " xAfter=" + xAfter + ")",
                 xAfter - xBefore > 1.0);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @LegacyWitness(prose = "one inversion per verdict in {@code FreeFlightPhysics#rampSetpoint} at"
@@ -1157,8 +1157,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("F must reduce vertical velocity vs the climb (myUp=" + myUp
                 + " myDown=" + myDown + ")", myDown < myUp - 0.05);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @LegacyWitness(prose = "with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing"
@@ -1203,8 +1203,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 + ", twelve ticks later " + myCut + "; the climb had reached " + myClimb + ")",
                 myCut <= myAtCut + 1e-3);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @LegacyWitness(prose = "with {@code FreeFlightPhysics#rampSetpoint} at {@code if (input.cutActive)} no longer zeroing"
@@ -1238,7 +1238,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         if (!(Math.abs(myMoving) > 0.02)) {
             // Diagnose before failing: one SYNCHRONOUS physics step shows whether
             // the physics produces thrust and what immediately eats it.
-            String singleStep = exec("stellurgytest rocket free-flight-tick " + rocketId + " 1");
+            String singleStep = act("stellurgytest rocket free-flight-tick " + rocketId + " 1").raw();
             String postStep = rocketInfo(rocketId).raw();
             throw new AssertionError("precondition: rocket must be climbing before the cut, got "
                     + myMoving + "\n  state: " + preInfo.raw()
@@ -1257,8 +1257,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 + ", now " + myCut + ")", Math.abs(myCut) < BRAKED_TO_HOVER);
         assertTrue("the hover must hold altitude, not land: " + info.raw(), info.inFlight);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     // ===== Engine start =====================================
@@ -1274,12 +1274,12 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         int rocketId = buildAndAssemble();
         tpOntoPad();
         long seatedMark = clientEvents().mark();
-        exec("stellurgytest player mount-entity " + rocketId);
-        exec("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
+        arrange("stellurgytest player mount-entity " + rocketId);
+        arrange("stellurgytest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         // Fuel up (a freshly-assembled fixture is empty): the ENGINE_START
         // validation honestly rejects a dry rocket, which is its own contract —
         // these tests exercise the start RITUAL, so they fly fuelled.
-        String fuel = exec("stellurgytest rocket fill-fuel " + rocketId);
+        String fuel = arrange("stellurgytest rocket fill-fuel " + rocketId).raw();
         assertTrue("fill-fuel must succeed: " + fuel, Reply.of(fuel).ok());
         // The start ritual is the CLIENT's: its key handler counts a Space hold only for a pilot it
         // knows is seated in a free-flight rocket. The pre-launch HUD is drawn exactly then, so its
@@ -1354,7 +1354,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("HUD must show the engines running: " + hud,
                 hud.contains("ENGINES ON") || hud.contains("Engines started"));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. PROGRESS — the progress branch of"
@@ -1427,7 +1427,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("HUD must be back to ENGINES OFF after the cancel: " + hud,
                 hud.contains("ENGINES OFF"));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. SHUTDOWN — the touchdown in"
@@ -1500,7 +1500,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("HUD must reflect the shutdown (stopped flash or ENGINES OFF): " + hud,
                 hud.contains("Engines stopped") || hud.contains("ENGINES OFF"));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ===== HUD indication ===============================
@@ -1559,8 +1559,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 "the cut must zero the VRT setpoint the pilot's HUD shows");
         bot().releaseKey(Keyboard.KEY_X);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @LegacyWitness(prose = "one inversion per verdict, 2026-09-28. OFF REACHES THE HUD —"
@@ -1582,7 +1582,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // whose state and label disagree still fails. Both are owed: FA starts on, and each probe
         // flips it.
         long offMark = clientEvents().mark();
-        exec("stellurgytest rocket set-flight-assist " + rocketId + " off");
+        arrange("stellurgytest rocket set-flight-assist " + rocketId + " off");
         String hud = awaitHudLine(offMark, line -> line.contains("Flight Assist: OFF"),
                 "drawing Flight Assist OFF",
                 "switching Flight Assist off must reach the pilot's HUD");
@@ -1590,14 +1590,14 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 hud.contains("Newtonian"));
 
         long onMark = clientEvents().mark();
-        exec("stellurgytest rocket set-flight-assist " + rocketId + " on");
+        arrange("stellurgytest rocket set-flight-assist " + rocketId + " on");
         String hudOn = awaitHudLine(onMark, line -> line.contains("Flight Assist: ON"),
                 "drawing Flight Assist ON",
                 "switching Flight Assist back on must reach the pilot's HUD");
         assertFalse("HUD must drop the Newtonian label when FA is back on: " + hudOn,
                 hudOn.contains("Newtonian"));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ===== Camera-nose lock + mouse-as-rate =================
@@ -1722,8 +1722,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 + " turn->idle edge (best residual over the window " + convErr + "°, settled "
                 + settledErr + "°)", convErr < CAMERA_CONVERGED_DEG);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @Test
@@ -1780,8 +1780,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         assertTrue("camera must stay locked to the nose during the drag "
                 + "(worst frame divergence " + maxErr + "°)", maxErr < CAMERA_TRACKS_NOSE_DEG);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     @Test
@@ -1824,8 +1824,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 + "°; roll must not couple into yaw)",
                 angDiff(yaw1, yaw0) < YAW_DRIFT_WHILE_BANKING_DEG);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     /**
@@ -1900,8 +1900,8 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
                 minFwdZ < 0.0);
         assertTrue("client must survive rendering the looping/inverted craft", stillRiding);
 
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
-        exec("stellurgytest player dismount");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
+        arrange("stellurgytest player dismount");
     }
 
     /**
@@ -2003,12 +2003,12 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
 
         // Command a steady bank-right: probe args are
         // id fwd vert yaw pitch brake cut strafe roll -> roll = last (=+1).
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 1");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 1").raw();
         advanceServerAndClient(10);
         double roll1 = rocketInfo(rocketId).freeFlightRoll;
 
         // Stop and let the client keep rendering the banked craft a moment.
-        exec("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 0");
+        act("stellurgytest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 0").raw();
         long renderMark = openFlightCameraWindow();
         bot().waitWorldTicks(10);
         double framesDrawn = Events.number(
@@ -2018,7 +2018,7 @@ public class FreeFlightModeTest extends AbstractSharedClientTest {
         // means is that the pilot is still aboard the banked craft.
         boolean stillRiding = bot().reportRidingEntity().get("riding").getAsBoolean();
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
 
         assertTrue("commanded roll must integrate server-side (roll0=" + roll0
                 + " roll1=" + roll1 + ")", angDiff(roll1, roll0) > SERVER_ROLL_INTEGRATED_DEG);

@@ -75,8 +75,8 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         //
         // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping
         // there, and the room the hull sweeps as it rolls.
-        return RocketFixture.assembleAt(site, this::exec, variant, 2, 24,
-                "the hull, the deck a crew member rides, and the air it rolls through");
+        return RocketFixture.assembleBuilt(site, c -> act(c).raw(), RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 24,
+                "the hull, the deck a crew member rides, and the air it rolls through"));
     }
 
     @LegacyWitness(prose = "with {@code ShipFrameTravel#followShipPoses} (the pass that re-images a held"
@@ -97,7 +97,7 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
 
         // Keep the observer far while the ship spawns (a nearby observer trips the double-load path).
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the observer that must not be near the spawn is a CLIENT, so his being away is a"
                         + " fact about the client and not about elapsed ticks");
@@ -110,20 +110,20 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         // `ship_usable` for THAT name, so it is also the proof that the assembly created a ship. The
         // count of every ship in the world that stood here was satisfied by any neighbour's hull on
         // a world this class shares.
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), 0,
+        String shipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), serverEvents(), 0,
                 ShipIdentity.nameFromAssembly(assemble), 200);
 
         // A poll of the world's LOADED-ship count stood after this teleport, "the ship must load with
         // the client present". It waited for nothing: the ship was already usable one line up, and a
         // test server keeps its ships loaded, so the count was satisfied on its first read. What the
         // client needs of the ship — its deck under his feet — is the landing link below.
-        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0").raw();
 
         // The ship does not stay at the pad base — which is exactly why it is asked for by NAME.
         // Find it, then drop the bot ONTO it: standing next to a ship would prove nothing.
-        ShipInfo where = ShipInfo.byId(this::exec, 0, shipId);
+        ShipInfo where = ShipInfo.byId(c -> read(c).raw(), 0, shipId);
         long dropMark = clientEvents().mark();
-        exec("tp @a " + where.x + " " + (where.y + 4) + " " + where.z + " 0 0");
+        arrange("tp @a " + where.x + " " + (where.y + 4) + " " + where.z + " 0 0");
         awaitClientPlacedNear(dropMark, where.x, where.z,
                 "the drop onto the deck is the client's fall, so the client must first BE over the"
                         + " deck");
@@ -142,7 +142,7 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
         // a line the client sent after landing, the landing packet has been handled.
         fenceWhatTheClientSent("the server must have handled the landing before it is asked about it");
 
-        PlayerShipData level = PlayerShipData.read(this::exec);
+        PlayerShipData level = PlayerShipData.read(c -> read(c).raw());
         // "Aboard" is tested by CONTAINMENT (shipLoaded: the player's world position lies inside a
         // loaded ship's box), NOT by VS's own lastTouchedShip. Stellurgy now resolves an aboard entity's
         // movement itself and cancels the vanilla move VS associates inside, so lastTouchedShip stays
@@ -165,19 +165,19 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
 
         // Roll the ship about its nose. Quaternion (w,x,y,z) for ROLL_DEG about +Z.
         double half = Math.toRadians(ROLL_DEG) / 2.0;
-        double upBeforeRoll = ShipInfo.byId(this::exec, 0, shipId).upY();
-        String point = exec("stellurgytest vs point-by-id 0 " + shipId
-                + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
+        double upBeforeRoll = ShipInfo.byId(c -> read(c).raw(), 0, shipId).upY();
+        String point = arrange("stellurgytest vs point-by-id 0 " + shipId
+                + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half)).raw();
         assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded"));
         advanceWorldAndClient(0, ROLL_WINDOW_TICKS);
-        double upAfterRoll = ShipInfo.byId(this::exec, 0, shipId).upY();
+        double upAfterRoll = ShipInfo.byId(c -> read(c).raw(), 0, shipId).upY();
         scenario().requireArranged("the deck must actually be rolled before the ride is judged - the"
                         + " test's own premise is at least half of the commanded " + ROLL_DEG
                         + " degrees: upY " + upBeforeRoll + " -> " + upAfterRoll + " over "
                         + ROLL_WINDOW_TICKS + " server ticks",
                 upAfterRoll < Math.cos(Math.toRadians(ROLL_DEG / 2.0)));
 
-        PlayerShipData rolled = PlayerShipData.read(this::exec);
+        PlayerShipData rolled = PlayerShipData.read(c -> read(c).raw());
         // Client-observed resolution state (the CLIENT owns a player's movement, so ITS ShipFrameTravel
         // statics are the honest half; the server's are the competing resolution). Diagnostic printout
         // for any failure below - which side captured, which side thrashed.
