@@ -161,6 +161,9 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
      */
     private static final double INVERTED_UP_Y = -0.9;
 
+    /** The deadline on the hull rolling to inverted: the 40 reads 10 ticks apart the roll always allowed. */
+    private static final int ROLL_TO_INVERTED_BUDGET_TICKS = 400;
+
     /**
      * How long the space subsystem's logout handler is given to run, in SERVER ticks - the old
      * 40 x 250 ms. The client cannot supply a clock here: it is the thing that went away, so the
@@ -341,6 +344,11 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         double half = Math.toRadians(170.0) / 2.0;
         // Addressed at the computer's own block. The ledger's durable ship id and the VS ship uuid the
         // `*-by-id` verbs resolve are DIFFERENT identities, and this scenario holds the first.
+        // The hold is commanded once and stands; it never says it has arrived. The hull's own attitude,
+        // which its computer publishes on every tick the hold is turning it, is what the roll waits on,
+        // from a mark taken before the command.
+        Events rollLog = serverEvents();
+        long rollMark = rollLog.markInstrumented();
         String rolled = exec("stellurgytest vs point-at " + slotDim + " " + arrangedAfcPos
                 + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
         requireArranged("the roll must reach THIS ship's own flight computer: " + rolled,
@@ -351,14 +359,13 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
         // ship failed to load and something else did.
         String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), slotDim, arrangedShipId,
                 200);
-        double upY = 1.0;
-        for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
-            advanceServerAndClient(10);
-            upY = shipUpY(jsonOf(exec("stellurgytest vs ship-info " + slotDim + " id " + rolledShipId)));
-        }
-        String info = jsonOf(exec("stellurgytest vs ship-info " + slotDim + " id " + rolledShipId));
-        requireArranged("the ship must be (near-)inverted before the relog, or this leg is "
-                + "silently the upright one again (upY=" + upY + "): " + info, upY < INVERTED_UP_Y);
+        ArrangementFailure.arranged(() -> rollLog.awaitMatching(rollMark, "afc_attitude",
+                reply -> Events.recordsWhereAll(reply, "vsShip", rolledShipId, "via", "probe").stream()
+                        .anyMatch(record -> Events.number(record, "upY") < INVERTED_UP_Y),
+                "a probe-held attitude of THIS ship with up.y < " + INVERTED_UP_Y,
+                "the ship must be (near-)inverted before the relog, or this leg is silently the upright one"
+                        + " again",
+                ROLL_TO_INVERTED_BUDGET_TICKS));
         DeckCapture capInverted = DeckCapture.read(this::exec);
         requireArranged("he must still be captured on the INVERTED deck: " + capInverted.raw(),
                 capInverted.alreadyTracked);
@@ -474,15 +481,5 @@ public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
                 + "world he is not in: " + serverPos.raw(), OVERWORLD_DIM, serverPos.dimField);
         assertFalse("and the client agrees he is riding nothing: " + riding + " server=" + serverPos,
                 riding.get("riding").getAsBoolean());
-    }
-
-    /**
-     * How far the ship's own UP points along world up, from a {@code ship-info} reply: {@code +1}
-     * upright, {@code -1} fully inverted. The full expression, {@code 1 - 2(qx^2 + qz^2)} - the
-     * single-axis shortcut this leg used to carry read {@code qx} alone and answered a confident
-     * {@code 1.0} for a ship that had rolled about a different axis.
-     */
-    private double shipUpY(String shipInfoJson) {
-        return ShipInfo.upYOrNaN(shipInfoJson);
     }
 }

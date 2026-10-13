@@ -350,6 +350,17 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             why = "the dose is the moon's travel, sized just above; no key is held. Given in pieces because one"
                     + " bridge wait is bounded below the bot's read timeout (ForgeTestClientBootstrap's"
                     + " CLIENT_SIDE_BUDGET_MILLIS), and a dose of minutes does not fit in one.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int candidate = 0; candidate < LISTED_ADDRESSES && pickIndex < 0;"
+            + " candidate++) {",
+            why = "a search that ACTS each step: every pass is his click on the next listed address, awaited on the"
+                    + " computer's own record of the pick, and the search ends on its goal, an address that is the"
+                    + " moon and landable. Delete the loop and no address is ever picked; a record answers each"
+                    + " click, and none could answer \"the next one is the moon\", which is the console's list.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "while (bursts < burstBudget && !descended) {",
+            why = "every pass is a burst of his translation key and the brake after it, sized from the offset he"
+                    + " can still see, and the chase ends on its goal, the descent that takes the ship out of the"
+                    + " cell. Delete it and the craft never closes on the body. The descent itself is a record the"
+                    + " pilot's client is carried by, awaited after the last burst.")
     public void aPlayerBuildsHisShipAtTheAssemblerBoardsItAndFliesItOffThePlanet() throws Exception {
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
@@ -1184,22 +1195,10 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         long descentClientMark = clientEvents().mark();
         long descentMark = events.mark();
 
-        while (bursts < burstBudget && descentDim == cellDim) {
-            aim = nearestDescendTargetVector(feed);
-            if (aim == null) {
-                // No body left in this cell: the descent has cut the ship out of it. That is this
-                // leg SUCCEEDING — but the crossing settles over several ticks and the CLIENT is
-                // carried at the end of it, so wait for him. Breaking on the dimension he was in
-                // when the trigger fired reads a completed descent as a failed approach.
-                descentDim = awaitClientWorldMatching(descentClientMark, dim -> dim != cellDim,
-                        "a change out of the cell " + cellDim,
-                        "the descent cut the ship out of its cell, so the PILOT has to be carried "
-                                + "out of it too — a hull that lands without its crew has not "
-                                + "completed the crossing, and the approach below would then read a "
-                                + "finished descent as a chase that never converged",
-                        budget * 5);
-                break;
-            }
+        // The chase's goal is the descent, seen two ways: his client is out of the cell, or the cell's
+        // feed holds no body any more because the descent has cut the ship out of it.
+        boolean descended = false;
+        while (bursts < burstBudget && !descended) {
             range = aim[3];
             if (range < bestRange) {
                 bestRange = range;
@@ -1236,6 +1235,21 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             feed = flyBurst(key, burstTicks, cutTicks);
             bursts++;
             descentDim = clientDim(descentDim);
+            aim = nearestDescendTargetVector(feed);
+            descended = descentDim != cellDim || aim == null;
+        }
+        if (aim == null && descentDim == cellDim) {
+            // No body left in this cell: the descent has cut the ship out of it. That is this leg
+            // SUCCEEDING — but the crossing settles over several ticks and the CLIENT is carried at the
+            // end of it, so wait for him. Reading the dimension he was in when the trigger fired would
+            // take a completed descent for a failed approach.
+            descentDim = awaitClientWorldMatching(descentClientMark, dim -> dim != cellDim,
+                    "a change out of the cell " + cellDim,
+                    "the descent cut the ship out of its cell, so the PILOT has to be carried "
+                            + "out of it too — a hull that lands without its crew has not "
+                            + "completed the crossing, and the approach below would then read a "
+                            + "finished descent as a chase that never converged",
+                    budget * 5);
         }
         range = nearestDescendTargetDistance(feed);
         assertTrue("a piloted ship that has CLOSED ON a body must be taken DOWN off the space cell — "
@@ -1546,6 +1560,9 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
      * the server's own set-slot for the armor slot it goes to — the server equipped it, not only his
      * client's prediction — and the four are then read off his client.
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (String[] piece : SUIT) {",
+            why = "a pass over the four pieces, each pass his own hotbar key and use press; the ticks it spends are"
+                    + " those presses' durations, and what each press did is the server's set-slot, linked.")
     private void putOnTheSpaceSuit() throws Exception {
         input().setLook(0f, -90f);
         client().waitWorldTicks(1);

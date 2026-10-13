@@ -584,14 +584,13 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
      * deck until {@code reportMouseOver} names a ship block. Returns that block's SUBSPACE address —
      * the raytrace's own answer, never a computed one.
      */
-    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int attempt = 0; attempt < AIM_ATTEMPTS && aim == null;"
-            + " attempt++) {",
-            why = "each pass stands and aims against the ship's LIVE pose and ends on the crosshair resting on a"
-                    + " deck block. Delete the loop and the standing and aiming stop HAPPENING; no link could"
-                    + " replace it, because nothing in production decides that a crosshair is on a block. The"
-                    + " order inside is load-bearing — teleport first, aim last — since a teleport arrives as a"
-                    + " pos-look that vanilla applies with setPositionAndRotation, overwriting any aim set"
-                    + " before it.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int pass = 0; pass < AIM_ATTEMPTS * AIM_PITCHES.length && aim =="
+            + " null; pass++) {",
+            why = "each pass aims — a look at the next pitch of the sweep, every AIM_PITCHES.length-th pass first"
+                    + " standing him again against the ship's LIVE pose — and the loop ends on its goal, the"
+                    + " crosshair resting on a deck block. Delete the loop and the standing and aiming stop"
+                    + " HAPPENING; no link could replace it, because nothing in production decides that a"
+                    + " crosshair is on a block.")
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); JsonObject candidate ="
             + " bot().reportMouseOver();",
             why = "the raytrace refreshes once per client tick, so the new rotation needs a tick.")
@@ -630,28 +629,29 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
         JsonObject aim = null;
         double[] seatWorld = null;
         float usedPitch = 0.0F;
-        for (int attempt = 0; attempt < AIM_ATTEMPTS && aim == null; attempt++) {
-            PilotSeat pose = findSeat();
-            scenario().requireArranged("the seat resolved before aiming began, so the ship must still"
-                    + " report its world pose on attempt " + attempt + ": " + pose.raw(),
-                    !Double.isNaN(pose.shipWorldX));
-            seatWorld = new double[]{pose.shipWorldX, pose.shipWorldY, pose.shipWorldZ};
+        // A teleport arrives as a pos-look that vanilla applies with setPositionAndRotation, overwriting
+        // any aim set before it — so the stand comes first in a pass and the aim last.
+        for (int pass = 0; pass < AIM_ATTEMPTS * AIM_PITCHES.length && aim == null; pass++) {
+            if (pass % AIM_PITCHES.length == 0) {
+                PilotSeat pose = findSeat();
+                scenario().requireArranged("the seat resolved before aiming began, so the ship must still"
+                        + " report its world pose on stand " + pass / AIM_PITCHES.length + ": " + pose.raw(),
+                        !Double.isNaN(pose.shipWorldX));
+                seatWorld = new double[]{pose.shipWorldX, pose.shipWorldY, pose.shipWorldZ};
 
-            long standMark = clientEvents().mark();
-            double standX = seatWorld[0] + EDIT_STAND_OFF_X;
-            exec("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + seatWorld[2] + " 0 0");
-            awaitClientPlacedNear(standMark, standX, seatWorld[2],
-                    "the stand on the deck must reach the client before he aims from it");
-
-            for (float pitch : AIM_PITCHES) {
-                bot().setLook(0.0F, pitch);
-                bot().waitWorldTicks(5);
-                JsonObject candidate = bot().reportMouseOver();
-                if (isShipDeckHit(candidate, seatSub)) {
-                    aim = candidate;
-                    usedPitch = pitch;
-                    break;
-                }
+                long standMark = clientEvents().mark();
+                double standX = seatWorld[0] + EDIT_STAND_OFF_X;
+                exec("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + seatWorld[2] + " 0 0");
+                awaitClientPlacedNear(standMark, standX, seatWorld[2],
+                        "the stand on the deck must reach the client before he aims from it");
+            }
+            float pitch = AIM_PITCHES[pass % AIM_PITCHES.length];
+            bot().setLook(0.0F, pitch);
+            bot().waitWorldTicks(5);
+            JsonObject candidate = bot().reportMouseOver();
+            if (isShipDeckHit(candidate, seatSub)) {
+                aim = candidate;
+                usedPitch = pitch;
             }
         }
 

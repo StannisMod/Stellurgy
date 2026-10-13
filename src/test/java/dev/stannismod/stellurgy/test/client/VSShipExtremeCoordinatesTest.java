@@ -567,8 +567,6 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * mechanism's own constant, or it pins the day it was written.</p>
      */
     @Test
-    @ServerOnly(at = "dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);",
-            why = "a server-side park between cases; the next case reads the server's own teleport reply.")
     public void whereExactlyDoesADeliveryStopWorking() throws Exception {
         java.util.Map<String, String> rules = setGamerules(
                 "sendCommandFeedback", "false", "logAdminCommands", "false");
@@ -601,9 +599,11 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                 if (moved != expectMove) {
                     wrong.add(report.get(report.size() - 1));
                 }
-                // Park him back near the origin so the next case starts from a known place.
+                // Park him back near the origin so the next case starts from a known place — the one his
+                // own client has been put at, not merely the one the server has written.
+                long parkMark = clientEvents().mark();
                 exec("stellurgytest player far-tp 0.5 200 0.5");
-                dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);
+                awaitClientPlacedNear(parkMark, 0.5, 0.5, "the park near the origin between two delivery cases");
             }
 
             StringBuilder out = new StringBuilder("[SPIKE far-coordinate delivery boundary]\n");
@@ -640,6 +640,10 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             + " key did not lift the ship (serverLift=0.0000 …)\", 2026-09-28. The waits each turn an expiry into"
             + " that RUNG's verdict (spawn, id, load, riding), and the control assertion is where any of them at"
             + " x=0 surfaces — the path this red went through.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int x : xLadder) { String arrangement = arrangeFarRung(x);",
+            why = "a pass over the rungs, one scenario each; the clock a rung spends of its own is the climb's"
+                    + " held-key dose (farClimbLeg), the number the climb is measured over, and every other wait"
+                    + " in a rung is a link on its own record.")
     @Test
     public void doesAShipAssembleLoadAndFlyFarFromTheOrigin() throws Exception {
         // The control, then the ratified half-cell. 24M is not carried: one far rung is the question.
@@ -744,8 +748,9 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
                         + " " + flight);
                 verdicts.put(x, flight.startsWith("OK") ? null : flight);
 
+                // No settle: the dismount reaches his client on the same connection ahead of the next
+                // rung's delivery, and that delivery is awaited on the client.
                 exec("stellurgytest player dismount");
-                advanceServerAndClient(10);
             }
         } finally {
             // The report is the deliverable and worth MOST when the leg died mid-ladder, so it is

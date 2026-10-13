@@ -100,8 +100,12 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
      * also makes the control arm what the subject arms already are: steady-state flight.</p>
      */
     private static final double LIFT_CLEAR_BLOCKS = 5.0;
-    private static final int LIFT_POLL_TICKS = 40;
-    private static final int LIFT_ATTEMPTS = 8;
+
+    /** The deadline on that lift: the eight 40-tick passes the lift always allowed. */
+    private static final int LIFT_BUDGET_TICKS = 320;
+
+    /** The deadline on the arrived computer's first tick: the twenty 10-tick reads it always allowed. */
+    private static final int ARRIVED_COMPUTER_BUDGET_TICKS = 200;
 
     /**
      * The fastest cruise the pilot can dial in, in blocks per TICK — {@code FA_SETPOINT_MAX_SPEED},
@@ -288,7 +292,7 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         mountTheSeat(originDim, seatX, seatY, seatZ);
 
         // ---- LEG A (the control): fly in the origin cell, before anything has jumped. -----------
-        liftClear(originDim, afcOrigin);
+        liftClear(shipId);
         Leg before = measure("before-jump", originDim, afcOrigin);
 
         // ---- ACT: the jump. Probe-driven so the park cannot race the measurement either side. ---
@@ -335,18 +339,16 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // — but the durable name crosses with it, and `(0,200,0)` in the target cell was never an
         // address of this craft at all: it named whatever the yard lookup reached from there.
         String arrivedShipId = awaitPhysicsId(targetDim, durableShipId);
-        PilotSeat arrivedSeat = null;
-        int[] afcArrived = null;
-        for (int i = 0; i < 20 && afcArrived == null; i++) {
-            arrivedSeat = PilotSeat.byId(this::exec, targetDim, arrivedShipId);
-            if (arrivedSeat.found && arrivedSeat.hasAfc) {
-                afcArrived = new int[]{arrivedSeat.afcX, arrivedSeat.afcY, arrivedSeat.afcZ};
-            } else {
-                advanceServerAndClient(10);
-            }
-        }
+        // The re-pasted computer is a NEW tile, and its first tick is its own record — under the craft's
+        // durable name, which crosses with it. Awaited from the mark before the departure, so the
+        // origin computer's first tick, written long before, cannot answer it.
+        ArrangementFailure.arranged(() -> serverEvents().awaitField(mark, "afc_first_tick", "ship", durableShipId,
+                "the arrived ship's flight computer must tick in the target cell, or the post-jump recorder"
+                        + " has nothing to key on", ARRIVED_COMPUTER_BUDGET_TICKS));
+        PilotSeat arrivedSeat = PilotSeat.byId(this::exec, targetDim, arrivedShipId);
         scenario().requireArranged("the arrived ship must expose its flight computer, or the post-jump "
-                + "recorder has nothing to key on: " + arrivedSeat, afcArrived != null);
+                + "recorder has nothing to key on: " + arrivedSeat, arrivedSeat.found && arrivedSeat.hasAfc);
+        int[] afcArrived = {arrivedSeat.afcX, arrivedSeat.afcY, arrivedSeat.afcZ};
 
         // ---- LEG B (the subject): the same pilot, the same key, the same craft, after a jump. ---
         Leg after = measure("after-jump", targetDim, afcArrived);
@@ -740,25 +742,23 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         return ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), dim, durableShipId, 200);
     }
 
-    private void liftClear(int dim, int[] afc) throws Exception {
-        double moved = 0.0;
+    /**
+     * Hold the climb key until his own client shows the craft, with him seated on it, risen clear of
+     * its pad — the client's record of carrying a seated rider ({@code seat_carried}), from a mark taken
+     * before the key goes down.
+     */
+    private void liftClear(String shipId) throws Exception {
+        long liftMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R);
         try {
-            for (int attempt = 0; attempt < LIFT_ATTEMPTS && moved < LIFT_CLEAR_BLOCKS; attempt++) {
-                resetServerMotionTrace();
-                advanceServerAndClient(LIFT_POLL_TICKS);
-                moved = netMoveLength(section(serverMotionTrace(dim, afc, WINDOW_MS), "phys"));
-            }
+            ArrangementFailure.arranged(() -> SeatCarry.awaitShownClimb(clientEvents(), liftMark, shipId,
+                    LIFT_CLEAR_BLOCKS, "the craft must get under way on its own pad under a held climb key. A"
+                            + " craft pushing at the authority ceiling while it does not rise is being held by its"
+                            + " surroundings, so nothing below would be a reading about the jump",
+                    LIFT_BUDGET_TICKS));
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        scenario().requireArranged("the craft never got under way on its own pad. It was given "
-                        + (LIFT_ATTEMPTS * LIFT_POLL_TICKS) + " ticks of held climb key and moved "
-                        + Leg.round(moved) + " blocks, against " + LIFT_CLEAR_BLOCKS + " asked for. "
-                        + "A craft pushing at the authority ceiling while its net move stays near "
-                        + "zero is being held by its surroundings, so nothing below would be a "
-                        + "reading about the jump.",
-                moved >= LIFT_CLEAR_BLOCKS);
     }
 
     @Wait(shape = Wait.Shape.STIMULUS, at = "advanceServerAndClient(FLY_TICKS);",
@@ -968,21 +968,16 @@ public class VSFlightSmoothnessAcrossJumpTest extends AbstractSharedVsClientTest
         // below waits for, and a mark taken after it could not tell "he was seated before I looked"
         // from "he was never seated".
         long clientMark = clientEvents().mark();
-        String mount = "";
-        boolean mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("stellurgytest vs seat-mount-at " + dim
-                    + " " + seatX + " " + seatY + " " + seatZ);
-            scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
-                    readBool(mountAt, "ok"));
-            mount = exec("stellurgytest player mount-entity " + readInt(mountAt, "dummyId"));
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            mounted = Reply.of(mount).boolOr("mounted", false);
-            if (!mounted) {
-                advanceServerAndClient(10);
-            }
-        }
-        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
+        String mountAt = exec("stellurgytest vs seat-mount-at " + dim
+                + " " + seatX + " " + seatY + " " + seatZ);
+        scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
+                readBool(mountAt, "ok"));
+        // Once. The mount is decided on the server thread before the verb answers, so a refusal is the
+        // answer and not a "not yet": there is nothing a later attempt would find changed.
+        String mount = exec("stellurgytest player mount-entity " + readInt(mountAt, "dummyId"));
+        // absence is the answer: a reply with no `mounted` is a mount that did not happen.
+        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount,
+                Reply.of(mount).boolOr("mounted", false));
         // The base raises a TYPED arrangement failure carrying the server's own mount/dismount
         // record, so a red here says whether the client was merely behind or the product dropped
         // him. This class used to keep its own copy of that logic with a comment explaining why it

@@ -338,6 +338,56 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
 
     private static final String INSTRUMENT_LATCH = "flight_computer_latch_events";
 
+    /** The attitude seam reports separately: its silence (nothing is turning) must not be vouched for. */
+    private static final String INSTRUMENT_ATTITUDE = "flight_computer_attitude_events";
+
+    /**
+     * Where the ship stands, on every server tick its computer is flying a command that TURNS it -- a
+     * probe's attitude hold, or a command with a rate in it (a pilot's stick off centre).
+     *
+     * <p>An attitude hold never decides that it has arrived ({@code point-by-id} engages it and leaves it
+     * standing), and a held roll has no end of its own: nothing in production announces "the hull is
+     * there". What a wait on the attitude needs is therefore the attitude itself, published on the tick it
+     * is reached, which this is -- the same quaternion the computer's own tick reads
+     * ({@code VSIntegration.getShipAttitude}), with its up axis in the world ({@code upY}, 1 level, -1
+     * inverted). SILENT while nothing turns the ship, which is most ticks of most computers: a held
+     * attitude a pilot is not moving has a zero rate and is not recorded.</p>
+     *
+     * <p>Taken right after the drive readout, as the motion sample is: the two returns above it are a tile
+     * that did not tick. The command read is the one the physics thread has been flying since last tick.</p>
+     */
+    @Inject(method = "update",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/stannismod/stellurgy/tile/TileAdvancedFlightComputer;refreshHudDrive(J)V",
+                    shift = At.Shift.AFTER))
+    private void stellurgyTest$turningAttitude(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT_ATTITUDE);
+        TileAdvancedFlightComputer self = (TileAdvancedFlightComputer) (Object) this;
+        dev.stannismod.stellurgy.ship.control.FlightCommand probe = self.probeCommand;
+        dev.stannismod.stellurgy.ship.control.FlightCommand flown = probe != null ? probe : self.flightCommand;
+        boolean holding = flown != null && flown.attitude() != null && probe != null;
+        if (flown == null || !(holding || stellurgyTest$turns(flown.angularVelocity()))) {
+            return;
+        }
+        dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat q =
+                VSIntegration.getShipAttitude(self.getWorld(), self.getPos());
+        if (q == null) {
+            return; // not on a ship: there is no hull to have turned
+        }
+        TestTrace.recordHere("afc_attitude", stellurgyTest$posAndShip()
+                + ",\"dim\":" + self.getWorld().provider.getDimension()
+                + ",\"vsShip\":\"" + VSIntegration.shipIdOwningBlock(self.getWorld(), self.getPos()) + "\""
+                + ",\"via\":\"" + (probe != null ? "probe" : "pilot") + "\""
+                + ",\"upY\":" + TestTrace.fmt(1.0 - 2.0 * (q.x * q.x + q.z * q.z))
+                + ",\"qw\":" + TestTrace.fmt(q.w) + ",\"qx\":" + TestTrace.fmt(q.x)
+                + ",\"qy\":" + TestTrace.fmt(q.y) + ",\"qz\":" + TestTrace.fmt(q.z));
+    }
+
+    @Unique
+    private static boolean stellurgyTest$turns(double[] rate) {
+        return rate != null && rate.length >= 3 && (rate[0] != 0.0 || rate[1] != 0.0 || rate[2] != 0.0);
+    }
+
     @Unique
     private String stellurgyTest$identity() {
         return ",\"identity\":" + System.identityHashCode(this);

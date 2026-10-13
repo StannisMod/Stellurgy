@@ -144,6 +144,9 @@ enum ProbeVerbKind {
             case "vs permaload":
                 return ARRANGE;
             case "mission complete-now":
+            // One impact delivered to the damage service, as a round that struck there would: the shot is
+            // the act, and what it does to the block is production's decision.
+            case "damage impact":
                 return ACT;
             default:
                 return null;

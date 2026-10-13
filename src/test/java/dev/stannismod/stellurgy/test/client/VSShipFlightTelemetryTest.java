@@ -179,6 +179,21 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      */
     private static final double ROLLED_PAST_VERTICAL_UP_Y = -0.3;
 
+    /** How many mouse pushes may take the cursor hard over; twenty of sixty units is several times enough. */
+    private static final int CURSOR_PUSHES = 20;
+
+    /** The cursor counts as hard over at this deflection: near its clamp, the fastest roll it asks for. */
+    private static final double CURSOR_HARD_OVER = 0.9;
+
+    /**
+     * Where the stick is let go: the hull is still turning at more than a radian a second and coasts on
+     * into the brake, so the roll is stopped short of inverted and lands near it.
+     */
+    private static final double STOP_ROLLING_UP_Y = -0.45;
+
+    /** The deadline on the hull rolling that far: the 240 passes of 2 ticks the roll always allowed. */
+    private static final int ROLL_OVER_BUDGET_TICKS = 480;
+
     /**
      * How far the pilot's camera must have rolled WITH an inverted hull, in degrees.
      *
@@ -533,6 +548,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
             + " existence — a check on the harness's own capture, which no production line decides. The"
             + " camera verdicts after the roll are not witnessed: inverting the roll itself stops the test at"
             + " \"the ship must actually have rolled past vertical\", an arrangement.")
+    @dev.stannismod.stellurgy.test.contract.RedWitness(verdict = "the pilot's cursor held hard over must roll his ship past vertical",
+            member = "KeyBindings#handleShipPilotInput", at = "float roll = deadzone(command.cursorX);",
+            replacedBy = "float roll = 0f;",
+            fails = "the pilot's cursor held hard over must roll his ship past vertical (cursor=1.0) — no"
+                    + " `afc_attitude`", on = "2026-10-13")
     @Test
     public void anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -1093,39 +1113,42 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     }
 
     /**
-     * Steer the ship all the way over with the pilot's own controls: hold the flight cursor hard to one
-     * side until the ship's up points down, then centre it so the controller stops the roll there.
+     * Steer the ship all the way over with the pilot's own controls: push the flight cursor hard to one
+     * side, keep it there until the ship's up points down, then centre it so the controller stops the
+     * roll there.
+     *
+     * <p>Two halves, because only the first is input. The cursor is an absolute deflection that stays
+     * where it is put ({@code KeyBindings}: each delta is added and clamped, nothing returns it), so once
+     * it is hard over the pilot's hand is still and the ship rolls by itself. That half is a wait, and it
+     * waits on the hull's own attitude as its computer publishes it on every tick the pilot's command
+     * turns it ({@code afc_attitude}) — not on a sample of the camera.</p>
      */
-    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 240; i++) {",
-            why = "a feedback controller, and its iterations are the input — each pass asks for more roll through"
-                    + " the real cursor, so deleting the loop does not stop the test watching, it stops the"
-                    + " ship TURNING. The pilot's own controls are the path this rolls the ship with, so a"
-                    + " probe attitude command would roll it by a different route. It stops on its own budget,"
-                    + " and what the scenario uses is read after the cursor is centred. What this cannot see: a"
-                    + " pass whose cursor delta was swallowed, which is why the delta itself is checked below"
-                    + " rather than assumed from having asked.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < CURSOR_PUSHES && Math.abs(cursor) < CURSOR_HARD_OVER;"
+            + " i++) {",
+            why = "each pass IS a push of the pilot's mouse, and the loop ends on its goal, the cursor hard over —"
+                    + " delete it and the stick stays centred and nothing turns. The pilot's own controls are the"
+                    + " path this rolls the ship with, so a probe attitude command would roll it by a different"
+                    + " route.")
     private void rollShipUpsideDownWithTheMouse(int bx, int by, int bz) throws Exception {
-        // The window each pass reads is the two ticks the pass itself waits, so this loop keeps its
-        // own pacing: no extra wait is added to take a reading, and the reading is never older than
-        // the pass before it.
         long cursorMark = clientEvents().mark();
-        // The first pass's window is not paced by a pass before it, so it is opened on the record
-        // it reads: the ship path's own cursor sample since the mark.
         clientEvents().awaitField(cursorMark, "flight_cursor", "path", "ship",
                 "the ship-pilot input path must be running before the ship is rolled with it",
                 CURSOR_RECORD_BUDGET_TICKS);
-        for (int i = 0; i < 240; i++) {
-            // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a
-            // radian a second, and it coasts on into the brake. Aiming early lands it near inverted.
-            if (deckCamera("shipUpY") < -0.45) {
-                break;
-            }
-            if (Math.abs(cursorXSince(cursorMark, "while rolling the ship over, pass " + i)) < 0.9) {
-                mouseDelta(60, 0);
-            }
-            cursorMark = clientEvents().mark();
-            bot().waitWorldTicks(2);
+        Events rollLog = serverEvents();
+        long rollMark = rollLog.markInstrumented();
+        double cursor = flightCursorX("before the roll");
+        for (int i = 0; i < CURSOR_PUSHES && Math.abs(cursor) < CURSOR_HARD_OVER; i++) {
+            mouseDelta(60, 0);
+            cursor = flightCursorX("pushing the cursor over, pass " + i);
         }
+        // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a
+        // radian a second, and it coasts on into the brake. Aiming early lands it near inverted.
+        rollLog.awaitMatching(rollMark, "afc_attitude",
+                reply -> Events.recordsWhereAll(reply, "vsShip", scenarioShipId, "via", "pilot").stream()
+                        .anyMatch(record -> Events.number(record, "upY") < STOP_ROLLING_UP_Y),
+                "a pilot-turned attitude of THIS ship with up.y < " + STOP_ROLLING_UP_Y,
+                "the pilot's cursor held hard over must roll his ship past vertical (cursor=" + cursor + ")",
+                ROLL_OVER_BUDGET_TICKS);
         // No settle after centring: the caller reads the attitude and the camera from one peek, so
         // the two agree about one instant whether or not the brake has finished.
         centreFlightCursor();
@@ -1170,12 +1193,6 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     private double flightCursorX(String what) throws Exception {
         long mark = clientEvents().mark();
         bot().waitWorldTicks(1);
-        return cursorXSince(mark, what);
-    }
-
-    /** The same reading, for a window the caller already owns — used by loops whose own pacing
-     *  supplies the ticks, so that taking a reading never adds one. */
-    private double cursorXSince(long mark, String what) throws Exception {
         String rec = Events.lastRecord(clientEvents().since(mark, "flight_cursor"));
         assertNotNull("no flight_cursor record " + what + " between client mark " + mark
                 + " and now — the client's flight-input path did not run in that window, so there is"

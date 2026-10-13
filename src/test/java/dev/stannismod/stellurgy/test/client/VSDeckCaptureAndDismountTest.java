@@ -497,53 +497,34 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double velYAtWindowStart = atWindowStart.velY;
 
         // Dismount exactly as the maintainer did: the real sneak key. (While seated it also feeds the
-        // flight brake, but a held sneak still triggers vanilla's dismount.) Confirm on the CLIENT that
-        // the player left the seat; fall back to the server dismount only if the key path did not fire.
-        // The un-seating is recorded where production performs it — at
-        // {@code Entity.dismountRidingEntity}, with the CALLER that performed it — so the wait is on
-        // that record rather than on the client's replicated riding flag, and the record's own
-        // caller trail says which of the two routes below actually got him out. (The client flag is
-        // the replication of a server write; polling it measured the round trip as much as the
-        // dismount.)
+        // flight brake, but a held sneak still triggers vanilla's dismount.) The un-seating is recorded
+        // where production performs it — at {@code Entity.dismountRidingEntity}, with the CALLER that
+        // performed it — so the key is held for exactly as long as it takes that record to appear, and
+        // the record's `by` trail names the un-seater. There is no second route: a server dismount
+        // standing in for a dead key would let this scenario pass on a path no player has, so a key that
+        // un-seats nobody ends the arrangement, naming what the client and the capture then held.
         Events events = serverEvents();
         long dismountMark = events.markInstrumented();
         Events clientEvents = clientEvents();
         long clientDismountMark = clientEvents.mark();
-        boolean dismounted = false;
-        String dismountPath = "sneak-key";
-        bot().holdKey(Keyboard.KEY_LSHIFT);
-        for (int i = 0; i < 40 && !dismounted; i++) {
-            advanceServerAndClient(2);
-            dismounted = Events.countRecordsWithField(events.since(dismountMark, "dismount"), "mount") > 0;
-        }
-        bot().releaseKey(Keyboard.KEY_LSHIFT);
-        String serverDismount = "";
-        if (!dismounted) {
-            System.out.println("[deckcap] sneak key did not dismount; using server dismount");
-            dismountPath = "sneak-key-then-server-dismount";
-            serverDismount = exec("stellurgytest player dismount").replace('\n', ' ');
-        }
-        // Which PATH was taken is the diagnosis, and this message used to be a bare sentence. Both
-        // paths failing is a different fault from the key path alone failing: the first says the
-        // player cannot be un-seated at all, the second says only the real key route is dead, which
-        // is the one a player actually uses and the one this scenario is about. The record's `by`
-        // trail names the un-seater — vanilla's own updateRidden for the sneak key, the probe verb
-        // for the fallback — so the two are now told apart by the log instead of by which branch the
-        // test happened to take.
         String dismountRecord;
+        bot().holdKey(Keyboard.KEY_LSHIFT);
         try {
-            dismountRecord = events.await(dismountMark, "dismount",
-                    "the pilot must actually leave the seat, and NEITHER route got him out. tried="
-                            + dismountPath
-                            + (serverDismount.isEmpty() ? "" : " serverDismount=" + serverDismount),
-                    DECK_LINK_BUDGET_TICKS);
-        } catch (AssertionError neverDismounted) {
-            throw new AssertionError(neverDismounted.getMessage()
+            dismountRecord = ArrangementFailure.arranged(() -> events.awaitMatching(dismountMark, "dismount",
+                    reply -> Events.countRecordsWithField(reply, "mount") > 0, "an un-seating from a mount",
+                    "the pilot's held sneak key must take him out of the seat — the real key route is the one a"
+                            + " player has, and the scenario stands up by it",
+                    DECK_LINK_BUDGET_TICKS));
+        } catch (ArrangementFailure neverDismounted) {
+            ArrangementFailure named = new ArrangementFailure(neverDismounted.getMessage()
                     + " | riding=" + bot().reportRidingEntity()
-                    + " | capture=" + exec("stellurgytest vs deck-capture"), neverDismounted);
+                    + " | capture=" + exec("stellurgytest vs deck-capture"));
+            named.initCause(neverDismounted);
+            throw named;
+        } finally {
+            bot().releaseKey(Keyboard.KEY_LSHIFT);
         }
-        System.out.println("[deckcap] dismount route tried=" + dismountPath
-                + " unSeatedBy=" + Events.lastField(dismountRecord, "by"));
+        System.out.println("[deckcap] dismount unSeatedBy=" + Events.lastField(dismountRecord, "by"));
 
         // Let the now-unmanned ship reveal whether it holds or falls — waited on the flight
         // computer's OWN decision rather than on 40 ticks. With no pilot input it either commands a
@@ -1041,6 +1022,12 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
     private static final String KEY_BINDINGS = "dev.stannismod.stellurgy.client.KeyBindings";
 
+    /** The steep tilt commands up.y = 0.5; at or under this the hull is there, in reach of the target. */
+    private static final double STEEP_TILT_REACHED_UP_Y = 0.55;
+
+    /** The deadline on the hull reaching that tilt: the 40 passes of 4 ticks the arrangement always allowed. */
+    private static final int STEEP_TILT_TURN_BUDGET_TICKS = 160;
+
     private double shipUpYFromInfo(ShipInfo info) {
         return info.upY(); // world-Y of the ship's local +Y
     }
@@ -1074,10 +1061,21 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // keeps turning after the cursor centres — its own comment says so — so it landed anywhere
         // between no tilt and a vertical wall and SKIPPED whenever it missed. The mouse is not the
         // subject here; standing up on a tilted deck is, and it is still the real client that stands.
-        for (int i = 0; i < 40 && shipUpYFromInfo(shipInfo()) > 0.55; i++) {
-            exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.8660254 0.5 0 0");
-            advanceServerAndClient(4);
-        }
+        //
+        // The hold is commanded ONCE: it stands until it is cleared, and it never decides that it has
+        // arrived. So what is awaited is the hull's own attitude, published by its computer on every tick
+        // the hold is turning it, closing on the first tick it is in reach of the commanded up.y = 0.5.
+        Events tiltLog = serverEvents();
+        long tiltMark = tiltLog.markInstrumented();
+        String held = exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.8660254 0.5 0 0");
+        scenario().requireArranged("the steep tilt must be commanded on THIS ship's flight computer: " + held,
+                Reply.of(held).bool("commanded"));
+        ArrangementFailure.arranged(() -> tiltLog.awaitMatching(tiltMark, "afc_attitude",
+                reply -> Events.recordsWhereAll(reply, "vsShip", scenarioShipId, "via", "probe").stream()
+                        .anyMatch(record -> Events.number(record, "upY") <= STEEP_TILT_REACHED_UP_Y),
+                "a probe-held attitude of THIS ship at up.y <= " + STEEP_TILT_REACHED_UP_Y,
+                "the commanded 60-degree roll must bring the craft to the steep tilt before he stands up on it",
+                STEEP_TILT_TURN_BUDGET_TICKS));
         // The pilot is at the controls, so the tilt is his to keep once the probe lets go — which his
         // computer does only once he has put his hands on the stick (see takeTheStickWhileHeld).
         takeTheStickWhileHeld("at the steep tilt, before the probe hold is cut");

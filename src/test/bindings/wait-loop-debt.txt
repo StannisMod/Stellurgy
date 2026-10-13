@@ -1,36 +1,8 @@
 # The methods whose loops broke the wait-loop rule (WaitLoops, run by checkTestBindings) when it was set, each
 # with the number of its loops that did. A loop that advances the clock stands on a line a @Wait of its method
-# names; every loop that waits leaves its body by exactly one edge. The list only shrinks: a method breaking
-# the rule more often than its line says fails, and one breaking it less often fails until its line is lowered.
+# names; every loop that waits leaves its body by exactly one edge, save a STIMULUS loop's goal exit, admitted
+# when every pass of it sends input. The list only shrinks: a method breaking the rule more often than its line
+# says fails, and one breaking it less often fails until its line is lowered.
 #
-# Named, and leaving on what they read -- loops whose iterations are the input and that stop on the goal
-# (aim until the crosshair rests on a block, centre the cursor until it is inside the dead zone, fire until the
-# drive breaks, walk until he is there):
-dev.stannismod.stellurgy.test.client.VSAssembledShipRealRightClickBoardingTest#aRealUseKeyPressOnAnAssembledShipsSeatBoardsThePilot 1
-dev.stannismod.stellurgy.test.client.VSDeckCaptureAndDismountTest#centreFlightCursor 1
-dev.stannismod.stellurgy.test.client.VSDeckCaptureAndDismountTest#takeTheStickWhileHeld 1
-dev.stannismod.stellurgy.test.client.VSJumpDriveFixtureBoardingTest#aimAt 1
-dev.stannismod.stellurgy.test.client.VSShipFlightTelemetryTest#centreFlightCursor 1
-dev.stannismod.stellurgy.test.client.VSShipFlightTelemetryTest#rollShipUpsideDownWithTheMouse 1
-dev.stannismod.stellurgy.test.milestone.M1PlanetToPlanetMilestoneE2ETest#aimAt 1
-dev.stannismod.stellurgy.test.milestone.M1PlanetToPlanetMilestoneE2ETest#aimAtWorldBlock 1
-dev.stannismod.stellurgy.test.milestone.M1PlanetToPlanetMilestoneE2ETest#walkTo 1
-dev.stannismod.stellurgy.test.server.TurretDamageDegradesTest#shootUntilDrive 1
-# Unnamed and leaving on what they read -- polls; the four in VSFlightSmoothnessAcrossJumpTest and
-# SpaceCellRelogGroupTest run only under @Ignore'd tests, the two in VSDeckCaptureAndDismountTest run:
-dev.stannismod.stellurgy.test.client.SpaceCellRelogGroupTest#aCrewMemberWhoRelogsOnAnInvertedDeckIsNotDraggedAlongIt 1
-dev.stannismod.stellurgy.test.client.VSDeckCaptureAndDismountTest#standingUpFromASeatOnASteeplyTiltedShipKeepsThePilotOnTheDeck 1
-dev.stannismod.stellurgy.test.client.VSDeckCaptureAndDismountTest#standingUpWhileHoveringKeepsTheShipUpAndThePilotOnTheDeck 1
-dev.stannismod.stellurgy.test.client.VSFlightSmoothnessAcrossJumpTest#aShipFliesAsSmoothlyAfterAJumpAsBeforeOne 1
-dev.stannismod.stellurgy.test.client.VSFlightSmoothnessAcrossJumpTest#liftClear 1
-dev.stannismod.stellurgy.test.client.VSFlightSmoothnessAcrossJumpTest#mountTheSeat 1
-# Unnamed and leaving on what they read, never seen by the comment census because the clock is spent in a
-# helper (the approach chase, 3 exits) or is a link (a pass over the listed addresses until one is landable;
-# a pass over the aim pitches until one hits the deck):
-dev.stannismod.stellurgy.test.client.VSAssembledShipRealRightClickBoardingTest#standOnTheDeckAndAimAtIt 2
-dev.stannismod.stellurgy.test.milestone.M1PlanetToPlanetMilestoneE2ETest#aPlayerBuildsHisShipAtTheAssemblerBoardsItAndFliesItOffThePlanet 2
-# Unnamed, one exit -- a pass over cases whose own instructions spend the clock (a server-side park between
-# coordinate cases, a rung's arrangement and assembly, a suit piece's press):
-dev.stannismod.stellurgy.test.client.VSShipExtremeCoordinatesTest#doesAShipAssembleLoadAndFlyFarFromTheOrigin 1
-dev.stannismod.stellurgy.test.client.VSShipExtremeCoordinatesTest#whereExactlyDoesADeliveryStopWorking 1
-dev.stannismod.stellurgy.test.milestone.M1PlanetToPlanetMilestoneE2ETest#putOnTheSpaceSuit 1
+# Empty: the loops listed when the rule was set were all paid down, and a method absent from this list that
+# breaks the rule fails the build.
