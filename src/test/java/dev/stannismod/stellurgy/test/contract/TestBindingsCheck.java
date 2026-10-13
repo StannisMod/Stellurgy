@@ -44,8 +44,10 @@ import java.util.stream.Stream;
  *       not hold, and a listed method that no longer carries one (the list only shrinks);</li>
  *   <li>THE KIND OF A CLASS, which is the base it extends and never its name: a concrete class named
  *       {@code *E2ETest} that does not extend {@link AbstractPlayerE2ETest}, a class that does, outside
- *       the {@code test.client} and {@code test.milestone} packages (an e2e boots a client), and a class
- *       with tests in {@code test.milestone} that does not (a milestone is a player's whole loop);</li>
+ *       the {@code test.milestone} package (the one tier that fails on a skipped test), and a class with
+ *       tests in {@code test.milestone} that does not (a milestone is a player's whole loop);</li>
+ *   <li>A DEBT LIST THAT GREW: a line of a ratchet list the list did not hold at this branch's base
+ *       ({@link #checkDebtGrowth});</li>
  *   <li>A BOOT NOT DECLARED WHERE IT IS TAKEN: a class of an own-boot base without {@link OwnBoot} that
  *       the committed debt list does not hold (the list only shrinks), an e2e without {@link NewPath}, and
  *       either on a class that does not take that boot;</li>
@@ -167,6 +169,10 @@ public final class TestBindingsCheck {
         System.out.println(checkUnpinnedBaseline(root, corpus.unpinned, failures));
         System.out.println(checkOwnBootDebt(root, corpus.ownBootWithoutReason, failures));
         System.out.println(checkLegacyWitnessDebt(root, corpus.legacyWitnessed, failures));
+        for (String debtList : new String[]{UNPINNED_BASELINE, OWN_BOOT_DEBT, LEGACY_WITNESS_DEBT, WaitLoops.DEBT,
+                WaitLoops.SPANNING_DEBT}) {
+            System.out.println(checkDebtGrowth(root, debtList, failures));
+        }
         checkWitnessMembers(root, corpus.witnessMembers, failures);
         System.out.println(String.format("records: %d witnesses (%d @RedWitness, %d @LegacyWitness), %d @NotYetRed;"
                         + " %d @Pins anchors",
@@ -325,6 +331,112 @@ public final class TestBindingsCheck {
             }
         }
         return String.format("legacy-witness debt: %d listed, %d carrying one now", debt.size(), carrying.size());
+    }
+
+    /** The branch every debt list's base is taken against: the line the work merges into. */
+    static final String MERGE_TARGET = "origin/1.12";
+
+    /**
+     * A debt list only SHRINKS, held against what the list said before this branch: each check above compares
+     * the list with the tree as it is now, so a line added beside a new debt is green there. Here a line the
+     * BASE does not hold is growth and fails, naming it. The base is the list at
+     * {@code git merge-base HEAD} {@value #MERGE_TARGET} when it exists there; a list this branch created is
+     * held against its own FIRST commit on the branch (the commit that seeded it), and one no commit holds
+     * yet is its own base until its first commit. A {@code class#method N} line (the wait-loop debt) also
+     * grows when its N rises. Git that cannot answer is a failure, never a skip -- without the base, growth
+     * cannot be told from the debt that was there. Answers the line it prints.
+     */
+    static String checkDebtGrowth(Path root, String debtList, List<String> failures) {
+        Path file = root.resolve(debtList);
+        if (!Files.isRegularFile(file)) {
+            return "debt growth " + debtList + ": the list is missing (its own check fails)";
+        }
+        String base;
+        String baseName;
+        try {
+            String mergeBase = git(root, "merge-base", "HEAD", MERGE_TARGET).trim();
+            if (!git(root, "ls-tree", "--name-only", mergeBase, "--", debtList).trim().isEmpty()) {
+                baseName = "the merge base " + mergeBase.substring(0, 10) + " with " + MERGE_TARGET;
+                base = git(root, "show", mergeBase + ":" + debtList);
+            } else {
+                String[] adding = git(root, "log", "--diff-filter=A", "--format=%H", "--reverse",
+                        mergeBase + "..HEAD", "--", debtList).trim().split("\\s+");
+                if (adding[0].isEmpty()) {
+                    return "debt growth " + debtList + ": in no commit yet -- its first commit will be its base";
+                }
+                baseName = "its first commit on this branch, " + adding[0].substring(0, 10);
+                base = git(root, "show", adding[0] + ":" + debtList);
+            }
+        } catch (IOException e) {
+            failures.add("the debt list " + debtList + " could not be compared with its base (" + e.getMessage()
+                    + ") -- growth cannot be told from the debt that was there; run inside the repository's checkout"
+                    + " with " + MERGE_TARGET + " fetched");
+            return "debt growth " + debtList + ": NOT COMPARED";
+        }
+        Map<String, Integer> was = debtLines(Arrays.asList(base.replace("\r\n", "\n").split("\n")));
+        Map<String, Integer> now;
+        try {
+            now = debtLines(Files.readAllLines(file, StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            failures.add("the debt list " + debtList + " could not be read: " + e);
+            return "debt growth " + debtList + ": NOT READ";
+        }
+        int grown = 0;
+        for (Map.Entry<String, Integer> line : now.entrySet()) {
+            Integer before = was.get(line.getKey());
+            if (before == null || line.getValue() > before) {
+                grown++;
+                failures.add(debtList + " GREW: `" + line.getKey() + (line.getValue() > 0 ? " " + line.getValue() : "")
+                        + "` " + (before == null ? "is not in" : "stands above the " + before + " of") + " the list at "
+                        + baseName + " -- a debt list only shrinks; the new case meets the rule instead");
+            }
+        }
+        return String.format("debt growth %s: %d line(s) now, %d at %s, %d grown", debtList, now.size(), was.size(),
+                baseName, grown);
+    }
+
+    /** A debt list's entries: {@code entry -> N} for a {@code class#method N} line, {@code entry -> 0} else. */
+    private static Map<String, Integer> debtLines(List<String> lines) {
+        Map<String, Integer> out = new TreeMap<>();
+        for (String line : lines) {
+            String entry = line.trim();
+            if (entry.isEmpty() || entry.startsWith("#")) {
+                continue;
+            }
+            String[] parts = entry.split("\\s+");
+            if (parts.length == 2 && parts[1].matches("\\d+")) {
+                out.put(parts[0], Integer.parseInt(parts[1]));
+            } else {
+                out.put(entry, 0);
+            }
+        }
+        return out;
+    }
+
+    /** {@code git <args>} in {@code root}: its standard output, or an {@code IOException} naming its exit. */
+    private static String git(Path root, String... args) throws IOException {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.addAll(Arrays.asList(args));
+        Process p = new ProcessBuilder(command).directory(root.toFile())
+                .redirectError(ProcessBuilder.Redirect.INHERIT).start();
+        StringBuilder out = new StringBuilder();
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                out.append(line).append('\n');
+            }
+        }
+        try {
+            int exit = p.waitFor();
+            if (exit != 0) {
+                throw new IOException("git " + String.join(" ", args) + " exited " + exit);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while git " + String.join(" ", args) + " ran");
+        }
+        return out.toString();
     }
 
     /**
@@ -777,10 +889,13 @@ public final class TestBindingsCheck {
                 }
                 String pkg = k.getPackage() == null ? "" : k.getPackage().getName();
                 boolean milestone = pkg.endsWith(".test.milestone") || pkg.contains(".test.milestone.");
-                if (onBase && !(pkg.endsWith(".test.client") || pkg.contains(".test.client.") || milestone)) {
+                // The milestone tier is the one that fails on a skipped test: an e2e skipped by its base's
+                // assumption anywhere else ends green, which reads exactly like a path that was walked. And
+                // only there is no other test code in its fork's JVM.
+                if (onBase && !milestone) {
                     failures.add(k.getName() + " extends " + AbstractPlayerE2ETest.class.getSimpleName()
-                            + " outside test.client / test.milestone: an e2e boots a client, and only those "
-                            + "tiers start one");
+                            + " outside test.milestone: an e2e runs in the tier that fails on a skip (testMilestone);"
+                            + " testClient ends a skipped e2e green");
                 }
                 if (milestone && !onBase && hasTests(k)) {
                     failures.add(k.getName() + " runs in the milestone tier and does not extend "

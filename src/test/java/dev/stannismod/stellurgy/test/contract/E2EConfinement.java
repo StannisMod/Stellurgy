@@ -47,17 +47,30 @@ import java.util.zip.ZipFile;
  * coremod or a mixin loader, and no test-source class has the name of a class on the runtime classpath
  * (the test output precedes the mod's jar in every child, so such a class would replace it there).</p>
  *
+ * <p><b>Also refused.</b> The e2e may not wait on the wall clock, declare {@code @Test(expected = …)}, catch a
+ * {@code Throwable} or an {@code Error} and carry on, or return early from a {@code @Test}. A child-side walk
+ * follows calls into the harness as well as the test source; a body run on the test's demand publishes no
+ * record type a recorder publishes; an observation's helpers write nothing, call no setter, write or call
+ * nothing through reflection; a subscriber never takes a command's argument array. No test-source class sits
+ * in the harness's packages, and no test RESOURCE has the path of one on the runtime classpath. Mechanics code
+ * leaves the JVM's properties, exit, security manager and streams alone; {@code GameTicks}' sleep is admitted
+ * in its one advance method only.</p>
+ *
  * <p><b>What it does not see.</b> What an ALLOWED call does with its arguments (a string sent through
  * {@code execute} is judged by the server's gate, an input event by the client bridge); a call a mixin or
- * an instrument makes to a game method that writes, beyond the field writes refused here -- the game's
- * methods are too many to classify, and an instrument's calls into the game are listed by name instead;
- * native code; and code that is not in a class file the test output holds.</p>
+ * an instrument makes to a game method that writes, beyond the field writes and the setters (by name)
+ * refused here -- the game's methods are too many to classify, and an instrument's calls into the game are
+ * listed by name instead; a record type a recorder hands on through a parameter; a failure an e2e turns
+ * into a value and never asserts, beyond the handler forms above; native code; and code that is not in a
+ * class file the test output holds.</p>
  */
 final class E2EConfinement {
 
     /** The e2e base, as an internal name. */
     static final String E2E_BASE = "com/github/stannismod/forge/testing/junit/AbstractPlayerE2ETest";
     private static final String FRAMEWORK_ROOT = "testframework/src/main/java";
+    /** The harness's packages: only {@value #FRAMEWORK_ROOT} declares classes in them. */
+    private static final String HARNESS_PACKAGE = "com/github/stannismod/forge/testing/";
     private static final String TEST_ROOT = "src/test/java";
     private static final String SUBSCRIBE = "Lnet/minecraftforge/fml/common/eventhandler/SubscribeEvent;";
     private static final String EVENT = "net/minecraftforge/fml/common/eventhandler/Event";
@@ -76,6 +89,10 @@ final class E2EConfinement {
     private final Map<String, Boolean> testSource = new HashMap<>();
     /** Classes read off the classpath outside the test output, for the event-hierarchy question. */
     private final Map<String, ClassNode> outside = new HashMap<>();
+    /** Internal name -> the classes of the test output below it, as {@link #subtypes} computed them. */
+    private final Map<String, Set<String>> subtypesOf = new HashMap<>();
+    /** The record types the recorders publish, once {@link #recorderTypes} has read them. */
+    private Set<String> recorderTypes;
 
     private E2EConfinement(Path root, Path testClasses, ClassLoader loader, List<String> failures) {
         this.root = root;
@@ -101,8 +118,8 @@ final class E2EConfinement {
         int shadows = c.refuseShadows();
         int[] mechanicsTests = c.confineMechanicsTests();
         return String.format("confinement: %d e2e class(es) walked, %d instrument method(s), %d mechanics"
-                + " instrument method(s), %d observation mixin(s), %d bus subscriber class(es); %d class name(s)"
-                + " checked against the runtime classpath; %d mechanics-tier class(es) seeded, %d test-source"
+                + " instrument method(s), %d observation mixin(s), %d bus subscriber class(es); %d class and"
+                + " resource name(s) checked against the runtime classpath; %d mechanics-tier class(es) seeded, %d test-source"
                 + " class(es) walked from them", e2es, instruments, mechanics, mixins, subscribers, shadows,
                 mechanicsTests[0], mechanicsTests[1]);
     }
@@ -134,6 +151,11 @@ final class E2EConfinement {
                 continue;
             }
             testSource.put(node.name, test);
+            if (test && node.name.startsWith(HARNESS_PACKAGE)) {
+                failures.add("confinement: the test-source class " + node.name.replace('/', '.') + " is declared in the"
+                        + " harness's package " + HARNESS_PACKAGE.replace('/', '.') + " -- a class there reaches the"
+                        + " harness's package-private members (VirtualInput, the bridges' tables), which no test may");
+            }
         }
     }
 
@@ -163,6 +185,19 @@ final class E2EConfinement {
         return node;
     }
 
+    /** Whether {@code internal} is Forge's {@code CommandEvent} or a class below it. */
+    private boolean isCommandEvent(String internal) {
+        String at = internal;
+        for (int depth = 0; at != null && depth < 32; depth++) {
+            if ("net/minecraftforge/event/CommandEvent".equals(at)) {
+                return true;
+            }
+            ClassNode node = testNodes.containsKey(at) ? testNodes.get(at) : outsideNode(at);
+            at = node == null ? null : node.superName;
+        }
+        return false;
+    }
+
     /** Whether {@code internal} is a Forge event, by its superclass chain. */
     private boolean isEvent(String internal) {
         String at = internal;
@@ -186,6 +221,10 @@ final class E2EConfinement {
         final String desc;
         final String where;
         final int opcode;
+        /** The method that makes it, as {@code owner#name+desc}; null for a class-level reference. */
+        String site;
+        /** The call instruction, for a method call; null for any other reference. */
+        MethodInsnNode call;
 
         Ref(String owner, String member, String desc, String where, int opcode) {
             this.owner = owner;
@@ -193,6 +232,14 @@ final class E2EConfinement {
             this.desc = desc;
             this.where = where;
             this.opcode = opcode;
+        }
+
+        /** The same reference, judged against {@code declaring}, the class that declares its member. */
+        Ref declaredBy(String declaring) {
+            Ref r = new Ref(declaring, member, desc, where, opcode);
+            r.site = site;
+            r.call = call;
+            return r;
         }
     }
 
@@ -315,7 +362,9 @@ final class E2EConfinement {
                 MethodInsnNode mi = (MethodInsnNode) insn;
                 String owner = mi.owner.startsWith("[") ? typeOwner(Type.getType(mi.owner)) : mi.owner;
                 if (owner != null) {
-                    out.add(new Ref(owner, mi.name, mi.desc, where, mi.getOpcode()));
+                    Ref call = new Ref(owner, mi.name, mi.desc, where, mi.getOpcode());
+                    call.call = mi;
+                    out.add(call);
                 }
             } else if (insn instanceof FieldInsnNode) {
                 FieldInsnNode fi = (FieldInsnNode) insn;
@@ -350,6 +399,10 @@ final class E2EConfinement {
             } else if (insn instanceof MultiANewArrayInsnNode) {
                 addDesc(out, ((MultiANewArrayInsnNode) insn).desc, where);
             }
+        }
+        String site = node.name + "#" + m.name + m.desc;
+        for (Ref r : out) {
+            r.site = site;
         }
         return out;
     }
@@ -398,6 +451,13 @@ final class E2EConfinement {
             List<Ref> refs = new ArrayList<>(classLevelRefs(node));
             for (MethodNode m : (List<MethodNode>) node.methods) {
                 refs.addAll(methodRefs(node, m));
+                for (String swallow : swallowsItsFailure(node, m)) {
+                    String line = "confinement: the e2e " + seed.replace('/', '.') + " " + swallow + " (at " + node.name
+                            + "#" + m.name + "; reached by " + path(reachedFrom, at) + ")";
+                    if (reported.add(line)) {
+                        failures.add(line);
+                    }
+                }
             }
             for (Ref ref : refs) {
                 // A member named through a test-source owner may be INHERITED from the harness or the JDK:
@@ -406,7 +466,7 @@ final class E2EConfinement {
                 if (isTestSource(ref.owner) && !"<class>".equals(ref.member)) {
                     String declaring = declaringOwner(ref.owner, ref.member, ref.desc);
                     if (!declaring.equals(ref.owner)) {
-                        r = new Ref(declaring, ref.member, ref.desc, ref.where, ref.opcode);
+                        r = ref.declaredBy(declaring);
                     }
                 }
                 if (isTestSource(r.owner)) {
@@ -433,6 +493,150 @@ final class E2EConfinement {
                 }
             }
         }
+    }
+
+    /**
+     * The ways a method of e2e code can turn its own failure into a pass, each read off the class file:
+     * <ul>
+     *   <li>a {@code @Test(expected = …)} -- the test passes on a throw, so the throw an assertion makes
+     *       is its green;</li>
+     *   <li>a handler for {@code Throwable} or for an {@code Error} (an {@code AssertionError} and its
+     *       subclasses among them) -- an exception-table entry, so a {@code catch}, a multi-catch and a
+     *       {@code catch} a try-with-resources writes are one form: what a failed assertion throws is
+     *       caught where it was thrown, whatever the handler then does;</li>
+     *   <li>an EARLY RETURN from a {@code @Test} method -- more than one return instruction in it: javac
+     *       writes one at the end of a body and one more for every {@code return} statement, so a second
+     *       one is a path that ends the test before its last line, whether or not an assertion stood
+     *       before it.</li>
+     * </ul>
+     * Not decidable here, so not refused: a {@code break} out of a labelled block that jumps over the
+     * assertions; a helper that returns early (a helper is not the test's end); a {@code finally} that
+     * returns (javac writes it as a handler of no type).
+     */
+    private List<String> swallowsItsFailure(ClassNode node, MethodNode m) {
+        List<String> out = new ArrayList<>();
+        AnnotationNode test = annotation(m.visibleAnnotations, m.invisibleAnnotations, "Lorg/junit/Test;");
+        if (test != null && value(test, "expected") != null) {
+            out.add("declares @Test(expected = …) on " + m.name + " -- an e2e that passes on a throw passes on the"
+                    + " throw its own failed assertion makes");
+        }
+        for (Object o : m.tryCatchBlocks) {
+            TryCatchBlockNode t = (TryCatchBlockNode) o;
+            if (t.type != null && catchesAFailure(t.type) && !handlerAlwaysThrows(m, t)
+                    && !diagnosticReader(node.name + "#" + m.name + m.desc)) {
+                String line = "catches " + t.type.replace('/', '.') + " in " + m.name + " and can carry on -- a path"
+                        + " from the handler completes without a throw, so what a failed assertion threw is swallowed"
+                        + " and the e2e can go on to a green it did not earn (a handler that throws again, typed or"
+                        + " with more to say, is admitted)";
+                if (!out.contains(line)) {
+                    out.add(line);
+                }
+            }
+        }
+        if (test != null) {
+            int returns = 0;
+            for (AbstractInsnNode insn = m.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                int op = insn.getOpcode();
+                if (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) {
+                    returns++;
+                }
+            }
+            if (returns > 1) {
+                out.add("returns early from its @Test " + m.name + " (" + returns + " return instructions) -- a path"
+                        + " that ends the test before its last line is a verdict nobody asserted");
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The one NAMED exception to the swallow rule: a reader of a failure message that must never throw,
+     * because it is read while an assertion's message is built -- on the green path too -- and a reader
+     * that threw there would replace the verdict it was asked to explain. It returns the caught throwable
+     * in its text, and decides nothing. A new entry is a new reader of that kind, argued here.
+     */
+    private static boolean diagnosticReader(String method) {
+        return "dev/stannismod/stellurgy/test/client/SeatDelivery#half(Z)Ljava/lang/String;".equals(method);
+    }
+
+    /**
+     * Whether every path from the handler of {@code t} ends in a throw -- the caught failure thrown again,
+     * as it is or typed -- rather than in a return or back in the method's normal flow. Exception edges and
+     * what a called method does are not followed: a call that always throws counts as a path that goes on.
+     */
+    private static boolean handlerAlwaysThrows(MethodNode m, TryCatchBlockNode t) {
+        AbstractInsnNode[] code = m.instructions.toArray();
+        Map<LabelNode, Integer> index = new HashMap<>();
+        for (int i = 0; i < code.length; i++) {
+            if (code[i] instanceof LabelNode) {
+                index.put((LabelNode) code[i], i);
+            }
+        }
+        Integer start = index.get(t.handler);
+        if (start == null) {
+            return false;
+        }
+        Deque<Integer> work = new ArrayDeque<>();
+        Set<Integer> seen = new HashSet<>();
+        work.push(start);
+        seen.add(start);
+        while (!work.isEmpty()) {
+            int i = work.pop();
+            int op = code[i].getOpcode();
+            if (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) {
+                return false;
+            }
+            if (op == Opcodes.ATHROW) {
+                continue;
+            }
+            List<LabelNode> targets = new ArrayList<>();
+            if (code[i] instanceof JumpInsnNode) {
+                targets.add(((JumpInsnNode) code[i]).label);
+            } else if (code[i] instanceof TableSwitchInsnNode) {
+                targets.addAll(((TableSwitchInsnNode) code[i]).labels);
+                targets.add(((TableSwitchInsnNode) code[i]).dflt);
+            } else if (code[i] instanceof LookupSwitchInsnNode) {
+                targets.addAll(((LookupSwitchInsnNode) code[i]).labels);
+                targets.add(((LookupSwitchInsnNode) code[i]).dflt);
+            }
+            List<Integer> next = new ArrayList<>();
+            for (LabelNode l : targets) {
+                Integer at = index.get(l);
+                if (at != null) {
+                    next.add(at);
+                }
+            }
+            boolean falls = op != Opcodes.GOTO && !(code[i] instanceof TableSwitchInsnNode)
+                    && !(code[i] instanceof LookupSwitchInsnNode);
+            if (falls) {
+                if (i + 1 >= code.length) {
+                    return false;
+                }
+                next.add(i + 1);
+            }
+            for (int n : next) {
+                if (seen.add(n)) {
+                    work.push(n);
+                }
+            }
+        }
+        return true;
+    }
+
+    /** {@code Throwable}, or a class whose superclass chain reaches {@code Error}. */
+    private boolean catchesAFailure(String type) {
+        if ("java/lang/Throwable".equals(type)) {
+            return true;
+        }
+        String at = type;
+        for (int depth = 0; at != null && depth < 32; depth++) {
+            if ("java/lang/Error".equals(at)) {
+                return true;
+            }
+            ClassNode n = testNodes.containsKey(at) ? testNodes.get(at) : outsideNode(at);
+            at = n == null ? null : n.superName;
+        }
+        return false;
     }
 
     /**
@@ -471,16 +675,55 @@ final class E2EConfinement {
         return at;
     }
 
-    /** Every test-source class below {@code internal}, by superclass or interface, transitively. */
+    /**
+     * As {@link #declaringOwner}, climbing through harness classes as well as test-source ones: the class of
+     * the test output that declares {@code member}, or the first class above it that the output does not hold.
+     */
+    @SuppressWarnings("unchecked")
+    private String declaringInTree(String owner, String member, String desc) {
+        boolean method = desc != null && desc.startsWith("(");
+        String at = owner;
+        for (int depth = 0; depth < 32; depth++) {
+            ClassNode node = testNodes.get(at);
+            if (node == null || "<init>".equals(member) || "<clinit>".equals(member)) {
+                return at;
+            }
+            if (method) {
+                for (MethodNode m : (List<MethodNode>) node.methods) {
+                    if (m.name.equals(member) && m.desc.equals(desc)) {
+                        return at;
+                    }
+                }
+            } else {
+                for (FieldNode f : (List<FieldNode>) node.fields) {
+                    if (f.name.equals(member)) {
+                        return at;
+                    }
+                }
+            }
+            if (node.superName == null) {
+                return at;
+            }
+            at = node.superName;
+        }
+        return at;
+    }
+
+    /** Every class of the test output (test source or harness) below {@code internal}, transitively. */
     @SuppressWarnings("unchecked")
     private Set<String> subtypes(String internal) {
+        Set<String> known = subtypesOf.get(internal);
+        if (known != null) {
+            return known;
+        }
         Set<String> out = new TreeSet<>();
+        subtypesOf.put(internal, out);
         Deque<String> todo = new ArrayDeque<>();
         todo.add(internal);
         while (!todo.isEmpty()) {
             String at = todo.poll();
             for (ClassNode node : testNodes.values()) {
-                if (isTestSource(node.name) && !out.contains(node.name)
+                if (testSource.containsKey(node.name) && !out.contains(node.name)
                         && (at.equals(node.superName) || ((List<String>) node.interfaces).contains(at))) {
                     out.add(node.name);
                     todo.add(node.name);
@@ -500,6 +743,9 @@ final class E2EConfinement {
 
     /** Why the reference {@code r}, made by e2e code, is refused; {@code null} when the allowlist admits it. */
     private String e2eRefusal(Ref r) {
+        if (clockAdvanceSleep(r)) {
+            return null;
+        }
         String forbidden = forbiddenCategory(r);
         if (forbidden != null) {
             return forbidden;
@@ -552,6 +798,10 @@ final class E2EConfinement {
                 || o.startsWith("java/lang/ProcessBuilder$") || "java/lang/SecurityManager".equals(o)
                 || o.startsWith("java/lang/management/") || o.startsWith("javax/management/")) {
             return "THE PROCESS (Runtime, ProcessBuilder, Process, management)";
+        }
+        String wallClock = wallClockWait(r);
+        if (wallClock != null) {
+            return wallClock;
         }
         if (("java/lang/Thread".equals(o) && !threadAdmits(m)) || "java/lang/ThreadGroup".equals(o)
                 || o.startsWith("java/lang/Thread$") || "java/util/Timer".equals(o) || "java/util/TimerTask".equals(o)
@@ -622,9 +872,27 @@ final class E2EConfinement {
         }
     }
 
+    /**
+     * Why {@code r} pauses the calling thread on the WALL clock, or {@code null}: {@code Thread.sleep},
+     * {@code TimeUnit.sleep / timedWait / timedJoin}, {@code Object.wait} on any receiver, and every member of
+     * {@code java.util.concurrent.locks} (a {@code LockSupport} park, a {@code Condition} await, a lock). A
+     * wait on machine time is a budget about the machine; a test waits on the game's clock or on a record.
+     */
+    static String wallClockWait(Ref r) {
+        String o = r.owner;
+        String m = r.member;
+        boolean sleep = "sleep".equals(m) && ("java/lang/Thread".equals(o) || "java/util/concurrent/TimeUnit".equals(o));
+        boolean timed = ("timedWait".equals(m) || "timedJoin".equals(m)) && "java/util/concurrent/TimeUnit".equals(o);
+        boolean objectWait = "wait".equals(m) && ("()V".equals(r.desc) || "(J)V".equals(r.desc) || "(JI)V".equals(r.desc));
+        if (sleep || timed || objectWait || o.startsWith("java/util/concurrent/locks/")) {
+            return "A WALL-CLOCK WAIT (Thread.sleep, TimeUnit.sleep, Object.wait, a lock's park or await): a wait is a"
+                    + " link on a published record or a window of two reads on the game's clock";
+        }
+        return null;
+    }
+
     private static boolean threadAdmits(String member) {
         switch (member) {
-            case "sleep":
             case "currentThread":
             case "interrupt":
             case "isInterrupted":
@@ -835,7 +1103,7 @@ final class E2EConfinement {
                 if (isTestSource(ref.owner) && !"<class>".equals(ref.member)) {
                     String declaring = declaringOwner(ref.owner, ref.member, ref.desc);
                     if (!declaring.equals(ref.owner)) {
-                        r = new Ref(declaring, ref.member, ref.desc, ref.where, ref.opcode);
+                        r = ref.declaredBy(declaring);
                     }
                 }
                 for (String owner : new String[]{ref.owner, r.owner}) {
@@ -847,7 +1115,7 @@ final class E2EConfinement {
                 if (isTestSource(r.owner)) {
                     continue;
                 }
-                String why = mechanicsRefusal(r, at);
+                String why = mechanicsRefusal(r);
                 if (why != null) {
                     String line = "confinement: the mechanics tier reaches " + r.owner.replace('/', '.')
                             + ("<class>".equals(r.member) ? "" : "#" + r.member) + " -- " + why + " (at " + r.where
@@ -878,18 +1146,50 @@ final class E2EConfinement {
     }
 
     /**
-     * The one test-source class whose wall-clock sleep is admitted: the server clock's own advance
-     * primitive, which sleeps between two READS of the game's clock and returns on the clock, never on the
-     * sleep -- the harness's role ({@code ClientBot#waitTicks} does the same on the client side), living
-     * in the test source.
+     * The one test-source METHOD whose wall-clock sleep is admitted: the server clock's own advance, which
+     * sleeps between two READS of the game's clock and returns on the clock, never on the sleep -- the
+     * harness's role ({@code ClientBot#waitTicks} does the same on the client side), living in the test
+     * source. Every other method of {@code GameTicks}, its lambdas and its overloads included, is judged
+     * like the rest of the tier.
      */
-    private static final String CLOCK_INSTRUMENT = "dev/stannismod/stellurgy/test/GameTicks";
+    private static final String CLOCK_ADVANCE = "dev/stannismod/stellurgy/test/GameTicks#advanceObserved"
+            + "(Lcom/github/stannismod/forge/testing/server/TestClient;Ldev/stannismod/stellurgy/test/GameTicks$Clock;"
+            + "ILjava/time/Duration;)J";
+
+    /** The one admitted wall-clock wait: {@code Thread.sleep} made by {@link #CLOCK_ADVANCE} itself. */
+    private static boolean clockAdvanceSleep(Ref r) {
+        return CLOCK_ADVANCE.equals(r.site) && "java/lang/Thread".equals(r.owner) && "sleep".equals(r.member);
+    }
 
     /**
-     * Why {@code r}, made by mechanics-tier code in the class {@code from}, is refused; {@code null} when it
-     * is admitted.
+     * The members of {@code System} mechanics code may not touch: the JVM's properties (written, cleared,
+     * or handed out as the live table), its end, its security manager, its standard streams, and native
+     * code. Reading one property, the clocks, and the rest are admitted.
      */
-    private String mechanicsRefusal(Ref r, String from) {
+    private static boolean mechanicsSystemAdmits(String member) {
+        switch (member) {
+            case "setProperty":
+            case "clearProperty":
+            case "setProperties":
+            case "getProperties":
+            case "exit":
+            case "setSecurityManager":
+            case "setOut":
+            case "setErr":
+            case "setIn":
+            case "load":
+            case "loadLibrary":
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Why {@code r}, made by mechanics-tier code (in the method {@code r.site}), is refused; {@code null}
+     * when it is admitted.
+     */
+    private String mechanicsRefusal(Ref r) {
         String o = r.owner;
         String m = r.member;
         if (r.opcode == Opcodes.INVOKEDYNAMIC) {
@@ -902,18 +1202,18 @@ final class E2EConfinement {
             return "A WRITE TO A STATIC outside the test source set: the game's or the mod's state, which a test"
                     + " does not own -- it arranges through the harness in the child";
         }
-        if (("sleep".equals(m) && ("java/lang/Thread".equals(o) || "java/util/concurrent/TimeUnit".equals(o)))
-                || ("wait".equals(m) && ("()V".equals(r.desc) || "(J)V".equals(r.desc) || "(JI)V".equals(r.desc)))
-                || o.startsWith("java/util/concurrent/locks/")) {
-            if (CLOCK_INSTRUMENT.equals(from) && "java/lang/Thread".equals(o) && "sleep".equals(m)) {
-                return null;
-            }
-            return "A WALL-CLOCK SLEEP (Thread.sleep, TimeUnit.sleep, Object.wait, a lock's park): a wait is a link"
-                    + " on a published record or a window of two reads on the game's clock";
+        String wallClock = wallClockWait(r);
+        if (wallClock != null) {
+            return clockAdvanceSleep(r) ? null : wallClock;
         }
         if ("java/lang/Runtime".equals(o) || "java/lang/ProcessBuilder".equals(o) || "java/lang/Process".equals(o)
                 || o.startsWith("java/lang/ProcessBuilder$")) {
             return "THE PROCESS (Runtime, ProcessBuilder, Process)";
+        }
+        if ("java/lang/System".equals(o) && !mechanicsSystemAdmits(m)) {
+            return "THE JVM'S OWN STATE (System." + m + ": a property, the process's end, a security manager, the"
+                    + " standard streams) -- the test JVM's properties are what the harness launches its children"
+                    + " from, and a mechanics class shares that JVM with the classes after it";
         }
         if (("java/lang/Thread".equals(o) && !mechanicsThreadAdmits(m)) || "java/lang/ThreadGroup".equals(o)
                 || o.startsWith("java/lang/Thread$") || "java/util/Timer".equals(o) || "java/util/TimerTask".equals(o)
@@ -1078,6 +1378,37 @@ final class E2EConfinement {
     private interface ChildPolicy {
         /** Why {@code r} is refused, or {@code null}. */
         String refusal(Ref r);
+
+        /**
+         * Why a call to a mixin's {@code @Shadow} METHOD is refused, or {@code null}: at run time it is a
+         * call into the target class's own code, which the walk cannot follow.
+         */
+        default String shadowCall(Ref r) {
+            return null;
+        }
+
+        /**
+         * Whether a reference that leaves the test output is first held to the categories refused everywhere
+         * ({@link #forbiddenCategory}); a policy that answers false judges those references itself.
+         */
+        default boolean everywhereCategories() {
+            return true;
+        }
+    }
+
+    /** Whether {@code owner#name+desc} is a method of the test output carrying {@code @Shadow}. */
+    @SuppressWarnings("unchecked")
+    private boolean isShadowMethod(String owner, String name, String desc) {
+        ClassNode node = testNodes.get(owner);
+        if (node == null) {
+            return false;
+        }
+        for (MethodNode m : (List<MethodNode>) node.methods) {
+            if (m.name.equals(name) && m.desc.equals(desc)) {
+                return hasAnnotation(m.visibleAnnotations, m.invisibleAnnotations, "Lorg/spongepowered/asm/mixin/Shadow;");
+            }
+        }
+        return false;
     }
 
     /** A method of a test-source class, the unit of a child-side walk. */
@@ -1086,12 +1417,114 @@ final class E2EConfinement {
     }
 
     /**
-     * Walk the methods {@code starts} reach inside the test source (callees, lambda bodies, the static
-     * initialisers of the classes they touch), judging every reference that leaves it by {@code policy}.
-     * Answers how many methods were walked.
+     * The entry points that PUBLISH a record a test then reads as something production did: the client
+     * bridge's {@code recordEvent}, the trace's {@code record*}, the server log's {@code record}. Only a
+     * recorder's own publish path -- an observation mixin, whose call production's code makes -- may reach
+     * one; from an instrument (run when the TEST asks) or anything else it would forge the record a link
+     * waits on.
+     */
+    private static boolean publishesARecord(String owner, String member) {
+        switch (owner) {
+            case "com/github/stannismod/forge/testing/client/bridge/ForgeTestClientBootstrap":
+                return "recordEvent".equals(member);
+            case "dev/stannismod/stellurgy/test/trace/TestTrace":
+                return member.startsWith("record");
+            case "dev/stannismod/stellurgy/test/trace/ServerEventLog":
+                return "record".equals(member);
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * The record type a publishing call names -- its second-to-last argument, as every entry point of
+     * {@link #publishesARecord} takes {@code (…, type, payload)} -- when it is a string constant at the call;
+     * null otherwise.
      */
     @SuppressWarnings("unchecked")
-    private int walkMethods(String subject, List<String[]> starts, ChildPolicy policy) {
+    private String publishedType(Ref r) {
+        if (r.call == null || r.site == null) {
+            return null;
+        }
+        String owner = r.site.substring(0, r.site.indexOf('#'));
+        ClassNode node = testNodes.get(owner);
+        if (node == null) {
+            return null;
+        }
+        String nameDesc = r.site.substring(r.site.indexOf('#') + 1);
+        for (MethodNode m : (List<MethodNode>) node.methods) {
+            if (!(m.name + m.desc).equals(nameDesc)) {
+                continue;
+            }
+            org.objectweb.asm.tree.analysis.Frame<org.objectweb.asm.tree.analysis.SourceValue>[] frames;
+            try {
+                frames = new org.objectweb.asm.tree.analysis.Analyzer<>(
+                        new org.objectweb.asm.tree.analysis.SourceInterpreter()).analyze(owner, m);
+            } catch (org.objectweb.asm.tree.analysis.AnalyzerException unreadable) {
+                return null;
+            }
+            int i = m.instructions.indexOf(r.call);
+            if (i < 0 || frames[i] == null) {
+                return null;
+            }
+            int args = Type.getArgumentTypes(r.call.desc).length;
+            if (args < 2) {
+                return null;
+            }
+            org.objectweb.asm.tree.analysis.SourceValue v =
+                    frames[i].getStack(frames[i].getStackSize() - args + (args - 2));
+            if (v.insns.size() == 1 && v.insns.iterator().next() instanceof LdcInsnNode) {
+                Object cst = ((LdcInsnNode) v.insns.iterator().next()).cst;
+                return cst instanceof String ? (String) cst : null;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * The record types the RECORDERS publish -- the test and harness mixins and every class with a bus
+     * handler -- as the string constants at their publishing calls. A type a recorder hands on through a
+     * parameter is not read here.
+     */
+    @SuppressWarnings("unchecked")
+    private Set<String> recorderTypes() {
+        if (recorderTypes != null) {
+            return recorderTypes;
+        }
+        recorderTypes = new TreeSet<>();
+        for (ClassNode node : testNodes.values()) {
+            boolean recorder = node.name.startsWith(MIXIN_PACKAGE) || node.name.startsWith(HARNESS_PACKAGE + "mixin/");
+            for (MethodNode m : (List<MethodNode>) node.methods) {
+                recorder |= hasAnnotation(m.visibleAnnotations, m.invisibleAnnotations, SUBSCRIBE);
+            }
+            if (!recorder) {
+                continue;
+            }
+            for (MethodNode m : (List<MethodNode>) node.methods) {
+                for (Ref ref : methodRefs(node, m)) {
+                    if (ref.call != null && publishesARecord(ref.owner, ref.member)) {
+                        String type = publishedType(ref);
+                        if (type != null) {
+                            recorderTypes.add(type);
+                        }
+                    }
+                }
+            }
+        }
+        return recorderTypes;
+    }
+
+    /**
+     * Walk the methods {@code starts} reach -- callees in the test source AND in the harness (a body that
+     * hands its work to a harness method does that work itself), lambda bodies, the static initialisers of
+     * the classes they touch -- judging every reference that leaves both by {@code policy}. A call from the
+     * test source into the harness is first judged as a reference (a harness start or the bypass client
+     * stays refused); a call to an entry point that publishes a record is refused unless {@code publishes}
+     * (the subject is a recorder's own publish path). Answers how many methods were walked.
+     */
+    @SuppressWarnings("unchecked")
+    private int walkMethods(String subject, List<String[]> starts, boolean publishes, ChildPolicy policy) {
         Deque<String[]> todo = new ArrayDeque<>();
         Set<String> seen = new LinkedHashSet<>();
         Set<String> classesTouched = new TreeSet<>();
@@ -1115,9 +1548,10 @@ final class E2EConfinement {
                     matched.add(m);
                 }
             }
-            if (matched.isEmpty() && at[2] != null && node.superName != null && isTestSource(node.superName)) {
+            if (matched.isEmpty() && at[2] != null && node.superName != null && testNodes.containsKey(node.superName)) {
                 todo.add(new String[]{node.superName, at[1], at[2]});
             }
+            boolean fromHarness = isFramework(node.name);
             for (MethodNode m : matched) {
                 if (!seen.add(key(node.name, m.name, m.desc))) {
                     continue;
@@ -1125,31 +1559,63 @@ final class E2EConfinement {
                 walked++;
                 for (Ref ref : methodRefs(node, m)) {
                     Ref r = ref;
-                    if (isTestSource(ref.owner) && !"<class>".equals(ref.member)) {
-                        String declaring = declaringOwner(ref.owner, ref.member, ref.desc);
+                    if (testNodes.containsKey(ref.owner) && !"<class>".equals(ref.member)) {
+                        String declaring = declaringInTree(ref.owner, ref.member, ref.desc);
                         if (!declaring.equals(ref.owner)) {
-                            r = new Ref(declaring, ref.member, ref.desc, ref.where, ref.opcode);
+                            r = ref.declaredBy(declaring);
                         }
                     }
-                    if (isTestSource(r.owner)) {
-                        if (!"<class>".equals(r.member) && r.desc != null && r.desc.startsWith("(")) {
-                            todo.add(new String[]{r.owner, r.member, r.desc});
-                            // A virtual call runs whichever override the receiver has: every one is walked.
-                            if (r.opcode == Opcodes.INVOKEVIRTUAL || r.opcode == Opcodes.INVOKEINTERFACE || r.opcode == -1) {
-                                for (String sub : subtypes(r.owner)) {
-                                    todo.add(new String[]{sub, r.member, r.desc});
-                                }
+                    String why = null;
+                    if (testNodes.containsKey(r.owner)) {
+                        boolean call = !"<class>".equals(r.member) && r.desc != null && r.desc.startsWith("(");
+                        if (call && isShadowMethod(r.owner, r.member, r.desc)) {
+                            why = policy.shadowCall(r);
+                            if (why == null) {
+                                continue;
                             }
-                        } else if (!classesTouched.contains(r.owner)) {
-                            todo.add(new String[]{r.owner, "<clinit>", null});
+                        } else if (call && publishesARecord(r.owner, r.member)) {
+                            // The log itself: what its writer does with the record is the log's own state.
+                            String type = publishes ? null : publishedType(r);
+                            if (publishes || (type != null && !recorderTypes().contains(type))) {
+                                continue;
+                            }
+                            why = "an entry point that PUBLISHES a record (" + r.owner.substring(r.owner.lastIndexOf('/') + 1)
+                                    + "#" + r.member + ") " + (type == null ? "of a type that is no constant at the call"
+                                    : "of the type '" + type + "', which a recorder publishes") + ": a body run on the"
+                                    + " test's demand publishes only a record type of its own (a window's summary),"
+                                    + " never one a link reads as what production did";
+                        } else if (isFramework(r.owner) && !fromHarness) {
+                            why = forbiddenCategory(r);
                         }
-                        continue;
-                    }
-                    String why = forbiddenCategory(r);
-                    if (r.opcode == Opcodes.INVOKEDYNAMIC) {
-                        why = lambdaBootstrap(r) ? null : "an invokedynamic bootstrap other than the lambda factory";
-                    } else if (why == null && !isFramework(r.owner)) {
-                        why = policy.refusal(r);
+                        // A harness class initialising its own statics, or a constructor its own object, writes
+                        // nothing anybody else holds: that object is being made.
+                        boolean ownInit = r.owner.equals(node.name) && ("<clinit>".equals(m.name) || "<init>".equals(m.name));
+                        if (why == null && (r.opcode == Opcodes.PUTFIELD || r.opcode == Opcodes.PUTSTATIC)
+                                && isFramework(r.owner) && !ownInit) {
+                            why = policy.refusal(r);
+                        }
+                        if (why == null) {
+                            if (call) {
+                                todo.add(new String[]{r.owner, r.member, r.desc});
+                                // A virtual call runs whichever override the receiver has: every one is walked.
+                                if (r.opcode == Opcodes.INVOKEVIRTUAL || r.opcode == Opcodes.INVOKEINTERFACE || r.opcode == -1) {
+                                    for (String sub : subtypes(r.owner)) {
+                                        todo.add(new String[]{sub, r.member, r.desc});
+                                    }
+                                }
+                            } else if (!classesTouched.contains(r.owner)
+                                    && (isTestSource(r.owner) || !"<class>".equals(r.member))) {
+                                todo.add(new String[]{r.owner, "<clinit>", null});
+                            }
+                            continue;
+                        }
+                    } else {
+                        why = policy.everywhereCategories() ? forbiddenCategory(r) : null;
+                        if (r.opcode == Opcodes.INVOKEDYNAMIC) {
+                            why = lambdaBootstrap(r) ? null : "an invokedynamic bootstrap other than the lambda factory";
+                        } else if (why == null) {
+                            why = policy.refusal(r);
+                        }
                     }
                     if (why != null) {
                         String line = "confinement: " + subject + " reaches " + r.owner.replace('/', '.')
@@ -1178,7 +1644,7 @@ final class E2EConfinement {
                 continue;
             }
             List<String[]> start = Collections.singletonList(new String[]{owner, row[1], null});
-            walked += walkMethods("the " + side + " instrument " + row[0] + "#" + row[1], start, r -> {
+            walked += walkMethods("the " + side + " instrument " + row[0] + "#" + row[1], start, false, r -> {
                 if (r.opcode == Opcodes.PUTFIELD || r.opcode == Opcodes.PUTSTATIC) {
                     return "a WRITE to a field outside the test source set: an instrument records into its own state";
                 }
@@ -1216,7 +1682,7 @@ final class E2EConfinement {
                 continue;
             }
             List<String[]> start = Collections.singletonList(new String[]{owner, row[1], null});
-            walked += walkMethods("the " + side + " mechanics instrument " + row[0] + "#" + row[1], start, r -> {
+            walked += walkMethods("the " + side + " mechanics instrument " + row[0] + "#" + row[1], start, false, r -> {
                 if (r.opcode == Opcodes.PUTFIELD || r.opcode == Opcodes.PUTSTATIC) {
                     return "a WRITE to a field outside the test source set: a mechanics instrument reads, records"
                             + " into its own state, or feeds input — it does not set the mod's state";
@@ -1269,12 +1735,122 @@ final class E2EConfinement {
                     shadowFields.add(f.name);
                 }
             }
+            List<String[]> starts = new ArrayList<>();
+            // The one call a @Redirect observation makes ON PURPOSE: the call it replaces, forwarded unchanged
+            // (redirectForwards holds that), by the method that carries the redirect.
+            Map<String, String> forwarded = new HashMap<>();
             for (MethodNode m : (List<MethodNode>) node.methods) {
                 String where = "the OBSERVATION mixin " + simple + "#" + m.name;
                 observationMethod(node, m, where, shadowFields);
+                starts.add(new String[]{node.name, m.name, m.desc});
+                String target = redirectTarget(m);
+                if (target != null) {
+                    forwarded.put(node.name + "#" + m.name + m.desc, target);
+                }
             }
+            // What its methods CALL is held to the same rule as their own bodies: a helper of the test source
+            // or of the harness writes no field outside the test source and cancels nothing, and neither it
+            // nor the mixin calls a setter of the game or the mod, writes through reflection, or calls a
+            // shadowed method of the target that is a setter. The mixin is a recorder: it may publish.
+            walkMethods("the OBSERVATION mixin " + simple, starts, true, new ChildPolicy() {
+                @Override
+                public String refusal(Ref r) {
+                    if (r.opcode == Opcodes.PUTFIELD || r.opcode == Opcodes.PUTSTATIC) {
+                        return "a WRITE to a field outside the test source set: an observation writes only its own state";
+                    }
+                    if (r.owner.startsWith(CALLBACK) && ("cancel".equals(r.member) || "setReturnValue".equals(r.member))) {
+                        return "an observation changes nothing the game decides";
+                    }
+                    if ((r.owner + "#" + r.member + r.desc).equals(forwarded.get(r.site))) {
+                        return null;
+                    }
+                    if (gameSetter(r.owner, r.member)) {
+                        return "a SETTER of the game or the mod: an observation changes nothing the game decides";
+                    }
+                    return observationOutsideRefusal(r);
+                }
+
+                @Override
+                public String shadowCall(Ref r) {
+                    return setterName(r.member) ? "a call to the target's own SETTER through a @Shadow method: an"
+                            + " observation changes nothing the game decides" : null;
+                }
+
+                @Override
+                public boolean everywhereCategories() {
+                    return false;
+                }
+            });
         }
         return checked;
+    }
+
+    /** The call a {@code @Redirect} on {@code m} replaces, as {@code owner#name+desc}; null for none. */
+    private static String redirectTarget(MethodNode m) {
+        AnnotationNode redirect = annotation(m.visibleAnnotations, m.invisibleAnnotations,
+                "Lorg/spongepowered/asm/mixin/injection/Redirect;");
+        Object at = redirect == null ? null : value(redirect, "at");
+        AnnotationNode atNode = at instanceof AnnotationNode ? (AnnotationNode) at
+                : at instanceof List && !((List<?>) at).isEmpty() ? (AnnotationNode) ((List<?>) at).get(0) : null;
+        String target = atNode == null ? null : (String) value(atNode, "target");
+        if (target == null || !target.startsWith("L") || target.indexOf(';') < 0 || target.indexOf('(') < target.indexOf(';')) {
+            return null;
+        }
+        int semi = target.indexOf(';');
+        int paren = target.indexOf('(');
+        return target.substring(1, semi) + "#" + target.substring(semi + 1, paren) + target.substring(paren);
+    }
+
+    /**
+     * Why a reference an observation's code makes outside the test output is refused, beyond fields and
+     * setters: what CHANGES something by another road -- a write or a call through reflection
+     * ({@code Field.set*}, {@code Method.invoke}, a constructor, a method handle, {@code Unsafe}), a thread
+     * started, a wall-clock wait (on the game's own thread), the process or the JVM's state, a file written.
+     * A reflective READ, a stack trace, a clock read are admitted: an observation reads what it observes.
+     */
+    private static String observationOutsideRefusal(Ref r) {
+        String o = r.owner;
+        String m = r.member;
+        if (("java/lang/reflect/Field".equals(o) && m.startsWith("set") && !"setAccessible".equals(m))
+                || ("java/lang/reflect/Method".equals(o) && "invoke".equals(m))
+                || ("java/lang/reflect/Constructor".equals(o) && "newInstance".equals(m))
+                || ("java/lang/Class".equals(o) && "newInstance".equals(m))
+                || (o.startsWith("java/lang/invoke/") && !"java/lang/invoke/LambdaMetafactory".equals(o))
+                || o.startsWith("sun/misc/") || o.startsWith("jdk/internal/")
+                || "java/lang/ClassLoader".equals(o) || "java/net/URLClassLoader".equals(o)) {
+            return "a WRITE or a CALL through reflection (Field.set*, Method.invoke, a constructor, a method handle,"
+                    + " Unsafe, class loading): an observation changes nothing the game decides";
+        }
+        if (("java/lang/Thread".equals(o) && ("start".equals(m) || "<init>".equals(m) || "stop".equals(m)))
+                || "java/util/Timer".equals(o) || (o.startsWith("java/util/concurrent/") && !concurrentAdmits(o))) {
+            return "THREADS (a thread started, an executor, a timer, a future): an observation records on the thread"
+                    + " that made the call";
+        }
+        String wallClock = wallClockWait(r);
+        if (wallClock != null) {
+            return wallClock;
+        }
+        if ("java/lang/Runtime".equals(o) || "java/lang/ProcessBuilder".equals(o) || "java/lang/Process".equals(o)
+                || ("java/lang/System".equals(o) && !mechanicsSystemAdmits(m))) {
+            return "THE PROCESS OR THE JVM'S STATE (Runtime, a process, System properties, exit, streams)";
+        }
+        return fileWrite(r) ? "A FILE WRITE: an observation publishes to the log, never to the disk" : null;
+    }
+
+    /** A method named as a setter: {@code set} followed by an upper-case letter. */
+    private static boolean setterName(String member) {
+        return member.length() > 3 && member.startsWith("set") && Character.isUpperCase(member.charAt(3));
+    }
+
+    /**
+     * A setter of the game, Forge, or the mod -- by NAME, which is the only reading of a game method this
+     * check has: the game's methods are too many to classify, and a setter is the form a write takes when
+     * it is not a field write.
+     */
+    private static boolean gameSetter(String owner, String member) {
+        boolean game = owner.startsWith("net/minecraft/") || owner.startsWith("net/minecraftforge/")
+                || owner.startsWith("dev/stannismod/stellurgy/") || owner.startsWith("org/valkyrienskies/");
+        return game && setterName(member);
     }
 
     private static boolean hasAnnotation(List<AnnotationNode> visible, List<AnnotationNode> invisible, String desc) {
@@ -1600,13 +2176,20 @@ final class E2EConfinement {
                     handlers.add(new String[]{node.name, m.name, m.desc});
                 }
             }
-            walkMethods("the bus subscriber " + subscriber.replace('/', '.'), handlers, r -> {
+            // A subscriber is a RECORDER of an event production posted, so it may publish what it saw.
+            walkMethods("the bus subscriber " + subscriber.replace('/', '.'), handlers, true, r -> {
                 if ((r.opcode == Opcodes.PUTFIELD || r.opcode == Opcodes.PUTSTATIC)) {
                     return "a WRITE to a field outside the test source set: a recorder writes only its own state";
                 }
                 if (r.member.startsWith("set") && r.desc != null && r.desc.startsWith("(") && isEvent(r.owner)) {
                     return "a SETTER of a Forge event: a recorder's handler changes nothing an event decides (an"
                             + " un-cancel, a result, an exception)";
+                }
+                if ("getParameters".equals(r.member) && isCommandEvent(r.owner)) {
+                    return "the ARGUMENT ARRAY of a command: the handler runs that very array, so a store into it"
+                            + " rewrites what runs -- the server's mode gate re-judges it at LOWEST, and a test"
+                            + " listener after that last word could still write; a recorder records the command's"
+                            + " name and verdict, never its arguments";
                 }
                 return null;
             });
@@ -1627,9 +2210,22 @@ final class E2EConfinement {
         for (String name : testNodes.keySet()) {
             ours.add(name + ".class");
         }
+        // A RESOURCE of the test source set shadows the same way: a recipe, a config default, a lang file,
+        // a mixin configuration the mod's jar also holds is read from the test output in every child.
+        Path testResources = root.resolve("build").resolve("resources").resolve("test");
+        for (Path dir : new Path[]{testResources, root.resolve("src/test/resources"),
+                root.resolve(FRAMEWORK_ROOT).getParent().resolve("resources")}) {
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            try (Stream<Path> walk = Files.walk(dir)) {
+                walk.filter(Files::isRegularFile).forEach(p -> ours.add(dir.relativize(p).toString().replace('\\', '/')));
+            }
+        }
         Map<String, String> clashes = new TreeMap<>();
         for (File entry : classpathEntries()) {
-            if (entry.exists() && Files.isSameFile(entry.toPath(), testClasses)) {
+            if (entry.exists() && (Files.isSameFile(entry.toPath(), testClasses)
+                    || (Files.isDirectory(testResources) && Files.isSameFile(entry.toPath(), testResources)))) {
                 continue;
             }
             if (entry.isDirectory()) {
@@ -1650,9 +2246,12 @@ final class E2EConfinement {
                 }
             }
         }
-        clashes.forEach((name, where) -> failures.add("confinement: the test class "
-                + name.substring(0, name.length() - ".class".length()).replace('/', '.') + " has the name of a class in "
-                + where + ": the test output precedes it on every child's classpath and would replace it there"));
+        clashes.forEach((name, where) -> failures.add(name.endsWith(".class")
+                ? "confinement: the test class " + name.substring(0, name.length() - ".class".length()).replace('/', '.')
+                + " has the name of a class in " + where + ": the test output precedes it on every child's classpath"
+                + " and would replace it there"
+                : "confinement: the test resource " + name + " has the path of a resource in " + where + ": the test"
+                + " output precedes it on every child's classpath and would replace it there"));
         return ours.size();
     }
 

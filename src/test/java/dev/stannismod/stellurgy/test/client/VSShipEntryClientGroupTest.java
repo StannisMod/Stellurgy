@@ -228,8 +228,7 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
     @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(CRUISE_BRAKE_TICKS);",
             why = "CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the constant for the"
                     + " measurement).")
-    @Wait(shape = Wait.Shape.EXPERIMENT, at = "try { climbOnPilotKey(clientDim, PILOT_THRUST_DOSE_TICKS, \"the"
-            + " pilot must still CONTROL his\"",
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(clientDim, PILOT_THRUST_DOSE_TICKS, \"the pilot must still CONTROL his\"",
             why = "a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival at its computer"
                     + " — that arrival is the first half of the contract and a link, so a seat binding that"
                     + " does not carry his input fails naming it rather than as a ship that would not climb —"

@@ -228,6 +228,12 @@ again, the answer is `permaload false` plus a poll.
   (`E2EModeGate#mechanicsRefusalOf`, `E2EModeGate.Tally`). The harness's client bridge refuses, in the same
   mode, a static chain, a static field read and a static call on no row of its mechanics table.
   `MechanicsModeRefusesAtTheCallTest#aMechanicsPairRefusesStaticCallsAndTagWritesAtTheCallAndAnswersItsArrangements`
+  [V] In either mode a command the gate admitted at `HIGHEST` (`E2EModeGate.java:244`) is judged again at
+  `LOWEST`, cancelled events included (`E2EModeGate.java:274`), on the command the handler resolved before the
+  event and the argument array as it will run — a listener between the two that wrote into that array (the
+  handler runs it as is) is refused there, the refusal object carrying `judgedAsItWillRun:true`; an admitted
+  command's console verdict is printed at `LOWEST`. A test-source subscriber never takes the array
+  (`getParameters`), which the build refuses, so none can write it after that last word.
 
 ## State & persistence — asserted, not owned
 This subsystem owns **no** NBT key. It drives/asserts keys owned elsewhere (C1); they must appear here for

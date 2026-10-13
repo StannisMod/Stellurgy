@@ -740,7 +740,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         // on is the one he sees after the crystal is in. Closing and looking again is what he does.
         // No settle: the close and the right-click that reopens travel in order on one connection.
         input().pressScreenKey(Keyboard.KEY_ESCAPE);
-        consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
+        consoleScreen = ArrangementFailure.arranged(() -> openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget));
         requireArranged("the console must reopen once the crystal is in it: " + consoleScreen,
                 consoleScreen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
 
@@ -1510,7 +1510,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                     "the blank crystal handed to the player must reach his client's inventory",
                     SLOT_APPLIED_TICKS);
         } catch (AssertionError neverLanded) {
-            requireArranged(neverLanded.getMessage(), false);
+            throw new ArrangementFailure(neverLanded.getMessage());
         }
     }
 
@@ -1549,7 +1549,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         "the suit piece " + piece[0] + " handed to the player must reach his client's inventory",
                         SLOT_APPLIED_TICKS);
             } catch (AssertionError neverLanded) {
-                requireArranged(neverLanded.getMessage(), false);
+                throw new ArrangementFailure(neverLanded.getMessage());
             }
         }
     }
@@ -1850,8 +1850,10 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             // turn it into "the console never opened" — a premise refusal read as a broken mechanic.
             throw alreadyTyped;
         } catch (AssertionError neverOpened) {
-            return "ARRANGEMENT: console never opened;" + aim[0].diagnosis + " | "
-                    + neverOpened.getMessage();
+            // Thrown again with the last aim's diagnosis: a press the console never answered is a red
+            // here, not a value a caller may read past. A caller that is ARRANGING wraps the call.
+            throw new AssertionError("a real use-key press aimed at the NAVIGATION CONSOLE must open its"
+                    + " screen, and it never did;" + aim[0].diagnosis + " | " + neverOpened.getMessage(), neverOpened);
         }
         return screenOf(client().reportState());
     }
@@ -2261,7 +2263,8 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             // client with no world into "a machine that swallows the press" three frames up.
             throw alreadyTyped;
         } catch (AssertionError neverOpened) {
-            return "";
+            throw new AssertionError("a real use-key press aimed at the " + what + " must open its screen, and"
+                    + " it never did;" + aim[0].diagnosis + " | " + neverOpened.getMessage(), neverOpened);
         }
         return screenOf(client().reportState());
     }

@@ -1394,8 +1394,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
                     + " the rise check after the window.")
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().holdKey(Keyboard.KEY_SPACE);",
             why = "the gap between the two presses")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().releaseKey(Keyboard.KEY_SPACE); //"
-            + " Hold space well past the hold window: a flying player RISES steadily and, on this",
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2); bot().releaseKey(Keyboard.KEY_SPACE); double y0 =",
             why = "the second press")
     @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < 25; i++) {",
             why = "the worst DROP below the running high-water mark is an extremum over the whole hold, which no"
@@ -1955,7 +1954,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     // ---- The crosshair picks the block the camera looks at, at any attitude ---------------------
 
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150); ShipInfo info = shipInfo();",
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(150);",
             why = "an attitude converges and nothing in production declares it reached, so there is no record to"
                     + " wait on. Overshoot brings the hull nearer its commanded 50 degrees, which is inside the"
                     + " band.")

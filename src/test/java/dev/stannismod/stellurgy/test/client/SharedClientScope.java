@@ -20,9 +20,6 @@ import java.util.Map;
  */
 public final class SharedClientScope extends TestClassScope {
 
-    /** The client's start-time framebuffer switch, read by the harness as it launches the child. */
-    private static final String CLIENT_FBO_PROPERTY = "forge.test.client.fbo";
-
     RealDedicatedServerHarness server;
     RealClientHarness client;
     /** Set once the shared harness stops answering; every later scenario then fails FAST. */
@@ -31,13 +28,6 @@ public final class SharedClientScope extends TestClassScope {
     /** Scenario name -> its plot. Stable within a run because the method order is pinned. */
     final Map<String, Plot> plots = new HashMap<>();
     int nextPlotIndex;
-    /**
-     * What {@link #CLIENT_FBO_PROPERTY} held before this class claimed it, and whether it claimed it
-     * at all. CLEAR MEANS RESTORE: a null here is a real state (the property was unset), so the flag
-     * is what says "we changed it", never the value.
-     */
-    private String displacedFboProperty;
-    private boolean fboPropertyClaimed;
 
     @Override
     protected void open(Class<?> testClass) {
@@ -62,17 +52,14 @@ public final class SharedClientScope extends TestClassScope {
         ServerRoot root = ServerRoot.fresh("forge-shared-client-").seed(seed);
         String seeded = seed.describe();
         server = RealDedicatedServerHarness.startWith(harnessBoot(), root, /*cleanupOnClose=*/true);
-        // The client's start-time options come from system properties the harness reads as it
-        // launches the child, so a class that needs one sets it HERE, around the boot, and the value
-        // it displaced goes back in close(). Set, not assumed: a scenario that measures pixels
-        // asserts the option took (see ClientBot.setFramebuffer's own `previous`).
-        if (test.clientNeedsFramebuffer() && !fboPropertyClaimed) {
-            displacedFboProperty = System.getProperty(CLIENT_FBO_PROPERTY);
-            fboPropertyClaimed = true;
-            System.setProperty(CLIENT_FBO_PROPERTY, "true");
-        }
+        // A class that needs the framebuffer from the first frame asks the harness's start for it, by
+        // name -- never through the launch property the harness also reads, which is the test JVM's and
+        // outlives this class. Asked, not assumed: a scenario that measures pixels asserts the option
+        // took (see ClientBot.setFramebuffer's own `previous`).
         try {
-            client = RealClientHarness.start(harnessBoot(), server);
+            client = test.clientNeedsFramebuffer()
+                    ? RealClientHarness.startWithFramebuffer(harnessBoot(), server)
+                    : RealClientHarness.start(harnessBoot(), server);
         } catch (Exception startupFailure) {
             try {
                 server.close();
@@ -110,15 +97,6 @@ public final class SharedClientScope extends TestClassScope {
                 else deferred.addSuppressed(e);
             }
             server = null;
-        }
-        if (fboPropertyClaimed) {
-            if (displacedFboProperty == null) {
-                System.clearProperty(CLIENT_FBO_PROPERTY);
-            } else {
-                System.setProperty(CLIENT_FBO_PROPERTY, displacedFboProperty);
-            }
-            displacedFboProperty = null;
-            fboPropertyClaimed = false;
         }
         if (deferred != null) throw deferred;
     }

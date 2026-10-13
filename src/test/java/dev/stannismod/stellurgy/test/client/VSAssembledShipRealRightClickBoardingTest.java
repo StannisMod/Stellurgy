@@ -591,8 +591,7 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
                     + " crosshair resting on a deck block. Delete the loop and the standing and aiming stop"
                     + " HAPPENING; no link could replace it, because nothing in production decides that a"
                     + " crosshair is on a block.")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); JsonObject candidate ="
-            + " bot().reportMouseOver();",
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5);",
             why = "the raytrace refreshes once per client tick, so the new rotation needs a tick.")
     private Deck standOnTheDeckAndAimAtIt() throws Exception {
         final FixtureSite site = site();

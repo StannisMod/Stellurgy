@@ -273,13 +273,19 @@ public final class Events {
 
     /** @see #read(String) — what was already announced is {@code reports}'s, the owner of the logs. */
     private static void announceEvictions(String reply, EvictionReports reports) {
-        JsonObject env;
+        // Parsed here, not through envelope(): that one ASSERTS, and a reply with no envelope has no
+        // counters to announce -- the caller's own assertions are what say whether that is a problem.
+        JsonElement parsed;
         try {
-            env = envelope(reply);
-        } catch (RuntimeException | AssertionError notAnEnvelope) {
-            return; // a reply with no envelope has no counters to announce; the caller's own
-        }           // assertions are what say whether that is a problem
-        if (env == null || !env.has("droppedByType") || !env.get("droppedByType").isJsonObject()) {
+            parsed = new JsonParser().parse(String.valueOf(reply));
+        } catch (RuntimeException notJson) {
+            return;
+        }
+        if (parsed == null || !parsed.isJsonObject()) {
+            return;
+        }
+        JsonObject env = parsed.getAsJsonObject();
+        if (!env.has("droppedByType") || !env.get("droppedByType").isJsonObject()) {
             return;
         }
         for (java.util.Map.Entry<String, JsonElement> byType

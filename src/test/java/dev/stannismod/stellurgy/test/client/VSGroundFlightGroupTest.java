@@ -644,8 +644,7 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
             + " {@code this.pilotInput = input} discarding its input, this fails at the climb with \"maxClimb=0.0\" (the seat still reports {@code afcResolved:true}, so"
             + " the red names the computer's intake, not the seat's link) — 2026-09-28.")
     @Test
-    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {"
-            + " advanceServerAndClient(1); yAfter = ShipInfo.of(shipInfoById(shipId)).y;",
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {",
             why = "the MAXIMUM climb over the window is the measurement, so a ship that rises and settles back is"
                     + " not read as one that never rose. No record carries the hull's pose per physics tick."
                     + " What it cannot see: a peak between two 1-tick samples (reads low).")

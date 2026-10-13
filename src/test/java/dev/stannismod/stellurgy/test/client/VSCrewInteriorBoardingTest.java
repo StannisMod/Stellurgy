@@ -704,17 +704,14 @@ public class VSCrewInteriorBoardingTest extends AbstractSharedVsClientTest {
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
             + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
             + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); // THE LANDING IS A LINK, and it was"
-            + " already being asserted twenty lines below as one —",
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); String landing =",
             why = "the first press of the double-tap that toggles flight off")
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
             + " bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE); bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); // THE LANDING IS A LINK, and it was"
-            + " already being asserted twenty lines below as one —",
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); String landing =",
             why = "the gap, inside vanilla's toggle window")
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);"
-            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); // THE LANDING IS A LINK, and it was"
-            + " already being asserted twenty lines below as one —",
+            + " bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE); String landing =",
             why = "the second press")
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(10);",
             why = "a body that touched and then slid or bounced away is what the far end is for, and overshoot"

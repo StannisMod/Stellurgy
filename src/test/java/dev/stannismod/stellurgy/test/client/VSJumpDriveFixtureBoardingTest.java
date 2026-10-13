@@ -140,8 +140,7 @@ public class VSJumpDriveFixtureBoardingTest extends AbstractSharedVsClientTest {
             + " decides what comes along\", 2026-09-28. The other two waits the rewrite touched are arrangement"
             + " links (the ship usable, the client standing at the console).")
     @Test
-    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false); // The"
-            + " two links a boarding IS, in the order the game commits them: Forge fires",
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false); events.assertChain(seatPressMark,",
             why = "the use key held down across client ticks, as a mouse button is.")
     @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(5); bot().setKey(KEY_USE_ITEM, false);"
             + " events.await(navMark, \"right_click_block\", \"the use press aimed at the NAVIGATION CONSOLE \"",

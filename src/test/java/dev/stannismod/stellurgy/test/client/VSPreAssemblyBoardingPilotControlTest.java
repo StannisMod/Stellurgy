@@ -263,8 +263,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
             why = "the resolve's ticks, then ONE reading. It replaced a loop that sampled until twenty readings"
                     + " agreed; the no-key control window right below is what proves the ship then sits still,"
                     + " and it reports the drift it saw rather than a loop's run length.")
-    @Wait(shape = Wait.Shape.EXPERIMENT, at = "try { climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, \"a pilot who"
-            + " took the seat BEFORE assembling\"",
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, \"a pilot who took the seat BEFORE assembling\"",
             why = "a fixed dose of thrust from the key's arrival, then one reading with the thrust cut. The dose"
                     + " is shorter than the control's window, which only makes the comparison stronger: the"
                     + " same free drift has less time to add up.")

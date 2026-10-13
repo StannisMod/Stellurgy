@@ -24,7 +24,8 @@ import java.util.stream.Stream;
  * <p><b>A TICK LOOP</b> is a loop (a backward branch) of a test-source method whose instructions call a
  * clock primitive -- {@code ClientBot} / {@code ClientReads} {@code waitTicks} and {@code waitWorldTicks},
  * {@code GameTicks} {@code advance}, {@code advanceObserved}, {@code advanceWorld} and {@code observe}, an
- * {@code Events.Step} -- or a test-source method that calls one, at any depth -- outside any loop nested in
+ * {@code Events.Step}, the WALL clock ({@code Thread.sleep}, {@code TimeUnit.sleep}, {@code Object.wait}, a
+ * lock's park) -- or a test-source method that calls one, at any depth -- outside any loop nested in
  * it. A LINK (a wait on the event log, {@code Events}) spends the clock as a deadline on a record, not as a
  * dose: a loop whose waits are links, or sit in claimed inner loops, is a pass over cases and names no
  * shape -- but it is held by the exit rule like any other.</p>
@@ -45,7 +46,10 @@ import java.util.stream.Stream;
  *       "Every pass" is a path property of the bytecode, not "somewhere in the body": input on one branch
  *       of an {@code if} leaves the other pass reading only;</li>
  *   <li>a {@link Wait} or {@link ServerOnly} whose {@code at} does not occur exactly once in its method's
- *       source, or whose {@code at} or {@code why} is blank.</li>
+ *       CODE -- its words on ONE line, comments blanked, so a fragment that crosses a line break or sits in
+ *       a comment names nothing (the claims that crossed one when the rule was set are listed in
+ *       {@value #SPANNING_DEBT} and name only the line their match starts on) -- or whose {@code at} or
+ *       {@code why} is blank.</li>
  * </ul>
  * <p>The methods whose loops broke it when it was set are listed in {@value #DEBT} with how many, and the
  * list only shrinks ({@link #checkDebt}).</p>
@@ -65,6 +69,8 @@ final class WaitLoops {
 
     /** The committed list of the methods whose tick loops broke the rule when it was set. */
     static final String DEBT = "src/test/bindings/wait-loop-debt.txt";
+    /** The committed list of the claims whose fragment crossed line breaks when the one-line rule was set. */
+    static final String SPANNING_DEBT = "src/test/bindings/multi-line-wait-claims.txt";
 
     private static final String TEST_ROOT = "src/test/java";
     private static final String GAME_TICKS = "dev/stannismod/stellurgy/test/GameTicks";
@@ -98,9 +104,21 @@ final class WaitLoops {
         }
     }
 
-    /** A call that advances a game clock by itself, whoever makes it. */
-    private static boolean primitive(String owner, String name) {
+    /**
+     * A call that advances a clock by itself, whoever makes it: a game clock's primitive, or the WALL clock
+     * -- {@code Thread.sleep}, {@code TimeUnit.sleep / timedWait / timedJoin}, {@code Object.wait}, a member of
+     * {@code java.util.concurrent.locks}. The confinement refuses the wall clock in both harness tiers; here it
+     * is a clock like any other, so a loop that sleeps between two reads is a loop that WAITS, held by the
+     * same rule, wherever in the test source it stands.
+     */
+    private static boolean primitive(String owner, String name, String desc) {
         if (owner.startsWith(HARNESS_CLIENT) && ("waitTicks".equals(name) || "waitWorldTicks".equals(name))) {
+            return true;
+        }
+        if (("sleep".equals(name) && ("java/lang/Thread".equals(owner) || "java/util/concurrent/TimeUnit".equals(owner)))
+                || (("timedWait".equals(name) || "timedJoin".equals(name)) && "java/util/concurrent/TimeUnit".equals(owner))
+                || ("wait".equals(name) && ("()V".equals(desc) || "(J)V".equals(desc) || "(JI)V".equals(desc)))
+                || owner.startsWith("java/util/concurrent/locks/")) {
             return true;
         }
         if (GAME_TICKS.equals(owner)) {
@@ -221,6 +239,12 @@ final class WaitLoops {
     private final Map<String, Integer> senders = new HashMap<>();
     /** owner#name+desc of every test-source method whose every normal return has sent player input. */
     private final Set<String> alwaysSends = new HashSet<>();
+    /** The lines of {@value #SPANNING_DEBT}. */
+    private final Set<String> spanningDebt = new TreeSet<>();
+    /** ...and those a claim resolved through on this run. */
+    private final Set<String> spanningUsed = new TreeSet<>();
+    /** Every claim that does not resolve on one line now, as a debt line would name it (the report). */
+    private final Set<String> spanningNow = new TreeSet<>();
     /** The stack sources of each method's instructions, computed when a call's arguments are asked. */
     private final Map<String, Frame<SourceValue>[]> frames = new HashMap<>();
 
@@ -245,6 +269,18 @@ final class WaitLoops {
     /** Runs the rule over the compiled test output; answers the line it prints. */
     static String check(Path root, Path testClasses, List<String> failures) throws IOException {
         WaitLoops w = new WaitLoops(root, failures);
+        Path spanningFile = root.resolve(SPANNING_DEBT);
+        if (!Files.isRegularFile(spanningFile)) {
+            failures.add("the multi-line claim list " + SPANNING_DEBT + " is missing -- without it every claim that"
+                    + " crosses a line break is new");
+        } else {
+            for (String line : Files.readAllLines(spanningFile, StandardCharsets.UTF_8)) {
+                String entry = line.trim();
+                if (!entry.isEmpty() && !entry.startsWith("#") && !w.spanningDebt.add(entry)) {
+                    failures.add(SPANNING_DEBT + " lists `" + entry + "` twice");
+                }
+            }
+        }
         w.read(testClasses);
         w.closeTicking();
         w.closeSenders();
@@ -252,11 +288,14 @@ final class WaitLoops {
         Map<String, Integer> violating = new TreeMap<>();
         int[] counts = w.judge(violating);
         String debt = w.checkDebt(violating);
+        String spanning = w.checkSpanningDebt();
         Path out = root.resolve("build").resolve("reports").resolve("test-bindings").resolve("wait-loops.txt");
         Files.createDirectories(out.getParent());
         Files.write(out, (String.join("\n", w.report) + "\n").getBytes(StandardCharsets.UTF_8));
+        Files.write(out.resolveSibling("multi-line-wait-claims.txt"),
+                (String.join("\n", w.spanningNow) + "\n").getBytes(StandardCharsets.UTF_8));
         return String.format("wait loops: %d loop(s) that wait, in %d method(s), %d of them advancing the clock"
-                + " themselves; %d claim(s) resolved; %s", counts[0], counts[1], counts[3], counts[2], debt);
+                + " themselves; %d claim(s) resolved; %s; %s", counts[0], counts[1], counts[3], counts[2], debt, spanning);
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -324,7 +363,7 @@ final class WaitLoops {
             return false;
         }
         MethodInsnNode mi = (MethodInsnNode) insn;
-        if (primitive(mi.owner, mi.name)) {
+        if (primitive(mi.owner, mi.name, mi.desc)) {
             return true;
         }
         String target = declared(mi.owner, mi.name, mi.desc);
@@ -893,7 +932,9 @@ final class WaitLoops {
                     + node.sourceFile + " -- a claim names a line of its method, so the method must be read");
             return 0;
         }
-        String text = source(node);
+        // The CODE of the method: a fragment inside a comment names nothing, so the match runs on the text
+        // with its comments blanked (strings kept -- a call's argument is part of the line it names).
+        String text = stripComments(source(node));
         int resolved = 0;
         for (int c = 0; c < claims.size(); c++) {
             AnnotationNode a = claims.get(c);
@@ -905,15 +946,23 @@ final class WaitLoops {
                         + " -- a claim names its line and says why no link answers");
                 continue;
             }
-            Matcher hit = fragment(at).matcher(text);
-            hit.region(span[0], span[1]);
-            List<int[]> found = new ArrayList<>();
-            while (hit.find()) {
-                found.add(new int[]{lineOf(text, hit.start()), lineOf(text, hit.end() - 1)});
+            List<int[]> found = matches(fragment(at), text, span);
+            String debtKey = where + " " + kind + " " + at;
+            if (found.size() != 1 && spanningDebt.contains(debtKey)) {
+                // A claim of the debt list: its fragment may cross line breaks, and it still names ONE line,
+                // the one its match starts on -- never the span, so no loop below that line is named by it.
+                found = matches(spanning(at), text, span);
+                if (found.size() == 1) {
+                    spanningUsed.add(debtKey);
+                    found.set(0, new int[]{found.get(0)[0], found.get(0)[0]});
+                }
+            } else if (found.size() != 1) {
+                spanningNow.add(debtKey);
             }
             if (found.size() != 1) {
                 failures.add(where + ": " + kind + "(at = \"" + at + "\") occurs " + found.size() + " times in the"
-                        + " method -- a claim names exactly one line of it (a stale claim names none)");
+                        + " method's code -- a claim names exactly one line of it, its words on that one line and"
+                        + " outside any comment (a stale claim names none)");
                 continue;
             }
             resolved++;
@@ -951,13 +1000,87 @@ final class WaitLoops {
         return null;
     }
 
-    /** A claim's fragment as a pattern: its words in order, whitespace between them free. */
-    static Pattern fragment(String at) {
+    /** The [first, last] lines of every match of {@code p} inside {@code span} of {@code text}. */
+    private static List<int[]> matches(Pattern p, String text, int[] span) {
+        Matcher hit = p.matcher(text);
+        hit.region(span[0], span[1]);
+        List<int[]> found = new ArrayList<>();
+        while (hit.find()) {
+            found.add(new int[]{lineOf(text, hit.start()), lineOf(text, hit.end() - 1)});
+        }
+        return found;
+    }
+
+    /** A DEBT claim's fragment: its words in order, any whitespace between them, line breaks included. */
+    private static Pattern spanning(String at) {
         List<String> words = new ArrayList<>();
         for (String w : at.trim().split("\\s+")) {
             words.add(Pattern.quote(w));
         }
         return Pattern.compile(String.join("\\s*", words));
+    }
+
+    /**
+     * The ratchet of the claims whose fragment crossed line breaks when the one-line rule was set: each line
+     * of {@value #SPANNING_DEBT} is {@code class#method @Wait|@ServerOnly <at>}. A listed claim that now
+     * resolves on one line, or no longer exists, fails until its line is deleted; a claim not listed that
+     * does not resolve on one line fails where it is resolved.
+     */
+    private String checkSpanningDebt() {
+        for (String listed : spanningDebt) {
+            if (!spanningUsed.contains(listed)) {
+                failures.add(SPANNING_DEBT + " lists `" + listed + "`, which no longer needs it (its fragment is on one"
+                        + " line now, or the claim is gone or does not resolve) -- delete the line; the list only shrinks");
+            }
+        }
+        return String.format("multi-line claims: %d listed, %d resolved through the list", spanningDebt.size(),
+                spanningUsed.size());
+    }
+
+    /**
+     * A claim's fragment as a pattern: its words in order, spaces and tabs between them free -- and nothing
+     * else, so a match lies on ONE source line. A fragment free to cross line breaks spans as many lines as
+     * it likes, and a claim on a span names every loop in it, a loop written there later included.
+     */
+    static Pattern fragment(String at) {
+        List<String> words = new ArrayList<>();
+        for (String w : at.trim().split("\\s+")) {
+            words.add(Pattern.quote(w));
+        }
+        return Pattern.compile(String.join("[ \\t]*", words));
+    }
+
+    /** {@code text} with comments blanked, strings and character literals kept, every offset kept. */
+    static String stripComments(String text) {
+        String all = strip(text);
+        StringBuilder out = new StringBuilder(text.length());
+        int i = 0;
+        int n = text.length();
+        while (i < n) {
+            char ch = text.charAt(i);
+            int j;
+            if (ch == '"' || ch == '\'') {
+                j = i + 1;
+                while (j < n && text.charAt(j) != ch && text.charAt(j) != '\n') {
+                    j += text.charAt(j) == '\\' ? 2 : 1;
+                }
+                j = Math.min(j + 1, n);
+                out.append(text, i, j);
+            } else if (ch == '/' && i + 1 < n && text.charAt(i + 1) == '/') {
+                j = text.indexOf('\n', i);
+                j = j < 0 ? n : j;
+                out.append(all, i, j);
+            } else if (ch == '/' && i + 1 < n && text.charAt(i + 1) == '*') {
+                j = text.indexOf("*/", i + 2);
+                j = j < 0 ? n : j + 2;
+                out.append(all, i, j);
+            } else {
+                j = i + 1;
+                out.append(ch);
+            }
+            i = j;
+        }
+        return out.toString();
     }
 
     private String source(ClassNode node) throws IOException {

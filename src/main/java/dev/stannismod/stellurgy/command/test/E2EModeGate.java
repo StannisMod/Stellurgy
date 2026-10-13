@@ -173,6 +173,13 @@ final class E2EModeGate {
      */
     private boolean walkBegan;
 
+    /**
+     * The commands admitted at HIGHEST and not yet judged at LOWEST, by the identity of their event: one
+     * entry per command between the two listeners (a listener that runs a command of its own nests one
+     * more). Lives with the gate; an entry leaves at LOWEST, which every posted event reaches.
+     */
+    private final Map<CommandEvent, Admitted> inFlight = new IdentityHashMap<>();
+
     E2EModeGate() {
         this.mode = launchedMode();
         this.servesAnE2E = mode == Mode.E2E;
@@ -243,18 +250,64 @@ final class E2EModeGate {
         if (mode == Mode.MECHANICS) {
             tally.saw(Tally.keyOf(event.getCommand(), event.getParameters()));
             why = mechanicsRefusalOf(event.getCommand(), event.getParameters());
-            if (why == null) {
-                return;
-            }
         } else {
             why = refusalOf(event.getCommand(), event.getParameters(), sender);
         }
-        if (sender instanceof MinecraftServer) {
-            Stellurgy.logger.info(CONSOLE_JUDGED + (why == null ? "admitted " : "refused ")
-                    + commandLine(event.getCommand(), event.getParameters()) + (why == null ? "" : " " + why));
+        if (why == null) {
+            inFlight.put(event, new Admitted(event.getCommand(), event.getParameters()));
+            return;
+        }
+        refuse(event, sender, event.getCommand(), event.getParameters(), why);
+    }
+
+    /**
+     * The LAST word on a command the HIGHEST listener admitted: it is judged again, as it will RUN. A
+     * listener between the two may have written into the arguments (the handler runs the very array the
+     * event carries, so a store into it changes what runs) or handed the event a new array; the handler
+     * runs the COMMAND it resolved before the event, whatever a listener sets, so that is the command
+     * judged. On a cancelled event too, which runs nothing: its console verdict is still owed.
+     *
+     * <p>A listener at LOWEST registered after this gate still acts after it; the build refuses a test
+     * subscriber the command's argument array (its {@code getParameters}), so none of those can write it.</p>
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+    public void onCommandAsItWillRun(CommandEvent event) {
+        Admitted admitted = inFlight.remove(event);
+        if (admitted == null) {
+            return;
+        }
+        ICommandSender sender = event.getSender();
+        String[] args = event.getParameters() != null ? event.getParameters() : admitted.args;
+        String why = null;
+        if (!event.isCanceled()) {
+            why = mode == Mode.MECHANICS ? mechanicsRefusalOf(admitted.command, args)
+                    : refusalOf(admitted.command, args, sender);
         }
         if (why == null) {
+            // As before the second judgement: a console verdict for an admitted command is an e2e server's.
+            if (mode == Mode.E2E && sender instanceof MinecraftServer) {
+                Stellurgy.logger.info(CONSOLE_JUDGED + "admitted " + commandLine(admitted.command, args));
+            }
             return;
+        }
+        // The same refusal object, marked as the second judgement: what was admitted is not what runs.
+        refuse(event, sender, admitted.command, args, "{\"judgedAsItWillRun\":true," + why.substring(1));
+    }
+
+    /** What the HIGHEST listener admitted: the command the handler will run, and the array it judged. */
+    private static final class Admitted {
+        final ICommand command;
+        final String[] args;
+
+        Admitted(ICommand command, String[] args) {
+            this.command = command;
+            this.args = args;
+        }
+    }
+
+    private void refuse(CommandEvent event, ICommandSender sender, ICommand command, String[] args, String why) {
+        if (sender instanceof MinecraftServer) {
+            Stellurgy.logger.info(CONSOLE_JUDGED + "refused " + commandLine(command, args) + " " + why);
         }
         event.setCanceled(true);
         if (HARNESS_BRIDGE_SENDER.equals(sender.getClass().getName())) {
