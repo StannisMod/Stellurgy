@@ -163,9 +163,9 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
      * admitted static call and input event an e2e is made of is answered, and a refusal typed into the
      * server's console leaves the server running.
      */
-    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#onCommand",
-            at = "why = refusalOf(event.getCommand(), event.getParameters(), sender);", replacedBy = "why = null;",
-            fails = "these were not: [`stellurgytest place 0 ", on = "2026-10-12")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#judged",
+            at = ": refusalOf(command, args, sender);", replacedBy = ": null;",
+            fails = "these were not: [`stellurgytest place 0 ", on = "2026-10-13")
     @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#handleCommand",
             at = "JsonObject refusal = refusedInE2E(known, request);", replacedBy = "JsonObject refusal = null;",
             fails = "these were not: [interact_block RAN", on = "2026-10-12")
@@ -230,10 +230,9 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     @RedWitness(verdict = "refused at the call", member = "ForgeTestClientBootstrap#inputNoHandProduces",
             at = "if (count > HUMAN_PRESSES_PER_TICK)", replacedBy = "if (false)",
             fails = "these were not: [input RAN", on = "2026-10-12")
-    @RedWitness(verdict = "refused at the console", member = "E2EModeGate#onCommand",
-            at = "CONSOLE_JUDGED + (why == null ? \"admitted \" : \"refused \")",
-            replacedBy = "CONSOLE_JUDGED + \"admitted \"",
-            fails = "a command the e2e gate refuses at the CONSOLE must reach the test as a refusal too", on = "2026-10-12")
+    @RedWitness(verdict = "refused at the console", member = "E2EModeGate#refuse",
+            at = "CONSOLE_JUDGED + \"refused \"", replacedBy = "CONSOLE_JUDGED + \"admitted \"",
+            fails = "a command the e2e gate refuses at the CONSOLE must reach the test as a refusal too", on = "2026-10-13")
     @Test
     public void everyActAnE2EMayNotPerformIsRefusedAtTheCallAndEveryReadItIsMadeOfIsAnswered() throws Exception {
         ClientBot bot = client.bot();

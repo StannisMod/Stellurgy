@@ -197,6 +197,7 @@ public final class TestBindingsCheck {
             new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(corpus.dump(root), w);
         }
         System.out.println("bindings written to " + root.relativize(dump));
+        System.out.println(WitnessReplay.locateAll(root, failures));
 
         for (String f : failures) {
             System.out.println("FAIL " + f);

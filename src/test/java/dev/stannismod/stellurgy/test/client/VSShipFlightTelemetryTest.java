@@ -1125,7 +1125,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      */
     @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < CURSOR_PUSHES && Math.abs(cursor) < CURSOR_HARD_OVER;"
             + " i++) {",
-            why = "each pass IS a push of the pilot's mouse, and the loop ends on its goal, the cursor hard over —"
+            why = "each pass IS a push of the pilot's mouse, sized by how far the cursor read short of the stop,"
+                    + " and the loop ends on its goal, the cursor hard over —"
                     + " delete it and the stick stays centred and nothing turns. The pilot's own controls are the"
                     + " path this rolls the ship with, so a probe attitude command would roll it by a different"
                     + " route.")
@@ -1138,7 +1139,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         long rollMark = rollLog.markInstrumented();
         double cursor = flightCursorX("before the roll");
         for (int i = 0; i < CURSOR_PUSHES && Math.abs(cursor) < CURSOR_HARD_OVER; i++) {
-            mouseDelta(60, 0);
+            // Toward the stop the cursor is clamped at, by what is left to go.
+            mouseDelta(cursorPush(dev.stannismod.stellurgy.api.FreeFlightInput.MAX, CURSOR_HARD_OVER, cursor), 0);
             cursor = flightCursorX("pushing the cursor over, pass " + i);
         }
         // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a

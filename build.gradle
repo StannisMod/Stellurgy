@@ -329,11 +329,13 @@ def configureHeadlessTest = { Test t, String packageGlob ->
 tasks.register('testUnit', Test) {
     configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/unit/**')
     dependsOn 'checkLangKeys', 'checkTestBindings'
+    finalizedBy 'replayFastWitnesses'
 }
 
 tasks.register('testIntegration', Test) {
     configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/integration/**')
     dependsOn 'checkTestBindings'
+    finalizedBy 'replayFastWitnesses'
 }
 
 test {
@@ -369,6 +371,43 @@ tasks.register('checkTestBindings', JavaExec) {
 }
 tasks.named('check') {
     dependsOn 'checkTestBindings'
+}
+
+// Every replayable @RedWitness, replayed FOR REAL: the record's replacement applied to its member, the
+// record's own method run, the failure it quotes required. A witness nobody re-runs is testimony.
+//   replayFastWitnesses     the unit and integration records, in process: the replaced file is compiled
+//                           alone into a scratch directory loaded first, so the tree is never written. Runs
+//                           after every fast tier run and in `check`.
+//   replayHarnessWitnesses  the server, client and milestone records, each through its tier's own task over
+//                           the replaced file (restored after every run): minutes per record, so it runs at a
+//                           merge into the main line, by hand.
+tasks.register('replayFastWitnesses', JavaExec) {
+    group = 'verification'
+    description = 'Replays every replayable red witness of the unit and integration tiers, in process.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.stannismod.stellurgy.test.contract.WitnessReplay'
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(8)
+    })
+    workingDir = projectDir
+    systemProperty 'stellurgy.tests', 'true'
+    args '--tiers', 'unit,integration'
+    dependsOn 'checkTestBindings'
+}
+tasks.register('replayHarnessWitnesses', JavaExec) {
+    group = 'verification'
+    description = 'Replays every replayable red witness of the harness tiers, each through its tier task.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.stannismod.stellurgy.test.contract.WitnessReplay'
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(8)
+    })
+    workingDir = projectDir
+    args '--tiers', 'server,client,milestone', '--gradle'
+    dependsOn 'checkTestBindings'
+}
+tasks.named('check') {
+    dependsOn 'replayFastWitnesses'
 }
 
 // Every translation key the code hands to a localization call as a string literal must exist in a

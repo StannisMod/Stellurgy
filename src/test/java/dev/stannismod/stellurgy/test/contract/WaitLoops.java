@@ -44,7 +44,14 @@ import java.util.stream.Stream;
  *       a {@code stellurgytest} command the probe's table calls a TRIGGER, a DECIDE or an ARRANGE
  *       ({@link #stimulusCommand}), or a test-source method every normal return of which has sent one.
  *       "Every pass" is a path property of the bytecode, not "somewhere in the body": input on one branch
- *       of an {@code if} leaves the other pass reading only;</li>
+ *       of an {@code if} leaves the other pass reading only. And the input must STEER: it varies with what
+ *       the loop read -- an argument computed from a reading, or one a branch on a reading picked; the same
+ *       push every pass until a goal holds is a dose, and dosing until a goal is a poll;</li>
+ *   <li>a loop that waits whose exit TESTS what it read. Of the branches that decide whether the loop ends,
+ *       none may test a value a read made inside the loop shaped -- computed from it, or chosen by a branch on
+ *       it ({@code ready = read() > 1}, {@code if (read() > 1) i = n;}); a READ is any call into the test's,
+ *       the harness's or the game's code, and the JDK's clocks. One edge whose bound is a reading is a poll as
+ *       much as a {@code break} is. The goal exit of a steering STIMULUS loop is the one exit that may;</li>
  *   <li>a {@link Wait} or {@link ServerOnly} whose {@code at} does not occur exactly once in its method's
  *       CODE -- its words on ONE line, comments blanked, so a fragment that crosses a line break or sits in
  *       a comment names nothing (the claims that crossed one when the rule was set are listed in
@@ -57,13 +64,15 @@ import java.util.stream.Stream;
  * <p><b>Not judged</b>: the classes that ARE the clock ({@link #instrument}) -- their loops are how a wait
  * is built -- and the harness, which is the tests' surface.</p>
  *
- * <p><b>What it does not see.</b> Whether the bound of a one-exit loop is a counter or a value it read
- * ({@code for (i < readN())}); a throw inside a loop, which is an assertion and indistinguishable from an
- * {@code assertTrue} there; a clock advanced by a lambda handed to another method, or by a probe verb that
- * steps a subsystem ({@code transit-tick}); a recursive retry; whether a claimed shape is the true one.
- * Of the goal exit: whether an input sent every pass DOES anything (a key re-held, a delta into a clamped
- * cursor); a command handed to the console through a functional interface ({@code c -> act(c).raw()}) or built
- * without a constant start, which counts as no input; exception edges.</p>
+ * <p><b>What it does not see.</b> A bound read BEFORE the loop ({@code n = readN(); for (i < n)}) -- fixed
+ * while it runs, so not a poll; a reading kept in a FIELD rather than a local; a throw inside a loop, which is
+ * an assertion and indistinguishable from an {@code assertTrue} there; a clock advanced by a lambda handed to
+ * another method, or by a probe verb that steps a subsystem ({@code transit-tick}); a recursive retry; whether
+ * a claimed shape is the true one. Of the goal exit: whether an input sent every pass DOES anything (a key
+ * re-held, a delta into a clamped cursor); whether its steering is real -- a branch on a reading that picks
+ * the same push either way ({@code x < goal ? 60 : 60}) passes; a command handed to the console through a
+ * functional interface ({@code c -> act(c).raw()}) or built without a constant start, which counts as no
+ * input; exception edges.</p>
  */
 final class WaitLoops {
 
@@ -674,6 +683,393 @@ final class WaitLoops {
         return out;
     }
 
+    // ------------------------------------------------------------------------------------------------
+    // what a loop read
+
+    /** A value as the read analysis sees it: its basic type, and whether a read made in the loop shaped it. */
+    private static final class Taint implements Value {
+        final BasicValue basic;
+        final boolean read;
+
+        Taint(BasicValue basic, boolean read) {
+            this.basic = basic;
+            this.read = read;
+        }
+
+        @Override
+        public int getSize() {
+            return basic.getSize();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Taint && ((Taint) o).basic.equals(basic) && ((Taint) o).read == read;
+        }
+
+        @Override
+        public int hashCode() {
+            return basic.hashCode() * 2 + (read ? 1 : 0);
+        }
+    }
+
+    /**
+     * Carries "was shaped by a read" through a method: a value is READ when a {@code sources} instruction made
+     * it, or any value it was computed from was -- through locals, the stack and across the loop's own back
+     * edge. Everything else (constants, parameters, what was computed before the loop) is not.
+     */
+    private static final class ReadInterpreter extends Interpreter<Taint> {
+        private final BasicInterpreter basic = new BasicInterpreter();
+        private final Set<AbstractInsnNode> sources;
+
+        ReadInterpreter(Set<AbstractInsnNode> sources) {
+            super(Opcodes.ASM5);
+            this.sources = sources;
+        }
+
+        private static Taint wrap(BasicValue v, boolean read) {
+            return v == null ? null : new Taint(v, read);
+        }
+
+        @Override
+        public Taint newValue(Type type) {
+            return wrap(basic.newValue(type), false);
+        }
+
+        @Override
+        public Taint newOperation(AbstractInsnNode insn) throws AnalyzerException {
+            return wrap(basic.newOperation(insn), false);
+        }
+
+        @Override
+        public Taint copyOperation(AbstractInsnNode insn, Taint v) throws AnalyzerException {
+            return wrap(basic.copyOperation(insn, v.basic), v.read);
+        }
+
+        @Override
+        public Taint unaryOperation(AbstractInsnNode insn, Taint v) throws AnalyzerException {
+            return wrap(basic.unaryOperation(insn, v.basic), v.read);
+        }
+
+        @Override
+        public Taint binaryOperation(AbstractInsnNode insn, Taint a, Taint b) throws AnalyzerException {
+            return wrap(basic.binaryOperation(insn, a.basic, b.basic), a.read || b.read);
+        }
+
+        @Override
+        public Taint ternaryOperation(AbstractInsnNode insn, Taint a, Taint b, Taint c) throws AnalyzerException {
+            return wrap(basic.ternaryOperation(insn, a.basic, b.basic, c.basic), a.read || b.read || c.read);
+        }
+
+        @Override
+        public Taint naryOperation(AbstractInsnNode insn, List<? extends Taint> values) throws AnalyzerException {
+            List<BasicValue> basics = new ArrayList<>();
+            boolean read = sources.contains(insn);
+            for (Taint v : values) {
+                basics.add(v.basic);
+                read |= v.read;
+            }
+            return wrap(basic.naryOperation(insn, basics), read);
+        }
+
+        @Override
+        public void returnOperation(AbstractInsnNode insn, Taint value, Taint expected) {
+        }
+
+        @Override
+        public Taint merge(Taint a, Taint b) {
+            if (a.equals(b)) {
+                return a;
+            }
+            return new Taint(basic.merge(a.basic, b.basic), a.read || b.read);
+        }
+    }
+
+    /**
+     * Whether the call {@code insn} READS -- answers something about the world or the clock: any call into code
+     * that is not the JDK's (the test's helpers, the harness, the game), and the JDK's own clocks. A JDK call
+     * on values the loop did not read (an iterator over a list built before it, a {@code Math.max}) reads
+     * nothing.
+     */
+    private static boolean reads(AbstractInsnNode insn) {
+        if (!(insn instanceof MethodInsnNode)) {
+            return false;
+        }
+        MethodInsnNode mi = (MethodInsnNode) insn;
+        if ("java/lang/System".equals(mi.owner)
+                && ("nanoTime".equals(mi.name) || "currentTimeMillis".equals(mi.name))) {
+            return true;
+        }
+        if (mi.owner.startsWith("java/time/")) {
+            return true;
+        }
+        return !(mi.owner.startsWith("java/") || mi.owner.startsWith("javax/") || mi.owner.startsWith("jdk/")
+                || mi.owner.startsWith("sun/"));
+    }
+
+    /** The read analysis of {@code m} for {@code loop}: its sources are the reads made inside the loop. */
+    private Frame<Taint>[] readFrames(String owner, MethodNode m, AbstractInsnNode[] code, Loop loop) {
+        Set<AbstractInsnNode> sources = new HashSet<>();
+        for (int i = loop.from; i <= loop.to; i++) {
+            if (reads(code[i])) {
+                sources.add(code[i]);
+            }
+        }
+        try {
+            return new Analyzer<>(new ReadInterpreter(sources)).analyze(owner, m);
+        } catch (AnalyzerException unreadable) {
+            return null;
+        }
+    }
+
+    private static boolean conditional(AbstractInsnNode insn) {
+        int op = insn.getOpcode();
+        return (op >= Opcodes.IFEQ && op <= Opcodes.IF_ACMPNE) || op == Opcodes.IFNULL || op == Opcodes.IFNONNULL
+                || insn instanceof TableSwitchInsnNode || insn instanceof LookupSwitchInsnNode;
+    }
+
+    /** How many stack operands the branch at {@code insn} tests. */
+    private static int operands(AbstractInsnNode insn) {
+        int op = insn.getOpcode();
+        return op >= Opcodes.IF_ICMPEQ && op <= Opcodes.IF_ACMPNE ? 2 : 1;
+    }
+
+    /** Whether a path from {@code s} leaves {@code loop} -- a jump out or a return -- before coming round. */
+    private static boolean reachesExit(AbstractInsnNode[] code, Map<LabelNode, Integer> index, Loop loop, int s) {
+        Deque<Integer> work = new ArrayDeque<>();
+        Set<Integer> seen = new HashSet<>();
+        work.push(s);
+        while (!work.isEmpty()) {
+            int i = work.pop();
+            if (i < loop.from || i > loop.to) {
+                return true;
+            }
+            if (i == loop.from && i != s || !seen.add(i)) {
+                continue;
+            }
+            int op = code[i].getOpcode();
+            if (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) {
+                return true;
+            }
+            for (int t : successors(code, index, i)) {
+                work.push(t);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The branches of {@code loop} that DECIDE whether it ends -- one way leads out before the loop comes
+     * round, the other does not -- and test a value the loop read: the source lines of each, empty when every
+     * exit of the loop is decided by what it did not read (its counter, its bound, its cases).
+     */
+    private List<Integer> exitsOnReads(String methodKey, AbstractInsnNode[] code, Loop loop, Frame<Taint>[] f) {
+        List<Integer> lines = new ArrayList<>();
+        if (f == null) {
+            return lines;
+        }
+        Map<LabelNode, Integer> index = labels(code);
+        List<Integer> readBranches = new ArrayList<>();
+        for (int j = loop.from; j <= loop.to; j++) {
+            if (conditional(code[j]) && testsRead(code, j, f)) {
+                readBranches.add(j);
+            }
+        }
+        Frame<SourceValue>[] sources = framesOf(methodKey);
+        for (int j = loop.from; j <= loop.to; j++) {
+            if (!conditional(code[j]) || !decidesExit(code, index, loop, j)) {
+                continue;
+            }
+            if (testsRead(code, j, f) || chosenByRead(code, index, loop, sources, readBranches, j)) {
+                lines.add(lineAt(code, j));
+            }
+        }
+        return lines;
+    }
+
+    /**
+     * Whether a value the branch at {@code j} tests was CHOSEN by a reading: one of the instructions that made
+     * it -- followed back through the stack and through the loop's own stores to a local it loads -- runs only
+     * on one side of a branch on a value the loop read. {@code ready = read() > 1} stores a constant the
+     * comparison picked, and {@code if (read() > 1) i = 100;} rewrites the counter: neither value is computed
+     * FROM the reading, both are decided BY it.
+     */
+    private static boolean chosenByRead(AbstractInsnNode[] code, Map<LabelNode, Integer> index, Loop loop,
+                                        Frame<SourceValue>[] sources, List<Integer> readBranches, int j) {
+        if (sources == null || sources[j] == null || readBranches.isEmpty()) {
+            return false;
+        }
+        Deque<AbstractInsnNode> work = new ArrayDeque<>();
+        Set<AbstractInsnNode> seen = new HashSet<>();
+        for (int k = 0; k < operands(code[j]); k++) {
+            work.addAll(sources[j].getStack(sources[j].getStackSize() - 1 - k).insns);
+        }
+        List<AbstractInsnNode> all = Arrays.asList(code);
+        while (!work.isEmpty()) {
+            AbstractInsnNode insn = work.pop();
+            if (!seen.add(insn)) {
+                continue;
+            }
+            int at = all.indexOf(insn);
+            if (at < loop.from || at > loop.to) {
+                continue;
+            }
+            for (int b : readBranches) {
+                if (decides(code, index, loop, b, at)) {
+                    return true;
+                }
+            }
+            if (insn instanceof VarInsnNode && insn.getOpcode() >= Opcodes.ILOAD && insn.getOpcode() <= Opcodes.ALOAD) {
+                int var = ((VarInsnNode) insn).var;
+                for (int s = loop.from; s <= loop.to; s++) {
+                    boolean store = code[s] instanceof VarInsnNode && ((VarInsnNode) code[s]).var == var
+                            && code[s].getOpcode() >= Opcodes.ISTORE && code[s].getOpcode() <= Opcodes.ASTORE;
+                    boolean inc = code[s] instanceof IincInsnNode && ((IincInsnNode) code[s]).var == var;
+                    if (store || inc) {
+                        work.push(code[s]);
+                    }
+                }
+            }
+            Frame<SourceValue> before = sources[at];
+            if (before != null) {
+                int consumed = consumed(insn);
+                for (int k = 0; k < consumed && k < before.getStackSize(); k++) {
+                    work.addAll(before.getStack(before.getStackSize() - 1 - k).insns);
+                }
+            }
+        }
+        return false;
+    }
+
+    /** How many stack values the instruction takes: enough of them to follow a value back to what made it. */
+    private static int consumed(AbstractInsnNode insn) {
+        if (insn instanceof MethodInsnNode) {
+            int n = Type.getArgumentTypes(((MethodInsnNode) insn).desc).length;
+            return insn.getOpcode() == Opcodes.INVOKESTATIC ? n : n + 1;
+        }
+        if (insn instanceof VarInsnNode && insn.getOpcode() >= Opcodes.ISTORE) {
+            return 1;
+        }
+        if (insn instanceof InsnNode) {
+            int op = insn.getOpcode();
+            if (op >= Opcodes.IADD && op <= Opcodes.LXOR || op >= Opcodes.LCMP && op <= Opcodes.DCMPG) {
+                return 2;
+            }
+            if (op >= Opcodes.INEG && op <= Opcodes.DNEG || op >= Opcodes.I2L && op <= Opcodes.I2S) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Whether the branch at {@code b} decides whether the instruction at {@code target} runs in this pass: it is
+     * reached from one side of the branch and not from the other, before the loop comes round.
+     */
+    private static boolean decides(AbstractInsnNode[] code, Map<LabelNode, Integer> index, Loop loop, int b,
+                                   int target) {
+        Set<Boolean> reach = new HashSet<>();
+        for (int s : successors(code, index, b)) {
+            reach.add(reachesWithinPass(code, index, loop, s, target));
+        }
+        return reach.size() > 1;
+    }
+
+    private static boolean reachesWithinPass(AbstractInsnNode[] code, Map<LabelNode, Integer> index, Loop loop,
+                                             int from, int target) {
+        Deque<Integer> work = new ArrayDeque<>();
+        Set<Integer> seen = new HashSet<>();
+        work.push(from);
+        while (!work.isEmpty()) {
+            int i = work.pop();
+            if (i == target) {
+                return true;
+            }
+            if (i < loop.from || i > loop.to || (i == loop.from && i != from) || !seen.add(i)) {
+                continue;
+            }
+            for (int t : successors(code, index, i)) {
+                work.push(t);
+            }
+        }
+        return false;
+    }
+
+    /** Whether the branch at {@code j} decides whether {@code loop} ends: one way leads out, the other round. */
+    private static boolean decidesExit(AbstractInsnNode[] code, Map<LabelNode, Integer> index, Loop loop, int j) {
+        Set<Boolean> ends = new HashSet<>();
+        for (int s : successors(code, index, j)) {
+            ends.add(reachesExit(code, index, loop, s));
+        }
+        return ends.size() > 1;
+    }
+
+    /** Whether the branch at {@code j} tests a value a read in the loop shaped. */
+    private static boolean testsRead(AbstractInsnNode[] code, int j, Frame<Taint>[] f) {
+        if (f == null || f[j] == null) {
+            return false;
+        }
+        for (int k = 0; k < operands(code[j]); k++) {
+            Taint v = f[j].getStack(f[j].getStackSize() - 1 - k);
+            if (v != null && v.read) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether the input sent at {@code i} VARIES WITH WHAT THE LOOP READ: one of the call's arguments was shaped
+     * by a read made inside it -- an aim computed from where the target was seen, a command built from a reading.
+     * An input that is the same every pass whatever the loop saw is a dose, and a loop that doses until a goal
+     * holds is a poll with a stimulus in it.
+     */
+    private static boolean argumentRead(AbstractInsnNode[] code, int i, Frame<Taint>[] f) {
+        if (f == null || f[i] == null || !(code[i] instanceof MethodInsnNode)) {
+            return false;
+        }
+        int n = Type.getArgumentTypes(((MethodInsnNode) code[i]).desc).length;
+        for (int k = 0; k < n; k++) {
+            Taint v = f[i].getStack(f[i].getStackSize() - 1 - k);
+            if (v != null && v.read) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether a pass of {@code loop} can come round to its header without sending an input that varies with what
+     * it read: one whose argument a read shaped ({@link #argumentRead}), or one the pass reached through a branch
+     * on a reading that does not decide the loop's end -- {@code delta(cursor > 0 ? -step : step)} picks its
+     * constant by what it read, and is steering as much as {@code delta(-cursor)} is.
+     */
+    private boolean steeringAvoidable(String methodKey, AbstractInsnNode[] code, Loop loop, Frame<Taint>[] f) {
+        Map<LabelNode, Integer> index = labels(code);
+        Deque<int[]> work = new ArrayDeque<>();
+        Set<Long> seen = new HashSet<>();
+        work.push(new int[]{loop.from, 0});
+        seen.add((long) loop.from << 1);
+        while (!work.isEmpty()) {
+            int[] at = work.pop();
+            int i = at[0];
+            boolean chosen = at[1] == 1;
+            if (sends(methodKey, code, i) && (chosen || argumentRead(code, i, f))) {
+                continue;
+            }
+            boolean picks = chosen || (conditional(code[i]) && !decidesExit(code, index, loop, i)
+                    && testsRead(code, i, f));
+            for (int s : successors(code, index, i)) {
+                if (s == loop.from) {
+                    return true;
+                }
+                if (s >= loop.from && s <= loop.to && seen.add(((long) s << 1) | (picks ? 1 : 0))) {
+                    work.push(new int[]{s, picks ? 1 : 0});
+                }
+            }
+        }
+        return false;
+    }
+
     /** The event log's own classes: a wait through them is a LINK. */
     private static boolean link(String internal) {
         String top = internal.indexOf('$') < 0 ? internal : internal.substring(0, internal.indexOf('$'));
@@ -736,10 +1132,18 @@ final class WaitLoops {
                     boolean stimulus = namedAt(owner, line, STIMULUS);
                     boolean everyPassSends = exits == 2 && stimulus
                             && !inputAvoidable(key(node.name, m), code, loop.from, loop.to, loop.from);
+                    // WHAT AN EXIT TESTS: the branches that decide whether the loop ends may test only what it
+                    // did not read -- its counter, its bound, its cases. A goal exit tests a reading by nature,
+                    // and is admitted only when every pass STEERS: sends an input shaped by what it read.
+                    Frame<Taint>[] readFrames = readFrames(node.name, m, code, loop);
+                    List<Integer> onReads = exitsOnReads(key(node.name, m), code, loop, readFrames);
+                    boolean steers = everyPassSends
+                            && !steeringAvoidable(key(node.name, m), code, loop, readFrames);
                     String where = display(owner);
                     report.add(where + ":" + line + (ticks ? " TICK" : " CASES") + " exits=" + exits
-                            + (named ? (ticks ? " named" : "") : " UNNAMED") + (everyPassSends ? " goal" : ""));
-                    if (named && (exits == 1 || everyPassSends)) {
+                            + (named ? (ticks ? " named" : "") : " UNNAMED") + (everyPassSends ? " goal" : "")
+                            + (steers ? " steers" : "") + (onReads.isEmpty() ? "" : " exit-on-read" + onReads));
+                    if (named && ((exits == 1 && onReads.isEmpty()) || steers)) {
                         continue;
                     }
                     violating.merge(where, 1, Integer::sum);
@@ -748,7 +1152,18 @@ final class WaitLoops {
                         why.add("stands on no line a @Wait of its method names -- a loop that spends the clock"
                                 + " says which shape it is, at = the text of its line");
                     }
-                    if (exits == 2 && stimulus) {
+                    if (everyPassSends && !steers) {
+                        why.add("is claimed STIMULUS and leaves by its goal, but a pass of it can come round sending"
+                                + " only input that is the same whatever it read -- a dose, not a steer: a loop that"
+                                + " doses until a goal holds is a poll with a stimulus in it. Steer by what was read"
+                                + " (the input's argument computed from the reading), or claim the doses: an"
+                                + " EXPERIMENT of a fixed count, its outcome read once after");
+                    } else if (exits == 1 && !onReads.isEmpty()) {
+                        why.add("ends on a value it read (the branch at line " + onReads.get(0) + ") -- its one exit"
+                                + " is a poll whatever its count: the exit of a loop that waits tests only its"
+                                + " counter, its bound or its cases; a link on the record, or a window that runs its"
+                                + " length and reads once after");
+                    } else if (exits == 2 && stimulus) {
                         why.add("is claimed STIMULUS and leaves by a second edge, its goal, but a pass of it can come"
                                 + " round without sending input -- a goal exit is admitted only when every pass is"
                                 + " input (a PlayerInput or ClientBot input verb, a fed-input instrument, a"

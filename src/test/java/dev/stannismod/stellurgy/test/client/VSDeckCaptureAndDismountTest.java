@@ -1513,14 +1513,17 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * THIS ship). The centring's last send is the idle input; the scenario's following read of the
      * attitude over a window is what says the hold took.</p>
      */
-    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 20 && Math.abs(flightCursorX(what + \","
-            + " deflecting\")) <= CURSOR_DEFLECTED; i++) {",
-            why = "each iteration IS a push of the cursor off centre, and the loop ends on its goal state — a"
-                    + " deflection past the dead-zone, which is a CHANGE the client sends.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int i = 0; i < 20 && Math.abs(stick) <= CURSOR_DEFLECTED; i++) {",
+            why = "each iteration IS a push of the cursor off centre, sized by how far the cursor read short of"
+                    + " the dead-zone's edge, and the loop ends on its goal state — a deflection past the"
+                    + " dead-zone, which is a CHANGE the client sends.")
     private void takeTheStickWhileHeld(String what) throws Exception {
-        for (int i = 0; i < 20 && Math.abs(flightCursorX(what + ", deflecting")) <= CURSOR_DEFLECTED; i++) {
-            mouseDelta(60, 0);
+        double stick = flightCursorX(what + ", before deflecting");
+        for (int i = 0; i < 20 && Math.abs(stick) <= CURSOR_DEFLECTED; i++) {
+            // Past the dead-zone's edge by as much again: a deflection the client sends, not a graze of it.
+            mouseDelta(cursorPush(2 * CURSOR_DEFLECTED, CURSOR_DEFLECTED, stick), 0);
             bot().waitWorldTicks(1);
+            stick = flightCursorX(what + ", deflecting, pass " + i);
         }
         long inputMark = serverEvents().mark();
         centreFlightCursor();

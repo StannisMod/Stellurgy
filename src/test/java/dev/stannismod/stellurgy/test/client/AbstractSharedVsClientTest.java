@@ -1113,4 +1113,21 @@ public abstract class AbstractSharedVsClientTest extends AbstractSharedClientTes
         return rec;
     }
 
+    /**
+     * The mouse counts a pilot pushes his flight cursor by to carry it past {@code threshold}, aiming at
+     * {@code aim} beyond it, from where it was READ: in proportion to the distance left. A push decided by the
+     * reading is what makes a loop that pushes until the cursor is over a steer and not a dose.
+     *
+     * <p>The gain is set so that AT the threshold the push is still {@value #FIXED_CURSOR_PUSH} counts -- the
+     * fixed push these loops made before -- so a pass moves the cursor at least as far as that dose did while
+     * it is short of the threshold, and farther the farther it has to go.</p>
+     */
+    protected static int cursorPush(double aim, double threshold, double cursor) {
+        double countsPerUnit = FIXED_CURSOR_PUSH / (aim - threshold);
+        return (int) Math.ceil((aim - Math.abs(cursor)) * countsPerUnit);
+    }
+
+    /** The fixed push, in mouse counts, the cursor loops made before they steered by what they read. */
+    private static final int FIXED_CURSOR_PUSH = 60;
+
 }

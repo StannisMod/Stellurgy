@@ -350,12 +350,6 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
             why = "the dose is the moon's travel, sized just above; no key is held. Given in pieces because one"
                     + " bridge wait is bounded below the bot's read timeout (ForgeTestClientBootstrap's"
                     + " CLIENT_SIDE_BUDGET_MILLIS), and a dose of minutes does not fit in one.")
-    @Wait(shape = Wait.Shape.STIMULUS, at = "for (int candidate = 0; candidate < LISTED_ADDRESSES && pickIndex < 0;"
-            + " candidate++) {",
-            why = "a search that ACTS each step: every pass is his click on the next listed address, awaited on the"
-                    + " computer's own record of the pick, and the search ends on its goal, an address that is the"
-                    + " moon and landable. Delete the loop and no address is ever picked; a record answers each"
-                    + " click, and none could answer \"the next one is the moon\", which is the console's list.")
     @Wait(shape = Wait.Shape.STIMULUS, at = "while (bursts < burstBudget && !descended) {",
             why = "every pass is a burst of his translation key and the brake after it, sized from the offset he"
                     + " can still see, and the chase ends on its goal, the descent that takes the ship out of the"
@@ -754,7 +748,9 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
         String targetCell = "";
         String targetInfo = "";
         StringBuilder considered = new StringBuilder();
-        for (int candidate = 0; candidate < LISTED_ADDRESSES && pickIndex < 0; candidate++) {
+        // He reads EVERY listed address before he chooses -- a search that stopped at the first fit would end on
+        // what it read, a poll with clicks in it -- and then picks the one he chose, again, below.
+        for (int candidate = 0; candidate < LISTED_ADDRESSES; candidate++) {
             // The CLICK IS AWAITED, not slept off. Ten ticks was a guess that has to cover a button
             // press travelling to the server and the computer answering it; when it did not, the
             // reading below was of the PREVIOUS candidate's target and the search silently
@@ -774,7 +770,7 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                 continue;
             }
             // He is flying to the MOON the telescope showed him, so that is the address he takes.
-            if (isLandable(picked)
+            if (pickIndex < 0 && isLandable(picked)
                     && readIntOr(picked, NAV_TARGET_DIM, Integer.MIN_VALUE) == homeMoon.dim) {
                 pickIndex = candidate;
                 targetCell = cell;
@@ -792,7 +788,16 @@ public class M1PlanetToPlanetMilestoneE2ETest extends AbstractPlayerE2ETest {
                         + "without it the console is handing him a coordinate the destination has "
                         + "already left. nav=" + targetInfo,
                 targetDim != Integer.MIN_VALUE && targetDim >= 0);
-        // No settle before ARM: the pick it depends on was already read back from the server above.
+        // He read every address, so the console now holds the LAST one he clicked: he clicks the one he chose.
+        long chosenMark = events.mark();
+        input().clickButtonAt(BUTTON_PICK_FIRST + pickIndex);
+        events.await(chosenMark, "nav_target_picked",
+                "his click on the address he chose must reach the navigation computer — it holds the last one he"
+                        + " read until he does", budget * 5);
+        String chosen = read("stellurgytest nav status " + slotDim + " " + describeArgs(navSub)).raw();
+        assertEquals("the address he clicked last must be the target the console holds",
+                targetCell, unquote(readString(chosen, NAV_TARGET)));
+        // No settle before ARM: the pick it depends on was just read back from the server.
         long armMark = events.mark();
         input().clickButtonAt(BUTTON_ARM);
 
