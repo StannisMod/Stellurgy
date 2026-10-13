@@ -41,7 +41,7 @@ import java.util.stream.Stream;
  *       {@code STIMULUS} claim names may leave by a second edge, its goal, when no pass of it can come
  *       round to its header without sending player input. Input is a harness verb of a player's hands
  *       ({@link #inputVerb}), a fed-input instrument the harness's own table names ({@link #fedInput}),
- *       a {@code stellurgytest} command the probe's table calls an ACT or an ARRANGE
+ *       a {@code stellurgytest} command the probe's table calls a TRIGGER, a DECIDE or an ARRANGE
  *       ({@link #stimulusCommand}), or a test-source method every normal return of which has sent one.
  *       "Every pass" is a path property of the bytecode, not "somewhere in the body": input on one branch
  *       of an {@code if} leaves the other pass reading only;</li>
@@ -194,7 +194,7 @@ final class WaitLoops {
     }
 
     /**
-     * Whether a probe command whose text starts with {@code prefix} is an ACT or an ARRANGE -- by the
+     * Whether a probe command whose text starts with {@code prefix} is a TRIGGER, a DECIDE or an ARRANGE -- by the
      * probe's own table ({@code ProbeVerbKind}, read reflectively: it is the server's, package-private).
      * A READ, a BUILD, a verb nobody has classified, or a command that is not a {@code stellurgytest}
      * verb is not a stimulus.
@@ -209,7 +209,7 @@ final class WaitLoops {
             java.lang.reflect.Method of = kinds.getDeclaredMethod("of", String[].class);
             of.setAccessible(true);
             String kind = String.valueOf(of.invoke(null, (Object) words));
-            return "ACT".equals(kind) || "ARRANGE".equals(kind);
+            return "TRIGGER".equals(kind) || "DECIDE".equals(kind) || "ARRANGE".equals(kind);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("the probe's verb table " + PROBE_VERB_KIND + " could not be read", e);
         }
@@ -566,7 +566,7 @@ final class WaitLoops {
     /**
      * Whether the instruction at {@code i} sends player input: a harness input verb ({@link #inputVerb}), a
      * fed-input instrument called with its constant name ({@link #fedInput}), a probe command whose
-     * constant start is an ACT or an ARRANGE ({@link #stimulusCommand}), or a test-source method every
+     * constant start is a TRIGGER, a DECIDE or an ARRANGE ({@link #stimulusCommand}), or a test-source method every
      * normal return of which has sent one.
      */
     private boolean sends(String methodKey, AbstractInsnNode[] code, int i) {
@@ -749,7 +749,8 @@ final class WaitLoops {
                         why.add("is claimed STIMULUS and leaves by a second edge, its goal, but a pass of it can come"
                                 + " round without sending input -- a goal exit is admitted only when every pass is"
                                 + " input (a PlayerInput or ClientBot input verb, a fed-input instrument, a"
-                                + " stellurgytest ACT or ARRANGE command); a pass that only reads is a poll");
+                                + " stellurgytest TRIGGER, DECIDE or ARRANGE command); a pass that only reads is a"
+                                + " poll");
                     } else if (exits != 1) {
                         why.add("leaves its body by " + exits + " edges -- a break, a return or a second header"
                                 + " condition on a value it read is a second exit, and a loop that ends on what it"

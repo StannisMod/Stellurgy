@@ -102,8 +102,8 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"error\":\"missing subcommand\",\"usage\":\"" + getUsage(sender) + "\"}");
             return;
         }
-        // A verb added below that an e2e may use declares its kind in ProbeVerbKind; until it does, a
-        // server serving an e2e refuses it before this method is reached (E2EModeGate).
+        // A verb added below declares its kind in ProbeVerbKind; until it does, a harness server of either
+        // mode refuses it before this method is reached (E2EModeGate).
         try {
             switch (args[0].toLowerCase()) {
                 case "clock":

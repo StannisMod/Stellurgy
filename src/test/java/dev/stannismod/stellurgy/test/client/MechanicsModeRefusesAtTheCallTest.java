@@ -94,6 +94,9 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
      */
     @Pins("INV-ART-10")
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#mechanicsRefusalOf",
+            at = "if (ProbeVerbKind.of(args) == ProbeVerbKind.UNCLASSIFIED) {", replacedBy = "if (false) {",
+            fails = "these were not: [`stellurgytest no-such-group no-such-action` RAN", on = "2026-10-13")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#mechanicsRefusalOf",
             at = "if (MechanicsInstrument.named(className, methodName) == null) {", replacedBy = "if (false) {",
             fails = "these were not: [`stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager",
             on = "2026-10-12")
@@ -108,7 +111,9 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         ClientBot bot = client.bot();
         List<String> notRefused = new ArrayList<>();
 
-        // ---- the server: static calls on no named instrument, NBT by command ----
+        // ---- the server: a verb nobody classified, static calls on no named instrument, NBT by command ----
+        expectServerRefusal(notRefused, "stellurgytest no-such-group no-such-action", "UNCLASSIFIED");
+        expectServerRefusal(notRefused, "stellurgytest clock-skew 5", "UNCLASSIFIED");
         expectServerRefusal(notRefused, "stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager"
                 + " getInstance", "STATIC_CALL");
         expectServerRefusal(notRefused, "stellurgytest invoke-static dev.stannismod.stellurgy.test.client.ClientDimensions"
@@ -128,7 +133,8 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectClientRefusal(notRefused, "invoke_static_int", "STATIC_TARGET",
                 () -> bot.invokeStaticInt("dev.stannismod.stellurgy.client.ClientProxy", "currentClientDimension", 0));
 
-        assertTrue("every static call on no named instrument, and every tile, entity or item tag written by"
+        assertTrue("every probe verb with no kind, every static call on no named instrument, and every tile,"
+                + " entity or item tag written by"
                 + " command, must be refused at the call in mechanics mode with the kind its judge gives it;"
                 + " these were not: " + notRefused, notRefused.isEmpty());
 
@@ -136,6 +142,7 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         List<String> notAnswered = new ArrayList<>();
         expectServerAnswered(notAnswered, "stellurgytest invoke-static " + SERVER_LOG + " markReply");
         expectServerAnswered(notAnswered, "give " + PLAYER + " minecraft:stone 1");
+        expectServerAnswered(notAnswered, "stellurgytest clock");
         expectServerAnswered(notAnswered, "stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 1000");
         try {
             JsonObject opened = bot.invokeStaticInt(CLIENT_WINDOW, "open");

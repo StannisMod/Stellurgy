@@ -265,7 +265,9 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         String assembled = String.join(" ", "turret", "charge");
         expectServerRefusal(notRefused, "stellurgytest " + assembled + " 0 300 84 300", "ARRANGE");
         expectServerRefusal(notRefused, "stellurgytest turret target 0 300 84 300 320.5 84.5 300.5", "ARRANGE");
-        expectServerRefusal(notRefused, new MissionHelper().finishingCommand(), "ACT");
+        expectServerRefusal(notRefused, new MissionHelper().finishingCommand(), "DECIDE");
+        expectServerRefusal(notRefused, "stellurgytest tile force-tick 0 300 84 300 1", "TRIGGER");
+        expectServerRefusal(notRefused, "stellurgytest fixture machine lathe 0 " + beside, "ARRANGE");
         expectServerRefusal(notRefused, MissionHelper.CHARGE, "ARRANGE");
         expectServerRefusal(notRefused, "stellurgytest planet state-orbit-line 0 255", "ARRANGE");
         expectServerRefusal(notRefused, "stellurgytest config set rocketRequireFuel true", "ARRANGE");

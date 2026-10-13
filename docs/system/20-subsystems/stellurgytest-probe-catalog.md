@@ -220,8 +220,13 @@ again, the answer is `permaload false` plus a poll.
 - **INV-ART-09 [A]** No verb writes Stellurgy gameplay NBT/registry/config of its own; persistence effects are always
   routed through the owning subsystem's production code. (Inferred from full handler read; not test-pinned.)
 - **INV-ART-10 [T]** Every harness child is launched in a MODE (`-Dforge.test.mode=e2e|mechanics`), and a
-  harness server child with none does not start (`E2EModeGate#launchedMode`). On a MECHANICS server the gate
-  refuses at the call a static call (`invoke-static`) on anything but a row of `MechanicsInstrument`, and
+  harness server child with none does not start (`E2EModeGate#launchedMode`). Every probe verb has a kind in
+  `ProbeVerbKind` — READ, BUILD, ARRANGE, TRIGGER (calls the production entry a player, a tick or a packet
+  reaches), DECIDE (writes a decision's outcome), and the e2e-only STATIC_CALL / WALK / START_ITEM — matched on
+  its leading one to three words; a verb with no row is UNCLASSIFIED and refused in BOTH modes. An e2e server
+  admits READ, BUILD (judged further by place) and the named exceptions. On a MECHANICS server the gate
+  refuses at the call an unclassified verb, a static call (`invoke-static`) on anything but a row of
+  `MechanicsInstrument`, and
   tile, entity or item NBT written by command (`blockdata`, `entitydata`, a `{` in `give` / `summon` / `fill` /
   `clear` / `replaceitem`); a typed `arrange …` verb sets such state through production's own setter instead
   (`TestProbeCommand#handleTypedArrangement`). Everything else is admitted and tallied per server

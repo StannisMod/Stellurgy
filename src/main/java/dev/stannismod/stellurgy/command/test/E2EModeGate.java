@@ -399,8 +399,11 @@ final class E2EModeGate {
 
     /**
      * Why {@code command} with {@code args} is refused on a MECHANICS server, as a JSON object; {@code null}
-     * when it is admitted. A mechanics test may arrange, so this refuses only two channels:
+     * when it is admitted. A mechanics test may arrange, trigger and decide, so this refuses only three
+     * channels:
      * <ul>
+     *   <li>a probe verb with no row in {@link ProbeVerbKind} — {@link ProbeVerbKind#UNCLASSIFIED}: nobody has
+     *       said what it is;</li>
      *   <li>a static call ({@code invoke-static}) on anything but a row of {@link MechanicsInstrument} — a
      *       static that is no named instrument calls a decision of the mod from the test's side;</li>
      *   <li>tile, entity or item NBT written by command — {@code blockdata}, {@code entitydata}, and
@@ -408,12 +411,15 @@ final class E2EModeGate {
      *       tag: an arrangement sets state through a typed probe verb ({@code arrange …}) that goes through
      *       production's own setter, never through a tag nothing checks.</li>
      * </ul>
-     * Everything else is admitted (and tallied by {@link Tally}); which probe verbs a mechanics test may send
-     * is not decided here.
+     * Everything else is admitted (and tallied by {@link Tally}).
      */
     String mechanicsRefusalOf(ICommand command, String[] args) {
         String name = command.getName().toLowerCase(Locale.ROOT);
         if ("stellurgytest".equals(name)) {
+            if (ProbeVerbKind.of(args) == ProbeVerbKind.UNCLASSIFIED) {
+                return refusal(name, verbOf(args), ProbeVerbKind.UNCLASSIFIED.name(),
+                        "no kind is declared for this verb, and an unclassified verb is refused");
+            }
             if (args.length > 0 && "invoke-static".equalsIgnoreCase(args[0])) {
                 String className = args.length > 1 ? args[1] : "";
                 String methodName = args.length > 2 ? args[2] : "";
