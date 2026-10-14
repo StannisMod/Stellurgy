@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.inventory;
 
+import dev.stannismod.stellurgy.client.ShipReadoutText;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-
-import dev.stannismod.stellurgy.client.ShipReadoutText;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 /**
  * The flight computer's console: the ship's readout, DESIGN beside LIVE, redrawn from whatever the

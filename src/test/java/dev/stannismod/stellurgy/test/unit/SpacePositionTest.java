@@ -1,14 +1,12 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.SpacePosition;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.util.SpacePosition;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Space position and astronomy helpers.
@@ -21,6 +19,8 @@ public class SpacePositionTest {
 
     private static final double EPS = 1e-9;
 
+    /** Pins INV-NAV-01 (SpacePosition survives an NBT round-trip and a read with no tag leaves it unchanged). */
+    @Pins("INV-NAV-01")
     @Test
     public void spacePositionNbtRoundTrip() {
         SpacePosition position = new SpacePosition();
@@ -49,6 +49,8 @@ public class SpacePositionTest {
         assertNull("world reference must not be reconstructed from NBT without a writer-side world", restored.world);
     }
 
+    /** Pins INV-NAV-01 (SpacePosition survives an NBT round-trip and a read with no tag leaves it unchanged). */
+    @Pins("INV-NAV-01")
     @Test
     public void spacePositionNbtRoundTripDefaults() {
         SpacePosition position = new SpacePosition();
@@ -64,6 +66,8 @@ public class SpacePositionTest {
         assertFalse(restored.isInInterplanetarySpace);
     }
 
+    /** Pins INV-NAV-01 (SpacePosition survives an NBT round-trip and a read with no tag leaves it unchanged). */
+    @Pins("INV-NAV-01")
     @Test
     public void readFromNbtWithoutSpacePositionTagIsNoOp() {
         SpacePosition position = new SpacePosition();
@@ -74,6 +78,8 @@ public class SpacePositionTest {
         assertEquals(5.0, position.x, EPS);
     }
 
+    /** Pins INV-NAV-02 (squared distance is the Euclidean definition and symmetric, the normal vector is unit-length, spherical coordinates land at the radius). */
+    @Pins("INV-NAV-02")
     @Test
     public void distanceSquaredMatchesEuclideanDefinition() {
         SpacePosition a = new SpacePosition();
@@ -87,6 +93,8 @@ public class SpacePositionTest {
         assertEquals(169.0, squared, EPS);
     }
 
+    /** Pins INV-NAV-02 (squared distance is the Euclidean definition and symmetric, the normal vector is unit-length, spherical coordinates land at the radius). */
+    @Pins("INV-NAV-02")
     @Test
     public void distanceSquaredIsSymmetric() {
         SpacePosition a = new SpacePosition();
@@ -97,6 +105,8 @@ public class SpacePositionTest {
         assertEquals(a.distanceToSpacePosition2(b), b.distanceToSpacePosition2(a), EPS);
     }
 
+    /** Pins INV-NAV-02 (squared distance is the Euclidean definition and symmetric, the normal vector is unit-length, spherical coordinates land at the radius). */
+    @Pins("INV-NAV-02")
     @Test
     public void normalVectorHasUnitLength() {
         SpacePosition a = new SpacePosition();
@@ -111,6 +121,8 @@ public class SpacePositionTest {
         assertEquals(1.0, Math.sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z), 1e-12);
     }
 
+    /** Pins INV-NAV-02 (squared distance is the Euclidean definition and symmetric, the normal vector is unit-length, spherical coordinates land at the radius). */
+    @Pins("INV-NAV-02")
     @Test
     public void normalVectorPointsTowardsTarget() {
         SpacePosition a = new SpacePosition();
@@ -127,6 +139,8 @@ public class SpacePositionTest {
         assertTrue(normal.z > 0);
     }
 
+    /** Pins INV-NAV-02 (squared distance is the Euclidean definition and symmetric, the normal vector is unit-length, spherical coordinates land at the radius). */
+    @Pins("INV-NAV-02")
     @Test
     public void getFromSphericalReturnsPointAtRequestedRadius() {
         SpacePosition origin = new SpacePosition();
@@ -149,6 +163,8 @@ public class SpacePositionTest {
         assertEquals(10.0, projected.z, 1e-12);
     }
 
+    /** Pins INV-NAV-02 (squared distance is the Euclidean definition and symmetric, the normal vector is unit-length, spherical coordinates land at the radius). */
+    @Pins("INV-NAV-02")
     @Test
     public void getFromSphericalCarriesContextFields() {
         SpacePosition origin = new SpacePosition();

@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import org.junit.After;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.test.AssembledCraft;
-import dev.stannismod.stellurgy.test.DriveInfo;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
+import java.util.ArrayList;
+import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -99,16 +98,25 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      */
     private static final int UNFED_WINDOW_TICKS = 100;
 
-    private final Events events = new Events(this::exec,
+    private final Events events = new Events(c -> read(c).raw(),
             ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
-     * Each scenario starts with an empty sky: a craft left by the scenario before is still loaded and
-     * still ticking, and it is cleared here, at the start of the one that must not meet it.
+     * Every craft this scenario assembled, by its durable name, beside the mark taken before its
+     * assembly. Disposed of when the scenario ends wherever its latest naming put it: an armed and
+     * pressed drive can carry it out of {@link #DIM} under a new registration before then.
      */
-    @Before
-    public void emptySky() throws Exception {
-        ShipReadiness.clearCraftFrom(this::exec, DIM);
+    private final List<String> builtDurables = new ArrayList<>();
+    private final List<Long> buildMarks = new ArrayList<>();
+
+    @After
+    public void disposeOfTheBuiltCraft() throws Exception {
+        for (int i = 0; i < builtDurables.size(); i++) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMarks.get(i),
+                    builtDurables.get(i));
+        }
+        builtDurables.clear();
+        buildMarks.clear();
     }
 
     /** The jump craft as assembled, and where its machines stand relative to its flight computer. */
@@ -141,25 +149,28 @@ public class HyperdriveTest extends AbstractSharedServerTest {
     }
 
     private JumpCraft jumpCraft(FixtureSite site, String variant, String what) throws Exception {
-        Reply fixture = AssembledCraft.lay(site, this::exec, variant, HALO, HEIGHT, what);
+        Reply fixture = AssembledCraft.lay(site, c -> arrange(c).raw(), variant, HALO, HEIGHT, what);
         String bay = fixture.object("jumpBayFromFlightComputer");
         requireArranged(what + " — the fixture must say where its drive machines stand: " + fixture,
                 bay != null);
-        return new JumpCraft(AssembledCraft.assemble(site, this::exec, events, fixture, what),
-                Reply.of(bay));
+        long mark = events.mark();
+        AssembledCraft craft = AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what);
+        builtDurables.add(craft.durable);
+        buildMarks.add(mark);
+        return new JumpCraft(craft, Reply.of(bay));
     }
 
     /** What the craft's drive is, as the ship's own answer. */
     private DriveInfo drive(JumpCraft ship) throws Exception {
-        return DriveInfo.at(this::exec, ship.craft.flightComputer());
+        return DriveInfo.at(c -> arrange(c).raw(), ship.craft.flightComputer());
     }
 
     /** Build machines onto the assembled craft; the probe links none of them. */
     private Reply extend(JumpCraft ship, int coils, int cells, int sinks, int emitters, int dampeners,
                          String what) throws Exception {
-        Reply built = Reply.of("stellurgytest drive extend", exec("stellurgytest drive extend "
+        Reply built = Reply.of("stellurgytest drive extend", arrange("stellurgytest drive extend "
                 + ship.craft.flightComputer() + " " + coils + " " + cells + " " + sinks + " "
-                + emitters + " " + dampeners));
+                + emitters + " " + dampeners).raw());
         requireArranged(what + " — every machine asked for must be built onto the ship: " + built,
                 built.ok() && built.blockPosArray("coils").length == coils
                         && built.blockPosArray("cells").length == cells
@@ -174,36 +185,36 @@ public class HyperdriveTest extends AbstractSharedServerTest {
     private void remove(JumpCraft ship, String machine, String what) throws Exception {
         int[] p = ship.at(machine);
         String at = p[0] + " " + p[1] + " " + p[2];
-        Reply fill = Reply.of(exec("stellurgytest fill " + DIM + " " + at + " " + at + " minecraft:air"));
+        Reply fill = Reply.of(arrange("stellurgytest fill " + DIM + " " + at + " " + at + " minecraft:air").raw());
         requireArranged(what + " — the " + machine + " must come off the ship: " + fill,
                 fill.ok() && fill.integer("placed") == 1);
     }
 
     /** Fill or drain the bank through its fixture seam: the level is arrangement here, not subject. */
     private void charge(JumpCraft ship, String level, String what) throws Exception {
-        Reply.of(exec("stellurgytest drive charge " + ship.craft.flightComputer() + " " + level))
+        Reply.of(arrange("stellurgytest drive charge " + ship.craft.flightComputer() + " " + level).raw())
                 .requireOk(what + " — the bank must be set " + level);
     }
 
     /** Type a destination into the ship's own navigation console. */
     private void aim(JumpCraft ship, String destination, String what) throws Exception {
-        Reply aimed = Reply.of(exec("stellurgytest nav target " + ship.machine("navigationComputer")
-                + " " + destination));
+        Reply aimed = Reply.of(arrange("stellurgytest nav target " + ship.machine("navigationComputer")
+                + " " + destination).raw());
         requireArranged(what + " — the console must take the destination: " + aimed,
                 aimed.ok() && aimed.has("target"));
     }
 
     /** The arm switch at the console; answers whether it is armed afterwards. */
     private boolean arm(JumpCraft ship, boolean on) throws Exception {
-        Reply armed = Reply.of(exec("stellurgytest drive arm " + ship.craft.flightComputer()
-                + (on ? " on" : " off")));
+        Reply armed = Reply.of(act("stellurgytest drive arm " + ship.craft.flightComputer()
+                + (on ? " on" : " off")).raw());
         requireArranged("the console must answer the arm switch: " + armed, armed.ok());
         return armed.bool("armed");
     }
 
     /** One press of the helm's jump key; answers whether the drive is winding up afterwards. */
     private boolean press(JumpCraft ship) throws Exception {
-        Reply pressed = Reply.of(exec("stellurgytest drive press " + ship.craft.flightComputer()));
+        Reply pressed = Reply.of(act("stellurgytest drive press " + ship.craft.flightComputer()).raw());
         requireArranged("the helm must answer the key: " + pressed, pressed.ok());
         return pressed.bool("spooling");
     }
@@ -227,11 +238,10 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a generator's power is measured
      * from the coils welded to it on the ship.</p>
-     *
-     * <p>red-witnessed: {@code TileHyperdriveGenerator#stats} at {@code DriveTuning.powerForCoils(coilCount())}
-     * (the coil count read as 0) fails "welding coils onto the ship's generator must make its drive
-     * stronger: 1000 -> 1000", 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code TileHyperdriveGenerator#stats} at {@code DriveTuning.powerForCoils(coilCount())}"
+            + " (the coil count read as 0) fails \"welding coils onto the ship's generator must make its drive"
+            + " stronger: 1000 -> 1000\", 2026-10-05")
     @Test
     public void aBiggerGeneratorIsAStrongerDrive() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft a player adds coils to");
@@ -256,16 +266,18 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>Measured 2026-10-05 on a healthy run: drive power 1000 -> 5000, speed 125000 -> 588369
      * blocks/tick, implied mass ratio 1.0623 — the four coils' 20 000 kg on the 321 250 kg hull.</p>
      *
-     * <p>red-witnessed: {@code JumpSpeed#blocksPerTick} at {@code double ratio = (drivePower / (double) DriveTuning.BASELINE_DRIVE_POWER)}
-     * (the generator's base power in place of the drive's) fails "a bigger drive crosses faster, the
-     * coils' own mass included: 125000 -> 117673", 2026-10-05</p>
-     * <p>red-witnessed: {@code ShipDriveStats#ofPower} at {@code (long) Math.ceil(power * DriveTuning.BURST_COST_PER_POWER)}
-     * (the burst priced at the generator's base power) fails "and asks for a bigger burst to open the
-     * window: 20000 -> 20000", 2026-10-05</p>
-     * <p>red-witnessed: {@code ShipDriveStats#ofPower} at {@code (long) Math.ceil(power * DriveTuning.IN_FLIGHT_DRAW_PER_POWER)}
-     * (the draw priced at the generator's base power) fails "and draws more while it holds the window
-     * open: 50 -> 50", 2026-10-05</p>
+     * Pins HYPER-5 (a generation buys efficiency and size buys power).
      */
+    @Pins("HYPER-5")
+    @LegacyWitness(prose = "{@code JumpSpeed#blocksPerTick} at {@code double ratio = (drivePower / (double) DriveTuning.BASELINE_DRIVE_POWER)}"
+            + " (the generator's base power in place of the drive's) fails \"a bigger drive crosses faster, the"
+            + " coils' own mass included: 125000 -> 117673\", 2026-10-05")
+    @LegacyWitness(prose = "{@code ShipDriveStats#ofPower} at {@code (long) Math.ceil(power * DriveTuning.BURST_COST_PER_POWER)}"
+            + " (the burst priced at the generator's base power) fails \"and asks for a bigger burst to open the"
+            + " window: 20000 -> 20000\", 2026-10-05")
+    @LegacyWitness(prose = "{@code ShipDriveStats#ofPower} at {@code (long) Math.ceil(power * DriveTuning.IN_FLIGHT_DRAW_PER_POWER)}"
+            + " (the draw priced at the generator's base power) fails \"and draws more while it holds the window"
+            + " open: 50 -> 50\", 2026-10-05")
     @Test
     public void aStrongerDriveIsFasterAndCostsMoreToStart() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft a player adds coils to");
@@ -295,13 +307,12 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that cells are a bank's size and sinks
      * its rate of refill.</p>
-     *
-     * <p>red-witnessed: {@code TileJumpCapacitor#capacity} at {@code scan.count(KIND_CELL) * DriveTuning.CAPACITY_PER_CELL}
-     * (cells counted as 0) fails "cells are what the bank holds: 20000 -> 20000", 2026-10-05</p>
-     * <p>red-witnessed: {@code TileJumpCapacitor#acceptRate} at {@code scan.count(KIND_SINK) * DriveTuning.ACCEPT_RATE_PER_SINK}
-     * (sinks counted as 0) fails "heat sinks are the whole of the cooling system: 2000 -> 2000",
-     * 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#capacity} at {@code scan.count(KIND_CELL) * DriveTuning.CAPACITY_PER_CELL}"
+            + " (cells counted as 0) fails \"cells are what the bank holds: 20000 -> 20000\", 2026-10-05")
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#acceptRate} at {@code scan.count(KIND_SINK) * DriveTuning.ACCEPT_RATE_PER_SINK}"
+            + " (sinks counted as 0) fails \"heat sinks are the whole of the cooling system: 2000 -> 2000\","
+            + " 2026-10-05")
     @Test
     public void moreCellsIsMoreBankAndMoreSinksIsAShorterWait() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft a player enlarges the bank of");
@@ -329,14 +340,13 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * A ship whose bank holds the burst is not waiting for anything.
      *
      * <p>Contract: this fails if production breaks the contract that a charged bank is ready.</p>
-     *
-     * <p>red-witnessed: {@code ShipDrive#cooldownTicks} at {@code charge >= needed} (its ready branch
-     * answering 1 instead of 0) fails "a ship ready to jump is not waiting for anything ... expected:&lt;0&gt;
-     * but was:&lt;1&gt;", 2026-10-05</p>
-     * <p>red-witnessed: {@code ShipDrive#capacitorCharge} at {@code total += capacitor.charge();} (each
-     * bank summed one short) fails "and its bank holds at least the burst: ... charge=19999/20000",
-     * 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code ShipDrive#cooldownTicks} at {@code charge >= needed} (its ready branch"
+            + " answering 1 instead of 0) fails \"a ship ready to jump is not waiting for anything ... expected:&lt;0&gt;"
+            + " but was:&lt;1&gt;\", 2026-10-05")
+    @LegacyWitness(prose = "{@code ShipDrive#capacitorCharge} at {@code total += capacitor.charge();} (each"
+            + " bank summed one short) fails \"and its bank holds at least the burst: ... charge=19999/20000\","
+            + " 2026-10-05")
     @Test
     public void aChargedBankHasNoCooldownAtAll() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft with a full bank");
@@ -359,13 +369,15 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a ship adopts only what stands
      * inside its own claim.</p>
      *
-     * <p>red-witnessed: {@code ShipDrive#componentsOfType} at {@code if (!withinXZ(yard, component.getPos()))}
-     * (the claim check dropped) fails "the neighbour, asked first while the new machines were nobody's,
-     * must not have taken them: emitters 1 -> 2, dampeners 0 -> 1", 2026-10-05</p>
-     * <p>red-witnessed: {@code ShipDrive#componentsOfType} at {@code component.linkToFlightComputer(flightComputerPos);}
-     * (nothing adopted) fails "and the craft they were built onto must have: emitters 1 -> 1, dampeners
-     * 0 -> 0", 2026-10-05</p>
+     * Pins INV-HYP-04 (A machine belongs to exactly one ship).
      */
+    @Pins("INV-HYP-04")
+    @LegacyWitness(prose = "{@code ShipDrive#componentsOfType} at {@code if (!withinXZ(yard, component.getPos()))}"
+            + " (the claim check dropped) fails \"the neighbour, asked first while the new machines were nobody's,"
+            + " must not have taken them: emitters 1 -> 2, dampeners 0 -> 1\", 2026-10-05")
+    @LegacyWitness(prose = "{@code ShipDrive#componentsOfType} at {@code component.linkToFlightComputer(flightComputerPos);}"
+            + " (nothing adopted) fails \"and the craft they were built onto must have: emitters 1 -> 1, dampeners"
+            + " 0 -> 0\", 2026-10-05")
     @Test
     public void anotherShipsMachinesAreNotYours() throws Exception {
         FixtureSite siteA = plot().siteAt(HALO, HALO);
@@ -400,11 +412,10 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Measured 2026-10-05: 0 blocks outside; at the window radius before that day (2) the same
      * craft had 90.</p>
-     *
-     * <p>red-witnessed: {@code JumpWindow#of} at {@code Envelope.around(generatorPos, DriveTuning.GENERATOR_BASELINE_WINDOW_RADIUS)}
-     * (the radius read as 2) fails "a first ship with no emitters at all must still fit its window ...
-     * expected:&lt;0&gt; but was:&lt;90&gt;", 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code JumpWindow#of} at {@code Envelope.around(generatorPos, DriveTuning.GENERATOR_BASELINE_WINDOW_RADIUS)}"
+            + " (the radius read as 2) fails \"a first ship with no emitters at all must still fit its window ..."
+            + " expected:&lt;0&gt; but was:&lt;90&gt;\", 2026-10-05")
     @Test
     public void aSmallHullFitsInsideTheGeneratorsOwnWindow() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft without its emitter");
@@ -427,17 +438,16 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * advisory, named to the pilot, and not a refusal.</p>
      *
      * <p>Measured 2026-10-05: the mast craft has 0 blocks outside with its emitter and 50 without.</p>
-     *
-     * <p>red-witnessed: {@code JumpWindow#cover} at {@code uncovered++;} (nothing counted outside) fails
-     * "part of this hull is outside the window" with hullOutsideWindow 0, 2026-10-05</p>
-     * <p>red-witnessed: {@code JumpGate#clauses} at {@code new Objection(Severity.ADVISORY, MSG_WINDOW_UNDERSIZED)}
-     * (the objection made HARD) fails "which is a warning, never a veto" with allowed false, 2026-10-05</p>
-     * <p>red-witnessed: {@code Verdict#needsConfirmation} at {@code return allowed() && !objections.isEmpty();}
-     * (answering false) fails "and he is told before he makes it" with confirm false, 2026-10-05</p>
-     * <p>red-witnessed: {@code JumpGate#clauses} at {@code new Objection(Severity.ADVISORY, MSG_WINDOW_UNDERSIZED)}
-     * (the key swapped for MSG_ENERGY_SHORTFALL) fails "and told THAT, in the gate's own message" with
-     * message msg.jumpgate.energyshortfall, 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code JumpWindow#cover} at {@code uncovered++;} (nothing counted outside) fails"
+            + " \"part of this hull is outside the window\" with hullOutsideWindow 0, 2026-10-05")
+    @LegacyWitness(prose = "{@code JumpGate#clauses} at {@code new Objection(Severity.ADVISORY, MSG_WINDOW_UNDERSIZED)}"
+            + " (the objection made HARD) fails \"which is a warning, never a veto\" with allowed false, 2026-10-05")
+    @LegacyWitness(prose = "{@code Verdict#needsConfirmation} at {@code return allowed() && !objections.isEmpty();}"
+            + " (answering false) fails \"and he is told before he makes it\" with confirm false, 2026-10-05")
+    @LegacyWitness(prose = "{@code JumpGate#clauses} at {@code new Objection(Severity.ADVISORY, MSG_WINDOW_UNDERSIZED)}"
+            + " (the key swapped for MSG_ENERGY_SHORTFALL) fails \"and told THAT, in the gate's own message\" with"
+            + " message msg.jumpgate.energyshortfall, 2026-10-05")
     @Test
     public void aHullTooBigForTheWindowWarnsAndStillLetsThePilotGo() throws Exception {
         JumpCraft ship = readyCraft(TALL_VARIANT, "the mast craft without its emitter");
@@ -462,11 +472,10 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a ship's emitters extend its
      * window.</p>
-     *
-     * <p>red-witnessed: {@code ShipDrive#window} at {@code emitterPositions.add(emitter.getPos());}
-     * (emitters left out of the window) fails "emitters are an extension for a big hull, and this is
-     * what they buy: 50 -> 50 outside, 1 emitter(s)", 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code ShipDrive#window} at {@code emitterPositions.add(emitter.getPos());}"
+            + " (emitters left out of the window) fails \"emitters are an extension for a big hull, and this is"
+            + " what they buy: 50 -> 50 outside, 1 emitter(s)\", 2026-10-05")
     @Test
     public void emittersAreWhatMakeALongHullFit() throws Exception {
         JumpCraft ship = jumpCraft(site(), TALL_VARIANT, "the mast craft that loses and regains an emitter");
@@ -494,12 +503,11 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that only an armed jump is fired from
      * the helm.</p>
-     *
-     * <p>red-witnessed: {@code JumpTrigger#press} at {@code if (!computer.isArmed())} (the arming check
-     * skipped) fails "with the console unarmed the press winds nothing up", 2026-10-05</p>
-     * <p>red-witnessed: {@code JumpTrigger#press} at {@code spool.begin(now);} (the wind-up never
-     * started) fails "and the same press, once the console is armed, does", 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code JumpTrigger#press} at {@code if (!computer.isArmed())} (the arming check"
+            + " skipped) fails \"with the console unarmed the press winds nothing up\", 2026-10-05")
+    @LegacyWitness(prose = "{@code JumpTrigger#press} at {@code spool.begin(now);} (the wind-up never"
+            + " started) fails \"and the same press, once the console is armed, does\", 2026-10-05")
     @Test
     public void thePilotCannotFireAJumpNobodyArmed() throws Exception {
         JumpCraft ship = readyCraft("the jump craft aimed but not armed");
@@ -518,12 +526,11 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that an armed, charged and aimed ship
      * winds up when the pilot presses.</p>
-     *
-     * <p>red-witnessed: {@code TileNavigationComputer#arm} at {@code armed = true;} (the switch never
-     * set) fails "the console is where the pilot commits to a destination", 2026-10-05</p>
-     * <p>red-witnessed: {@code JumpTrigger#press} at {@code spool.begin(now);} (the wind-up never
-     * started) fails "and the helm is where he commits to going", 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code TileNavigationComputer#arm} at {@code armed = true;} (the switch never"
+            + " set) fails \"the console is where the pilot commits to a destination\", 2026-10-05")
+    @LegacyWitness(prose = "{@code JumpTrigger#press} at {@code spool.begin(now);} (the wind-up never"
+            + " started) fails \"and the helm is where he commits to going\", 2026-10-05")
     @Test
     public void armingAtTheConsoleAndPressingAtTheHelmWindsTheDriveUp() throws Exception {
         JumpCraft ship = readyCraft("the jump craft armed and pressed");
@@ -540,13 +547,12 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that the burst is the only thing ever
      * spent, and an aborted wind-up has not fired it.</p>
-     *
-     * <p>red-witnessed: {@code JumpTrigger#press} at {@code spool.abort();} (the abort dropped from the
-     * press that meets a wind-up) fails "a second press during the wind-up stops it", 2026-10-05</p>
-     * <p>red-witnessed: {@code JumpTrigger#press} at {@code return new Result(Outcome.ABORTED, MSG_ABORTED);}
-     * (the burst fired on the way to it) fails "and it costs the pilot nothing - the burst has not fired
-     * expected:&lt;20000&gt; but was:&lt;0&gt;", 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code JumpTrigger#press} at {@code spool.abort();} (the abort dropped from the"
+            + " press that meets a wind-up) fails \"a second press during the wind-up stops it\", 2026-10-05")
+    @LegacyWitness(prose = "{@code JumpTrigger#press} at {@code return new Result(Outcome.ABORTED, MSG_ABORTED);}"
+            + " (the burst fired on the way to it) fails \"and it costs the pilot nothing - the burst has not fired"
+            + " expected:&lt;20000&gt; but was:&lt;0&gt;\", 2026-10-05")
     @Test
     public void pressingAgainDuringTheWindUpAbortsItAndCostsNothing() throws Exception {
         JumpCraft ship = readyCraft("the jump craft wound up and stopped");
@@ -569,15 +575,17 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a refused press never spends the
      * charge.</p>
      *
-     * <p>red-witnessed: {@code JumpTrigger#press} at {@code ShipNavigation nav = new ShipNavigation(world, flightComputerPos, shipId);}
-     * (the burst fired before anything is decided) fails "a refusal is never a loss expected:&lt;20000&gt;
-     * but was:&lt;0&gt;", 2026-10-05</p>
+     * Pins INV-HYP-01 (Asking the gate is free and side-effect free).
      */
+    @Pins("INV-HYP-01")
+    @LegacyWitness(prose = "{@code JumpTrigger#press} at {@code ShipNavigation nav = new ShipNavigation(world, flightComputerPos, shipId);}"
+            + " (the burst fired before anything is decided) fails \"a refusal is never a loss expected:&lt;20000&gt;"
+            + " but was:&lt;0&gt;\", 2026-10-05")
     @Test
     public void aRefusedJumpNeverSpendsTheCharge() throws Exception {
         JumpCraft ship = readyCraft("the jump craft whose destination is cleared");
         requireArranged("the console must arm", arm(ship, true));
-        Reply.of(exec("stellurgytest nav cleartarget " + ship.machine("navigationComputer")))
+        Reply.of(arrange("stellurgytest nav cleartarget " + ship.machine("navigationComputer")).raw())
                 .requireOk("the destination must be cleared at the console");
 
         long before = drive(ship).charge;
@@ -596,9 +604,11 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a new destination is a new
      * decision.</p>
      *
-     * <p>red-witnessed: {@code TileNavigationComputer#aim} at {@code this.armed = false;} (re-aiming left
-     * armed) fails "a new destination is a new decision", 2026-10-05</p>
+     * Pins INV-HYP-05 (Re-aiming disarms: a ship is never armed at a destination the pilot has already changed his mind about).
      */
+    @Pins("INV-HYP-05")
+    @LegacyWitness(prose = "{@code TileNavigationComputer#aim} at {@code this.armed = false;} (re-aiming left"
+            + " armed) fails \"a new destination is a new decision\", 2026-10-05")
     @Test
     public void clearingTheTargetDisarmsTheJump() throws Exception {
         JumpCraft ship = readyCraft("the jump craft re-aimed after arming");
@@ -619,25 +629,24 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a ship's dampeners are its own and
      * protect only once powered.</p>
-     *
-     * <p>red-witnessed: {@code ShipDrive#componentsOfType} at {@code component.linkToFlightComputer(flightComputerPos);}
-     * (nothing adopted) fails "every dampener built onto the craft belongs to it ... expected:&lt;3&gt; but
-     * was:&lt;0&gt;", 2026-10-05</p>
-     * <p>red-witnessed: {@code TileGravityDampener#isPowered} at {@code return energy.getEnergyStored() >= POWERED_THRESHOLD;}
-     * (compared against 0) fails "and none protects anybody before it has power ... expected:&lt;0&gt; but
-     * was:&lt;3&gt;", 2026-10-05</p>
-     * <p>red-witnessed: {@code TileGravityDampener#isPowered} at {@code return energy.getEnergyStored() >= POWERED_THRESHOLD;}
-     * (answering false) fails "and each one the grid has charged will ... expected:&lt;3&gt; but
-     * was:&lt;0&gt;", 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code ShipDrive#componentsOfType} at {@code component.linkToFlightComputer(flightComputerPos);}"
+            + " (nothing adopted) fails \"every dampener built onto the craft belongs to it ... expected:&lt;3&gt; but"
+            + " was:&lt;0&gt;\", 2026-10-05")
+    @LegacyWitness(prose = "{@code TileGravityDampener#isPowered} at {@code return energy.getEnergyStored() >= POWERED_THRESHOLD;}"
+            + " (compared against 0) fails \"and none protects anybody before it has power ... expected:&lt;0&gt; but"
+            + " was:&lt;3&gt;\", 2026-10-05")
+    @LegacyWitness(prose = "{@code TileGravityDampener#isPowered} at {@code return energy.getEnergyStored() >= POWERED_THRESHOLD;}"
+            + " (answering false) fails \"and each one the grid has charged will ... expected:&lt;3&gt; but"
+            + " was:&lt;0&gt;\", 2026-10-05")
     @Test
     public void dampenersAreFoundAndReportPowered() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft a player adds dampeners to");
         extend(ship, 0, 0, 0, 0, DAMPENERS_ADDED, "dampeners onto the craft");
         DriveInfo dark = drive(ship);
 
-        Reply fed = Reply.of("stellurgytest drive push", exec("stellurgytest drive push "
-                + ship.craft.flightComputer() + " " + OFFER + " dampeners"));
+        Reply fed = Reply.of("stellurgytest drive push", arrange("stellurgytest drive push "
+                + ship.craft.flightComputer() + " " + OFFER + " dampeners").raw());
         requireArranged("every dampener must expose a port the grid can push into: " + fed,
                 fed.ok() && fed.integer("ports") == dark.dampeners);
         DriveInfo lit = drive(ship);
@@ -658,12 +667,18 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a capacitor's charge comes only
      * from what is pushed into it.</p>
      *
-     * <p>red-witnessed: {@code TileJumpCapacitor#charge} at {@code return Math.min(capacity(), Math.max(0L, charge));}
-     * (the level read as the stored charge plus the world clock mod 1000) fails "a running world must
-     * not have put a single unit into a bank nothing is feeding ... expected:&lt;18&gt; but
-     * was:&lt;121&gt;", 2026-10-05</p>
+     * Pins INV-HYP-07 (the jump bank charges only from energy the ship pushes into it).
      */
+    @Pins("INV-HYP-07")
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#charge} at {@code return Math.min(capacity(), Math.max(0L, charge));}"
+            + " (the level read as the stored charge plus the world clock mod 1000) fails \"a running world must"
+            + " not have put a single unit into a bank nothing is feeding ... expected:&lt;18&gt; but"
+            + " was:&lt;121&gt;\", 2026-10-05")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceWorld(client(), DIM, UNFED_WINDOW_TICKS);",
+            why = "the bank is read on both sides of a stretch of its own world's clock, and the claim is that the"
+                    + " second read equals the first. Overshoot gives an unfed bank MORE time to fill itself,"
+                    + " so a slow box can only make this stricter.")
     public void aFRESHBANKSTAYSEMPTYWHILETIMEPASSES() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft with a drained bank");
         charge(ship, "empty", "a drained bank");
@@ -671,9 +686,6 @@ public class HyperdriveTest extends AbstractSharedServerTest {
         requireArranged("the drained bank must be short of the burst, or a bank that filled itself"
                 + " would have no room to show it: " + before, before.charge < before.burstCost);
 
-        // WINDOW: the bank is read on both sides of a stretch of its own world's clock, and the claim
-        // is that the second read equals the first. Overshoot gives an unfed bank MORE time to fill
-        // itself, so a slow box can only make this stricter.
         GameTicks.advanceWorld(client(), DIM, UNFED_WINDOW_TICKS);
         DriveInfo after = drive(ship);
 
@@ -687,18 +699,17 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a bank is a Forge Energy receiver
      * bounded by its accept rate.</p>
-     *
-     * <p>red-witnessed: {@code TileJumpCapacitor#acceptCharge} at {@code long accepted = Math.min(Math.min(room, acceptRate()), amount);}
-     * (answering 0) fails "the bank must take some of what is offered: ...\"accepted\":0", 2026-10-05</p>
-     * <p>red-witnessed: {@code TileJumpCapacitor#acceptCharge} at {@code charge = charge() + accepted;}
-     * (half of it kept) fails "what it took is what it holds expected:&lt;10&gt; but was:&lt;5&gt;" (taken
-     * with the sinks also counted as 0), 2026-10-05</p>
-     * <p>red-witnessed: {@code TileJumpCapacitor#acceptCharge} at {@code long accepted = Math.min(Math.min(room, acceptRate()), amount);}
-     * (the accept rate left out) fails "one push is one tick's worth ... (20000 of 20000)", 2026-10-05</p>
-     * <p>red-witnessed: {@code TileJumpCapacitor#acceptCharge} at {@code charge = charge() + accepted;}
-     * (overwritten instead of added to) fails "and a second push adds to the first: ...\"charge\":170",
-     * 2026-10-05</p>
      */
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#acceptCharge} at {@code long accepted = Math.min(Math.min(room, acceptRate()), amount);}"
+            + " (answering 0) fails \"the bank must take some of what is offered: ...\\\"accepted\\\":0\", 2026-10-05")
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#acceptCharge} at {@code charge = charge() + accepted;}"
+            + " (half of it kept) fails \"what it took is what it holds expected:&lt;10&gt; but was:&lt;5&gt;\" (taken"
+            + " with the sinks also counted as 0), 2026-10-05")
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#acceptCharge} at {@code long accepted = Math.min(Math.min(room, acceptRate()), amount);}"
+            + " (the accept rate left out) fails \"one push is one tick's worth ... (20000 of 20000)\", 2026-10-05")
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#acceptCharge} at {@code charge = charge() + accepted;}"
+            + " (overwritten instead of added to) fails \"and a second push adds to the first: ...\\\"charge\\\":170\","
+            + " 2026-10-05")
     @Test
     public void whatTheSHIPPUSHESINthroughItsGridIsWhatTheBankHolds() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft whose bank the grid fills");
@@ -706,7 +717,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
 
         // `push` answers what the PORTS did, not what the drive is, so it is read as its own reply.
         Reply pushed = Reply.of("stellurgytest drive push",
-                exec("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER));
+                arrange("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER).raw());
         requireArranged("the bank must expose an energy port for the ship to push into: " + pushed,
                 pushed.ok() && pushed.longInteger("ports") > 0L);
         long accepted = pushed.longInteger("accepted");
@@ -719,7 +730,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
                 + ")", accepted < filled.capacity);
 
         Reply again = Reply.of("stellurgytest drive push",
-                exec("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER));
+                arrange("stellurgytest drive push " + ship.craft.flightComputer() + " " + OFFER).raw());
         assertTrue("and a second push adds to the first: " + again, again.longInteger("charge") > accepted);
     }
 
@@ -734,21 +745,20 @@ public class HyperdriveTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a capacitor's charge is part of
      * what a ship saves.</p>
-     *
-     * <p>red-witnessed: {@code TileJumpCapacitor#writeToNBT} at {@code nbt.setLong(NBT_CHARGE, charge);}
-     * (the charge never written) fails "a bank that came back from disk holds what it held ...
-     * expected:&lt;20000&gt; but was:&lt;0&gt;", 2026-10-05</p>
-     * <p>red-witnessed: {@code WorldServerShipManager#queueShipUnload} at {@code this.unloadQueue.add(shipID);}
-     * (an unload never queued) fails "the ship must unload once nothing holds it — no `ship_unloaded`
-     * ... within 200 ticks", 2026-10-05</p>
-     * <p>red-witnessed: {@code PhysicsObject#unload} at {@code provider.queueUnload(claimedChunkCache.getChunkAt(chunkPos.x, chunkPos.z));}
-     * (the ship's chunks kept in memory) fails "the capacitor's chunk must leave memory ... no
-     * `chunk_unloaded` ... within 200 ticks", 2026-10-05</p>
-     * <p>red-witnessed: {@code WorldServerShipManager#tick} at {@code pendingLifecycle.add(new ShipLifecycleEvent.ShipUsable(}
-     * (the load never announced) fails "the ship must come back when it is asked for — no `ship_usable`
-     * ... within 200 ticks", 2026-10-05 on the per-tick watcher that published this edge until then,
-     * and RE-TAKEN 2026-10-06 at the anchor above, its one publisher since: the same failure.</p>
      */
+    @LegacyWitness(prose = "{@code TileJumpCapacitor#writeToNBT} at {@code nbt.setLong(NBT_CHARGE, charge);}"
+            + " (the charge never written) fails \"a bank that came back from disk holds what it held ..."
+            + " expected:&lt;20000&gt; but was:&lt;0&gt;\", 2026-10-05")
+    @LegacyWitness(prose = "{@code WorldServerShipManager#queueShipUnload} at {@code this.unloadQueue.add(shipID);}"
+            + " (an unload never queued) fails \"the ship must unload once nothing holds it — no `ship_unloaded`"
+            + " ... within 200 ticks\", 2026-10-05")
+    @LegacyWitness(prose = "{@code PhysicsObject#unload} at {@code provider.queueUnload(claimedChunkCache.getChunkAt(chunkPos.x, chunkPos.z));}"
+            + " (the ship's chunks kept in memory) fails \"the capacitor's chunk must leave memory ... no"
+            + " `chunk_unloaded` ... within 200 ticks\", 2026-10-05")
+    @LegacyWitness(prose = "{@code WorldServerShipManager#tick} at {@code pendingLifecycle.add(new ShipLifecycleEvent.ShipUsable(}"
+            + " (the load never announced) fails \"the ship must come back when it is asked for — no `ship_usable`"
+            + " ... within 200 ticks\", 2026-10-05 on the per-tick watcher that published this edge until then,"
+            + " and RE-TAKEN 2026-10-06 at the anchor above, its one publisher since: the same failure.")
     @Test
     public void aBanksChargeSurvivesAREALunloadAndReload() throws Exception {
         JumpCraft ship = jumpCraft(site(), "the jump craft parked with a full bank");
@@ -758,7 +768,7 @@ public class HyperdriveTest extends AbstractSharedServerTest {
         int[] capacitor = ship.at("capacitor");
 
         long unloadMark = events.mark();
-        ShipReadiness.letShipsUnload(this::exec, "the ship's own unload is what writes its chunks to disk");
+        ShipReadiness.letShipsUnload(c -> arrange(c).raw(), "the ship's own unload is what writes its chunks to disk");
         try {
             events.awaitRecordWithField(unloadMark, "ship_unloaded", "vsShip", ship.craft.physicsId,
                     "the ship must unload once nothing holds it", AssembledCraft.LINK_BUDGET_TICKS);
@@ -767,10 +777,11 @@ public class HyperdriveTest extends AbstractSharedServerTest {
                     AssembledCraft.LINK_BUDGET_TICKS, "dim", String.valueOf(DIM),
                     "cx", String.valueOf(capacitor[0] >> 4), "cz", String.valueOf(capacitor[2] >> 4));
         } finally {
-            ShipReadiness.holdShipsLoaded(this::exec, "the ship is asked for again");
+            ShipReadiness.holdShipsLoaded(c -> arrange(c).raw(), "the ship is asked for again");
         }
         long loadMark = events.mark();
-        exec("stellurgytest vs load-ships " + DIM);
+        arrange("stellurgytest vs load-ship " + DIM + " " + ship.craft.physicsId)
+                .requireOk("ask for the ship by its id");
         events.awaitRecordWithField(loadMark, "ship_usable", "vsShip", ship.craft.physicsId,
                 "the ship must come back when it is asked for", AssembledCraft.LINK_BUDGET_TICKS);
 

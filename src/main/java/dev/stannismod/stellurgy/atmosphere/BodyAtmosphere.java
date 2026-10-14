@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.atmosphere;
 
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-import dev.stannismod.stellurgy.atmosphere.gas.Gas;
-import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 
 /**
  * What a body's air is made of when nobody wrote it down: one rule, from the body's own mass, size and

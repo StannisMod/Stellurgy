@@ -1,22 +1,20 @@
 package dev.stannismod.stellurgy.affs.te;
 
-import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.affs.block.BlockFieldGenerator;
 import dev.stannismod.stellurgy.affs.config.ModConfig;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.affs.network.PacketFieldTouchEffect;
 import dev.stannismod.stellurgy.affs.network.PacketSyncActiveGenerators;
 import dev.stannismod.stellurgy.affs.util.CodeUtils;
-import dev.stannismod.stellurgy.affs.world.FieldFrame;
-import dev.stannismod.stellurgy.affs.world.FieldFrames;
-import dev.stannismod.stellurgy.affs.world.FieldSource;
-import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
-import dev.stannismod.stellurgy.affs.world.WorldFieldFrame;
+import dev.stannismod.stellurgy.affs.world.*;
 import dev.stannismod.stellurgy.affs.world.projectile.IEnergyProjectile;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldCondition;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkState;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -39,9 +37,6 @@ import net.minecraftforge.energy.EnergyStorage;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 
 public class TileEntityFieldGenerator extends TileEntity implements ITickable, FieldSource, ISubsystemSink {
 

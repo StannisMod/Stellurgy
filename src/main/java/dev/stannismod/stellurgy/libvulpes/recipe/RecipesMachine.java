@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.recipe;
 
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.tile.TileEntityMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 import net.minecraft.block.Block;
 import net.minecraft.init.Items;
 import net.minecraft.inventory.InventoryCrafting;
@@ -9,10 +13,6 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
-import dev.stannismod.stellurgy.libvulpes.tile.TileEntityMachine;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import javax.annotation.Nonnull;
 import java.util.*;

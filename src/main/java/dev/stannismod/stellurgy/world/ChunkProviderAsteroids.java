@@ -1,5 +1,10 @@
 package dev.stannismod.stellurgy.world;
 
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.util.OreGenProperties;
+import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
+import dev.stannismod.stellurgy.world.ore.CustomizableOreGen;
 import net.minecraft.block.BlockFalling;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EnumCreatureType;
@@ -15,11 +20,6 @@ import net.minecraft.world.gen.MapGenBase;
 import net.minecraft.world.gen.MapGenCavesHell;
 import net.minecraft.world.gen.NoiseGeneratorOctaves;
 import net.minecraft.world.gen.NoiseGeneratorSimplex;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.util.OreGenProperties;
-import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
-import dev.stannismod.stellurgy.world.ore.CustomizableOreGen;
 
 import java.util.List;
 import java.util.Random;

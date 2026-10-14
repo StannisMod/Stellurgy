@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.dimension;
 
-import java.util.Locale;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.util.Locale;
 
 /**
  * How a planet dimension's terrain is produced. Orthogonal to {@link DimensionProperties#getGenType()},

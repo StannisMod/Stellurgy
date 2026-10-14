@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.subsystem.heat;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 
 /**
  * The second half of "a machine is not a network node": a chunk arriving can put a heat-making

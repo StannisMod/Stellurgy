@@ -1,9 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.List;
-import dev.stannismod.stellurgy.test.Reply;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -37,15 +39,16 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     private static final int Y = 70;
 
     /**
-     * red-witnessed: with {@code Walk#visit} at {@code result.entryPoint = here;} (the walk recording its entry point)
-     * removed, this fails with "the report names no entry point, so a continuing shot has nowhere to
-     * resume: {...hasEntry:false...}". Only the entry verdict was individually witnessed; the spend,
-     * depth and staged-or-destroyed verdicts before and after it were not. 2026-09-30.
-     *
-     * <p>red-witnessed: with {@code ShipDamageService#toReport} at {@code return new DamageReport(walk.outcome, walk.stopReason, walk.budgetSpent, walk.budgetLeft,} reporting every walk's outcome as
-     * NOTHING_STRUCK, this fails at "an impact into a solid wall reported striking nothing:
-     * {...outcome:NOTHING_STRUCK...spent:3000...destroyed:3...}" (2026-09-30).</p>
+     * Pins INV-DMG-01 (an impact that meets structure spends into it and reports a depth and an entry point).
      */
+    @Pins("INV-DMG-01")
+    @LegacyWitness(prose = "with {@code Walk#visit} at {@code result.entryPoint = here;} (the walk recording its entry point)"
+            + " removed, this fails with \"the report names no entry point, so a continuing shot has nowhere to"
+            + " resume: {...hasEntry:false...}\". Only the entry verdict was individually witnessed; the spend,"
+            + " depth and staged-or-destroyed verdicts before and after it were not. 2026-09-30.")
+    @LegacyWitness(prose = "with {@code ShipDamageService#toReport} at {@code return new DamageReport(walk.outcome, walk.stopReason, walk.budgetSpent, walk.budgetLeft,} reporting every walk's outcome as"
+            + " NOTHING_STRUCK, this fails at \"an impact into a solid wall reported striking nothing:"
+            + " {...outcome:NOTHING_STRUCK...spent:3000...destroyed:3...}\" (2026-09-30).")
     @Test
     public void anImpactIntoAWallSpendsIntoItAndReportsWhereItReached() throws Exception {
         int x = 1200, z = 1200;
@@ -68,12 +71,14 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code Walk#exitedFarSide} at {@code return decide(DamageOutcome.EXITED, StopReason.EXITED_FAR_SIDE, lastSolidExit);}
-     * decided as {@code ABSORBED/BUDGET_EXHAUSTED} instead, this fails with "a budget that dwarfs a
-     * single pane did not report exiting: {...outcome:ABSORBED...left:399624...}". 2026-09-30, taken on
-     * the pre-fix form, where that decision was made inline in {@code Walk#visit}; the fix that same day
-     * moved it into its own method without changing it.
+     * Pins INV-DMG-02 (an impact whose budget outlasts what it struck exits carrying the remainder).
      */
+    @Pins("INV-DMG-02")
+    @LegacyWitness(prose = "with {@code Walk#exitedFarSide} at {@code return decide(DamageOutcome.EXITED, StopReason.EXITED_FAR_SIDE, lastSolidExit);}"
+            + " decided as {@code ABSORBED/BUDGET_EXHAUSTED} instead, this fails with \"a budget that dwarfs a"
+            + " single pane did not report exiting: {...outcome:ABSORBED...left:399624...}\". 2026-09-30, taken on"
+            + " the pre-fix form, where that decision was made inline in {@code Walk#visit}; the fix that same day"
+            + " moved it into its own method without changing it.")
     @Test
     public void anImpactThatOutlastsTheWallExitsCarryingTheRest() throws Exception {
         int x = 1200, z = 1220;
@@ -106,29 +111,25 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
      * block behind it is not reached is read as the remainder going nowhere ({@code left == 0}), not
      * off the third block's stage: half a stage cannot stage it under either law, so that read could
      * not fail.</p>
-     *
-     * <p>red-witnessed: with {@code Walk#armourHeld} at
-     * {@code return world.isBlockLoaded(axis) && isStructure(world, axis, world.getBlockState(axis));}
-     * answering false, this fails with "the remainder of an impact that could not buy the next stage
-     * was handed back or carried on ... {...outcome:EXITED, stopReason:EXITED_FAR_SIDE, spent:1250,
-     * left:125, staged:1, destroyed:1, depth:3...} expected:&lt;0&gt; but was:&lt;125&gt;" (2026-10-03).</p>
-     *
-     * <p>red-witnessed: with {@code Walk#visit} at
-     * {@code return decide(DamageOutcome.ABSORBED, StopReason.ARMOUR_HELD, null);} deciding
-     * {@code BUDGET_EXHAUSTED} instead, this fails at "an impact stopped by a block reported a different
-     * reason: {...outcome:ABSORBED, stopReason:BUDGET_EXHAUSTED, spent:1375, left:0...}" (2026-10-03).</p>
-     *
-     * <p>red-witnessed: with {@code StructureDamageEngine#spendInto} at
-     * {@code if (!mayRemove(world, pos, state))} taken for every block that reaches its last stage (so
-     * nothing is ever removed), this fails at "the stages the impact paid for were not all taken (one
-     * whole block, then one stage of the next): {...stopReason:ARMOUR_HELD, spent:1375, left:0,
-     * staged:2, destroyed:0...}" (2026-10-03).</p>
-     *
-     * <p>red-witnessed: with {@code Walk#visit} at
-     * {@code result.distanceWalked = layer.tEnter * reach;} followed by the held block's stage being set
-     * back to 0 before the walk ends, this fails at "the block that held was not left with the one stage
-     * that was paid for: {...stopReason:ARMOUR_HELD...staged:1...} ... {...stage:0...}" (2026-10-03).</p>
      */
+    @LegacyWitness(prose = "with {@code Walk#armourHeld} at"
+            + " {@code return world.isBlockLoaded(axis) && isStructure(world, axis, world.getBlockState(axis));}"
+            + " answering false, this fails with \"the remainder of an impact that could not buy the next stage"
+            + " was handed back or carried on ... {...outcome:EXITED, stopReason:EXITED_FAR_SIDE, spent:1250,"
+            + " left:125, staged:1, destroyed:1, depth:3...} expected:&lt;0&gt; but was:&lt;125&gt;\" (2026-10-03).")
+    @LegacyWitness(prose = "with {@code Walk#visit} at"
+            + " {@code return decide(DamageOutcome.ABSORBED, StopReason.ARMOUR_HELD, null);} deciding"
+            + " {@code BUDGET_EXHAUSTED} instead, this fails at \"an impact stopped by a block reported a different"
+            + " reason: {...outcome:ABSORBED, stopReason:BUDGET_EXHAUSTED, spent:1375, left:0...}\" (2026-10-03).")
+    @LegacyWitness(prose = "with {@code StructureDamageEngine#spendInto} at"
+            + " {@code if (!mayRemove(world, pos, state))} taken for every block that reaches its last stage (so"
+            + " nothing is ever removed), this fails at \"the stages the impact paid for were not all taken (one"
+            + " whole block, then one stage of the next): {...stopReason:ARMOUR_HELD, spent:1375, left:0,"
+            + " staged:2, destroyed:0...}\" (2026-10-03).")
+    @LegacyWitness(prose = "with {@code Walk#visit} at"
+            + " {@code result.distanceWalked = layer.tEnter * reach;} followed by the held block's stage being set"
+            + " back to 0 before the walk ends, this fails at \"the block that held was not left with the one stage"
+            + " that was paid for: {...stopReason:ARMOUR_HELD...staged:1...} ... {...stage:0...}\" (2026-10-03).")
     @Test
     public void aKineticImpactThatCannotBuyTheNextStageIsHeldByTheBlock() throws Exception {
         int x = 1200, z = 1340;
@@ -155,12 +156,14 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code ShipDamageService#apply} at {@code if (isDuplicate(world, request.getImpactId()))}'s duplicate check disabled, this fails with
-     * "the same impact identity was applied a second time ... {...stopReason:EXITED_FAR_SIDE,spent:1000
-     * ...}"; with the same check widened to also refuse {@code impactId - 1}, the fresh-identity verdict
-     * fails with "a fresh impact identity was refused as a duplicate: {...DUPLICATE_IMPACT...}".
-     * 2026-09-30.
+     * Pins INV-DMG-03 (the same impact identity applied twice damages once).
      */
+    @Pins("INV-DMG-03")
+    @LegacyWitness(prose = "with {@code ShipDamageService#apply} at {@code if (isDuplicate(world, request.getImpactId()))}'s duplicate check disabled, this fails with"
+            + " \"the same impact identity was applied a second time ... {...stopReason:EXITED_FAR_SIDE,spent:1000"
+            + " ...}\"; with the same check widened to also refuse {@code impactId - 1}, the fresh-identity verdict"
+            + " fails with \"a fresh impact identity was refused as a duplicate: {...DUPLICATE_IMPACT...}\"."
+            + " 2026-09-30.")
     @Test
     public void theSameImpactIdentityAppliedTwiceDamagesOnce() throws Exception {
         int x = 1200, z = 1240;
@@ -190,10 +193,12 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code StructureDamageEngine#spendInto} at {@code int stageCost = stageCost(world, pos, areaFactor, kind);}'s per-stage price overwritten to 1 in
-     * the spend (the probe's quoted price untouched), this fails with "the same budget went as far into
-     * iron as into glass (glass destroyed 8, iron destroyed 8)". 2026-09-30.
+     * Pins INV-DMG-04 (at equal budget a tougher wall is not penetrated as far as a flimsy one).
      */
+    @Pins("INV-DMG-04")
+    @LegacyWitness(prose = "with {@code StructureDamageEngine#spendInto} at {@code int stageCost = stageCost(world, pos, areaFactor, kind);}'s per-stage price overwritten to 1 in"
+            + " the spend (the probe's quoted price untouched), this fails with \"the same budget went as far into"
+            + " iron as into glass (glass destroyed 8, iron destroyed 8)\". 2026-09-30.")
     @Test
     public void aTougherWallIsNotPenetratedFurtherThanAFlimsyOneAtEqualBudget() throws Exception {
         int thickness = 8;
@@ -244,11 +249,10 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
      * held by the price itself: the base term of the law is material-independent and the price rounds
      * up to at least one. So "almost no material" lands at "almost free", never at "free" — which is
      * what stops a body walking an arbitrarily long run of decoration for nothing.</p>
-     *
-     * <p>red-witnessed: with {@code StructureDamageEngine#occupancyOf} at {@code if (world == null || pos == null)}'s {@code occupancyOf} answering 1.0
-     * for every block, this fails with "a carpet costs what a solid block of the same wool costs
-     * (carpet=76 block=76)". The never-free verdict was not separately witnessed. 2026-09-30.</p>
      */
+    @LegacyWitness(prose = "with {@code StructureDamageEngine#occupancyOf} at {@code if (world == null || pos == null)}'s {@code occupancyOf} answering 1.0"
+            + " for every block, this fails with \"a carpet costs what a solid block of the same wool costs"
+            + " (carpet=76 block=76)\". The never-free verdict was not separately witnessed. 2026-09-30.")
     @Test
     public void aBlockIsPricedByHowMuchOfItsVoxelItFillsAndNeverAtNothing() throws Exception {
         int blockX = 1200, blockZ = 1300;
@@ -271,19 +275,19 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
 
     /** The unified stage reader at a wall's first block: stage, max stage, and what a stage costs there. */
     private String stage(int x, int z) throws Exception {
-        return exec("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z);
+        return read("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z).raw();
     }
 
     private String impact(double x, double z, double dx, double dy, double dz, int budget, String kind,
                           long impactId) throws Exception {
-        return exec("stellurgytest damage impact " + DIM + " " + x + " " + (Y + 0.5D) + " " + z
-                + " " + dx + " " + dy + " " + dz + " " + budget + " " + kind + " " + impactId);
+        return act("stellurgytest damage impact " + DIM + " " + x + " " + (Y + 0.5D) + " " + z
+                + " " + dx + " " + dy + " " + dz + " " + budget + " " + kind + " " + impactId).raw();
     }
 
     /** A run of blocks along +X at the test's own row, the wall an impact is fired into. */
     private void buildWall(String block, int x, int z, int thickness) throws Exception {
-        String resp = exec("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " "
-                + (x + thickness - 1) + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " "
+                + (x + thickness - 1) + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to build the " + block + " wall at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).ok());
         assertTrue("the " + block + " wall placed no blocks, so every assertion below would be about "
@@ -293,7 +297,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     private void clearImpactMemory() throws Exception {
         // The dedup memory is server-lifetime state on a shared server; a scenario that does not
         // clear it can be refused for an id another scenario happened to use.
-        exec("stellurgytest damage clear-impacts");
+        arrange("stellurgytest damage clear-impacts").raw();
     }
 
     private static long readLong(String json, String key) {

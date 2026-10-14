@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.util.List;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -68,6 +68,8 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
                 + " tier1=" + tp1 + "): the tier progression does not scale throughput", tp1 > tp0);
     }
 
+    /** Pins INV-SHD-03 (an emitter never receives more than its recharge throughput in a tick). */
+    @Pins("INV-SHD-03")
     @Test
     public void regenerationIsThroughputCapped() throws Exception {
         // Generator + accumulator build a bulk reserve, then an emitter attaches to the accumulator (not
@@ -96,7 +98,7 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
         place("affs:field_generator", ax, ez);
         // Ensure the coil has ample free space (drain a little via self-drain, no refill needed), so the
         // throughput cap — not the coil being nearly full — is what bounds the demand.
-        exec("stellurgytest tile force-tick " + DIM + " " + ax + " " + Y + " " + ez + " 3");
+        act("stellurgytest tile force-tick " + DIM + " " + ax + " " + Y + " " + ez + " 3").raw();
 
         ShieldTile emitter = read(ax, ez);
         long throughput = emitter.rechargeThroughput();
@@ -140,7 +142,7 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
 
         // Starve B: advance ITS emitter (self-drain only, no solve → no refill) far enough to empty a full
         // coil. A is untouched (no solve drains it), so A holds its charge.
-        exec("stellurgytest tile force-tick " + DIM + " " + bEx + " " + Y + " " + z + " 90");
+        act("stellurgytest tile force-tick " + DIM + " " + bEx + " " + Y + " " + z + " 90").raw();
 
         ShieldTile starved = read(bEx, z);
         ShieldTile held = read(aEx, z);
@@ -181,27 +183,27 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
     // helpers -----------------------------------------------------------------
 
     private void chargeIteration(int gx, int gz) throws Exception {
-        exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-        exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-        exec("stellurgytest shield tick " + DIM);
+        arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+        act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+        act("stellurgytest shield tick " + DIM);
     }
 
     private ShieldTile read(int x, int z) throws Exception {
-        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+        return ShieldTile.at(c -> read(c).raw(), DIM, x, Y, z);
     }
 
     private String zone(int x, int z) throws Exception {
-        return exec("stellurgytest shield zone " + DIM + " " + x + " " + Y + " " + z);
+        return read("stellurgytest shield zone " + DIM + " " + x + " " + Y + " " + z).raw();
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }
 
     private void placeMeta(String block, int x, int z, int meta) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block + " " + meta);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block + " " + meta).raw();
         assertTrue("failed to place " + block + " (meta " + meta + ") at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

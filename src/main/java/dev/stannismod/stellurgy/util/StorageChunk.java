@@ -5,6 +5,26 @@
 
 package dev.stannismod.stellurgy.util;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.api.capability.CapabilityWear;
+import dev.stannismod.stellurgy.api.capability.IPartWear;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.stations.IStorageChunk;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.block.*;
+import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
+import dev.stannismod.stellurgy.damage.DamageLayer;
+import dev.stannismod.stellurgy.item.ItemPackedStructure;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
+import dev.stannismod.stellurgy.tile.TileBrokenPart;
+import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
+import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
+import dev.stannismod.stellurgy.world.util.WorldDummy;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -32,32 +52,10 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.util.Constants.NBT;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.items.CapabilityItemHandler;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.*;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.stations.IStorageChunk;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.block.*;
-import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
-import dev.stannismod.stellurgy.damage.DamageLayer;
-import dev.stannismod.stellurgy.item.ItemPackedStructure;
-import dev.stannismod.stellurgy.api.capability.CapabilityWear;
-import dev.stannismod.stellurgy.api.capability.IPartWear;
-import dev.stannismod.stellurgy.tile.TileBrokenPart;
-import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
-import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
-import dev.stannismod.stellurgy.world.util.WorldDummy;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
-import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
-import dev.stannismod.stellurgy.api.*;
-import dev.stannismod.stellurgy.block.*;
 
 public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBreakable {
 

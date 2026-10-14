@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.atmosphere.hazard;
 
-import java.util.Collections;
-import java.util.function.Supplier;
-
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
+import dev.stannismod.stellurgy.atmosphere.AirState;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.DamageSource;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
-import dev.stannismod.stellurgy.atmosphere.AirState;
+
+import java.util.Collections;
+import java.util.function.Supplier;
 
 /**
  * Poisoning: a DOSE the body carries, not damage on a clock.

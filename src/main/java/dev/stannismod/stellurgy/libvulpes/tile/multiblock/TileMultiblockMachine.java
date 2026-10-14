@@ -1,5 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.tile.multiblock;
 
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.util.IFluidHandlerInternal;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
@@ -10,18 +16,11 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
-import dev.stannismod.stellurgy.libvulpes.util.IFluidHandlerInternal;
-import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import java.util.LinkedList;
 import java.util.List;

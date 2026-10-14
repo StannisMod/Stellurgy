@@ -1,18 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.universe.*;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.Cosmology;
-import dev.stannismod.stellurgy.universe.Galaxy;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.LightYearVector;
-import dev.stannismod.stellurgy.universe.UniverseLawsV0;
-import dev.stannismod.stellurgy.universe.UniverseScale;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for one galaxy as a shape: what it contains, how its density falls off, and how it

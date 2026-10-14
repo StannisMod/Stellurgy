@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.atmosphere;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion;
 import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
 import dev.stannismod.stellurgy.atmosphere.hazard.Poisoning;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * What the client is TOLD about the air around a player: enough to draw, and nothing to decide with.

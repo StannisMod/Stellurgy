@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.affs.network;
 
-import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.affs.client.ClientFieldTouchEffectCache;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;

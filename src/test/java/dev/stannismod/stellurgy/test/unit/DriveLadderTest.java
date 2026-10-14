@@ -1,21 +1,21 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.hyperdrive.DriveTier;
+import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
+import dev.stannismod.stellurgy.space.CellFrames;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
+import dev.stannismod.stellurgy.universe.PlanetarySystem;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
-import dev.stannismod.stellurgy.hyperdrive.DriveTier;
-import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
-import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
-import dev.stannismod.stellurgy.space.CellFrames;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -52,6 +52,8 @@ public class DriveLadderTest {
 
     // ── the ladder ────────────────────────────────────────────────────────────
 
+    /** Pins HYPER-5 (a generation buys efficiency and size buys power). */
+    @Pins("HYPER-5")
     @Test
     public void aFullBuildOfEachGenerationCrossesITSOWNBandInTheSameTime() {
         // THE defining property, and the reason a generation's efficiency is derived rather than
@@ -96,6 +98,8 @@ public class DriveLadderTest {
                 boughtByTier > boughtBySize);
     }
 
+    /** Pins HYPER-6 (a route's total energy does not read drive power). */
+    @Pins("HYPER-6")
     @Test
     public void aRoutesENERGYdoesNotDependOnHowBigTheDriveIs() {
         // The property that makes "size buys power, the tier buys efficiency" literal: ticks go as

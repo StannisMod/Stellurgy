@@ -1,20 +1,14 @@
 package dev.stannismod.stellurgy.atmosphere.hazard;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
+import dev.stannismod.stellurgy.network.PacketOxygenState;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
-import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.network.PacketOxygenState;
+
+import java.util.*;
 
 /**
  * Everything one atmosphere is doing to the people in it, as a set of rows.

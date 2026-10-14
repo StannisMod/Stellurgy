@@ -1,17 +1,5 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.entity.Entity;
-import net.minecraftforge.client.event.RenderGameOverlayEvent;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.client.FreeFlightHudState;
 import dev.stannismod.stellurgy.client.KeyBindings;
@@ -19,6 +7,16 @@ import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.test.trace.FlightCameraState;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
+import net.minecraft.client.Minecraft;
+import net.minecraft.entity.Entity;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.List;
 
 /**
  * What the Free Flight pilot's own view is doing, per rendered frame.

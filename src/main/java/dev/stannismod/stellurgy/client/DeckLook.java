@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * The local crew member's look, held in the DECK frame while his movement is resolved aboard a

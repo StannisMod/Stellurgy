@@ -5,6 +5,9 @@
   "plugin": "dev.stannismod.stellurgy.test.trace.StellurgyTestMixinPlugin",
   "compatibilityLevel": "JAVA_8",
   "target": "@env(DEFAULT)",
+  "injectors": {
+    "defaultRequire": 1
+  },
   "mixins": [
     "MixinChunkLoadCount",
     "MixinWorldEntityRemoval",
@@ -48,6 +51,7 @@
     "MixinQueryableShipDataEvents",
     "MixinTileAdvancedFlightComputerEvents",
     "MixinFlightComputerPhysicsStepWindow",
+    "MixinWorldPhysicsColliderContacts",
     "MixinPhysicsObjectEvents",
     "MixinPhysicsObjectTeleportAdoption",
     "MixinSpaceEventHandlerEvents",
@@ -89,6 +93,8 @@
     "MixinBasicTeleporterEvents",
     "MixinEntityRocketEvents",
     "MixinEntityRocketLaunchGate",
+    "MixinRocketBirthEvents",
+    "MixinShipBackgroundLoadEvents",
     "MixinItemAtmosphereAnalzerEvents",
     "MixinAtmosphereNeedsSuitEvents",
     "MixinPoisoningEvents",

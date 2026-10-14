@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import javax.annotation.Nullable;
-
-import org.joml.Matrix3d;
-import org.joml.Vector3d;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.joml.Matrix3d;
+import org.joml.Vector3d;
 import org.valkyrienskies.mod.common.ships.physics_data.ShipInertiaData;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+
+import javax.annotation.Nullable;
 
 /**
  * The one place that writes a mass frame into the physics engine's own record, and the only place in

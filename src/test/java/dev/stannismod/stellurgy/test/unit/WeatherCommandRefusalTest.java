@@ -1,7 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.command.sub.redirect.WeatherCommand;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -23,17 +24,23 @@ import static org.junit.Assert.assertNull;
 public class WeatherCommandRefusalTest {
 
     // ── rain ──────────────────────────────────────────────────────────────
+    /** Pins INV-CMD-03 (weatherRefusalKey is a pure function of action and markers and atmosphere). */
+    @Pins("INV-CMD-03")
     @Test
     public void rainAllowedWhenDynamicMarkerAndAtmosphereOk() {
         assertNull(WeatherCommand.weatherRefusalKey("rain", 0, 0, true));
     }
 
+    /** Pins INV-CMD-03 (weatherRefusalKey is a pure function of action and markers and atmosphere). */
+    @Pins("INV-CMD-03")
     @Test
     public void rainRefusedByNeverMarker() {
         assertEquals("commands.weather.cannot_rain",
                 WeatherCommand.weatherRefusalKey("rain", -1, 0, true));
     }
 
+    /** Pins INV-CMD-03 (weatherRefusalKey is a pure function of action and markers and atmosphere). */
+    @Pins("INV-CMD-03")
     @Test
     public void rainRefusedByThinAtmosphere() {
         assertEquals("commands.weather.cannot_rain_atmosphere",
@@ -80,6 +87,8 @@ public class WeatherCommandRefusalTest {
         assertNull(WeatherCommand.weatherRefusalKey("clear", -1, -1, false));
     }
 
+    /** Pins INV-CMD-03 (weatherRefusalKey is a pure function of action and markers and atmosphere). */
+    @Pins("INV-CMD-03")
     @Test
     public void clearRefusedByAlwaysRainMarker() {
         assertEquals("commands.weather.always_not_clear",

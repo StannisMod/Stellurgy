@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.client.render.entity;
 
+import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.entity.EntityUIPlanet;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -11,10 +15,6 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.entity.EntityUIPlanet;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.

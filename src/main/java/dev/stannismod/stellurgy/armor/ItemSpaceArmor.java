@@ -1,6 +1,16 @@
 package dev.stannismod.stellurgy.armor;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
+import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
+import dev.stannismod.stellurgy.client.render.armor.RenderJetPack;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 import net.minecraft.client.model.ModelBiped;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.entity.Entity;
@@ -19,17 +29,6 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
-import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
-import dev.stannismod.stellurgy.client.render.armor.RenderJetPack;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
-import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
-import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
-import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
-import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

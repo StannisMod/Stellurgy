@@ -1,19 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
 import org.junit.Test;
-
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
 
 /**
  * E2E: can a restored in-flight tier-2 jump rebuild its ship by PASTING a block snapshot into the target
@@ -48,18 +39,20 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
 
         // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        buildMark = events.mark();
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
+        builtDurable = setup.requireDurableId();
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
-        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                originDim, setup.requireDurableId(), USABLE_TICKS));
 
         // Depart into hyperspace. We deliberately do NOT tick the transit yet: it stays parked in hyperspace
         // while we re-cut its snapshot (the save-point cut is of a PARKED ship).
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
-                + " " + HYPERSPACE_JUMP_SPEED);
+        String begin = act("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
+                + " " + HYPERSPACE_JUMP_SPEED).raw();
         assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
 
         // Re-cut the parked ship's block snapshot, ONCE.
@@ -77,18 +70,18 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // (measured across this tier at one fork and at six). A retry around a synchronous command
         // turns "it failed" into "it failed several times", which is the same verdict later and with
         // less to say about why.
-        String lastRefresh = exec("stellurgytest space transit-refresh");
+        String lastRefresh = act("stellurgytest space transit-refresh").raw();
         assertTrue("the parked hyperspace ship was never re-cut into a persisted snapshot; last="
                 + lastRefresh, extractInt(lastRefresh, "refreshed") >= 1);
 
-        String lastExport = exec("stellurgytest space transit-export");
+        String lastExport = read("stellurgytest space transit-export").raw();
         assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "
                 + "paste: " + lastExport, Reply.of(lastExport).bool("hasSnapshot"));
 
         // Simulate a restart in-process: rebuild the transit from the exported record alone (the live
         // manager, and its parked hyperspace ship, are thrown away). Note: this reuses the in-memory record;
         // the on-disk NBT round-trip is unit-pinned separately (ShipLedgerDataTest + TransitRecordTest).
-        String restore = exec("stellurgytest space transit-restore");
+        String restore = arrange("stellurgytest space transit-restore").raw();
         assertTrue("restore did not recreate the in-flight transit: " + restore,
                 (Reply.of(restore).integer("inTransit") == 1));
 
@@ -97,7 +90,7 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // so the arrival production announces IS the proof that path ran.
         String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the restored jump never completed; the durable record now reads "
-                        + exec("stellurgytest space transit-export"),
+                        + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
@@ -105,38 +98,35 @@ public class VSShipTransitPersistTest extends AbstractSharedServerTest {
         // The snapshot-restored ship must load + be VS-managed in the TARGET cell. Restored arrivals paste in
         // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
         // ONLY through the persisted snapshot — the live ship was discarded.
-        assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
-                + "); countAll=" + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
-        // Named rather than approached: the cell's ship count now carries the ids it counted, so
-        // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
-        // this replaced would answer in the same shape if the cell held two.
-        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        // Named rather than approached: THIS craft, by the durable name the restored jump carried,
+        // linked on its own announcement that it is usable in the target cell.
+        String arrivedId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, targetDim,
+                setup.requireDurableId(), USABLE_TICKS);
         assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly"
                 + " failed); id=" + arrivedId,
-                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
+                ShipInfo.loadedIn(c -> read(c).raw(), targetDim, arrivedId));
     }
 
+    /** Server ticks for the craft to become usable where it was built or has arrived. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     // --- helpers (mirror VSShipTransitTest) ------------------------------------------------------
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    /**
-     * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
-     *
-     * <p>On the SERVER's clock, not {@code dim}'s: the world asked about is the one that may not have
-     * started ticking, and budgeting against it would measure the wait with what it waits for.</p>
-     */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static int extractInt(String json, String key) {
         return Reply.of(json).integer(key);

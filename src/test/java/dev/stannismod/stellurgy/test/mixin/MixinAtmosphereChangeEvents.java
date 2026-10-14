@@ -1,19 +1,17 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * The moment production decides a player's atmosphere has CHANGED: {@code player_atmosphere_changed}.

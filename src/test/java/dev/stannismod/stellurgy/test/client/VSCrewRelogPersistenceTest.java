@@ -1,18 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
-
-import dev.stannismod.stellurgy.test.DeckCapture;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -94,6 +88,20 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
     // position. Measured - a ship built at world 6720 reports its crew at B=5120000.000, 51200.000 in
     // exactly the same range, because that is simply where Valkyrien Skies parks a subspace. There is
     // no coordinate-magnitude variable to vary.
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(30);",
+            why = "an absence; `resolved=` in the message is the window's measured width. Overshoot only lengthens"
+                    + " a control that must stay at zero — the strict direction.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ROLL_WINDOW_TICKS);",
+            why = "not a poll. The header used to exit on `upY > -0.9`, which is the arrangement gate below — so"
+                    + " its green said \"some sample was inverted\" and could not be disproved. An attitude"
+                    + " converging under the hold IS a physical value, and the hold never decides it has"
+                    + " arrived, so there is no link to await; but a loop that re-reads until the value is"
+                    + " acceptable is a poll whatever the value is made of. Give the roll its ticks, then read."
+                    + " The window is the roll's own time rather than a budget: the hold slews at about 2"
+                    + " rad/s, so half a turn is ~31 ticks, and an attitude this far past the reference reseed"
+                    + " is ADOPTED and then HELD — a window longer than the slew cannot walk back out of the"
+                    + " state. Overshoot adds held-attitude ticks to a window whose pins are zeros and maxima —"
+                    + " the strict direction.")
     private void requireHeIsHeldThroughARoll(FixtureSite site, String where) throws Exception {
         // The caller asks the allocator for this site; it used to pass two coordinates it had chosen,
         // and the Y was a bare `final int by = 64;` until 2026-09-14 — a staging decision with no
@@ -112,7 +120,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // on 2026-09-15, in the tick-burst leg. `awaitCaptureHeldBy` states the whole chain.
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
                 + " after being put on it - nothing below is about a deck capture until there is"
@@ -136,8 +144,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // -1 - -1 == 0 and every zero-release pin in this class went green on it, saying nothing.
         long restReleaseMark = clientEvents().mark();
         long restMark = lastClientTick();
-        // WINDOW: an absence; `resolved=` in the message is the window's measured width. Overshoot
-        // only lengthens a control that must stay at zero — the strict direction.
         advanceServerAndClient(30);
         String restHistory = clientTickHistory();
         String restReleases = clientReleases(restReleaseMark, "the still-ship control window");
@@ -149,8 +155,8 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         double h = Math.toRadians(170.0) / 2.0;
         double upYBefore = upYOf(shipInfo());
         scenario().requireArranged("the attitude hold must accept the roll command",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         long rollMark = lastClientTick();
         long rollReleaseMark = clientEvents().mark();
         // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
@@ -158,17 +164,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         long poseTraceMark = clientEvents().mark();
         ClientWindow poseTrace = ClientWindow.open(bot(),
                 "dev.stannismod.stellurgy.test.trace.DeckPoseTraceWindow", 200);
-        // WINDOW: not a poll. The header used to exit on `upY > -0.9`, which is the arrangement
-        // gate below — so its green said "some sample was inverted" and could not be disproved. An
-        // attitude converging under the hold IS a physical value, and the hold never decides it has
-        // arrived, so there is no link to await; but a loop that re-reads until the value is
-        // acceptable is a poll whatever the value is made of. Give the roll its ticks, then read.
-        // 
-        // The window is the roll's own time rather than a budget: the hold slews at about 2 rad/s,
-        // so half a turn is ~31 ticks, and an attitude this far past the reference reseed is ADOPTED
-        // and then HELD — a window longer than the slew cannot walk back out of the state. Overshoot
-        // adds held-attitude ticks to a window whose pins are zeros and maxima — the strict
-        // direction.
         advanceServerAndClient(ROLL_WINDOW_TICKS);
         // The shared reading, which uses the full expression 1 - 2(qx^2 + qz^2). The single-axis
         // shortcut this leg carried answers a confident 1.0 for a ship that rolled about a different
@@ -381,6 +376,9 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             + " world and this method is the LAST one, so nothing downstream inherits its world;"
             + " that is not true of its siblings — this very red was uncovered by ignoring the"
             + " method that ran immediately before it.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ROLL_WINDOW_TICKS);",
+            why = "overshoot is lenient, and the gate it feeds is the arrangement for the relog, not the relog's"
+                    + " verdict.")
     public void aPlayerWhoRelogsOnAnInvertedDeckStaysAboardIt() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -391,7 +389,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         double[] ship = buildShip(site);
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck while the"
                 + " ship is still upright - the capture is what carries his deck spot through the"
@@ -407,8 +405,8 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
 
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+                Reply.of(arrange("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").raw()).bool("commanded"));
         // An attitude CONVERGING under the hold is a physical value and not a link — production
         // never decides it has arrived — so this is a WINDOW and one read. It was a poll whose exit
         // condition is the gate below, which is the one shape question 2 does not license however
@@ -426,8 +424,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // opposite fixes: the first is a window too short, the second is a command that was accepted
         // and did nothing, which no wait can repair.
         double upYBefore = upYOf(shipInfo());
-        // WINDOW: overshoot is lenient, and the gate it feeds is the arrangement for the relog, not
-        // the relog's verdict.
         advanceServerAndClient(ROLL_WINDOW_TICKS);
         double upY = upYOf(shipInfo());
         assertTrue("the ship must be (near-)inverted for the relog to be able to drop the player"
@@ -435,7 +431,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
                 + " ticks). If those two are equal the attitude hold never started and the window is"
                 + " innocent; if they differ it was still slewing and the window is short.",
                 upY < INVERTED_UP_Y);
-        DeckCapture capBefore = DeckCapture.read(this::exec);
+        DeckCapture capBefore = DeckCapture.read(c -> read(c).raw());
         assertTrue("the player must still be captured on the inverted deck before the relog: "
                 + capBefore.raw(), capBefore.alreadyTracked);
         // The BEFORE half of "his capture came back on his ship" — pinned here so the after half has
@@ -470,7 +466,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         String modes = awaitCommittedAboardOnHisShip(events, relogMark,
                 "after a relog on an inverted deck the player must be captured ABOARD again, not"
                         + " held with world semantics wherever the inverted hull stopped him");
-        DeckCapture capNow = DeckCapture.read(this::exec);
+        DeckCapture capNow = DeckCapture.read(c -> read(c).raw());
         double postY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[relog] preY=" + preY + " postY=" + postY + " dY=" + (postY - preY)
                 + " modes=" + modes);
@@ -537,6 +533,14 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             + " of the two outcomes it already produces. RE-ENABLE when the mode a login leaves"
             + " behind is settled by the time the restore is complete — the acceptance is this"
             + " method green on two consecutive full tiers.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(30);",
+            why = "the creep across it is what the post-relog pin quotes; staying put is not an event.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(12);",
+            why = "W held — an input, not a wait.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int i = 1; i < trace.length; i++) {",
+            why = "staying put is the absence of motion, not a thing production commits, so no record could stand"
+                    + " in for the reads; the samples between them are the trace a failure prints. What it"
+                    + " cannot see: motion that went and came back inside one 5-tick step.")
     public void aCrewMemberWhoLogsOutWalkingComesBackStandingStillOnHisDeckSpot() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -544,7 +548,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         double[] ship = buildShip(site);
         Events events = serverEvents();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        arrange("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck before he"
                 + " walks on it - the walk he logs out carrying is only meaningful under a capture",
@@ -563,7 +567,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // documented to feed its crew a constant no-input drift. Without this baseline, any creep
         // measured after the relog would be blamed on the restore by default.
         double[] idle0 = deckPoint();
-        // WINDOW: the creep across it is what the post-relog pin quotes; staying put is not an event.
         advanceServerAndClient(30);
         double[] idle1 = deckPoint();
         double idleCreep = alongDeck(idle0, idle1);
@@ -572,7 +575,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
 
         double[] beforeWalk = clientPos();
         bot().holdKey(Keyboard.KEY_W);
-        // STIMULUS: W held — an input, not a wait.
         bot().waitWorldTicks(12);
         double[] walking = clientPos();
         bot().releaseKey(Keyboard.KEY_W);
@@ -639,9 +641,6 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         String[] who = new String[11];
         trace[0] = deckPoint();
         who[0] = mover();
-        // WINDOW: staying put is the absence of motion, not a thing production commits, so no
-        // record could stand in for the reads; the samples between them are the trace a failure
-        // prints. What it cannot see: motion that went and came back inside one 5-tick step.
         for (int i = 1; i < trace.length; i++) {
             advanceServerAndClient(5);
             trace[i] = deckPoint();
@@ -748,7 +747,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
      * derived from the body's own coordinates every time it is asked.</p>
      */
     private double[] deckPoint() throws Exception {
-        DeckCapture cap = DeckCapture.read(this::exec);
+        DeckCapture cap = DeckCapture.read(c -> read(c).raw());
         assertTrue("the deck capture must be live to report a ship-frame point: " + cap.raw(),
                 cap.alreadyTracked);
         // In WHOSE ship frame. The three numbers below are subspace coordinates of the ANCHOR ship,
@@ -973,7 +972,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
             Events.assertInstrumentRan(log.since(mark, "deck_mode_committed"), "deck_mode_events",
                     "a capture MODE was committed at all after the relog");
             throw new AssertionError(never.getMessage() + " | server verdict "
-                    + exec("stellurgytest vs deck-capture"));
+                    + read("stellurgytest vs deck-capture").raw());
         }
     }
 
@@ -1018,7 +1017,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -1029,16 +1028,17 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         // two of its samples is indistinguishable from one that never happened.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // The IDENTITY, off that same record: this scenario built the ship, so it is TOLD which
         // ship that is, and nothing below re-derives it from a position.
         scenarioShipId = awaitShipSpawned(events, spawnMark, "a with-pilot-seat build must become a"
                 + " ship in the physics mod's own registry - not a rocket, and not nothing");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so the readiness link below"
                         + " is waiting on something only an arrived client can cause");
@@ -1064,7 +1064,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         return where;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
@@ -1074,7 +1074,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         //
         // HEIGHT 24 is the ENVELOPE: hull, deck, a body standing and walking on it, and the room the
         // hull rolls through.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 24,
                 "the hull, the deck the crew member is held on, and the air he walks and rolls through");
     }
 

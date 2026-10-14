@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.damage.IContactResponder;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.PropertyDirection;
@@ -11,7 +12,6 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.damage.IContactResponder;
 
 /**
  * A thin skin that clings to whichever face it was put on — what "armour is a COATING" has to mean in

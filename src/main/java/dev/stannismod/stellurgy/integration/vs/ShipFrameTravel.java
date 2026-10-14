@@ -1,8 +1,6 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.List;
-import java.util.Map;
-
+import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -13,7 +11,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Resolves one tick of an aboard living entity's movement in its SHIP's frame instead of the world's.

@@ -1,21 +1,16 @@
 package dev.stannismod.stellurgy.navigation;
 
-import java.util.UUID;
-
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
-import dev.stannismod.stellurgy.hyperdrive.JumpSpeed;
-import dev.stannismod.stellurgy.hyperdrive.JumpWindow;
-import dev.stannismod.stellurgy.hyperdrive.ShipDrive;
-import dev.stannismod.stellurgy.hyperdrive.ShipDriveStats;
-import dev.stannismod.stellurgy.hyperdrive.ShipMassProvider;
+import dev.stannismod.stellurgy.hyperdrive.*;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipLedger;
 import dev.stannismod.stellurgy.space.ShipTransitManager;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.tile.TileNavigationComputer;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+
+import java.util.UUID;
 
 /**
  * What one real ship can answer about its ability to jump — the production side of
@@ -35,11 +30,26 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     private final World world;
     private final BlockPos flightComputerPos;
     private final UUID shipId;
+    /** Whether the drive this resolves adopts an unlinked machine in the claim — see {@link ShipDrive}. */
+    private final boolean observing;
 
     public ShipNavigation(World world, BlockPos flightComputerPos, UUID shipId) {
+        this(world, flightComputerPos, shipId, false);
+    }
+
+    private ShipNavigation(World world, BlockPos flightComputerPos, UUID shipId, boolean observing) {
         this.world = world;
         this.flightComputerPos = flightComputerPos;
         this.shipId = shipId;
+        this.observing = observing;
+    }
+
+    /**
+     * The ship's navigation for an OBSERVER: its drive is {@link ShipDrive#observedFrom}, so every answer
+     * is about the machines the ship already holds and asking writes nothing.
+     */
+    public static ShipNavigation observedFrom(World world, BlockPos flightComputerPos, UUID shipId) {
+        return new ShipNavigation(world, flightComputerPos, shipId, true);
     }
 
     @Override
@@ -135,7 +145,7 @@ public final class ShipNavigation implements JumpGate.ShipContext {
 
     /** The ship's drive, resolved fresh — a drive is measured when asked, never remembered. */
     public ShipDrive drive() {
-        return new ShipDrive(world, flightComputerPos);
+        return observing ? ShipDrive.observedFrom(world, flightComputerPos) : new ShipDrive(world, flightComputerPos);
     }
 
     /**

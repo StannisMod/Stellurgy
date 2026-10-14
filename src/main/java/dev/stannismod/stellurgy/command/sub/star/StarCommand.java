@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.command.sub.star;
 
+import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraftforge.server.command.CommandTreeBase;
 import net.minecraftforge.server.command.CommandTreeHelp;
-import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 
 import javax.annotation.Nullable;
 

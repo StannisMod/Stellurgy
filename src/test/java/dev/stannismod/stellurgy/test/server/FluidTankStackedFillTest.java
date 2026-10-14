@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.FluidStored;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.FluidStored;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -47,7 +47,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         int cx = blockX >> 4;
         int cz = blockZ >> 4;
         try {
-            String resp = join(client().execute(
+            String resp = join(client().arrange(
                     "stellurgytest chunk warmup 0 " + (cx - 1) + " " + (cz - 1) + " "
                             + (cx + 1) + " " + (cz + 1)));
             assertTrue("chunk warmup failed: " + resp,
@@ -59,7 +59,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
 
     /** Place a TileFluidTank at the given coords. */
     private void placeTank(int x, int y, int z) throws Exception {
-        String resp = join(client().execute(
+        String resp = join(client().arrange(
                 "stellurgytest place 0 " + x + " " + y + " " + z
                         + " stellurgy:liquidTank"));
         assertTrue("liquidTank place failed at (" + x + "," + y + "," + z
@@ -72,7 +72,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
      *  {@code blockLiquidHatchCapacityMultiplier}) so the test reads
      *  it dynamically rather than pinning a magic number. */
     private int storedCapacity(int x, int y, int z) throws Exception {
-        String resp = join(client().execute(
+        String resp = join(client().read(
                 "stellurgytest fluid stored 0 " + x + " " + y + " " + z));
         return FluidStored.of(resp).capacity(0);
     }
@@ -80,7 +80,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
     /** Return the {@code amount} field from the {@code fluid stored}
      *  response, or 0 if the tank is empty. */
     private int storedAmount(int x, int y, int z) throws Exception {
-        String resp = join(client().execute(
+        String resp = join(client().read(
                 "stellurgytest fluid stored 0 " + x + " " + y + " " + z));
         assertTrue("fluid stored must succeed: " + resp,
                 Reply.of(resp).bool("hasFluid"));
@@ -88,6 +88,8 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         return FluidStored.of(resp).amount(0);
     }
 
+    /** Pins INV-INFRA-25 (stacked pressure tanks fill from the bottom and spill into the top). */
+    @Pins("INV-INFRA-25")
     @Test
     public void smallInjectionFillsBottomTankAndLeavesTopEmpty() throws Exception {
         // A STACK, and the whole subject is that the top sits one block above the bottom. Both Ys
@@ -106,7 +108,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         int capacity = storedCapacity(baseX, bottomY, baseZ);
         // Inject a small amount well under one tank's capacity.
         int injectAmt = Math.max(1, capacity / 4);
-        String inject = join(client().execute(
+        String inject = join(client().arrange(
                 "stellurgytest fluid inject 0 " + baseX + " " + topY + " " + baseZ
                         + " oxygen " + injectAmt));
         assertTrue("inject must succeed: " + inject,
@@ -127,6 +129,8 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                 0, topAmt);
     }
 
+    /** Pins INV-INFRA-25 (stacked pressure tanks fill from the bottom and spill into the top). */
+    @Pins("INV-INFRA-25")
     @Test
     public void overflowingInjectionFillsBottomThenSpillsIntoTop() throws Exception {
         // Different column from the first test (position isolation).
@@ -145,7 +149,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         int overflowOver = Math.max(1, capacity / 4);
         int injectAmt = capacity + overflowOver;
 
-        String inject = join(client().execute(
+        String inject = join(client().arrange(
                 "stellurgytest fluid inject 0 " + baseX + " " + topY + " " + baseZ
                         + " oxygen " + injectAmt));
         assertTrue("inject must succeed: " + inject,

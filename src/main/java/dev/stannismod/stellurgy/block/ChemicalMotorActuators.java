@@ -1,7 +1,10 @@
 package dev.stannismod.stellurgy.block;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.api.capability.CapabilityWear;
+import dev.stannismod.stellurgy.api.capability.IPartWear;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.ship.control.Actuator;
+import dev.stannismod.stellurgy.ship.control.ChemicalMotor;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -9,11 +12,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.World;
 
-import dev.stannismod.stellurgy.api.capability.CapabilityWear;
-import dev.stannismod.stellurgy.api.capability.IPartWear;
-import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
-import dev.stannismod.stellurgy.ship.control.Actuator;
-import dev.stannismod.stellurgy.ship.control.ChemicalMotor;
+import java.util.List;
 
 /**
  * What the world tells a chemical motor's {@link ChemicalMotor}: where its nozzle points, and whether

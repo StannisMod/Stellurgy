@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.ship.control;
 
-import java.util.List;
-
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+
+import java.util.List;
 
 /**
  * One ship's derived flight state at one revision: what it can do as built, and what it can do with

@@ -2,13 +2,13 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.*;
 
 /**
  * Going dark: what shutting every sink does to a ship, and what it cannot do.
@@ -60,31 +60,32 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * collapsed to zero, going dark would be a cloak. And the range must move with the power, or the
      * detection term is not the one the clause names.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SILENCED — {@code ThermalBody#setSinksClosed} at {@code changed++;}
-     * stopping after the first cell it shuts: "silencing failed: … \"changed\":1,\"silent\":false".
-     * NOT WORKING SURFACE — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the shut flag: "a shut cell is not
-     * working surface: … expected:&lt;0&gt; but was:&lt;3&gt;". MOST OF IT — {@code ThermalBody#signature} at {@code signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),}
-     * counting every radiator, shut or not, at the loop's temperature: "shutting the sinks must take
-     * most of what the ship radiates away … lit=6504393 silent=6557149". A FLOOR — {@code ThermalBody#signature} at {@code signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),} leaving a hundredth of a cell per shut radiator at the loop's temperature:
-     * "with every sink shut, what a ship shows may not depend on how much heat it is carrying … hot=919598
-     * cold=863715". RANGE FALLS — {@code ThermalSignature#detectionRangeBlocks} at {@code return sensorRangeAtReference * Math.sqrt(radiatedPower / reference);} answering the sensor's own range for
-     * any power: "and the range must fall with it … lit=2000000 silent=2000000". STILL FOUND — {@code ThermalBody#signature} at {@code ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());} dropping the hull term: "but the hull is still warmer than space, so a silent
-     * ship is found CLOSER and never not at all: … \"radiatedPowerMilli\":0". SHEDS NOTHING — {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, ((IHeatExchanger) node).getExchangeCells());} and {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, exchanger.getExchangeCells());} rejecting through every exchanger, shut or not: "a shut array
-     * may shed nothing: … expected:&lt;0&gt; but was:&lt;5598&gt;". STILL ABOARD — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} losing one unit a tick outside rejection: "so the heat that used to leave is
-     * still on the ship: … expected:&lt;3030000&gt; but was:&lt;3029999&gt;". COMES BACK — {@code TileHeatRadiator#setClosed} at {@code if (this.closed == closed)} refusing to open a shut cell: "a ship that went dark must be able to come
-     * back: … \"rejected\":0 … \"silent\":true".
-     * The three premises at its head are arrangements and are not witnessed.</p>
-     *
-     * <p>red-witnessed: the same run, continued. LOCKABLE — {@code ThermalSignature#plus} at
-     * {@code Math.max(peakKelvin, other.peakKelvin));} taking the added surface's peak instead of the
-     * hotter one, so the shut loop's zero wins over the hull: "and a seeker still has a warm surface to
-     * lock on, the hull's: … \"radianceMilli\":0". NOT SILENT ONCE OPENED —
-     * {@code ThermalBody#isRunningSilent} at {@code if (!radiator.isClosed())} removed, so any body
-     * with radiators reads silent: "an opened array is not running silent: … \"silent\":true".</p>
-     *
      * <p>Not asserted, because it is another verdict read again: how many cells one order changed
      * (three working cells before and none after make it three).</p>
+     * Pins INV-HEAT-29 (With every sink shut, most of what a ship radiates goes with them and what is left is a FLOOR).
+     * Pins HEAT-16 (silence is never invisibility: a shut ship still radiates its hull).
      */
+    @Pins({"INV-HEAT-29", "HEAT-16"})
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. SILENCED — {@code ThermalBody#setSinksClosed} at {@code changed++;}"
+            + " stopping after the first cell it shuts: \"silencing failed: … \\\"changed\\\":1,\\\"silent\\\":false\"."
+            + " NOT WORKING SURFACE — {@code TileHeatRadiator#getExchangeCells} at {@code return !closed && getObstruction() == 0 ? 1 : 0;} ignoring the shut flag: \"a shut cell is not"
+            + " working surface: … expected:&lt;0&gt; but was:&lt;3&gt;\". MOST OF IT — {@code ThermalBody#signature} at {@code signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),}"
+            + " counting every radiator, shut or not, at the loop's temperature: \"shutting the sinks must take"
+            + " most of what the ship radiates away … lit=6504393 silent=6557149\". A FLOOR — {@code ThermalBody#signature} at {@code signature = signature.plus(ThermalSignature.surface(loop.getRadiatingCells(),} leaving a hundredth of a cell per shut radiator at the loop's temperature:"
+            + " \"with every sink shut, what a ship shows may not depend on how much heat it is carrying … hot=919598"
+            + " cold=863715\". RANGE FALLS — {@code ThermalSignature#detectionRangeBlocks} at {@code return sensorRangeAtReference * Math.sqrt(radiatedPower / reference);} answering the sensor's own range for"
+            + " any power: \"and the range must fall with it … lit=2000000 silent=2000000\". STILL FOUND — {@code ThermalBody#signature} at {@code ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());} dropping the hull term: \"but the hull is still warmer than space, so a silent"
+            + " ship is found CLOSER and never not at all: … \\\"radiatedPowerMilli\\\":0\". SHEDS NOTHING — {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, ((IHeatExchanger) node).getExchangeCells());} and {@code HeatNetwork#rejectHeat} at {@code int cells = Math.max(0, exchanger.getExchangeCells());} rejecting through every exchanger, shut or not: \"a shut array"
+            + " may shed nothing: … expected:&lt;0&gt; but was:&lt;5598&gt;\". STILL ABOARD — {@code HeatNetwork#tickThermodynamics} at {@code stored = Math.max(0L, stored - rejected);} losing one unit a tick outside rejection: \"so the heat that used to leave is"
+            + " still on the ship: … expected:&lt;3030000&gt; but was:&lt;3029999&gt;\". COMES BACK — {@code TileHeatRadiator#setClosed} at {@code if (this.closed == closed)} refusing to open a shut cell: \"a ship that went dark must be able to come"
+            + " back: … \\\"rejected\\\":0 … \\\"silent\\\":true\"."
+            + " The three premises at its head are arrangements and are not witnessed.")
+    @LegacyWitness(prose = "the same run, continued. LOCKABLE — {@code ThermalSignature#plus} at"
+            + " {@code Math.max(peakKelvin, other.peakKelvin));} taking the added surface's peak instead of the"
+            + " hotter one, so the shut loop's zero wins over the hull: \"and a seeker still has a warm surface to"
+            + " lock on, the hull's: … \\\"radianceMilli\\\":0\". NOT SILENT ONCE OPENED —"
+            + " {@code ThermalBody#isRunningSilent} at {@code if (!radiator.isClosed())} removed, so any body"
+            + " with radiators reads silent: \"an opened array is not running silent: … \\\"silent\\\":true\".")
     @Test
     public void aShipRunningSilentIsFoundCloserAndIsStillFound() throws Exception {
         buildLoop();
@@ -103,7 +104,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
         assertEquals("premise: every cell must be working while the ship is lit: " + lit,
                 RADIATORS, lit.integer("radiatingCells"));
 
-        Reply shut = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " on");
+        Reply shut = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " on").requireOk();
         assertTrue("silencing failed: " + shut, shut.bool("silent"));
 
         Reply silentCycle = cycle(charge);
@@ -144,7 +145,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
                 charge, silentCycle.longInteger("heatStored"));
 
         // And it is a state a pilot can leave: opening the sinks must restore the ship it was.
-        Reply opened = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " off");
+        Reply opened = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " off").requireOk();
         assertFalse("an opened array is not running silent: " + opened, opened.bool("silent"));
         Reply reopened = cycle(charge);
         assertTrue("a ship that went dark must be able to come back: " + reopened + " | " + opened,
@@ -163,14 +164,16 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * hull, not two. If they were two, each would claim the whole floor and a sensor summing them
      * would see a ship twice as bright as the one that is there.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONE BODY — {@code ThermalBody#loopsOf} at {@code if (shipId == null && (hull == null || hull.isEmpty()))}
-     * never looking past the loop asked about: "two loops in one sealed room are ONE body … expected:&lt;2&gt;
-     * but was:&lt;1&gt;". HOTTER SKIN — {@code ThermalBody#skinKelvin} at {@code return environmentKelvin + skinFraction() * above;} holding the skin at the environment's
-     * temperature: "a hotter cabin must show a hotter skin … cool=286000 hot=286000". FOUND FURTHER
-     * — {@code ThermalBody#signature} at {@code ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());} dropping the hull term: "so a ship that cooks itself while hiding is
-     * found further away the longer it hides: cool=0 hot=0". The three premises are arrangements and
-     * are not witnessed.</p>
+     * Pins INV-HEAT-30 (A hotter cabin is a hotter skin and a brighter ship, and two loops threading one sealed room are ONE body).
      */
+    @Pins("INV-HEAT-30")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. ONE BODY — {@code ThermalBody#loopsOf} at {@code if (shipId == null && (hull == null || hull.isEmpty()))}"
+            + " never looking past the loop asked about: \"two loops in one sealed room are ONE body … expected:&lt;2&gt;"
+            + " but was:&lt;1&gt;\". HOTTER SKIN — {@code ThermalBody#skinKelvin} at {@code return environmentKelvin + skinFraction() * above;} holding the skin at the environment's"
+            + " temperature: \"a hotter cabin must show a hotter skin … cool=286000 hot=286000\". FOUND FURTHER"
+            + " — {@code ThermalBody#signature} at {@code ThermalSignature signature = ThermalSignature.surface(hullCells(), skinKelvin());} dropping the hull term: \"so a ship that cooks itself while hiding is"
+            + " found further away the longer it hides: cool=0 hot=0\". The three premises are arrangements and"
+            + " are not witnessed.")
     @Test
     public void theHullGlowsWithTheAirItEncloses() throws Exception {
         buildSealedRoomWithTwoLoops();
@@ -227,31 +230,31 @@ public class RunningSilentTest extends AbstractSharedServerTest {
         roomY = site.y + 2;
         roomZ = site.z + 2;
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone").requireOk();
         for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
             arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
-                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
-                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone").requireOk();
 
         place(roomX - 1, roomY + 1, roomZ - 1, "stellurgy:heatPipe", null);
         place(roomX + 1, roomY + 1, roomZ + 1, "stellurgy:heatPipe", null);
 
         place(roomX, roomY, roomZ, "stellurgy:oxygenVent", null);
         arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
-        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ).requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5").requireOk();
     }
 
     /** Put the room's air at a stated temperature, leaving its gases alone. */
     private void setAir(int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
-                + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK);
+                + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK).requireOk();
     }
 
     private Reply signature() throws Exception {
@@ -261,30 +264,30 @@ public class RunningSilentTest extends AbstractSharedServerTest {
     /** The probe answers `isBody:false` with every figure zero where there is no body, so that is
      *  refused here rather than read as a ship that radiates nothing. */
     private Reply signature(int x, int y, int z) throws Exception {
-        Reply resp = arrange("stellurgytest heat signature 0 " + x + " " + y + " " + z);
+        Reply resp = read("stellurgytest heat signature 0 " + x + " " + y + " " + z).requireOk();
         requireArranged("no body at " + x + " " + y + " " + z + ": " + resp, resp.bool("isBody"));
         return resp;
     }
 
     /** Charge the loop and advance one tick in ONE call - see `heat cycle` on why it must be one. */
     private Reply cycle(long charge) throws Exception {
-        Reply cycled = arrange("stellurgytest heat cycle 0 " + xShip + " " + y + " " + z + " " + charge + " 1");
+        Reply cycled = act("stellurgytest heat cycle 0 " + xShip + " " + y + " " + z + " " + charge + " 1").requireOk();
         requireArranged("heat cycle found no loop: " + cycled, cycled.bool("inLoop"));
         return cycled;
     }
 
     private Reply loopInfo() throws Exception {
-        return ask("stellurgytest subnet info heat 0 " + xShip + " " + y + " " + z);
+        return read("stellurgytest subnet info heat 0 " + xShip + " " + y + " " + z);
     }
 
     private void place(int x, int y, int z, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block
-                + (meta == null ? "" : " " + meta));
+                + (meta == null ? "" : " " + meta)).requireOk();
         assertTrue(block + " place failed at " + x + " " + y + " " + z + ": " + resp, resp.bool("placed"));
     }
 
     private void solve(int ticks) throws Exception {
-        Reply solved = arrange("stellurgytest subnet solve heat 0 " + ticks);
+        Reply solved = act("stellurgytest subnet solve heat 0 " + ticks).requireOk();
         assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 }

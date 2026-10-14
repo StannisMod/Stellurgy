@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
@@ -14,7 +15,6 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderTank extends TileEntitySpecialRenderer {
 

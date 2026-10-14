@@ -1,7 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.space.AbsolutePos;
+import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.*;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import net.minecraft.nbt.NBTTagCompound;
-import org.junit.After;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -9,33 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.space.AbsolutePos;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.GalacticAnchor;
-import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
-import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.IUniverseLaws;
-import dev.stannismod.stellurgy.universe.UniverseLawsV0;
-import dev.stannismod.stellurgy.universe.UniverseRegistry;
-import dev.stannismod.stellurgy.universe.UniverseSchema;
-import dev.stannismod.stellurgy.universe.UniverseSchemaMismatchException;
-import dev.stannismod.stellurgy.universe.UniverseSchemas;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the Layer-1 universe registry: the cell-keyed coord&harr;system placement
@@ -127,13 +109,15 @@ public class UniverseRegistryTest {
      * different answer; without that the test would pass against a registry that persisted nothing
      * and simply re-derived the same value.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#durableName} at {@code return recorded.name} no longer returning the
-     * recorded name, this fails with "a recorded name must survive the save and win over a fresh
-     * derivation expected:&lt;…(21,0,9)…&gt; but was:&lt;…(-22,0,5)…&gt;". And the fixture's distance,
-     * measured: with the orbit put back to the literal {@code 120} (12 000 km in today's unit) and
-     * production untouched, it fails with "a fresh registry must derive the CHANGED orbit's name, or
-     * this test proves nothing" — the degenerate fixture the comment in the body describes.</p>
+     * Pins ADDR-2 (a cell name is derived from the layout and a recorded name beats a later derivation).
      */
+    @Pins("ADDR-2")
+    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#durableName} at {@code return recorded.name} no longer returning the"
+            + " recorded name, this fails with \"a recorded name must survive the save and win over a fresh"
+            + " derivation expected:&lt;…(21,0,9)…&gt; but was:&lt;…(-22,0,5)…&gt;\". And the fixture's distance,"
+            + " measured: with the orbit put back to the literal {@code 120} (12 000 km in today's unit) and"
+            + " production untouched, it fails with \"a fresh registry must derive the CHANGED orbit's name, or"
+            + " this test proves nothing\" — the degenerate fixture the comment in the body describes.")
     @Test
     public void cellNamesRoundTripThroughNbtAndBeatALaterDerivation() {
         StellarBody host = star(4321);
@@ -539,13 +523,12 @@ public class UniverseRegistryTest {
      * belong to DIFFERENT systems, so nothing downstream ever compares them: the collision audit is
      * per-system, and attribution answers happily with the wrong anchor. The name has to know which
      * system it was recorded for.
-     *
-     * <p>red-witnessed: 2026-09-30, with BOTH {@code UniverseRegistry#durableName} at {@code if (recorded.starId != starId)} (the owning-star
-     * check) and `:648` (the box check) answering {@code false}, this fails with "a recycled id must
-     * not inherit the deleted body's cell". With `:640` alone inverted it stays GREEN: the two stars
-     * sit in different super-cells, so the stale name is also outside the new star's box and `:648`
-     * re-derives it. This arrangement pins the contract, not the star-id guard on its own.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with BOTH {@code UniverseRegistry#durableName} at {@code if (recorded.starId != starId)} (the owning-star"
+            + " check) and `:648` (the box check) answering {@code false}, this fails with \"a recycled id must"
+            + " not inherit the deleted body's cell\". With `:640` alone inverted it stays GREEN: the two stars"
+            + " sit in different super-cells, so the stale name is also outside the new star's box and `:648`"
+            + " re-derives it. This arrangement pins the contract, not the star-id guard on its own.")
     @Test
     public void aRecycledDimensionIdDoesNotInheritTheOldBodysName() {
         StellarBody sol = star(6001);
@@ -580,10 +563,9 @@ public class UniverseRegistryTest {
 
     /**
      * Deleting a dimension drops its recorded name outright — the direct half of the same defect.
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#forgetName} at {@code if (namesByDim.remove(dimId) == null)} reading the name instead
-     * of removing it, this fails with "...and the name is gone".</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#forgetName} at {@code if (namesByDim.remove(dimId) == null)} reading the name instead"
+            + " of removing it, this fails with \"...and the name is gone\".")
     @Test
     public void forgettingADimensionDropsItsRecordedName() {
         StellarBody sol = star(6003);
@@ -605,9 +587,11 @@ public class UniverseRegistryTest {
      * body stays listed and jumpable and can never be arrived at. Moving a star's anchor does exactly
      * that to every name recorded under the old layout, and nothing said so.
      *
-     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#durableName} at {@code else if (!SystemContent.withinBoxOf(recorded.name, anchor, minSpacingCells))} (the box check) answering
-     * {@code false}, this fails with "a name outside its own system's box may not be served".</p>
+     * Pins ADDR-3 (every body's name lies inside its own system's box).
      */
+    @Pins("ADDR-3")
+    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#durableName} at {@code else if (!SystemContent.withinBoxOf(recorded.name, anchor, minSpacingCells))} (the box check) answering"
+            + " {@code false}, this fails with \"a name outside its own system's box may not be served\".")
     @Test
     public void aRecordedNameThatLeftItsSystemsBoxIsReDerivedRatherThanServed() {
         StellarBody host = star(6004);
@@ -640,12 +624,11 @@ public class UniverseRegistryTest {
 
     /**
      * A name that is still inside its box is served unchanged — the control for the clause above.
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#durableName} at {@code return recorded.name} no longer returning the
-     * recorded name, this fails with "a name that still names a cell of its own system is not
-     * disturbed expected:&lt;…(27,0,8)…&gt; but was:&lt;…(28,0,8)…&gt;" — a re-derivation after the
-     * one-cell move answers a different cell, so the control is sensitive.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#durableName} at {@code return recorded.name} no longer returning the"
+            + " recorded name, this fails with \"a name that still names a cell of its own system is not"
+            + " disturbed expected:&lt;…(27,0,8)…&gt; but was:&lt;…(28,0,8)…&gt;\" — a re-derivation after the"
+            + " one-cell move answers a different cell, so the control is sensitive.")
     @Test
     public void aRecordedNameInsideItsBoxSurvivesASmallAnchorMove() {
         StellarBody host = star(6005);
@@ -672,12 +655,14 @@ public class UniverseRegistryTest {
      * frame moves" would pass against a lookup that returned an arbitrary function of the tick for
      * everything.
      *
-     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#originAt} at {@code if (b.definesFrame())} never taking a body's frame,
-     * this fails with "a cell with a primary in it moves with that primary". And the fixture's
-     * distance, measured: with the orbit put back to the literal {@code 150} (15 000 km in today's
-     * unit) and production untouched, it fails with that same message — the quarter orbit rounds to
-     * nothing, so the frame is compared with itself.</p>
+     * Pins ADDR-6 (the cell of a primary rides its body while a void cell stands still).
      */
+    @Pins("ADDR-6")
+    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#originAt} at {@code if (b.definesFrame())} never taking a body's frame,"
+            + " this fails with \"a cell with a primary in it moves with that primary\". And the fixture's"
+            + " distance, measured: with the orbit put back to the literal {@code 150} (15 000 km in today's"
+            + " unit) and production untouched, it fails with that same message — the quarter orbit rounds to"
+            + " nothing, so the frame is compared with itself.")
     @Test
     public void aBodyCellRidesItsPrimaryWhileAVoidCellStandsStill() {
         StellarBody host = star(6006);
@@ -708,9 +693,11 @@ public class UniverseRegistryTest {
      * standing in a void cell — the system read aggregates POIs of BODY cells only, and answers empty
      * for a cell no anchor attributes.
      *
-     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#skyBodiesAt} at {@code for (SystemBody here : bodiesAt(cell))} iterating nothing instead
-     * of the observer's own cell, this fails with "...and whatever is keyed at your own cell".</p>
+     * Pins CON-C14-14 (the sky shows the whole system unioned with the observer's own cell, and interstellar void is fed nothing).
      */
+    @Pins("CON-C14-14")
+    @LegacyWitness(prose = "2026-09-30, with {@code UniverseRegistry#skyBodiesAt} at {@code for (SystemBody here : bodiesAt(cell))} iterating nothing instead"
+            + " of the observer's own cell, this fails with \"...and whatever is keyed at your own cell\".")
     @Test
     public void theSkyFeedUnionsTheSystemWithTheObserversOwnCell() {
         StellarBody host = star(6007);
@@ -752,7 +739,11 @@ public class UniverseRegistryTest {
                 systemReadSawStation);
     }
 
-    /** Interstellar void — a cell no anchor attributes — is fed the union's EMPTY case. */
+    /**
+     * Interstellar void — a cell no anchor attributes — is fed the union's EMPTY case.
+     * Pins CON-C14-14 (the sky shows the whole system unioned with the observer's own cell, and interstellar void is fed nothing).
+     */
+    @Pins("CON-C14-14")
     @Test
     public void interstellarVoidIsFedNothing() {
         UniverseRegistry reg = testUniverse.newRegistry();

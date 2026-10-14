@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.world.weather;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.play.server.SPacketChangeGameState;
@@ -12,10 +13,6 @@ import net.minecraft.world.storage.WorldSavedData;
 import net.minecraftforge.common.DimensionManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Central service that:

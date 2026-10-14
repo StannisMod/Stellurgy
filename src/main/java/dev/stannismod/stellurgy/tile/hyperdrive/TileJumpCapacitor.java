@@ -1,7 +1,10 @@
 package dev.stannismod.stellurgy.tile.hyperdrive;
 
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.hyperdrive.CapacitorCharge;
+import dev.stannismod.stellurgy.hyperdrive.ComponentScan;
+import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
+import dev.stannismod.stellurgy.tile.TileShipComponent;
 import net.minecraft.block.Block;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
@@ -9,11 +12,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
 
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import dev.stannismod.stellurgy.hyperdrive.CapacitorCharge;
-import dev.stannismod.stellurgy.hyperdrive.ComponentScan;
-import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
-import dev.stannismod.stellurgy.tile.TileShipComponent;
+import javax.annotation.Nullable;
 
 /**
  * The bank that dumps the burst opening a jump window.

@@ -2,22 +2,19 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.PlayerState;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PlayerState;
 
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The player types an {@code /ar} command into the real client chat, and reads the answer there.
@@ -61,7 +58,7 @@ import static org.junit.Assert.assertTrue;
  * {@code WorldCommandPlayerEquippedE2ETest}, {@code WorldCommandFetchTest}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
+public class WorldCommandClientGroupTest extends AbstractSharedClientTest {
 
     private static final String STATION_ID = "id";
     private static final String POS_X = "posX";
@@ -82,12 +79,12 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
     /** Ops the bot: every verb below is op-gated, and an un-opped run fails as a permission error
      *  that reads nothing like the contract under test. */
     private void opTheBot() throws Exception {
-        String op = exec("stellurgytest player op-self");
+        String op = arrange("stellurgytest player op-self").raw();
         scenario().requireArranged("op-self must succeed: " + op, Reply.of(op).bool("opped"));
     }
 
     private String botName() throws Exception {
-        return PlayerState.botName(this::exec);
+        return PlayerState.botName(c -> read(c).raw());
     }
 
     /**
@@ -174,7 +171,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
     public void stellurgyGiveStationAddsChipToPlayerInventory() throws Exception {
         scenario().arranging("op the bot and create a station for the chip to bind to");
         opTheBot();
-        String create = exec("stellurgytest station create " + plot().dim);
+        String create = arrange("stellurgytest station create " + plot().dim).raw();
         Reply created = Reply.of("stellurgytest station create", create);
         scenario().requireArranged("station create response must include id: " + create,
                 created.has(STATION_ID));
@@ -208,7 +205,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
                 + "inventory; client count=" + count + " (the slot write was recorded: "
                 + slotWrites + ")", count >= 1);
 
-        String post = exec("stellurgytest player inventory-contains stellurgy:spacestationchip");
+        String post = read("stellurgytest player inventory-contains stellurgy:spacestationchip").raw();
         assertTrue("server inventory must also contain the chip: " + post,
                 !(Reply.of(post).integer("count") == 0));
     }
@@ -221,15 +218,15 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
     public void stellurgyGotoTransfersPlayerToTargetDim() throws Exception {
         scenario().arranging("op the bot and generate a planet to travel to");
         opTheBot();
-        String before = exec("stellurgytest dim list");
-        exec("ar planet generate 0 GotoTarget");
-        String after = exec("stellurgytest dim list");
+        String before = read("stellurgytest dim list").raw();
+        arrange("ar planet generate 0 GotoTarget");
+        String after = read("stellurgytest dim list").raw();
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
                 + " after=" + after, targetDim != -1);
         try {
-            exec("stellurgytest dim load " + targetDim);
+            arrange("stellurgytest dim load " + targetDim);
 
             scenario().asserting("the client renders the target dim after the command");
             Events clientLog = clientEvents();
@@ -239,14 +236,14 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
                     "the server half is read below and would agree about a world the client never"
                             + " reached");
 
-            String health = exec("stellurgytest player health");
+            String health = read("stellurgytest player health").raw();
             assertTrue("server must agree the player is in dim " + targetDim + ": " + health,
                     String.valueOf(targetDim).equals(Reply.of(health).text("dim")));
         } finally {
             // The dimension itself must go: a generated planet outlives the scenario and the next
             // one's `ar planet list` diff would see it. The player's own return is the reset's.
-            exec("stellurgytest tp " + plot().dim);
-            exec("ar planet delete " + targetDim);
+            arrange("stellurgytest tp " + plot().dim).raw();
+            arrange("ar planet delete " + targetDim);
         }
     }
 
@@ -260,28 +257,26 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
      * Forge's registry in the client JVM still holds the id once the client is done with it. The
      * harness client is always remote (a separate server JVM), so this does not see the single-player
      * branch, where the registration is the integrated server's and must be left alone.</p>
-     *
-     * <p>red-witnessed: with {@code PacketDimInfo#executeClient} at
-     * {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every
-     * client only forgetting, the shape it shipped with — this fails with "the client forgot the
-     * deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,
-     * withdraw:false,forgeRegistered:true}" (2026-10-06).</p>
-     *
-     * <p>red-witnessed: with {@code PacketDimInfo#executeClient} at
-     * {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails
-     * at "the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14";
-     * with its {@code if (deleteDim)} branch never taken, at "the client was never told the planet was
-     * deleted — no `client_dim_forgotten` carrying dim = 14" (2026-10-06).</p>
      */
+    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
+            + " {@code if (dev.stannismod.stellurgy.client.ServerView.current().remote())} never taken — every"
+            + " client only forgetting, the shape it shipped with — this fails with \"the client forgot the"
+            + " deleted planet but its Forge registry still holds dimension 14: {...client_dim_forgotten,dim:14,"
+            + " withdraw:false,forgeRegistered:true}\" (2026-10-06).")
+    @LegacyWitness(prose = "with {@code PacketDimInfo#executeClient} at"
+            + " {@code DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);} removed, this fails"
+            + " at \"the client never learned of the generated planet — no `client_dim_registered` carrying dim = 14\";"
+            + " with its {@code if (deleteDim)} branch never taken, at \"the client was never told the planet was"
+            + " deleted — no `client_dim_forgotten` carrying dim = 14\" (2026-10-06).")
     @Test
     public void aDeletedPlanetLeavesNoForgeDimensionOnARemoteClient() throws Exception {
         scenario().arranging("op the bot and generate a planet the client learns of");
         opTheBot();
         Events clientLog = clientEvents();
         long heard = clientLog.mark();
-        String before = exec("stellurgytest dim list");
-        exec("ar planet generate 0 WithdrawTarget");
-        String after = exec("stellurgytest dim list");
+        String before = read("stellurgytest dim list").raw();
+        arrange("ar planet generate 0 WithdrawTarget");
+        String after = read("stellurgytest dim list").raw();
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
@@ -296,7 +291,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
 
         scenario().asserting("after the deletion the client's Forge registry no longer holds the id");
         long deleted = clientLog.mark();
-        exec("ar planet delete " + targetDim);
+        arrange("ar planet delete " + targetDim);
         String forgotten = clientLog.awaitRecordWithFields(deleted, "client_dim_forgotten",
                 "the client was never told the planet was deleted", REPLY_BUDGET_TICKS,
                 "dim", String.valueOf(targetDim));
@@ -322,15 +317,15 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
         scenario().requireArranged("the client must name the world type it starts in, else the"
                 + " comparison below has nothing to change FROM; got '" + home + "'", !home.isEmpty());
 
-        String before = exec("stellurgytest dim list");
-        exec("ar planet generate 0 WorldTypeTarget");
-        String after = exec("stellurgytest dim list");
+        String before = read("stellurgytest dim list").raw();
+        arrange("ar planet generate 0 WorldTypeTarget");
+        String after = read("stellurgytest dim list").raw();
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
                 + " after=" + after, targetDim != -1);
         try {
-            exec("stellurgytest dim load " + targetDim);
+            arrange("stellurgytest dim load " + targetDim);
 
             scenario().asserting("the client renders the planet's own world type after arriving");
             Events clientLog = clientEvents();
@@ -347,8 +342,8 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
             assertNotEquals("the world type the client renders must differ between the overworld"
                     + " and a planet, or it is not per-dimension at all", home, onPlanet);
         } finally {
-            exec("stellurgytest tp " + plot().dim);
-            exec("ar planet delete " + targetDim);
+            arrange("stellurgytest tp " + plot().dim);
+            arrange("ar planet delete " + targetDim);
         }
     }
 
@@ -366,14 +361,14 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
     public void stellurgyGotoStationTeleportsToStationSpawnInSpaceDim() throws Exception {
         scenario().arranging("op the bot and create a station to travel to");
         opTheBot();
-        String create = exec("stellurgytest station create " + plot().dim);
+        String create = arrange("stellurgytest station create " + plot().dim).raw();
         Reply created = Reply.of("stellurgytest station create", create);
         scenario().requireArranged("station create must succeed: " + create,
                 created.has(STATION_ID));
         int stationId = created.integer(STATION_ID);
         scenario().record("stationId", stationId);
 
-        exec("stellurgytest dim load " + SPACE_DIM);
+        arrange("stellurgytest dim load " + SPACE_DIM);
 
         scenario().asserting("the client renders the space dim after the command");
         Events clientLog = clientEvents();
@@ -413,12 +408,11 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
      * not the "same-dim no-op" this javadoc used to claim; the recorded placement below says so.)
      * Positive coverage of the whole resolve &rarr; transfer &rarr; placement path without a second
      * bot (the harness is single-client; fetching a DIFFERENT connected player stays out of scope).
-     *
-     * <p>red-witnessed: with {@code FetchCommand#execute} at {@code new
-     * BasicTeleporter(destPlayer.getPosition())} aimed 20 blocks east, the wait for the client's
-     * placement at the teleporter's target passes and this fails on the position assertion with
-     * "preX=4096.5 … postX=4116.5" (2026-09-30).</p>
      */
+    @LegacyWitness(prose = "with {@code FetchCommand#execute} at {@code new"
+            + " BasicTeleporter(destPlayer.getPosition())} aimed 20 blocks east, the wait for the client's"
+            + " placement at the teleporter's target passes and this fails on the position assertion with"
+            + " \"preX=4096.5 … postX=4116.5\" (2026-09-30).")
     @Test
     public void selfFetchCompletesAndPreservesPosition() throws Exception {
         scenario().arranging("op the bot and read its own username back");
@@ -478,7 +472,7 @@ public class WorldCommandClientGroupTest extends AbstractSharedClientE2ETest {
         assertTrue("self-fetch must leave bot within 1 block of its prior position:" + where,
                 Math.abs(postZ - preZ) < 1.0);
 
-        String postServer = exec("stellurgytest player health");
+        String postServer = read("stellurgytest player health").raw();
         assertTrue("server-side X must agree with the client view: " + postServer,
                 Math.abs(extractDouble(postServer, POS_X) - postX) < 1.0);
     }

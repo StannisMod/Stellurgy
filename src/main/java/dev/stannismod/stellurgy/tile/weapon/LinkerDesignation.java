@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.tile.weapon;
 
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.text.TextComponentTranslation;
-import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
 
 /**
  * How a player names a target with a linker, for the two things a linker can be bound to — a gun and

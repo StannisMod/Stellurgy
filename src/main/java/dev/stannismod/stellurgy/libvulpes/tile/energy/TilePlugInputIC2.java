@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.libvulpes.tile.energy;
 
+import dev.stannismod.stellurgy.libvulpes.Configuration;
 import ic2.api.energy.event.EnergyTileLoadEvent;
 import ic2.api.energy.event.EnergyTileUnloadEvent;
 import ic2.api.energy.tile.IEnergyEmitter;
@@ -7,7 +8,6 @@ import ic2.api.energy.tile.IEnergySink;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
 import net.minecraftforge.common.MinecraftForge;
-import dev.stannismod.stellurgy.libvulpes.Configuration;
 
 import javax.annotation.Nullable;
 

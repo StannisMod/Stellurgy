@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
+
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -18,9 +20,11 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
     /** The array of registered command names this reply carries. */
     private static final String COMMANDS = "commands";
 
+    /** Pins INV-CMD-07 (the primary command and its help survive registration). */
+    @Pins("INV-CMD-07")
     @Test
     public void primaryCommandsAreRegistered() throws Exception {
-        String joined = String.join("\n", client().execute("stellurgytest commands list"));
+        String joined = String.join("\n", client().read("stellurgytest commands list"));
         // MEMBERSHIP of a list of names, asked of the list. As substrings over the rendering
         // these were satisfied by a name appearing anywhere — including inside a LONGER command
         // name, which is how `"ar"` could have been answered by `"stellurgytest"` had the quotes ever
@@ -32,13 +36,15 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
         assertTrue("Stellurgy's primary command missing from command list: " + joined, hasStellurgy);
     }
 
+    /** Pins INV-CMD-07 (the primary command and its help survive registration). */
+    @Pins("INV-CMD-07")
     @Test
     public void stellurgyHelpCommandPrintsUsageWithoutCrash() throws Exception {
         // Stellurgy's primary command must surface usage text without crashing
         // the server. The StellurgyCommandRoot tree prints its usage line
         // "/stellurgy [subcommand]" rather than the old WorldCommand
         // "Subcommands:" header.
-        String help = String.join("\n", client().execute("stellurgy help"));
+        String help = String.join("\n", client().read("stellurgy help"));
         assertTrue("Stellurgy help did not surface the command usage: " + help,
                 help.contains("/stellurgy") && help.contains("[subcommand]"));
     }

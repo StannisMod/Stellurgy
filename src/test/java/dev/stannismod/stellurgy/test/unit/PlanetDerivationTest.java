@@ -1,30 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.universe.BodyProfile;
-import dev.stannismod.stellurgy.universe.PlanetDerivation;
-import dev.stannismod.stellurgy.universe.PlanetTypePreset;
-import dev.stannismod.stellurgy.universe.PlanetTypes;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-import dev.stannismod.stellurgy.universe.TerrainOption;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.universe.*;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the procedural planet derivation. Pure JUnit; no Minecraft bootstrap.
@@ -185,7 +173,9 @@ public class PlanetDerivationTest {
      * has no bearing on rotation, so a half-gravity world got a day eight times longer. The pin that
      * catches a return to it is two bodies with the SAME gravity and DIFFERENT days — impossible under
      * any function of gravity alone, and cheap to find across a spread of seeds.</p>
+     * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
      */
+    @Pins("INV-NAV-11")
     @Test
     public void aDayIsDrawnAndIsNotAFunctionOfGravity() {
         GalacticCoord anchor = cell(600, 0, 0);
@@ -213,7 +203,11 @@ public class PlanetDerivationTest {
                 sameGravityDifferentDay);
     }
 
-    /** The same body answers the same day twice — a draw, not a random. */
+    /**
+     * The same body answers the same day twice — a draw, not a random.
+     * Pins INV-NAV-11 (a day is drawn, not computed from gravity, and the same body answers the same day twice).
+     */
+    @Pins("INV-NAV-11")
     @Test
     public void aDrawnDayIsStillDeterministic() {
         GalacticCoord anchor = cell(610, 0, 0);
@@ -482,12 +476,11 @@ public class PlanetDerivationTest {
 
     /**
      * A very close orbit is tidally locked and one a thousand AU out is not.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for
-     * every orbit, this fails with "a distant orbit must not be locked". That is what the distant leg
-     * can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the
-     * old "1 AU = 100") leaves it green, because 1 000 AU is outside the radius either way.</p>
      */
+    @LegacyWitness(prose = "2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for"
+            + " every orbit, this fails with \"a distant orbit must not be locked\". That is what the distant leg"
+            + " can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the"
+            + " old \"1 AU = 100\") leaves it green, because 1 000 AU is outside the radius either way.")
     @Test
     public void aCloseOrbitIsLockedAndADistantOneIsNot() {
         StellarBody s = sol();
@@ -672,11 +665,10 @@ public class PlanetDerivationTest {
      * is decided from its profile's own facts; a profile that reported a pressure for a world whose
      * every gas escapes or freezes out would scan as an atmosphere and land as a vacuum — and keep the
      * warmth of a greenhouse it does not have.
-     *
-     * <p>red-witnessed: with {@code PlanetDerivation#derive} at {@code if (pressure > 0 && BodyAtmosphere.derive(}
-     * made {@code if (false && …}, this fails listing ice worlds reported at {@code p=1} to {@code p=38}
-     * at 53-59 K (2026-10-01).</p>
      */
+    @LegacyWitness(prose = "with {@code PlanetDerivation#derive} at {@code if (pressure > 0 && BodyAtmosphere.derive(}"
+            + " made {@code if (false && …}, this fails listing ice worlds reported at {@code p=1} to {@code p=38}"
+            + " at 53-59 K (2026-10-01).")
     @Test
     public void aPressureTheScanReportsIsAirTheWorldKeeps() {
         int withAir = 0;

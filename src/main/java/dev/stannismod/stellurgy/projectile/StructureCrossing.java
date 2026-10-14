@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.projectile;
 
+import dev.stannismod.stellurgy.damage.StructureDamageEngine;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.util.SweptVolume;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.damage.StructureDamageEngine;
-import dev.stannismod.stellurgy.util.SweptVolume;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 import java.util.Map;
 

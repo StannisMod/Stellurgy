@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.recipe;
 
-import dev.stannismod.stellurgy.tile.multiblock.machine.TileRollingMachine;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipeMachineFactory;
+import dev.stannismod.stellurgy.tile.multiblock.machine.TileRollingMachine;
 
 public class RecipeRollingMachine extends RecipeMachineFactory {
 

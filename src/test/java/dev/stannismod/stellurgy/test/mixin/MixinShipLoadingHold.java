@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.ShipLoadHold;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -8,8 +9,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.ships.ship_world.WorldServerShipManager;
-
-import dev.stannismod.stellurgy.test.trace.ShipLoadHold;
 
 /**
  * At the substrate's load/unload decision, a ship counts as permanently loaded when the player's own

@@ -1,25 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.OrbitLine;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.EntrySlots;
-import dev.stannismod.stellurgy.test.EntryStatus;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
+import dev.stannismod.stellurgy.test.*;
 import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
 /**
  * E2E: crossing OUT of an atmosphere is a PHYSICAL event, so it does not ask who is holding a key.
@@ -69,54 +56,72 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
     /** Where the ship is built — its own region, clear of every other server-tier fixture. */
     private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
 
+    /** Server ticks for the craft to be named and become usable: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes first, wherever its latest naming put it; the entry stack after it. */
     @After
     public void cleanup() throws Exception {
-        exec("stellurgytest space entry-clear");
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
+        arrange("stellurgytest space entry-clear");
     }
 
     @Test
     public void anUnpilotedShipClimbingPastTheCeilingStillEntersSpace() throws Exception {
 
-        String setup = exec("stellurgytest space entry-setup 2");
+        String setup = arrange("stellurgytest space entry-setup 2").raw();
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
-        EntryStatus control = EntryStatus.wholeLedger(this::exec);
-        assertEquals("witness sensitivity control — no ship must be ledgered before the climb: " + control,
-                0, control.ships);
+        int[] bp = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, USABLE_TICKS,
+                "the craft that climbs with nobody at the controls");
+        builtDurable = birth.durable;
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
+        String durableId = birth.durable;
 
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        // Witness sensitivity control, asked of THIS craft: it has no ledger row before the climb, so
+        // the row read after it is the climb's.
+        EntryStatus control = EntryStatus.forShip(c -> read(c).raw(), durableId);
+        assertTrue("witness sensitivity control — this craft must not be ledgered before the climb: "
+                + control, !control.found);
 
-        String launch = exec("stellurgytest space launch-cell 0");
+        String launch = read("stellurgytest space launch-cell 0").raw();
         assertTrue("launch-cell resolve failed: " + launch, Reply.of(launch).ok());
         String expectedCell = extractString(launch, "cellKey");
         assertTrue("launch dim resolved to no cell: " + launch, expectedCell != null);
 
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String vsId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String vsId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, USABLE_TICKS));
 
-        ShipInfo src = ShipInfo.byId(this::exec, 0, vsId);
+        ShipInfo src = ShipInfo.byId(c -> read(c).raw(), 0, vsId);
         double sx = src.x, sy = src.y, sz = src.z;
 
         // THE ONE DIFFERENCE from the piloted leg, and it is ASSERTED rather than assumed: this ship's
         // own flight computer holds no pilot input. The probe reports the state it left behind, so
         // "nobody is at the controls" is a reading rather than a hope — the earlier form of this line
         // scrubbed a world-wide static, which said nothing about THIS ship.
-        String hands = exec("stellurgytest vs ff-input-by-id 0 " + vsId);
+        String hands = arrange("stellurgytest vs ff-input-by-id 0 " + vsId).raw();
         assertTrue("this ship's flight computer must resolve, and hold NO pilot input, or the climb"
                 + " below is the piloted leg again: " + hands,
                 Reply.of(hands).bool("afcResolved") && "null".equals(Reply.of(hands).text("input")));
 
-        String tp = exec("stellurgytest vs teleport-ship-by-id 0 " + vsId + " "
-                + (int) sx + " " + OrbitLine.of(this::exec, 0).aboveEntryCeiling() + " " + (int) sz);
+        String tp = arrange("stellurgytest vs teleport-ship-by-id 0 " + vsId + " "
+                + (int) sx + " " + OrbitLine.of(c -> read(c).raw(), 0).aboveEntryCeiling() + " " + (int) sz).raw();
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         // Marked before the unpark, which is what lets the entry start: the arrival is announced
         // once, and a mark taken after it would wait for a second entry.
         long entryMark = events.mark();
-        exec("stellurgytest vs unpark-by-id 0 " + vsId);
+        arrange("stellurgytest vs unpark-by-id 0 " + vsId);
 
         // Linked on the record the entry publishes at its settle. What this scenario is ABOUT is
         // that the announcement happens at all for an unpiloted craft, so the announcement is the
@@ -124,8 +129,8 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
         // check whose hands are on the stick.
         awaitEnteredSpace(events, entryMark, durableId,
                 "a ship with NOBODY at the controls must still cross out of the atmosphere",
-                SETTLE_TICKS, () -> loadAllEntrySlots(setup));
-        EntryStatus status = EntryStatus.forShip(this::exec, durableId).requireFound(
+                SETTLE_TICKS, null);
+        EntryStatus status = EntryStatus.forShip(c -> read(c).raw(), durableId).requireFound(
                 "the arrival was announced, so the ledger must hold this craft's row");
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,
                 status.cellKey);
@@ -135,18 +140,8 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
-    private void loadAllEntrySlots(String setup) throws Exception {
-        EntrySlots.loadAll(this::exec, setup);
-    }
-
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
 
 
     /**
@@ -162,10 +157,9 @@ public class VSUnpilotedEntryTest extends AbstractSharedServerTest {
      * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
      * they are what this scenario's green runs were taken over.</p>
      */
-    private String placeFixture(FixtureSite site, String variant) throws Exception {
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+    private int[] placeFixture(FixtureSite site, String variant) throws Exception {
+        return RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 4, 12,
                 "the craft this scenario builds stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {

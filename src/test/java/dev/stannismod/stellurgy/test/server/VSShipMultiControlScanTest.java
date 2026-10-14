@@ -1,11 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.RocketFixture;
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
@@ -38,13 +36,13 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         String coords = placeFixture(site, "with-pilot-seat");
         // A second AFC in the free drill cell (rocketX+1, rocketY+3) — inside the scanned build.
-        String fill = String.join("\n", client().execute("stellurgytest fill 0 "
+        String fill = String.join("\n", client().arrange("stellurgytest fill 0 "
                 + (baseX + 4) + " " + (baseY + 4) + " " + (baseZ + 3) + " "
                 + (baseX + 4) + " " + (baseY + 4) + " " + (baseZ + 3)
                 + " stellurgy:advancedFlightComputer"));
         assertTrue("placing the second flight computer failed: " + fill, Reply.of(fill).ok());
 
-        String assemble = String.join("\n", client().execute("stellurgytest rocket assemble 0 " + coords));
+        String assemble = String.join("\n", client().act("stellurgytest rocket assemble 0 " + coords));
         assertTrue("a build with TWO flight computers must be rejected at scan with its own error "
                         + "code: " + assemble,
                 "MULTIPLEFLIGHTCOMPUTERS".equals(Reply.of(assemble).text("status")));
@@ -58,13 +56,13 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         String coords = placeFixture(site, "with-pilot-seat");
         // A second pilot seat in the free cell beside the linked one (rocketX+1, rocketY+4).
-        String fill = String.join("\n", client().execute("stellurgytest fill 0 "
+        String fill = String.join("\n", client().arrange("stellurgytest fill 0 "
                 + (baseX + 4) + " " + (baseY + 5) + " " + (baseZ + 3) + " "
                 + (baseX + 4) + " " + (baseY + 5) + " " + (baseZ + 3)
                 + " stellurgy:pilotSeat"));
         assertTrue("placing the second pilot seat failed: " + fill, Reply.of(fill).ok());
 
-        String assemble = String.join("\n", client().execute("stellurgytest rocket assemble 0 " + coords));
+        String assemble = String.join("\n", client().act("stellurgytest rocket assemble 0 " + coords));
         assertTrue("a build with TWO pilot seats must be rejected at scan with its own error code: "
                         + assemble,
                 "MULTIPLEPILOTSEATS".equals(Reply.of(assemble).text("status")));
@@ -78,7 +76,7 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
         // ASSERTS rather than digs, and its fill force-loads every chunk in the box — so the warmup
         // it replaces lost nothing. Nothing here ever flies: the subject is the assembly SCAN, and
         // the height covers the tower the scan reads.
-        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().arrange(cmd)),
                 variant, 2, 10,
                 "the build the assembly scan is about stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];

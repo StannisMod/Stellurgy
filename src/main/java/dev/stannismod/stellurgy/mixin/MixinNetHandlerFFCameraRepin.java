@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.client.KeyBindings;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.network.play.server.SPacketPlayerPosLook;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import dev.stannismod.stellurgy.client.KeyBindings;
 
 /**
  * Free Flight camera lock vs the vanilla riding echo.

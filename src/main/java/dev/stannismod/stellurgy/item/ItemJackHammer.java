@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.item;
 
 import com.google.common.collect.Sets;
+import dev.stannismod.stellurgy.api.MaterialGeode;
+import dev.stannismod.stellurgy.client.TooltipInjector;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -12,13 +14,10 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.api.MaterialGeode;
-import dev.stannismod.stellurgy.client.TooltipInjector;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
-
 import java.util.List;
 import java.util.Set;
 

@@ -1,18 +1,19 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.atmosphere.AirState;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,10 +27,12 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>The world is a carbon-dioxide planet from the planet file (no oxygen of its own). The trace
  * arrives through the planet's own gas exchange — the one a terraformer step uses — so the arrangement
- * supplies gas, never the reading. Manual harness lifecycle: the planet file must be on disk before the
- * first boot, and the second boot runs against the same directory.</p>
+ * supplies gas, never the reading. Manual harness lifecycle: the planet file is the start of the first
+ * boot (a {@link GameDirSeed} the harness writes before it), and the second boot runs against the same
+ * directory.</p>
  */
-public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
+@OwnBoot(reason = OwnBoot.Reason.STARTUP_FILE)
+public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest extends AbstractMechanicsTest {
 
     private static final int DIM = 9731;
     /** A trace: a thousandth of an atmosphere, two orders under the breathing band's floor. */
@@ -37,7 +40,7 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
     /** Outdoors, well above any terrain, where no sealed zone can contain the point. */
     private static final String OUTDOORS = "0 220 0";
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -46,10 +49,6 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-trace-oxygen-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
 
         String xml =
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
@@ -66,7 +65,8 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
                 "    </star>\n" +
                 "</galaxy>\n";
 
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+        workDir = ServerRoot.fresh("forge-server-trace-oxygen-")
+                .seed(new GameDirSeed().planetDefs(xml, getClass()));
     }
 
     @After
@@ -74,18 +74,16 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
         if (harness != null) harness.close();
     }
 
-    /**
-     * red-witnessed: with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}
-     * replaced by {@code return false;}, this fails after the trace is added with
-     * {@code expected:<[low]O2> but was:<[No]O2>} (2026-10-01).
-     * red-witnessed: with {@code DimensionProperties#copyData} lacking
-     * {@code this.air = props.air.copy();}, this fails after the restart with
-     * {@code expected:<[lowO2]> but was:<[air]>} — the world re-read from its planet file came back as
-     * Earth's mix (2026-10-01, the first run of this test, before that line existed).
-     */
+    @LegacyWitness(prose = "with {@code DimensionProperties#hasOxygen} at {@code return air.getOxygen() > 0L;}"
+            + " replaced by {@code return false;}, this fails after the trace is added with"
+            + " {@code expected:<[low]O2> but was:<[No]O2>} (2026-10-01).")
+    @LegacyWitness(prose = "with {@code DimensionProperties#copyData} lacking"
+            + " {@code this.air = props.air.copy();}, this fails after the restart with"
+            + " {@code expected:<[lowO2]> but was:<[air]>} — the world re-read from its planet file came back as"
+            + " Earth's mix (2026-10-01, the first run of this test, before that line existed).")
     @Test
     public void aTraceOfOxygenReadsAsTooLittleOutdoorsAndIsStillThereAfterARestart() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
         Reply before = outdoors();
         // The positive precondition of the verdict below: this world starts with NO oxygen, so a
@@ -94,21 +92,20 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
                 "NoO2", before.text("type"));
 
         String add = "stellurgytest planet add-gas " + DIM + " oxygen " + TRACE_PPM * AirState.PER_PPM;
-        Reply.of(add, String.join("\n", harness.client().execute(add))).requireOk("add a trace of oxygen");
+        Reply.of(add, String.join("\n", harness.client().arrange(add))).requireOk("add a trace of oxygen");
 
         Reply after = outdoors();
         assertEquals("a trace of oxygen outdoors must read as too little oxygen, not as none: " + after,
                 "lowO2", after.text("type"));
 
-        harness.close();
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        harness.close();        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         Reply restarted = outdoors();
         assertEquals("after a restart the world must still hold its trace, and read it the same way: "
                 + restarted, "lowO2", restarted.text("type"));
 
         String info = "stellurgytest planet info " + DIM;
-        Reply planet = Reply.of(info, String.join("\n", harness.client().execute(info)));
+        Reply planet = Reply.of(info, String.join("\n", harness.client().read(info)));
         String composition = planet.object("gases");
         assertTrue("planet info must report the world's composition: " + planet, composition != null);
         Reply gases = Reply.of(composition);
@@ -119,11 +116,11 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
     /** The atmosphere at a point outdoors on the fixture world, as the world's own handler answers it. */
     private Reply outdoors() throws Exception {
         String load = "stellurgytest dim load " + DIM;
-        Reply loaded = Reply.of(load, String.join("\n", harness.client().execute(load)));
+        Reply loaded = Reply.of(load, String.join("\n", harness.client().arrange(load)));
         assertTrue("the fixture world must load: " + loaded, loaded.bool("loaded"));
 
         String get = "stellurgytest atmosphere get " + DIM + " " + OUTDOORS;
-        Reply atmosphere = Reply.of(get, String.join("\n", harness.client().execute(get)));
+        Reply atmosphere = Reply.of(get, String.join("\n", harness.client().read(get)));
         // Arrangement: the reading comes from the world's atmosphere handler — the path a player
         // standing there is judged by — and not from the probe's fallback to the dimension default.
         assertEquals("the outdoor reading must come from the world's own handler: " + atmosphere,

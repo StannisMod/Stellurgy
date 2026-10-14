@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.tile.heat.TileHeatIntakeDuct;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -7,8 +8,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 
 import javax.annotation.Nullable;
-
-import dev.stannismod.stellurgy.tile.heat.TileHeatIntakeDuct;
 
 /**
  * The air-intake duct: bolted to a chiller's cold face, it makes the machine draw from the room

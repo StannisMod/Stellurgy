@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.item;
 
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.util.DimensionBlockPosition;
+import dev.stannismod.stellurgy.util.NBTStorableListList;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.util.DimensionBlockPosition;
-import dev.stannismod.stellurgy.util.NBTStorableListList;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import javax.annotation.Nonnull;
 import java.util.List;

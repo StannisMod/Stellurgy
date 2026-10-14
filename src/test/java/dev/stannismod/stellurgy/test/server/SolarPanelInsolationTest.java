@@ -2,9 +2,9 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.EnergyStore;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Assume;
 import org.junit.Test;
-
 
 import static org.junit.Assert.assertTrue;
 
@@ -50,11 +50,11 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
 
     /** What the Forge energy capability at one block reports — refusing a block that is not there. */
     private EnergyStore energy(int dim, int x, int y, int z) throws Exception {
-        return EnergyStore.at(cmd -> ok(client().execute(cmd)), dim, x, y, z);
+        return EnergyStore.at(cmd -> ok(client().read(cmd)), dim, x, y, z);
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse("No Stellurgy dimensions registered",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -70,19 +70,19 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
     private long accumulateOverTicks(int dim, int x, int y, int z, int ticks) throws Exception {
         // Ensure the dim is loaded — non-overworld Stellurgy dims aren't kept hot
         // by default and need an explicit /stellurgytest dim load.
-        ok(client().execute("stellurgytest dim load " + dim));
+        ok(client().arrange("stellurgytest dim load " + dim));
         // High y with explicit air halo so sky access is guaranteed.
-        ok(client().execute("stellurgytest fill " + dim + " " + (x - 2) + " " + (y - 2)
+        ok(client().arrange("stellurgytest fill " + dim + " " + (x - 2) + " " + (y - 2)
                 + " " + (z - 2) + " " + (x + 2) + " " + (y + 4) + " " + (z + 2)
                 + " minecraft:air"));
-        String place = ok(client().execute(
+        String place = ok(client().arrange(
                 "stellurgytest place " + dim + " " + x + " " + y + " " + z
                         + " stellurgy:solarGenerator"));
         assertTrue("could not place solar in dim " + dim + ": " + place,
                 Reply.of(place).bool("placed"));
         // Make sure it's daytime + clear for both dims.
-        client().execute("time set day");
-        client().execute("weather clear 100000");
+        client().arrange("time set day");
+        client().arrange("weather clear 100000");
 
         // The reader refuses a block with no store, which is what the `initial >= 0` check stood
         // for: the old parse answered NaN-cast-to-0 for a panel that was not there, and a delta
@@ -91,7 +91,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
                 .requireEnergy("the placed panel must expose a store in dim " + dim)
                 .stored();
 
-        String tick = ok(client().execute(
+        String tick = ok(client().act(
                 "stellurgytest tile force-tick " + dim + " " + x + " " + y + " " + z
                         + " " + ticks));
         assertTrue("force-tick failed in dim " + dim + ": " + tick,
@@ -101,6 +101,8 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
         return after - initial;
     }
 
+    /** Pins INV-INFRA-26 (A solar panel in aStellurgy dimension gains energy on a forced tick, scaled by insolation). */
+    @Pins("INV-INFRA-26")
     @Test
     public void solarPanelGeneratesInNonOverworldStellurgyDim() throws Exception {
         // Most basic non-zero check: a solar panel in a Stellurgy dim that isn't

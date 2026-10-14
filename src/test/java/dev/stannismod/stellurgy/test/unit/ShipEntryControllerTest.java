@@ -1,34 +1,19 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.universe.BodyEphemeris;
+import dev.stannismod.stellurgy.universe.CellFrame;
+import dev.stannismod.stellurgy.universe.SystemBody;
+import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.junit.Test;
-
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.space.AbsolutePos;
-import dev.stannismod.stellurgy.space.CellWorldMapper;
-import dev.stannismod.stellurgy.space.CrewTransfer;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.ShipCrossingService;
-import dev.stannismod.stellurgy.space.ShipEntryController;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.SlotBinder;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.universe.BodyEphemeris;
-import dev.stannismod.stellurgy.universe.CellFrame;
-import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the entry on-ramp state machine, driven against the real {@link SpaceManager}

@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.item;
 
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.util.StorageChunk;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -7,13 +9,10 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.util.StorageChunk;
-
-import java.util.List;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 
 public class ItemPackedStructure extends Item {
 

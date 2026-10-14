@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.util;
 
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.text.ITextComponent;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
-
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.ITextComponent;
 
 /**
  * Sends a player an action-bar message a few ticks FROM NOW. The action bar holds exactly one

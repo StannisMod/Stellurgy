@@ -1,18 +1,13 @@
 package dev.stannismod.stellurgy.hyperdrive;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.navigation.JumpGate;
+import dev.stannismod.stellurgy.navigation.ShipNavigation;
+import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.tile.TileNavigationComputer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
-import dev.stannismod.stellurgy.navigation.JumpGate;
-import dev.stannismod.stellurgy.navigation.ShipNavigation;
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.ShipTransitManager;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.SpaceSubsystem;
-import dev.stannismod.stellurgy.tile.TileNavigationComputer;
+import java.util.UUID;
 
 /**
  * The act of jumping: what a press of the helm key does, and when it costs anything.

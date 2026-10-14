@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.ship.control;
 
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 
 /**
  * What a ship's readout says: the primitives of its flight model, and the arithmetic every surface

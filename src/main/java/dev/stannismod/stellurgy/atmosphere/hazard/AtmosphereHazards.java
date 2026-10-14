@@ -1,19 +1,7 @@
 package dev.stannismod.stellurgy.atmosphere.hazard;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.annotation.Nonnull;
-
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.inventory.EntityEquipmentSlot;
-import net.minecraft.item.ItemStack;
-import net.minecraftforge.fml.common.Loader;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.EntityRocketBase;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
 import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
@@ -22,6 +10,17 @@ import dev.stannismod.stellurgy.atmosphere.RocketTransferGrace;
 import dev.stannismod.stellurgy.entity.EntityElevatorCapsule;
 import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
 import dev.stannismod.stellurgy.util.ItemAirUtils;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.EntityEquipmentSlot;
+import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.Loader;
+
+import javax.annotation.Nonnull;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * What each atmosphere does to the people in it, in one table, plus the one question a suit is asked.

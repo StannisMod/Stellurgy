@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.test.trace.MotionTrace;
-import dev.stannismod.stellurgy.test.trace.SideTrace;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 /**
  * One flight-recorder sample per SERVER TICK of a flight computer.

@@ -1,18 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.hyperdrive.JumpWindow;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.junit.Test;
-
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.hyperdrive.JumpWindow;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * What the jump window promises: a generator can carry a small ship on its own, emitters are how a

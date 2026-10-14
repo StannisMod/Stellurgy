@@ -1,8 +1,18 @@
 package dev.stannismod.stellurgy.command.test;
 
 import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.satellite.SatelliteSpyTelescope;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
@@ -21,24 +31,10 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Test-only {@code /stellurgytest} command tree.
@@ -71,8 +67,15 @@ public class TestProbeCommand extends CommandBase {
      */
     private final WeaponFireVetoProbe veto;
 
-    TestProbeCommand(WeaponFireVetoProbe veto) {
+    /**
+     * The e2e gate of the same server, told by {@code e2e walk-begins} that the player's walk has begun.
+     * Made with this command in {@link TestProbeCommandRegistration}, and gone with the server.
+     */
+    private final E2EModeGate gate;
+
+    TestProbeCommand(WeaponFireVetoProbe veto, E2EModeGate gate) {
         this.veto = veto;
+        this.gate = gate;
     }
 
     @Override
@@ -99,10 +102,27 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"error\":\"missing subcommand\",\"usage\":\"" + getUsage(sender) + "\"}");
             return;
         }
+        // A verb added below declares its kind in ProbeVerbKind; until it does, a harness server of either
+        // mode refuses it before this method is reached (E2EModeGate).
         try {
             switch (args[0].toLowerCase()) {
                 case "clock":
                     handleClock(server, sender);
+                    break;
+                case "e2e":
+                    // The harness's record that an e2e's player made his first input: from here on the
+                    // gate admits no build. Answers whether this server judges an e2e at all.
+                    if (args.length == 2 && "walk-begins".equalsIgnoreCase(args[1])) {
+                        gate.walkBegins();
+                        send(sender, "{\"ok\":true,\"walkBegan\":true,\"servesAnE2E\":" + gate.servesAnE2E() + "}");
+                    } else if (args.length == 2 && E2EModeGate.FILLED_SPACE_CHEST.equalsIgnoreCase("e2e " + args[1])) {
+                        handTheFilledSpaceChest(server, sender);
+                    } else {
+                        send(sender, "{\"error\":\"usage: e2e walk-begins | " + E2EModeGate.FILLED_SPACE_CHEST + "\"}");
+                    }
+                    break;
+                case "arrange":
+                    handleTypedArrangement(server, sender, tail(args));
                     break;
                 case "registry":
                     handleRegistry(sender, tail(args));
@@ -133,6 +153,9 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "rocket":
                     handleRocket(server, sender, tail(args));
+                    break;
+                case "crafts":
+                    handleCrafts(server, sender, tail(args));
                     break;
                 case "assembler":
                     handleAssembler(server, sender, tail(args));
@@ -1596,11 +1619,8 @@ public class TestProbeCommand extends CommandBase {
             // one a memory query has to be made with.
             info.put("declaredId", declaredId);
             info.put("impactId", impactId);
-            // Which target the service resolved, and how many ships even offered themselves. Without
-            // these a miss cannot be told apart from a hit on the wrong thing: the report names no
-            // ship on purpose, so the instrument has to.
-            info.put("candidateShips", dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .shipIdsAt(world, point.x, point.y, point.z).size());
+            // Which target the service resolved. Without it a miss cannot be told apart from a hit
+            // on the wrong thing: the report names no ship on purpose, so the instrument has to.
             String resolved = dev.stannismod.stellurgy.damage.ShipDamageService
                     .resolveTargetShip(world, point, dir);
             info.put("onShip", resolved != null);
@@ -1663,86 +1683,16 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"permanentlyLoaded\":" + v + "}");
             return;
         }
-        // ship-count <dim> — number of loaded VS ships (poll for async assembly).
-        // ships-registered <dim> — every ship in the REGISTRY, loaded or not, each with its durable
-        // name, its block count, whether anything has it loaded and whether it has been declared
-        // finished.
-        //
-        // The half no instrument could see. `ship-count`, `ships-loaded` and `shipIdsAt` are all
-        // about LOADED ships, so a blockless craft nothing had loaded was invisible to the whole
-        // tree while still answering position lookups and holding a lane — which meant "remnants do
-        // not accumulate" was not a measured claim on either side. `blocks:0` is a remnant;
-        // `loaded:false` beside it means no destroy pass was ever going to ask about it.
-        if (args.length >= 2 && "ships-registered".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            java.util.List<java.util.Map<String, Object>> ships =
-                    dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShips(world);
-            int blockless = 0;
-            StringBuilder out = new StringBuilder("{\"count\":").append(ships.size())
-                    .append(",\"ships\":[");
-            for (int i = 0; i < ships.size(); i++) {
-                if (i > 0) out.append(',');
-                java.util.Map<String, Object> one = ships.get(i);
-                if (Integer.valueOf(0).equals(one.get("blocks"))) {
-                    blockless++;
-                }
-                out.append(jsonMap(one));
-            }
-            // Counted here rather than left to the caller: the number a remnant question actually
-            // wants is "how many own nothing", and a caller deriving it from the list would be
-            // re-implementing the predicate at every call site.
-            send(sender, out.append("],\"blockless\":").append(blockless).append("}").toString());
-            return;
-        }
-        if (args.length >= 2 && "ship-count".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            // The ids beside the count. A caller that establishes "this cell holds exactly one ship"
-            // still cannot say WHICH without them, and the shape that followed — one count, then a
-            // nearest-ship lookup — is an identification by position wearing a count's clothes.
-            java.util.List<String> loaded = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .loadedShipIds(world);
-            StringBuilder counted = new StringBuilder("{\"count\":")
-                    .append(dev.stannismod.stellurgy.integration.vs.VSIntegration
-                            .loadedShipCount(world))
-                    .append(",\"ships\":[");
-            for (int i = 0; i < loaded.size(); i++) {
-                if (i > 0) counted.append(',');
-                counted.append('"').append(escapeJson(loaded.get(i))).append('"');
-            }
-            send(sender, counted.append("]}").toString());
-            return;
-        }
-        // ship-count-all <dim> — total ships loaded OR not (distinguishes created-but-
-        // unloaded from never-created). Reports the REGISTRY's identity beside the count, in the
-        // same hex the physics mod prints when it serialises a world: a count read here and a count
-        // written to disk can only be compared once both name the object they came from.
-        if (args.length >= 2 && "ship-count-all".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            send(sender, "{\"count\":"
-                    + dev.stannismod.stellurgy.integration.vs.VSIntegration.queryableShipCount(world)
-                    + ",\"registry\":\""
-                    + dev.stannismod.stellurgy.integration.vs.VSIntegration.queryableIdentity(world)
-                    + "\"}");
-            return;
-        }
+        // `ship-count`, `ship-count-all` and `ships-registered` ARE GONE (2026-10-14), with every
+        // other verb that counted or listed a world's ships: a test holds its craft's id from the
+        // record of its own assembly, reads how many crafts an act made off the lifecycle records,
+        // and leaves the question "how many ships are there" to the shared base's census.
         // strand-blockless-record <dim> <x> <y> <z> — TEST-ONLY fault injection: register a
         // blockless, unloaded ship record, the garbage a hull cut out of a world leaves behind when
-        // nothing loaded remains for the destroy pass to walk. `countAfterAdd` is measured on this
-        // call, before any tick: a second probe command is separated from this one by a whole world
-        // pass, so a count read there would already be post-collection and could not tell a working
-        // sweep from a plant that never happened.
+        // nothing loaded remains for the destroy pass to walk. `registered` — whether the registry
+        // holds THAT record — is read on this call, before any tick: a second probe command is
+        // separated from this one by a whole world pass, so a read there would already be
+        // post-collection and could not tell a working sweep from a plant that never happened.
         if (args.length >= 5 && "strand-blockless-record".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
@@ -1757,7 +1707,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             send(sender, "{\"ok\":true,\"uuid\":\"" + planted[0] + "\""
-                    + ",\"countAfterAdd\":" + planted[1] + "}");
+                    + ",\"registered\":" + Boolean.parseBoolean(planted[1]) + "}");
             return;
         }
         // `empty-nearest-and-look` IS GONE. Its whole subject was the unbounded nearest-ship
@@ -1765,47 +1715,52 @@ public class TestProbeCommand extends CommandBase {
         // was removed on 2026-09-14: a ship's blocks live in its subspace, so in the world it has a
         // pose and no extent a distance could be measured to. A fault injector outlives its fault
         // only as a way to keep the fault.
-        // load-ships <dim> — force all known ships loaded + physics-enabled (a headless
-        // server has no player near a ship to auto-load it).
-        if (args.length >= 2 && "load-ships".equalsIgnoreCase(args[0])) {
+        // load-ship <dim> <shipUuid> — force ONE registered ship loaded and physics-enabled (a
+        // headless server has no player near a ship to auto-load it). `found:false` = this world
+        // registers no such ship; `requested` = a load was queued, false when it was already loaded.
+        if (args.length >= 3 && "load-ship".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            int[] loads = dev.stannismod.stellurgy.integration.vs.VSIntegration.loadAllShips(world);
-            if (loads == null) {
-                // `loadAllShips` answers null for a null world, and no longer for "the substrate is
-                // absent" — that branch is gone, because the substrate is compiled into this jar.
-                send(sender, "{\"error\":\"no world\"}");
+            java.util.UUID ship;
+            try {
+                ship = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"shipId is not a uuid\"}");
                 return;
             }
-            // BOTH halves: a zero `requested` beside a non-zero `alreadyLoaded` is "nothing needed
-            // doing", and beside a zero it is "this world holds no ships" — the same number, two
-            // answers, and a caller that sees only the first cannot tell them apart.
-            send(sender, "{\"requested\":" + loads[0] + ",\"alreadyLoaded\":" + loads[1] + "}");
+            int load = dev.stannismod.stellurgy.integration.vs.VSIntegration.loadShip(world, ship);
+            send(sender, "{\"ok\":true,\"found\":" + (load >= 0) + ",\"requested\":" + (load > 0) + "}");
             return;
         }
-        // destroy-ships <dim> — mark every registered ship in this world as finished, so the
-        // substrate collects them on its next tick. A scenario's own cleanup: a craft left behind is
-        // not inert any more (it is held loaded, it still ticks, and it is still flying wherever it
-        // was last pointed), so leaving one is leaving a moving object in the next scenario's world.
-        if (args.length >= 2 && "destroy-ships".equalsIgnoreCase(args[0])) {
+        // destroy-ship <dim> <shipUuid> — mark ONE registered ship finished, so the substrate
+        // collects it on its next tick: a scenario's disposal of the craft it built, keyed on the
+        // craft's own id. Its blocks are discarded, not pasted back. `found:false` = this world
+        // registers no such ship. The collection is announced as a `DESTROYED` unnaming; the
+        // caller links to that, not to this reply.
+        if (args.length >= 3 && "destroy-ship".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            int marked = dev.stannismod.stellurgy.integration.vs.VSIntegration.markAllShipsDead(world);
-            send(sender, "{\"ok\":" + (marked >= 0) + ",\"marked\":" + marked + "}");
+            java.util.UUID ship;
+            try {
+                ship = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            boolean found = dev.stannismod.stellurgy.integration.vs.VSIntegration.discardShip(world, ship);
+            send(sender, "{\"ok\":true,\"found\":" + found + "}");
             return;
         }
-        // seat-yard <dim> <x> <y> <z> [shipUuid] — how many pilot-seat tiles the ARRIVAL's own seat
-        // lookup reaches, and whose shipyard it looked in. With a uuid the ship is resolved BY
-        // IDENTITY (what a crossing does with the ship it created); without one it falls back to
-        // the ship nearest to (x,y,z) — the lookup that can answer for a stranger's craft. Both are
-        // reported because the DIFFERENCE between them is the whole of the wrong-ship arrival.
-        if (args.length >= 5 && "seat-yard".equalsIgnoreCase(args[0])) {
+        // seat-yard <dim> <x> <y> <z> <shipUuid> — how many pilot-seat tiles the ARRIVAL's own seat
+        // lookup reaches in the NAMED ship's shipyard (what a crossing does with the ship it created).
+        // The form without a uuid, which fell back to the ship nearest (x,y,z), is gone.
+        if (args.length >= 6 && "seat-yard".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
@@ -1813,24 +1768,18 @@ public class TestProbeCommand extends CommandBase {
             }
             double qx = parseDoubleOr(args[2], 0), qy = parseDoubleOr(args[3], 0),
                     qz = parseDoubleOr(args[4], 0);
-            java.util.UUID want = null;
-            if (args.length >= 6) {
-                try {
-                    want = java.util.UUID.fromString(args[5]);
-                } catch (IllegalArgumentException e) {
-                    send(sender, "{\"error\":\"bad uuid\"}");
-                    return;
-                }
+            java.util.UUID want;
+            try {
+                want = java.util.UUID.fromString(args[5]);
+            } catch (IllegalArgumentException e) {
+                send(sender, "{\"error\":\"bad uuid\"}");
+                return;
             }
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("ok", true);
             m.put("seats", dev.stannismod.stellurgy.space.CrewTransfer.countSeatsOfShip(
                     world, new net.minecraft.util.math.BlockPos(qx, qy, qz), want));
-            m.put("askedShip", want == null ? "BY-POSITION" : want.toString());
-            // The `nearest` field that stood here is GONE with the lookup behind it (2026-09-14). It
-            // named whichever hull a distance happened to reach, and a distance to a craft whose
-            // blocks live in its subspace measures nothing. A caller that wants to know WHICH ship
-            // this count is about passes its uuid, which is what `askedShip` then reports.
+            m.put("askedShip", want.toString());
             send(sender, jsonMap(m));
             return;
         }
@@ -1882,10 +1831,12 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
             world.getChunkProvider().provideChunk(afcPos.getX() >> 4, afcPos.getZ() >> 4);
             TileEntity nameTe = world.getTileEntity(afcPos);
+            // The id the computer CARRIES — never minted here: a read that minted one would hand a name to
+            // a computer no assembly ever named, and `found:false` is the answer for a computer with none.
             java.util.UUID durable = nameTe instanceof dev.stannismod.stellurgy.tile
                     .TileAdvancedFlightComputer
                     ? ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) nameTe)
-                            .getOrCreateShipId()
+                            .shipIdOrNull()
                     : null;
             send(sender, "{\"ok\":true,\"found\":" + (durable != null)
                     + ",\"shipId\":" + (durable == null ? "null" : "\"" + durable + "\"") + "}");
@@ -2110,9 +2061,7 @@ public class TestProbeCommand extends CommandBase {
         // ship-info <dim> id <shipId> — the ship report keyed on the ship's own IDENTITY. There is
         // no distance term to be wrong about: the ship may be anywhere, and an id naming nothing
         // loaded here answers managed:false, which is a loud arrangement failure rather than a
-        // quiet description of somebody else's ship. This is the form a caller that means ONE
-        // particular ship should use for the whole of its scenario, having captured the id once
-        // from the positional form below at a moment it can defend.
+        // quiet description of somebody else's ship.
         if (args.length >= 4 && "ship-info".equalsIgnoreCase(args[0])
                 && "id".equalsIgnoreCase(args[2])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
@@ -2158,69 +2107,6 @@ public class TestProbeCommand extends CommandBase {
         // grown world AABB contains (x,y,z) through THIS side's (the server's) transform. Paired
         // with the client-side skew statics it measures cross-side pose divergence: the same
         // subspace point mapped by each side's own transform.
-        // ships-loaded <dim> — every LOADED ship in that world, each with its own pose, in ONE reply.
-        //
-        // <p>For a caller asking about a PLACE — "is any ship's own pose at this spot" — which is a
-        // real question and not an identification. The shape it replaces is a nearest lookup followed
-        // by a pose comparison: that filters the ONE craft the lookup chose, so a hull sitting exactly
-        // at the spot is invisible whenever the lookup preferred another.
-        //
-        // <p><b>One call on purpose.</b> The obvious form — list the ids, then ask each for its pose —
-        // costs a probe round-trip per ship, and a caller polling a world where nothing holds ships
-        // loaded reads a ship that is resident for about a tick after its load pump. An extra
-        // round-trip inside that gap is enough to miss it every time (measured 2026-09-06: it turned
-        // `VSCrossingOutOfAnUnloadedSourceE2ETest` red, with the reply saying `loaded=0`).
-        if (args.length >= 2 && "ships-loaded".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            java.util.List<String> resident = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .loadedShipIds(world);
-            StringBuilder out = new StringBuilder("{\"ok\":true,\"count\":")
-                    .append(resident.size()).append(",\"ships\":[");
-            for (int i = 0; i < resident.size(); i++) {
-                double[] pose = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                        .shipStateById(world, resident.get(i));
-                if (i > 0) out.append(',');
-                out.append("{\"id\":\"").append(escapeJson(resident.get(i))).append('"');
-                if (pose != null) {
-                    out.append(",\"posX\":").append(pose[0])
-                            .append(",\"posY\":").append(pose[1])
-                            .append(",\"posZ\":").append(pose[2]);
-                }
-                out.append('}');
-            }
-            send(sender, out.append("]}").toString());
-            return;
-        }
-        // ships-at <dim> <x> <y> <z> — EVERY loaded ship whose world box CONTAINS that point, and how
-        // many there are.
-        //
-        // <p>Not an identification and never used as one: it is the honest instrument for the
-        // question "is a hull here at all", which a diagnostic on a failure path asks and a
-        // nearest-ship lookup answers badly. Containment rather than distance, and a LIST rather than
-        // a winner — ships do not collide, so one point can be inside several of them, and a reader
-        // who is told which is nearest learns nothing about how many there were.
-        if (args.length >= 5 && "ships-at".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            java.util.List<String> here = dev.stannismod.stellurgy.integration.vs.VSIntegration
-                    .shipIdsAt(world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
-                            parseDoubleOr(args[4], 0));
-            StringBuilder at = new StringBuilder("{\"ok\":true,\"count\":")
-                    .append(here.size()).append(",\"ships\":[");
-            for (int i = 0; i < here.size(); i++) {
-                if (i > 0) at.append(',');
-                at.append('"').append(escapeJson(here.get(i))).append('"');
-            }
-            send(sender, at.append("]}").toString());
-            return;
-        }
         // managed-by <dim> <x> <y> <z> — the REGISTERED ship whose subspace claim manages the block
         // at that position, or none. The same question production asks when it decides that a block
         // is part of a ship at all (a gun or a sensor looking for the hull it is bolted to), so a
@@ -2238,29 +2124,54 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"shipId\":" + (owner == null ? "null" : "\"" + escapeJson(owner) + "\"") + "}");
             return;
         }
-        // PREFER `to-world <dim> id <shipId> <subX> <subY> <subZ>`. The positional form asks which
-        // ships CONTAIN (x,y,z) and maps through the FIRST of them — and ships do not collide, so a
-        // point can be inside several. The reply reports how many contained it (`shipsHere`), because
-        // a mapping through the wrong hull is a plausible number and nothing else in the answer says
-        // which transform produced it.
-        boolean toWorldById = args.length >= 7 && "to-world".equalsIgnoreCase(args[0])
-                && "id".equalsIgnoreCase(args[2]);
-        if (toWorldById || (args.length >= 8 && "to-world".equalsIgnoreCase(args[0]))) {
+        // ship-contains <dim> <shipId> <x> <y> <z> — whether the NAMED loaded ship's grown world box
+        // contains that point: the containment test production's aboard decision makes, asked of one
+        // craft. It answers about that craft only — never which, or how many, others contain it.
+        if (args.length >= 6 && "ship-contains".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            java.util.List<String> ids = toWorldById
-                    ? java.util.Collections.singletonList(args[3])
-                    : dev.stannismod.stellurgy.integration.vs.VSIntegration
-                            .shipIdsAt(world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
-                                    parseDoubleOr(args[4], 0));
-            if (ids.isEmpty()) {
-                send(sender, "{\"error\":\"no ship at point\"}");
+            boolean contains = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                    .shipIdsAt(world, parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0),
+                            parseDoubleOr(args[5], 0))
+                    .contains(args[2]);
+            send(sender, "{\"ok\":true,\"ship\":\"" + escapeJson(args[2]) + "\",\"contains\":" + contains + "}");
+            return;
+        }
+        // ship-registered <dim> <shipUuid> — whether this world's ship registry holds the NAMED ship,
+        // loaded or not. A pure read: unlike `ship-uuid`, it resolves nothing and loads nothing.
+        if (args.length >= 3 && "ship-registered".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            int sub = toWorldById ? 4 : 5;
+            java.util.UUID ship;
+            try {
+                ship = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"ship\":\"" + ship + "\",\"registered\":"
+                    + dev.stannismod.stellurgy.integration.vs.VSIntegration.isShipRegistered(world, ship) + "}");
+            return;
+        }
+        // to-world <dim> id <shipId> <subX> <subY> <subZ> — a subspace point of the NAMED ship in
+        // world coordinates. The positional form, which mapped through the first ship containing a
+        // point, is gone.
+        boolean toWorldById = args.length >= 7 && "to-world".equalsIgnoreCase(args[0])
+                && "id".equalsIgnoreCase(args[2]);
+        if (toWorldById) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.List<String> ids = java.util.Collections.singletonList(args[3]);
+            int sub = 4;
             double[] w = dev.stannismod.stellurgy.integration.vs.VSIntegration.toWorldFrameFor(
                     world, ids.get(0), parseDoubleOr(args[sub], 0), parseDoubleOr(args[sub + 1], 0),
                     parseDoubleOr(args[sub + 2], 0));
@@ -2271,7 +2182,6 @@ public class TestProbeCommand extends CommandBase {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("ok", true);
             m.put("shipId", ids.get(0));
-            m.put("shipsHere", toWorldById ? 1 : ids.size());
             m.put("worldX", w[0]);
             m.put("worldY", w[1]);
             m.put("worldZ", w[2]);
@@ -2279,48 +2189,38 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         // ship-repack <dim> id <shipId> <sx> <sy> <sz> <dstX> <dstY> <dstZ>
-        //   | ship-repack <dim> <sx> <sy> <sz> <dstX> <dstY> <dstZ> — the per-ship "crossing":
+        //   — the per-ship "crossing":
         // snapshot the ship's subspace SHIPYARD blocks (+TileEntities) via StorageChunk, deregister
         // the ship, paste the blocks at (dstX,dstY,dstZ), and re-assemble them into a fresh VS ship.
         // Proves a VS ship + its linked-TE state survive a pack/paste round-trip and re-VS. Any
         // EntityDummy within 8 blocks of the source is carried to the destination.
         //
-        // PREFER THE ID FORM. This verb CUTS a ship, and the positional form resolves the yard through
-        // shipyardBoundsAt — "whatever craft is nearest, with no distance bound" — so on a world
-        // holding a second craft, or a blockless remnant of one, it cuts a stranger. Production's own
-        // crossing has taken an identity since the jump departure was fixed; the caller says which
-        // craft it means and the source coordinates are then only WHERE, for the riders and the log.
+        // The caller says which craft it means; the source coordinates are only WHERE, for the riders
+        // and the log. (A positional form, which cut whatever craft was nearest, is gone.)
         boolean repackById = args.length >= 10 && "ship-repack".equalsIgnoreCase(args[0])
                 && "id".equalsIgnoreCase(args[2]);
-        if (repackById || (args.length >= 8 && "ship-repack".equalsIgnoreCase(args[0]))) {
+        if (repackById) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            java.util.UUID repackShip = null;
-            if (repackById) {
-                try {
-                    repackShip = java.util.UUID.fromString(args[3]);
-                } catch (IllegalArgumentException notAUuid) {
-                    send(sender, "{\"error\":\"ship-repack id needs a well-formed uuid\"}");
-                    return;
-                }
+            java.util.UUID repackShip;
+            try {
+                repackShip = java.util.UUID.fromString(args[3]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"ship-repack id needs a well-formed uuid\"}");
+                return;
             }
-            int a = repackById ? 4 : 2;
+            int a = 4;
             double sx = parseDoubleOr(args[a], 0), sy = parseDoubleOr(args[a + 1], 0),
                     sz = parseDoubleOr(args[a + 2], 0);
             int dstX = parseIntOr(args[a + 3], 0), dstY = parseIntOr(args[a + 4], 0),
                     dstZ = parseIntOr(args[a + 5], 0);
-            net.minecraft.util.math.AxisAlignedBB repackYard = repackShip == null
-                    ? dev.stannismod.stellurgy.integration.vs.VSIntegration
-                            .shipyardBoundsAt(world, sx, sy, sz)
-                    : dev.stannismod.stellurgy.integration.vs.VSIntegration
-                            .shipyardBoundsOf(world, repackShip);
+            net.minecraft.util.math.AxisAlignedBB repackYard = dev.stannismod.stellurgy.integration.vs
+                    .VSIntegration.shipyardBoundsOf(world, repackShip);
             if (repackYard == null) {
-                send(sender, repackShip == null
-                        ? "{\"error\":\"no ship at source\"}"
-                        : "{\"error\":\"no such ship loaded here\",\"shipId\":\"" + repackShip + "\"}");
+                send(sender, "{\"error\":\"no such ship loaded here\",\"shipId\":\"" + repackShip + "\"}");
                 return;
             }
             try {
@@ -2420,46 +2320,8 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
-        // teleport-ship <dim> <x> <y> <z> <dstX> <dstY> <dstZ> — rigid-teleport the ship nearest to
-        // (x,y,z): the world-frame POSE moves (subspace blocks stay), VS Y-limits widen as needed, and
-        // any aboard EntityDummy (+its rider) is carried. Park->write->unpark around the transform write.
-        if (args.length >= 8 && "teleport-ship".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            double sx = parseDoubleOr(args[2], 0), sy = parseDoubleOr(args[3], 0), sz = parseDoubleOr(args[4], 0);
-            double dstX = parseDoubleOr(args[5], 0), dstY = parseDoubleOr(args[6], 0), dstZ = parseDoubleOr(args[7], 0);
-            java.util.List<dev.stannismod.stellurgy.entity.EntityDummy> riders =
-                    world.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityDummy.class,
-                            new net.minecraft.util.math.AxisAlignedBB(
-                                    sx - 8, sy - 8, sz - 8, sx + 8, sy + 8, sz + 8));
-            // teleportShipTo mirrors VS's own recipe: the ship comes out PARKED (physics off); re-enable
-            // with "vs unpark" once the transform adoption has propagated (a tick later).
-            boolean ok = dev.stannismod.stellurgy.integration.vs.VSIntegration.teleportShipTo(
-                    world, sx, sy, sz, dstX, dstY, dstZ);
-            if (ok) {
-                for (dev.stannismod.stellurgy.entity.EntityDummy d : riders) {
-                    d.setPositionAndUpdate(d.posX + (dstX - sx), d.posY + (dstY - sy), d.posZ + (dstZ - sz));
-                }
-            }
-            send(sender, "{\"ok\":" + ok + ",\"ridersCarried\":" + riders.size() + "}");
-            return;
-        }
-        // unpark <dim> <x> <y> <z> — re-enable physics on the ship nearest to (x,y,z) (after a
-        // teleport-ship, which leaves the ship parked per the VS teleport recipe).
-        if (args.length >= 5 && "unpark".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            boolean ok = dev.stannismod.stellurgy.integration.vs.VSIntegration.unparkShipAt(world,
-                    parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0));
-            send(sender, "{\"ok\":" + ok + "}");
-            return;
-        }
+        // The positional `teleport-ship` and `unpark` ARE GONE: each moved "the ship nearest to
+        // (x,y,z)". Their `-by-id` forms are the verbs.
         // push-ship-by-id <dim> <shipId> <vx> <vy> <vz> — set the linear-velocity setpoint
         // (blocks/second) of the ship NAMED by shipId.
         if (args.length >= 6 && "push-ship-by-id".equalsIgnoreCase(args[0])) {
@@ -2471,8 +2333,7 @@ public class TestProbeCommand extends CommandBase {
             boolean pushed = dev.stannismod.stellurgy.integration.vs.VSIntegration.pushShipById(
                     world, args[2],
                     parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0), parseDoubleOr(args[5], 0));
-            send(sender, "{\"pushed\":" + pushed + ",\"count\":"
-                    + dev.stannismod.stellurgy.integration.vs.VSIntegration.loadedShipCount(world) + "}");
+            send(sender, "{\"pushed\":" + pushed + "}");
             return;
         }
         // spin-ship-by-id <dim> <shipId> <wx> <wy> <wz> — TEST-ONLY: set the angular velocity (rad/s)
@@ -2858,36 +2719,9 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"afcY\":" + afcPos.getY() + ",\"afcZ\":" + afcPos.getZ() + "}");
             return;
         }
-        // seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll> — drive the ship through the
-        // PILOT SEAT path server-side: find the loaded pilot seat, resolve its linked AFC via the
-        // stored offset, and set that AFC's per-tile pilot input. Bisects the seat->AFC->force
-        // pipeline from the client packet/keybind path — if the ship moves under this but not under
-        // a real seated pilot, the break is client-side. Reports whether the seat + its AFC resolved.
-        if (args.length >= 8 && "seat-input".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            dev.stannismod.stellurgy.tile.TilePilotSeat seat = null;
-            for (TileEntity te : world.loadedTileEntityList) {
-                if (te instanceof dev.stannismod.stellurgy.tile.TilePilotSeat) {
-                    seat = (dev.stannismod.stellurgy.tile.TilePilotSeat) te;
-                    break;
-                }
-            }
-            if (seat == null) {
-                send(sender, "{\"seatFound\":false}");
-                return;
-            }
-            probeApplySeatInput(sender, seat, args, 2);
-            return;
-        }
         // seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll> — the same
-        // seat->AFC drive, aimed at ONE craft by identity. The unaddressed form above takes
-        // whichever pilot seat the world happens to list first, which is only ever right in a world
-        // holding a single ship; a scenario sharing its world with other craft must say which one it
-        // means, exactly as `point-by-id` does. The computer is resolved from the ship, then the
+        // seat->AFC drive, aimed at ONE craft by identity (the unaddressed form, which took the
+        // first pilot seat the world listed, is gone). The computer is resolved from the ship, then the
         // SEAT LINKED TO THAT COMPUTER — so the seat->AFC hop this verb exists to exercise is still
         // the thing under test, rather than being short-circuited by the lookup.
         if (args.length >= 9 && "seat-input-by-id".equalsIgnoreCase(args[0])) {
@@ -2952,24 +2786,16 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        // seat-mount <dim> [id <shipUuid> | near <x> <y> <z> [maxDist]] — spawn the pilot seat's dummy
-        // mount and return its entity id, so a test bot can `player mount-entity <id>` and become the
-        // ship's pilot. Mirrors BlockPilotSeat.onBlockActivated server-side (the bot cannot right-click
-        // a ship block). Without a qualifier the FIRST loaded seat answers, which is only defensible on
-        // a world holding one ship — the reply carries "seatsLoaded" so a caller can see when it is not,
-        // and measured 2026-09-06 not one of the twelve bare call sites in the suite read it.
-        if (args.length >= 2 && "seat-mount".equalsIgnoreCase(args[0])) {
+        // seat-mount <dim> id <shipUuid> — spawn the pilot seat's dummy mount of the NAMED ship and
+        // return its entity id, so a test bot can `player mount-entity <id>` and become the ship's
+        // pilot. Mirrors BlockPilotSeat.onBlockActivated server-side (the bot cannot right-click a ship
+        // block). The bare form, which took the first loaded seat of the world, is gone.
+        if (args.length >= 4 && "seat-mount".equalsIgnoreCase(args[0]) && "id".equalsIgnoreCase(args[2])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            // WHICH seat. The bare form takes the first loaded one, and on a world holding several
-            // ships that is a coin toss reported as a fact: it once mounted a pilot onto a ship
-            // 16,000,000 blocks away from the one under test, and the reply was indistinguishable
-            // from success. So the seat COUNT now travels in every reply, and a caller that means
-            // one particular ship names it with "near <x> <y> <z> [maxDist]" — resolved through that
-            // ship's chunk CLAIM, an identity, rather than through whichever seat is nearest.
             java.util.List<dev.stannismod.stellurgy.tile.TilePilotSeat> seats =
                     new java.util.ArrayList<>();
             for (TileEntity te : world.loadedTileEntityList) {
@@ -2984,15 +2810,9 @@ public class TestProbeCommand extends CommandBase {
             // was trusting a distance to a thing that has no extent in the world. The seat is
             // matched through the ship's own chunk CLAIM (shipIdOwningBlock), so the seat found
             // belongs to that hull or none is returned.
-            if (args.length >= 4 && "id".equalsIgnoreCase(args[2])) {
-                wantShipId = args[3];
-            }
+            wantShipId = args[3];
             dev.stannismod.stellurgy.tile.TilePilotSeat seat = null;
             for (dev.stannismod.stellurgy.tile.TilePilotSeat candidate : seats) {
-                if (wantShipId == null) {
-                    seat = candidate;
-                    break;
-                }
                 if (wantShipId.equals(dev.stannismod.stellurgy.integration.vs.VSIntegration
                         .shipIdOwningBlock(world, candidate.getPos()))) {
                     seat = candidate;
@@ -3000,8 +2820,7 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             if (seat == null) {
-                send(sender, "{\"seatFound\":false,\"seatsLoaded\":" + seats.size()
-                        + (wantShipId == null ? "" : ",\"wantedShip\":\"" + wantShipId + "\"") + "}");
+                send(sender, "{\"seatFound\":false,\"wantedShip\":\"" + wantShipId + "\"}");
                 return;
             }
             BlockPos sp = seat.getPos();
@@ -3025,7 +2844,6 @@ public class TestProbeCommand extends CommandBase {
             }
             send(sender, "{\"seatFound\":true,\"dummyId\":" + dummy.getEntityId()
                     + ",\"reused\":" + reused
-                    + ",\"seatsLoaded\":" + seats.size()
                     + ",\"seatX\":" + sp.getX() + ",\"seatY\":" + sp.getY() + ",\"seatZ\":" + sp.getZ() + "}");
             return;
         }
@@ -3295,8 +3113,8 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             boolean seatById = "id".equalsIgnoreCase(args[2]);
-            if (!seatById && args.length < 5) {
-                send(sender, "{\"error\":\"find-seat needs <dim> id <uuid> or <dim> <x> <y> <z>\"}");
+            if (!seatById) {
+                send(sender, "{\"error\":\"find-seat needs <dim> id <uuid>; the positional form is gone\"}");
                 return;
             }
             java.util.UUID seatShipUuid = null;
@@ -3308,14 +3126,8 @@ public class TestProbeCommand extends CommandBase {
                     return;
                 }
             }
-            int ax = seatById ? 0 : parseIntOr(args[2], 0);
-            int ay = seatById ? 0 : parseIntOr(args[3], 0);
-            int az = seatById ? 0 : parseIntOr(args[4], 0);
-            net.minecraft.util.math.AxisAlignedBB yard = seatById
-                    ? dev.stannismod.stellurgy.integration.vs.VSIntegration.shipyardBoundsOf(
-                            world, seatShipUuid)
-                    : dev.stannismod.stellurgy.integration.vs.VSIntegration.shipyardBoundsAt(
-                            world, ax + 0.5, ay + 0.5, az + 0.5);
+            net.minecraft.util.math.AxisAlignedBB yard = dev.stannismod.stellurgy.integration.vs
+                    .VSIntegration.shipyardBoundsOf(world, seatShipUuid);
             net.minecraft.util.math.BlockPos seatSub = pilotSeatInYard(world, yard);
             // The bot's spawn point: the SEAT's live world position (keyed by its subspace block - the world
             // anchor is not a managed block, so getShipWorldPosition/getSeatWorldPosition need the subspace pos).
@@ -3742,8 +3554,8 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"entityId\":" + item.getEntityId() + ",\"armed\":" + armed + "}");
             return;
         }
-        send(sender, "{\"error\":\"usage: vs ship-count <dim>|ships-registered <dim>"
-                + "|ship-info <dim> <x> <y> <z> [maxDist]|ship-info <dim> id <shipId>"
+        send(sender, "{\"error\":\"usage: vs ship-info <dim> id <shipId>"
+                + "|load-ship <dim> <shipId>|destroy-ship <dim> <shipId>"
                 + "|push-ship-by-id <dim> <shipId> <vx> <vy> <vz>"
                 + "|spin-ship-by-id <dim> <shipId> <wx> <wy> <wz>"
                 + "|force-vel-by-id|force-rot-by-id <dim> <shipId> <x> <y> <z>"
@@ -3751,11 +3563,12 @@ public class TestProbeCommand extends CommandBase {
                 + "|ff-cruise-at|force-vel-at <dim> <x> <y> <z> <a> <b> <c>"
                 + "|point-at <dim> <x> <y> <z> <qw> <qx> <qy> <qz>"
                 + "|phys-diag <dim> <shipId> <afcX> <afcY> <afcZ>"
-                + "|seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
                 + "|seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
                 + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
                 + "|unpark-by-id <dim> <shipId>|managed-by <dim> <x> <y> <z>"
-                + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|arrival-trace"
+                + "|ship-contains <dim> <shipId> <x> <y> <z>|ship-registered <dim> <shipId>"
+                + "|seat-mount <dim> id <shipId>|seat-mount-at <dim> <x> <y> <z>"
+                + "|seat-occupy <dim> <x> <y> <z>|arrival-trace"
                 + "|player-ship-data|would-take-over|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");
     }
@@ -4723,9 +4536,13 @@ public class TestProbeCommand extends CommandBase {
 
     private void handleDrive(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 5) {
-            send(sender, "{\"error\":\"usage: drive build|extend|info|charge|push|arm|press <dim> <afcX> <afcY> <afcZ> ...\"}");
+            send(sender, "{\"error\":\"usage: drive build|extend|info|observe|charge|push|arm|press <dim> <afcX> <afcY> <afcZ> ...\"}");
             return;
         }
+        // `observe` is `info` that writes nothing: `info` resolves the drive as production does, which
+        // links an unlinked machine standing in the ship's claim and mints the computer's durable id;
+        // `observe` reads the machines the ship already holds and the id it already carries.
+        boolean observe = "observe".equalsIgnoreCase(args[0]);
         if ("extend".equalsIgnoreCase(args[0])) {
             // Dispatched before anything below reads the ship: every read there goes through
             // ShipDrive, and ShipDrive ADOPTS any unlinked machine standing in the claim — the very
@@ -4745,11 +4562,13 @@ public class TestProbeCommand extends CommandBase {
         java.util.UUID shipId = null;
         net.minecraft.tileentity.TileEntity afcTe = world.getTileEntity(afc);
         if (afcTe instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) {
-            shipId = ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe)
-                    .getOrCreateShipId();
+            dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer computerTe =
+                    (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe;
+            shipId = observe ? computerTe.shipIdOrNull() : computerTe.getOrCreateShipId();
         }
-        dev.stannismod.stellurgy.hyperdrive.ShipDrive drive =
-                new dev.stannismod.stellurgy.hyperdrive.ShipDrive(world, afc);
+        dev.stannismod.stellurgy.hyperdrive.ShipDrive drive = observe
+                ? dev.stannismod.stellurgy.hyperdrive.ShipDrive.observedFrom(world, afc)
+                : new dev.stannismod.stellurgy.hyperdrive.ShipDrive(world, afc);
         long now = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
 
         if ("build".equalsIgnoreCase(verb)) {
@@ -4846,9 +4665,10 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"spooling\":" + computer.isSpooling() + "}");
             return;
         }
-        if ("info".equalsIgnoreCase(verb)) {
-            dev.stannismod.stellurgy.navigation.ShipNavigation nav =
-                    new dev.stannismod.stellurgy.navigation.ShipNavigation(world, afc, shipId);
+        if ("info".equalsIgnoreCase(verb) || observe) {
+            dev.stannismod.stellurgy.navigation.ShipNavigation nav = observe
+                    ? dev.stannismod.stellurgy.navigation.ShipNavigation.observedFrom(world, afc, shipId)
+                    : new dev.stannismod.stellurgy.navigation.ShipNavigation(world, afc, shipId);
             dev.stannismod.stellurgy.hyperdrive.ShipDriveStats stats = drive.stats();
             dev.stannismod.stellurgy.hyperdrive.JumpWindow.Coverage coverage = drive.coverage();
             dev.stannismod.stellurgy.navigation.JumpGate.Verdict verdict =
@@ -5604,7 +5424,9 @@ public class TestProbeCommand extends CommandBase {
         // way to tell WHICH half is empty: the ledger (no settled ship -> nothing is produced for
         // anyone), the registry (a cell with genuinely nothing in it), or the drawing. This reports
         // the first two exactly, so "I see no planet" stops being a guess. Read-only.
+        // `bodies id <shipId>` answers the ledger row of that one craft alone.
         if (args.length >= 1 && "bodies".equalsIgnoreCase(args[0])) {
+            String onlyShip = args.length >= 3 && "id".equalsIgnoreCase(args[1]) ? args[2] : null;
             dev.stannismod.stellurgy.space.SpaceSubsystem spaceStack = liveStack();
             if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
@@ -5618,7 +5440,8 @@ public class TestProbeCommand extends CommandBase {
             for (java.util.Map.Entry<java.util.UUID, dev.stannismod.stellurgy.space.ShipLedger.Entry>
                     shipEntry : led.snapshot().entrySet()) {
                 dev.stannismod.stellurgy.space.ShipLedger.Entry e = shipEntry.getValue();
-                if (e == null || e.coord == null) {
+                if (e == null || e.coord == null
+                        || (onlyShip != null && !onlyShip.equals(String.valueOf(shipEntry.getKey())))) {
                     continue;
                 }
                 if (shipCount++ > 0) {
@@ -5697,8 +5520,7 @@ public class TestProbeCommand extends CommandBase {
                 }
                 out.append("],\"cellBodyCount\":").append(bodyCount).append('}');
             }
-            out.append("],\"shipCount\":").append(shipCount)
-                    .append(",\"registry\":").append(reg != null);
+            out.append("],\"registry\":").append(reg != null);
             // The FEED itself, exactly as the broadcast would build it: one entry per live cell, keyed
             // by the slot dim whose sky it is. The ships array above cannot answer "why is my sky
             // empty" on its own - a ship is not what the feed is derived from, and a cell can be live
@@ -6273,7 +6095,7 @@ public class TestProbeCommand extends CommandBase {
             }
             // Assembly is DEFERRED, not threaded: `queueShipSpawn` only enqueues, and the manager's
             // own tick drains that queue. So the seat + ship world pos are NOT queryable
-            // yet. The caller polls `vs ship-count-all`/`load-ships`/`ship-count` for the ship, then reads the
+            // yet. The caller links on this craft's own `ship_usable` (by its durable id), then reads the
             // post-assembly pilot-seat subspace pos + ship world pos via `vs find-seat <dim> id <shipId>`.
             send(sender, "{\"ok\":true,\"originDim\":" + originDim
                     + ",\"anchorX\":1,\"anchorY\":64,\"anchorZ\":1"
@@ -8692,28 +8514,31 @@ public class TestProbeCommand extends CommandBase {
                     + (assembled == null ? "null" : "\"" + assembled + "\"") + "}");
             return;
         }
-        if (args.length >= 2 && "vs-count".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer w = net.minecraftforge.common.DimensionManager.getWorld(
-                    parseIntOr(args[1], Integer.MIN_VALUE));
-            int c = w == null ? -1
-                    : dev.stannismod.stellurgy.integration.vs.VSIntegration.queryableShipCount(w);
-            send(sender, "{\"ok\":true,\"count\":" + c + "}");
-            return;
-        }
         if (args.length >= 3 && "reload".equalsIgnoreCase(args[0])) {
-            // Synchronous unload (saves VS ship data via VS's per-world save) + reload of the SAME
-            // slot, bound to a cell. This is the risky path: setWorld(null) on a world with a VS ship
-            // and a live physics thread. Reports rather than crashing where it can.
+            // reload <slot> <cell> [<shipUuid>] — synchronous unload (saves VS ship data via VS's
+            // per-world save) + reload of the SAME slot, bound to a cell. This is the risky path:
+            // setWorld(null) on a world with a VS ship and a live physics thread. Reports rather than
+            // crashing where it can.
+            java.util.UUID ship = null;
+            if (args.length >= 4) {
+                try {
+                    ship = java.util.UUID.fromString(args[3]);
+                } catch (IllegalArgumentException notAUuid) {
+                    send(sender, "{\"error\":\"shipUuid is not a uuid\"}");
+                    return;
+                }
+            }
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             dev.stannismod.stellurgy.space.SpaceSlotPool.unload(dim);
             net.minecraft.world.WorldServer w =
                     dev.stannismod.stellurgy.space.SpaceSlotPool.loadScratch(dim, args[2]);
-            // Read the queryable ship count SYNCHRONOUSLY here (same server-thread call as the reload,
-            // before any tick can auto-unload the world): VS loads its per-world ship registry from
-            // the world capability at construction, so a surviving ship shows up immediately.
-            int count = w == null ? -1
-                    : dev.stannismod.stellurgy.integration.vs.VSIntegration.queryableShipCount(w);
-            send(sender, "{\"ok\":true,\"present\":" + (w != null) + ",\"countAfterReload\":" + count + "}");
+            // Whether the reloaded world registers the NAMED ship, read SYNCHRONOUSLY here (same
+            // server-thread call as the reload, before any tick can auto-unload the world): VS loads
+            // its per-world ship registry from the world capability at construction, so a surviving
+            // ship is registered immediately. Without a uuid nothing is asked about any ship.
+            String shipField = ship == null ? "" : ",\"ship\":\"" + ship + "\",\"shipRegistered\":"
+                    + (w != null && dev.stannismod.stellurgy.integration.vs.VSIntegration.isShipRegistered(w, ship));
+            send(sender, "{\"ok\":true,\"present\":" + (w != null) + shipField + "}");
             return;
         }
         if (args.length >= 1 && "vs-cap".equalsIgnoreCase(args[0])) {
@@ -9411,18 +9236,26 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(out));
             return;
         }
-        // orbit-line <dim> [<blocks>|unset]: a world's atmosphere<->orbit line as production reads it,
-        // and - with a second argument - the planet file's own <orbitHeight> for it, stated or cleared,
-        // which is how a test arranges a low line without writing a whole galaxy. Absence is a value:
+        // orbit-line <dim>: a world's atmosphere<->orbit line as production reads it. Absence is a value:
         // `line` and `entryCeiling` are null for a world that has no line.
-        if (args.length >= 2 && "orbit-line".equalsIgnoreCase(args[0])) {
+        // state-orbit-line <dim> <blocks>|unset: the planet file's own <orbitHeight> for it, stated or
+        // cleared, then the same reading - how a mechanics test arranges a low line without writing a
+        // whole galaxy. Two verbs, so that a read and a write differ by NAME: the e2e census admits the
+        // first and refuses the second, and it cannot read arguments.
+        boolean stating = "state-orbit-line".equalsIgnoreCase(args.length > 0 ? args[0] : "");
+        if (args.length >= 2 && ("orbit-line".equalsIgnoreCase(args[0]) || stating)) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
             if (props == null) {
                 send(sender, "{\"error\":\"unknown planet\",\"dim\":" + dim + "}");
                 return;
             }
-            if (args.length >= 3) {
+            if (stating != (args.length >= 3)) {
+                send(sender, "{\"error\":\"orbit-line <dim> reads; state-orbit-line <dim> <blocks>|unset"
+                        + " states\",\"dim\":" + dim + "}");
+                return;
+            }
+            if (stating) {
                 int stated = "unset".equalsIgnoreCase(args[2]) ? DimensionProperties.ORBIT_HEIGHT_UNSET
                         : parseIntOr(args[2], Integer.MIN_VALUE);
                 if (stated == Integer.MIN_VALUE) {
@@ -9610,62 +9443,28 @@ public class TestProbeCommand extends CommandBase {
     // Rocket probes ------------------------------------------------------
 
     private void handleRocket(MinecraftServer server, ICommandSender sender, String[] args) {
-        if (args.length == 0 || "list".equalsIgnoreCase(args[0])) {
-            // Dimension argument optional — defaults to all loaded dimensions.
-            int dimFilter = args.length >= 2 ? parseIntOr(args[1], Integer.MIN_VALUE) : Integer.MIN_VALUE;
-            StringBuilder builder = new StringBuilder("{\"rockets\":[");
-            boolean first = true;
-            for (WorldServer world : server.worlds) {
-                if (dimFilter != Integer.MIN_VALUE && world.provider.getDimension() != dimFilter) continue;
-                for (Entity entity : world.loadedEntityList) {
-                    if (!(entity instanceof EntityRocket)) continue;
-                    if (!first) builder.append(',');
-                    first = false;
-                    // `age` is the discriminator a caller needs when the list answers with MORE
-                    // than one craft and has to say which of them it built: a rocket assembled a
-                    // moment ago carries tens of ticks, one left behind by an earlier scenario
-                    // carries thousands. Position alone cannot separate those, because a craft that
-                    // has moved and a craft built somewhere else look identical in a coordinate.
-                    builder.append("{\"id\":").append(entity.getEntityId())
-                            .append(",\"uuid\":\"").append(entity.getPersistentID().toString()).append("\"")
-                            .append(",\"dim\":").append(world.provider.getDimension())
-                            .append(",\"age\":").append(entity.ticksExisted)
-                            .append(",\"pos\":[").append(entity.posX).append(',').append(entity.posY).append(',').append(entity.posZ).append("]}");
-                }
-            }
-            builder.append("]}");
-            send(sender, builder.toString());
+        // `rocket list` and `rocket clear` ARE GONE (2026-10-14): the one enumerated every rocket of
+        // every world, the other killed every rocket of one. A test holds its rocket's id from the
+        // record of its own assembly and disposes of that rocket by id.
+        if (args.length == 0) {
+            send(sender, "{\"error\":\"rocket needs a verb\"}");
             return;
         }
-        if ("clear".equalsIgnoreCase(args[0]) && args.length >= 2) {
-            // /stellurgytest rocket clear <dim> — remove every EntityRocket from one world.
-            //
-            // The sibling of `vs destroy-ships`, and it exists for the same measured reason: a craft
-            // a scenario walks away from goes on MOVING. Measured 2026-09-16 in a shared-world
-            // class — a rocket 93 ticks old, 120 blocks up and 80 blocks downrange of where it was
-            // built, standing in the next scenario's patch of world and making that scenario's "how
-            // many craft are here" question ambiguous. A patch of world keeps two scenarios apart
-            // only while what is in it stays put.
+        if ("remove".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /stellurgytest rocket remove <entityId> — a scenario's disposal of the rocket it built.
             //
             // Riders come off first: setDead on a ridden entity leaves the passenger falling from
-            // wherever the craft had got to, and the next scenario then begins with its bot in the
-            // air. What is NOT reclaimed is the rocket's StorageChunk — it is dropped with the
-            // entity and collected with the world, which is a per-class thing here; a caller that
-            // needs that storage back needs a different verb than this one.
-            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
-            net.minecraft.world.WorldServer target = server.getWorld(dim);
-            if (target == null) {
-                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            // wherever the craft had got to. The entity is marked dead on this call, so the reply's
+            // `removed` is the disposal itself; the world drops it from its lists on its next tick.
+            // What is NOT reclaimed is the rocket's StorageChunk — it is collected with the entity.
+            EntityRocket rocket = findRocket(server, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (rocket == null) {
+                send(sender, "{\"ok\":true,\"found\":false}");
                 return;
             }
-            int cleared = 0;
-            for (Entity entity : new java.util.ArrayList<>(target.loadedEntityList)) {
-                if (!(entity instanceof EntityRocket)) continue;
-                entity.removePassengers();
-                entity.setDead();
-                cleared++;
-            }
-            send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"cleared\":" + cleared + "}");
+            rocket.removePassengers();
+            rocket.setDead();
+            send(sender, "{\"ok\":true,\"found\":true,\"removed\":" + rocket.isDead + "}");
             return;
         }
         if ("assemble".equalsIgnoreCase(args[0]) && args.length >= 4) {
@@ -11193,10 +10992,8 @@ public class TestProbeCommand extends CommandBase {
             //    second scan changes status, abort there too.
             builder.assembleRocket();
             String postStatusName = ((Enum<?>) getStatusMethod.invoke(builder)).name();
-            // 6. Find the spawned rocket inside the pad BB.
-            java.util.List<dev.stannismod.stellurgy.entity.EntityRocket> rockets =
-                    world.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityRocket.class, bb);
-            int entityId = rockets.isEmpty() ? -1 : rockets.get(0).getEntityId();
+            // 6. No search for the rocket this press made: the pad holds whatever stands on it, and the
+            //    rocket's id — and whether there was one — is the assembler's own record of its birth.
             // 7. WHETHER THIS PRESS BUILT a ship, as a value: the assembler's own verdict, FINISHED,
             //    which only the hand-over writes — a press that only WARNED (thrust-to-weight under one
             //    here) leaves the scan's SUCCESS, and one the substrate would refuse names its refusal.
@@ -11217,7 +11014,7 @@ public class TestProbeCommand extends CommandBase {
                         + ",\"gravity\":" + scanReadout.gravity() + "}";
             }
             send(sender, "{\"ok\":true,\"status\":\"" + postStatusName
-                    + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size()
+                    + "\""
                     + ",\"afcCount\":" + afcCount
                     + ",\"shipId\":" + (durableShipId == null ? "null" : "\"" + durableShipId + "\"")
                     + ",\"built\":" + shipBuilt
@@ -11291,6 +11088,40 @@ public class TestProbeCommand extends CommandBase {
         } catch (RuntimeException e) {
             send(sender, "{\"error\":\"" + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
         }
+    }
+
+    /**
+     * {@code crafts census} — every craft the server holds: each registered ship of every loaded
+     * world, loaded or not, and each live rocket entity of every loaded world.
+     *
+     * <p>The instrument of the shared test bases' check that a scenario left no craft behind, and of
+     * nothing else: a test never counts or searches crafts, it holds the ids of its own. SILENT about
+     * a world that is not loaded — a ship registered there, or a rocket saved in its chunks, is not
+     * in the reply — and about a rocket in an unloaded chunk of a loaded world.</p>
+     */
+    private void handleCrafts(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 1 || !"census".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"crafts needs: census\"}");
+            return;
+        }
+        StringBuilder ships = new StringBuilder();
+        StringBuilder rockets = new StringBuilder();
+        for (WorldServer world : server.worlds) {
+            int dim = world.provider.getDimension();
+            for (java.util.Map<String, Object> row
+                    : dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShips(world)) {
+                if (ships.length() > 0) ships.append(',');
+                ships.append("{\"dim\":").append(dim).append(",\"ship\":").append(jsonMap(row)).append('}');
+            }
+            for (Entity entity : world.loadedEntityList) {
+                if (!(entity instanceof EntityRocket) || entity.isDead) continue;
+                if (rockets.length() > 0) rockets.append(',');
+                rockets.append("{\"dim\":").append(dim)
+                        .append(",\"e\":").append(entity.getEntityId())
+                        .append(",\"uuid\":\"").append(entity.getUniqueID()).append("\"}");
+            }
+        }
+        send(sender, "{\"ok\":true,\"ships\":[" + ships + "],\"rockets\":[" + rockets + "]}");
     }
 
     private static EntityRocket findRocket(MinecraftServer server, int entityId) {
@@ -11855,7 +11686,8 @@ public class TestProbeCommand extends CommandBase {
             boolean mounted = rocket.isPassenger(player);
             rocket.deploySatelliteFromHatch(hatch);
 
-            send(sender, "{\"ok\":true,\"mounted\":" + mounted
+            // The rocket this verb spawned, so the scenario can dispose of it by id.
+            send(sender, "{\"ok\":true,\"rocketId\":" + rocket.getEntityId() + ",\"mounted\":" + mounted
                     + ",\"player\":\"" + escapeJson(player.getName()) + "\"}");
             return;
         }
@@ -15096,6 +14928,155 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
+     * {@code /stellurgytest arrange …} — the TYPED arrangements that stand where a mechanics test once wrote
+     * tile, item or entity NBT by command (a {@code blockdata}, or a {@code give} / {@code summon} carrying a
+     * data tag, which a MECHANICS server refuses). Each sets one named state through production's own setter
+     * and answers what that setter left:
+     * <ul>
+     *   <li>{@code wheel-momentum <dim> <x> <y> <z> <X|Y|Z> <value>} — a reaction wheel's stored momentum on
+     *       one axis, through {@code TileReactionWheel#setMomentum} (the state a saved world brings back);</li>
+     *   <li>{@code coded-item <player> <code>} — an AFFS code device carrying {@code code}, through
+     *       {@code CodeUtils#setCode}, into the player's inventory;</li>
+     *   <li>{@code charged-item <player> <item> <energy>} — one {@code item} charged through its Forge Energy
+     *       capability ({@code receiveEnergy}, what a charger calls), into the player's inventory;</li>
+     *   <li>{@code held-target <dim> <x> <y> <z> <uuidMost> <uuidLeast>} — a zombie with no AI that takes no
+     *       damage, of the given uuid, through the entity's own setters, spawned at that point.</li>
+     * </ul>
+     */
+    private void handleTypedArrangement(MinecraftServer server, ICommandSender sender, String[] args) {
+        String sub = args.length > 0 ? args[0].toLowerCase(java.util.Locale.ROOT) : "";
+        try {
+            switch (sub) {
+                case "wheel-momentum": {
+                    WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(Integer.parseInt(args[1]));
+                    BlockPos pos = new BlockPos(Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]));
+                    TileEntity tile = world == null ? null : world.getTileEntity(pos);
+                    if (!(tile instanceof dev.stannismod.stellurgy.tile.TileReactionWheel)) {
+                        send(sender, "{\"error\":\"no reaction wheel at " + pos + " in dim " + args[1] + "\"}");
+                        return;
+                    }
+                    int axis = "XYZ".indexOf(args[5].toUpperCase(java.util.Locale.ROOT));
+                    if (axis < 0 || args[5].length() != 1) {
+                        send(sender, "{\"error\":\"axis is X, Y or Z, not " + escapeJson(args[5]) + "\"}");
+                        return;
+                    }
+                    dev.stannismod.stellurgy.tile.TileReactionWheel wheel = (dev.stannismod.stellurgy.tile.TileReactionWheel) tile;
+                    wheel.setMomentum(axis, Double.parseDouble(args[6]));
+                    send(sender, "{\"ok\":true,\"axis\":\"" + args[5] + "\",\"momentum\":" + wheel.momentum(axis) + "}");
+                    return;
+                }
+                case "coded-item": {
+                    EntityPlayerMP player = server.getPlayerList().getPlayerByUsername(args[1]);
+                    net.minecraft.item.Item device = net.minecraft.item.Item.getByNameOrId("affs:code_device");
+                    if (player == null || device == null) {
+                        send(sender, "{\"error\":\"no player " + escapeJson(args[1]) + " or no affs:code_device\"}");
+                        return;
+                    }
+                    net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(device);
+                    dev.stannismod.stellurgy.affs.util.CodeUtils.setCode(stack, args[2]);
+                    String code = dev.stannismod.stellurgy.affs.util.CodeUtils.getCode(stack);
+                    handOver(sender, player, stack, "\"code\":\"" + escapeJson(String.valueOf(code)) + "\"");
+                    return;
+                }
+                case "charged-item": {
+                    EntityPlayerMP player = server.getPlayerList().getPlayerByUsername(args[1]);
+                    net.minecraft.item.Item item = net.minecraft.item.Item.getByNameOrId(args[2]);
+                    if (player == null || item == null) {
+                        send(sender, "{\"error\":\"no player " + escapeJson(args[1]) + " or no item " + escapeJson(args[2]) + "\"}");
+                        return;
+                    }
+                    net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(item);
+                    net.minecraftforge.energy.IEnergyStorage energy =
+                            stack.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+                    if (energy == null) {
+                        send(sender, "{\"error\":\"" + escapeJson(args[2]) + " exposes no Forge Energy capability\"}");
+                        return;
+                    }
+                    int received = energy.receiveEnergy(Integer.parseInt(args[3]), false);
+                    handOver(sender, player, stack, "\"received\":" + received + ",\"stored\":" + energy.getEnergyStored());
+                    return;
+                }
+                case "held-target": {
+                    WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(Integer.parseInt(args[1]));
+                    if (world == null) {
+                        send(sender, "{\"error\":\"dim " + escapeJson(args[1]) + " is not loaded\"}");
+                        return;
+                    }
+                    net.minecraft.entity.monster.EntityZombie zombie = new net.minecraft.entity.monster.EntityZombie(world);
+                    zombie.setLocationAndAngles(Double.parseDouble(args[2]), Double.parseDouble(args[3]),
+                            Double.parseDouble(args[4]), 0.0F, 0.0F);
+                    zombie.setNoAI(true);
+                    zombie.setEntityInvulnerable(true);
+                    zombie.setUniqueId(new java.util.UUID(Long.parseLong(args[5]), Long.parseLong(args[6])));
+                    boolean spawned = world.spawnEntity(zombie);
+                    send(sender, "{\"ok\":" + spawned + ",\"uuid\":\"" + zombie.getUniqueID() + "\"}");
+                    return;
+                }
+                default:
+                    send(sender, "{\"error\":\"usage: arrange wheel-momentum|coded-item|charged-item|held-target …\"}");
+            }
+        } catch (NumberFormatException | ArrayIndexOutOfBoundsException badArguments) {
+            send(sender, "{\"error\":\"arrange " + escapeJson(sub) + ": bad arguments (" + escapeJson(String.valueOf(badArguments)) + ")\"}");
+        }
+    }
+
+    /** {@code stack} into {@code player}'s inventory, answered with {@code fields}; refused when it has no room. */
+    private void handOver(ICommandSender sender, EntityPlayerMP player, net.minecraft.item.ItemStack stack, String fields) {
+        if (!player.inventory.addItemStackToInventory(stack)) {
+            send(sender, "{\"error\":\"the player's inventory has no room\"}");
+            return;
+        }
+        player.inventoryContainer.detectAndSendChanges();
+        send(sender, "{\"ok\":true," + fields + "}");
+    }
+
+    /**
+     * {@code /stellurgytest e2e filled-space-chest} — the named exception {@link E2EModeGate#FILLED_SPACE_CHEST}:
+     * hands the ONE player online a space chestplate carrying a pressure tank full of oxygen, into his
+     * inventory. Nothing is equipped: he puts it on himself.
+     *
+     * <p>Made the way production makes one: the tank goes in through the chest's own
+     * {@code addArmorComponent} (what the suit workstation calls), and the oxygen through the chest's own
+     * {@code increment} (what a gas charge pad calls), up to the chest's own {@code getMaxAir}. Refuses —
+     * hands nothing — when there is not exactly one player, when the items are missing, when the chest does
+     * not come out full, or when his inventory has no room for it.</p>
+     */
+    private void handTheFilledSpaceChest(MinecraftServer server, ICommandSender sender) {
+        java.util.List<EntityPlayerMP> players = server.getPlayerList().getPlayers();
+        if (players.size() != 1) {
+            send(sender, "{\"error\":\"the filled space chest is handed to THE player, and " + players.size()
+                    + " players are online\"}");
+            return;
+        }
+        EntityPlayerMP player = players.get(0);
+        net.minecraft.item.Item chestItem = dev.stannismod.stellurgy.api.StellurgyItems.itemSpaceSuit_Chest;
+        net.minecraft.item.Item tankItem = dev.stannismod.stellurgy.api.StellurgyItems.itemPressureTank;
+        if (!(chestItem instanceof dev.stannismod.stellurgy.armor.ItemSpaceChest) || tankItem == null) {
+            send(sender, "{\"error\":\"the space chestplate or the pressure tank is not registered\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.armor.ItemSpaceChest chestType = (dev.stannismod.stellurgy.armor.ItemSpaceChest) chestItem;
+        net.minecraft.item.ItemStack chest = new net.minecraft.item.ItemStack(chestItem);
+        chestType.addArmorComponent(player.world, chest, new net.minecraft.item.ItemStack(tankItem), 0);
+        int maxAir = chestType.getMaxAir(chest);
+        int filled = chestType.increment(chest, maxAir);
+        int air = chestType.getAirRemaining(chest);
+        if (maxAir <= 0 || air != maxAir) {
+            send(sender, "{\"error\":\"the chest did not come out full\",\"maxAir\":" + maxAir + ",\"filled\":"
+                    + filled + ",\"air\":" + air + "}");
+            return;
+        }
+        if (!player.inventory.addItemStackToInventory(chest)) {
+            send(sender, "{\"error\":\"the player's inventory has no room for the chest\"}");
+            return;
+        }
+        player.inventoryContainer.detectAndSendChanges();
+        send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\",\"item\":\""
+                + escapeJson(String.valueOf(chestItem.getRegistryName())) + "\",\"air\":" + air + ",\"maxAir\":"
+                + maxAir + "}");
+    }
+
+    /**
      * {@code /stellurgytest clock} — what time it is IN THE GAME.
      *
      * <p>The server's own tick counter, plus the overworld's total world time. This exists so that a
@@ -18037,7 +18018,14 @@ public class TestProbeCommand extends CommandBase {
             //                               craft's emitter. Upward because the assembler takes
             //                               nothing beyond the pad's footprint, and that footprint
             //                               lies wholly inside the generator's window horizontally.
+            // And one jump craft that charges its own drive:
+            //   with-powered-jump-drive   — with-jump-drive plus libVulpes' creative power plug standing
+            //                               on the capacitor, so the bank is filled by the ship's own
+            //                               grid from the moment the plug ticks — the way a player's
+            //                               generation fills it — rather than by a probe. The tower
+            //                               rises one course to keep the plug inside the scan.
             boolean jumpMast = "with-jump-drive-and-mast".equals(variant);
+            boolean poweredJumpDrive = "with-powered-jump-drive".equals(variant);
             boolean bareHull = "hull-without-actuators".equals(variant);
             boolean wheelOnlyHull = "wheel-only-hull".equals(variant);
             boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
@@ -18050,6 +18038,7 @@ public class TestProbeCommand extends CommandBase {
                     && !"with-shield-emitter".equals(variant)
                     && !"with-jump-drive".equals(variant)
                     && !jumpMast
+                    && !poweredJumpDrive
                     && !seatHullVariant;
             boolean includeGuidance = !"invalid-no-guidance".equals(variant)
                     && !"advanced-flight-computer-only".equals(variant)
@@ -18057,6 +18046,7 @@ public class TestProbeCommand extends CommandBase {
                     && !"with-shield-emitter".equals(variant)
                     && !"with-jump-drive".equals(variant)
                     && !jumpMast
+                    && !poweredJumpDrive
                     && !seatHullVariant;
             boolean includeCargo = "with-cargo".equals(variant);
             // with-fluid-cargo: same as simple but replaces 2 of the 6 BlockFuelTank
@@ -18116,7 +18106,7 @@ public class TestProbeCommand extends CommandBase {
             // machine welds a ship's machines to its flight computer, and a fixture that did that
             // itself would hide the failure a jump-capable-ship test is looking for.
             boolean includeRoofedDeck = "with-roofed-deck".equals(variant);
-            boolean includeJumpDrive = "with-jump-drive".equals(variant) || jumpMast;
+            boolean includeJumpDrive = "with-jump-drive".equals(variant) || jumpMast || poweredJumpDrive;
             boolean includePilotDeck = "with-pilot-deck".equals(variant) || includeRoofedDeck
                     || includeJumpDrive || includeHold || includeDeckTank;
             // with-shield-emitter — a with-pilot-seat ship (AFC + pilot seat, so it becomes a VS ship)
@@ -18242,7 +18232,10 @@ public class TestProbeCommand extends CommandBase {
             // the top of the drive bay is not sitting exactly on the scan ceiling.
             // The mast variant's tower clears the mast's top (rocketY+11 = baseY+12) by the same
             // spare course.
-            int towerTop = includeRoofedDeck ? 9 : (jumpMast ? 13 : (includeJumpDrive ? 7 : 6));
+            // The powered jump craft's plug stands on the capacitor (rocketY+6), so its tower rises
+            // one course more for the same spare course above it.
+            int towerTop = includeRoofedDeck ? 9 : (jumpMast ? 13 : (poweredJumpDrive ? 8
+                    : (includeJumpDrive ? 7 : 6)));
             if (structureTower != null) {
                 for (int dy = 0; dy <= towerTop; dy++) {
                     world.setBlockState(new BlockPos(baseX - 1, baseY + dy, baseZ + padSize / 2),
@@ -18391,6 +18384,17 @@ public class TestProbeCommand extends CommandBase {
                 // the jump gate returns a clean verdict instead of the undersized-window advisory.
                 // It stands on the flight computer, out of the walkway.
                 world.setBlockState(bayEmitter, jumpFieldEmitter.getDefaultState());
+                if (poweredJumpDrive) {
+                    // On the capacitor, its only free face inside the footprint: the plug pushes into
+                    // every adjacent energy acceptor each tick, and the bank is one. This variant is the
+                    // one fixture an e2e may lay, as a NAMED EXCEPTION until a craftable reactor or
+                    // generator can charge a drive (E2EModeGate.CREATIVE_PLUG_FIXTURE, with its trigger).
+                    if (creativePlug == null) {
+                        send(sender, "{\"error\":\"missing libvulpes:creativePowerBattery\"}");
+                        return;
+                    }
+                    world.setBlockState(bayCapacitor.up(), creativePlug.getDefaultState());
+                }
                 // Where each machine stands, as an offset from the flight computer: assembly moves
                 // the craft as one rigid body, so the offset names the same machine aboard the ship,
                 // and a scenario that has to reach one of them reads it here instead of re-deriving
@@ -20060,36 +20064,23 @@ public class TestProbeCommand extends CommandBase {
             targetDim = transitMgr.materialize(transitTarget);
             transitMgr.dematerialize(transitTarget);
         }
-        // Where the arrived ship ACTUALLY is, as the two answers that can disagree. An arrival is
-        // only complete when the ship sits on the world pose realizing its target coordinate; if it
-        // is still in the paste band, its address inverts through the pose mapping into a
-        // NEIGHBOURING cell. Both are asked through the queryable registry (shipBlockAt), which
-        // answers for an UNLOADED ship too - so a test can observe this without force-loading
-        // anything, and therefore without supplying the very state the arrival is supposed to
-        // establish for itself.
+        // The world pose realizing the target coordinate. An arrival is only complete when the craft
+        // sits on it; still in the paste band, its address inverts through the pose mapping into a
+        // NEIGHBOURING cell.
         double[] pose = dev.stannismod.stellurgy.space.CellWorldMapper.poseWorldOf(transitTarget);
-        long shipY = Long.MIN_VALUE, poseDist = -1L;
         net.minecraft.world.WorldServer tw = targetDim < 0 ? null
                 : net.minecraftforge.common.DimensionManager.getWorld(targetDim);
-        if (tw != null) {
-            // Ask for the ship's OWN transform position, not "is a ship near this point": the
-            // nearest-ship lookup underneath shipBlockAt is UNBOUNDED, so asking it about two
-            // different points in a world that holds one ship answers yes to both. A pair of such
-            // questions looks like a discriminator and is not one.
-            net.minecraft.util.math.BlockPos sub = dev.stannismod.stellurgy.integration.vs
-                    .VSIntegration.shipBlockAt(tw, pose[0], pose[1], pose[2]);
-            double[] sp = sub == null ? null : dev.stannismod.stellurgy.integration.vs
-                    .VSIntegration.getShipWorldPosition(tw, sub);
-            if (sp != null) {
-                shipY = (long) sp[1];
-                double dx = sp[0] - pose[0], dy = sp[1] - pose[1], dz = sp[2] - pose[2];
-                poseDist = (long) Math.sqrt(dx * dx + dy * dy + dz * dz);
-            }
+        // Where THIS transit's own craft stands, by its durable id, off its registry record — loaded
+        // or not, so a test observes the arrival without supplying the loadedness the arrival is
+        // supposed to establish for itself. `craftPos` is "" when the target world registers no
+        // craft of that name. Nothing here is asked about any other craft.
+        double[] craft = null;
+        if (tw != null && transitDurableId != null) {
+            java.util.UUID craftUuid = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                    .shipUuidOfDurableId(tw, transitDurableId.toString());
+            craft = dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShipPosition(tw, craftUuid);
         }
-        // Point-free witness: where the ships in this world actually ARE. Without it, a null from the
-        // point-keyed lookup above cannot be told from "the ship is not where I asked".
-        String ships = tw == null ? "" : dev.stannismod.stellurgy.integration.vs.VSIntegration
-                .queryableShipPositions(tw);
+        String craftPos = craft == null ? "" : (long) craft[0] + "," + (long) craft[1] + "," + (long) craft[2];
         // Where the crew of the in-flight ship BELONGS while it is parked, and the world that holds
         // it. `crewDim` is the subsystem's own answer (-1 once the jump is over, or for a transit
         // restored from a snapshot, which has no physical ship anywhere); `hyperDim` is the raw id of
@@ -20103,7 +20094,6 @@ public class TestProbeCommand extends CommandBase {
                 + ",\"crossing\":" + crossing
                 + ",\"poseX\":" + (long) pose[0] + ",\"poseY\":" + (long) pose[1]
                 + ",\"poseZ\":" + (long) pose[2]
-                + ",\"shipY\":" + shipY + ",\"poseDist\":" + poseDist
                 // Asked under the SAME name the departure used. This read was hard-coded to the
                 // synthetic "t" and answered -1 for every jump the moment departures started
                 // naming their ship, which reads as "the crew belongs nowhere" rather than as a
@@ -20117,7 +20107,7 @@ public class TestProbeCommand extends CommandBase {
                 // crew means it either succeeded or gave up - and the arrival leg gives up
                 // without a word, so nothing else distinguishes the two.
                 + ",\"reseating\":" + transitTm.reseatingCount()
-                + ",\"ships\":\"" + ships + "\"}");
+                + ",\"craftPos\":\"" + craftPos + "\"}");
     }
 
     private static dev.stannismod.stellurgy.space.SpaceSubsystem liveStack() {
@@ -25637,20 +25627,14 @@ public class TestProbeCommand extends CommandBase {
      *       {@code startWorldTime} by the given tick count, observationally
      *       equivalent to advancing world time but deterministic + cheap.</li>
      *   <li>{@code complete-now <missionId>} — advances until progress reaches
-     *       1.0 then drives one {@code tickEntity()} to fire side effects.</li>
-     *   <li>{@code rocket-cargo <missionId>} — after completion, scan launch
-     *       coords for the respawned rocket entity and report its fluid +
-     *       inventory tile contents as JSON.</li>
+     *       1.0 then drives one {@code tickEntity()} to fire side effects. Its
+     *       reply names no rocket: the rocket a completion returns is named by
+     *       that completion's own {@code rocket_born} record.</li>
+     *   <li>{@code rocket-cargo <rocketEntityId>} — ONE rocket's class, fluid +
+     *       inventory tile contents and infrastructureCoords, by its entity id.</li>
      *   <li>{@code infra-state <missionId>} — list infrastructureCoords + how
      *       many resolve to live IInfrastructure tiles currently pointing
      *       back at this mission via {@code getLinkedMission()}.</li>
-     *   <li>{@code rocket-relink-state <dim>} — class-filtered scan
-     *       of the launch dim for EntityStationDeployedRocket entities
-     *       (post-completion respawn target), reporting each rocket's
-     *       infrastructureCoords list. Unlike {@code rocket-cargo} this
-     *       is not bbox-limited, so it finds the respawned rocket even
-     *       when production positions it at world origin (vanilla
-     *       EntityRocket's writeMissionPersistentNBT no-op default).</li>
      * </ul>
      *
      * <p>Reads/writes the mission's package-private fields
@@ -25663,7 +25647,7 @@ public class TestProbeCommand extends CommandBase {
     private void handleMission(net.minecraft.server.MinecraftServer server,
                                ICommandSender sender, String[] args) {
         if (args.length == 0) {
-            send(sender, "{\"error\":\"missing mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state | rocket-relink-state\"}");
+            send(sender, "{\"error\":\"missing mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state\"}");
             return;
         }
         String sub = args[0].toLowerCase(java.util.Locale.ROOT);
@@ -25880,11 +25864,9 @@ public class TestProbeCommand extends CommandBase {
                 // (Stellurgy.proxy.getWorldTimeUniversal(0)), not the
                 // mission dim's own clock, so backdate against the same source.
                 long now = dev.stannismod.stellurgy.Stellurgy.proxy.getWorldTimeUniversal(0);
-                // Snapshot launch coords + dim BEFORE tickEntity so we can
-                // read cargo from the re-spawned rocket atomically — the
-                // natural DimensionProperties.tick loop prunes dead
-                // satellites between commands, so a follow-up rocket-cargo
-                // call would race the prune.
+                // Launch coords + dim are read BEFORE tickEntity: the natural
+                // DimensionProperties.tick loop prunes the dead mission between
+                // commands, after which nothing answers for them.
                 double lx = readDoubleField(m, "x");
                 double ly = readDoubleField(m, "y");
                 double lz = readDoubleField(m, "z");
@@ -25897,36 +25879,28 @@ public class TestProbeCommand extends CommandBase {
                 writeIntField(m, "completionCheckTimer", 59);
                 boolean wasDead = m.isDead();
                 m.tickEntity();
-                // Synchronous cargo readback while we still know the launch
-                // coords — even after the prune the respawned rocket entity
-                // persists in the launch dim, but the mission registry no
-                // longer exposes its coords.
-                String cargo = snapshotCargoJson(server, launchDim, lx, ly, lz);
                 send(sender, "{\"ok\":true,\"missionId\":" + missionId
                         + ",\"wasDeadBefore\":" + wasDead
                         + ",\"isDeadAfter\":" + m.isDead()
                         + ",\"completed\":" + (!wasDead && m.isDead())
                         + ",\"launchDim\":" + launchDim
-                        + ",\"launchPos\":[" + lx + "," + ly + "," + lz + "]"
-                        + "," + cargo + "}");
+                        + ",\"launchPos\":[" + lx + "," + ly + "," + lz + "]}");
                 return;
             }
             if ("rocket-cargo".equals(sub) && args.length >= 2) {
-                long missionId = (long) parseDoubleOr(args[1], -1);
-                dev.stannismod.stellurgy.mission.MissionResourceCollection m = findMission(missionId);
-                if (m == null) {
-                    send(sender, "{\"error\":\"mission not found\",\"missionId\":" + missionId + "}");
+                // /stellurgytest mission rocket-cargo <rocketEntityId> — the rocket is named by the
+                // caller (a completion's returned craft is named by its `rocket_born` record); no
+                // rocket is looked for.
+                int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+                EntityRocket rocket = findRocket(server, entityId);
+                if (rocket == null) {
+                    send(sender, "{\"ok\":true,\"found\":false,\"entityId\":" + entityId + "}");
                     return;
                 }
-                double lx = readDoubleField(m, "x");
-                double ly = readDoubleField(m, "y");
-                double lz = readDoubleField(m, "z");
-                int launchDim = readIntField(m, "launchDimension");
-                String cargo = snapshotCargoJson(server, launchDim, lx, ly, lz);
-                send(sender, "{\"ok\":true,\"missionId\":" + missionId
-                        + ",\"launchDim\":" + launchDim
-                        + ",\"launchPos\":[" + lx + "," + ly + "," + lz + "]"
-                        + "," + cargo + "}");
+                send(sender, "{\"ok\":true,\"found\":true,\"entityId\":" + entityId
+                        + ",\"dim\":" + rocket.world.provider.getDimension()
+                        + ",\"cls\":\"" + escapeJson(rocket.getClass().getSimpleName()) + "\""
+                        + "," + cargoJson(rocket) + "}");
                 return;
             }
             if ("link-infra".equals(sub) && args.length >= 6) {
@@ -25995,125 +25969,45 @@ public class TestProbeCommand extends CommandBase {
                         + ",\"missionId\":" + mid + "}");
                 return;
             }
-            if ("rocket-relink-state".equals(sub) && args.length >= 2) {
-                // /stellurgytest mission rocket-relink-state <dim>
-                // After MissionGasCollection.onMissionComplete spawns a fresh
-                // EntityStationDeployedRocket and calls rocket.linkInfrastructure
-                // on each linked infra tile (production line 84), the new
-                // rocket's infrastructureCoords set holds those tile coords.
-                // The rocket-cargo / snapshotCargoJson scan is bbox-limited
-                // around the mission's stored launch coords, but the freshly
-                // spawned rocket is positioned by EntityStationDeployedRocket
-                // .launchLocation (restored from missionPersistantNBT). With
-                // a vanilla EntityRocket fixture, writeMissionPersistentNBT
-                // is a no-op so launchLocation defaults to (0,0,0) and the
-                // new rocket spawns at world origin — outside the cargo
-                // bbox. This verb is class-filtered (not bbox-filtered) so
-                // it finds EntityStationDeployedRocket entities regardless
-                // of position. Takes a dim arg directly because the mission
-                // satellite may have been pruned by the time this verb is
-                // called as a follow-up command after complete-now.
-                int launchDim = parseIntOr(args[1], Integer.MIN_VALUE);
-                net.minecraft.world.WorldServer lw = server.getWorld(launchDim);
-                if (lw == null) {
-                    send(sender, "{\"error\":\"launch dim not loaded\",\"dim\":" + launchDim + "}");
-                    return;
-                }
-                com.google.common.base.Predicate<net.minecraft.entity.Entity> alwaysTrue =
-                        com.google.common.base.Predicates.alwaysTrue();
-                java.util.List<dev.stannismod.stellurgy.entity.EntityStationDeployedRocket> deployed =
-                        lw.getEntities(dev.stannismod.stellurgy.entity.EntityStationDeployedRocket.class, alwaysTrue);
-                StringBuilder per = new StringBuilder("[");
-                int totalInfra = 0;
-                for (int idx = 0; idx < deployed.size(); idx++) {
-                    dev.stannismod.stellurgy.entity.EntityStationDeployedRocket r = deployed.get(idx);
-                    Object coordsObj;
-                    try {
-                        coordsObj = readObjectField(r, "infrastructureCoords");
-                    } catch (ReflectiveOperationException ignored) {
-                        coordsObj = null;
-                    }
-                    StringBuilder coordsJson = new StringBuilder("[");
-                    int n = 0;
-                    if (coordsObj instanceof java.util.Collection) {
-                        for (Object pos : (java.util.Collection<?>) coordsObj) {
-                            dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition hbp =
-                                    (dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition) pos;
-                            if (n++ > 0) coordsJson.append(',');
-                            coordsJson.append('[').append(hbp.x).append(',').append(hbp.y)
-                                    .append(',').append(hbp.z).append(']');
-                        }
-                    }
-                    coordsJson.append(']');
-                    totalInfra += n;
-                    if (idx > 0) per.append(',');
-                    per.append("{\"entityId\":").append(r.getEntityId())
-                            .append(",\"pos\":[").append(r.posX).append(',').append(r.posY)
-                            .append(',').append(r.posZ).append(']')
-                            .append(",\"infraCount\":").append(n)
-                            .append(",\"infrastructure\":").append(coordsJson).append('}');
-                }
-                per.append(']');
-                send(sender, "{\"ok\":true,\"launchDim\":" + launchDim
-                        + ",\"deployedCount\":" + deployed.size()
-                        + ",\"totalInfraEntries\":" + totalInfra
-                        + ",\"rockets\":" + per + "}");
-                return;
-            }
-            send(sender, "{\"error\":\"unknown mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state | rocket-relink-state\"}");
+            send(sender, "{\"error\":\"unknown mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state\"}");
         } catch (ReflectiveOperationException e) {
             send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
         }
     }
 
     /**
-     * Returns a JSON fragment (without enclosing braces) describing the
-     * fluid + inventory contents of all EntityRockets within a 128-block
-     * cube around the given coords. Used by both the standalone
-     * {@code rocket-cargo} verb and the atomic {@code complete-now}
-     * which embeds cargo readback to avoid the natural-tick-prune
-     * race between commands.
+     * A JSON fragment (without enclosing braces) describing ONE rocket's cargo: the
+     * fluid + inventory contents of its storage tiles and its infrastructureCoords.
      *
      * <p>Fragment shape:</p>
-     * <pre>"rocketCount":N,"fluidEntries":F,"itemEntries":I,
-     * "fluids":[...],"items":[...]</pre>
+     * <pre>"hasStorage":B,"fluidEntries":F,"itemEntries":I,"infraEntries":N,
+     * "fluids":[...],"items":[...],"infrastructure":[...]</pre>
      */
-    private static String snapshotCargoJson(net.minecraft.server.MinecraftServer server,
-                                            int launchDim, double lx, double ly, double lz) {
-        net.minecraft.world.WorldServer lw = server.getWorld(launchDim);
-        if (lw == null) {
-            return "\"rocketCount\":0,\"fluidEntries\":0,\"itemEntries\":0"
-                    + ",\"fluids\":[],\"items\":[],\"cargoError\":\"launch dim not loaded\"";
-        }
-        net.minecraft.util.math.AxisAlignedBB bb = new net.minecraft.util.math.AxisAlignedBB(
-                lx - 128, ly - 64, lz - 128, lx + 128, ly + 256, lz + 128);
-        java.util.List<dev.stannismod.stellurgy.entity.EntityRocket> rockets =
-                lw.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityRocket.class, bb);
+    private static String cargoJson(EntityRocket r) {
         StringBuilder fluidsJson = new StringBuilder("[");
         StringBuilder itemsJson = new StringBuilder("[");
         StringBuilder infraJson = new StringBuilder("[");
         int fluidEntries = 0, itemEntries = 0, infraEntries = 0;
-        for (dev.stannismod.stellurgy.entity.EntityRocket r : rockets) {
-            // Post-completion re-link verification: EntityRocket.infrastructureCoords
-            // (HashSet<HashedBlockPosition>) lists tiles this rocket considers
-            // connected. Production's MissionGasCollection.onMissionComplete
-            // calls rocket.linkInfrastructure(tile) for each mission infra tile,
-            // which adds to this set.
-            try {
-                Object coordsObj = readObjectField(r, "infrastructureCoords");
-                if (coordsObj instanceof java.util.Collection) {
-                    for (Object pos : (java.util.Collection<?>) coordsObj) {
-                        dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition hbp =
-                                (dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition) pos;
-                        if (infraEntries++ > 0) infraJson.append(',');
-                        infraJson.append('[').append(hbp.x).append(',').append(hbp.y)
-                                .append(',').append(hbp.z).append(']');
-                    }
+        // EntityRocket.infrastructureCoords lists the tiles this rocket considers connected;
+        // MissionGasCollection.onMissionComplete adds each mission infra tile to it.
+        String infraError = null;
+        try {
+            Object coordsObj = readObjectField(r, "infrastructureCoords");
+            if (coordsObj instanceof java.util.Collection) {
+                for (Object pos : (java.util.Collection<?>) coordsObj) {
+                    dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition hbp =
+                            (dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition) pos;
+                    if (infraEntries++ > 0) infraJson.append(',');
+                    infraJson.append('[').append(hbp.x).append(',').append(hbp.y)
+                            .append(',').append(hbp.z).append(']');
                 }
-            } catch (ReflectiveOperationException ignored) {
-                // Field absent in a future refactor — leave infra list empty.
+            } else {
+                infraError = "infrastructureCoords is not a collection";
             }
-            if (r.storage == null) continue;
+        } catch (ReflectiveOperationException e) {
+            infraError = "infrastructureCoords unreadable: " + e;
+        }
+        if (r.storage != null) {
             for (net.minecraft.tileentity.TileEntity t : r.storage.getFluidTiles()) {
                 if (t.hasCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null)) {
                     net.minecraftforge.fluids.capability.IFluidHandler fh =
@@ -26154,7 +26048,8 @@ public class TestProbeCommand extends CommandBase {
         fluidsJson.append(']');
         itemsJson.append(']');
         infraJson.append(']');
-        return "\"rocketCount\":" + rockets.size()
+        return "\"hasStorage\":" + (r.storage != null)
+                + (infraError == null ? "" : ",\"infraError\":\"" + escapeJson(infraError) + "\"")
                 + ",\"fluidEntries\":" + fluidEntries
                 + ",\"itemEntries\":" + itemEntries
                 + ",\"infraEntries\":" + infraEntries

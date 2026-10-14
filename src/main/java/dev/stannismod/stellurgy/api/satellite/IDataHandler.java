@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.api.satellite;
 
-import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.api.DataStorage;
+import net.minecraft.util.EnumFacing;
 
 public interface IDataHandler {
 

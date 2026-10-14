@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.world.decoration;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import net.minecraft.block.Block;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.MapGenBase;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 public class MapGenVolcano extends MapGenBase {
 

@@ -1,21 +1,18 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.UUID;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.ship.mass.MassContributor;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.util.datastructures.IBlockPosSet;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.tileentity.TileEntity;
-
-import dev.stannismod.stellurgy.ship.mass.MassContributor;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import javax.annotation.Nullable;
+import java.util.UUID;
 
 /**
  * The authoritative answer to "what does this hull actually weigh": one pass over every block the

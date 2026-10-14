@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.block.plant;
 
+import dev.stannismod.stellurgy.world.gen.WorldGenAlienTree;
 import net.minecraft.block.BlockBush;
 import net.minecraft.block.IGrowable;
 import net.minecraft.block.properties.PropertyInteger;
@@ -13,7 +14,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.gen.feature.WorldGenerator;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.world.gen.WorldGenAlienTree;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

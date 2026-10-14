@@ -1,28 +1,17 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.Test;
-
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-
-import dev.stannismod.stellurgy.space.GalacticCoord;
-import dev.stannismod.stellurgy.space.HyperspaceTiles;
-import dev.stannismod.stellurgy.space.OfflineProgress;
-import dev.stannismod.stellurgy.space.ShipCrossingService;
-import dev.stannismod.stellurgy.space.ShipLedger;
-import dev.stannismod.stellurgy.space.ShipTransitManager;
-import dev.stannismod.stellurgy.space.SlotBinder;
-import dev.stannismod.stellurgy.space.SpaceManager;
-import dev.stannismod.stellurgy.space.TransitRecord;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the transit state machine's WIRING - the depart/advance/arrive lifecycle, the
@@ -297,12 +286,15 @@ public class ShipTransitManagerTest {
      * An arrival whose target cell finds no slot WAITS in its lane: the jump stays open, the crew is
      * told once, and the ship lands on the first tick a slot frees. Before this the throw left the
      * world tick and stopped the server.
-     *
-     * <p>red-witnessed: with {@code ShipTransitManager#tickTransits} at {@code t.targetSlotDim = space.materialize(t.target);}
-     * outside its {@code try}: the first tick threw {@code SpaceManager$PoolExhaustedException: no free
-     * slot and no evict-eligible cell}, 2026-10-06. With the {@code if (!t.arrivalDelayed)} guard
-     * removed: "the crew is told once, not once per tick expected:&lt;1&gt; but was:&lt;3&gt;", 2026-10-06.</p>
      */
+    @Pins("JUMP-15")
+    @RedWitness(verdict = "waits", member = "ShipTransitManager#tickTransits",
+            at = "} catch (SpaceManager.PoolExhaustedException full) {",
+            replacedBy = "} catch (IllegalArgumentException full) {",
+            fails = "no free slot and no evict-eligible cell", on = "2026-10-06")
+    @RedWitness(verdict = "told once", member = "ShipTransitManager#tickTransits",
+            at = "if (!t.arrivalDelayed) {", replacedBy = "if (true) {",
+            fails = "the crew is told once, not once per tick", on = "2026-10-06")
     @Test
     public void anArrivalIntoAFullPoolWaitsInItsLaneAndLandsOnceASlotFrees() {
         SpaceManager space = new SpaceManager(new FakeBinder(10), () -> 0L, never());
@@ -341,11 +333,10 @@ public class ShipTransitManagerTest {
      * hyperspace instead: the direct crossing would load the destination while the origin is still
      * held and could only refuse after the burst was paid; the hyperspace path releases the origin
      * first, and the arrival then takes that slot.
-     *
-     * <p>red-witnessed: with {@code ShipTransitManager#jumpsDirect} at {@code && space.canMaterialize(target)}
-     * removed: "a short jump into a full pool is not handed to the direct crosser expected:&lt;0&gt; but
-     * was:&lt;1&gt;", 2026-10-06.</p>
      */
+    @Pins("JUMP-15")
+    @RedWitness(member = "ShipTransitManager#jumpsDirect", at = "&& space.canMaterialize(target)", replacedBy = "",
+            fails = "a short jump into a full pool is not handed to the direct crosser", on = "2026-10-06")
     @Test
     public void aShortJumpIntoAFullPoolFliesThroughHyperspaceAndLands() {
         SpaceManager space = new SpaceManager(new FakeBinder(10), () -> 0L, never());
@@ -962,6 +953,8 @@ public class ShipTransitManagerTest {
                 before, mgr.remainingDistance("s"), 0.0);
     }
 
+    /** Pins JUMP-6 (an aborted jump puts the crew back where they were). */
+    @Pins("JUMP-6")
     @Test
     public void anAbortedDepartureIsANoOpForTheCrew() {
         // A jump that never leaves must leave nobody worse off. The capture runs FIRST — it has to,
@@ -1149,6 +1142,8 @@ public class ShipTransitManagerTest {
                 crosser.departs.contains(originDim + "@0"));
     }
 
+    /** Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of). */
+    @Pins("JUMP-10")
     @Test
     public void bootDisposesOfEveryParkedShipNoRecordClaims() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
@@ -1177,7 +1172,9 @@ public class ShipTransitManagerTest {
      * The reconciliation must find a hull WHEREVER it is standing, and the lanes it has to reach are
      * precisely the ones no surviving record points at. Anything that derives the reach from what the
      * records reclaimed asks the orphans to announce themselves.
+     * Pins JUMP-10 (at boot every parked hyperspace ship is matched against the restored records and an unmatched one is disposed of).
      */
+    @Pins("JUMP-10")
     @Test
     public void anOrphanIsFoundInALaneNoSurvivingRecordCameNear() {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());

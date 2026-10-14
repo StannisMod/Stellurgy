@@ -1,13 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.CellInfo;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * A recorded defect's own repro, at the server tier, against the real universe registry: <b>a body does not
@@ -57,9 +54,9 @@ public class ParkedShipKeepsItsBodiesTest extends AbstractSharedServerTest {
     @Test
     public void aBodyStaysInItsOwnCellAcrossAVeryLongDwell() throws Exception {
         // Where the registry says the body is, and what its cell holds — as of now.
-        String cellKey = CellInfo.atSector(this::exec, 0, 0, 0, WATCHED_DIM).requireDimCell();
+        String cellKey = CellInfo.atSector(c -> read(c).raw(), 0, 0, 0, WATCHED_DIM).requireDimCell();
 
-        CellInfo before = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
+        CellInfo before = CellInfo.atKey(c -> read(c).raw(), cellKey, WATCHED_DIM);
         int bodiesBefore = before.bodiesAtCount;
         assertTrue("the fixture must actually have a body in this cell to lose: " + before.raw(),
                 bodiesBefore > 0);
@@ -78,20 +75,20 @@ public class ParkedShipKeepsItsBodiesTest extends AbstractSharedServerTest {
         assertEquals("a cell key is a sector triple: " + cellKey, 3, sectors.length);
         String cellArgs = sectors[0] + " " + sectors[1] + " " + sectors[2];
 
-        String frameBefore = exec("stellurgytest space frame " + cellArgs);
+        String frameBefore = read("stellurgytest space frame " + cellArgs).raw();
         long clockBefore = jsonLong(frameBefore, "clock");
 
         CellInfo after;
         String frameAfter;
         CellInfo reDerived;
         try {
-            String set = exec("stellurgytest space set-clock " + (clockBefore + AGE_TICKS));
+            String set = arrange("stellurgytest space set-clock " + (clockBefore + AGE_TICKS)).raw();
             assertTrue("the clock must move: " + set, Reply.of(set).ok());
             assertEquals("the space subsystem must read the clock that was set: " + set,
                     clockBefore + AGE_TICKS, jsonLong(set, "spaceClock"));
 
-            after = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
-            frameAfter = exec("stellurgytest space frame " + cellArgs);
+            after = CellInfo.atKey(c -> read(c).raw(), cellKey, WATCHED_DIM);
+            frameAfter = read("stellurgytest space frame " + cellArgs).raw();
 
             // Now take away the SECOND reason the name could be stable. A recorded name wins over
             // any derivation, so up to this line the clause is satisfied by the store alone and says
@@ -100,14 +97,14 @@ public class ParkedShipKeepsItsBodiesTest extends AbstractSharedServerTest {
             // forces the next query to derive, at the aged clock, and that answer must be the same
             // cell: a name is derived from the layout alone — the system anchor and the body's own
             // authored orbital elements — and never from the clock.
-            String forget = exec("stellurgytest space forget-name " + WATCHED_DIM);
+            String forget = arrange("stellurgytest space forget-name " + WATCHED_DIM).raw();
             assertTrue("the registry must have been holding a recorded name to forget: " + forget,
                     Reply.of(forget).bool("held"));
-            reDerived = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
+            reDerived = CellInfo.atKey(c -> read(c).raw(), cellKey, WATCHED_DIM);
         } finally {
             // Hand the shared server back the clock it had. A test that ages the universe by eleven
             // days and leaves it there is a test that breaks somebody else's.
-            exec("stellurgytest space set-clock " + clockBefore);
+            arrange("stellurgytest space set-clock " + clockBefore).raw();
         }
 
         // THE CONTROL. The frame's origin is reported as a SECTOR triple plus an in-cell offset, so the

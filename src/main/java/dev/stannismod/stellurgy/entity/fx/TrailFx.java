@@ -4,8 +4,6 @@ import net.minecraft.init.Blocks;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.client.render.DelayedParticleRenderingEventHandler;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
 
 import static java.lang.Math.min;
 import static java.lang.Math.sqrt;

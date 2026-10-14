@@ -1,18 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.util.SweptSegment;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.util.SweptSegment;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * The one promise a swept traversal makes: <b>nothing between the two ends is passed unseen</b>.

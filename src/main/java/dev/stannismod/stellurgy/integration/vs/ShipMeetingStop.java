@@ -1,20 +1,15 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.event.ShipCollisionEvent;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.event.ShipCollisionEvent;
-import dev.stannismod.stellurgy.world.WorldRuntime;
+import java.util.*;
 
 /**
  * Two craft may not pass through one another: while their world boxes overlap, both are held at

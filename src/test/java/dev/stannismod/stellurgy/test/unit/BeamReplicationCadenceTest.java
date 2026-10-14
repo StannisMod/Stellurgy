@@ -1,17 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.client.ClientBeamTracker;
+import dev.stannismod.stellurgy.projectile.BeamReplication;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.client.ClientBeamTracker;
-import dev.stannismod.stellurgy.projectile.BeamReplication;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * When a burning beam is worth a packet, and when silence is the right answer.
@@ -143,19 +142,16 @@ public class BeamReplicationCadenceTest {
 
     /**
      * The tracker is the client's whole memory of what is burning; it starts and ends empty.
-     *
-     * <p>red-witnessed: with {@code ClientBeamTracker#ClientBeamTracker} (an empty body) made to put one
-     * beam into a new tracker, this fails at "the client's beam tracker did not start
-     * empty expected:&lt;0&gt; but was:&lt;1&gt;" (2026-09-30).</p>
-     *
-     * <p>red-witnessed: with {@code ClientBeamTracker#lit} at {@code beams.put(gun, new ClientBeam(path));}
-     * deleted, this fails at "a beam the client was told about is not being drawn expected:&lt;1&gt; but
-     * was:&lt;0&gt;" (2026-09-30).</p>
-     *
-     * <p>red-witnessed: with {@code ClientBeamTracker#extinguished} at {@code beams.remove(gun);} deleted,
-     * this fails at "a beam the client was told had gone out is still being drawn expected:&lt;0&gt; but
-     * was:&lt;1&gt;" (2026-09-30).</p>
      */
+    @LegacyWitness(prose = "with {@code ClientBeamTracker#ClientBeamTracker} (an empty body) made to put one"
+            + " beam into a new tracker, this fails at \"the client's beam tracker did not start"
+            + " empty expected:&lt;0&gt; but was:&lt;1&gt;\" (2026-09-30).")
+    @LegacyWitness(prose = "with {@code ClientBeamTracker#lit} at {@code beams.put(gun, new ClientBeam(path));}"
+            + " deleted, this fails at \"a beam the client was told about is not being drawn expected:&lt;1&gt; but"
+            + " was:&lt;0&gt;\" (2026-09-30).")
+    @LegacyWitness(prose = "with {@code ClientBeamTracker#extinguished} at {@code beams.remove(gun);} deleted,"
+            + " this fails at \"a beam the client was told had gone out is still being drawn expected:&lt;0&gt; but"
+            + " was:&lt;1&gt;\" (2026-09-30).")
     @Test
     public void theClientDrawsNothingUntilItIsTold() {
         ClientBeamTracker beams = new ClientBeamTracker();
@@ -171,15 +167,13 @@ public class BeamReplicationCadenceTest {
     /**
      * The backstop for every way a beam can end without anybody being able to say so — the gun blown
      * up, the chunk unloaded, the player out of range at the moment it stopped.
-     *
-     * <p>red-witnessed: with {@code ClientBeamTracker#lit} at {@code beams.put(gun, new ClientBeam(path));}
-     * deleted, this fails at "a beam went undrawn while it was still being mentioned expected:&lt;1&gt;
-     * but was:&lt;0&gt;" (2026-09-30).</p>
-     *
-     * <p>red-witnessed: with {@code ClientBeam#ageAndCheckStale} at
-     * {@code return ++sinceHeard > STALE_TICKS;} made to return false, this fails at "a beam nobody has
-     * mentioned since it lit is still being drawn … expected:&lt;0&gt; but was:&lt;1&gt;" (2026-09-30).</p>
      */
+    @LegacyWitness(prose = "with {@code ClientBeamTracker#lit} at {@code beams.put(gun, new ClientBeam(path));}"
+            + " deleted, this fails at \"a beam went undrawn while it was still being mentioned expected:&lt;1&gt;"
+            + " but was:&lt;0&gt;\" (2026-09-30).")
+    @LegacyWitness(prose = "with {@code ClientBeam#ageAndCheckStale} at"
+            + " {@code return ++sinceHeard > STALE_TICKS;} made to return false, this fails at \"a beam nobody has"
+            + " mentioned since it lit is still being drawn … expected:&lt;0&gt; but was:&lt;1&gt;\" (2026-09-30).")
     @Test
     public void aBeamNobodyMentionsAgainStopsBeingDrawn() {
         ClientBeamTracker beams = new ClientBeamTracker();

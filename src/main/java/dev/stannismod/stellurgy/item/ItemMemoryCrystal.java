@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.item;
 
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.navigation.CrystalEntry;
+import dev.stannismod.stellurgy.navigation.CrystalMemory;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -12,9 +11,8 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-import dev.stannismod.stellurgy.navigation.CrystalEntry;
-import dev.stannismod.stellurgy.navigation.CrystalMemory;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import javax.annotation.Nullable;
+import java.util.List;
 
 /**
  * A memory crystal — the physical form of a ship's galactic knowledge.

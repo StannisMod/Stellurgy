@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -45,10 +44,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final String ENT_ID = "entityId";
     private static final String TOTAL_AMOUNT = "totalAmount";
     private static final String TILES_WITH_CAP = "tilesWithCapability";
     private static final String TOTAL_FILLED = "totalFilled";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
 
     /**
      * loader pre-loaded with oxygen actively transfers it into
@@ -63,7 +68,9 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      *
      * <p>Doesn't pin exact mB-per-tick — production's transfer rate is
      * impl (depends on tank capacity, handler fill behaviour, etc.).</p>
+     * Pins INV-INFRA-13 (the fluid loader transfers fluid into a rocket fluid tile).
      */
+    @Pins("INV-INFRA-13")
     @Test
     public void loaderTransfersOxygenIntoRocketStorageLiquidTanks() throws Exception {
         // THE PAIR MOVES TOGETHER. The loader sat at y=65 and the rocket's base at y=64, one below
@@ -79,8 +86,8 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
 
         // Pre-load loader's tank with oxygen. The loader IS a
         // TileFluidHatch, so `fluid inject` works against its world pos.
-        String inj = exec("stellurgytest fluid inject 0 " + lx + " " + ly + " " + lz
-                + " oxygen 32000");
+        String inj = arrange("stellurgytest fluid inject 0 " + lx + " " + ly + " " + lz
+                + " oxygen 32000").raw();
         assertTrue("loader fluid inject must succeed: " + inj,
                 Reply.of(inj).ok());
         int loaderFilled = extract(inj, "filled");
@@ -100,12 +107,13 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
 
         // Force at least 60 additional ticks of the loader's update()
         // to ensure the transfer completes even on slow harnesses.
-        ok("stellurgytest tile force-tick 0 " + lx + " " + ly + " " + lz + " 60");
+        Reply ticked = act("stellurgytest tile force-tick 0 " + lx + " " + ly + " " + lz + " 60");
+        assertTrue("probe must succeed: resp=" + ticked, ticked.ok());
 
         // Loader's tank must be drained (production transferred
         // fluid out). After full drain the tank reads
         // {"fluid":null} (no amount field) — parse defensively.
-        String loaderAfter = exec("stellurgytest fluid stored 0 " + lx + " " + ly + " " + lz);
+        String loaderAfter = read("stellurgytest fluid stored 0 " + lx + " " + ly + " " + lz).raw();
         int loaderTankAfter = parseOxygenAmountOrZero(loaderAfter);
         assertTrue("loader's own tank must have drained from "
                         + loaderFilled + " mB toward 0 after ticks; "
@@ -117,7 +125,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         // tank capacities + how many ticks fired between commands; the
         // contract pin is "rocket gained the loader's fluid", not a
         // specific mB count.
-        String postStorage = exec("stellurgytest rocket storage-fluid " + rocketId);
+        String postStorage = read("stellurgytest rocket storage-fluid " + rocketId).raw();
         // THE oxygen tank, and its amount read off that same tank. `totalAmount` sums every tank,
         // so "the storage grew" and "oxygen is in there" were two questions about one subject —
         // and a rocket holding oxygen beside anything else answers them from two different tanks.
@@ -151,8 +159,8 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
 
         // Pre-fill rocket's storage liquidTanks with oxygen via the
         // dedicated probe.
-        String fillResp = exec("stellurgytest rocket storage-fluid-fill " + rocketId
-                + " oxygen 16000");
+        String fillResp = arrange("stellurgytest rocket storage-fluid-fill " + rocketId
+                + " oxygen 16000").raw();
         assertTrue("storage-fluid-fill must succeed: " + fillResp,
                 Reply.of(fillResp).ok());
         int tilesWithCap = extract(fillResp, TILES_WITH_CAP);
@@ -165,7 +173,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
                 totalFilled > 0);
 
         // Sanity: storage-fluid probe agrees with fill result.
-        String preStorage = exec("stellurgytest rocket storage-fluid " + rocketId);
+        String preStorage = read("stellurgytest rocket storage-fluid " + rocketId).raw();
         int storageBefore = extract(preStorage, TOTAL_AMOUNT);
         assertTrue("rocket storage must show the pre-filled amount "
                         + "(storage-fluid probe sanity gate): " + preStorage,
@@ -173,20 +181,21 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
 
         // Pre-condition: unloader's own tank starts empty (or with any
         // residual from previous test runs — only the delta matters).
-        String preUnloader = exec("stellurgytest fluid stored 0 " + ux + " " + uy + " " + uz);
+        String preUnloader = read("stellurgytest fluid stored 0 " + ux + " " + uy + " " + uz).raw();
         int unloaderTankBefore = parseOxygenAmountOrZero(preUnloader);
 
         // Link rocket to unloader.
-        String link = exec("stellurgytest infra link 0 " + ux + " " + uy + " " + uz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + ux + " " + uy + " " + uz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link,
                 Reply.of(link).bool("linked"));
 
         // Run the unloader's production update() for 60 ticks.
-        ok("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
+        Reply ticked = act("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
+        assertTrue("probe must succeed: resp=" + ticked, ticked.ok());
 
         // Unloader's tank must have gained fluid.
-        String postUnloader = exec("stellurgytest fluid stored 0 " + ux + " " + uy + " " + uz);
+        String postUnloader = read("stellurgytest fluid stored 0 " + ux + " " + uy + " " + uz).raw();
         int unloaderTankAfter = parseOxygenAmountOrZero(postUnloader);
         assertTrue("unloader's own tank must have gained oxygen after "
                         + "60 ticks (the player-visible 'drain returning "
@@ -196,7 +205,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
                 unloaderTankAfter > unloaderTankBefore);
 
         // Rocket storage must have drained.
-        String postStorage = exec("stellurgytest rocket storage-fluid " + rocketId);
+        String postStorage = read("stellurgytest rocket storage-fluid " + rocketId).raw();
         int storageAfter = extract(postStorage, TOTAL_AMOUNT);
         assertTrue("rocket storage liquidTanks must have drained after "
                         + "60 unloader ticks; before=" + storageBefore
@@ -205,24 +214,18 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
     }
 
     private void ok(String cmd) throws Exception {
-        String resp = exec(cmd);
+        String resp = arrange(cmd).raw();
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
                 Reply.of(resp).ok());
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
-        String assemble = RocketFixture.assembleAt(site, cmd -> exec(cmd), variant, 2, 10,
+        return rockets.assembleAt(site, c -> act(c).raw(), variant, 2, 10,
                 "the craft the loader fills stands in this volume");
-        assertTrue("rocket assemble failed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply emReply = Reply.of(assemble);
-        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
-        return Integer.parseInt(emReply.text(ENT_ID));
     }
 
     private static int extract(String src, String field) {

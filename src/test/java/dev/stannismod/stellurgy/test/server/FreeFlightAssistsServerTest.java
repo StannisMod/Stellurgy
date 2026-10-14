@@ -1,16 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -107,26 +100,24 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
+
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the
-        // body below unchanged, so what moved is visible in one place.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
-                "simple", 2, 50,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 50,
                 "the craft is built and flown in this volume");
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     // -----------------------------------------------------------------
@@ -137,18 +128,18 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
         // velocity setpoint; releasing the key KEEPS it — the craft cruises
         // hands-off instead of coasting down.
         int id = buildAndAssemble(FixtureSite.openAir(0, 4150, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
         // Hold forward+up for 20 ticks: the setpoint ramps to ~1.0 blocks/tick
         // on both axes. The upward component keeps the cruise climbing away
         // from terrain — the world outside the cleared pad column is random.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 1 1 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 20"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 1 1 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 20"));
 
         // Release (all-zero input) and keep flying.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 40"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 40"));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("released key must NOT bleed the cruise (motionZ=" + info.motionZ
@@ -161,17 +152,17 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
         // X (cut): zero the setpoint -> FA damps motion to zero AND holds
         // altitude (gravity cancelled) — brake-to-hover, not brake-to-fall.
         int id = buildAndAssemble(FixtureSite.openAir(0, 4200, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
         // Build a climbing cruise first (also cancels the liftoff assist; the
         // upward component keeps it clear of un-cleared terrain).
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 1 1 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 20"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 1 1 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 20"));
 
         // Cut.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 60"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 60"));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("cut must ease the cruise to a stop (motionZ=" + info.motionZ + ")",
@@ -186,17 +177,17 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
         // The setpoint is body-frame: cruise forward, then yaw ~90° — the
         // WORLD velocity must rotate with the nose (from +Z toward -X).
         int id = buildAndAssemble(FixtureSite.openAir(0, 4300, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 1 1 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 20"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 1 1 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 20"));
         // Release forward, hold yaw for 30 ticks (= 90° at MAX_YAW_RATE 3°/tick).
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 1 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 30"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 1 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 30"));
         // Let FA re-align the velocity to the rotated setpoint.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 40"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 40"));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("after a 90° yaw the cruise must point -X (mx=" + info.motionX
@@ -218,8 +209,8 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
         // against a ceiling of 3.0. The capture is still the contract; it is now tested where the
         // contract holds, and the clamp is tested beside it as its own leg.
         int id = buildAndAssemble(FixtureSite.openAir(0, 4350, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
         // Climb well away from the ground first: the Newtonian coast sheds
         // altitude under gravity, and — because re-enabling FA captures the
@@ -228,19 +219,19 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
         // 1-block engine hover it would touch down (engines off, motion zeroed)
         // before the cruise capture could be observed. The climb budget is sized
         // for the worst case (a full held descent), not just the coast.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 1 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 60"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1")); // cut -> hover
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 30"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 1 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 60"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1")); // cut -> hover
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 30"));
 
         // FA off, build a Newtonian cruise with direct thrust, then coast.
-        ok(client().execute("stellurgytest rocket set-flight-assist " + id + " off"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 1 0 0 0 0"));
+        ok(client().arrange("stellurgytest rocket set-flight-assist " + id + " off"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 1 0 0 0 0"));
         // Four ticks of thrust, not eight: 4 × 0.5 = 2.0 b/t, comfortably UNDER the assist ceiling,
         // which is the regime where "capture the current velocity" is the promise.
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 4"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 2"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 4"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 2"));
         double mzBefore = rocketInfo(id).motionZ;
         assertTrue("precondition: must be coasting (+Z), got " + mzBefore, mzBefore > COASTING);
         assertTrue("precondition: this leg tests the capture, so the cruise must be UNDER the assist "
@@ -248,8 +239,8 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
                 mzBefore < ASSIST_CEILING);
 
         // FA back on -> setpoint captured -> cruise continues, no jerk.
-        ok(client().execute("stellurgytest rocket set-flight-assist " + id + " on"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 20"));
+        ok(client().arrange("stellurgytest rocket set-flight-assist " + id + " on"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 20"));
         double mzAfter = rocketInfo(id).motionZ;
         assertTrue("FA re-enable must keep the cruise (was " + mzBefore + ", now "
                 + mzAfter + ")", Math.abs(mzAfter - mzBefore) < RE_ENABLE_KEEPS_CRUISE);
@@ -263,27 +254,27 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
     @Test
     public void reEnablingFlightAssistAboveItsCeilingDeceleratesToTheCeiling() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 4375, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
         // Climb clear of the ground, then hover, exactly as the capture leg does.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 1 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 60"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 30"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 1 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 60"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 30"));
 
         // FA off, build a cruise well ABOVE the assist ceiling (8 × 0.5 = 4.0 against 3.0).
-        ok(client().execute("stellurgytest rocket set-flight-assist " + id + " off"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 1 0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 8"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 2"));
+        ok(client().arrange("stellurgytest rocket set-flight-assist " + id + " off"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 1 0 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 8"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 2"));
         double mzBefore = rocketInfo(id).motionZ;
         assertTrue("precondition: the cruise must exceed the assist ceiling, got " + mzBefore,
                 mzBefore > ASSIST_CEILING);
 
-        ok(client().execute("stellurgytest rocket set-flight-assist " + id + " on"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 20"));
+        ok(client().arrange("stellurgytest rocket set-flight-assist " + id + " on"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 20"));
         double mzAfter = rocketInfo(id).motionZ;
         assertTrue("the assist must bring an overfast craft DOWN toward its ceiling (was " + mzBefore
                 + ", now " + mzAfter + ")", mzAfter < mzBefore);
@@ -295,16 +286,16 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
     public void flightAssistOffStillAcceptsExplicitBrake() throws Exception {
         // Cross-side wiring: FA=off + brake input still attenuates motion.
         int id = buildAndAssemble(FixtureSite.openAir(0, 4400, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
-        ok(client().execute("stellurgytest rocket set-flight-assist " + id + " off"));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-assist " + id + " off"));
 
-        ok(client().execute("stellurgytest rocket set-state " + id + " motionY=1.0"));
+        ok(client().arrange("stellurgytest rocket set-state " + id + " motionY=1.0"));
         double myBefore = rocketInfo(id).motionY;
 
         // brake=1.0 (channel 4).
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 1 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 1"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 1 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 1"));
 
         double myAfter = rocketInfo(id).motionY;
         // Brake at FA off must still pull motion down (toward gravity-altered baseline).
@@ -319,16 +310,16 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
         // non-zero for thrust in ANY direction — not only motionY>0 (the classic
         // areEnginesRunning gate that made the sound cut out in cruise/hover).
         int id = buildAndAssemble(FixtureSite.openAir(0, 4250, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
+        ok(client().arrange("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
+        ok(client().arrange("stellurgytest rocket start-free-flight " + id));
 
         // Climb clear of the pad, then CUT to a gravity-cancelled hover: FA fires
         // the engines to hold altitude, so motionY settles ~0 while thrust is still
         // being produced — exactly the case the old motionY>0 gate silenced.
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 1 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 30"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1")); // cut -> hover
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 25"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 1 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 30"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1")); // cut -> hover
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 25"));
         RocketInfo hover = rocketInfo(id);
         double myHover  = hover.motionY;
         double powHover = hover.enginePower;
@@ -336,9 +327,9 @@ public class FreeFlightAssistsServerTest extends AbstractSharedServerTest {
                 + "(motionY=" + myHover + " enginePower=" + powHover + ")", powHover > 0.0);
 
         // FA off + no input: pure coast under gravity, no thrust -> engines silent.
-        ok(client().execute("stellurgytest rocket set-flight-assist " + id + " off"));
-        ok(client().execute("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
-        ok(client().execute("stellurgytest rocket free-flight-tick " + id + " 3"));
+        ok(client().arrange("stellurgytest rocket set-flight-assist " + id + " off"));
+        ok(client().act("stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0"));
+        ok(client().act("stellurgytest rocket free-flight-tick " + id + " 3"));
         double powCoast = rocketInfo(id).enginePower;
         assertTrue("coasting with no thrust must be silent (enginePower=" + powCoast + ")",
                 powCoast < ENGINE_SILENT);

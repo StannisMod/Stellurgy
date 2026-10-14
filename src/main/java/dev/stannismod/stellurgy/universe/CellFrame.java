@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.universe;
 
-import net.minecraft.nbt.NBTTagCompound;
-
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * The coordinate system a cell's contents live in — its ORIGIN as a function of world time. Every

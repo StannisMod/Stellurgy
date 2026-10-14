@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockPistonBase;
 import net.minecraft.block.BlockPistonExtension;
@@ -8,7 +9,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 import javax.annotation.Nonnull;
 

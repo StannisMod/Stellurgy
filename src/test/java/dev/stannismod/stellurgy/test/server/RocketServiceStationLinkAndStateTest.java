@@ -1,10 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ScenarioRockets;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
-
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -46,8 +47,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTest {
 
-    private static final String ENTITY_ID = "entityId";
     private static final String LINKED_ID = "linkedRocketId";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
     private static final String PARTS_COUNT = "partsToRepairCount";
 
     /**
@@ -62,26 +69,29 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
 
     /** Service-station tick path with no linked rocket and no power
      *  surfaces — the same path a freshly-placed station traverses
-     *  on world load. Must not throw. */
+     *  on world load. Must not throw.
+     * Pins INV-INFRA-07 (an unlinked service station reports no linked rocket and no parts to repair).
+     */
+    @Pins("INV-INFRA-07")
     @Test
     public void serviceStationTicksWithoutLinkedRocketWithoutCrash() throws Exception {
         // Place service station in isolation (not adjacent to any rocket
         // fixture, no assemblers nearby).
         int sx = CX_NO_LINK, sy = CY_PAD, sz = CZ_PAD - 50;
-        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation");
+        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
 
         // Tick. Production performFunction guards on `linkedRocket instanceof
         // EntityRocket` before doing any work — null branch must be a no-op.
-        String tick = exec("stellurgytest tile force-tick 0 " + sx + " " + sy + " " + sz
-                + " 40");
+        String tick = act("stellurgytest tile force-tick 0 " + sx + " " + sy + " " + sz
+                + " 40").raw();
         assertTrue("force-tick on unlinked service station must succeed: " + tick,
                 Reply.of(tick).ok());
 
         // State probe must succeed and report linkedRocketId = -1.
-        String state = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String state = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("unlinked service station must report linkedRocketId=-1",
                 -1, extract(state, LINKED_ID));
         assertEquals("unlinked service station must report 0 parts-to-repair",
@@ -101,33 +111,27 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
     public void linkedFreshRocketAppearsInServiceStationStateWithZeroWornParts()
             throws Exception {
         // Build + assemble a standard rocket fixture far from any other patch.
-        // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away.
-        String assemble = RocketFixture.assembleAt(
-                FixtureSite.openAir(0, CX_WITH_LINK, CZ_PAD),
-                cmd -> exec(cmd), "simple", 2, 10,
-                "the fresh craft the service station is linked to stands in this volume");
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
-        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
+        // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away. The
+        // rocket is the one the press's own `rocket_born` record names.
+        int rocketId = rockets.assembleAt(FixtureSite.openAir(0, CX_WITH_LINK, CZ_PAD), c -> act(c).raw(),
+                "simple", 2, 10, "the fresh craft the service station is linked to stands in this volume");
 
         // Place service station near the launchpad (not on it — the pad
         // is occupied). Position-isolated from CX_NO_LINK.
         int sx = CX_WITH_LINK + 10, sy = CY_PAD, sz = CZ_PAD;
-        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:serviceStation");
+        String place = arrange("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation").raw();
         assertTrue("service station place failed: " + place,
                 Reply.of(place).bool("placed"));
 
         // Link.
-        String link = exec("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
-                + " " + rocketId);
+        String link = arrange("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
+                + " " + rocketId).raw();
         assertTrue("infra link must succeed: " + link,
                 Reply.of(link).ok());
 
         // Verify the service station now reports the rocket's entityId.
-        String state = exec("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz);
+        String state = read("stellurgytest infra service-state 0 " + sx + " " + sy + " " + sz).raw();
         assertEquals("linked service station must report rocket's entityId",
                 rocketId, extract(state, LINKED_ID));
 

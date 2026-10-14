@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.affs.world;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * Resolves the {@link FieldFrame} for a shield block from its position (§4.3): the frame is a

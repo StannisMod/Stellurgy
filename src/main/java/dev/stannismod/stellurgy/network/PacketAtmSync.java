@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.atmosphere.AtmosphereSummary;
+import dev.stannismod.stellurgy.client.ClientAtmosphere;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -7,9 +10,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.NBTTagString;
 import net.minecraft.network.PacketBuffer;
-import dev.stannismod.stellurgy.atmosphere.AtmosphereSummary;
-import dev.stannismod.stellurgy.client.ClientAtmosphere;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.io.IOException;
 import java.util.ArrayList;

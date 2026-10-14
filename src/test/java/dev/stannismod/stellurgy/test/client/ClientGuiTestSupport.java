@@ -4,9 +4,9 @@ import com.github.stannismod.forge.testing.client.ClientBot;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.Events;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
-import dev.stannismod.stellurgy.test.Events;
 
 /**
  * Shared helpers for the client GUI E2E tests.

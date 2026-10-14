@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.damage;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
@@ -7,12 +8,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.item.crafting.Ingredient;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.NonNullList;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.oredict.OreDictionary;
-
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -45,12 +45,12 @@ public final class OrbitLine {
      * {@link #unstate}.
      */
     public static OrbitLine state(Probe probe, int dim, int blocks) throws Exception {
-        return read(probe.exec("stellurgytest planet orbit-line " + dim + " " + blocks));
+        return read(probe.exec("stellurgytest planet state-orbit-line " + dim + " " + blocks));
     }
 
     /** Clear a stated line, so the body's own applies again. */
     public static OrbitLine unstate(Probe probe, int dim) throws Exception {
-        return read(probe.exec("stellurgytest planet orbit-line " + dim + " unset"));
+        return read(probe.exec("stellurgytest planet state-orbit-line " + dim + " unset"));
     }
 
     private static OrbitLine read(String raw) {

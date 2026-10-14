@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.libvulpes.tile.energy;
 
+import dev.stannismod.stellurgy.libvulpes.energy.IPower;
+import dev.stannismod.stellurgy.libvulpes.util.CreativeBattery;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
-import dev.stannismod.stellurgy.libvulpes.energy.IPower;
-import dev.stannismod.stellurgy.libvulpes.util.CreativeBattery;
 
 import javax.annotation.Nullable;
 

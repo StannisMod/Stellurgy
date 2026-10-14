@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
-import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShieldTile;
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -42,6 +40,8 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private static final int CHARGE_ITERATIONS = 60;
     private static final int FE_PER_ITERATION = 4000;
 
+    /** Pins INV-SHD-02 (two adjacent shield blocks form a network with no cable and a one-block gap forms none). */
+    @Pins("INV-SHD-02")
     @Test
     public void twoBlockShieldPowersWithoutCable() throws Exception {
         // Generator at G, emitter directly adjacent along +X. No cable, console or accumulator.
@@ -52,12 +52,14 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
+        ShieldTile emitter = ShieldTile.at(c -> read(c).raw(), DIM, ex, Y, ez);
         assertTrue("adjacent generator+emitter (no cable) failed to power — the cable-less edge did not "
                         + "carry shield energy:\n" + emitter.raw(),
                 emitter.powered());
     }
 
+    /** Pins INV-SHD-02 (two adjacent shield blocks form a network with no cable and a one-block gap forms none). */
+    @Pins("INV-SHD-02")
     @Test
     public void nonAdjacentPairNeverPowers() throws Exception {
         // Same two blocks, but a one-block gap and no cable: two disconnected components.
@@ -68,7 +70,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
+        ShieldTile emitter = ShieldTile.at(c -> read(c).raw(), DIM, ex, Y, ez);
         assertTrue("disconnected emitter (one-block gap, no cable) powered anyway — a spurious edge is "
                         + "carrying energy across the gap:\n" + emitter.raw(),
                 !emitter.powered());
@@ -92,34 +94,31 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * which no single-server tier can watch.</p>
      *
      * <p>One inversion per verdict, 2026-10-03:</p>
-     *
-     * <p>red-witnessed: with {@code SubsystemNetworkRegistry#nodesIn} at
-     * {@code if (type.isInstance(node) && node.getNodeWorld() == world)} dropping the world conjunct,
-     * this fails at "the overworld does not answer for exactly its own emitter
-     * expected:[4020,151,4020] but was:[4020,151,4020, 4022,151,4020]".</p>
-     *
-     * <p>red-witnessed: with {@code TileEntityFieldGenerator#loadedIn} at
-     * {@code nodesIn(ShieldNetworkManager.DOMAIN, world,} asking for the overworld whatever world it is
-     * given, this fails at "the nether does not answer for exactly its own emitter
-     * expected:[4022,151,4020] but was:[4020,151,4020]".</p>
-     *
-     * <p>red-witnessed: with {@code TileEntityFieldGenerator#onChunkUnload} at
-     * {@code SubsystemNetworkManager.of(world).unregister(this);} removed, this fails at "after its chunk
-     * unloaded, the emitter at 4020,151,4020 never left the overworld's shield registry" with no
-     * {@code subsystem_node_unregistered} for that position, while a {@code subsystem_network_rebuilt}
-     * WAS recorded in the window (2026-10-04).</p>
      */
+    @LegacyWitness(prose = "with {@code SubsystemNetworkRegistry#nodesIn} at"
+            + " {@code if (type.isInstance(node) && node.getNodeWorld() == world)} dropping the world conjunct,"
+            + " this fails at \"the overworld does not answer for exactly its own emitter"
+            + " expected:[4020,151,4020] but was:[4020,151,4020, 4022,151,4020]\".")
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#loadedIn} at"
+            + " {@code nodesIn(ShieldNetworkManager.DOMAIN, world,} asking for the overworld whatever world it is"
+            + " given, this fails at \"the nether does not answer for exactly its own emitter"
+            + " expected:[4022,151,4020] but was:[4020,151,4020]\".")
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#onChunkUnload} at"
+            + " {@code SubsystemNetworkManager.of(world).unregister(this);} removed, this fails at \"after its chunk"
+            + " unloaded, the emitter at 4020,151,4020 never left the overworld's shield registry\" with no"
+            + " {@code subsystem_node_unregistered} for that position, while a {@code subsystem_network_rebuilt}"
+            + " WAS recorded in the window (2026-10-04).")
     @Test
     public void aWorldAnswersForTheEmittersLoadedInItAndNoOthers() throws Exception {
         FixtureSite here = site();
-        here.requireClear(this::exec, 0, 1, "the emitter's block");
+        here.requireClear(cmd -> arrange(cmd).raw(), 0, 1, "the emitter's block");
         int y = here.y + 1, z = here.z;
         int overworldX = here.x, netherX = here.x + 2;
         String overworldEmitter = overworldX + "," + y + "," + z, netherEmitter = netherX + "," + y + "," + z;
         int cx = overworldX >> 4, cz = z >> 4;
         // The nether is held loaded for the whole scenario, so its answer below is about a loaded world
         // with an emitter in it rather than about a world that has gone away.
-        Reply held = Reply.of(exec("stellurgytest chunk forceload " + NETHER + " " + (netherX >> 4) + " " + cz));
+        Reply held = Reply.of(arrange("stellurgytest chunk forceload " + NETHER + " " + (netherX >> 4) + " " + cz).raw());
         requireArranged("the nether chunk could not be held loaded: " + held, held.ok());
         placeAt(DIM, "affs:field_generator", overworldX, y, z);
         placeAt(NETHER, "affs:field_generator", netherX, y, z);
@@ -131,10 +130,10 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
                 Collections.singletonList(netherEmitter),
                 emittersAmong(NETHER, overworldEmitter, netherEmitter));
 
-        Events events = new Events(this::exec,
+        Events events = new Events(c -> read(c).raw(),
                 ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
         long cycled = events.markInstrumented();
-        Reply cycle = Reply.of(exec("stellurgytest chunk cycle " + DIM + " " + cx + " " + cz));
+        Reply cycle = Reply.of(arrange("stellurgytest chunk cycle " + DIM + " " + cx + " " + cz).raw());
         requireArranged("the emitter's chunk did not unload and come back as a new chunk, so there is no"
                         + " released tile to look for: " + cycle,
                 cycle.bool("dropped") && cycle.bool("reloaded") && !cycle.bool("sameInstance"));
@@ -175,29 +174,34 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * address that no ship will ever claim.</p>
      *
      * <p>One inversion per verdict, 2026-10-07, after a healthy run:</p>
-     * <p>red-witnessed: with {@code FieldFrames#forBlock} at {@code return
-     * VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;}
-     * answering the world frame whatever the position, this fails at "an emitter in the shipyard that no
-     * ship claims projected a shell over its shipyard address".</p>
-     * <p>red-witnessed: with {@code TileEntityFieldGenerator#update} at {@code if
-     * (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at "an emitter in the
-     * shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but
-     * was:&lt;10453&gt;".</p>
+     * Pins INV-SHD-25 (A charged emitter in the shipyard that no ship claims projects no shell and spends nothing from its coil, beside a control at).
      */
+    @Pins("INV-SHD-25")
+    @LegacyWitness(prose = "with {@code FieldFrames#forBlock} at {@code return"
+            + " VSIntegration.isOnUnnamedShip(world, pos) ? new UnnamedShipFieldFrame() : WorldFieldFrame.INSTANCE;}"
+            + " answering the world frame whatever the position, this fails at \"an emitter in the shipyard that no"
+            + " ship claims projected a shell over its shipyard address\".")
+    @LegacyWitness(prose = "with {@code TileEntityFieldGenerator#update} at {@code if"
+            + " (VSIntegration.isOnUnnamedShip(world, pos))} never waiting, this fails at \"an emitter in the"
+            + " shipyard that no ship claims spent its coil on a shell over nothing expected:&lt;36985&gt; but"
+            + " was:&lt;10453&gt;\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advance(client(), GameTicks.server(),"
+            + " MAINTENANCE_WINDOW_TICKS);",
+            why = "two reads of each coil with the world advanced between; the verdicts name both reads.")
     public void anEmitterInTheShipyardThatNoShipClaimsProjectsNothing() throws Exception {
         FixtureSite here = site();
-        here.requireClear(this::exec, 0, 1, "the control emitter's block");
+        here.requireClear(cmd -> arrange(cmd).raw(), 0, 1, "the control emitter's block");
         int y = here.y + 1, z = here.z;
         int controlX = here.x;
-        Reply held = Reply.of(exec("stellurgytest chunk forceload " + DIM + " " + (SHIPYARD_X >> 4) + " " + (z >> 4)));
+        Reply held = Reply.of(arrange("stellurgytest chunk forceload " + DIM + " " + (SHIPYARD_X >> 4) + " " + (z >> 4)).raw());
         requireArranged("the shipyard chunk could not be held loaded: " + held, held.ok());
         placeAt(DIM, "affs:field_generator", controlX, y, z);
         placeAt(DIM, "affs:field_generator", SHIPYARD_X, y, z);
         charge(controlX, y, z);
         charge(SHIPYARD_X, y, z);
 
-        ShieldTile control = ShieldTile.at(cmd -> exec(cmd), DIM, controlX, y, z).require(ShieldTile.EMITTER,
+        ShieldTile control = ShieldTile.at(c -> read(c).raw(), DIM, controlX, y, z).require(ShieldTile.EMITTER,
                 "the control emitter");
         requireArranged("the control emitter must be powered by the charge: " + control.raw(), control.powered());
         // Inside the emitter's own sphere, straight above it: the point its shell covers if it has one.
@@ -209,7 +213,6 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         long controlBefore = stored(controlX, y, z);
         long shipyardBefore = stored(SHIPYARD_X, y, z);
-        // WINDOW: two reads of each coil with the world advanced between; the verdicts name both reads.
         GameTicks.advance(client(), GameTicks.server(), MAINTENANCE_WINDOW_TICKS);
         long controlAfter = stored(controlX, y, z);
         long shipyardAfter = stored(SHIPYARD_X, y, z);
@@ -236,21 +239,21 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private static final int MAINTENANCE_WINDOW_TICKS = 40;
 
     private void charge(int x, int y, int z) throws Exception {
-        Reply charged = Reply.of(exec("stellurgytest shield charge " + DIM + " " + x + " " + y + " " + z + " "
-                + CHARGE));
+        Reply charged = Reply.of(arrange("stellurgytest shield charge " + DIM + " " + x + " " + y + " " + z + " "
+                + CHARGE).raw());
         requireArranged("the emitter at " + x + "," + y + "," + z + " could not be charged: " + charged,
                 charged.ok() && charged.integer("stored") > 0);
     }
 
     private boolean covered(int x, int y, int z) throws Exception {
-        Reply zone = Reply.of(exec("stellurgytest shield zone " + DIM + " " + x + " " + y + " " + z));
+        Reply zone = Reply.of(read("stellurgytest shield zone " + DIM + " " + x + " " + y + " " + z).raw());
         requireArranged("the zone probe did not answer for " + x + "," + y + "," + z + ": " + zone,
                 zone.has("covered"));
         return zone.bool("covered");
     }
 
     private long stored(int x, int y, int z) throws Exception {
-        Reply read = Reply.of(exec("stellurgytest shield read " + DIM + " " + x + " " + y + " " + z));
+        Reply read = Reply.of(read("stellurgytest shield read " + DIM + " " + x + " " + y + " " + z).raw());
         requireArranged("no emitter answered at " + x + "," + y + "," + z + ": " + read, read.has("shieldStored"));
         return (long) read.number("shieldStored");
     }
@@ -273,7 +276,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      */
     private List<String> emittersAmong(int dim, String... positions) throws Exception {
         Reply listed = Reply.of("stellurgytest shield emitters " + dim,
-                exec("stellurgytest shield emitters " + dim));
+                read("stellurgytest shield emitters " + dim).raw());
         assertEquals("the emitters probe answered for another dimension: " + listed,
                 dim, listed.integer("dim"));
         List<String> wanted = Arrays.asList(positions);
@@ -290,7 +293,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     }
 
     private void placeAt(int dim, String block, int x, int y, int z) throws Exception {
-        Reply placed = Reply.of(exec("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block));
+        Reply placed = Reply.of(arrange("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block).raw());
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + " in dim " + dim + ": "
                 + placed, placed.bool("placed"));
     }
@@ -298,14 +301,14 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     /** Feed the generator FE and run one network solve per iteration. */
     private void chargeAndSolve(int gx, int gz) throws Exception {
         for (int i = 0; i < CHARGE_ITERATIONS; i++) {
-            exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
-            exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
-            exec("stellurgytest shield tick " + DIM);
+            arrange("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + gz + " " + FE_PER_ITERATION);
+            act("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
+            act("stellurgytest shield tick " + DIM);
         }
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        String resp = arrange("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block).raw();
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
     }

@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraftforge.common.config.Configuration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
-import dev.stannismod.stellurgy.api.Constants;
 
 import java.io.File;
 import java.util.List;

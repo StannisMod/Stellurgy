@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
-
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -58,14 +58,17 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
      *  per tick into the battery. Asserts the delta within a single tick
      *  command (immune to background ticks). The exact per-tick accrual
      *  formula is implementation detail; the contract is "battery grows
-     *  at roughly powerGen rate, bounded by powerGen × ticks". */
+     *  at roughly powerGen rate, bounded by powerGen × ticks".
+     * Pins INV-SAT-01 (Base battery never exceeds powerStorage).
+     */
+    @Pins("INV-SAT-01")
     @Test
     public void baseSatelliteTickAccruesAtApproximatelyPowerGenRate() throws Exception {
         int powerGen = 100;
         int ticks = 10;
         long satId = createSat("oreScanner", powerGen, 10_000, 1000);
 
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " " + ticks));
         assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long pre = longField(PRE_STORED, resp, "preStored");
@@ -83,14 +86,17 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
     }
 
     /** Pin: battery never exceeds {@code powerStorage}. Even when each
-     *  tick would push past the cap, the battery clamps at max. */
+     *  tick would push past the cap, the battery clamps at max.
+     * Pins INV-SAT-01 (Base battery never exceeds powerStorage).
+     */
+    @Pins("INV-SAT-01")
     @Test
     public void baseSatelliteBatteryCapsAtPowerStorage() throws Exception {
         long satId = createSat("oreScanner", 1000, 500, 1000);
 
         // Tick 10x — first tick alone (powerGen-1=999) already overshoots
         // powerStorage=500.
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 10"));
         assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long post = longField(POST_STORED, resp, "postStored");
@@ -107,12 +113,15 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
     /** Pin: a {@code SatelliteData} subclass (composition) accumulates
      *  data over multiple ticks. With powerGen=1000 collectionTime ≈ 20,
      *  so within 100 ticks of monotonically-advancing worldTime the gate
-     *  fires at worldTime ∈ {20, 40, 60, 80, 100} &rarr; 5 data points. */
+     *  fires at worldTime ∈ {20, 40, 60, 80, 100} &rarr; 5 data points.
+     * Pins INV-SAT-02 (DataStorage.addData is capped at maxData).
+     */
+    @Pins("INV-SAT-02")
     @Test
     public void dataSatelliteAccumulatesDataOverTime() throws Exception {
         long satId = createSat("composition", 1000, 100_000, 1000);
 
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 100"));
         assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long preData = longField(PRE_DATA, resp, "preData");
@@ -129,21 +138,25 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
                 + "than ~6 data points; delta=" + delta, delta <= MAX_DATA_POINTS);
     }
 
-    /** Pin: {@code DataStorage.addData} caps at {@code maxData}. */
+    /**
+     * Pin: {@code DataStorage.addData} caps at {@code maxData}.
+     * Pins INV-SAT-02 (DataStorage.addData is capped at maxData).
+     */
+    @Pins("INV-SAT-02")
     @Test
     public void dataSatelliteRespectsMaxDataCap() throws Exception {
         // maxData=2, powerGen=1000 -> collectionTime=20; 500 ticks would
         // otherwise produce ~25 fires.
         long satId = createSat("composition", 1000, 100_000, 2);
 
-        client().execute("stellurgytest satellite tick 0 " + satId + " 500");
+        client().act("stellurgytest satellite tick 0 " + satId + " 500");
 
-        String dataResp = String.join("\n", client().execute(
+        String dataResp = String.join("\n", client().read(
                 "stellurgytest satellite data 0 " + satId));
         long maxData = longField(MAX_DATA, dataResp, "maxData");
 
         // Read postData via a fresh 0-tick run (gives us a snapshot).
-        String snap = String.join("\n", client().execute(
+        String snap = String.join("\n", client().act(
                 "stellurgytest satellite tick 0 " + satId + " 0"));
         long postData = longField(POST_DATA, snap, "postData");
         assertTrue("data must NOT exceed maxData cap even with many "
@@ -154,7 +167,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
     // -- helpers ----------------------------------------------------------
 
     private long createSat(String type, int powerGen, int powerStorage, int maxData) throws Exception {
-        String resp = String.join("\n", client().execute(
+        String resp = String.join("\n", client().arrange(
                 "stellurgytest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,

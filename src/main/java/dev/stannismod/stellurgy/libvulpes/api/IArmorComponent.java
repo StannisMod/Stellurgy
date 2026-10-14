@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.libvulpes.api;
 
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -11,7 +12,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
 
 import javax.annotation.Nonnull;
 import java.util.List;

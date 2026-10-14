@@ -1,9 +1,8 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
 import dev.stannismod.stellurgy.libvulpes.inventory.GuiModular;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPanYOnly;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPanYOnly;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;

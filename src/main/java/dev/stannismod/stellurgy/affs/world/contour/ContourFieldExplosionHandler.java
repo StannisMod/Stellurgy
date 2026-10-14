@@ -2,15 +2,15 @@ package dev.stannismod.stellurgy.affs.world.contour;
 
 import dev.stannismod.stellurgy.affs.te.TileEntityContourInjector;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldNetworkManager;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
+import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.ExplosionEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkNode;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 
 import java.util.*;
 

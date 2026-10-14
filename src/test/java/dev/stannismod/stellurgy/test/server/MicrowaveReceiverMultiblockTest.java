@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -27,19 +27,21 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7000;
 
+    /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
+    @Pins("INV-MBM-11")
     @Test
     public void microwaveReceiverMultiblockValidatesWhenFixtureIsBuilt() throws Exception {
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock microwave-receiver 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock microwave-receiver failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String info = join(client().execute(
+        String info = join(client().read(
                 "stellurgytest machine info 0 " + CX + " " + CY + " " + CZ));
         assertEquals("expected TileMicrowaveReciever tile at controller pos: " + info,
                 "TileMicrowaveReciever", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = join(client().execute(
+        String tryComplete = join(client().act(
                 "stellurgytest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -47,41 +49,45 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
                 Reply.of(tryComplete).bool("isComplete"));
     }
 
+    /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
+    @Pins("INV-MBM-11")
     @Test
     public void microwaveReceiverMultiblockInvalidatesWhenCornerPanelRemoved() throws Exception {
         int cx = CX + 30, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock microwave-receiver 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Break BEFORE first try-complete (no-baseline pattern — solar panels
         // are TE-aware in hidden-multiblock state).
         // NW corner — globalY = cy, globalX = cx + 2, globalZ = cz - 2.
-        String breakCorner = join(client().execute(
+        String breakCorner = join(client().arrange(
                 "stellurgytest place 0 " + (cx + 2) + " " + cy + " " + (cz - 2) + " minecraft:stone"));
         assertTrue("could not replace corner: " + breakCorner,
                 Reply.of(breakCorner).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing corner panel: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
     }
 
+    /** Pins INV-MBM-11 (the microwave receiver validates as a multiblock and loses it when a panel is removed). */
+    @Pins("INV-MBM-11")
     @Test
     public void microwaveReceiverMultiblockInvalidatesWhenAdjacentPanelRemoved() throws Exception {
         int cx = CX + 60, cy = CY, cz = CZ;
-        String fixture = join(client().execute(
+        String fixture = join(client().arrange(
                 "stellurgytest fixture multiblock microwave-receiver 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Cell immediately east of controller — globalY = cy, globalX = cx + 1, globalZ = cz.
-        String breakAdj = join(client().execute(
+        String breakAdj = join(client().arrange(
                 "stellurgytest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace adjacent panel: " + breakAdj,
                 Reply.of(breakAdj).ok());
 
-        String broken = join(client().execute(
+        String broken = join(client().act(
                 "stellurgytest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing adjacent panel: " + broken,
                 (!Reply.of(broken).bool("isComplete")));

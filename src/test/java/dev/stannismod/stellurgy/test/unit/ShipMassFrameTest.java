@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.ship.mass.MassContributor;
+import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
+import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.joml.Matrix3d;
 import org.joml.Matrix3dc;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.ship.mass.MassContributor;
-import dev.stannismod.stellurgy.ship.mass.MassContributor.Kind;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
-import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -52,11 +52,11 @@ public class ShipMassFrameTest {
      * <p>The inertia leg is the load-bearing half: the tensor is expressed <em>about the centre of
      * mass</em>, so it must be invariant here. If it ever stopped being, every craft's handling would
      * silently depend on where its shipyard happened to be allocated.</p>
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrame#translated} at {@code return new ShipMassFrame(structuralMass, contentMass, crewMass,} doubling the hull
-     * in {@code translated} fails "must not invent or lose mass"; {@code ShipMassFrame#translated} at {@code new Vector3d(centreOfMass).add(dx, dy, dz), inertia);} not adding the offset
-     * fails "the centre moves by exactly the offset"; {@code ShipMassFrame#translated} at {@code new Vector3d(centreOfMass).add(dx, dy, dz), inertia);} rescaling the tensor fails "cannot
-     * depend on where the centre IS".</p>
      */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipMassFrame#translated} at {@code return new ShipMassFrame(structuralMass, contentMass, crewMass,} doubling the hull"
+            + " in {@code translated} fails \"must not invent or lose mass\"; {@code ShipMassFrame#translated} at {@code new Vector3d(centreOfMass).add(dx, dy, dz), inertia);} not adding the offset"
+            + " fails \"the centre moves by exactly the offset\"; {@code ShipMassFrame#translated} at {@code new Vector3d(centreOfMass).add(dx, dy, dz), inertia);} rescaling the tensor fails \"cannot"
+            + " depend on where the centre IS\".")
     @Test
     public void translatingMovesTheCentreAndLeavesTheInertiaAlone() {
         ShipMassFrame local = new ShipMassFrameBuilder()
@@ -77,12 +77,10 @@ public class ShipMassFrameTest {
                 local.getInertia(), moved.getInertia());
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting
-     * content as structure fails the structural 1000 (1300); {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting content as crew fails
-     * the content 300 (0.0); {@code ShipMassFrameBuilder#add} at {@code crewMass += m;} not accumulating crew fails the crew 80 (0.0);
-     * {@code ShipMassFrame#getTotalMass} at {@code return structuralMass + contentMass + crewMass;} leaving the crew out of the total fails 1380 (1300).</p>
-     */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting"
+            + " content as structure fails the structural 1000 (1300); {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting content as crew fails"
+            + " the content 300 (0.0); {@code ShipMassFrameBuilder#add} at {@code crewMass += m;} not accumulating crew fails the crew 80 (0.0);"
+            + " {@code ShipMassFrame#getTotalMass} at {@code return structuralMass + contentMass + crewMass;} leaving the crew out of the total fails 1380 (1300).")
     @Test
     public void totalIsExactlyTheThreeCategories() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -99,9 +97,7 @@ public class ShipMassFrameTest {
                 frame.getTotalMass(), EPS);
     }
 
-    /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X at its face instead of its centre, fails "the mass-weighted mean" at (1.5, 0, 0), 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X at its face instead of its centre, fails \"the mass-weighted mean\" at (1.5, 0, 0), 2026-09-30.")
     @Test
     public void centreOfMassIsTheMassWeightedMean() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -114,11 +110,9 @@ public class ShipMassFrameTest {
                 new Vector3d(1.0D, 0.0D, 0.0D), frame.getCentreOfMass(), EPS);
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a
-     * block's X at its face fails "a symmetric hull balances at its middle" (0.5); {@code ShipMassFrameBuilder#add} at {@code sx += m * x;} leaving
-     * content out of the moment fails "cargo on one side must pull the centre".</p>
-     */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a"
+            + " block's X at its face fails \"a symmetric hull balances at its middle\" (0.5); {@code ShipMassFrameBuilder#add} at {@code sx += m * x;} leaving"
+            + " content out of the moment fails \"cargo on one side must pull the centre\".")
     @Test
     public void cargoLoadedToOneSideMovesTheCentreOfMass() {
         ShipMassFrame empty = symmetricPair(500);
@@ -134,9 +128,7 @@ public class ShipMassFrameTest {
                 loaded.getCentreOfMass().x() > empty.getCentreOfMass().x() + 1.0e-6D);
     }
 
-    /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X at its face, fails "must not move it", 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X at its face, fails \"must not move it\", 2026-09-30.")
     @Test
     public void massAddedAtTheCentreOfMassDoesNotMoveIt() {
         ShipMassFrame before = symmetricPair(500);
@@ -152,11 +144,9 @@ public class ShipMassFrameTest {
                 com, after.getCentreOfMass(), EPS);
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrame#getTotalMass} at {@code return structuralMass + contentMass + crewMass;} leaving content out
-     * of the total fails "more cargo must mean more mass"; {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting
-     * content as structure fails "structure is untouched" (1750).</p>
-     */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipMassFrame#getTotalMass} at {@code return structuralMass + contentMass + crewMass;} leaving content out"
+            + " of the total fails \"more cargo must mean more mass\"; {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting"
+            + " content as structure fails \"structure is untouched\" (1750).")
     @Test
     public void loadingCargoStrictlyIncreasesTotalMassAndNeverThrustLikeQuantities() {
         ShipMassFrame light = symmetricPair(500);
@@ -172,13 +162,11 @@ public class ShipMassFrameTest {
                 light.getStructuralMass(), heavy.getStructuralMass(), EPS);
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — the negative mass is refused TWICE — clamped
-     * by {@code MassContributor#ofBlock} at {@code return new MassContributor(x, y, z, Math.max(0.0D, mass), BLOCK_EXTENT, kind);} and dropped by {@code ShipMassFrameBuilder#add} at {@code if (m <= 0.0D)} — and only with BOTH
-     * removed does "must not subtract from the hull" fail (100.0); either alone stays green (the
-     * builder's guard alone was tried 2026-09-29). {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X
-     * at its face fails "nor drag the centre of mass toward it" (0.5).</p>
-     */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — the negative mass is refused TWICE — clamped"
+            + " by {@code MassContributor#ofBlock} at {@code return new MassContributor(x, y, z, Math.max(0.0D, mass), BLOCK_EXTENT, kind);} and dropped by {@code ShipMassFrameBuilder#add} at {@code if (m <= 0.0D)} — and only with BOTH"
+            + " removed does \"must not subtract from the hull\" fail (100.0); either alone stays green (the"
+            + " builder's guard alone was tried 2026-09-29). {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X"
+            + " at its face fails \"nor drag the centre of mass toward it\" (0.5).")
     @Test
     public void negativeContributionsCannotCancelPartOfTheShip() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -192,9 +180,7 @@ public class ShipMassFrameTest {
                 frame.getCentreOfMass().x(), EPS);
     }
 
-    /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder#build} at {@code dxy, dyy, dyz,} writing 0 below the diagonal in place of the xy product, fails "equals its own transpose", 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ShipMassFrameBuilder#build} at {@code dxy, dyy, dyz,} writing 0 below the diagonal in place of the xy product, fails \"equals its own transpose\", 2026-09-30.")
     @Test
     public void inertiaIsSymmetric() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -207,9 +193,7 @@ public class ShipMassFrameTest {
                 frame.getInertia(), new Matrix3d(frame.getInertia()).transpose());
     }
 
-    /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double own = m * (s * s) / 6.0D;}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ShipMassFrameBuilder#add} at {@code double own = m * (s * s) / 6.0D;}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.")
     @Test
     public void aSingleBlockHullStillHasAnInvertibleInertia() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -219,9 +203,7 @@ public class ShipMassFrameTest {
         assertInvertible(frame);
     }
 
-    /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double own = m * (s * s) / 6.0D;}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ShipMassFrameBuilder#add} at {@code double own = m * (s * s) / 6.0D;}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.")
     @Test
     public void aCollinearHullStillHasAnInvertibleInertia() {
         // A mast: every block on one line. A point-mass model gives this a zero moment about the
@@ -233,11 +215,9 @@ public class ShipMassFrameTest {
         assertInvertible(builder.build());
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrame#empty} at {@code return new ShipMassFrame(0.0D, 0.0D, 0.0D, new Vector3d(), new Matrix3d().zero());}'s empty frame given
-     * 1 kg fails "weighs nothing"; {@code ShipMassFrameBuilder#build} at {@code if (total <= 0.0D)}'s empty guard skipped fails "the
-     * origin, not a 0/0" (NaN).</p>
-     */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipMassFrame#empty} at {@code return new ShipMassFrame(0.0D, 0.0D, 0.0D, new Vector3d(), new Matrix3d().zero());}'s empty frame given"
+            + " 1 kg fails \"weighs nothing\"; {@code ShipMassFrameBuilder#build} at {@code if (total <= 0.0D)}'s empty guard skipped fails \"the"
+            + " origin, not a 0/0\" (NaN).")
     @Test
     public void anEmptyFrameIsWellFormedRatherThanUndefined() {
         ShipMassFrame frame = new ShipMassFrameBuilder().build();
@@ -247,12 +227,10 @@ public class ShipMassFrameTest {
                 new Vector3d(), frame.getCentreOfMass(), EPS);
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting
-     * content only once a structure has arrived fails "the total" (590 vs 790); {@code ShipMassFrameBuilder#add} at {@code sx += m * x;} assigning
-     * the x moment instead of accumulating it fails "the centre"; {@code ShipMassFrameBuilder#add} at {@code ixx += own + m * (y * y + z * z);} assigning ixx fails "the
-     * tensor".</p>
-     */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting"
+            + " content only once a structure has arrived fails \"the total\" (590 vs 790); {@code ShipMassFrameBuilder#add} at {@code sx += m * x;} assigning"
+            + " the x moment instead of accumulating it fails \"the centre\"; {@code ShipMassFrameBuilder#add} at {@code ixx += own + m * (y * y + z * z);} assigning ixx fails \"the"
+            + " tensor\".")
     @Test
     public void theOrderContributorsArriveInDoesNotChangeTheShip() {
         // Block iteration order is an accident of how chunks are walked; handling must not depend on it.
@@ -275,9 +253,7 @@ public class ShipMassFrameTest {
                 forwards.getInertia(), backwards.getInertia());
     }
 
-    /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code iyy += own + m * (x * x + z * z);} giving iyy the long axis's lever, fails "about the long axis must be the cheapest rotation", 2026-09-30.</p>
-     */
+    @LegacyWitness(prose = "with {@code ShipMassFrameBuilder#add} at {@code iyy += own + m * (x * x + z * z);} giving iyy the long axis's lever, fails \"about the long axis must be the cheapest rotation\", 2026-09-30.")
     @Test
     public void aLongHullResistsRollingLessThanYawing() {
         // A property a player feels: a needle-shaped ship spins about its long axis far more readily

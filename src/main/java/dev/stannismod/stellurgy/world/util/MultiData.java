@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.world.util;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
 import dev.stannismod.stellurgy.api.satellite.IDataHandler;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumFacing;
 
 import java.util.HashMap;
 

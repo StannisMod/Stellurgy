@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.math.Vec3d;
-import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
-import dev.stannismod.stellurgy.client.ClientWorldDrawings;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
  * Server&rarr;client: a round stopped here, for this reason.

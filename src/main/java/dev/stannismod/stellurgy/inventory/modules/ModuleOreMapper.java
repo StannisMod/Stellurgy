@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
+import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -13,10 +17,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
-import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
-import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 import javax.annotation.Nonnull;
 import java.nio.IntBuffer;

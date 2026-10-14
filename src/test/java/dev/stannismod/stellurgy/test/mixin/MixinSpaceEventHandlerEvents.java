@@ -1,17 +1,15 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.space.ShipAboardTag;
+import dev.stannismod.stellurgy.space.SpaceEventHandler;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.stannismod.stellurgy.space.ShipAboardTag;
-import dev.stannismod.stellurgy.space.SpaceEventHandler;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A player's LOGOUT, as the space subsystem finished handling it — with the aboard record his next

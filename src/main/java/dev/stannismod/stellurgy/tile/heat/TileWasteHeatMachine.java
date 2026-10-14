@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.tile.heat;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.subsystem.heat.WasteHeat;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
-import dev.stannismod.stellurgy.api.capability.CapabilityHeatEmitter;
-import dev.stannismod.stellurgy.subsystem.heat.WasteHeat;
-import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 /**
  * A recipe machine whose work leaves heat behind.

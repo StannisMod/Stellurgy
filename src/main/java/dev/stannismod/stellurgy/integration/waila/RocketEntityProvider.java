@@ -1,9 +1,12 @@
 package dev.stannismod.stellurgy.integration.waila;
 
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
+import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoader;
+import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoaderServer;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.util.StationLandingLocation;
 import mcp.mobius.waila.api.IWailaConfigHandler;
 import mcp.mobius.waila.api.IWailaEntityAccessor;
 import mcp.mobius.waila.api.IWailaEntityProvider;
@@ -14,13 +17,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
-import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoader;
-import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoaderServer;
-import dev.stannismod.stellurgy.util.StationLandingLocation;
-import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+
+import javax.annotation.Nullable;
+import java.util.List;
 
 public class RocketEntityProvider implements IWailaEntityProvider {
     static class WailaRocketDataLoader extends RocketDataLoader {

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.command.test;
 
-import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import dev.stannismod.stellurgy.Stellurgy;
+import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 
 /**
  * Conditional registration entry-point for the test-only {@code /stellurgytest} command
@@ -51,7 +51,9 @@ public final class TestProbeCommandRegistration {
         }
         // What belongs to THIS server's life: on the bus from here, off it when the server stops.
         ServerScoped scope = ServerScoped.start();
-        TestProbeCommand command = new TestProbeCommand(scope.hold(new WeaponFireVetoProbe()));
+        // Answers nothing unless this server serves an e2e; then it judges every command before it runs.
+        E2EModeGate gate = scope.hold(new E2EModeGate());
+        TestProbeCommand command = new TestProbeCommand(scope.hold(new WeaponFireVetoProbe()), gate);
         event.registerServerCommand(command);
         // register the rocket-event recorder at server start so
         // counters are accurate from the first rocket lifecycle event.

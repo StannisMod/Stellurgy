@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.block;
 
+import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
 
 public class BlockTileComparatorOverride extends BlockTile {
 

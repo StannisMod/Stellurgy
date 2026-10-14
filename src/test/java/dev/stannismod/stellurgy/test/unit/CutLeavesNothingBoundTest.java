@@ -1,11 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
-
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;

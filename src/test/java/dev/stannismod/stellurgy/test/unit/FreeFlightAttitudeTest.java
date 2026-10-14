@@ -1,10 +1,11 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics.Step;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -55,6 +56,8 @@ public class FreeFlightAttitudeTest {
 
     // -- calibration: single body rates == legacy bodyBasis ---------------
 
+    /** Pins INV-RKT-07 (the attitude source of truth is the quaternion and Euler is derived from it). */
+    @Pins("INV-RKT-07")
     @Test
     public void identityBasisMatchesEulerZero() {
         assertBasisEquals(FreeFlightPhysics.bodyBasis(0f, 0f, 0f),
@@ -143,6 +146,8 @@ public class FreeFlightAttitudeTest {
 
     // -- basis invariants -------------------------------------------------
 
+    /** Pins INV-RKT-07 (the attitude source of truth is the quaternion and Euler is derived from it). */
+    @Pins("INV-RKT-07")
     @Test
     public void derivedBasisIsOrthonormalRightHanded() {
         Quat q = FreeFlightPhysics.integrateBodyRates(
@@ -168,6 +173,8 @@ public class FreeFlightAttitudeTest {
 
     // -- Euler extraction round-trips (away from poles) -------------------
 
+    /** Pins INV-RKT-07 (the attitude source of truth is the quaternion and Euler is derived from it). */
+    @Pins("INV-RKT-07")
     @Test
     public void eulerFromQuatRoundTripsBodyBasis() {
         Quat q = FreeFlightPhysics.integrateBodyRates(

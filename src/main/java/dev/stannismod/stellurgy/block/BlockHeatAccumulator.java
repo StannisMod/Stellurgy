@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.tile.heat.TileHeatAccumulator;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.tile.heat.TileHeatAccumulator;
 
 import javax.annotation.Nullable;
 

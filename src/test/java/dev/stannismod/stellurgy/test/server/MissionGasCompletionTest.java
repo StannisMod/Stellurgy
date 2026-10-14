@@ -1,22 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.MissionCompletion;
-import dev.stannismod.stellurgy.test.PlanetAir;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * MissionGasCollection.onMissionComplete contract.
@@ -34,10 +28,8 @@ import static org.junit.Assert.assertTrue;
  *       even if the rocket otherwise has fluid tiles.</li>
  * </ul>
  *
- * <p>The respawned rocket's exact position depends on the fixture
- * rocket's forwardDirection (offset by 64 in that axis). Tests scan a
- * 128-block cube around the launch coords to find it — the
- * {@code rocket-cargo} probe handles this lookup.</p>
+ * <p>The returned rocket is the one the completion's own {@code rocket_born} record names
+ * ({@link MissionCompletion}); nothing looks for it near the launch site.</p>
  */
 public class MissionGasCompletionTest extends AbstractSharedServerTest {
 
@@ -45,6 +37,13 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     private static final int DELIVERED_OXYGEN_MB = 64000;
 
     private static final String MISSION_ID = "missionId";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
+
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
+    }
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -54,30 +53,29 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         return buildAndAssembleRocket(baseX, "simple");
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssembleRocket(int baseX, String variant) throws Exception {
         final FixtureSite site = FixtureSite.openAir(0, baseX, 600);
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), variant, 2, 10,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), variant, 2, 10,
                 "the craft is built and flown in this volume");
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     private long startGasMission(int rocketId, long duration, String fluid, int intakePower) throws Exception {
-        String start = ok(client().execute(
+        String start = ok(client().arrange(
                 "stellurgytest mission start-gas 0 " + rocketId + " " + duration + " " + fluid
                         + " " + intakePower));
         assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
-        return Long.parseLong(mmReply.text(MISSION_ID));
+        return rockets.missionStarted(0, Long.parseLong(mmReply.text(MISSION_ID)));
+    }
+
+    private MissionCompletion completeNow(long missionId) throws Exception {
+        return MissionCompletion.now(commands(), rockets, missionId);
     }
 
     /** With intakePower > 0 the gas mission completes WITHOUT crashing
@@ -94,8 +92,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     public void gasCompletionWithIntakeAboveZeroCompletesWithoutCrash() throws Exception {
         int rid = buildAndAssembleRocket(8000);
         long mid = startGasMission(rid, 1000, "oxygen", 10);
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
+        MissionCompletion cargo = completeNow(mid);
         assertTrue("completion must mark mission dead: " + cargo.raw(),
                 cargo.isDeadAfter);
         assertTrue("completion must report fired (wasDeadBefore=false): " + cargo.raw(),
@@ -104,37 +101,35 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
 
     /** Production gate: if `(int)stats.getStatTag("intakePower") > 0`
      *  is false, the fluid-fill loop is skipped (MissionGasCollection
-     *  line 46). Counter-test pinning the gate. */
+     *  line 46). Counter-test pinning the gate.
+     * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
+     */
+    @Pins("INV-MSN-07")
     @Test
     public void gasCompletionDoesNotFillFluidWhenIntakePowerZero() throws Exception {
         int rid = buildAndAssembleRocket(8100);
         long mid = startGasMission(rid, 1000, "water", 0);
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
-        // Either no rocket re-spawned, or no fluid entries — both
-        // represent the no-fill branch (production also spawns the
-        // rocket entity in this path; we pin the empty-fluid invariant).
+        MissionCompletion cargo = completeNow(mid);
+        // The completion returns its rocket on this path too; the gate is that its tanks stay empty.
         assertTrue("intakePower=0 -> no fluid entries: " + cargo.raw(),
-                cargo.fluidEntries == 0);
+                cargo.fluidEntries() == 0);
     }
 
     /** The gas completion path constructs an EntityStationDeployedRocket
      *  (MissionGasCollection line 60), distinguishing it from the ore
-     *  path (which spawns a plain EntityRocket). Pin via a presence
-     *  check in the dim's entity list after completion. */
+     *  path (which spawns a plain EntityRocket). Pinned on the completion's
+     *  own birth records: it returns exactly one rocket, and the server
+     *  holds it. */
     @Test
     public void gasCompletionRespawnsRocketInLaunchDim() throws Exception {
         int rid = buildAndAssembleRocket(8200);
         long mid = startGasMission(rid, 1000, "water", 10);
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
-        // rocketCount > 0 confirms at least one rocket entity is in
-        // the launch dim near the launch coords post-completion. The
-        // type discrimination (StationDeployed vs plain) is checked
+        MissionCompletion cargo = completeNow(mid);
+        // The type discrimination (StationDeployed vs plain) is checked
         // via the ore counter-test in MissionOreCompletionTest.
-        assertTrue("at least one rocket entity must exist near launch coords after gas completion: "
-                        + cargo.raw(),
-                cargo.rocketCount > 0);
+        assertEquals("the gas completion must return exactly one rocket: " + cargo.raw(),
+                1, cargo.returnedRocketCount());
+        cargo.requireCargo("the returned rocket must be in the world");
     }
 
     /** Strong contract: with intakePower>0 AND a rocket carrying fluid
@@ -144,20 +139,17 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      *  {@code fill(new FluidStack(type, 64000), true)}).
      *  Uses the `with-fluid-cargo` fixture variant that swaps 2 of 6
      *  fuel tanks for liquidTank blocks so StorageChunk.liquidTiles is
-     *  non-empty. */
+     *  non-empty.
+     * Pins INV-MSN-07 (gas completion fills fluid tiles only when intake power is above zero).
+     */
+    @Pins("INV-MSN-07")
     @Test
     public void gasCompletionFillsRocketFluidTilesWithConfiguredFluid() throws Exception {
         int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");
         long mid = startGasMission(rid, 1000, "oxygen", 10);
-        MissionCompletion cargo = MissionCompletion.now(
-                cmd -> ok(client().execute(cmd)), mid);
-        // fluidEntries > 0 — fill loop ran on at least one TE. Exact
-        // count depends on whether the original EntityRocket still
-        // lingers next to the freshly spawned StationDeployedRocket
-        // (both share the same StorageChunk via reference). Loose pin
-        // avoids that ambiguity.
+        MissionCompletion cargo = completeNow(mid);
         assertFalse("fluidEntries must be > 0 (production filled fluid tiles): " + cargo.raw(),
-                cargo.fluidEntries == 0);
+                cargo.fluidEntries() == 0);
         // Each filled tile holds 64000 mB of oxygen — production literal
         // at MissionGasCollection.java:50 (FluidStack(type, 64000)).
         assertTrue("fluid contents must include oxygen 64000 mB: " + cargo.raw(),
@@ -172,28 +164,29 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      *  {@code planet info} reports it. Does NOT see the rocket's selector or the mission it plans — only
      *  the offer they both read. Hydrogen and oxygen are used because Stellurgy itself registers their
      *  fluids; a gas no mod has bottled is measured and not offered, and that half is unpinned here.</p>
-     *
-     *  <p>red-witnessed: with {@code DimensionProperties#getHarvestableGases} at
-     *  {@code air.partialPressure(gas) > 0L} widened to {@code >= 0L}, empty air was offered every
-     *  bottled gas; with the method answering an empty list, the hydrogen trace was not offered.</p> */
+     */
+    @LegacyWitness(prose = "with {@code DimensionProperties#getHarvestableGases} at"
+            + " {@code air.partialPressure(gas) > 0L} widened to {@code >= 0L}, empty air was offered every"
+            + " bottled gas; with the method answering an empty list, the hydrogen trace was not offered.")
     @Test
     public void aHarvesterIsOfferedExactlyTheGasesTheAirHolds() throws Exception {
         final int dim = 0;
-        PlanetAir.Probe probe = cmd -> ok(client().execute(cmd));
-        PlanetAir before = PlanetAir.snapshot(probe, dim);
+        PlanetAir.Probe reader = cmd -> ok(client().read(cmd));
+        PlanetAir.Probe arranger = cmd -> ok(client().arrange(cmd));
+        PlanetAir before = PlanetAir.snapshot(reader, dim);
         try {
-            run(probe, "stellurgytest atmosphere set-density " + dim + " 0");
-            assertEquals("air emptied, so nothing is there to offer", set(), offered(probe, dim));
+            run(arranger, "stellurgytest atmosphere set-density " + dim + " 0");
+            assertEquals("air emptied, so nothing is there to offer", set(), offered(reader, dim));
 
-            run(probe, "stellurgytest planet add-gas " + dim + " hydrogen 1");
+            run(arranger, "stellurgytest planet add-gas " + dim + " hydrogen 1");
             assertEquals("one nano-atmosphere of hydrogen is in the air, so hydrogen is offered",
-                    set("hydrogen"), offered(probe, dim));
+                    set("hydrogen"), offered(reader, dim));
 
-            run(probe, "stellurgytest planet add-gas " + dim + " oxygen 200000000");
+            run(arranger, "stellurgytest planet add-gas " + dim + " oxygen 200000000");
             assertEquals("oxygen joined the hydrogen, so both are offered and nothing else",
-                    set("hydrogen", "oxygen"), offered(probe, dim));
+                    set("hydrogen", "oxygen"), offered(reader, dim));
         } finally {
-            before.restore(probe);
+            before.restore(arranger);
         }
     }
 
@@ -240,11 +233,11 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      */
     @Test
     public void aHarvestPlannedAtTwiceThePartialPressureTakesHalfAsLong() throws Exception {
-        Reply found = arrange("stellurgytest space find-giant 8");
-        Reply realized = arrange("stellurgytest space realize " + found.text("cellKey") + " "
-                + found.integer("variant"));
+        Reply found = read("stellurgytest space find-giant 8").requireOk();
+        Reply realized = act("stellurgytest space realize " + found.text("cellKey") + " "
+                + found.integer("variant")).requireOk();
         int giant = realized.integer("dim");
-        Reply planet = ask("stellurgytest planet info " + giant);
+        Reply planet = read("stellurgytest planet info " + giant);
         String[] offered = planet.textArray("harvestable");
         requireArranged("the giant must offer a gas to harvest: " + planet, offered.length > 0);
         String gas = offered[0];
@@ -254,13 +247,13 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         // config verb does not expose it). A server running another id would leave onOrbitReached's
         // dimension check false, and the "exactly one mission" arrangement below would say so.
         int space = new dev.stannismod.stellurgy.api.StellurgyConfiguration().spaceDimId;
-        ask("stellurgytest dim time " + space);
-        Reply station = arrange("stellurgytest station create " + giant);
-        Reply info = arrange("stellurgytest station info " + station.integer("id"));
+        arrange("stellurgytest dim time " + space);
+        Reply station = arrange("stellurgytest station create " + giant).requireOk();
+        Reply info = read("stellurgytest station info " + station.integer("id")).requireOk();
         int x = info.integer("spawnX"), y = info.integer("spawnY"), z = info.integer("spawnZ");
 
         long atHeld = plannedDurationTicks(giant, space, x, y, z);
-        arrange("stellurgytest planet add-gas " + giant + " " + gas + " " + held);
+        arrange("stellurgytest planet add-gas " + giant + " " + gas + " " + held).requireOk();
         long atTwiceHeld = plannedDurationTicks(giant, space, x + 16, y, z);
 
         requireArranged("the shorter mission must be clear of the one-second floor `missionSeconds` clamps"
@@ -278,30 +271,32 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
      * gas mission that registered on {@code giant} as a result.
      */
     private long plannedDurationTicks(int giant, int space, int x, int y, int z) throws Exception {
-        arrange("stellurgytest fixture uv-rocket " + space + " " + x + " " + y + " " + z);
-        Reply rocket = arrange("stellurgytest rocket assemble " + space + " " + x + " " + y + " " + z);
-        int id = rocket.integer("entityId");
-        Reply rocketInfo = ask("stellurgytest rocket info " + id);
+        arrange("stellurgytest fixture uv-rocket " + space + " " + x + " " + y + " " + z).requireOk();
+        long mark = rockets.mark();
+        act("stellurgytest rocket assemble " + space + " " + x + " " + y + " " + z).requireOk();
+        int id = rockets.bornAt(mark, new int[]{x, y, z});
+        Reply rocketInfo = read("stellurgytest rocket info " + id);
         requireArranged("the assembled craft must be a station-deployed rocket in the space dimension: "
                 + rocketInfo, rocketInfo.text("entityClass").endsWith("EntityStationDeployedRocket")
                 && rocketInfo.integer("dim") == space);
-        Reply tanks = ask("stellurgytest rocket storage-fluid " + id);
+        Reply tanks = read("stellurgytest rocket storage-fluid " + id);
         requireArranged("its tanks must be empty, so both missions plan the same harvest: " + tanks,
                 tanks.integer("totalAmount") == 0);
 
         Set<Integer> before = satelliteIds(giant);
-        arrange("stellurgytest rocket force-orbit-reached " + id);
+        arrange("stellurgytest rocket force-orbit-reached " + id).requireOk();
         Set<Integer> planned = satelliteIds(giant);
         planned.removeAll(before);
         requireArranged("reaching orbit over the giant must register exactly one mission on it: " + planned,
                 planned.size() == 1);
-        Reply mission = arrange("stellurgytest mission state " + planned.iterator().next());
+        rockets.missionStarted(giant, planned.iterator().next());
+        Reply mission = read("stellurgytest mission state " + planned.iterator().next()).requireOk();
         return (long) mission.number("duration");
     }
 
     private Set<Integer> satelliteIds(int dim) throws Exception {
         Set<Integer> ids = new HashSet<>();
-        for (String satellite : ask("stellurgytest satellite list " + dim).objectArrayOrEmpty("satellites")) {
+        for (String satellite : read("stellurgytest satellite list " + dim).objectArrayOrEmpty("satellites")) {
             ids.add(Reply.of("satellite list", satellite).integer("id"));
         }
         return ids;

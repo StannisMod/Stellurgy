@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.co2scrubber;
 
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import mezz.jei.api.recipe.IRecipeHandler;
 import mezz.jei.api.recipe.IRecipeWrapper;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 
 public class Co2ScrubberRecipeHandler implements IRecipeHandler<Co2ScrubberWrapper> {
 

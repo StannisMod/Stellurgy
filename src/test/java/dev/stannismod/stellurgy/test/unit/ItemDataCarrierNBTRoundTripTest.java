@@ -1,24 +1,22 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.item.ItemStack;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.item.ItemData;
 import dev.stannismod.stellurgy.item.ItemMultiData;
 import dev.stannismod.stellurgy.item.ItemSpaceElevatorChip;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.util.DimensionBlockPosition;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.DimensionBlockPosition;
+import net.minecraft.item.ItemStack;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * data-carrying items NBT round-trip pins.
@@ -55,6 +53,8 @@ public class ItemDataCarrierNBTRoundTripTest {
 
     // ────────────────────── ItemSpaceElevatorChip ───────────────────────
 
+    /** Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT). */
+    @Pins("INV-ITM-06")
     @Test
     public void elevatorChipEmptyStackReturnsEmptyPositionList() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -89,6 +89,8 @@ public class ItemDataCarrierNBTRoundTripTest {
         }
     }
 
+    /** Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT). */
+    @Pins("INV-ITM-06")
     @Test
     public void elevatorChipSetEmptyOnFreshStackDoesNotAttachNbt() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -103,7 +105,10 @@ public class ItemDataCarrierNBTRoundTripTest {
      *  previously called {@code removeTag("positions")} but the data
      *  lived under {@code "list"} per
      *  {@code NBTStorableListList.writeToNBT}, so the clear was a no-op.
-     *  Now the key matches and the list is actually cleared. */
+     *  Now the key matches and the list is actually cleared.
+     * Pins INV-ITM-06 (the elevator chip yields an empty list on a fresh stack and clearing attaches no NBT).
+     */
+    @Pins("INV-ITM-06")
     @Test
     public void elevatorChipSetEmptyAfterNonEmptyClearsList() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
@@ -169,6 +174,8 @@ public class ItemDataCarrierNBTRoundTripTest {
                 7, item.getData(s));
     }
 
+    /** Pins INV-ITM-05 (the data-stick max-data table and a data stick never stacking past one). */
+    @Pins("INV-ITM-05")
     @Test
     public void dataStickNeverStacksPastOne() {
         // Production contract: ItemData() ctor calls setMaxStackSize(1), so
@@ -188,6 +195,8 @@ public class ItemDataCarrierNBTRoundTripTest {
                 1, item.getItemStackLimit(programmed));
     }
 
+    /** Pins INV-ITM-05 (the data-stick max-data table and a data stick never stacking past one). */
+    @Pins("INV-ITM-05")
     @Test
     public void dataStickMaxDataIsZeroForNonZeroDamage() {
         // ItemData.getMaxData(damage) returns 1000 only for damage 0;

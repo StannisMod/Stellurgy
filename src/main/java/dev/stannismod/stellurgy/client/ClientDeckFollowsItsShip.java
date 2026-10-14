@@ -1,13 +1,12 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-
-import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 
 /**
  * The client half of {@code DeckFollowsItsShip} — the same re-seat, hung on the event the client

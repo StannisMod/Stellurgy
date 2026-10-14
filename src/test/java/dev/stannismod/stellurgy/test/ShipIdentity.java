@@ -87,65 +87,6 @@ public final class ShipIdentity {
     }
 
     /**
-     * Is any LOADED ship in {@code dim} sitting within {@code tolerance} of {@code (x,y,z)}?
-     *
-     * <p>A question about a PLACE, which is a real question and not an identification. Answered by
-     * enumerating the loaded ships and their poses, rather than by asking which ship is nearest the
-     * point: the nearest lookup is unbounded, so it answers with a craft however far away it is, and
-     * the pose comparison that followed then tested only the ONE ship the lookup chose.</p>
-     *
-     * <p><b>ONE probe call.</b> The list and the poses come back together, because a caller polling a
-     * world where nothing holds ships loaded reads a hull that is resident for about a tick after its
-     * own load pump — and an extra round-trip inside that gap misses it every time. Measured
-     * 2026-09-06: a two-call form of this helper turned {@code
-     * VSCrossingOutOfAnUnloadedSourceE2ETest} red with {@code loaded=0} in the reply, and that class
-     * had passed on the same tree with the nearest lookup it replaced.</p>
-     */
-    public static boolean aLoadedShipIsAt(Probe probe, int dim, double x, double y, double z,
-                                          double tolerance) throws Exception {
-        String reply = probe.exec("stellurgytest vs ships-loaded " + dim);
-        // Each ship is read as its own object. The regex this replaces matched the three coordinate
-        // fields in ONE expression, which held only while they stayed adjacent and in that order —
-        // and would otherwise have paired one hull's x with another hull's z.
-        for (String ship : Reply.of("stellurgytest vs ships-loaded", reply).objectArray("ships")) {
-            Reply one = Reply.of(ship);
-            double dx = one.number("posX") - x;
-            double dy = one.number("posY") - y;
-            double dz = one.number("posZ") - z;
-            if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= tolerance) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * The identity of the ONLY loaded ship in {@code dim} — for the one caller that genuinely has no
-     * name to ask by.
-     *
-     * <p>A tier-2 craft is normally followed by its durable name; a fixture built without a flight
-     * computer has none, so after a crossing there is nothing about it to ask for. This is what such
-     * a caller may use INSTEAD of a nearest-ship lookup: the cell's ship count now names what it
-     * counted, so "exactly one ship is here" and "and this is it" are one reading rather than a
-     * premise followed by a positional query that could answer about the other one.</p>
-     *
-     * <p>Fails when the count is not exactly one, naming the count — which is the arrangement
-     * failure, not a finding about the subject.</p>
-     */
-    public static String theOnlyLoadedShipIn(Probe probe, int dim) throws Exception {
-        String counted = probe.exec("stellurgytest vs ship-count " + dim);
-        Reply count = Reply.of("stellurgytest vs ship-count", counted);
-        assertTrue("the ship count for dim " + dim + " is unreadable: " + counted,
-                count.has("count"));
-        assertEquals("dim " + dim + " must hold exactly ONE loaded ship for it to be nameable this"
-                + " way — with two, nothing here says which one a reading is about: " + counted,
-                1, count.integer("count"));
-        String[] named = count.textArray("ships");
-        assertTrue("the count says one ship but does not name it: " + counted, named.length >= 1);
-        return named[0];
-    }
-
-    /**
      * {@link #physicsIdOf} once the craft named {@code durableShipId} is USABLE in {@code dim}: a
      * caller that asks the instant the assembler returns — or a crossing reports — is asking before
      * the hull exists on the far side of the substrate's spawn queue.

@@ -1,20 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
+import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
-
-import com.google.gson.JsonObject;
-
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ShipInfo;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -103,6 +96,8 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
     /** The account the client harness plays under; every record is keyed on it. */
     private static final String BOT = "ForgeTestClient";
 
+    /** Pins SHIPCTL-9 (an unassembled craft takes no pilot input and the refusal is surfaced). */
+    @Pins("SHIPCTL-9")
     @Test
     public void aCraftThatNeverBecameAShipTakesNoOrdersFromItsPilot() throws Exception {
 
@@ -119,7 +114,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
      */
     private void controlARealShipDoesTakeOrders() throws Exception {
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (SHIP_X + 600) + " 120 " + (SHIP_Z + 600) + " 0 0");
+        arrange("tp @a " + (SHIP_X + 600) + " 120 " + (SHIP_Z + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, SHIP_X + 600, SHIP_Z + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -128,16 +123,17 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         // answered by every neighbour that ever assembled one.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleShip();
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleShip();
+        String assemble = assembleBuilt.reply;
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         // Kept, not discarded: the mark precedes the assembly, so this record is this scenario's
         // own ship, and the mount below has to name it rather than take the first loaded seat.
         String controlShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (SHIP_X + 0.5) + " " + (SHIP_Y + 6) + " " + (SHIP_Z + 0.5) + " 0 0");
+        arrange("tp @a " + (SHIP_X + 0.5) + " " + (SHIP_Y + 6) + " " + (SHIP_Z + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, SHIP_X + 0.5, SHIP_Z + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
@@ -152,13 +148,13 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
                 + " answer, and the control leg would indict the harness's keys instead: "
                 + controlInfo, ShipInfo.isLoaded(controlInfo));
 
-        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, controlShipId);
+        SeatMount mountInfo = SeatMount.onShip(c -> arrange(c).raw(), 0, controlShipId);
         scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo.raw(),
                 mountInfo.seatFound);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo.raw(),
                 true /* the reader refuses a reply with no dummy */);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + mountInfo.requireDummyId()).raw();
         scenario().requireArranged("the bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // "Let the mount replicate" is a record on the client's own log. The control below presses a
@@ -213,7 +209,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         // input to that seat and leave leg 2 green for the wrong reason. Ten ticks could only ever
         // be too few, and when they were, nothing said so.
         long offMark = clientEvents().mark();
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
         awaitClientDismount(offMark, "leg 2 must start with him off the REAL ship — its silence is"
                 + " only evidence if there is no other seat his input could have reached",
                 SEAT_LINK_BUDGET_TICKS);
@@ -222,25 +218,38 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
     // ---- Leg 2: the subject ---------------------------------------------------------------------
 
     /** The craft whose assembly never produced a ship: linked, seated in, and completely deaf. */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(SILENCE_WINDOW_TICKS);",
+            why = "the claim is \"no command arrived within SILENCE_WINDOW_TICKS of the taps\" — an absence has no"
+                    + " record to link on, only a deadline. The control leg's jump arrived on the same seam, so"
+                    + " the window is long enough to have seen one; overshoot only lengthens it, which is the"
+                    + " strict direction for an absence.")
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(40);",
+            why = "40 ticks of held flight keys — many samples of the client's per-tick gate, and two of its"
+                    + " once-a-second re-assertions of a held intent.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(10);",
+            why = "the tail of the server-side silence. The client-side reads below are complete at the release,"
+                    + " but an input sent on the hold's last tick is still in flight to the seat, and \"nothing"
+                    + " reached a seat\" is only a claim once it has had time to land. Overshoot only lengthens"
+                    + " the absence window — the strict direction.")
     private void theUnassembledCraftDoesNot() throws Exception {
-        exec("stellurgytest chunk warmup 0 " + ((CRAFT_X - 8) >> 4) + " " + ((CRAFT_Z - 8) >> 4)
+        arrange("stellurgytest chunk warmup 0 " + ((CRAFT_X - 8) >> 4) + " " + ((CRAFT_Z - 8) >> 4)
                 + " " + ((CRAFT_X + 8) >> 4) + " " + ((CRAFT_Z + 8) >> 4));
-        exec("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + (CRAFT_Y - 1) + " " + (CRAFT_Z - 3)
+        arrange("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + (CRAFT_Y - 1) + " " + (CRAFT_Z - 3)
                 + " " + (CRAFT_X + 3) + " " + (CRAFT_Y - 1) + " " + (CRAFT_Z + 3) + " minecraft:obsidian");
-        exec("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + CRAFT_Y + " " + (CRAFT_Z - 3)
+        arrange("stellurgytest fill 0 " + (CRAFT_X - 3) + " " + CRAFT_Y + " " + (CRAFT_Z - 3)
                 + " " + (CRAFT_X + 3) + " " + (CRAFT_Y + 4) + " " + (CRAFT_Z + 3) + " minecraft:air");
-        String seat = exec("stellurgytest fill 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
-                + " " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z + " stellurgy:pilotSeat");
+        String seat = arrange("stellurgytest fill 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
+                + " " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z + " stellurgy:pilotSeat").raw();
         scenario().requireArranged("placing the pilot seat failed: " + seat, Reply.of(seat).ok());
-        String afc = exec("stellurgytest fill 0 " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
+        String afc = arrange("stellurgytest fill 0 " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
                 + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
-                + " stellurgy:advancedFlightComputer");
+                + " stellurgy:advancedFlightComputer").raw();
         scenario().requireArranged("placing the flight computer failed: " + afc, Reply.of(afc).ok());
 
         // Link the two WITHOUT assembling: exactly what the assembler leaves behind when the
         // physics mod rejects the spawn. A real failed assembly cannot be arranged deterministically.
-        String linked = exec("stellurgytest vs seat-link 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
-                + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z);
+        String linked = arrange("stellurgytest vs seat-link 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
+                + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z).raw();
         scenario().requireArranged("the seat must end up LINKED — an unlinked seat is refused for a "
                         + "reason that has nothing to do with this bug: " + linked,
                 Reply.of(linked).bool("linked"));
@@ -300,10 +309,6 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         tapKey(Keyboard.KEY_N);
         tapKey(Keyboard.KEY_K);
         tapKey(Keyboard.KEY_J);
-        // EXPERIMENT: the claim is "no command arrived within SILENCE_WINDOW_TICKS of the taps" —
-        // an absence has no record to link on, only a deadline. The control leg's jump arrived on
-        // the same seam, so the window is long enough to have seen one; overshoot only lengthens
-        // it, which is the strict direction for an absence.
         advanceServerAndClient(SILENCE_WINDOW_TICKS);
         String commands = events.since(deafMark, "pilot_command_received");
         Events.assertInstrumentRan(commands, "pilot_seat_events",
@@ -320,17 +325,11 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         bot().holdKey(Keyboard.KEY_R);
         bot().holdKey(Keyboard.KEY_W);
         try {
-            // STIMULUS: 40 ticks of held flight keys — many samples of the client's per-tick gate,
-            // and two of its once-a-second re-assertions of a held intent.
             bot().waitWorldTicks(40);
         } finally {
             bot().releaseKey(Keyboard.KEY_W);
             bot().releaseKey(Keyboard.KEY_R);
         }
-        // EXPERIMENT: the tail of the server-side silence. The client-side reads below are complete
-        // at the release, but an input sent on the hold's last tick is still in flight to the seat,
-        // and "nothing reached a seat" is only a claim once it has had time to land. Overshoot only
-        // lengthens the absence window — the strict direction.
         advanceServerAndClient(10);
 
         // THE POSITIVE PRECONDITION, and the reason this leg is worth anything: the client's gate
@@ -372,7 +371,7 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
         assertTrue("the refused pilot must still be SEATED — the craft is deaf, not ejecting",
                 isRiding(bot().reportRidingEntity()));
 
-        exec("stellurgytest player dismount");
+        arrange("stellurgytest player dismount");
     }
 
     // ---- Instruments ----------------------------------------------------------------------------
@@ -384,9 +383,10 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
      * and independent bindings do not need to see each other released. Tapping the SAME key twice
      * in a row would need a client tick between the release and the next press to be two edges.</p>
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "bot().waitWorldTicks(2);",
+            why = "held across client ticks, so the edge-triggered handler samples it pressed.")
     private void tapKey(int keyCode) throws Exception {
         bot().holdKey(keyCode);
-        // STIMULUS: held across client ticks, so the edge-triggered handler samples it pressed.
         bot().waitWorldTicks(2);
         bot().releaseKey(keyCode);
     }
@@ -416,8 +416,8 @@ public class VSUnassembledCraftTakesNoOrdersTest extends AbstractSharedVsClientT
      * FIRST link, and it ASSERTS where the warmup+fill pair DUG. HEIGHT 16: the hull, plus the air
      * above it this scenario watches for a craft that must NOT move.
      */
-    private String assembleShip() throws Exception {
-        return RocketFixture.assembleAt(FixtureSite.openAir(0, SHIP_X, SHIP_Z), this::exec,
+    private ShipAssembly assembleShip() throws Exception {
+        return ShipAssembly.at(FixtureSite.openAir(0, SHIP_X, SHIP_Z), c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(),
                 "with-pilot-seat", 2, 16,
                 "the loose craft that must take no orders, and the air it must not climb into");
     }

@@ -1,8 +1,9 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.Test;
-import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -15,6 +16,8 @@ import static org.junit.Assert.assertFalse;
  */
 public class PlanetWeatherStateTest {
 
+    /** Pins INV-WGEN-12 (PlanetWeatherState NBT round-trips its weather fields). */
+    @Pins("INV-WGEN-12")
     @Test
     public void planetWeatherStateNbtRoundTrip() {
         PlanetWeatherState source = new PlanetWeatherState();
@@ -37,6 +40,8 @@ public class PlanetWeatherStateTest {
         assertEquals(true, round.isThundering());
     }
 
+    /** Pins INV-WGEN-12 (PlanetWeatherState NBT round-trips its weather fields). */
+    @Pins("INV-WGEN-12")
     @Test
     public void planetWeatherStateNbtRoundTripPreservesClearWeather() {
         // Distinct from raining round-trip — guards against the trivial impl

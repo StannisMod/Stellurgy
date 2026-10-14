@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 
 import java.util.LinkedList;
 import java.util.List;

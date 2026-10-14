@@ -41,7 +41,7 @@ public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerT
 
     @Test
     public void inheritedSubPacketRoundTripsSymmetrically() throws Exception {
-        String resp = join(client().execute("stellurgytest rocket wire-symmetry TURNUPDATE"));
+        String resp = join(client().read("stellurgytest rocket wire-symmetry TURNUPDATE"));
         assertTrue("wire-symmetry probe errored: " + resp, Reply.of(resp).ok());
 
         int written = intOf(WRITTEN, resp);
@@ -62,7 +62,7 @@ public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerT
         // MENU_CHANGE is the subclass's own payload (gasId short) and is
         // symmetric both pre- and post-fix — a regression guard that the fix
         // must not disturb the gas-selection path.
-        String resp = join(client().execute("stellurgytest rocket wire-symmetry MENU_CHANGE"));
+        String resp = join(client().read("stellurgytest rocket wire-symmetry MENU_CHANGE"));
         assertTrue("wire-symmetry probe errored: " + resp, Reply.of(resp).ok());
         assertTrue("sanity: MENU_CHANGE must carry the gasId payload on the wire, got "
                 + resp, intOf(WRITTEN, resp) > 0);

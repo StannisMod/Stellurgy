@@ -1,22 +1,20 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkController;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkDomain;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkState;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * A weapon network taking its orders from its consoles, as an event: {@code weapon_orders_seeded}.
@@ -26,7 +24,7 @@ import dev.stannismod.stellurgy.weapon.WeaponNetworkState;
  * Carries {@code consoles}, the positions of the component's consoles sorted by x, then y, then z
  * and joined as {@code "x,y,z|x,y,z"}, so a reader names the exact component it built; and
  * {@code stamp}, the stamp of the orders the network holds once the decision is taken. Server
- * log. Read by {@code WeaponConsoleE2ETest}.</p>
+ * log. Read by {@code WeaponConsoleTest}.</p>
  *
  * <p>SILENT about a component with no console, which never asks the question, and about a client
  * world, which has no networks.</p>

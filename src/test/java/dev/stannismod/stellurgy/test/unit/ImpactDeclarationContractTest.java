@@ -1,20 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind;
+import dev.stannismod.stellurgy.api.damage.*;
+import dev.stannismod.stellurgy.damage.ImpactKindMapping;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.damage.DamageOutcome;
-import dev.stannismod.stellurgy.api.damage.DamageReport;
-import dev.stannismod.stellurgy.api.damage.ImpactKind;
-import dev.stannismod.stellurgy.api.damage.ImpactRequest;
-import dev.stannismod.stellurgy.api.damage.SelectionMode;
-import dev.stannismod.stellurgy.api.damage.StopReason;
-import dev.stannismod.stellurgy.damage.ImpactKindMapping;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * What a declared impact promises before any world is involved — the half of the damage seam that a
@@ -27,6 +20,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class ImpactDeclarationContractTest {
 
+    /** Pins INV-DMG-05 (every ImpactKind declares how a shell bills it). */
+    @Pins("INV-DMG-05")
     @Test
     public void everyHullImpactKindDeclaresHowAShellBillsIt() {
         for (ImpactKind kind : ImpactKind.values()) {

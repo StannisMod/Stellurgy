@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.util.ShortWireParts;
 import org.junit.Test;
 
@@ -18,11 +20,12 @@ import static org.junit.Assert.assertEquals;
  * whose part has its sign bit set (sign extension on receipt), the full long range at both ends, and
  * random values — each delivered in every arrival order of its parts, over a held value that is not
  * empty (a previous slot value).</p>
- *
- * red-witnessed: with {@code ShortWireParts#fold} at {@code ((long) received & 0xFFFFL)} replaced by {@code (long) received}, fails: "a value must arrive whole through a 16-bit wire" (2026-10-08).
  */
 public class ShortWirePartsTest {
 
+    @Pins("INV-RASM-14")
+    @RedWitness(member = "ShortWireParts#fold", at = "((long) received & 0xFFFFL)", replacedBy = "(long) received",
+            fails = "a value must arrive whole through a 16-bit wire", on = "2026-10-08")
     @Test
     public void aValueArrivesWholeThroughASixteenBitWireInAnyOrder() {
         Random random = new Random(762L);

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.libvulpes.block.INamedMetaBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.material.MapColor;
@@ -17,7 +18,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.block.INamedMetaBlock;
 
 import javax.annotation.Nonnull;
 

@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.integration.vs;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
-import dev.stannismod.stellurgy.Stellurgy;
 
 /**
  * The structural mass of one block, in kilograms, for the physics engine to accumulate.

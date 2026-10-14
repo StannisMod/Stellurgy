@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.command.sub;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
-import dev.stannismod.stellurgy.Stellurgy;
 
 import java.util.Collections;
 import java.util.List;

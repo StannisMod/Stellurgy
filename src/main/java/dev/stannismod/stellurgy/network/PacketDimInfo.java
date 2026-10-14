@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.util.SpawnListEntryNBT;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.PacketBuffer;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.util.SpawnListEntryNBT;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.io.IOException;
 import java.util.LinkedList;

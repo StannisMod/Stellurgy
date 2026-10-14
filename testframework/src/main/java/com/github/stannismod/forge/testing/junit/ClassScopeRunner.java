@@ -1,12 +1,12 @@
 package com.github.stannismod.forge.testing.junit;
 
-import java.util.List;
-
 import org.junit.runners.BlockJUnit4ClassRunner;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.MultipleFailureException;
 import org.junit.runners.model.Statement;
+
+import java.util.List;
 
 /**
  * A JUnit 4 runner that gives each run of a test class its own {@link TestClassScope}, declared by
@@ -72,6 +72,40 @@ public class ClassScopeRunner extends BlockJUnit4ClassRunner {
                         failure = failure == null ? t
                                 : new MultipleFailureException(java.util.Arrays.asList(failure, t));
                     }
+                }
+                if (failure != null) {
+                    throw failure;
+                }
+            }
+        };
+    }
+
+    /**
+     * The scenario's whole statement, then the scope's {@link TestClassScope#afterScenario} — outside
+     * every rule, so a rule that reports or cleans up has finished before the scope judges.
+     */
+    @Override
+    protected Statement methodBlock(final FrameworkMethod method) {
+        final Statement inner = super.methodBlock(method);
+        return new Statement() {
+            @Override
+            public void evaluate() throws Throwable {
+                Throwable failure = null;
+                try {
+                    inner.evaluate();
+                } catch (Throwable t) {
+                    failure = t;
+                }
+                TestClassScope judging = scope;
+                if (judging == null) {
+                    throw new IllegalStateException("no class scope is open after " + method.getName()
+                            + " — a test of a scoped class ran outside its class run");
+                }
+                try {
+                    judging.afterScenario(method.getName());
+                } catch (Throwable t) {
+                    failure = failure == null ? t
+                            : new MultipleFailureException(java.util.Arrays.asList(failure, t));
                 }
                 if (failure != null) {
                     throw failure;

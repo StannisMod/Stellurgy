@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
+import dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.Slot;
 import net.minecraftforge.items.SlotItemHandler;
 import net.minecraftforge.items.wrapper.PlayerArmorInvWrapper;
-import dev.stannismod.stellurgy.libvulpes.inventory.ContainerModular;
 
 import java.util.List;
 

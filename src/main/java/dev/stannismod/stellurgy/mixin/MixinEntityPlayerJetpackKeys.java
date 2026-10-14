@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.mixin;
 
+import dev.stannismod.stellurgy.libvulpes.util.JetpackKeys;
 import net.minecraft.entity.player.EntityPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
-
-import dev.stannismod.stellurgy.libvulpes.util.JetpackKeys;
 
 /**
  * Gives every player the state of its own jetpack thrust key, so it lives and dies with the player

@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.player;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import dev.stannismod.stellurgy.space.ShipAboardTag;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 
-import dev.stannismod.stellurgy.space.ShipAboardTag;
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The default {@link IPlayerBindings}, and its own capability provider.

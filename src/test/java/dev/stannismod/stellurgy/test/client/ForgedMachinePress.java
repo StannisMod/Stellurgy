@@ -1,15 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
-import java.io.IOException;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.util.math.BlockPos;
-
 import com.github.stannismod.forge.testing.client.ClientBot;
-
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.tile.weapon.TileWeaponConsole;
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.math.BlockPos;
+
+import java.io.IOException;
 
 /**
  * A weapon-console press written by the real client for a console it need not be anywhere near — what

@@ -1,20 +1,13 @@
 package dev.stannismod.stellurgy.universe;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
+
+import java.util.*;
 
 /**
  * A deterministic, addon-default {@link IGalaxyGenerator} producing a CLUSTERED procedural galaxy

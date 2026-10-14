@@ -30,15 +30,19 @@ public final class TestClient implements Closeable {
     private BufferedWriter bridgeWriter;
     private final Object bridgeLock = new Object();
 
-    TestClient(Process process, Writer stdin, List<String> transcript) {
+    /** Whether the server serves an e2e: then a console command waits for the gate's verdict line. */
+    private final boolean e2e;
+
+    TestClient(Process process, Writer stdin, List<String> transcript, boolean e2e) {
         this.process = process;
         this.stdin = stdin;
         this.transcript = transcript;
+        this.e2e = e2e;
     }
 
     /**
      * Adopt the accepted control connection to the server JVM's bridge; from here on
-     * {@link #execute(String)} goes over it.
+     * every command ({@link #read}, {@link #arrange}, {@link #act}) goes over it.
      *
      * <p>The caller is {@code RealDedicatedServerHarness}, which has already read the child's
      * {@code READY} line, so the socket handed here is live and idle.</p>
@@ -57,7 +61,7 @@ public final class TestClient implements Closeable {
         }
     }
 
-    /** Whether a bridge is connected — i.e. whether {@link #execute(String)} is on the socket path. */
+    /** Whether a bridge is connected — i.e. whether a command can be sent at all. */
     public boolean hasBridge() {
         synchronized (bridgeLock) {
             return bridgeSocket != null;
@@ -65,7 +69,9 @@ public final class TestClient implements Closeable {
     }
 
     /**
-     * Run a server command and return its reply — over the control bridge, which is the only channel.
+     * Run a server command that OBSERVES and return its reply — over the control bridge, which is the only
+     * channel. Every command is sent in a {@link CommandRole} — this method, {@link #arrange} or {@link #act};
+     * there is no role-less send — and the role travels with it to the server.
      *
      * <p>The reply is exactly the messages the command addressed to its sender: nothing is broadcast
      * to chat, nothing is sliced out of the log, and two concurrent calls cannot take each other's
@@ -80,8 +86,26 @@ public final class TestClient implements Closeable {
      * A branch no caller reaches is not a fallback, and keeping it kept all four defects alive
      * behind a flag nobody set.</p>
      */
-    public List<String> execute(String command) throws IOException, InterruptedException {
-        List<String> overBridge = executeOverBridge(command);
+    public List<String> read(String command) throws IOException, InterruptedException {
+        return execute(CommandRole.READ, command);
+    }
+
+    /** Run a server command that sets the scene — see {@link #read} for the channel and the reply. */
+    public List<String> arrange(String command) throws IOException, InterruptedException {
+        return execute(CommandRole.ARRANGE, command);
+    }
+
+    /**
+     * Run a server command that calls a production entry a player, a tick or a packet would reach — see
+     * {@link #read} for the channel and the reply.
+     */
+    public List<String> act(String command) throws IOException, InterruptedException {
+        return execute(CommandRole.ACT, command);
+    }
+
+    /** Run {@code command} in {@code role}; the three public methods are the only callers. */
+    private List<String> execute(CommandRole role, String command) throws IOException, InterruptedException {
+        List<String> overBridge = executeOverBridge(role, command);
         if (overBridge != null) {
             return overBridge;
         }
@@ -93,12 +117,12 @@ public final class TestClient implements Closeable {
 
     /**
      * One request/response exchange over the bridge, or {@code null} when none is connected — which
-     * {@link #execute(String)} turns into a failure, since there is no other channel to fall to.
+     * {@link #execute} turns into a failure, since there is no other channel to fall to.
      *
      * <p>A bridge that is connected but fails mid-exchange is torn down and the call fails: a broken
      * channel must not be indistinguishable from a healthy one.</p>
      */
-    private List<String> executeOverBridge(String command) {
+    private List<String> executeOverBridge(CommandRole role, String command) {
         Objects.requireNonNull(command, "command");
         synchronized (bridgeLock) {
             if (bridgeSocket == null) {
@@ -106,6 +130,7 @@ public final class TestClient implements Closeable {
             }
             JsonObject request = new JsonObject();
             request.addProperty("command", command);
+            request.addProperty("role", role.wire());
             try {
                 bridgeWriter.write(request.toString());
                 bridgeWriter.newLine();
@@ -121,9 +146,7 @@ public final class TestClient implements Closeable {
                 }
                 JsonObject response = parsed.getAsJsonObject();
                 if (!response.has("ok") || !response.get("ok").getAsBoolean()) {
-                    throw new AssertionError("Server command failed over the bridge: " + command
-                            + " -> " + (response.has("error")
-                                    ? response.get("error").getAsString() : line));
+                    throw new ServerCommandFailed(command, response);
                 }
                 List<String> lines = new ArrayList<>();
                 if (response.has("lines")) {
@@ -158,8 +181,73 @@ public final class TestClient implements Closeable {
         }
     }
 
+    /**
+     * Type {@code command} into the server's CONSOLE (its stdin).
+     *
+     * <p>On a server that serves an e2e the console is judged like every other sender, and the consuming
+     * mod's gate answers each console command with one line,
+     * {@link com.github.stannismod.forge.testing.E2EMode#CONSOLE_JUDGED}{@code admitted|refused <command> …}.
+     * This waits for that line and throws {@link ServerCommandFailed} — whose reply carries
+     * {@code refused:true}, {@code console:true} and the gate's line — when the command was refused, so a
+     * refusal at the console reaches the test as loudly as one over the bridge. The wait is a deadline for
+     * a discrete decision ({@value #CONSOLE_JUDGED_MILLIS} ms): the console thread hands the line to the
+     * server, which judges it at its next tick; an expiry means it never reached the command handler (an
+     * unknown command never does) and is an {@link IOException}.</p>
+     */
     public void sendRaw(String command) throws IOException {
         Objects.requireNonNull(command, "command");
+        int mark = transcriptSize();
+        writeConsole(command);
+        if (!e2e) {
+            return;
+        }
+        String typed = command.startsWith("/") ? command.substring(1) : command;
+        String admitted = com.github.stannismod.forge.testing.E2EMode.CONSOLE_JUDGED + "admitted " + typed;
+        String refused = com.github.stannismod.forge.testing.E2EMode.CONSOLE_JUDGED + "refused " + typed;
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(CONSOLE_JUDGED_MILLIS);
+        synchronized (transcript) {
+            int index = mark;
+            while (true) {
+                while (index < transcript.size()) {
+                    String line = transcript.get(index++);
+                    if (line.contains(refused)) {
+                        JsonObject reply = new JsonObject();
+                        reply.addProperty("ok", false);
+                        reply.addProperty("refused", true);
+                        reply.addProperty("console", true);
+                        reply.addProperty("line", line);
+                        throw new ServerCommandFailed(command, reply);
+                    }
+                    if (line.contains(admitted)) {
+                        return;
+                    }
+                }
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0L) {
+                    throw new IOException("the console command `" + command + "` was not judged by the e2e gate within "
+                            + CONSOLE_JUDGED_MILLIS + " ms: it never reached the server's command handler. Recent"
+                            + " output: " + tail());
+                }
+                try {
+                    transcript.wait(Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining)));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("interrupted while waiting for the console verdict on " + command, interrupted);
+                }
+            }
+        }
+    }
+
+    /** How long a console command is given to be judged, in milliseconds — see {@link #sendRaw}. */
+    private static final long CONSOLE_JUDGED_MILLIS = 30_000L;
+
+    private int transcriptSize() {
+        synchronized (transcript) {
+            return transcript.size();
+        }
+    }
+
+    private void writeConsole(String command) throws IOException {
         synchronized (stdin) {
             stdin.write(command);
             stdin.write('\n');
@@ -182,7 +270,9 @@ public final class TestClient implements Closeable {
             return;
         }
         try {
-            sendRaw("stop");
+            // Written, not judged: the harness ends its own server, and a server stopping prints no verdict
+            // it would be worth waiting on.
+            writeConsole("stop");
         } catch (IOException ignored) {
             // If stdin is already closed, fall through and destroy the process.
         }

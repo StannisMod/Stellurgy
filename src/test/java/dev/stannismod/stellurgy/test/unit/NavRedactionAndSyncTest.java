@@ -1,22 +1,20 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.navigation.CrystalEntry;
 import dev.stannismod.stellurgy.navigation.CrystalMemory;
 import dev.stannismod.stellurgy.navigation.CrystalSync;
 import dev.stannismod.stellurgy.navigation.NavInfoRedaction;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.PlanetInfoField;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the two navigation rules a pilot can feel: how much a body tells you depends on
@@ -92,7 +90,9 @@ public class NavRedactionAndSyncTest {
      * A moon shares its parent's cell and can sit tens of thousands of blocks away inside it, and a
      * neighbouring cell's body can be closer than one in your own; the rule has to read the metre,
      * or a pilot alongside a moon is told less about it than the planet he is nowhere near.
+     * Pins ADDR-15 (proximity reveals information whatever the cell names say).
      */
+    @Pins("ADDR-15")
     @Test
     public void theOrbitTierFollowsTheMeasuredDistanceNotTheCellName() {
         InfoTier sameCellFarAway = NavInfoRedaction.tierFor(coord(3, 0), coord(3, 0),

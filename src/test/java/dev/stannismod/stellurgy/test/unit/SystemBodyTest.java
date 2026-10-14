@@ -1,21 +1,18 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import dev.stannismod.stellurgy.universe.BodyEphemeris;
 import dev.stannismod.stellurgy.universe.CellFrame;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
+import net.minecraft.nbt.NBTTagCompound;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for {@link SystemBody}: the split between a body's durable NAME — an identifier no
@@ -49,7 +46,9 @@ public class SystemBodyTest {
      * A name is not a place. The whole point of the model: a cell name is an identifier, so no amount
      * of time changes it. The second half is the control — without it a body that never moves would
      * pass.
+     * Pins ADDR-1 (a body's cell name is the same at every tick while its place is not).
      */
+    @Pins("ADDR-1")
     @Test
     public void aNameIsTheSameAtEveryTickWhileThePlaceIsNot() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(57, 0, 5, 0, 0, 0);
@@ -68,7 +67,11 @@ public class SystemBodyTest {
                 planet.absoluteAt(0L), planet.absoluteAt(250L));
     }
 
-    /** A cell's primary body is what its frame is centred on, so its in-cell offset is zero. */
+    /**
+     * A cell's primary body is what its frame is centred on, so its in-cell offset is zero.
+     * Pins ADDR-6 (the cell of a primary rides its body while a void cell stands still).
+     */
+    @Pins("ADDR-6")
     @Test
     public void aPrimarySitsAtItsOwnFramesOrigin() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(1, 2, 3, 0, 0, 0);
@@ -86,12 +89,11 @@ public class SystemBodyTest {
     /**
      * A moon shares its parent's cell NAME and rides its parent's frame, while keeping its own live
      * offset inside it — that is what makes a planet-and-its-moons one destination.
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#inCellOffsetAt} at {@code offsetLaw.offsetAt(tick)} (then bound to a local
-     * {@code raw}, since returned directly) reading the offset law at
-     * tick 0 instead of the tick asked, this fails with "a moon's offset inside its parent's cell is
-     * live. Actual: BlockDelta[120000,0,0]" — 300 units at 400 blocks each, the fixture printed.</p>
      */
+    @LegacyWitness(prose = "2026-09-30, with {@code SystemBody#inCellOffsetAt} at {@code offsetLaw.offsetAt(tick)} (then bound to a local"
+            + " {@code raw}, since returned directly) reading the offset law at"
+            + " tick 0 instead of the tick asked, this fails with \"a moon's offset inside its parent's cell is"
+            + " live. Actual: BlockDelta[120000,0,0]\" — 300 units at 400 blocks each, the fixture printed.")
     @Test
     public void aMoonKeepsItsParentsNameAndMovesInsideIt() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(9, 0, 0, 0, 0, 0);
@@ -112,7 +114,9 @@ public class SystemBodyTest {
      * LAW rather than a position: a pin freezes the ELEMENTS. Pin-on-touch fires the first time a
      * player builds a station in a system, so a pin that froze positions would stop that system for
      * the rest of the save — and nothing would ever say so.
+     * Pins ADDR-6 (the cell of a primary rides its body while a void cell stands still).
      */
+    @Pins("ADDR-6")
     @Test
     public void aBodyStillMovesAfterAnNbtRoundTrip() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(20, 0, 0, 0, 0, 0);
@@ -153,7 +157,9 @@ public class SystemBodyTest {
      * and that cell rides the moon. While it shared its parent's name
      * it could not define one — two bodies cannot both be the primary of one cell — and that is what
      * left a craft parked beside a moon riding the PLANET and drifting away from the moon.</p>
+     * Pins ADDR-17 (a body with mass has a zone and its name is its cell in its parent's zone, and a massless body defines none).
      */
+    @Pins("ADDR-17")
     @Test
     public void onlyBodiesWithMassDefineACellsFrame() {
         GalacticCoord at = GalacticCoord.ORIGIN;
@@ -224,11 +230,10 @@ public class SystemBodyTest {
      * A body whose in-cell offset would reach past its own cell is a fault of whatever derived it,
      * so it is refused when built rather than flattened onto the cell face — where every point of
      * the orbit beyond the face lands on one spot and the body looks as if it stopped moving.
-     *
-     * <p>red-witnessed: with {@code SystemBody#requireInsideOwnCell} at
-     * {@code if (!offsetLaw.staysWithin(-half, half - 1L))} inverted to never throw, this fails with
-     * "a moon whose orbit is wider than the cell that names it must be refused" (2026-10-02).</p>
      */
+    @LegacyWitness(prose = "with {@code SystemBody#requireInsideOwnCell} at"
+            + " {@code if (!offsetLaw.staysWithin(-half, half - 1L))} inverted to never throw, this fails with"
+            + " \"a moon whose orbit is wider than the cell that names it must be refused\" (2026-10-02).")
     @Test
     public void aBodyWhoseOffsetLeavesItsOwnCellIsRefusedWhenBuilt() {
         GalacticCoord giantCell = GalacticCoord.ofSectorLocal(9, 0, -3, 0, 0, 0);

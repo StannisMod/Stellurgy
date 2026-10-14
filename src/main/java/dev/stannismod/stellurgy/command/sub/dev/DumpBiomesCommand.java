@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.command.sub.dev;
 
+import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.biome.Biome;
-import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
 
 import java.io.BufferedWriter;
 import java.io.IOException;

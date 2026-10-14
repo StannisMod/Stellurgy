@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -37,6 +38,8 @@ public class VSBoundaryContainmentTest {
 
     private static final String PKG = "dev/stannismod/stellurgy/";
 
+    /** Pins PORT-1 (only four roles may import the physics substrate in main). */
+    @Pins("PORT-1")
     @Test
     public void physicsEngineTypesStayConfinedToThePortAndMixins() throws IOException {
         Path sourceRoot = resolveMainSourceRoot();

@@ -1,11 +1,10 @@
 package dev.stannismod.stellurgy.api.armor;
 
-import java.util.Set;
-
-import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereHazard;
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
+import java.util.Set;
 
 public interface IProtectiveArmor {
     /**

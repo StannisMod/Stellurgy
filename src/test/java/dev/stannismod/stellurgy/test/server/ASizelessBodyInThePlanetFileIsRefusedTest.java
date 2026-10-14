@@ -1,17 +1,19 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertFalse;
@@ -29,9 +31,11 @@ import static org.junit.Assert.assertTrue;
  * <p>The witness is the dimension REGISTRY, not {@code planet info}: that verb answers an unknown id
  * with the overworld's properties, so it cannot tell a refused body from a loaded one.</p>
  *
- * <p>Manual harness lifecycle: the planet file has to be on disk before the server boots.</p>
+ * <p>Manual harness lifecycle: the planet file is the START this boot reads, stated as a
+ * {@link GameDirSeed} the harness writes before the server boots.</p>
  */
-public class ASizelessBodyInThePlanetFileIsRefusedTest {
+@OwnBoot(reason = OwnBoot.Reason.STARTUP_FILE)
+public class ASizelessBodyInThePlanetFileIsRefusedTest extends AbstractMechanicsTest {
 
     private static final int OVERWORLD_DIM = 0;
     /** An airless planet that states everything but its bulk. */
@@ -39,7 +43,7 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest {
     /** The CONTROL: the same planet, stating its bulk. */
     private static final int SIZED_DIM = 3;
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness harness;
 
     @Before
@@ -48,10 +52,6 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest {
                 "Server harness disabled — set -Dforge.test.harness.enabled=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-sizeless-body-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
 
         String xml =
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
@@ -70,8 +70,8 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest {
                 "    </star>\n" +
                 "</galaxy>\n";
 
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-    }
+        workDir = ServerRoot.fresh("forge-server-sizeless-body-")
+                .seed(new GameDirSeed().planetDefs(xml, getClass()));    }
 
     /**
      * An AIRLESS planet: a body with air could not be realized without its size anyway, so only an
@@ -91,17 +91,15 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest {
         if (harness != null) harness.close();
     }
 
-    /**
-     * red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code if (!properties.hasBulkProperties())} replaced by {@code if (false)}, this fails on the
-     * sizeless airless planet: {@code "stellurgyDimensions":[3,4]} (2026-10-01).
-     */
+    @LegacyWitness(prose = "with {@code XMLPlanetLoader#readPlanetFromNode} at"
+            + " {@code if (!properties.hasBulkProperties())} replaced by {@code if (false)}, this fails on the"
+            + " sizeless airless planet: {@code \"stellurgyDimensions\":[3,4]} (2026-10-01).")
     @Test
     public void aBodyThatStatesNoSizeIsNotLoadedAndTheOverworldIsHeldToTheSameRule() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        harness = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         String command = "stellurgytest dim list";
-        Reply dims = Reply.of(command, String.join("\n", harness.client().execute(command)));
+        Reply dims = Reply.of(command, String.join("\n", harness.client().read(command)));
         int[] registered = dims.intArray("stellurgyDimensions");
 
         // CONTROL: the file was read, and a body that states its size loads from it — so an absence

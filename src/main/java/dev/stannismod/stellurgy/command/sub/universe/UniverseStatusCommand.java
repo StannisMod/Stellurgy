@@ -1,15 +1,15 @@
 package dev.stannismod.stellurgy.command.sub.universe;
 
-import java.util.List;
-
-import net.minecraft.command.CommandException;
-import net.minecraft.command.ICommandSender;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.TextComponentTranslation;
 import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import dev.stannismod.stellurgy.universe.UniverseSchemas;
+import net.minecraft.command.CommandException;
+import net.minecraft.command.ICommandSender;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.text.TextComponentTranslation;
+
+import java.util.List;
 
 /**
  * What world model this save runs on, what the pack currently states, and how much of the universe has

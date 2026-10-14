@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.libvulpes.block.BlockTileComparatorOverride;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
-import dev.stannismod.stellurgy.libvulpes.block.BlockTileComparatorOverride;
-import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
 
 public class BlockTileNeighborUpdate extends BlockTileComparatorOverride {
 

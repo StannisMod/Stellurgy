@@ -1,19 +1,14 @@
 package dev.stannismod.stellurgy.test.client;
 
-import java.util.Locale;
-
 import com.google.gson.JsonObject;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import dev.stannismod.stellurgy.test.SubsystemStatus;
-import dev.stannismod.stellurgy.test.SeatMount;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
+import java.util.Locale;
 
 import static org.junit.Assert.assertTrue;
 
@@ -236,7 +231,9 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * The human's own route: right-click the seat of a craft that is still loose blocks, then
      * assemble, then fly. Changes BOTH the boarding moment and the boarding mechanism relative to
      * the passing post-assembly flight test - which is why the probe variant below exists.
+     * Pins SHIPCTL-8 (a player who boards before assembly stays seated and controls the ship immediately after assembly).
      */
+    @Pins("SHIPCTL-8")
     @Test
     public void aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip() throws Exception {
         runPreAssemblyBoardingScenario(site(), Boarding.RIGHT_CLICK);
@@ -246,7 +243,9 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * The SAME boarding mechanism the passing post-assembly flight test uses, moved to BEFORE
      * assembly. This isolates the boarding MOMENT: everything else - fixture, coordinates, seeded
      * config, control key, thresholds, polling shape - is the passing test's.
+     * Pins SHIPCTL-8 (a player who boards before assembly stays seated and controls the ship immediately after assembly).
      */
+    @Pins("SHIPCTL-8")
     @Test
     public void aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip() throws Exception {
         // ITS OWN PLOT, and it is the allocator that says so rather than a second coordinate typed
@@ -260,18 +259,26 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
      * The shared scenario, so the two variants cannot drift apart: build loose, board (by
      * {@code how}), assemble, settle, measure a no-key control leg, then measure the key-held climb.
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE);",
+            why = "the resolve's ticks, then ONE reading. It replaced a loop that sampled until twenty readings"
+                    + " agreed; the no-key control window right below is what proves the ship then sits still,"
+                    + " and it reports the drift it saw rather than a loop's run length.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, \"a pilot who took the seat BEFORE assembling\"",
+            why = "a fixed dose of thrust from the key's arrival, then one reading with the thrust cut. The dose"
+                    + " is shorter than the control's window, which only makes the comparison stronger: the"
+                    + " same free drift has less time to add up.")
     private void runPreAssemblyBoardingScenario(FixtureSite plot, Boarding how) throws Exception {
         useSite(plot);
 
         // The subsystem must actually be up, or the run silently degrades into a different
         // configuration than the one a player is in and its result would mean nothing.
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        SubsystemStatus status = SubsystemStatus.read(c -> read(c).raw());
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                         + "config is what opts it in: " + status.raw(),
                 status.registered);
 
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -285,7 +292,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // RECORD — the pos-look packet the teleport arrives as — so it is awaited rather than
         // counted out in ticks, and the mark is taken before the command that must produce it.
         long standMark = clientEvents().mark();
-        exec("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
+        arrange("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
         clientEvents().await(standMark, "client_pos_look_applied",
                 "the stand-beside-the-craft teleport must be APPLIED on the client before anything"
                         + " is asked of it or clicked through it", CLIENT_TERRAIN_BUDGET_TICKS);
@@ -600,9 +607,6 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
         // overlaps, and that motion is not the pilot's.
-        // EXPERIMENT: the resolve's ticks, then ONE reading. It replaced a loop that sampled until
-        // twenty readings agreed; the no-key control window right below is what proves the ship then
-        // sits still, and it reports the drift it saw rather than a loop's run length.
         advanceServerAndClient(SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE);
         double yRest = shipPosY();
         scenario().requireArranged("the ship must report an altitude once the post-assembly resolve"
@@ -630,9 +634,6 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // that happened while the ship was settling.
         long inputServerMark = events.markInstrumented();
         long inputClientMark = clientEvents().mark();
-        // EXPERIMENT: a fixed dose of thrust from the key's arrival, then one reading with the thrust
-        // cut. The dose is shorter than the control's window, which only makes the comparison
-        // stronger: the same free drift has less time to add up.
         try {
             climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, "a pilot who took the seat BEFORE assembling"
                     + " must have his held vertical key reach the craft's flight computer right after"
@@ -744,30 +745,23 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
     }
 
     /**
-     * The passing post-assembly test's boarding mechanism, performed BEFORE assembly. The seat probe
-     * finds its seat by scanning the world's loaded tile entities, so a seat that is still a loose
-     * world block is exactly as findable as one already relocated into a ship - which is what makes
-     * this variant possible at all.
+     * The passing post-assembly test's boarding mechanism, performed BEFORE assembly. The dummy is
+     * bound to the seat named by its block address — the fixture's own seat, at the position the block
+     * measurement just verified — so a seat that is still a loose world block is addressed exactly as
+     * one already relocated into a ship, which is what makes this variant possible at all.
      */
     private String boardByProbe() throws Exception {
-        SeatMount mountInfo = SeatMount.firstLoadedSeat(this::exec, 0);
-        scenario().requireArranged("the seat probe must FIND the loose pilot seat before assembly: "
-                + mountInfo.raw(), mountInfo.seatFound);
+        String seatMount = arrange("stellurgytest vs seat-mount-at 0 " + seatX + " " + seatY + " "
+                + seatZ).raw();
+        Reply bound = Reply.of("stellurgytest vs seat-mount-at", seatMount);
+        scenario().requireArranged("the probe must bind a dummy to the loose pilot seat at (" + seatX
+                + "," + seatY + "," + seatZ + ") before assembly: " + seatMount, bound.ok());
 
-        // The probe takes the first pilot seat it finds anywhere in the world; pin that it found
-        // OUR seat, at the position the block measurement just verified.
-        scenario().requireArranged("the seat the probe bound must be the fixture's seat at (" + seatX
-                        + "," + seatY + "," + seatZ + "), not some other pilot seat in the world: "
-                        + mountInfo.raw(),
-                mountInfo.seatX() == seatX
-                        && mountInfo.seatY() == seatY
-                        && mountInfo.seatZ() == seatZ);
-
-        String mount = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+        String mount = arrange("stellurgytest player mount-entity " + bound.integer("dummyId")).raw();
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
         // No settle: the caller links on both sides' mount records from marks it took before this.
-        return "seatMount=" + mountInfo.raw() + " mount=" + mount;
+        return "seatMount=" + seatMount + " mount=" + mount;
     }
 
     // ---- Observation helpers -----------------------------------------------------------------
@@ -786,12 +780,12 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
     }
 
     /** The largest deviation from {@code from} over a full measurement window. */
+    @Wait(shape = Wait.Shape.WINDOW, at = "for (int sample = 0; sample < MEASURE_SAMPLES; sample++) {",
+            why = "its result is the LARGEST deviation across it — the method's whole purpose. A drift that"
+                    + " appeared and was corrected is exactly what is being looked for, so a single read would"
+                    + " report the correction. What it cannot see: a worse excursion between two samples.")
     private double measureMaxDrift(double from) throws Exception {
         double worst = 0.0;
-        // WINDOW: its result is the LARGEST deviation across it — the method's whole purpose.
-        // A drift that appeared and was corrected is exactly what is being looked for, so a single
-        // read would report the correction. What it cannot see: a worse excursion between two
-        // samples.
         for (int sample = 0; sample < MEASURE_SAMPLES; sample++) {
             advanceServerAndClient(TICKS_PER_SAMPLE);
             double y = shipPosY();
@@ -966,7 +960,7 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
         // this ASSERTS rather than digs. It matters here because the player WALKS to the loose
         // craft and clicks its seat before anything is assembled — a pit puts him on a rim a metre
         // above the block he is aiming at, and the red then reads as the right-click path.
-        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 2, 16,
+        int[] bp = RocketFixture.placeAt(site, c -> arrange(c).raw(), variant, 2, 16,
                 "the loose craft, and the air the player stands and clicks in beside it");
         builderX = bp[0];
         builderY = bp[1];
@@ -975,6 +969,6 @@ public class VSPreAssemblyBoardingPilotControlTest extends AbstractSharedVsClien
 
     /** Turns the loose blocks placed by {@link #buildLooseFixture} into a ship. */
     private String assembleFixture() throws Exception {
-        return exec("stellurgytest rocket assemble 0 " + builderX + " " + builderY + " " + builderZ);
+        return act("stellurgytest rocket assemble 0 " + builderX + " " + builderY + " " + builderZ).raw();
     }
 }

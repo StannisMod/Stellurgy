@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.gui.inventory.GuiContainer;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
 import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import java.util.LinkedList;
 import java.util.List;

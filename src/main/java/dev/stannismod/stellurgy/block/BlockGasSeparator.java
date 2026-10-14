@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
+import dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.tileentity.TileEntity;
@@ -8,8 +10,6 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.tile.atmosphere.TileGasSeparator;
-import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 /**
  * The separator's block half. Its only reason to exist is the sneak-click: a plain right-click

@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.satellite;
 
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 
 public class SatelliteSpyTelescope extends SatelliteBase {
 

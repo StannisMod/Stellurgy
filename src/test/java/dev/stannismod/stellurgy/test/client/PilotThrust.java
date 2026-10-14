@@ -2,11 +2,11 @@ package dev.stannismod.stellurgy.test.client;
 
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.server.TestClient;
-
-import org.lwjgl.input.Keyboard;
-
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import org.lwjgl.input.Keyboard;
 
 /**
  * A seated pilot's vertical-up key, driven as a DOSE of thrust: held until the flight computer has
@@ -83,6 +83,11 @@ final class PilotThrust {
      * @param thrustTicks ticks of thrust from the key's arrival
      * @param what        the scenario's own sentence for why the key must arrive, used on a failure
      */
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advanceWorld(server, dim, thrustTicks);",
+            why = "the dose under the held key, counted from its arrival — see DOSE_TICKS.")
+    @ServerOnly(at = "GameTicks.advanceWorld(server, dim, thrustTicks);",
+            why = "the dose is thrust steps the flight computer integrates on the hull's world, counted from the"
+                    + " key's linked arrival; whatever a caller reads afterwards is its own window.")
     static void hold(ClientBot bot, Events serverLog, TestClient server, int dim, int thrustTicks,
                      String what) throws Exception {
         long pressMark = serverLog.markInstrumented();
@@ -91,8 +96,6 @@ final class PilotThrust {
             serverLog.awaitMatching(pressMark, "pilot_input_set",
                     seen -> Events.anyRecordHasAll(seen, "input", "set", "dim", String.valueOf(dim)),
                     "with input = set in dim " + dim, what, LINK_TICKS);
-            // STIMULUS: the dose under the held key, counted from its arrival — see DOSE_TICKS.
-            // SERVER-ONLY: the dose is thrust steps the flight computer integrates on the hull's world, counted from the key's linked arrival; whatever a caller reads afterwards is its own window.
             GameTicks.advanceWorld(server, dim, thrustTicks);
         } catch (Exception | AssertionError failed) {
             bot.releaseKey(Keyboard.KEY_R);

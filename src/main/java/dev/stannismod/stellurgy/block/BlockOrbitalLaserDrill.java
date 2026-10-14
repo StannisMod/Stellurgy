@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill.TileOrbitalLaserDrill;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -10,11 +14,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.Explosion;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
-import dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer;
-import dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill.TileOrbitalLaserDrill;
-import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
-import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 
 import java.util.Random;
 

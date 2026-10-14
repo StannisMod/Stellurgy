@@ -27,7 +27,7 @@ public class SatelliteUnknownTypeCreateFromNbtServerTest extends AbstractSharedS
     @Test
     public void createFromNbtWithUnknownTypeReturnsNullOnServer() throws Exception {
         String resp = String.join("\n",
-                client().execute("stellurgytest satellite create-from-nbt-unknown 0"));
+                client().read("stellurgytest satellite create-from-nbt-unknown 0"));
 
         assertTrue("SatelliteRegistry.createFromNBT with an unregistered dataType "
                 + "must return null server-side (no NullPointerException, no "

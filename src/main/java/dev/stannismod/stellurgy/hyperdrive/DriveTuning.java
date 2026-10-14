@@ -137,13 +137,14 @@ public final class DriveTuning {
      * a balance knob: moving it rescales every jump in the game at once.
      *
      * <p>Measured, not chosen: it is the mass of the craft the first milestone builds and jumps (the
-     * {@code with-jump-drive} fixture), 321 250 kg by the block table on 2026-10-05. Anchoring the
-     * baseline there keeps that craft at the speed it flew while every hull was weighed at one
-     * placeholder figure — the entry speed the maintainer accepted (ruling 2026-10-05: the baseline is
-     * the milestone craft) — and a hull heavier or lighter than it flies slower or faster by the
-     * ratio.</p>
+     * {@code with-powered-jump-drive} fixture), 326 250 kg by the block table on 2026-10-08 — the
+     * {@code with-jump-drive} hull's 321 250 kg (measured 2026-10-05) plus the power plug on its
+     * capacitor, an iron-material block at 5 000 kg. The baseline is the milestone craft (ruling
+     * 2026-10-05), so it moved with the craft when the milestone began charging its drive from its own
+     * grid (ruling 2026-10-08: "да", to re-measuring). A hull heavier or lighter than it flies slower or
+     * faster by the ratio — the plain {@code with-jump-drive} hull now 1.6 % faster than the baseline.</p>
      */
-    public static final long BASELINE_SHIP_MASS = 321_250L;
+    public static final long BASELINE_SHIP_MASS = 326_250L;
     public static final long BASELINE_SPEED_BLOCKS_PER_TICK = 1_000_000L;
 
     /**

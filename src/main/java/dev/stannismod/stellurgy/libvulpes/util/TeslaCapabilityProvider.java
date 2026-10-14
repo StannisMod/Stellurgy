@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.util;
 
-import net.minecraft.util.ResourceLocation;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import net.minecraft.util.ResourceLocation;
 
 public class TeslaCapabilityProvider {
 

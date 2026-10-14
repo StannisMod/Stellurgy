@@ -1,17 +1,13 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
-
-
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -82,6 +78,11 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
     // the game rather than off a sentence.
 
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(40);",
+            why = "the window opens forty ticks after the destruction — the brake's share of the experiment; a"
+                    + " hold slower than that reads as motion, loudly, never as a pass.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(60);",
+            why = "the 3-second stability window described above.")
     public void breakingTheOccupiedSeatDismountsThePilotAndHoldsTheShip() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -93,8 +94,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         Events events = serverEvents();
         long breakMark = events.markInstrumented();
         long breakClientMark = clientEvents().mark();
-        String broke = exec("stellurgytest fill 0 " + ship.seatX + " " + ship.seatY + " " + ship.seatZ
-                + " " + ship.seatX + " " + ship.seatY + " " + ship.seatZ + " minecraft:air");
+        String broke = arrange("stellurgytest fill 0 " + ship.seatX + " " + ship.seatY + " " + ship.seatZ
+                + " " + ship.seatX + " " + ship.seatY + " " + ship.seatZ + " minecraft:air").raw();
         assertTrue("breaking the seat block failed: " + broke, Reply.of(broke).ok());
         try {
             // The release, as the three links breakBlock commits in ITS OWN source order: it
@@ -125,11 +126,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
             // that has to precede it is already asserted above. Let the brake settle, then require
             // the altitude to be stable over a 3-second window — with the key STILL physically
             // held, so a surviving latch would be climbing at cruise speed here.
-            // EXPERIMENT: the window opens forty ticks after the destruction — the brake's share of
-            // the experiment; a hold slower than that reads as motion, loudly, never as a pass.
             advanceServerAndClient(40);
             double y1 = shipY(ship.id);
-            // WINDOW: the 3-second stability window described above.
             advanceServerAndClient(60);
             double y2 = shipY(ship.id);
             assertTrue("after the seat is destroyed the ship must HOLD, never fly the dead pilot's "
@@ -146,19 +144,20 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
     /**
      * Destroying the flight computer throws its pilot out, removes his mount, and leaves a ship that
      * never climbs on the dead computer's last command.
-     *
-     * <p>red-witnessed: the never-thrusts verdict. The line the wait rewrite touched is the break
-     * probe's own reply, an arrangement check typed as an assertion; the contract after it needs
-     * BOTH of production's two defences broken
-     * — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no
-     * longer dropping the removed tile from the ship's controller set, AND
-     * {@code TileAdvancedFlightComputer#invalidate} at {@code flightCommand = null} no longer clearing the
-     * command — and then fails with "y1=174.19 y2=252.81". Either one broken alone stays
-     * green, each defence sufficing on its own — 2026-09-28 (witnessed on the three-field form,
-     * {@code commandedVelocity = null}; the fragment renamed 2026-10-08 when the command became one
-     * object, the same line of {@code invalidate}, not re-run).</p>
      */
+    @LegacyWitness(prose = "the never-thrusts verdict. The line the wait rewrite touched is the break"
+            + " probe's own reply, an arrangement check typed as an assertion; the contract after it needs"
+            + " BOTH of production's two defences broken"
+            + " — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no"
+            + " longer dropping the removed tile from the ship's controller set, AND"
+            + " {@code TileAdvancedFlightComputer#invalidate} at {@code flightCommand = null} no longer clearing the"
+            + " command — and then fails with \"y1=174.19 y2=252.81\". Either one broken alone stays"
+            + " green, each defence sufficing on its own — 2026-09-28 (witnessed on the three-field form,"
+            + " {@code commandedVelocity = null}; the fragment renamed 2026-10-08 when the command became one"
+            + " object, the same line of {@code invalidate}, not re-run).")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(80);",
+            why = "a climb that continues is a value, not an event; no record answers.")
     public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -171,8 +170,8 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         Events events = serverEvents();
         long breakMark = events.markInstrumented();
         long breakClientMark = clientEvents().mark();
-        String broke = exec("stellurgytest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
-                + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air");
+        String broke = arrange("stellurgytest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
+                + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air").raw();
         assertTrue("breaking the flight computer block failed: " + broke,
                 Reply.of(broke).ok());
 
@@ -199,7 +198,6 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // A brainless ship must never keep thrusting upward: the dead computer's channels die
         // with the tile. (It is free to FALL — only continued powered climb is the defect.)
         double y1 = shipY(ship.id);
-        // WINDOW: a climb that continues is a value, not an event; no record answers.
         advanceServerAndClient(80);
         double y2 = shipY(ship.id);
         assertTrue("a ship whose flight computer was destroyed must not keep climbing under the "
@@ -241,7 +239,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        arrange("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
 
@@ -250,15 +248,16 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // incremented by every neighbour that ever assembled one on this shared world.
         Events events = serverEvents();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(site);
-        assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        assertTrue("a with-pilot-seat build must route to a ship: " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
         FlyingShip ship = new FlyingShip();
         ship.id = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
 
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what loads the ship, so the readiness link below is"
                         + " waiting on something only an arrived client can cause");
@@ -274,7 +273,7 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
 
         // Resolve the seat + computer SUBSPACE blocks now, while the ship still sits at its build
         // site (subspace addresses are stationary; the ship's world pose is about to change).
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, ship.id)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, ship.id)
                 .requireFound("find-seat must resolve the ship's subspace seat");
         ship.seatX = seat.seatX;
         ship.seatY = seat.seatY;
@@ -288,11 +287,11 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         // addressed by the subspace block find-seat just resolved FOR THIS SHIP: `vs seat-mount`
         // takes the first pilot seat in the world with no position filter, which mounts a
         // neighbour's ship once several scenarios share a world.
-        String mountInfo = exec("stellurgytest vs seat-mount-at 0 " + ship.seatX + " " + ship.seatY
-                + " " + ship.seatZ);
+        String mountInfo = arrange("stellurgytest vs seat-mount-at 0 " + ship.seatX + " " + ship.seatY
+                + " " + ship.seatZ).raw();
         ship.dummyId = Reply.of("stellurgytest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("stellurgytest player mount-entity " + ship.dummyId);
+        String mount = arrange("stellurgytest player mount-entity " + ship.dummyId).raw();
         assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
         // The lift below is commanded by a real key held on a client that must already be riding;
         // ten ticks were a bet on that, and this whole class is about what happens to a pilot.
@@ -402,14 +401,14 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
         return value;
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the craft is built in and FLOWN out of is EMPTY, measured by the
         // air fill's own `placed`. Open air, so this ASSERTS rather than digs — a craft climbing on
         // a held key out of a ten-block pit meets its rim, and the red then accuses the destruction
         // handler this class exists to test.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
                 "the hull, and the first blocks of the lane it climbs before the seat is broken");
     }
 }

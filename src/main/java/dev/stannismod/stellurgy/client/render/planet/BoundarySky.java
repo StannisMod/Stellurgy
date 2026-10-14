@@ -1,5 +1,12 @@
 package dev.stannismod.stellurgy.client.render.planet;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.network.PacketSystemBodiesSync;
+import dev.stannismod.stellurgy.universe.Nebula;
+import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -12,14 +19,6 @@ import net.minecraftforge.client.IRenderHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.network.PacketSystemBodiesSync;
-import dev.stannismod.stellurgy.space.HyperspaceWorld;
-import dev.stannismod.stellurgy.universe.Nebula;
-import dev.stannismod.stellurgy.universe.SystemBodyKind;
 
 import java.util.List;
 

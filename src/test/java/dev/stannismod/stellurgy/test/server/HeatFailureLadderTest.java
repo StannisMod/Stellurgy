@@ -2,13 +2,13 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static org.junit.Assert.*;
 
 /**
  * What being too hot COSTS: the two rungs of the failure ladder that a ship can reach today.
@@ -73,12 +73,14 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * also be true of a build that reported VeryHot for every room, and of one that latched on the
      * first hazard it ever saw - which is a real failure mode this very code path has had.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HOSTILE — {@code AirState#deriveAtmosphere} at {@code if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)} raising
-     * the rung 1000 K: "past the threshold the room itself is the hazard … expected:&lt;[VeryHot]&gt;
-     * but was:&lt;[PressurizedAir]&gt;". BACK — {@code AreaBlob#setData} at {@code data = obj;} refusing to publish over a VeryHot
-     * zone: "and the room must come BACK when it is cooled … expected:&lt;[PressurizedAir]&gt; but
-     * was:&lt;[VeryHot]&gt;". The two premises at its head are arrangements and are not witnessed.</p>
+     * Pins INV-HEAT-22 (A compartment past the crew threshold presents a hostile atmosphere, and cooling it gives the room back).
      */
+    @Pins("INV-HEAT-22")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. HOSTILE — {@code AirState#deriveAtmosphere} at {@code if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)} raising"
+            + " the rung 1000 K: \"past the threshold the room itself is the hazard … expected:&lt;[VeryHot]&gt;"
+            + " but was:&lt;[PressurizedAir]&gt;\". BACK — {@code AreaBlob#setData} at {@code data = obj;} refusing to publish over a VeryHot"
+            + " zone: \"and the room must come BACK when it is cooled … expected:&lt;[PressurizedAir]&gt; but"
+            + " was:&lt;[VeryHot]&gt;\". The two premises at its head are arrangements and are not witnessed.")
     @Test
     public void anOverheatedCompartmentTurnsHostileAndCoolingItGivesTheRoomBack() throws Exception {
         buildRoomWithVent();
@@ -108,12 +110,14 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * existing atmosphere types say both at once. Asserting the plain variant alongside is what
      * stops this passing on a build that simply always answers with the NoO2 one.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BOTH HAZARDS — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;}
-     * always answering the breathable variant: "a suffocating room that is also lethally hot must say
-     * so expected:&lt;Superheated[NoOxygen]&gt; but was:&lt;Superheated[]&gt;". THE PLAIN ONE — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;} always answering the NoO2 variant: "and the same temperature with air to breathe
-     * is the plain lethal one expected:&lt;Superheated[]&gt; but was:&lt;Superheated[NoOxygen]&gt;".
-     * The premise at its head is an arrangement and is not witnessed.</p>
+     * Pins INV-HEAT-23 (Temperature picks the rung and the gases pick the variant).
      */
+    @Pins("INV-HEAT-23")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. BOTH HAZARDS — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;}"
+            + " always answering the breathable variant: \"a suffocating room that is also lethally hot must say"
+            + " so expected:&lt;Superheated[NoOxygen]&gt; but was:&lt;Superheated[]&gt;\". THE PLAIN ONE — {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;} always answering the NoO2 variant: \"and the same temperature with air to breathe"
+            + " is the plain lethal one expected:&lt;Superheated[]&gt; but was:&lt;Superheated[NoOxygen]&gt;\"."
+            + " The premise at its head is an arrangement and is not witnessed.")
     @Test
     public void hotAirWithNothingToBreatheIsBothHazardsAtOnce() throws Exception {
         buildRoomWithVent();
@@ -138,20 +142,21 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * pilot nothing, and the whole reason this check lives at the gate rather than at the burst is
      * that a paid refusal is the failure the jump sequence is built to prevent.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MUST NOT FIRE — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null}
-     * raising the refusal 10000 K: "a drive whose coolant is past the threshold must not fire: …
-     * \"allowed\":true". WHICH REFUSAL — {@code JumpGate#check} at {@code : new Objection(Severity.HARD, MSG_DRIVE_OVERHEATED);} raising the no-drive message instead:
-     * "and the pilot must be told which of the refusals this is: … \"message\":\"msg.jumpgate.nodrive\"".
-     * NOT WOUND UP — {@code JumpTrigger#press} at {@code if (!verdict.allowed())} ignoring the verdict: "a refused jump must not wind the
-     * drive up: {\"ok\":true,\"spooling\":true}". COSTS NOTHING — {@code JumpTrigger#press} at {@code spool.clearWarning();} firing the
-     * burst before refusing: "and must cost the pilot nothing … \"charge\":720000". REMEMBERS NOTHING
-     * — {@code JumpTrigger#press} at {@code spool.clearWarning();} clearing the aim on a refusal: "cooling the ship is the whole of the
-     * fix - the gate is read-only and remembers nothing: … \"allowed\":false". The premises at its
-     * head and the two after the cook and the cool are arrangements and are not witnessed.</p>
-     *
      * <p>What the gate read is not asserted beside the message: the overheated refusal is raised only
      * when the same coolant reading is past the threshold, so it would be WHICH REFUSAL again.</p>
+     * Pins INV-HEAT-25 (A drive whose loop is past the refusal threshold does not fire, says which refusal it is, and costs the pilot nothing).
      */
+    @Pins("INV-HEAT-25")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. MUST NOT FIRE — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null}"
+            + " raising the refusal 10000 K: \"a drive whose coolant is past the threshold must not fire: …"
+            + " \\\"allowed\\\":true\". WHICH REFUSAL — {@code JumpGate#check} at {@code : new Objection(Severity.HARD, MSG_DRIVE_OVERHEATED);} raising the no-drive message instead:"
+            + " \"and the pilot must be told which of the refusals this is: … \\\"message\\\":\\\"msg.jumpgate.nodrive\\\"\"."
+            + " NOT WOUND UP — {@code JumpTrigger#press} at {@code if (!verdict.allowed())} ignoring the verdict: \"a refused jump must not wind the"
+            + " drive up: {\\\"ok\\\":true,\\\"spooling\\\":true}\". COSTS NOTHING — {@code JumpTrigger#press} at {@code spool.clearWarning();} firing the"
+            + " burst before refusing: \"and must cost the pilot nothing … \\\"charge\\\":720000\". REMEMBERS NOTHING"
+            + " — {@code JumpTrigger#press} at {@code spool.clearWarning();} clearing the aim on a refusal: \"cooling the ship is the whole of the"
+            + " fix - the gate is read-only and remembers nothing: … \\\"allowed\\\":false\". The premises at its"
+            + " head and the two after the cook and the cool are arrangements and are not witnessed.")
     @Test
     public void anOverheatedDriveRefusesToFireAndTheRefusalIsFree() throws Exception {
         standShip("an armed ship with coolant laid against its drive");
@@ -182,13 +187,13 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
         assertEquals("and the pilot must be told which of the refusals this is: " + hot,
                 "msg.jumpgate.driveoverheated", hot.text("message"));
 
-        Reply pressed = arrange("stellurgytest drive press 0 " + ship);
+        Reply pressed = act("stellurgytest drive press 0 " + ship).requireOk();
         assertFalse("a refused jump must not wind the drive up: " + pressed, pressed.bool("spooling"));
         Reply afterPress = driveInfo(ship);
         assertEquals("and must cost the pilot nothing - this refusal is above the commit line: "
                 + afterPress, chargeBefore, afterPress.longInteger("charge"));
 
-        Reply shed = arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
+        Reply shed = act("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1").requireOk();
         requireArranged("premise: the drive's pipes must still be a loop: " + shed, shed.bool("inLoop"));
         assertTrue("premise: the loop must actually have shed what it was holding: " + shed,
                 shed.longInteger("temperatureMilliK") < refusal * 1000L);
@@ -204,10 +209,12 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * accident nor as "too hot" by defaulting the safe way: a ship built before anyone laid a pipe
      * has to keep flying.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING TO READ — {@code ShipDrive#coolantKelvin} at {@code double hottest = 0.0D;} starting the reading at ambient: "with nothing bolted to the drive there is
-     * nothing to read: … \"driveCoolantMilliK\":293000". ALLOWED — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} refusing an
-     * unmeasured drive: "and an unmeasured drive must still be allowed to jump: … \"allowed\":false".</p>
+     * Pins INV-HEAT-26 (A drive with no coolant against it reads zero and is NOT refused).
      */
+    @Pins("INV-HEAT-26")
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NOTHING TO READ — {@code ShipDrive#coolantKelvin} at {@code double hottest = 0.0D;} starting the reading at ambient: \"with nothing bolted to the drive there is"
+            + " nothing to read: … \\\"driveCoolantMilliK\\\":293000\". ALLOWED — {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} refusing an"
+            + " unmeasured drive: \"and an unmeasured drive must still be allowed to jump: … \\\"allowed\\\":false\".")
     @Test
     public void aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused() throws Exception {
         standShip("an armed ship with nothing against its drive");
@@ -230,52 +237,52 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
         roomY = site.y + 2;
         roomZ = site.z + 2;
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone").requireOk();
         for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
             arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
-                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone").requireOk();
             arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
-                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air").requireOk();
         }
         arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
-                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone").requireOk();
 
         Reply vent = arrange("stellurgytest place 0 " + roomX + " " + roomY + " " + roomZ
-                + " stellurgy:oxygenVent");
+                + " stellurgy:oxygenVent").requireOk();
         assertTrue("vent place failed: " + vent, vent.bool("placed"));
         arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
-        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
-        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
-        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000").requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1").requireOk();
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ).requireOk();
+        act("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5").requireOk();
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int n2, int o2, int co2, int milliK) throws Exception {
         arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
-                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK).requireOk();
     }
 
     /** What a person standing in the compartment breathes, as the handler publishes it. */
     private String atmosphereInRoom() throws Exception {
-        return ask("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ)
+        return read("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ)
                 .text("type");
     }
 
     private Reply driveInfo(String afc) throws Exception {
-        return ask("stellurgytest drive info 0 " + afc);
+        return arrange("stellurgytest drive info 0 " + afc);
     }
 
     /** A ship that can jump: a drive, a full bank, a navigation computer, a target, armed. */
     private void buildArmedShip(String afc, String nav) throws Exception {
-        arrange("stellurgytest drive build 0 " + afc + " 4 8 0 0 0");
-        arrange("stellurgytest drive charge 0 " + afc + " full");
-        arrange("stellurgytest nav place " + nav);
-        Reply linked = arrange("stellurgytest nav link " + nav + " " + afc);
+        arrange("stellurgytest drive build 0 " + afc + " 4 8 0 0 0").requireOk();
+        arrange("stellurgytest drive charge 0 " + afc + " full").requireOk();
+        arrange("stellurgytest nav place " + nav).requireOk();
+        Reply linked = arrange("stellurgytest nav link " + nav + " " + afc).requireOk();
         requireArranged("the navigation computer must be linked to the drive: " + linked,
                 linked.bool("linked"));
-        arrange("stellurgytest nav target " + nav + " 7 0 0");
-        Reply armed = arrange("stellurgytest drive arm 0 " + afc + " on");
+        arrange("stellurgytest nav target " + nav + " 7 0 0").requireOk();
+        Reply armed = act("stellurgytest drive arm 0 " + afc + " on").requireOk();
         assertTrue("the ship must be armed, or the gate refuses for a different reason: " + armed,
                 armed.bool("armed"));
     }
@@ -287,23 +294,23 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      */
     private void layCoolantAlongTheGenerator() throws Exception {
         for (int i = 0; i < PIPES; i++) {
-            Reply placed = arrange("stellurgytest place 0 " + pipeAt(i) + " stellurgy:heatPipe");
+            Reply placed = arrange("stellurgytest place 0 " + pipeAt(i) + " stellurgy:heatPipe").requireOk();
             assertTrue("pipe place failed at " + pipeAt(i) + ": " + placed, placed.bool("placed"));
         }
-        Reply solved = arrange("stellurgytest subnet solve all 0 1");
+        Reply solved = act("stellurgytest subnet solve all 0 1").requireOk();
         assertEquals("the loop never solved, so it does not exist yet: " + solved,
                 1, solved.integer("ticksSolved"));
     }
 
     /** Charge the drive's loop past {@code refusalKelvin} in one call, and answer what it reached. */
     private Reply cook(int refusalKelvin) throws Exception {
-        Reply empty = arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
+        Reply empty = act("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1").requireOk();
         requireArranged("premise: the drive's pipes must form a loop: " + empty, empty.bool("inLoop"));
         long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass to charge: " + empty, capacity > 0);
         int ambient = configInt("shipHeatAmbientKelvin");
         long charge = (refusalKelvin + 100L - ambient) * capacity;
-        return arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " " + charge + " 1");
+        return act("stellurgytest heat cycle 0 " + pipeAt(0) + " " + charge + " 1").requireOk();
     }
 
     /** The i-th pipe of the drive's coolant run: above the generator, running away from the coils. */
@@ -316,6 +323,6 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
     }
 
     private int configInt(String key) throws Exception {
-        return arrange("stellurgytest config get " + key).integer("value");
+        return read("stellurgytest config get " + key).requireOk().integer("value");
     }
 }

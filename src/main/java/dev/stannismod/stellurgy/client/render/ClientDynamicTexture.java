@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.client.render;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.Stellurgy;
 
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;

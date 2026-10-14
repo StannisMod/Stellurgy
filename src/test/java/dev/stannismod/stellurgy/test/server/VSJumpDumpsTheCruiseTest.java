@@ -1,16 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.DIRECT_JUMP_SPEED;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.HYPERSPACE_JUMP_SPEED;
@@ -62,11 +56,13 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
     /** Tolerance on a cruise read back, in blocks per second. The two outcomes are 20 apart. */
     private static final double CRUISE_EPSILON = 1e-9;
 
+    /** Pins HYPER-31 (a craft leaves hyperspace at rest and keeps its cruise across a direct crossing). */
+    @Pins("HYPER-31")
     @Test
     public void aDirectCrossingKeepsTheCruise() throws Exception {
         Arrived arrived = jumpUnderCruise(DIRECT_JUMP_SPEED, "DIRECT");
 
-        String cruise = exec("stellurgytest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId);
+        String cruise = read("stellurgytest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId).raw();
         assertTrue("the arrived craft has no flight computer to answer about, so this leg pins "
                 + "nothing: " + cruise, Reply.of(cruise).bool("afcResolved"));
         assertEquals("a craft keeps its cruise across a cell-to-cell crossing — if this is zero, the "
@@ -75,11 +71,13 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
                 COMMANDED_CRUISE, extractDouble(cruise, "cruiseUp"), CRUISE_EPSILON);
     }
 
+    /** Pins HYPER-31 (a craft leaves hyperspace at rest and keeps its cruise across a direct crossing). */
+    @Pins("HYPER-31")
     @Test
     public void aHyperspaceJumpLeavesTheCraftAtRest() throws Exception {
         Arrived arrived = jumpUnderCruise(HYPERSPACE_JUMP_SPEED, "HYPERSPACE");
 
-        String cruise = exec("stellurgytest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId);
+        String cruise = read("stellurgytest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId).raw();
         assertTrue("the arrived craft has no flight computer to answer about: " + cruise,
                 Reply.of(cruise).bool("afcResolved"));
         assertEquals("a craft leaves hyperspace at rest, and this one arrived still carrying the "
@@ -112,19 +110,19 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
      */
     private Arrived jumpUnderCruise(long speed, String route) throws Exception {
 
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        buildMark = events.mark();
+        TransitSetup setup = TransitSetup.piloted(c -> arrange(c).raw());
+        builtDurable = setup.requireDurableId();
         int originDim = setup.originDim;
-        assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                loadedShips(originDim) >= 1);
 
-        // The origin cell is freshly minted and holds this craft alone, so "the only loaded ship
-        // here" is an identification rather than a proximity guess. This fixture carries TWO ids —
-        // the substrate's and a durable one it mints off the computer — and the cruise verbs resolve
-        // the FIRST, so the other one is deliberately not used here.
-        String originVsId = ShipIdentity.theOnlyLoadedShipIn(this::exec, originDim);
+        // The craft the setup built, by the physics id its own reply names — the id the cruise verbs
+        // resolve — once its own announcement says it is usable in the origin cell.
+        String originVsId = setup.requireShipId();
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
+                originDim, setup.requireDurableId(), USABLE_TICKS));
 
-        String commanded = exec("stellurgytest vs ff-cruise-by-id " + originDim + " " + originVsId
-                + " 0 0 " + COMMANDED_CRUISE);
+        String commanded = arrange("stellurgytest vs ff-cruise-by-id " + originDim + " " + originVsId
+                + " 0 0 " + COMMANDED_CRUISE).raw();
         assertTrue("the craft has no flight computer to command, so nothing below is about a cruise: "
                 + commanded, Reply.of(commanded).bool("afcResolved"));
         assertEquals("PREMISE: the craft must actually be under way before it jumps, or both legs "
@@ -133,7 +131,7 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
 
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " 1 64 1 " + speed);
+        String begin = act("stellurgytest space transit-begin " + originDim + " 1 64 1 " + speed).raw();
         assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began"));
 
         // Narrowed by the CRAFT as well as the route — see the identity note below: the
@@ -141,35 +139,39 @@ public class VSJumpDumpsTheCruiseTest extends AbstractSharedServerTest {
         String arrived = events.awaitRecordWithFields(jumpMark, "ship_transit_ended",
                 "the ship never reached the target cell by the " + route + " route, so this leg has "
                         + "no arrival to read a cruise off; the durable record now reads "
-                        + exec("stellurgytest space transit-export"),
+                        + read("stellurgytest space transit-export").raw(),
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", route);
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
-        assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + exec("stellurgytest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
-        // Identified off the ARRIVAL'S OWN RECORD, not off "the only loaded ship in this cell". That
-        // read worked only while an earlier scenario's hull unloaded itself once nobody was near it;
-        // with a test server holding ships loaded, the target cell holds two and a count cannot say
-        // which one this jump produced.
+        // Identified off the ARRIVAL'S OWN RECORD, and linked on that craft becoming usable in the
+        // target cell.
         String durableId = Events.text(arrived, "ship");
         assertTrue("the arrival must name the craft that made it, or the cruise read below is about"
-                + " whichever hull the cell happens to hold: " + arrived,
+                + " some other hull: " + arrived,
                 durableId != null && !durableId.trim().isEmpty());
-        return new Arrived(targetDim, ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim()));
+        return new Arrived(targetDim, ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, targetDim,
+                durableId.trim(), USABLE_TICKS));
     }
 
+    /** Server ticks for a craft to become usable once it is built or has arrived: one or two ticks away. */
+    private static final int USABLE_TICKS = 200;
+
+    /** The mark taken before this scenario's setup, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
     @org.junit.After
-    public void resetPermaload() throws Exception {
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
     }
 
     // ─── plumbing, mirroring this tier's siblings ───────────────────────────────
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
-
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
-    }
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static int extractInt(String json, String key) {
         return Reply.of(json).integer(key);

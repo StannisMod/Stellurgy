@@ -34,6 +34,22 @@ public abstract class TestClassScope {
     protected abstract void close() throws Exception;
 
     /**
+     * Judge what one scenario left behind in what this scope shares. Called by the runner after the
+     * scenario's whole statement — its rules, {@code @Before} and {@code @After} included — has
+     * finished, whether it passed or failed; a throw here is a failure of THAT scenario, reported
+     * beside its own failure when it had one.
+     *
+     * <p>Default: nothing is judged.</p>
+     */
+    protected void afterScenario(String scenario) throws Exception {
+    }
+
+    /** The right to start the harness server or client this scope shares — see {@link HarnessBoot}. */
+    protected static HarnessBoot harnessBoot() {
+        return new HarnessBoot(com.github.stannismod.forge.testing.ChildMode.MECHANICS);
+    }
+
+    /**
      * This class run's one instance of {@code type}, created on first use. A memory that is
      * {@link AutoCloseable} is closed when the class run ends, in reverse order of creation and
      * before {@link #close}, so it can still use what {@link #open} started.

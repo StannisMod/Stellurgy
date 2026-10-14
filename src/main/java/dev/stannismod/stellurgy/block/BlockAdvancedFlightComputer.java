@@ -1,17 +1,16 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
+import dev.stannismod.stellurgy.util.StorageChunk;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
-
-import dev.stannismod.stellurgy.entity.EntityDummy;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
-import dev.stannismod.stellurgy.util.StorageChunk;
-import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 /**
  * The Advanced Flight Computer's block. A plain {@link BlockTile} except for destruction: the

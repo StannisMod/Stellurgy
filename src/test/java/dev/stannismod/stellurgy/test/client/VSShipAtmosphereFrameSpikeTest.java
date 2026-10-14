@@ -1,19 +1,12 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.ServerOnly;
+import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
 
 import static org.junit.Assert.assertTrue;
 
@@ -121,15 +114,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
 
     /**
      * RESULT-1 is the control: a sealed cabin on an assembled ship seals a blob at all.
-     *
-     * <p>red-witnessed: with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any
-     * block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: "RESULT-1: a vent in a
-     * sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…
-     * \"blobSize\":0)", 2026-09-28, and again on 2026-09-30 after the gate read gained its
-     * resolved-something refusal (the three CONTROL checks, that refusal included, stayed green). The
-     * two waits before it are arrangement links (the ship's id, the ship usable), and the refusal is a
-     * premise; none of them is witnessed.</p>
      */
+    @LegacyWitness(prose = "with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any"
+            + " block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: \"RESULT-1: a vent in a"
+            + " sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…"
+            + " \\\"blobSize\\\":0)\", 2026-09-28, and again on 2026-09-30 after the gate read gained its"
+            + " resolved-something refusal (the three CONTROL checks, that refusal included, stayed green). The"
+            + " two waits before it are arrangement links (the ship's id, the ship usable), and the refusal is a"
+            + " premise; none of them is witnessed.")
     @Test
     public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
 
@@ -166,7 +158,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         // makes VS load it (a headless server alone never does), and one run that assembled with
         // the player still 400 blocks away at the control cabin left the registry empty.
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
+        arrange("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
         // The comment above is the reason this is a LINK and not twenty ticks: what makes VS load
         // the ship is a CLIENT being near it, and a client still on its way is exactly the run that
         // left the registry empty.
@@ -175,22 +167,24 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
                         + " ship is what makes the physics mod load it");
 
         Events loadEvents = serverEvents();
-        String assemble = assembleFixture(site);
+        ShipAssembly assembleBuilt = assembleFixture(site);
+        String assemble = assembleBuilt.reply;
+        disposeOfShipAtEnd(ShipIdentity.nameFromAssembly(assemble));
         System.out.println("[S1/ship] assemble=" + assemble);
-        assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 0));
+        assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assembleBuilt,
+                assembleBuilt.madeNoRocket());
 
         // The craft this spike built, by the name the assembler minted — so every lookup below is
         // about it and not about whichever hull is nearest the pad on a world the tier shares. Its
         // LOAD is then this ship's own `ship_usable`, not a dimension-wide count any neighbour's hull
         // answers.
-        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, loadEvents, 0,
+        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), loadEvents, 0,
                 ShipIdentity.nameFromAssembly(assemble), 200);
         String loadedInfo = shipInfoById(scenarioShipId);
         scenario().requireArranged("the ship must LOAD with the client present: " + loadedInfo,
                 ShipInfo.isLoaded(loadedInfo));
 
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), 0, scenarioShipId)
                 .requireFound("find-seat must resolve the ship's subspace seat");
         int sx = seat.seatX;
         int sy = seat.seatY;
@@ -252,41 +246,41 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
      */
     private void buildCabin(int x, int y, int z) throws Exception {
         assertTrue("chunk warmup failed",
-                Reply.of(exec("stellurgytest chunk warmup 0 " + ((x - 2) >> 4) + " " + ((z - 2) >> 4)
-                        + " " + ((x + 4) >> 4) + " " + ((z + 4) >> 4))).ok());
+                Reply.of(arrange("stellurgytest chunk warmup 0 " + ((x - 2) >> 4) + " " + ((z - 2) >> 4)
+                        + " " + ((x + 4) >> 4) + " " + ((z + 4) >> 4)).raw()).ok());
         assertTrue("cabin shell fill failed",
-                Reply.of(exec("stellurgytest fill 0 " + (x - 1) + " " + (y - 2) + " " + (z - 1)
-                        + " " + (x + 3) + " " + (y + 3) + " " + (z + 3) + " minecraft:stone")
+                Reply.of(arrange("stellurgytest fill 0 " + (x - 1) + " " + (y - 2) + " " + (z - 1)
+                        + " " + (x + 3) + " " + (y + 3) + " " + (z + 3) + " minecraft:stone").raw()
                         ).ok());
         assertTrue("cabin cavity fill failed",
-                Reply.of(exec("stellurgytest fill 0 " + x + " " + y + " " + z
-                        + " " + (x + 2) + " " + (y + 2) + " " + (z + 2) + " minecraft:air")
+                Reply.of(arrange("stellurgytest fill 0 " + x + " " + y + " " + z
+                        + " " + (x + 2) + " " + (y + 2) + " " + (z + 2) + " minecraft:air").raw()
                         ).ok());
     }
 
     /** Place, fuel and force-seal the cabin's vent; returns the raw {@code vent reseal} payload. */
     private String sealCabin(int x, int y, int z) throws Exception {
-        String place = exec("stellurgytest place 0 " + x + " " + (y - 1) + " " + z
-                + " stellurgy:oxygenVent");
+        String place = arrange("stellurgytest place 0 " + x + " " + (y - 1) + " " + z
+                + " stellurgy:oxygenVent").raw();
         assertTrue("vent place failed: " + place, Reply.of(place).bool("placed"));
         assertTrue("energy inject failed",
-                Reply.of(exec("stellurgytest energy inject 0 " + x + " " + (y - 1) + " " + z + " 1000000")
+                Reply.of(arrange("stellurgytest energy inject 0 " + x + " " + (y - 1) + " " + z + " 1000000").raw()
                         ).ok());
         assertTrue("oxygen inject failed",
-                Reply.of(exec("stellurgytest fluid inject 0 " + x + " " + (y - 1) + " " + z + " oxygen 16000")
+                Reply.of(arrange("stellurgytest fluid inject 0 " + x + " " + (y - 1) + " " + z + " oxygen 16000").raw()
                         ).ok());
         String firstTick = "stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 1";
-        Reply.of(firstTick, exec(firstTick)).requireOk(firstTick);
-        String reseal = exec("stellurgytest vent reseal 0 " + x + " " + (y - 1) + " " + z);
+        act(firstTick).requireOk(firstTick);
+        String reseal = arrange("stellurgytest vent reseal 0 " + x + " " + (y - 1) + " " + z).raw();
         String settle = "stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 5";
-        Reply.of(settle, exec(settle)).requireOk(settle);
+        act(settle).requireOk(settle);
         return reseal;
     }
 
     // ── observation ───────────────────────────────────────────────────────────────────────
 
     private String atmosphereAt(int x, int y, int z) throws Exception {
-        String info = exec("stellurgytest atmosphere get 0 " + x + " " + y + " " + z);
+        String info = read("stellurgytest atmosphere get 0 " + x + " " + y + " " + z).raw();
         Reply mReply = Reply.of(info);
         assertTrue("atmosphere type not found in: " + info, mReply.has(ATM_TYPE));
         return mReply.text(ATM_TYPE);
@@ -307,12 +301,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
      * could not tell a change made and undone from one never made, and answered the same silence
      * for "the gate resolved him to what he was already in" as for "the gate never ran".</p>
      */
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);",
+            why = "a dose of gate evaluations, not a budget — both legs of this test are in dim 0, and `tp` has"
+                    + " already moved the server's copy of him by the time the command answers.")
+    @ServerOnly(at = "GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);",
+            why = "the gate runs on the server's ticks of dim 0; the read is the server's log.")
     private String cachedAtmosphereWithPlayerAt(double x, double y, double z) throws Exception {
         long mark = serverEvents().markInstrumented();
-        exec("tp @a " + x + " " + y + " " + z + " 0 0");
-        // EXPERIMENT: a dose of gate evaluations, not a budget — both legs of this test are in dim 0,
-        // and `tp` has already moved the server's copy of him by the time the command answers.
-        // SERVER-ONLY: the gate runs on the server's ticks of dim 0; the read is the server's log.
+        arrange("tp @a " + x + " " + y + " " + z + " 0 0");
         GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);
         String changes = serverEvents().since(mark, "player_atmosphere_changed");
 
@@ -331,7 +327,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         // into a different atmosphere" from "he is in the same one he was in", which is exactly the
         // difference between this test's two legs.
         String command = "stellurgytest atmosphere for-player";
-        Reply mReply = Reply.of(command, exec(command)).requireOk(command);
+        Reply mReply = read(command).requireOk(command);
         // The verb writes `"atmosphere":""` when the gate resolved NOTHING, and RESULT-3 asks only
         // that the answer is not PressurizedAir — so an unresolved player would read as the finding.
         // "Resolved to nothing" is a different defect from "resolved to the wrong air", and it is
@@ -361,7 +357,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         // ONE lookup, by name. This used to try four build-site coordinates in turn and take the
         // first that answered — a search whose success condition was "some ship's yard was reachable
         // from one of these points", which a neighbour's craft satisfies as readily as this one's.
-        PilotSeat pose = PilotSeat.byId(this::exec, 0, scenarioShipId);
+        PilotSeat pose = PilotSeat.byId(c -> read(c).raw(), 0, scenarioShipId);
         if (!Double.isNaN(pose.shipWorldX)) {
             anchor = new int[]{(int) Math.floor(pose.shipWorldX),
                     (int) Math.floor(pose.shipWorldY),
@@ -377,8 +373,8 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         // goes through the ship this spike NAMES. The positional form maps through the first hull
         // containing the anchor, and a point can be inside more than one.
         int[] a = refreshAnchor();
-        String resp = exec("stellurgytest vs to-world 0 id " + scenarioShipId
-                + " " + sx + " " + sy + " " + sz);
+        String resp = read("stellurgytest vs to-world 0 id " + scenarioShipId
+                + " " + sx + " " + sy + " " + sz).raw();
         Reply mapped = Reply.of("stellurgytest vs to-world", resp);
         scenario().requireArranged("subspace->world mapping failed (anchor=" + a[0] + "," + a[1] + ","
                 + a[2] + "): " + resp, mapped.has(WORLD_X));
@@ -393,14 +389,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
         return reply.integer(field);
     }
 
-    private String assembleFixture(FixtureSite site) throws Exception {
+    private ShipAssembly assembleFixture(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume the hull and the cabin built on it occupy is EMPTY, measured by
         // the air fill's own `placed`. Open air, so this ASSERTS rather than digs. It matters more
         // here than in most: the subject is a SEALED cabin, and a shell whose stone is continuous
         // with the pit's wall is not the shape this leg believes it built.
-        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
+        return ShipAssembly.at(site, c -> arrange(c).raw(), c -> act(c).raw(), serverEvents(), VARIANT, 2, 16,
                 "the hull, and the sealed cabin raised on it");
     }
 }

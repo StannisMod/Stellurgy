@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.world.biome;
 
+import dev.stannismod.stellurgy.world.gen.WorldGenAlienTree;
+import dev.stannismod.stellurgy.world.gen.WorldGenNoTree;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.gen.feature.WorldGenAbstractTree;
-import dev.stannismod.stellurgy.world.gen.WorldGenAlienTree;
-import dev.stannismod.stellurgy.world.gen.WorldGenNoTree;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;

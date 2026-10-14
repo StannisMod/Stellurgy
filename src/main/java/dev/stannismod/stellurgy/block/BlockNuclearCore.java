@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.block;
 
+import dev.stannismod.stellurgy.api.IRocketNuclearCore;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.client.TooltipInjector;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.util.ITooltipFlag;
@@ -8,9 +11,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.api.IRocketNuclearCore;
-import dev.stannismod.stellurgy.client.TooltipInjector;
 
 import javax.annotation.Nullable;
 import java.util.List;

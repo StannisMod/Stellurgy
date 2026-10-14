@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.api;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 
 public interface IPlanetaryProvider {
 

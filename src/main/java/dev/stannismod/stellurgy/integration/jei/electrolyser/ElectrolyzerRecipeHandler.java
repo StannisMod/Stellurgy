@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.integration.jei.electrolyser;
 
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import mezz.jei.api.recipe.IRecipeHandler;
 import mezz.jei.api.recipe.IRecipeWrapper;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 
 public class ElectrolyzerRecipeHandler implements IRecipeHandler<ElectrolyzerWrapper> {
 

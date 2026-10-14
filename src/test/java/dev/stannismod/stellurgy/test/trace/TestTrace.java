@@ -1,11 +1,11 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.util.List;
-import java.util.Locale;
-
 import net.minecraft.entity.Entity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.World;
+
+import java.util.List;
+import java.util.Locale;
 
 /**
  * The sink a test-only mixin writes an observation into, and the side routing that picks which

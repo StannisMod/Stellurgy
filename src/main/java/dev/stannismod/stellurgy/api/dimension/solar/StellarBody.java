@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.api.dimension.solar;
 
+import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.util.SpacePosition;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.common.util.Constants.NBT;
-import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.util.SpacePosition;
 
 import java.util.ArrayList;
 import java.util.HashMap;

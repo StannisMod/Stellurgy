@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.projectile;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.network.PacketBeamState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.network.PacketBeamState;
-
 import java.util.function.Supplier;
 
 /**

@@ -1,20 +1,16 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
+import dev.stannismod.stellurgy.world.weather.StellurgyDimensionWorldInfo;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.storage.WorldInfo;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import dev.stannismod.stellurgy.test.MinecraftBootstrap;
-import dev.stannismod.stellurgy.world.weather.StellurgyDimensionWorldInfo;
-import dev.stannismod.stellurgy.world.weather.PlanetWeatherState;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * {@link StellurgyDimensionWorldInfo} delegation contract.

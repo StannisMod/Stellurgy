@@ -1,13 +1,11 @@
 package dev.stannismod.stellurgy.integration.jei.satelliteBuilder;
 
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
 import mezz.jei.api.IJeiHelpers;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
-import dev.stannismod.stellurgy.api.StellurgyItems;
-import dev.stannismod.stellurgy.integration.jei.satelliteBuilder.SatelliteBuilderWrapper;
-import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
-import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
-
 
 import java.util.ArrayList;
 import java.util.Arrays;

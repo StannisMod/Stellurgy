@@ -1,30 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.Wait;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.integration.vs.PhysicsUnits;
-import dev.stannismod.stellurgy.test.ArrangementFailure;
-import dev.stannismod.stellurgy.test.AssembledCraft;
-import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.DriveInfo;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.PilotSeat;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ServerWindow;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.ShipLift;
-import dev.stannismod.stellurgy.test.ShipReadiness;
-import dev.stannismod.stellurgy.test.TransitSetup;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
@@ -120,6 +106,22 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      */
     private static final int DRIVE_DOSE_TICKS = 30;
 
+    /**
+     * EXPERIMENT dose of a drive whose craft FALLS — nothing holds it up — so the dose also sets how far
+     * it falls inside the window. Derived from the one measured rate: 30 game ticks gave 127 physics steps
+     * and 2.10 engine seconds (measured 2026-10-08: logs/require-server.log, the motorless hull's
+     * window), so 10 ticks is about 0.7 engine s, a fall from rest of ½·32·0.7² ≈ 8 blocks — and still
+     * dozens of steps, every one of them saturated for a hull with nothing aboard. The fall's freedom is
+     * not trusted to this number: the window's contact count says whether the hull touched anything.
+     */
+    private static final int FREE_FALL_DOSE_TICKS = 10;
+
+    /**
+     * EXPERIMENT dose of the contact counter's control: enough game ticks for several physics steps
+     * of a hull resting on its pad (the drive refuses a window of fewer than two).
+     */
+    private static final int PAD_CONTACT_TICKS = 5;
+
     /** STIMULUS: ticks of a zero-velocity command after a drive, so the next drive starts near rest. */
     private static final int BRAKE_TICKS = 40;
 
@@ -147,7 +149,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      */
     private static final double NO_MOTION_BAND = 1.0e-9;
 
-    private final Events events = new Events(this::exec,
+    private final Events events = new Events(c -> read(c).raw(),
             ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
@@ -159,18 +161,19 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     private String gasesAtStart;
 
     /**
-     * Each scenario starts with an empty sky, at standard gravity, and remembers the air it found.
+     * Each scenario starts at standard gravity, remembers the air it found, and marks the log before
+     * its first build so the crafts it builds can be disposed of where they end up.
      *
-     * <p>The craft a previous scenario flew go on moving, so they are cleared here, at the start of
-     * the one that must not meet them. One scenario raises the field; every scenario starts from the
+     * <p>One scenario raises the field; every scenario starts from the
      * standard one, so a scenario that failed with the field raised cannot hand it on. Both are READ
      * back, because the command's own answer is a chat line and not a value.</p>
      */
     @Before
     public void emptySkyAtStandardGravity() throws Exception {
-        ShipReadiness.clearCraftFrom(this::exec, DIM);
-        exec("ar planet set " + DIM + " gravitationalMultiplier 1");
-        Reply planet = Reply.of(exec("stellurgytest planet info " + DIM));
+        scenarioMark = events.mark();
+        built.clear();
+        arrange("ar planet set " + DIM + " gravitationalMultiplier 1");
+        Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
         requireArranged("the overworld must be at standard gravity, which every scenario here"
                 + " leaves it at: " + planet, planet.number("gravity") == 1.0);
         gasesAtStart = planet.object("gases");
@@ -183,8 +186,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * the air the overworld boots with.
      */
     private void standInVacuum() throws Exception {
-        exec("ar planet set " + DIM + " atmosphereDensity 0");
-        Reply planet = Reply.of(exec("stellurgytest planet info " + DIM));
+        arrange("ar planet set " + DIM + " atmosphereDensity 0");
+        Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
         requireArranged("the overworld must be airless for a readout to be the whole prediction: "
                 + planet, planet.number("atmosphereDensity") == 0.0);
     }
@@ -205,8 +208,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
             // absence is the answer "none of it left": an airless world reports no entry for a gas.
             long missing = wanted.longInteger(gas) - (now.has(gas) ? now.longInteger(gas) : 0L);
             if (missing > 0L) {
-                Reply added = Reply.of(exec("stellurgytest planet add-gas " + DIM + " " + gas + " "
-                        + missing));
+                Reply added = Reply.of(arrange("stellurgytest planet add-gas " + DIM + " " + gas + " "
+                        + missing).raw());
                 requireArranged("the overworld's " + gas + " must be put back: " + added, added.ok());
             }
         }
@@ -221,9 +224,45 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
     /** The overworld's gas mix now, as {@code planet info} reports it. */
     private Reply gasesNow() throws Exception {
-        Reply planet = Reply.of(exec("stellurgytest planet info " + DIM));
+        Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
         requireArranged("the overworld must report its gas mix: " + planet, planet.object("gases") != null);
         return Reply.of(planet.object("gases"));
+    }
+
+    /** The mark taken before this scenario's first build, and the durable name of every craft it built. */
+    private long scenarioMark;
+    private final java.util.List<String> built = new java.util.ArrayList<>();
+
+    /** Every craft this scenario built goes when it ends, wherever its latest naming put it. */
+    @After
+    public void disposeOfTheBuiltCraft() throws Exception {
+        for (String durable : built) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, scenarioMark, durable);
+        }
+        built.clear();
+    }
+
+    /** Keep the craft a press reply names, when it names one, for {@link #disposeOfTheBuiltCraft}. */
+    private void owned(Reply press) {
+        String durable = press.textOr("shipId", null);
+        if (durable != null) {
+            built.add(durable);
+        }
+    }
+
+    /**
+     * Press the assembler at {@code builder} and answer its reply, keeping the craft it made: the press
+     * must name a ship it ASSEMBLED and its assembler must record no rocket born ({@link ShipBirth}).
+     */
+    private String pressShip(FixtureSite site, int[] builder) throws Exception {
+        long mark = events.mark();
+        String asm = RocketFixture.assembleBuilt(site, c -> act(c).raw(), builder);
+        owned(Reply.of("stellurgytest rocket assemble", asm));
+        ShipBirth birth = ArrangementFailure.arranged(() -> ShipBirth.ofPress(events, mark, site.dim, builder, asm,
+                LINK_BUDGET_TICKS, "the craft this scenario builds"));
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + birth,
+                birth.rocketsBorn.isEmpty());
+        return asm;
     }
 
     /** Lay {@code variant} at {@code site} and assemble it ({@link AssembledCraft}). */
@@ -239,19 +278,21 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /** {@link #lay}, clearing {@code height} blocks above the site instead of {@link #HEIGHT}. */
     private Reply layWithHeadroom(FixtureSite site, String variant, int height, String what)
             throws Exception {
-        return AssembledCraft.lay(site, this::exec, variant, HALO, height, what);
+        return AssembledCraft.lay(site, c -> arrange(c).raw(), variant, HALO, height, what);
     }
 
     /** {@link AssembledCraft#assemble}: press the assembler the fixture laid and resolve the craft. */
     private AssembledCraft assembleLaid(FixtureSite site, Reply fixture, String what) throws Exception {
-        return AssembledCraft.assemble(site, this::exec, events, fixture, what);
+        AssembledCraft craft = AssembledCraft.assemble(site, c -> act(c).raw(), events, fixture, what);
+        built.add(craft.durable);
+        return craft;
     }
 
     /** Command a world-frame velocity on the craft's own flight computer, and require it took. */
     private void command(AssembledCraft craft, String verb, double x, double y, double z, String what)
             throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs " + verb + " " + DIM + " " + craft.physicsId
-                + " " + x + " " + y + " " + z));
+        Reply r = Reply.of(arrange("stellurgytest vs " + verb + " " + DIM + " " + craft.physicsId
+                + " " + x + " " + y + " " + z).raw());
         // absence is the answer "refused": when the verb cannot reach a flight computer it answers
         // an error object, or shipFound false, carrying neither field — which is what this rejects.
         requireArranged(what + " — the command must reach this craft's flight computer: " + r,
@@ -263,8 +304,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * Answers how many pad blocks there were.
      */
     private int removePad(FixtureSite site, String what) throws Exception {
-        Reply fill = Reply.of(exec("stellurgytest fill " + DIM + " " + site.x + " " + site.y + " "
-                + site.z + " " + (site.x + 5) + " " + site.y + " " + (site.z + 5) + " minecraft:air"));
+        Reply fill = Reply.of(arrange("stellurgytest fill " + DIM + " " + site.x + " " + site.y + " "
+                + site.z + " " + (site.x + 5) + " " + site.y + " " + (site.z + 5) + " minecraft:air").raw());
         requireArranged(what + " — the pad under the craft must be removed: " + fill,
                 fill.ok() && fill.integer("placed") > 0);
         return fill.integer("placed");
@@ -272,7 +313,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
     /** The readout the craft's flight computer holds now, as the {@code model} object. */
     private Reply readout(AssembledCraft craft, String what) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs flight-model-by-id " + DIM + " " + craft.physicsId));
+        Reply r = Reply.of(read("stellurgytest vs flight-model-by-id " + DIM + " " + craft.physicsId).raw());
         requireArranged(what + " — the craft's flight computer must hold a model: " + r,
                 r.bool("found") && r.object("model") != null);
         return Reply.of(r.object("model"));
@@ -293,7 +334,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      */
     private String drive(AssembledCraft craft, String verb, double x, double y, double z, int doseTicks,
                          String what) throws Exception {
-        ServerWindow window = ServerWindow.open(this::exec,
+        ServerWindow window = ServerWindow.open(c -> read(c).raw(),
                 "dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", DIM,
                 craft.afcX, craft.afcY, craft.afcZ);
         command(craft, verb, x, y, z, what);
@@ -326,11 +367,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a craft delivers the authority
      * its readout reports.</p>
-     *
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the allocated force scaled by 0.5 on its
-     * way into the solver) fails "driven forward at its authority, the craft must accelerate at the
-     * readout's live surge figure (17.44 m/s²)" with 8.456 m/s², 2026-09-30</p>
      */
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the allocated force scaled by 0.5 on its"
+            + " way into the solver) fails \"driven forward at its authority, the craft must accelerate at the"
+            + " readout's live surge figure (17.44 m/s²)\" with 8.456 m/s², 2026-09-30")
     @Test
     public void aBuiltShipAcceleratesAsItsReadoutPredicts() throws Exception {
         standInVacuum();
@@ -375,18 +415,17 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that cargo lowers a craft's
      * acceleration and never its force.</p>
-     *
-     * <p>red-witnessed: {@code ShipHullMass#addContents} at {@code double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);} (a hull's contents weighed at zero) fails "the flight
-     * computer must weigh the cargo that was stowed aboard — the readout's mass must GROW by it" with
-     * no heavier model inside 200 ticks, 2026-09-30 — taken on the pre-merge form of that line, which
-     * read the table through the engine's former singleton; the line is otherwise unchanged</p>
-     * <p>red-witnessed: {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);} (each authority scaled by the structural share of the
-     * mass) fails "cargo must not change the craft's surge force" with empty 4 905 000 N, laden
-     * 4 044 474 N, 2026-09-30</p>
-     * <p>red-witnessed: {@code ShipHullMass#addContents} at {@code builder.add(MassContributor.ofBlock(x + 0.5 - ox, y + 0.5 - oy, z + 0.5 - oz,} (content mass placed ten blocks off the block that holds
-     * it) fails "laden, the craft must accelerate less by exactly the ratio of its masses" with empty
-     * 56.74, laden 28.54 blocks per engine second², 2026-09-30</p>
      */
+    @LegacyWitness(prose = "{@code ShipHullMass#addContents} at {@code double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);} (a hull's contents weighed at zero) fails \"the flight"
+            + " computer must weigh the cargo that was stowed aboard — the readout's mass must GROW by it\" with"
+            + " no heavier model inside 200 ticks, 2026-09-30 — taken on the pre-merge form of that line, which"
+            + " read the table through the engine's former singleton; the line is otherwise unchanged")
+    @LegacyWitness(prose = "{@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);} (each authority scaled by the structural share of the"
+            + " mass) fails \"cargo must not change the craft's surge force\" with empty 4 905 000 N, laden"
+            + " 4 044 474 N, 2026-09-30")
+    @LegacyWitness(prose = "{@code ShipHullMass#addContents} at {@code builder.add(MassContributor.ofBlock(x + 0.5 - ox, y + 0.5 - oy, z + 0.5 - oz,} (content mass placed ten blocks off the block that holds"
+            + " it) fails \"laden, the craft must accelerate less by exactly the ratio of its masses\" with empty"
+            + " 56.74, laden 28.54 blocks per engine second², 2026-09-30")
     @Test
     public void theSameShipCarryingCargoAcceleratesLessByItsMassRatio() throws Exception {
         standInVacuum();
@@ -413,9 +452,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         GameTicks.advance(client(), GameTicks.server(), BRAKE_TICKS);
 
         long stowMark = events.mark();
-        Reply stow = Reply.of(exec("stellurgytest vs stow " + DIM + " " + (craft.afcX + hold[0])
+        Reply stow = Reply.of(arrange("stellurgytest vs stow " + DIM + " " + (craft.afcX + hold[0])
                 + " " + (craft.afcY + hold[1]) + " " + (craft.afcZ + hold[2])
-                + " minecraft:iron_block " + CARGO_BLOCKS));
+                + " minecraft:iron_block " + CARGO_BLOCKS).raw());
         requireArranged("the cargo must go into the hold: " + stow,
                 stow.bool("inventory") && stow.integer("stowed") == CARGO_BLOCKS);
         String laden = events.awaitMatching(stowMark, "flight_model_changed",
@@ -458,20 +497,25 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * accelerate at its readout's figure; without it "did not move" could be a command that reached
      * nobody.
      * That the command did reach the motorless hull's computer is read too: its controller ran every
-     * step of the window and reported, every step, that it could not deliver.</p>
+     * step of the window and reported, every step, that it could not deliver. And that it FELL FREELY is
+     * measured, not assumed: the window counts the physics mod's collision impulses on this hull, the
+     * counter is seen to count on the pad first, and a window with any contact is refused as an
+     * arrangement (a hull that struck the ground inside its window once read as a broken mechanic,
+     * 2026-10-08). The premise was seen to refuse: with the pad left under the hull, the window counted
+     * 46 collider ticks and 259 contacts and the test stopped on "must have been in free air"
+     * (2026-10-08, logs/contacts-witness.log).</p>
      *
      * <p>Contract: this fails if production breaks the contract that a hull with no actuators has no
      * authority and does not move under command (no transition mode).</p>
-     *
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code calc.addForceAndTorque(force, torque);} (the controller's wrench never handed to
-     * the solver) fails "the CONTROL — a craft with motors under the same command — must accelerate
-     * at its readout's forward figure, 17.44 m/s²" (re-witnessed 2026-09-30 on this form, which reads
-     * the saturated steps' acceleration instead of the speed reached after the dose)</p>
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the force taken as wanted acceleration
-     * times mass, bypassing the hull's actuators — the pre-actuator controller) fails "under a command
-     * to go forward and hold its altitude, the motorless hull must not move forward or sideways, and
-     * must fall exactly as gravity takes it", 2026-09-30</p>
      */
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code calc.addForceAndTorque(force, torque);} (the controller's wrench never handed to"
+            + " the solver) fails \"the CONTROL — a craft with motors under the same command — must accelerate"
+            + " at its readout's forward figure, 17.44 m/s²\" (re-witnessed 2026-09-30 on this form, which reads"
+            + " the saturated steps' acceleration instead of the speed reached after the dose)")
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the force taken as wanted acceleration"
+            + " times mass, bypassing the hull's actuators — the pre-actuator controller) fails \"under a command"
+            + " to go forward and hold its altitude, the motorless hull must not move forward or sideways, and"
+            + " must fall exactly as gravity takes it\", 2026-09-30")
     @Test
     public void aHullWithNothingThatPushesDoesNotMoveUnderCommand() throws Exception {
         standInVacuum();
@@ -504,15 +548,27 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 1.0, Events.number(controlDrive, "satEngineAccelZ") / PhysicsUnits.ACCELERATION
                         / controlPredictedSi, ACCELERATION_BAND);
 
+        // The contact counter is an instrument, so it is seen to count before its zero is believed:
+        // standing on its pad, the hull is touched on every step.
+        String onPad = drive(bare, "force-vel-by-id", 0, 0, 0, PAD_CONTACT_TICKS,
+                "the motorless hull still standing on its pad");
+        requireArranged("standing on its pad, the motorless hull must be counted as touched, or a zero"
+                + " contact count below would say nothing: " + onPad,
+                Events.number(onPad, "colliderTicks") > 0 && Events.number(onPad, "contacts") > 0);
+
         // Only now: nothing holds this hull up, so from here it falls, and the drive below must
-        // happen while it is still in free air.
+        // happen while it is still in free air — which is measured, not assumed.
         removePad(bareSite, "the motorless hull measured in free air");
-        String bareDrive = drive(bare, "force-vel-by-id", 0, 0, SURGE_COMMAND, DRIVE_DOSE_TICKS,
+        String bareDrive = drive(bare, "force-vel-by-id", 0, 0, SURGE_COMMAND, FREE_FALL_DOSE_TICKS,
                 "the motorless hull driven forward");
         requireArranged("the motorless hull's controller must have been asked every step and have"
                 + " reported every step that it delivered less than asked: " + bareDrive,
                 Events.number(bareDrive, "saturatedSteps") == Events.number(bareDrive, "returnedSteps")
                         && Events.number(bareDrive, "returnedSteps") > 0);
+        requireArranged("the motorless hull must have been in free air for the whole window — the"
+                + " collider listened and touched it nowhere — or its fall is not gravity's alone: "
+                + bareDrive,
+                Events.number(bareDrive, "colliderTicks") > 0 && Events.number(bareDrive, "contacts") == 0);
         measured("no actuators", controlDrive, bareDrive);
         double seconds = Events.number(bareDrive, "engineSeconds");
         double gravity = bareModel.number("gravity") * PhysicsUnits.ACCELERATION;
@@ -541,14 +597,13 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a reaction wheel turns a hull
      * and never pushes it.</p>
-     *
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code calc.addForceAndTorque(force, torque);} (the controller's wrench never handed to
-     * the solver) fails "told to turn about the vertical at 2.0 rad per engine second, the wheel-only
-     * hull must reach that rate" with no turn, 2026-09-30</p>
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the force taken as wanted acceleration
-     * times mass, bypassing the hull's actuators) fails "turning, the wheel-only hull must not
-     * translate", 2026-09-30</p>
      */
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code calc.addForceAndTorque(force, torque);} (the controller's wrench never handed to"
+            + " the solver) fails \"told to turn about the vertical at 2.0 rad per engine second, the wheel-only"
+            + " hull must reach that rate\" with no turn, 2026-09-30")
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code force.set(command.force()).mul(k);} (the force taken as wanted acceleration"
+            + " times mass, bypassing the hull's actuators) fails \"turning, the wheel-only hull must not"
+            + " translate\", 2026-09-30")
     @Test
     public void aWheelOnlyHullTurnsAndDoesNotTranslate() throws Exception {
         standInVacuum();
@@ -611,14 +666,13 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a hull delivers no more than its
      * authority, and that a hull with enough of it hovers.</p>
-     *
-     * <p>red-witnessed: {@code ShipInertiaWriter#applyTo} at {@code record.setGameTickMass(frame.getTotalMass());} (the physics mass written 10% heavier than the
-     * frame the readout is solved for) fails "told to hover with less heave than weight, the weak craft
-     * must sink at what its readout leaves it (-1.6002 m/s²)" with -4.130 m/s², 2026-09-30</p>
-     * <p>red-witnessed: {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code gx = g.x(); gy = g.y(); gz = g.z();} (the gravity feed-forward zeroed) fails
-     * "the CONTROL — a craft whose heave exceeds its weight — must hold its altitude" with a vertical
-     * velocity of -1.6 blocks per engine second, 2026-09-30</p>
      */
+    @LegacyWitness(prose = "{@code ShipInertiaWriter#applyTo} at {@code record.setGameTickMass(frame.getTotalMass());} (the physics mass written 10% heavier than the"
+            + " frame the readout is solved for) fails \"told to hover with less heave than weight, the weak craft"
+            + " must sink at what its readout leaves it (-1.6002 m/s²)\" with -4.130 m/s², 2026-09-30")
+    @LegacyWitness(prose = "{@code TileAdvancedFlightComputer#onPhysicsTick} at {@code gx = g.x(); gy = g.y(); gz = g.z();} (the gravity feed-forward zeroed) fails"
+            + " \"the CONTROL — a craft whose heave exceeds its weight — must hold its altitude\" with a vertical"
+            + " velocity of -1.6 blocks per engine second, 2026-09-30")
     @Test
     public void aCraftWhoseHeaveIsBelowItsWeightSinksUnderAHoverCommand() throws Exception {
         standInVacuum();
@@ -631,8 +685,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         removePad(weakSite, "the weak craft measured in free air");
         removePad(strongSite, "the strong craft measured in free air");
 
-        exec("ar planet set " + DIM + " gravitationalMultiplier " + RAISED_FIELD);
-        Reply planet = Reply.of(exec("stellurgytest planet info " + DIM));
+        arrange("ar planet set " + DIM + " gravitationalMultiplier " + RAISED_FIELD);
+        Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
         requireArranged("the field must be raised to " + RAISED_FIELD + " standard gravities: "
                 + planet, planet.number("gravity") == RAISED_FIELD);
         Reply weakModel = readout(weak, "the weak craft in the raised field");
@@ -688,17 +742,16 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that the live readout follows the
      * hull as it changes.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, on the form whose wait IS the verdict. With
-     * {@code TileAdvancedFlightComputer#tickFlightModel} at {@code boolean due = flightModel == null}
-     * (a model rebuilt only when the computer has none), it fails "with one forward motor gone, the
-     * craft's live forward authority must drop below the 4905000.0 N it had, without re-assembly". With
-     * {@code TileAdvancedFlightComputer#rebuildFlightModel} at
-     * {@code survey.mass(), survey.design(), survey.live(),} solving every rebuild over the
-     * FIRST survey's live actuators instead of the new survey's, the same verdict fails (taken on the
-     * form whose line ended {@code HELM_FRAME);}, before the helm frame moved to {@code ControlFrame}). Earlier records
-     * (2026-09-30) were taken on a form that waited for the next rebuild and then asserted.</p>
      */
+    @LegacyWitness(prose = "2026-10-05, on the form whose wait IS the verdict. With"
+            + " {@code TileAdvancedFlightComputer#tickFlightModel} at {@code boolean due = flightModel == null}"
+            + " (a model rebuilt only when the computer has none), it fails \"with one forward motor gone, the"
+            + " craft's live forward authority must drop below the 4905000.0 N it had, without re-assembly\". With"
+            + " {@code TileAdvancedFlightComputer#rebuildFlightModel} at"
+            + " {@code survey.mass(), survey.design(), survey.live(),} solving every rebuild over the"
+            + " FIRST survey's live actuators instead of the new survey's, the same verdict fails (taken on the"
+            + " form whose line ended {@code HELM_FRAME);}, before the helm frame moved to {@code ControlFrame}). Earlier records"
+            + " (2026-09-30) were taken on a form that waited for the next rebuild and then asserted.")
     @Test
     public void removingAWorkingMotorLowersLiveAuthorityWithoutReassembly() throws Exception {
         standInVacuum();
@@ -710,7 +763,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         long revision = before.longInteger("revision");
         double massBefore = Reply.of(before.object("mass")).number("totalKg");
         double forceBefore = live(before, "SURGE_POSITIVE").number("sustained");
-        Reply survey = Reply.of(exec("stellurgytest vs actuators " + DIM + " " + craft.physicsId));
+        Reply survey = Reply.of(read("stellurgytest vs actuators " + DIM + " " + craft.physicsId).raw());
         requireArranged("the craft must be surveyable: " + survey, survey.bool("survey"));
         Reply motor = null;
         for (String one : survey.objectArray("actuators")) {
@@ -725,9 +778,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 motor != null && forceBefore > 0.0);
 
         long mark = events.mark();
-        Reply removed = Reply.of(exec("stellurgytest fill " + DIM + " " + motor.integer("x") + " "
+        Reply removed = Reply.of(arrange("stellurgytest fill " + DIM + " " + motor.integer("x") + " "
                 + motor.integer("y") + " " + motor.integer("z") + " " + motor.integer("x") + " "
-                + motor.integer("y") + " " + motor.integer("z") + " minecraft:air"));
+                + motor.integer("y") + " " + motor.integer("z") + " minecraft:air").raw());
         requireArranged("the motor must come out of the ship's yard: " + removed,
                 removed.ok() && removed.integer("placed") == 1);
         // THE WAIT IS THE VERDICT: the readout this craft publishes — what its console shows — must
@@ -770,6 +823,114 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         return false;
     }
 
+    // ---- 6a. a worn-out motor puts no force into the craft ----------------------------------------
+
+    /**
+     * STIMULUS: the climb this scenario commands, in blocks per engine second. Its only job is to ask
+     * for more than one physics step at the motors' authority delivers, so the controller works at
+     * that authority for several steps (the window reports how many); small, because the craft must
+     * be braked back to rest before its motors are worn, and a motorless craft keeps any speed it has.
+     */
+    private static final double WEAR_CLIMB_COMMAND = 4.0;
+
+    /** EXPERIMENT dose of each climb in this scenario, game ticks: long enough to hold saturated steps. */
+    private static final int WEAR_CLIMB_TICKS = 10;
+
+    /** STIMULUS: ticks of a zero-velocity command after the first climb, so the craft is near rest. */
+    private static final int WEAR_BRAKE_TICKS = 20;
+
+    /**
+     * A motor worn to its last stage puts no force into the craft (ship-flight-model INV-SFM-14): a
+     * craft whose every motor is worn out does not accelerate when commanded to climb, where the same
+     * craft, unworn, does.
+     *
+     * <p>The decision lives in three places of the world side — the wear threshold, the survey that
+     * keeps a broken device out of LIVE, and the flight computer allocating over LIVE alone — and the
+     * kernel never sees wear, so this is a mechanics test: a probe ARRANGES the wear (the stage a
+     * motor reaches by use), production does everything after it. EVERY motor is worn, not one: with
+     * one of the fixture's two motors left, the remaining motor is off-centre and its clean authority
+     * is zero by the solver's own law, so "no force" would be the solver's answer, not this contract's.
+     * Here no working motor remains, so zero is what the contract alone predicts.</p>
+     *
+     * <p>The model is rebuilt on a cadence, not on wear: the verdict waits for this craft's next
+     * {@code flight_model_changed} after the wear, and a motor worn mid-flight pushes until then (at most
+     * one load round).</p>
+     *
+     * <p>Run in VACUUM and ZERO gravity, a configuration no player's overworld has, on purpose: the
+     * contract is about the motors' force, which neither air nor the field changes, and a craft with no
+     * working motor would otherwise fall out of its plot into the terrain between the reads.</p>
+     *
+     * <p>What it does NOT see: a pilot's key (the climb enters on the computer's probe channel), and what
+     * the pilot is shown about the worn motors.</p>
+     *
+     * Pins INV-SFM-14 (a motor worn to its last stage puts no force into the craft).
+     */
+    @Pins("INV-SFM-14")
+    @LegacyWitness(prose = "one break per place the decision lives, each failing the verdict with \"with every"
+            + " motor worn out, nothing may push the craft in any direction … expected:&lt;0.0&gt; but"
+            + " was:&lt;86.36976495536865&gt;\", 2026-10-07: the wear threshold — {@code"
+            + " ChemicalMotorActuators#working} at {@code wear.getStage() < wear.getMaxStage()} turned to"
+            + " {@code <=}; the routing into LIVE — {@code HullSurvey#collect} at {@code if (block.isWorking(world,"
+            + " pos, state))} made always true; the controller — {@code TileAdvancedFlightComputer#onPhysicsTick}"
+            + " at {@code scheme.allocate(model.live(), a,} handed {@code model.design()}.")
+    @Test
+    @Wait(shape = Wait.Shape.STIMULUS, at = "GameTicks.advance(client(), GameTicks.server(), WEAR_BRAKE_TICKS);",
+            why = "the brake's duration; the verdict reads acceleration, never position or speed.")
+    public void aMotorWornToItsLastStagePutsNoForceIntoTheCraft() throws Exception {
+        FixtureSite site = site();
+        standInVacuum();
+        arrange("ar planet set " + DIM + " gravitationalMultiplier 0");
+        Reply planet = Reply.of(read("stellurgytest planet info " + DIM).raw());
+        requireArranged("the overworld's field must be off for a motorless craft to stay in its plot: "
+                + planet, planet.number("gravity") == 0.0);
+
+        AssembledCraft craft = assemble(site, "with-advanced-flight-computer",
+                "a craft whose motors will be worn out");
+        removePad(site, "the worn-motor craft");
+
+        String unworn = drive(craft, "force-vel-by-id", 0.0, WEAR_CLIMB_COMMAND, 0.0, WEAR_CLIMB_TICKS,
+                "the unworn craft commanded to climb");
+        requireArranged("the controller must work at the motors' authority for several steps: " + unworn,
+                Events.number(unworn, "saturatedSteps") > 1);
+        assertTrue("unworn, the craft's motors must push it up when it is commanded to climb: " + unworn,
+                Events.number(unworn, "satEngineAccelY") > NO_MOTION_BAND);
+
+        command(craft, "force-vel-by-id", 0.0, 0.0, 0.0, "brake the worn-motor craft to rest");
+        GameTicks.advance(client(), GameTicks.server(), WEAR_BRAKE_TICKS);
+
+        Reply survey = Reply.of(read("stellurgytest vs actuators " + DIM + " " + craft.physicsId).raw());
+        requireArranged("the craft's devices must be surveyable: " + survey, survey.bool("survey"));
+        int motors = 0;
+        for (Reply device : survey.elements("actuators")) {
+            if (!device.bool("sustained")) {
+                continue;
+            }
+            String at = DIM + " " + device.integer("x") + " " + device.integer("y") + " " + device.integer("z");
+            Reply wear = Reply.of(read("stellurgytest wear get " + at).raw());
+            requireArranged("a motor must carry wear: " + wear, wear.bool("registered"));
+            Reply worn = Reply.of(arrange("stellurgytest wear set " + at + " " + wear.integer("maxStage")).raw());
+            requireArranged("the motor must be worn to its last stage: " + worn,
+                    worn.integer("stage") == worn.integer("maxStage"));
+            motors++;
+        }
+        requireArranged("the fixture must carry motors to wear: " + survey, motors > 0);
+
+        long wornMark = events.mark();
+        events.awaitRecordWithFields(wornMark, "flight_model_changed",
+                "the craft's model must be rebuilt after its motors wore out", AssembledCraft.LINK_BUDGET_TICKS,
+                "ship", craft.durable);
+
+        String worn = drive(craft, "force-vel-by-id", 0.0, WEAR_CLIMB_COMMAND, 0.0, WEAR_CLIMB_TICKS,
+                "the worn-out craft commanded to climb");
+        requireArranged("the controller must report it could not deliver the climb for several steps: "
+                + worn, Events.number(worn, "saturatedSteps") > 1);
+        double ax = Events.number(worn, "satEngineAccelX");
+        double ay = Events.number(worn, "satEngineAccelY");
+        double az = Events.number(worn, "satEngineAccelZ");
+        assertEquals("with every motor worn out, nothing may push the craft in any direction — " + worn,
+                0.0, Math.sqrt(ax * ax + ay * ay + az * az), NO_MOTION_BAND);
+    }
+
     // ---- 6b. an idle craft gives its wheel back ---------------------------------------------------
 
     /**
@@ -789,8 +950,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /**
      * A craft whose reaction wheel holds momentum, left holding station with nothing else asked of
      * it, gives that momentum back: its thrusters unload the wheel. The wheel is built already wound —
-     * its stored momentum written into the block before assembly, which is how a saved world brings
-     * one back — and holding station asks the wheel for nothing, so the only thing in the window that
+     * its stored momentum set through the wheel's own setter before assembly, the state a saved world
+     * brings back — and holding station asks the wheel for nothing, so the only thing in the window that
      * can empty it is what the flight computer's allocation does with a wheel the command leaves
      * idle.
      *
@@ -800,12 +961,16 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a craft at rest gives its wheels
      * back their momentum.</p>
      *
-     * <p>red-witnessed: 2026-10-05, after a healthy run (0.0588 → 0.0) — with
-     * {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed it
-     * fails "an idle craft must give its wheel back: the fullest wheel aboard read 0.058823529411764705
-     * of its capacity, and 20 ticks later 0.058823529411764705".</p>
+     * Pins INV-SFM-11 (a wheel the command leaves idle is given back its momentum).
      */
+    @Pins("INV-SFM-11")
+    @LegacyWitness(prose = "2026-10-05, after a healthy run (0.0588 → 0.0) — with"
+            + " {@code CleanAxisScheme#allocate} at {@code desaturate(capability, u, momentum, dt);} removed it"
+            + " fails \"an idle craft must give its wheel back: the fullest wheel aboard read 0.058823529411764705"
+            + " of its capacity, and 20 ticks later 0.058823529411764705\".")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "double first = wheelFill(craft);",
+            why = "the fill is a value that converges; two reads, and the verdict names both.")
     public void anIdleCraftGivesItsWheelBack() throws Exception {
         standInVacuum();
         FixtureSite site = site();
@@ -813,8 +978,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         int[] wheel = fixture.intArray("wheelPos");
         requireArranged("the fixture must say where its wheel stands: " + fixture,
                 wheel != null && wheel.length == 3);
-        String wound = exec("blockdata " + wheel[0] + " " + wheel[1] + " " + wheel[2]
-                + " {storedMomentumY:" + WOUND_YAW_MOMENTUM + "d}");
+        String wound = arrange("stellurgytest arrange wheel-momentum " + site.dim + " " + wheel[0] + " " + wheel[1]
+                + " " + wheel[2] + " Y " + WOUND_YAW_MOMENTUM).raw();
         AssembledCraft craft = assembleLaid(site, fixture, "a decked craft with a wound wheel");
         command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
         removePad(site, "a craft left in free air");
@@ -825,9 +990,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         requireArranged("the craft must be able to turn about yaw with its thrusters alone, or nothing "
                 + "aboard can cancel an unwinding wheel: " + yaw, sustainedYaw > 0.0);
 
-        // WINDOW: the fill is a value that converges; two reads, and the verdict names both.
         double first = wheelFill(craft);
-        requireArranged("the wheel must hold momentum once the craft is built (blockdata: " + wound
+        requireArranged("the wheel must hold momentum once the craft is built (wound: " + wound
                 + ")", first > 0.0);
         GameTicks.advance(client(), GameTicks.server(), UNLOAD_WINDOW_TICKS);
         double second = wheelFill(craft);
@@ -884,14 +1048,19 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that a spent wheel never leaves a
      * straight command turning the craft.</p>
      *
-     * <p>red-witnessed: 2026-10-07 — {@code CleanAxisScheme#allocate} at {@code recipe =
-     * burstIfItCanDeliver(capability, direction, recipe, amount, u, live);} taking the burst recipe
-     * unconditionally fails "a craft whose wheel was spent must not turn … it reached 7.396 rad/s",
-     * the turn growing 0.54 → 6.35 rad/s over ticks 10-30 (taken on the form that passed
-     * {@code momentum, dt}); on the form that refused a burst only for a wheel with NO room the same
-     * verdict failed at 0.29 rad/s — a kick each time the wheel filled.</p>
+     * Pins INV-SFM-12 (the craft does not turn under a straight push).
      */
+    @Pins("INV-SFM-12")
+    @LegacyWitness(prose = "2026-10-07 — {@code CleanAxisScheme#allocate} at {@code recipe ="
+            + " burstIfItCanDeliver(capability, direction, recipe, amount, u, live);} taking the burst recipe"
+            + " unconditionally fails \"a craft whose wheel was spent must not turn … it reached 7.396 rad/s\","
+            + " the turn growing 0.54 → 6.35 rad/s over ticks 10-30 (taken on the form that passed"
+            + " {@code momentum, dt}); on the form that refused a burst only for a wheel with NO room the same"
+            + " verdict failed at 0.29 rad/s — a kick each time the wheel filled.")
     @Test
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "for (int t = 0; t < OVERLOAD_DOSE_TICKS; t += WHEEL_SAMPLE_TICKS) {",
+            why = "the drive is the dose; the wheel is read along it because \"was it spent\" is a question about"
+                    + " how its fill moved over the drive, which no single read can answer.")
     public void aCraftWhoseWheelIsSpentDoesNotTurnUnderAStraightCommand() throws Exception {
         standInVacuum();
         FixtureSite site = site();
@@ -905,9 +1074,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
         double emptyKg = Reply.of(readout(craft, "the empty craft").object("mass")).number("totalKg");
         long stowMark = events.mark();
-        Reply stow = Reply.of(exec("stellurgytest vs stow " + DIM + " " + (craft.afcX + hold[0])
+        Reply stow = Reply.of(arrange("stellurgytest vs stow " + DIM + " " + (craft.afcX + hold[0])
                 + " " + (craft.afcY + hold[1]) + " " + (craft.afcZ + hold[2])
-                + " minecraft:iron_block " + OVERLOAD_BLOCKS));
+                + " minecraft:iron_block " + OVERLOAD_BLOCKS).raw());
         requireArranged("the cargo must go into the hold: " + stow,
                 stow.bool("inventory") && stow.integer("stowed") == OVERLOAD_BLOCKS);
         events.awaitMatching(stowMark, "flight_model_changed",
@@ -915,20 +1084,18 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 "for this craft, solved for more than the empty " + emptyKg + " kg",
                 "the flight computer must weigh the cargo before the drive", LINK_BUDGET_TICKS);
 
-        ServerWindow window = ServerWindow.open(this::exec,
+        ServerWindow window = ServerWindow.open(c -> read(c).raw(),
                 "dev.stannismod.stellurgy.test.trace.PhysicsStepWindow", DIM,
                 craft.afcX, craft.afcY, craft.afcZ);
         command(craft, "force-vel-by-id", 0, 0, SURGE_COMMAND, "the overloaded craft driven forward");
         double previous = Double.NaN;
         double fill = Double.NaN;
         StringBuilder trace = new StringBuilder();
-        // EXPERIMENT: the drive is the dose; the wheel is read along it because "was it spent" is a
-        // question about how its fill moved over the drive, which no single read can answer.
         for (int t = 0; t < OVERLOAD_DOSE_TICKS; t += WHEEL_SAMPLE_TICKS) {
             GameTicks.advance(client(), GameTicks.server(), WHEEL_SAMPLE_TICKS);
             previous = fill;
             fill = wheelFill(craft);
-            ShipInfo at = ShipInfo.byId(this::exec, DIM, craft.physicsId);
+            ShipInfo at = ShipInfo.byId(c -> read(c).raw(), DIM, craft.physicsId);
             trace.append('[').append(t + WHEEL_SAMPLE_TICKS).append(" fill=").append(fill)
                     .append(" y=").append(at.y).append("] ");
         }
@@ -980,14 +1147,13 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a jump's speed is set by the mass
      * of the hull it carries.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, after a healthy run (321 250 → 311 250 kg, 1556 → 1606
-     * blocks/tick) — with {@code ShipMassProvider#massOf} at
-     * {@code return OptionalLong.of(Math.max(1L, Math.round(frame.getTotalMass())));} answering
-     * {@code DriveTuning.BASELINE_SHIP_MASS} for every hull, as the placeholder did, it fails "a lighter
-     * hull must be forecast faster by its mass ratio: 321250.0 kg at 125000 blocks/tick, 311250.0 kg
-     * at 125000 expected:&lt;1.0321285140562249&gt; but was:&lt;1.0&gt;".</p>
      */
+    @LegacyWitness(prose = "2026-10-05, after a healthy run (321 250 → 311 250 kg, 1556 → 1606"
+            + " blocks/tick) — with {@code ShipMassProvider#massOf} at"
+            + " {@code return OptionalLong.of(Math.max(1L, Math.round(frame.getTotalMass())));} answering"
+            + " {@code DriveTuning.BASELINE_SHIP_MASS} for every hull, as the placeholder did, it fails \"a lighter"
+            + " hull must be forecast faster by its mass ratio: 321250.0 kg at 125000 blocks/tick, 311250.0 kg"
+            + " at 125000 expected:&lt;1.0321285140562249&gt; but was:&lt;1.0&gt;\".")
     @Test
     public void theDriveForecastsALighterHullFasterByItsMassRatio() throws Exception {
         FixtureSite site = site();
@@ -997,12 +1163,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         command(craft, "force-vel-by-id", 0, 0, 0, "hold it where it was built");
         String where = DIM + " " + craft.afcX + " " + craft.afcY + " " + craft.afcZ;
 
-        DriveInfo before = DriveInfo.at(this::exec, where);
+        DriveInfo before = DriveInfo.at(c -> arrange(c).raw(), where);
         requireArranged("the craft must carry a drive that forecasts a speed: " + before,
                 before.drivePower > 0L && before.speedBlocksPerTick > 0L);
         Reply model = readout(craft, "the jump craft with every motor");
         double massBefore = Reply.of(model.object("mass")).number("totalKg");
-        Reply survey = Reply.of(exec("stellurgytest vs actuators " + DIM + " " + craft.physicsId));
+        Reply survey = Reply.of(read("stellurgytest vs actuators " + DIM + " " + craft.physicsId).raw());
         Reply motor = null;
         for (String one : survey.objectArray("actuators")) {
             Reply a = Reply.of(one);
@@ -1015,9 +1181,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         requireArranged("the craft must carry a working motor to take off: " + survey, motor != null);
 
         long mark = events.mark();
-        Reply removed = Reply.of(exec("stellurgytest fill " + DIM + " " + motor.integer("x") + " "
+        Reply removed = Reply.of(arrange("stellurgytest fill " + DIM + " " + motor.integer("x") + " "
                 + motor.integer("y") + " " + motor.integer("z") + " " + motor.integer("x") + " "
-                + motor.integer("y") + " " + motor.integer("z") + " minecraft:air"));
+                + motor.integer("y") + " " + motor.integer("z") + " minecraft:air").raw());
         requireArranged("the motor must come out of the ship's yard: " + removed,
                 removed.ok() && removed.integer("placed") == 1);
         String lighter = events.awaitMatching(mark, "flight_model_changed",
@@ -1032,7 +1198,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 massAfter = kg; // the last lighter model is the one the drive is read against
             }
         }
-        DriveInfo after = DriveInfo.at(this::exec, where);
+        DriveInfo after = DriveInfo.at(c -> arrange(c).raw(), where);
         requireArranged("taking off a motor must leave the drive as it was: " + before + " / " + after,
                 after.drivePower == before.drivePower);
 
@@ -1062,7 +1228,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
     /** How full the fullest wheel aboard is, 0 to 1, as the craft's flight computer reports it. */
     private double wheelFill(AssembledCraft craft) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs flight-model-by-id " + DIM + " " + craft.physicsId));
+        Reply r = Reply.of(read("stellurgytest vs flight-model-by-id " + DIM + " " + craft.physicsId).raw());
         requireArranged("the craft's flight computer must answer for its wheels: " + r,
                 r.bool("found") && r.has("wheelFill"));
         return r.number("wheelFill");
@@ -1087,29 +1253,29 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that a ship under unit
      * thrust-to-weight is built only on confirmation.</p>
-     *
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code if (tier2Readout != null && !tier2Readout.canHover(} (the gate's condition inverted, so a
-     * craft that CAN hover is the one warned about) fails "a craft that can hover must be built on the
-     * FIRST press" with shipCut false, 2026-09-30</p>
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code if (tier2Readout != null && !tier2Readout.canHover(} (the gate disabled) fails "a ship that
-     * cannot hold its weight here must NOT be built on the first press" with shipCut true,
-     * 2026-09-30</p>
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code warnedThrustToWeight = twr;} (the warned thrust-to-weight never
-     * remembered, so every press warns afresh) fails "a second press on the SAME build must build it"
-     * with shipCut false, 2026-09-30</p>
-     * <p>red-witnessed: {@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);} (the build never handed to the
-     * physics mod) fails "the build the second press made must become a named ship" with no
-     * ship_lifecycle named inside 200 ticks, 2026-09-30 — taken on the pre-2026-10-07 form, which handed
-     * over a pasted snapshot at that line.</p>
      */
+    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code if (tier2Readout != null && !tier2Readout.canHover(} (the gate's condition inverted, so a"
+            + " craft that CAN hover is the one warned about) fails \"a craft that can hover must be built on the"
+            + " FIRST press\" with shipCut false, 2026-09-30")
+    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code if (tier2Readout != null && !tier2Readout.canHover(} (the gate disabled) fails \"a ship that"
+            + " cannot hold its weight here must NOT be built on the first press\" with shipCut true,"
+            + " 2026-09-30")
+    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code warnedThrustToWeight = twr;} (the warned thrust-to-weight never"
+            + " remembered, so every press warns afresh) fails \"a second press on the SAME build must build it\""
+            + " with shipCut false, 2026-09-30")
+    @LegacyWitness(prose = "{@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);} (the build never handed to the"
+            + " physics mod) fails \"the build the second press made must become a named ship\" with no"
+            + " ship_lifecycle named inside 200 ticks, 2026-09-30 — taken on the pre-2026-10-07 form, which handed"
+            + " over a pasted snapshot at that line.")
     @Test
     public void theAssemblerAsksTwiceBeforeBuildingAShipThatCannotHover() throws Exception {
         standInVacuum();
         FixtureSite hoverSite = plot().siteAt(4, 4);
         FixtureSite heavySite = plot().siteAt(36, 4);
         Reply hoverFixture = lay(hoverSite, "with-pilot-seat", "the control: a craft that can hover");
-        Reply hoverPress = Reply.of(RocketFixture.assembleBuilt(hoverSite, this::exec,
+        Reply hoverPress = Reply.of(RocketFixture.assembleBuilt(hoverSite, c -> act(c).raw(),
                 hoverFixture.blockPos("builderPos")));
+        owned(hoverPress);
         requireArranged("the control's scan must say it can hover: " + hoverPress,
                 hoverPress.ok() && Reply.of(hoverPress.object("scanReadout")).bool("canHoverLIVE"));
         assertTrue("a craft that can hover must be built on the FIRST press: " + hoverPress,
@@ -1117,14 +1283,15 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
         Reply heavyFixture = lay(heavySite, "hull-without-actuators", "a hull that cannot hover");
         int[] builder = heavyFixture.blockPos("builderPos");
-        Reply first = Reply.of(RocketFixture.assembleBuilt(heavySite, this::exec, builder));
+        Reply first = Reply.of(RocketFixture.assembleBuilt(heavySite, c -> act(c).raw(), builder));
         requireArranged("the heavy build's scan must say it cannot hover: " + first,
                 first.ok() && !Reply.of(first.object("scanReadout")).bool("canHoverLIVE"));
         assertTrue("a ship that cannot hold its weight here must NOT be built on the first press: "
                 + first, !first.bool("built"));
 
         long mark = events.mark();
-        Reply second = Reply.of(RocketFixture.assembleBuilt(heavySite, this::exec, builder));
+        Reply second = Reply.of(RocketFixture.assembleBuilt(heavySite, c -> act(c).raw(), builder));
+        owned(second);
         measured("assembler presses", hoverPress, first, second);
         assertTrue("a second press on the SAME build must build it: " + second,
                 second.ok() && second.bool("built"));
@@ -1188,13 +1355,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * never thrown by production — it runs inside the world tick, and a dead server would report that
      * the process exited rather than that a hull was 4% light — so the number arrives here in the
      * record and the failure can carry it.</p>
-     *
-     * <p>red-witnessed: one break per verdict, 2026-09-30 (the {@code Drift} form — with
-     * {@code ShipMassTrigger#recompute} at {@code if (event.cause != ShipLifecycleEvent.Cause.LOADED)} comparing only on a LOAD, the wait for this craft's comparison fails —
-     * "the assembly never compared the full hull pass against the running total"; with
-     * {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, the verdict fails on {@code agrees}
-     * ("disagree").</p>
      */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 (the {@code Drift} form — with"
+            + " {@code ShipMassTrigger#recompute} at {@code if (event.cause != ShipLifecycleEvent.Cause.LOADED)} comparing only on a LOAD, the wait for this craft's comparison fails —"
+            + " \"the assembly never compared the full hull pass against the running total\"; with"
+            + " {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, the verdict fails on {@code agrees}"
+            + " (\"disagree\").")
     @Test
     public void theAuthoritativeRecomputeAgreesWithTheIncrementalTotalOnAFreshAssembly()
             throws Exception {
@@ -1202,11 +1368,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // Marked before the assemble: the comparison is made on the tick the craft is first named,
         // and a mark taken after the assembly could land behind it.
         long mark = events.markInstrumented();
-        String asm = RocketFixture.assembleAt(site(), this::exec,
-                "with-pilot-seat", 4, 12, "the craft whose hull is weighed stands in this volume");
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
-        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+                "with-pilot-seat", 4, 12, "the craft whose hull is weighed stands in this volume"));
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
         String compared = events.awaitRecordWithFields(mark, "ship_mass_compared",
@@ -1233,20 +1397,17 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * table denominates at 5000 kg a block, and the engine's default cannot reach that figure with the
      * whole fixture. So this separates the two models without pinning the table's exact numbers,
      * which are balance and may be tuned.</p>
-     *
-     * <p>red-witnessed: with {@code StellurgyBlockMass.of} ({@code StellurgyBlockMass#of} at {@code return Stellurgy.weights().getWeight(asItem);}, read by both the hull pass
-     * and the per-block path) answering 1.0 for every block, the verdict fails — "recorded mass is
-     * 35.0 kg, below the 125000.0 kg of iron deck" — 2026-09-29, taken on the pre-merge form of that
-     * line, which read the table through the engine's former singleton.</p>
      */
+    @LegacyWitness(prose = "with {@code StellurgyBlockMass.of} ({@code StellurgyBlockMass#of} at {@code return Stellurgy.weights().getWeight(asItem);}, read by both the hull pass"
+            + " and the per-block path) answering 1.0 for every block, the verdict fails — \"recorded mass is"
+            + " 35.0 kg, below the 125000.0 kg of iron deck\" — 2026-09-29, taken on the pre-merge form of that"
+            + " line, which read the table through the engine's former singleton.")
     @Test
     public void anAssembledShipWeighsWhatTheBlockTableSays() throws Exception {
         long mark = events.markInstrumented();
-        String asm = RocketFixture.assembleAt(site(), this::exec,
-                "with-pilot-deck", 4, 12, "the decked craft that is weighed stands in this volume");
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
-        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+                "with-pilot-deck", 4, 12, "the decked craft that is weighed stands in this volume"));
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
         // The authoritative frame is written right after this record, on the same tick: the read
         // below is of the mass that settles the question, not of whatever the paste had accumulated.
@@ -1254,7 +1415,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 "the assembly's own measurement must be on the record before its mass is read",
                 LINK_BUDGET_TICKS, "ship", shipId, "path", "event"));
 
-        String info = exec("stellurgytest vs ship-info " + DIM + " id " + shipId);
+        String info = read("stellurgytest vs ship-info " + DIM + " id " + shipId).raw();
         double massKg = Reply.of("stellurgytest vs ship-info", info).number("massKg");
         assertTrue("this ship's recorded mass is " + massKg + " kg, below the " + IRON_DECK_KG
                 + " kg of iron deck it carries. A mass that low is the physics engine's flat per-block"
@@ -1276,16 +1437,15 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>The snow is laid by the test on the pad's open cells between building and assembling, because
      * that is the one arrangement that puts a block diagonally beside the craft once the assembler has
      * lifted it, the way weather does on a real pad. Read as a premise: at least one cell took snow.</p>
-     *
-     * <p>red-witnessed: with {@code SpatialDetector#tryExpanding} at {@code if (x < footprint.minX || x >
-     * footprint.maxX} disabled, the pad verdict fails — "the ship took 36 of its 36 cells with it … (32
-     * snowed-on cells beside it) expected:&lt;36&gt; but was:&lt;0&gt;" — 2026-10-06. The builder verdict
-     * is not witnessed separately.</p>
      */
+    @LegacyWitness(prose = "with {@code SpatialDetector#tryExpanding} at {@code if (x < footprint.minX || x >"
+            + " footprint.maxX} disabled, the pad verdict fails — \"the ship took 36 of its 36 cells with it … (32"
+            + " snowed-on cells beside it) expected:&lt;36&gt; but was:&lt;0&gt;\" — 2026-10-06. The builder verdict"
+            + " is not witnessed separately.")
     @Test
     public void aShipAssembledOnASnowedOnPadLeavesTheLaunchSiteBehind() throws Exception {
         FixtureSite site = site();
-        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", HALO, HEIGHT,
+        int[] builder = RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", HALO, HEIGHT,
                 "the craft built on a snowed-on pad stands in this volume");
 
         // The launch site as it stands before anything is assembled, READ rather than assumed from
@@ -1298,8 +1458,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                     padBefore++;
                     if (blockAt(px, site.y + 1, pz).bool("isAir")) {
                         requireArranged("snow must take on the open pad cell at " + px + "," + (site.y + 1)
-                                + "," + pz, Reply.of(exec("stellurgytest place " + DIM + " " + px + " "
-                                + (site.y + 1) + " " + pz + " minecraft:snow_layer")).bool("placed"));
+                                + "," + pz, Reply.of(arrange("stellurgytest place " + DIM + " " + px + " "
+                                + (site.y + 1) + " " + pz + " minecraft:snow_layer").raw()).bool("placed"));
                         snowed++;
                     }
                 }
@@ -1310,12 +1470,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 + " nothing touches it and the scenario cannot tell a bounded search from an unbounded"
                 + " one", snowed > 0);
 
-        String asm = RocketFixture.assembleBuilt(site, this::exec, builder);
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String asm = pressShip(site, builder);
         // USABLE, not merely named: the block search runs when the spawn is drained, which is before
         // the ship can be usable, so everything it took is gone from the world by the reads below.
-        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events, DIM,
+        ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, DIM,
                 ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
         int padAfter = 0;
@@ -1350,12 +1508,11 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Measured 2026-10-06 with the craft left in place: offset (0.0, 0.0, 0.0), and over 41 ticks the
      * hull moved 0.0 blocks with omega 1.5e-15 rad/s — the physics does not push a hull resting on its
      * pad, in open air or on a ground pad.</p>
-     *
-     * <p>red-witnessed: taken on the pre-change form, which cut the craft and pasted it one block higher;
-     * the code now standing there is {@code TileRocketAssemblingMachine#assembleRocket} at
-     * {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);}. The placement verdict failed — "the assembly moved it by (0.0,1.0,0.0)" —
-     * 2026-10-06. The rest verdicts are not witnessed.</p>
      */
+    @LegacyWitness(prose = "taken on the pre-change form, which cut the craft and pasted it one block higher;"
+            + " the code now standing there is {@code TileRocketAssemblingMachine#assembleRocket} at"
+            + " {@code VSIntegration.assembleBuiltTier2Ship(world, rocketBB);}. The placement verdict failed — \"the assembly moved it by (0.0,1.0,0.0)\" —"
+            + " 2026-10-06. The rest verdicts are not witnessed.")
     @Test
     public void anAssembledShipStaysWhereItWasBuilt() throws Exception {
         requireItStaysWhereItWasBuilt(site());
@@ -1371,19 +1528,20 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 Plot.CLEAN_GROUND_Z, "the terrain around the pad is what a hull at rest must not be pushed by"));
     }
 
+    @Wait(shape = Wait.Shape.WINDOW, at = "ShipInfo before = ShipInfo.byId(c -> read(c).raw(), DIM, shipId);",
+            why = "a hull at rest is a value that does not converge to anything — it holds, or the physics pushes"
+                    + " it. Two reads with the observed ticks between them, and the verdict names both.")
     private void requireItStaysWhereItWasBuilt(FixtureSite site) throws Exception {
-        int[] builder = RocketFixture.placeAt(site, this::exec, "with-pilot-seat", HALO, HEIGHT,
+        int[] builder = RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", HALO, HEIGHT,
                 "the craft that must stay where it was built stands in this volume");
-        String asm = RocketFixture.assembleBuilt(site, this::exec, builder);
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String asm = pressShip(site, builder);
         int[] built = Reply.of("stellurgytest rocket assemble", asm).blockPos("afcPos");
-        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
-        PilotSeat seat = PilotSeat.byId(this::exec, DIM, shipId).requireFound("the new ship's own computer");
-        Reply mapped = Reply.of("stellurgytest vs to-world", exec("stellurgytest vs to-world " + DIM + " id "
-                + shipId + " " + seat.afcX + " " + seat.afcY + " " + seat.afcZ)).requireOk("map the computer");
+        PilotSeat seat = PilotSeat.byId(c -> read(c).raw(), DIM, shipId).requireFound("the new ship's own computer");
+        Reply mapped = Reply.of("stellurgytest vs to-world", read("stellurgytest vs to-world " + DIM + " id "
+                + shipId + " " + seat.afcX + " " + seat.afcY + " " + seat.afcZ).raw()).requireOk("map the computer");
         double dx = mapped.number("worldX") - built[0];
         double dy = mapped.number("worldY") - built[1];
         double dz = mapped.number("worldZ") - built[2];
@@ -1392,11 +1550,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 Math.abs(dx) < BUILT_IN_PLACE_BLOCKS && Math.abs(dy) < BUILT_IN_PLACE_BLOCKS
                         && Math.abs(dz) < BUILT_IN_PLACE_BLOCKS);
 
-        // WINDOW: a hull at rest is a value that does not converge to anything — it holds, or the physics
-        // pushes it. Two reads with the observed ticks between them, and the verdict names both.
-        ShipInfo before = ShipInfo.byId(this::exec, DIM, shipId);
+        ShipInfo before = ShipInfo.byId(c -> read(c).raw(), DIM, shipId);
         long ticks = GameTicks.advanceObserved(client(), GameTicks.server(), AT_REST_WINDOW_TICKS);
-        ShipInfo after = ShipInfo.byId(this::exec, DIM, shipId);
+        ShipInfo after = ShipInfo.byId(c -> read(c).raw(), DIM, shipId);
         double moved = after.distanceTo(before.x, before.y, before.z);
         System.out.println("[measure] built-in-place offset (" + dx + "," + dy + "," + dz + "); over " + ticks
                 + " ticks moved " + moved + " blocks, omega " + after.omega + " rad/s, velY " + after.velY);
@@ -1420,8 +1576,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     private static final String ROCKET_BUILDER = "stellurgy:rocketbuilder";
 
     private Reply blockAt(int x, int y, int z) throws Exception {
-        return Reply.of("stellurgytest block at", exec("stellurgytest block at " + DIM + " " + x + " " + y
-                + " " + z));
+        return Reply.of("stellurgytest block at", read("stellurgytest block at " + DIM + " " + x + " " + y
+                + " " + z).raw());
     }
 
     /**
@@ -1439,20 +1595,17 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * to the ship. The record names its path, so the assembly's measurement can never be mistaken for
      * the round's. The consequence — that cargo makes its ship heavier — is
      * {@link #theSameShipCarryingCargoAcceleratesLessByItsMassRatio}'s.</p>
-     *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer.tickMassRound} returning before its
-     * {@code backgroundRound} call ({@code TileAdvancedFlightComputer#tickMassRound} at {@code dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.backgroundRound(world, uuid);}), the round wait fails, "no record
-     * carrying ship = … and path = round was recorded within 200 ticks", 2026-09-29.</p>
      */
+    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer.tickMassRound} returning before its"
+            + " {@code backgroundRound} call ({@code TileAdvancedFlightComputer#tickMassRound} at {@code dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.backgroundRound(world, uuid);}), the round wait fails, \"no record"
+            + " carrying ship = … and path = round was recorded within 200 ticks\", 2026-09-29.")
     @Test
     public void aSettledShipIsMeasuredAgainWithNothingHappeningToIt() throws Exception {
 
         long assemblyMark = events.markInstrumented();
-        String asm = RocketFixture.assembleAt(site(), this::exec,
-                "with-pilot-seat", 4, 12, "the craft that is re-weighed stands in this volume");
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
-        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+                "with-pilot-seat", 4, 12, "the craft that is re-weighed stands in this volume"));
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
         // The assembly's own measurement first, on the record. Marking the round window only after it
@@ -1492,13 +1645,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Contract: this fails if production breaks the contract that the fluid a craft carries is part
      * of its mass.</p>
-     *
-     * <p>red-witnessed: 2026-10-05, after a healthy run (306 250 => 311 250 kg for 1000 mB) — with
-     * {@code WeightEngine#heldWeight} at {@code weight += getWeight(info.getContents());} adding nothing
-     * for a tank's contents, it fails "the flight computer must weigh the water poured into the craft's
-     * tank — the readout's mass must GROW by it — no `flight_model_changed` for this craft, solved for
-     * more than the 306250.0 kg it weighed with its tank empty was recorded within 200 ticks".</p>
      */
+    @LegacyWitness(prose = "2026-10-05, after a healthy run (306 250 => 311 250 kg for 1000 mB) — with"
+            + " {@code WeightEngine#heldWeight} at {@code weight += getWeight(info.getContents());} adding nothing"
+            + " for a tank's contents, it fails \"the flight computer must weigh the water poured into the craft's"
+            + " tank — the readout's mass must GROW by it — no `flight_model_changed` for this craft, solved for"
+            + " more than the 306250.0 kg it weighed with its tank empty was recorded within 200 ticks\".")
     @Test
     public void aFilledTankOutweighsAnEmptyOne() throws Exception {
         FixtureSite site = site();
@@ -1513,8 +1665,8 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         double emptyKg = Reply.of(empty.object("mass")).number("totalKg");
 
         long pourMark = events.mark();
-        Reply pour = Reply.of(exec("stellurgytest fluid inject " + DIM + " " + (craft.afcX + tank[0])
-                + " " + (craft.afcY + tank[1]) + " " + (craft.afcZ + tank[2]) + " water " + POURED_MB));
+        Reply pour = Reply.of(arrange("stellurgytest fluid inject " + DIM + " " + (craft.afcX + tank[0])
+                + " " + (craft.afcY + tank[1]) + " " + (craft.afcZ + tank[2]) + " water " + POURED_MB).raw());
         requireArranged("the water must go into the tank: " + pour,
                 pour.ok() && pour.integer("filled") == POURED_MB);
         String full = events.awaitMatching(pourMark, "flight_model_changed",
@@ -1572,21 +1724,21 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      *
      * <p>Witnessed 2026-10-05, after a healthy run (80.0 kg added, solved at the seat block's middle,
      * 0.30 above its floor), one break per verdict:</p>
-     * <p>red-witnessed: with {@code ShipHullMass#isCarried} at {@code if (body.isRiding())} never
-     * taken, it fails "the flight computer must weigh the occupant seated aboard — the readout's mass
-     * must GROW by him — no `flight_model_changed` for this craft, solved for more than the 281250.0 kg
-     * it weighed empty was recorded within 200 ticks".</p>
-     * <p>red-witnessed: with {@code ShipInertiaWriter#applyTo} at
-     * {@code record.setGameTickMass(frame.getTotalMass());} writing the total less the crew, it fails
-     * "the craft's physics record must grow by the occupant's mass its readout reports (80.0 kg); it
-     * grew by 0.0 kg".</p>
-     * <p>red-witnessed: with {@code ShipHullMass#addCrew} at
-     * {@code builder.add(MassContributor.ofBlock(local[0] - ox, local[1] - oy, local[2] - oz,} placing
-     * the occupant at its WORLD position instead, it fails "the occupant's mass must sit where the
-     * occupant sits aboard — in the column of the pilot seat at 19200001,128,51200 (subspace), inside
-     * that block — and the centre of mass moved as if it sat at 4023.500004246831,156.30000000148743,
-     * 4023.4999999994398".</p>
      */
+    @LegacyWitness(prose = "with {@code ShipHullMass#isCarried} at {@code if (body.isRiding())} never"
+            + " taken, it fails \"the flight computer must weigh the occupant seated aboard — the readout's mass"
+            + " must GROW by him — no `flight_model_changed` for this craft, solved for more than the 281250.0 kg"
+            + " it weighed empty was recorded within 200 ticks\".")
+    @LegacyWitness(prose = "with {@code ShipInertiaWriter#applyTo} at"
+            + " {@code record.setGameTickMass(frame.getTotalMass());} writing the total less the crew, it fails"
+            + " \"the craft's physics record must grow by the occupant's mass its readout reports (80.0 kg); it"
+            + " grew by 0.0 kg\".")
+    @LegacyWitness(prose = "with {@code ShipHullMass#addCrew} at"
+            + " {@code builder.add(MassContributor.ofBlock(local[0] - ox, local[1] - oy, local[2] - oz,} placing"
+            + " the occupant at its WORLD position instead, it fails \"the occupant's mass must sit where the"
+            + " occupant sits aboard — in the column of the pilot seat at 19200001,128,51200 (subspace), inside"
+            + " that block — and the centre of mass moved as if it sat at 4023.500004246831,156.30000000148743,"
+            + " 4023.4999999994398\".")
     @Test
     public void aSeatedOccupantIsWeighedWhereItSits() throws Exception {
         FixtureSite site = site();
@@ -1603,12 +1755,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         double unoccupiedKg = Reply.of(unoccupied.object("mass")).number("totalKg");
         requireArranged("the craft must carry nobody before the occupant sits: " + unoccupied,
                 Reply.of(unoccupied.object("mass")).number("crewKg") == 0.0);
-        Reply before = Reply.of(exec("stellurgytest vs ship-info " + DIM + " id " + craft.physicsId));
+        Reply before = Reply.of(read("stellurgytest vs ship-info " + DIM + " id " + craft.physicsId).raw());
         requireArranged("the craft's physics record must answer its mass and centre: " + before,
                 before.has("massKg") && before.has("comX"));
 
-        Reply occupied = Reply.of(exec("stellurgytest vs seat-occupy " + DIM + " " + seatX + " " + seatY
-                + " " + seatZ));
+        Reply occupied = Reply.of(arrange("stellurgytest vs seat-occupy " + DIM + " " + seatX + " " + seatY
+                + " " + seatZ).raw());
         // absence is the answer "refused": when the verb cannot seat anybody it answers an error
         // object carrying neither field — which is what this rejects.
         requireArranged("an occupant must be seated on the craft's pilot seat: " + occupied,
@@ -1626,7 +1778,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                         + " read", ROUND_BUDGET_TICKS, "ship", craft.physicsId, "path", "round"));
         double crewKg = Reply.of(readout(craft, "the craft with its occupant").object("mass"))
                 .number("crewKg");
-        Reply after = Reply.of(exec("stellurgytest vs ship-info " + DIM + " id " + craft.physicsId));
+        Reply after = Reply.of(read("stellurgytest vs ship-info " + DIM + " id " + craft.physicsId).raw());
         requireArranged("the craft's physics record must answer its mass and centre: " + after,
                 after.has("massKg") && after.has("comX"));
 
@@ -1770,31 +1922,35 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * test. So the same craft is held with Flight Assist ON first and asserted NOT to move, then released
      * and asserted to fall. The control comes first deliberately: if the hold is already broken, the test
      * says so instead of reporting a successful fall.</p>
-     *
-     * <p>red-witnessed: with the unmanned branch's {@code !flightAssistEnabled} release in
-     * {@code TileAdvancedFlightComputer} ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)}) never taken, the fall verdict fails — "sank only
-     * 0.0 blocks in 61 ticks" — after the hold passed, 2026-09-29. With that branch taken ALWAYS
-     * ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} to {@code if (true)}), the hold verdict fails — "must keep station, and this one moved
-     * from 235.7 to 57.1" — 2026-09-30.</p>
      */
+    @LegacyWitness(prose = "with the unmanned branch's {@code !flightAssistEnabled} release in"
+            + " {@code TileAdvancedFlightComputer} ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)}) never taken, the fall verdict fails — \"sank only"
+            + " 0.0 blocks in 61 ticks\" — after the hold passed, 2026-09-29. With that branch taken ALWAYS"
+            + " ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} to {@code if (true)}), the hold verdict fails — \"must keep station, and this one moved"
+            + " from 235.7 to 57.1\" — 2026-09-30.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "long heldTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), ASSIST_SAMPLE_TICKS);",
+            why = "the altitude is read before and after this stretch and the claim is an UPPER bound on the"
+                    + " difference, so a longer stretch than asked can only make a leaking hold show.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long fallTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), ASSIST_SAMPLE_TICKS);",
+            why = "the dose is ASSIST_SAMPLE_TICKS of release. The claim is a LOWER bound, which extra ticks make"
+                    + " easier — but only for a craft that is falling at all: a held one does not sink further"
+                    + " for being watched longer, and a released one clears FELL many times over.")
     public void flightAssistDecidesWhetherAnUnpilotedCraftHoldsOrFalls() throws Exception {
 
-        String asm = RocketFixture.assembleAt(site(), this::exec,
-                "with-pilot-seat", 4, 12, "the craft that is held and then released is built here");
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, Reply.of(asm).integer("rocketCount") == 0);
-        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec,
+        String asm = pressShip(site(), RocketFixture.placeAt(site(), c -> arrange(c).raw(),
+                "with-pilot-seat", 4, 12, "the craft that is held and then released is built here"));
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(),
                 events, DIM, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
-        ShipLift.toAltitude(this::exec, events, client(), DIM, shipId, RELEASE_ALTITUDE,
+        ShipLift.toAltitude(commands(), events, client(), DIM, shipId, RELEASE_ALTITUDE,
                 "a craft released on its pad lands on the pad at once, which reads as holding");
 
         // --- first half: Flight Assist ON must HOLD ----------------------------------------------
         Released craft = new Released(DIM, shipId);
         hold(craft);
         double heldFrom = altitudeOf(craft);
-        // WINDOW: the altitude is read before and after this stretch and the claim is an UPPER bound
-        // on the difference, so a longer stretch than asked can only make a leaking hold show.
         long heldTicks = GameTicks.advanceObserved(client(), GameTicks.server(), ASSIST_SAMPLE_TICKS);
         double heldTo = altitudeOf(craft);
         assertTrue("with Flight Assist ON an unpiloted craft must keep station,"
@@ -1806,9 +1962,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // --- the subject: Flight Assist OFF must RELEASE ------------------------------------------
         release(craft);
         double releasedFrom = altitudeOf(craft);
-        // EXPERIMENT: the dose is ASSIST_SAMPLE_TICKS of release. The claim is a LOWER bound, which
-        // extra ticks make easier — but only for a craft that is falling at all: a held one does not
-        // sink further for being watched longer, and a released one clears FELL many times over.
         long fallTicks = GameTicks.advanceObserved(client(), GameTicks.server(), ASSIST_SAMPLE_TICKS);
         double fellTo = altitudeOf(craft);
         measured("flight assist", "held drift " + (heldFrom - heldTo) + " in " + heldTicks + " ticks",
@@ -1847,12 +2000,20 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * Earth craft, once released, really falls. The hold is an ABSOLUTE drift, in both directions: if
      * the feed-forward were left on Earth's field while the solver used the body's, a held craft over a
      * quarter-gravity body would CLIMB by the difference.</p>
-     *
-     * <p>red-witnessed: with {@code StellurgyWorldGravity#of} at {@code return VSConfig.gravity().mul(multiplier, new Vector3d());} answering the configured vector instead of
-     * scaling it by the body's multiplier, the ratio verdict fails at 1.015 ("outside [0.125, 0.5]"),
-     * 2026-09-29.</p>
      */
+    @LegacyWitness(prose = "with {@code StellurgyWorldGravity#of} at {@code return VSConfig.gravity().mul(multiplier, new Vector3d());} answering the configured vector instead of"
+            + " scaling it by the body's multiplier, the ratio verdict fails at 1.015 (\"outside [0.125, 0.5]\"),"
+            + " 2026-09-29.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "GameTicks.advanceObserved(client(), GameTicks.server(),"
+            + " COMPARISON_SAMPLE_TICKS); double earthHeldY = altitudeOf(earth), lowHeldY = altitudeOf(low);",
+            why = "both altitudes are read before and after this stretch and the claim is an UPPER bound on each"
+                    + " difference, so a longer stretch than asked can only make a leaking hold show.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long fallTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), COMPARISON_SAMPLE_TICKS);",
+            why = "the dose is COMPARISON_SAMPLE_TICKS of release for both craft at once. The subject is a RATIO"
+                    + " of two falls over the same ticks, so the box delivering more of them changes both"
+                    + " numbers together and not the verdict.")
     public void aCraftOverALowGravityBodyFallsInProportionToThatBodysGravity() throws Exception {
 
         int lowGravityDim = authorLowGravityBody();
@@ -1865,8 +2026,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         hold(earth);
         hold(low);
         double earthFrom = altitudeOf(earth), lowFrom = altitudeOf(low);
-        // WINDOW: both altitudes are read before and after this stretch and the claim is an UPPER
-        // bound on each difference, so a longer stretch than asked can only make a leaking hold show.
         GameTicks.advanceObserved(client(), GameTicks.server(), COMPARISON_SAMPLE_TICKS);
         double earthHeldY = altitudeOf(earth), lowHeldY = altitudeOf(low);
         requireHeld(earth, earthFrom, earthHeldY);
@@ -1878,9 +2037,6 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // --- release both in the same window --------------------------------------------------------
         release(earth);
         release(low);
-        // EXPERIMENT: the dose is COMPARISON_SAMPLE_TICKS of release for both craft at once. The
-        // subject is a RATIO of two falls over the same ticks, so the box delivering more of them
-        // changes both numbers together and not the verdict.
         long fallTicks = GameTicks.advanceObserved(client(), GameTicks.server(), COMPARISON_SAMPLE_TICKS);
         double earthFell = earthHeldY - altitudeOf(earth);
         double lowFell = lowHeldY - altitudeOf(low);
@@ -1923,22 +2079,28 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * ({@code force-vel-by-id}) and not a raw velocity write, which the substrate overwrites every step
      * and which moves nothing ({@code VSShipMotionServerTest} pins exactly that).</p>
      *
-     * <p>red-witnessed: with {@code StellurgyWorldGravity#of} at {@code return WEIGHTLESS;} answering the configured vector for a space
-     * slot instead of zero, the stillness verdict fails — "moved 74.2 blocks vertically in 41 ticks" —
-     * on a craft that was {@code ready:true} when released, 2026-09-29; again on the piloted fixture
-     * assembled in the cell with its scaffolding removed, "This one moved 64.53 blocks vertically in 41
-     * ticks", 2026-09-30. With the scaffolding left in place that break stayed GREEN — sank 1.0 and
-     * stopped on the launchpad — which is why the arrangement removes it.</p>
-     *
      * <p>The release is a premise, linked on the branch the flight computer took ({@code unmanned_mode},
      * a test mixin at that branch): in a cell a HELD craft is as still as a released one and cancels any
      * field it is given, so without the link a broken release would leave this verdict unable to fail.</p>
-     *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} never taken,
-     * the scenario stops at that premise — "no `unmanned_mode` released, for this craft's flight
-     * computer … within 200 ticks" — 2026-10-04.</p>
      */
+    @LegacyWitness(prose = "with {@code StellurgyWorldGravity#of} at {@code return WEIGHTLESS;} answering the configured vector for a space"
+            + " slot instead of zero, the stillness verdict fails — \"moved 74.2 blocks vertically in 41 ticks\" —"
+            + " on a craft that was {@code ready:true} when released, 2026-09-29; again on the piloted fixture"
+            + " assembled in the cell with its scaffolding removed, \"This one moved 64.53 blocks vertically in 41"
+            + " ticks\", 2026-09-30. With the scaffolding left in place that break stayed GREEN — sank 1.0 and"
+            + " stopped on the launchpad — which is why the arrangement removes it.")
+    @LegacyWitness(prose = "with {@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} never taken,"
+            + " the scenario stops at that premise — \"no `unmanned_mode` released, for this craft's flight"
+            + " computer … within 200 ticks\" — 2026-10-04.")
     @Test
+    @Wait(shape = Wait.Shape.WINDOW, at = "long stillTicks = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), CELL_SAMPLE_TICKS);",
+            why = "the altitude is read before and after this stretch and the claim is an UPPER bound on the"
+                    + " difference, so a longer stretch than asked can only make a real field show.")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "long driven = GameTicks.advanceObserved(client(),"
+            + " GameTicks.server(), CELL_SAMPLE_TICKS);",
+            why = "the dose is CELL_SAMPLE_TICKS of commanded drive, and the claim is a LOWER bound — so the bar"
+                    + " is scaled by the ticks this box delivered and the rate it demands is fixed.")
     public void aReleasedCraftInACellKeepsItsAltitude() throws Exception {
 
         // A craft that can FLY, built in the cell: the transit stack's empty origin cell, and the
@@ -1946,14 +2108,12 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // the craft, and a craft is driven only through actuators aboard — the piloted transit setup's
         // bare 3x3 deck has none (the probe's own note on `transit-setup-empty` says so), and against
         // it the control measured 0.0 blocks in 41 ticks on 2026-09-30.
-        TransitSetup setup = TransitSetup.empty(this::exec);
+        TransitSetup setup = TransitSetup.empty(c -> arrange(c).raw());
         int cellDim = setup.originDim;
         FixtureSite site = plot().inDimension(cellDim).site();
-        String asm = RocketFixture.assembleAt(site, this::exec,
-                "with-pilot-seat", 2, 12, "the craft released in the cell stands in this volume");
-        requireArranged("an AFC-bearing build in the cell must route to a ship, not a rocket: " + asm,
-                Reply.of(asm).integer("rocketCount") == 0);
-        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+        String asm = pressShip(site, RocketFixture.placeAt(site, c -> arrange(c).raw(),
+                "with-pilot-seat", 2, 12, "the craft released in the cell stands in this volume"));
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 cellDim, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
 
         // THE ASSEMBLER'S SCAFFOLDING GOES, because it is a floor. The fixture lays a launchpad one
@@ -1962,16 +2122,16 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // standing on the pad. The volume is the fixture's own footprint (pad x..x+5 / z..z+5 at the
         // site's y, tower at x-1 up to y+6, builder and plug at z-1), and the fill's `placed` is how
         // many blocks were standing in it.
-        String cleared = exec("stellurgytest fill " + cellDim + " " + (site.x - 1) + " " + site.y + " "
+        String cleared = arrange("stellurgytest fill " + cellDim + " " + (site.x - 1) + " " + site.y + " "
                 + (site.z - 1) + " " + (site.x + 5) + " " + (site.y + 6) + " " + (site.z + 5)
-                + " minecraft:air");
+                + " minecraft:air").raw();
         requireArranged("the assembler's pad, tower, builder and plug must be removed from under the"
                         + " craft — " + SCAFFOLDING_BLOCKS + " blocks — before it is released: " + cleared,
                 Reply.of(cleared).ok() && Reply.of(cleared).integer("placed") == SCAFFOLDING_BLOCKS);
 
         // A craft placed by a paste is rigid until something hands it back, and a rigid craft is
         // exactly as still as a weightless one.
-        String unparked = exec("stellurgytest vs unpark-by-id " + cellDim + " " + shipId);
+        String unparked = arrange("stellurgytest vs unpark-by-id " + cellDim + " " + shipId).raw();
         requireArranged("the pasted craft must be handed back to physics: " + unparked,
                 Reply.of(unparked).ok());
 
@@ -1982,7 +2142,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
         // stillness below would be true for the wrong reason. So the release is linked on the branch
         // the flight computer TOOK, recorded by a test mixin at that branch, for this craft's own
         // computer, from a mark taken before the command.
-        Reply model = Reply.of(exec("stellurgytest vs flight-model-by-id " + cellDim + " " + shipId));
+        Reply model = Reply.of(read("stellurgytest vs flight-model-by-id " + cellDim + " " + shipId).raw());
         requireArranged("the craft must resolve its own flight computer, whose decision is read: "
                 + model, model.bool("found"));
         String afcX = String.valueOf(model.integer("afcX"));
@@ -2000,26 +2160,22 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
                 LINK_BUDGET_TICKS));
 
         // --- the subject: released, over nothing, it must keep its altitude ------------------------
-        ShipInfo atRelease = ShipInfo.byId(this::exec, cellDim, shipId);
+        ShipInfo atRelease = ShipInfo.byId(c -> read(c).raw(), cellDim, shipId);
         double before = atRelease.y;
-        // WINDOW: the altitude is read before and after this stretch and the claim is an UPPER bound
-        // on the difference, so a longer stretch than asked can only make a real field show.
         long stillTicks = GameTicks.advanceObserved(client(), GameTicks.server(), CELL_SAMPLE_TICKS);
-        ShipInfo afterStill = ShipInfo.byId(this::exec, cellDim, shipId);
+        ShipInfo afterStill = ShipInfo.byId(c -> read(c).raw(), cellDim, shipId);
         double after = afterStill.y;
         double sank = before - after;
 
         // --- the control, taken AFTER the reading and asserted BEFORE it ---------------------------
         // Taken second so the drive cannot disturb the altitude it is vouching for, and asserted first
         // so a craft nobody is simulating fails HERE, on a leg that says so.
-        double zBefore = ShipInfo.byId(this::exec, cellDim, shipId).z;
+        double zBefore = ShipInfo.byId(c -> read(c).raw(), cellDim, shipId).z;
         requireArranged("could not command the craft's flight computer: the control leg cannot run",
-                Reply.of(exec("stellurgytest vs force-vel-by-id " + cellDim + " " + shipId + " 0 0 "
-                        + DRIVE_VZ)).bool("afcResolved"));
-        // EXPERIMENT: the dose is CELL_SAMPLE_TICKS of commanded drive, and the claim is a LOWER bound
-        // — so the bar is scaled by the ticks this box delivered and the rate it demands is fixed.
+                Reply.of(arrange("stellurgytest vs force-vel-by-id " + cellDim + " " + shipId + " 0 0 "
+                        + DRIVE_VZ).raw()).bool("afcResolved"));
         long driven = GameTicks.advanceObserved(client(), GameTicks.server(), CELL_SAMPLE_TICKS);
-        double travelled = Math.abs(ShipInfo.byId(this::exec, cellDim, shipId).z - zBefore);
+        double travelled = Math.abs(ShipInfo.byId(c -> read(c).raw(), cellDim, shipId).z - zBefore);
         double required = DRIVE_MIN_TRAVEL * driven / CELL_SAMPLE_TICKS;
         measured("cell", "sank " + sank + " in " + stillTicks + " ticks",
                 "driven " + travelled + " in " + driven + " ticks", "at release " + atRelease.raw(),
@@ -2047,24 +2203,24 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * not a test.
      */
     private int authorLowGravityBody() throws Exception {
-        DimList before = DimList.from(this::exec);
-        exec("ar planet generate 0 LowGravityWitness");
-        int[] added = DimList.from(this::exec).addedSince(before);
+        DimList before = DimList.from(c -> read(c).raw());
+        arrange("ar planet generate 0 LowGravityWitness");
+        int[] added = DimList.from(c -> read(c).raw()).addedSince(before);
         requireArranged("planet generate must add exactly one dim - got "
                 + java.util.Arrays.toString(added), added.length == 1);
         int dim = added[0];
 
-        String load = exec("stellurgytest dim load " + dim);
+        String load = arrange("stellurgytest dim load " + dim).raw();
         requireArranged("the authored body never loaded: " + load, Reply.of(load).bool("loaded"));
 
         // The SHIPPED command, not a test-only setter: it is what an operator would use, it refuses
         // a dimension that is not a registered body instead of silently writing to Earth's
         // properties, and it publishes the change the way production does.
-        exec("ar planet set " + dim + " gravitationalMultiplier " + LOW_GRAVITY);
+        arrange("ar planet set " + dim + " gravitationalMultiplier " + LOW_GRAVITY).raw();
         // Read back off the planet registry rather than trusting the command's own reply: what the
         // solver will ask is the registry, and this is the one moment the arrangement can be checked
         // against the same source.
-        double gravity = Reply.of(exec("stellurgytest planet info " + dim)).number("gravity");
+        double gravity = Reply.of(read("stellurgytest planet info " + dim).raw()).number("gravity");
         // Exact: the multiplier is stored as a float, and 0.25 is exact in one.
         requireArranged("the authored body does not carry the gravity it was given (" + gravity + ")",
                 gravity == LOW_GRAVITY);
@@ -2074,25 +2230,23 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /** Build a craft at {@code site}, then lift it into clear sky and hand it to physics. */
     private Released buildAndLift(FixtureSite site, String what) throws Exception {
         int dim = site.dim;
-        String asm = RocketFixture.assembleAt(site, this::exec, "with-pilot-seat", 4, 12, what);
-        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket (dim "
-                + dim + "): " + asm, Reply.of(asm).integer("rocketCount") == 0);
-        String id = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+        String asm = pressShip(site, RocketFixture.placeAt(site, c -> arrange(c).raw(), "with-pilot-seat", 4, 12, what));
+        String id = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events,
                 dim, ShipIdentity.nameFromAssembly(asm), LINK_BUDGET_TICKS));
-        ShipLift.toAltitude(this::exec, events, client(), dim, id, RELEASE_ALTITUDE,
+        ShipLift.toAltitude(commands(), events, client(), dim, id, RELEASE_ALTITUDE,
                 "a craft released on its pad lands on the pad at once, which reads as not falling");
         return new Released(dim, id);
     }
 
     private void hold(Released craft) throws Exception {
         requireArranged("could not reach the flight computer of the craft in dim " + craft.dim,
-                Reply.of(exec("stellurgytest vs fa-by-id " + craft.dim + " " + craft.id + " true"))
+                Reply.of(arrange("stellurgytest vs fa-by-id " + craft.dim + " " + craft.id + " true").raw())
                         .bool("afcResolved"));
     }
 
     private void release(Released craft) throws Exception {
         requireArranged("could not release the craft in dim " + craft.dim,
-                Reply.of(exec("stellurgytest vs fa-by-id " + craft.dim + " " + craft.id + " false"))
+                Reply.of(arrange("stellurgytest vs fa-by-id " + craft.dim + " " + craft.id + " false").raw())
                         .bool("afcResolved"));
     }
 
@@ -2109,7 +2263,7 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
     /** The craft's own Y, by identity — never "whichever ship is nearest", which a fall would outrun. */
     private double altitudeOf(Released craft) throws Exception {
-        return ShipInfo.byId(this::exec, craft.dim, craft.id).y;
+        return ShipInfo.byId(c -> read(c).raw(), craft.dim, craft.id).y;
     }
 
     /** A craft the gravity family holds and releases: its world and its identity, nothing nearer. */

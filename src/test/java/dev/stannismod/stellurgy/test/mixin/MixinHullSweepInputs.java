@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.List;
-
+import dev.stannismod.stellurgy.integration.vs.HullSweep;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.integration.vs.HullSweep;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.List;
 
 /**
  * The last unknown in the hull-stand launch: what the sweep was ASKED for, and what it gave back.

@@ -1,16 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import dev.stannismod.stellurgy.space.CrewTransfer;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
-
-import net.minecraft.util.math.BlockPos;
-import org.junit.Test;
-
-import dev.stannismod.stellurgy.space.CrewTransfer;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
 
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;

@@ -1,13 +1,13 @@
 package dev.stannismod.stellurgy.libvulpes.inventory.modules;
 
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.client.resources.I18n;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IContainerListener;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
-import net.minecraft.client.resources.I18n;
 
 import java.util.LinkedList;
 import java.util.List;

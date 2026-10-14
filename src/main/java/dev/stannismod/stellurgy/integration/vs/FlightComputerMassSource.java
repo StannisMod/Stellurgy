@@ -1,15 +1,14 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.UUID;
-
-import javax.annotation.Nullable;
-
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassSource;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+
+import javax.annotation.Nullable;
+import java.util.UUID;
 
 /**
  * The mass source for the crafts of one world, as it stands today: a craft is ours to weigh exactly

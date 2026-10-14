@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.inventory;
 
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumHand;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.IGuiHandler;
-import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.

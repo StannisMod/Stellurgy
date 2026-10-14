@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -55,25 +54,25 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
 
     @Test
     public void terminalPlacesAndTicksWithEmptyInventoryWithoutCrash() throws Exception {
-        String place = exec("stellurgytest place 0 " + CX_BASIC + " " + CY + " " + CZ
-                + " stellurgy:terraformingTerminal");
+        String place = arrange("stellurgytest place 0 " + CX_BASIC + " " + CY + " " + CZ
+                + " stellurgy:terraformingTerminal").raw();
         assertTrue("terminal must place: " + place,
                 Reply.of(place).bool("placed"));
 
-        String info = exec("stellurgytest machine info 0 " + CX_BASIC + " " + CY + " " + CZ);
+        String info = read("stellurgytest machine info 0 " + CX_BASIC + " " + CY + " " + CZ).raw();
         assertEquals("block must produce TileTerraformingTerminal: " + info,
                 "TileTerraformingTerminal", MachineInfo.of(info).tileSimpleName());
 
         // 40 force-ticks — drives the natural update() loop through
         // hasValidBiomeChanger=false branch repeatedly. No NPE if the
         // null-chip guards in update():135 and 141 hold.
-        String tick = exec("stellurgytest tile force-tick 0 " + CX_BASIC + " " + CY + " "
-                + CZ + " 40");
+        String tick = act("stellurgytest tile force-tick 0 " + CX_BASIC + " " + CY + " "
+                + CZ + " 40").raw();
         assertTrue("force-tick on empty terminal must succeed: " + tick,
                 Reply.of(tick).ok());
 
-        String postInfo = exec("stellurgytest machine info 0 " + CX_BASIC + " " + CY + " "
-                + CZ);
+        String postInfo = read("stellurgytest machine info 0 " + CX_BASIC + " " + CY + " "
+                + CZ).raw();
         assertEquals("tile must remain TileTerraformingTerminal after ticking: "
                         + postInfo,
                 "TileTerraformingTerminal", MachineInfo.of(postInfo).tileSimpleName());
@@ -81,8 +80,8 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
 
     @Test
     public void terminalAdjacentToRedstoneTicksWithoutCrash() throws Exception {
-        String place = exec("stellurgytest place 0 " + CX_REDSTONE + " " + CY + " " + CZ
-                + " stellurgy:terraformingTerminal");
+        String place = arrange("stellurgytest place 0 " + CX_REDSTONE + " " + CY + " " + CZ
+                + " stellurgy:terraformingTerminal").raw();
         assertTrue("terminal must place: " + place,
                 Reply.of(place).bool("placed"));
 
@@ -90,17 +89,17 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         // returns true. This pushes the terminal into the
         // "hasValidBiomeChanger && has_redstone" branch — guard must fail
         // (no chip in slot 0) and not crash.
-        exec("stellurgytest place 0 " + (CX_REDSTONE + 1) + " " + CY + " " + CZ
-                + " minecraft:redstone_block");
+        arrange("stellurgytest place 0 " + (CX_REDSTONE + 1) + " " + CY + " " + CZ
+                + " minecraft:redstone_block").raw();
 
-        String tick = exec("stellurgytest tile force-tick 0 " + CX_REDSTONE + " " + CY + " "
-                + CZ + " 40");
+        String tick = act("stellurgytest tile force-tick 0 " + CX_REDSTONE + " " + CY + " "
+                + CZ + " 40").raw();
         assertTrue("force-tick on redstone-powered empty terminal must succeed: "
                         + tick,
                 Reply.of(tick).ok());
 
-        String postInfo = exec("stellurgytest machine info 0 " + CX_REDSTONE + " " + CY + " "
-                + CZ);
+        String postInfo = read("stellurgytest machine info 0 " + CX_REDSTONE + " " + CY + " "
+                + CZ).raw();
         assertEquals("tile must survive redstone-powered tick burst: " + postInfo,
                 "TileTerraformingTerminal", MachineInfo.of(postInfo).tileSimpleName());
     }

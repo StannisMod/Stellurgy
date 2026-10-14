@@ -1,16 +1,14 @@
 package dev.stannismod.stellurgy.test.mixin;
 
+import dev.stannismod.stellurgy.test.trace.PoseArrival;
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.util.math.AxisAlignedBB;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
-
-import dev.stannismod.stellurgy.test.trace.PoseArrival;
-import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
  * A pose ARRIVING for a craft on the client — one record per packet, paired with the per-tick record

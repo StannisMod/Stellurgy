@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.Test;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.PlanetInfoField;
+import org.junit.Test;
 
 import java.util.EnumSet;
 

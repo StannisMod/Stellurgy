@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.tile;
 
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.nbt.NBTTagCompound;
 import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IProgressBar;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.nbt.NBTTagCompound;
 
 public abstract class TileInventoriedForgePowerMachine extends TileInventoriedForgeProducer implements IProgressBar {
 

@@ -1,21 +1,18 @@
 package dev.stannismod.stellurgy.test.mixin;
 
-import java.util.UUID;
-
+import dev.stannismod.stellurgy.test.trace.TestTrace;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.MoverType;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
 import org.valkyrienskies.mod.common.entity.EntityShipMovementData;
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.entity_interaction.IDraggable;
 
-import dev.stannismod.stellurgy.test.trace.TestTrace;
+import java.util.UUID;
 
 /**
  * A loose body came to rest on a ship — the moment the substrate starts calling it a passenger.

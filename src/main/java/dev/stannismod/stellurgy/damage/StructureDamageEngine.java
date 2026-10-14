@@ -1,32 +1,27 @@
 package dev.stannismod.stellurgy.damage;
 
 import com.mojang.authlib.GameProfile;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.capability.CapabilityDamageAware;
+import dev.stannismod.stellurgy.api.damage.*;
+import dev.stannismod.stellurgy.util.SweptVolume;
+import dev.stannismod.stellurgy.util.WeightEngine;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.event.world.BlockEvent;
 
-import java.util.UUID;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.capability.CapabilityDamageAware;
-import dev.stannismod.stellurgy.api.damage.DamageOutcome;
-import dev.stannismod.stellurgy.api.damage.IDamageAware;
-import dev.stannismod.stellurgy.api.damage.ImpactKind;
-import dev.stannismod.stellurgy.api.damage.ImpactRequest;
-import dev.stannismod.stellurgy.api.damage.StopReason;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import dev.stannismod.stellurgy.util.SweptVolume;
-
 import java.util.ArrayList;
 import java.util.List;
-import dev.stannismod.stellurgy.util.WeightEngine;
+import java.util.UUID;
 
 /**
  * The budget-and-spend loop: a damage budget is walked into blocks until it runs out.

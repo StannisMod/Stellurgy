@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.integration.theoneprobe;
 
+import dev.stannismod.stellurgy.api.DataStorage;
+import dev.stannismod.stellurgy.integration.dataloaders.*;
+import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
 import mcjty.theoneprobe.api.IProbeHitData;
 import mcjty.theoneprobe.api.IProbeInfo;
 import mcjty.theoneprobe.api.IProbeInfoProvider;
@@ -8,13 +11,6 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.DataStorage;
-import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
-import dev.stannismod.stellurgy.integration.dataloaders.DataBlockDataLoader;
-import dev.stannismod.stellurgy.integration.dataloaders.DataBlockDataLoaderServer;
-import dev.stannismod.stellurgy.integration.dataloaders.WirelessTransceiverDataLoader;
-import dev.stannismod.stellurgy.integration.dataloaders.WirelessTransceiverDataLoaderServer;
-import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
 
 public class DataBlockProbeProvider implements IProbeInfoProvider {
 

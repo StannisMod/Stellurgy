@@ -2,21 +2,14 @@ package dev.stannismod.stellurgy.test.unit;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fluids.Fluid;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.util.WeightEngine;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import dev.stannismod.stellurgy.util.WeightEngine;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -24,10 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * MC-free unit coverage for {@link WeightEngine}: the parts that don't need a
@@ -50,12 +40,16 @@ public class WeightEngineUnitTest {
     @Rule
     public TemporaryFolder tempFolder = new TemporaryFolder();
 
+    /** Pins INV-WGT-04 (seedDefaults populates a non-empty material table). */
+    @Pins("INV-WGT-04")
     @Test
     public void seedDefaultsPopulatesMaterialTable() {
         WeightEngine we = WeightEngine.fromJson(CURRENT + "}");
         assertTrue("default material table must be populated", we.materialCount() > MIN_MATERIALS);
     }
 
+    /** Pins INV-WGT-02 (an individual override survives a JSON save and load). */
+    @Pins("INV-WGT-02")
     @Test
     public void individualOverrideSurvivesSaveLoadRoundTrip() throws Exception {
         File file = new File(tempFolder.getRoot(), "weights.json");
@@ -76,12 +70,10 @@ public class WeightEngineUnitTest {
                 Double.valueOf(42.0), reloaded.rawIndividual("ar:roundtrip_probe"));
     }
 
-    /**
-     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has("formatVersion")} checking no schema
-     * version fails "must NOT be read" (0.1); {@code WeightEngine#retireIncompatibleFile} at {@code if (!current.renameTo(retired))} deleting the file instead of setting it aside
-     * fails "must be kept beside the new one"; {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails "must write a fresh table";
-     * {@code WeightEngine#save} at {@code json.addProperty("formatVersion", FORMAT_VERSION);} not stamping the version fails "retired again".</p>
-     */
+    @LegacyWitness(prose = "one break per verdict, 2026-09-30 — {@code WeightEngine#read} at {@code if (root == null || !root.has(\"formatVersion\")} checking no schema"
+            + " version fails \"must NOT be read\" (0.1); {@code WeightEngine#retireIncompatibleFile} at {@code if (!current.renameTo(retired))} deleting the file instead of setting it aside"
+            + " fails \"must be kept beside the new one\"; {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails \"must write a fresh table\";"
+            + " {@code WeightEngine#save} at {@code json.addProperty(\"formatVersion\", FORMAT_VERSION);} not stamping the version fails \"retired again\".")
     @Test
     public void aTableFromAnotherSchemaIsSetAsideRatherThanRead() throws Exception {
         // The numbers in weights.json changed meaning when the tables were denominated in
@@ -134,7 +126,9 @@ public class WeightEngineUnitTest {
      *
      * <p>Two ablation columns were lost exactly this way: read by {@code load()}, absent from
      * {@code save()}, invisible until a pack's hand-written rows evaporated.</p>
+     * Pins INV-WGT-07 (Every column the file declares survives a save→load cycle carrying its value, and every regex column comes back in the order it).
      */
+    @Pins("INV-WGT-07")
     @Test
     public void everyColumnAPackCanWriteSurvivesASave() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");
@@ -180,7 +174,9 @@ public class WeightEngineUnitTest {
      * Regex columns are first-match-wins, so the order a pack writes its patterns in IS the
      * precedence between two patterns that both match. A column deserialised into an unordered map
      * answers a different question after a reload than the one the pack asked.
+     * Pins INV-WGT-07 (Every column the file declares survives a save and load, and every regex column keeps its written order).
      */
+    @Pins("INV-WGT-07")
     @Test
     public void aRegexColumnKeepsThePackSOrderAcrossASave() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");
@@ -212,7 +208,9 @@ public class WeightEngineUnitTest {
      * <p>The file below breaks on its LAST field, {@code toughnessFallback}, which is read after every
      * column this asserts on. {@link #everyColumnAPackCanWriteSurvivesASave} is the control: the same
      * rows in a file that parses are kept.</p>
+     * Pins INV-WGT-08 (A config file that cannot be read leaves no column carrying the previous load's rows).
      */
+    @Pins("INV-WGT-08")
     @Test
     public void aConfigThatCannotBeReadLeavesNoColumnBehind() throws Exception {
         File config = new File(tempFolder.getRoot(), "weights.json");

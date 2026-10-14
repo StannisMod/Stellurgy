@@ -1,5 +1,9 @@
 package dev.stannismod.stellurgy.entity;
 
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.tile.station.TileHolographicPlanetSelector;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
@@ -9,10 +13,6 @@ import net.minecraft.network.datasync.EntityDataManager;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.tile.station.TileHolographicPlanetSelector;
 
 import javax.annotation.Nullable;
 

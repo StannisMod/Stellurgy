@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.atmosphere;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import net.minecraft.nbt.NBTTagCompound;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRole;
+import net.minecraft.nbt.NBTTagCompound;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * The gas contents of one sealed zone: a partial pressure per SUBSTANCE, and a temperature.

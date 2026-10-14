@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.libvulpes.network;
 
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 
 public class PacketChangeKeyState extends BasePacket {
 

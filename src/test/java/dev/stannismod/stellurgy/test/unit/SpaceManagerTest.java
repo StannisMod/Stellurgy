@@ -1,18 +1,16 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.SlotBinder;
 import dev.stannismod.stellurgy.space.SpaceManager;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.Assert.*;
 
 /**
  * Contract tests for the space controller's pure bookkeeping and policy: coord&harr;cell resolution,
@@ -131,12 +129,13 @@ public class SpaceManagerTest {
     /**
      * {@code canMaterialize} answers what {@code materialize} would do — yes for a live cell, a free
      * slot or an idle evictable cell; no when every slot is claimed or stood in — and changes nothing.
-     *
-     * <p>red-witnessed: with {@code SpaceManager#canMaterialize} at {@code || lruEvictableCell() != null}
-     * removed: "an idle cell can be evicted for it", 2026-10-06. With its
-     * {@code loadedCellToSlot.containsKey(coord.cellKey())} term removed: "a cell already live needs no
-     * slot", 2026-10-06.</p>
      */
+    @Pins("INV-HYP-08")
+    @RedWitness(verdict = "evictable", member = "SpaceManager#canMaterialize", at = "|| lruEvictableCell() != null",
+            replacedBy = "", fails = "an idle cell can be evicted for it", on = "2026-10-06")
+    @RedWitness(verdict = "live", member = "SpaceManager#canMaterialize",
+            at = "loadedCellToSlot.containsKey(coord.cellKey()) ||", replacedBy = "",
+            fails = "a cell already live needs no slot", on = "2026-10-06")
     @Test
     public void canMaterializeForecastsMaterializeAndBindsNothing() {
         FakeBinder binder = new FakeBinder(10);
@@ -248,7 +247,9 @@ public class SpaceManagerTest {
      *
      * <p>The control is the same arrangement with the body absent — without it a green here could
      * just as well mean the LRU picked the other cell for an unrelated reason.</p>
+     * Pins JUMP-5 (a world is not evicted under an occupant).
      */
+    @Pins("JUMP-5")
     @Test
     public void aCellWithSomebodyStandingInItIsNotEvictedUnderHim() {
         FakeBinder binder = new FakeBinder(10, 11);
@@ -270,7 +271,11 @@ public class SpaceManagerTest {
         assertTrue(m.isLoaded(cell(3)));
     }
 
-    /** The control for the leg above: with nobody in it, that same cell IS the victim. */
+    /**
+     * The control for the leg above: with nobody in it, that same cell IS the victim.
+     * Pins JUMP-5 (a world is not evicted under an occupant).
+     */
+    @Pins("JUMP-5")
     @Test
     public void aCellWithNobodyInItIsEvictedByTheSameArrangement() {
         FakeBinder binder = new FakeBinder(10, 11);

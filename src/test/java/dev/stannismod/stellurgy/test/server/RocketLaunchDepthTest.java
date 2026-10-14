@@ -1,9 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
-import dev.stannismod.stellurgy.test.Reply;
+
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.test.*;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.NotYetRed;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import org.junit.After;
 import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -11,19 +16,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.test.Events;
-import dev.stannismod.stellurgy.test.Plot;
-import dev.stannismod.stellurgy.test.RocketInfo;
-import dev.stannismod.stellurgy.test.RocketList;
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
-
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * REAL rocket launch path.
@@ -64,8 +58,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
-    private static final String ROCKET_LIST_ID = "id";
     private static final String AR_DIMS_ARRAY = "stellurgyDimensions";
+
+    private final ScenarioRockets rockets = ScenarioRockets.of(commands(), evictionReports());
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -73,27 +68,21 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
     /** What the server says about one craft, read through the verb's own reader. */
     private RocketInfo rocketInfo(int id) throws Exception {
-        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        return RocketInfo.byId(cmd -> ok(client().read(cmd)), id);
     }
 
+    /** The rocket this scenario's press made, named by that press's own {@code rocket_born} record. */
     private int buildAndAssemble(FixtureSite site) throws Exception {
         // FIRST link: the volume this rocket is built and launched in is empty. It is an assertion
         // and not a clearing — the site stands in open air, so anything standing in it means the
         // arrangement is wrong, and saying so here is what keeps it from arriving later as a launch
         // that would not take off.
-        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
-                "simple", 2, 10,
+        return rockets.assembleAt(site, cmd -> ok(client().act(cmd)), "simple", 2, 10,
                 "the rocket is built and launched in this volume");
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
-
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> built = RocketList.of(list);
-        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
-        return built.get(built.size() - 1).id;
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {
-        String joined = ok(client().execute("stellurgytest dim list"));
+        String joined = ok(client().read("stellurgytest dim list"));
         Assume.assumeFalse("No Stellurgy dimensions registered",
                 (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
         Reply dims = Reply.of("stellurgytest dim list", joined);
@@ -115,7 +104,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         int destDim = firstNonOverworldStellurgyDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 1000, 500));
 
-        String prog = ok(client().execute(
+        String prog = ok(client().arrange(
                 "stellurgytest rocket set-destination " + id + " " + destDim));
         assertTrue("set-destination must succeed: " + prog,
                 Reply.of(prog).ok());
@@ -124,7 +113,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
         // Launch with fuelFill=true + mode=instant -> real rocket.launch().
         // This MUST flip isInFlight to true and NOT report an error.
-        String launch = ok(client().execute(
+        String launch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("launch response must be ok=true: " + launch,
                 Reply.of(launch).ok());
@@ -149,7 +138,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // bails with "error.rocket.cannotGetThere".
         int id = buildAndAssemble(FixtureSite.openAir(0, 1100, 500));
 
-        String launch = ok(client().execute(
+        String launch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("launch probe must succeed (wiring is fine): " + launch,
                 Reply.of(launch).ok());
@@ -175,7 +164,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // (cheap, deterministic), then calling instant launch — the
         // second call must complete cleanly with isInFlight still true.
         int id = buildAndAssemble(FixtureSite.openAir(0, 1200, 500));
-        ok(client().execute("stellurgytest rocket launch " + id + " false force"));
+        ok(client().arrange("stellurgytest rocket launch " + id + " false force"));
 
         // Now invoke production launch() on the already-flying rocket.
         // The early-return at line 1761-1762 must prevent any state
@@ -184,7 +173,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // (which is INVALID_PLANET since we never programmed) must NOT
         // suddenly become anything else because the destination-lookup
         // branch is skipped by the early return.
-        String secondLaunch = ok(client().execute(
+        String secondLaunch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("second launch on in-flight rocket must still be probe-ok: "
                         + secondLaunch, Reply.of(secondLaunch).ok());
@@ -217,9 +206,9 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // configurations work. If a regression broke it, every
         // overworld->overworld flight would silently fail.
         int id = buildAndAssemble(FixtureSite.openAir(0, 1300, 500));
-        ok(client().execute("stellurgytest rocket set-destination " + id + " 0"));
+        ok(client().arrange("stellurgytest rocket set-destination " + id + " 0"));
 
-        String launch = ok(client().execute(
+        String launch = ok(client().act(
                 "stellurgytest rocket launch " + id + " true instant"));
         assertTrue("launch wiring ok: " + launch, Reply.of(launch).ok());
 
@@ -264,13 +253,13 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
     private static final String TOO_HEAVY = "error.rocket.tooHeavy";
 
     /**
-     * Every craft these scenarios launch climbs out of its plot and keeps moving, so the next
-     * scenario starts by removing what an earlier one left in the overworld — at its START, because
-     * JUnit runs an {@code @After} before the rules have finished.
+     * Every craft these scenarios launch climbs out of its plot and keeps moving, so each scenario
+     * disposes of the crafts it built, by the ids their presses' records named, before it ends. A
+     * scenario on a moon does so in its own {@code finally}, before the worlds it minted are deleted.
      */
-    @Before
-    public void disposeOfCraftAnEarlierScenarioLaunched() throws Exception {
-        RocketList.clearFrom(this::exec, 0);
+    @After
+    public void disposeOfThisScenariosRockets() throws Exception {
+        rockets.disposeStanding();
     }
 
     /**
@@ -279,7 +268,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * inside the call, which is a fact about the arrangement and must be said, not slept through.
      */
     private Events serverLog() {
-        return new Events(this::exec, ticks -> {
+        return new Events(c -> read(c).raw(), ticks -> {
             throw new AssertionError("a launch decision is taken inside the probe call, so nothing"
                     + " here waits; asked to advance " + ticks + " ticks");
         }, evictionReports());
@@ -328,13 +317,13 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      */
     private LaunchDecision launch(Events log, int rocket, int destination, boolean fillTanks)
             throws Exception {
-        String chip = exec("stellurgytest rocket set-destination " + rocket + " " + destination);
+        String chip = arrange("stellurgytest rocket set-destination " + rocket + " " + destination).raw();
         Reply programmed = Reply.of("stellurgytest rocket set-destination", chip);
         requireArranged("the guidance computer must carry a chip for dimension " + destination
                 + " before the launch: " + chip,
                 programmed.ok() && String.valueOf(destination).equals(programmed.text("chipDim")));
         long mark = log.mark();
-        String fired = exec("stellurgytest rocket launch " + rocket + " " + fillTanks + " instant");
+        String fired = act("stellurgytest rocket launch " + rocket + " " + fillTanks + " instant").raw();
         requireArranged("the launch verb must reach EntityRocket.launch: " + fired,
                 Reply.of("stellurgytest rocket launch", fired).ok());
         String id = String.valueOf(rocket);
@@ -361,18 +350,17 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * because an accepted launch sends the craft straight up through it.</p>
      */
     private int rocketAt(FixtureSite site, String what) throws Exception {
-        return RocketFixture.rocketEntityId(RocketFixture.assembleAt(site,
-                this::exec, "simple", 0, 255 - site.y, what));
+        return rockets.assembleAt(site, c -> act(c).raw(), "simple", 0, 255 - site.y, what);
     }
 
     /** {@code stellurgytest planet info} for one world, read as data. */
     private Reply planetInfo(int dim) throws Exception {
-        return Reply.of("stellurgytest planet info", exec("stellurgytest planet info " + dim));
+        return Reply.of("stellurgytest planet info", read("stellurgytest planet info " + dim).raw());
     }
 
     private Set<Integer> stellurgyWorlds() throws Exception {
         Set<Integer> worlds = new LinkedHashSet<>();
-        for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list"))
+        for (int dim : Reply.of("stellurgytest dim list", read("stellurgytest dim list").raw())
                 .intArray(AR_DIMS_ARRAY)) {
             worlds.add(dim);
         }
@@ -386,7 +374,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      */
     private int mint(String placement, String name) throws Exception {
         Set<Integer> before = stellurgyWorlds();
-        exec("stellurgy planet generate " + placement + " " + name);
+        arrange("stellurgy planet generate " + placement + " " + name);
         List<Integer> added = new ArrayList<>(stellurgyWorlds());
         added.removeAll(before);
         requireArranged("`/stellurgy planet generate " + placement + " " + name + "` must register"
@@ -417,14 +405,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * back unchanged.
      */
     private String configValue(String key) throws Exception {
-        Reply got = Reply.of("stellurgytest config get", exec("stellurgytest config get " + key));
+        Reply got = Reply.of("stellurgytest config get", read("stellurgytest config get " + key).raw());
         requireArranged("config key " + key + " must be readable: " + got, got.ok());
         return got.text("value");
     }
 
     private void setConfig(String key, String value) throws Exception {
         Reply set = Reply.of("stellurgytest config set",
-                exec("stellurgytest config set " + key + " " + value));
+                arrange("stellurgytest config set " + key + " " + value).raw());
         requireArranged("config key " + key + " must take " + value + ": " + set, set.ok());
     }
 
@@ -443,19 +431,21 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * <p>The far planet and its moon are minted with the shipped operator command for this scenario
      * and deleted after it; the overworld's moon is the one the world was made with.</p>
      *
-     * red-witnessed: with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at
-     * {@code return isPlanetMoonSystem} made to answer true, this fails at the far-planet verdict
-     * with "expected:<error.rocket.outsidePlanetarySystem> but was:<null>" (2026-10-02).
-     * red-witnessed: with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at
-     * {@code for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets())} —
-     * the moon branch's sibling loop — made to match every moon, this fails at the far-moon verdict with
-     * "expected:<error.rocket.outsidePlanetarySystem> but was:<null>" while the far planet is still
-     * refused (2026-10-02).
-     * red-witnessed: with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at
-     * {@code isPlanetMoonSystem = (destinationDimensionID == launchworldProperties.getParentPlanet())}
-     * made false, this fails at the own-moon verdict, the launch refused with
-     * error.rocket.outsidePlanetarySystem (2026-10-02).
+     * Pins INV-NAV-05 (a planet and its own moon are within-system, another planet and its moon are not).
      */
+    @Pins("INV-NAV-05")
+    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
+            + " {@code return isPlanetMoonSystem} made to answer true, this fails at the far-planet verdict"
+            + " with \"expected:<error.rocket.outsidePlanetarySystem> but was:<null>\" (2026-10-02).")
+    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
+            + " {@code for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets())} —"
+            + " the moon branch's sibling loop — made to match every moon, this fails at the far-moon verdict with"
+            + " \"expected:<error.rocket.outsidePlanetarySystem> but was:<null>\" while the far planet is still"
+            + " refused (2026-10-02).")
+    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
+            + " {@code isPlanetMoonSystem = (destinationDimensionID == launchworldProperties.getParentPlanet())}"
+            + " made false, this fails at the own-moon verdict, the launch refused with"
+            + " error.rocket.outsidePlanetarySystem (2026-10-02).")
     @Test
     public void aRocketOnAPlanetMayGoToItsOwnMoonButNotToAnotherPlanetOrItsMoon() throws Exception {
         int luna = theOverworldsMoon();
@@ -491,9 +481,9 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " above were about where it was sent: " + toOwnMoon.window, toOwnMoon.launched);
         } finally {
             if (farMoon != Integer.MIN_VALUE) {
-                exec("stellurgy planet delete " + farMoon);
+                arrange("stellurgy planet delete " + farMoon);
             }
-            exec("stellurgy planet delete " + far);
+            arrange("stellurgy planet delete " + far);
         }
     }
 
@@ -511,19 +501,18 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * <p>Both craft stand on the overworld's moon, on this scenario's own footprint in that world
      * ({@code Plot#inDimension}); they are removed from it when the scenario ends, as are the far
      * planet and the sibling moon minted for it.</p>
-     *
-     * red-witnessed: with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at
-     * {@code return isPlanetMoonSystem} made to answer true, this fails at the far-planet verdict, the
-     * launch accepted where error.rocket.outsidePlanetarySystem was expected (2026-10-02).
-     * red-witnessed: with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at
-     * {@code for (int moonDimID : launchworldProperties.getChildPlanets())} — the planet branch — made
-     * to match none, this fails at the parent-planet verdict, the launch refused with
-     * error.rocket.outsidePlanetarySystem (2026-10-02).
-     * red-witnessed: with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at
-     * {@code for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets())} —
-     * the moon branch's sibling loop — made to match none, this fails at the sibling-moon verdict,
-     * the launch refused with error.rocket.outsidePlanetarySystem (2026-10-02).
      */
+    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
+            + " {@code return isPlanetMoonSystem} made to answer true, this fails at the far-planet verdict, the"
+            + " launch accepted where error.rocket.outsidePlanetarySystem was expected (2026-10-02).")
+    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
+            + " {@code for (int moonDimID : launchworldProperties.getChildPlanets())} — the planet branch — made"
+            + " to match none, this fails at the parent-planet verdict, the launch refused with"
+            + " error.rocket.outsidePlanetarySystem (2026-10-02).")
+    @LegacyWitness(prose = "with {@code PlanetaryTravelHelper#isTravelBetweenBodiesWithinPlanetarySystem} at"
+            + " {@code for (int moonDimID : launchworldProperties.getParentProperties().getChildPlanets())} —"
+            + " the moon branch's sibling loop — made to match none, this fails at the sibling-moon verdict,"
+            + " the launch refused with error.rocket.outsidePlanetarySystem (2026-10-02).")
     @Test
     public void aRocketOnAMoonMayGoToItsPlanetAndASiblingMoonButNotToAnotherPlanet()
             throws Exception {
@@ -537,7 +526,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " stands on is: " + planetInfo(sibling), planetInfo(sibling).integer("parent") == 0);
             requireArranged("the far planet must be nobody's moon: " + planetInfo(far),
                     planetInfo(far).integer("parent") == Constants.INVALID_PLANET);
-            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            Reply loaded = Reply.of("stellurgytest dim load", arrange("stellurgytest dim load " + luna).raw());
             requireArranged("the moon's world must be loaded and held to stand a craft in: " + loaded,
                     loaded.bool("loaded"));
 
@@ -561,11 +550,11 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             assertTrue("a craft on a moon must be accepted for another moon of the same planet: "
                     + toSibling.window, toSibling.launched);
         } finally {
-            RocketList.clearFrom(this::exec, luna);
+            rockets.disposeStanding();
             if (sibling != Integer.MIN_VALUE) {
-                exec("stellurgy planet delete " + sibling);
+                arrange("stellurgy planet delete " + sibling);
             }
-            exec("stellurgy planet delete " + far);
+            arrange("stellurgy planet delete " + far);
         }
     }
 
@@ -583,20 +572,19 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * tanks, so the wet weight is the same on all three calls — and each verdict asserts that the
      * gate compared that same ratio again.</p>
      *
-     * red-witnessed: with {@code StatsRocket#canLaunch} at
-     * {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
-     * given a tolerance (compared against {@code minLaunchTWR - 1e-3}), this fails at the
-     * just-above verdict, "a threshold one ulp above the craft's ratio must refuse it as too heavy"
-     * (re-taken 2026-10-03 on the gravity-taking gate; first taken 2026-10-02).
-     * red-witnessed: with {@code StatsRocket#canLaunch} at
-     * {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
-     * made strict ({@code >} for {@code >=}), this fails at the at-the-threshold verdict, "a ratio
-     * EQUAL to minLaunchTWR must be let go" (re-taken 2026-10-03).
-     *
      * <p>That the gate compared the measured ratio again on the second and third calls is a premise
      * of the placement, not a verdict: a ratio that moved between calls means the threshold was set
      * against a number the gate no longer reads, and the scenario says so as an arrangement failure.</p>
      */
+    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
+            + " {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}"
+            + " given a tolerance (compared against {@code minLaunchTWR - 1e-3}), this fails at the"
+            + " just-above verdict, \"a threshold one ulp above the craft's ratio must refuse it as too heavy\""
+            + " (re-taken 2026-10-03 on the gravity-taking gate; first taken 2026-10-02).")
+    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
+            + " {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}"
+            + " made strict ({@code >} for {@code >=}), this fails at the at-the-threshold verdict, \"a ratio"
+            + " EQUAL to minLaunchTWR must be let go\" (re-taken 2026-10-03).")
     @Test
     public void theWeightGateLetsACraftGoAtExactlyMinLaunchTwrAndRefusesItJustAbove()
             throws Exception {
@@ -650,15 +638,17 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * with the system ON is asserted first, on the same craft and the same threshold, so the
      * acceptance cannot be a craft the gate would have let go anyway.</p>
      *
-     * red-witnessed: with {@code StatsRocket#canLaunch} at
-     * {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
-     * made to answer true, this fails at the system-on verdict, "with the weight system on, a
-     * threshold no finite ratio reaches must refuse the craft as too heavy" (re-taken 2026-10-03).
-     * red-witnessed: with {@code StatsRocket#canLaunch} at
-     * {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)} never taken, this
-     * fails at the system-off verdict, "with the weight system off the same craft, under the same
-     * threshold, must be let go" (re-taken 2026-10-03).
+     * Pins INV-API-08 (canLaunch is true whenever the weight system is off and judges weight at the gravity it is handed).
      */
+    @Pins("INV-API-08")
+    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
+            + " {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}"
+            + " made to answer true, this fails at the system-on verdict, \"with the weight system on, a"
+            + " threshold no finite ratio reaches must refuse the craft as too heavy\" (re-taken 2026-10-03).")
+    @LegacyWitness(prose = "with {@code StatsRocket#canLaunch} at"
+            + " {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)} never taken, this"
+            + " fails at the system-off verdict, \"with the weight system off the same craft, under the same"
+            + " threshold, must be let go\" (re-taken 2026-10-03).")
     @Test
     public void turningTheWeightSystemOffLiftsTheWeightGate() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -695,17 +685,16 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * twice that ratio (at their midpoint, 1.5×), so only a thrust that really grew can clear it. 2 is
      * used because {@code (int) (thrust * 2.0)} is exact for any engine thrust, so the doubled thrust
      * is a prediction and not a tolerance.</p>
-     *
-     * red-witnessed: with {@code StatsRocket#getThrust} at
-     * {@code (int) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier)} made
-     * {@code thrust}, this fails at the doubled-thrust verdict with the gate reading the multiplier-1
-     * thrust again (re-taken 2026-10-03).
-     * red-witnessed: with {@code StatsRocket#getThrustToWeightRatio} at
-     * {@code return getThrust() / localWeight} reading the raw {@code thrust} field instead, the
-     * doubled-thrust verdict holds and this fails at the let-go verdict, "with the thrust doubled the
-     * craft clears a threshold of 1.5x its multiplier-1 ratio and must be let go" (re-taken
-     * 2026-10-03).
      */
+    @LegacyWitness(prose = "with {@code StatsRocket#getThrust} at"
+            + " {@code (int) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier)} made"
+            + " {@code thrust}, this fails at the doubled-thrust verdict with the gate reading the multiplier-1"
+            + " thrust again (re-taken 2026-10-03).")
+    @LegacyWitness(prose = "with {@code StatsRocket#getThrustToWeightRatio} at"
+            + " {@code return getThrust() / localWeight} reading the raw {@code thrust} field instead, the"
+            + " doubled-thrust verdict holds and this fails at the let-go verdict, \"with the thrust doubled the"
+            + " craft clears a threshold of 1.5x its multiplier-1 ratio and must be let go\" (re-taken"
+            + " 2026-10-03).")
     @Test
     public void theThrustTheWeightGateComparesIsScaledByTheThrustMultiplier() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -771,17 +760,19 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * at one gee (2026-10-02, {@code logs/bugs-a-repro-final.log}: ratio 13.986 against a threshold
      * below the local ratio 84.25 on a body of g 0.166).</p>
      *
-     * red-witnessed: with {@code StatsRocket#getThrustToWeightRatio} at
-     * {@code float localWeight = getWeightNewtons(gravitationalMultiplier);} weighing at one gee instead,
-     * this fails at the verdict, the craft refused at one gee (2026-10-03,
-     * {@code logs/bugs-a-601-red1.log}) — taken on the pre-merge form of that line, which multiplied
-     * the craft's weight by the effective gravity itself; it now asks the SI weight of the mass, which
-     * applies the same multiplier.
-     * red-witnessed: with {@code EntityRocket#launch} at
-     * {@code this.stats.canLaunch(DimensionManager.getInstance()} handed {@code 1f} instead of the
-     * world's gravity, this fails at the verdict the same way (2026-10-03,
-     * {@code logs/bugs-a-601-red2.log}).
+     * Pins INV-API-08 (canLaunch is true whenever the weight system is off and judges weight at the gravity it is handed).
      */
+    @Pins("INV-API-08")
+    @LegacyWitness(prose = "with {@code StatsRocket#getThrustToWeightRatio} at"
+            + " {@code float localWeight = getWeightNewtons(gravitationalMultiplier);} weighing at one gee instead,"
+            + " this fails at the verdict, the craft refused at one gee (2026-10-03,"
+            + " {@code logs/bugs-a-601-red1.log}) — taken on the pre-merge form of that line, which multiplied"
+            + " the craft's weight by the effective gravity itself; it now asks the SI weight of the mass, which"
+            + " applies the same multiplier.")
+    @LegacyWitness(prose = "with {@code EntityRocket#launch} at"
+            + " {@code this.stats.canLaunch(DimensionManager.getInstance()} handed {@code 1f} instead of the"
+            + " world's gravity, this fails at the verdict the same way (2026-10-03,"
+            + " {@code logs/bugs-a-601-red2.log}).")
     @Test
     public void aCraftOnALowGravityMoonIsWeighedAtThatMoonsGravity() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -794,7 +785,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             double gravity = planetInfo(luna).number("gravity");
             requireArranged("the moon's gravity must be below one gee and above none, so that the"
                     + " local ratio exceeds the one-gee ratio: " + gravity, gravity > 0 && gravity < 1);
-            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            Reply loaded = Reply.of("stellurgytest dim load", arrange("stellurgytest dim load " + luna).raw());
             requireArranged("the moon's world must be loaded to stand a craft in: " + loaded,
                     loaded.bool("loaded"));
             setConfig("advancedWeightSystem", "true");
@@ -825,7 +816,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " a threshold of " + between + " (its one-gee ratio is " + oneGeeRatio + ") must"
                     + " be let go from the moon: " + atBetween.window, atBetween.launched);
         } finally {
-            RocketList.clearFrom(this::exec, luna);
+            rockets.disposeStanding();
             setConfig("minLaunchTWR", minWas);
             setConfig("advancedWeightSystem", weightSystemWas);
         }
@@ -851,13 +842,12 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      *
      * <p>What this does NOT see: the flight model's half of the flag ({@code StatsRocket#getAcceleration}
      * at one gee) — a craft that is let go is gone, and nothing on this tier reads its climb.</p>
-     *
-     * red-witnessed: with {@code StatsRocket#effectiveGravityMultiplier} at
-     * {@code return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;}
-     * answering the multiplier whatever the flag says, this fails at the verdict — the craft let go
-     * with a one-gee ratio of 13.99 under a threshold of 49.12 (local ratio 84.25, g 0.166),
-     * 2026-10-04.
      */
+    @LegacyWitness(prose = "with {@code StatsRocket#effectiveGravityMultiplier} at"
+            + " {@code return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;}"
+            + " answering the multiplier whatever the flag says, this fails at the verdict — the craft let go"
+            + " with a one-gee ratio of 13.99 under a threshold of 49.12 (local ratio 84.25, g 0.166),"
+            + " 2026-10-04.")
     @Test
     public void turningGravityOffTheLaunchJudgesACraftOnTheMoonAtOneGee() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -869,7 +859,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             double gravity = planetInfo(luna).number("gravity");
             requireArranged("the moon's gravity must be below one gee and above none, so that the"
                     + " local ratio exceeds the one-gee ratio: " + gravity, gravity > 0 && gravity < 1);
-            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            Reply loaded = Reply.of("stellurgytest dim load", arrange("stellurgytest dim load " + luna).raw());
             requireArranged("the moon's world must be loaded to stand a craft in: " + loaded,
                     loaded.bool("loaded"));
             setConfig("advancedWeightSystem", "true");
@@ -898,7 +888,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " gravity (" + localRatio + ") would clear it: " + atBetween.window,
                     TOO_HEAVY, atBetween.refusal);
         } finally {
-            RocketList.clearFrom(this::exec, luna);
+            rockets.disposeStanding();
             setConfig("minLaunchTWR", minWas);
             setConfig("gravityAffectsFuel", gravityWas);
             setConfig("advancedWeightSystem", weightSystemWas);
@@ -932,19 +922,18 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * <p>Before the fix it failed at the agreement verdict, the assembler having built the craft and
      * the gate refusing it as too heavy (2026-10-02, {@code logs/bugs-a-repro-final.log}: dry ratio
      * 13.986 (weight 7.15), wet ratio 7.605 (weight 13.15), threshold at their midpoint 10.795).</p>
-     *
-     * red-witnessed: with {@code TileRocketAssemblingMachine#canLaunchFullFromHere} at
-     * {@code return stats.withTanksFull().canLaunch(getGravityMultiplier())} asking the scanned
-     * stats as they are (tanks empty) instead, this fails at the refusal verdict,
-     * "expected:<[NOENGINES]> but was:<[ALREADY_ASSEMBLED]>" (2026-10-03,
-     * {@code logs/bugs-a-601-red4.log}).
-     * red-witnessed: NOT YET for the agreement verdict on the fixed form — once the refusal verdict
-     * above holds, it can only go red by a launch-side break the measured ratios do not see, and the
-     * one attempted, {@code EntityRocket#launch} at {@code this.stats.canLaunch(DimensionManager.getInstance()}
-     * handed {@code 0f}, let the measuring launches go and failed at the arrangement
-     * (2026-10-03, {@code logs/bugs-a-601-red5.log}). It was red on the pre-fix form, the defect
-     * itself (2026-10-02, {@code logs/bugs-a-repro-final.log}).
      */
+    @LegacyWitness(prose = "with {@code TileRocketAssemblingMachine#canLaunchFullFromHere} at"
+            + " {@code return stats.withTanksFull().canLaunch(getGravityMultiplier())} asking the scanned"
+            + " stats as they are (tanks empty) instead, this fails at the refusal verdict,"
+            + " \"expected:<[NOENGINES]> but was:<[ALREADY_ASSEMBLED]>\" (2026-10-03,"
+            + " {@code logs/bugs-a-601-red4.log}).")
+    @NotYetRed(prose = "NOT YET for the agreement verdict on the fixed form — once the refusal verdict"
+            + " above holds, it can only go red by a launch-side break the measured ratios do not see, and the"
+            + " one attempted, {@code EntityRocket#launch} at {@code this.stats.canLaunch(DimensionManager.getInstance()}"
+            + " handed {@code 0f}, let the measuring launches go and failed at the arrangement"
+            + " (2026-10-03, {@code logs/bugs-a-601-red5.log}). It was red on the pre-fix form, the defect"
+            + " itself (2026-10-02, {@code logs/bugs-a-repro-final.log}).")
     @Test
     public void theAssemblerAndTheWeightGateGiveOneVerdictOnOneCraft() throws Exception {
         String weightSystemWas = configValue("advancedWeightSystem");
@@ -968,23 +957,23 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             int[] station = {pad.x + 8, pad.y + 1, pad.z};
             String at = " 0 " + station[0] + " " + station[1] + " " + station[2];
             requireArranged("the fuelling station must be placed: ", Reply.of("stellurgytest place",
-                    exec("stellurgytest place" + at + " stellurgy:fuelingStation")).ok());
+                    arrange("stellurgytest place" + at + " stellurgy:fuelingStation").raw()).ok());
             requireArranged("the station must take power: ", Reply.of("stellurgytest energy inject",
-                    exec("stellurgytest energy inject" + at + " 100000")).ok());
+                    arrange("stellurgytest energy inject" + at + " 100000").raw()).ok());
             requireArranged("the station must take the fuel: ", Reply.of("stellurgytest fluid inject",
-                    exec("stellurgytest fluid inject" + at + " rocketfuel 8000")).ok());
+                    arrange("stellurgytest fluid inject" + at + " rocketfuel 8000").raw()).ok());
             Reply link = Reply.of("stellurgytest infra link",
-                    exec("stellurgytest infra link" + at + " " + measuredCraft));
+                    arrange("stellurgytest infra link" + at + " " + measuredCraft).raw());
             requireArranged("the station must link to the craft: " + link, link.bool("linked"));
             requireArranged("the station must run: ", Reply.of("stellurgytest tile force-tick-clock",
-                    exec("stellurgytest tile force-tick-clock" + at + " 20")).ok());
+                    act("stellurgytest tile force-tick-clock" + at + " 20").raw()).ok());
 
             // Fill the tanks in a call of their own and launch WITHOUT the verb's fill: the verb's
             // fill reaches the gate's weight only a tick later (measured 2026-10-02: the same craft
             // weighed 7.40 on the launch that filled it and 13.15 on the next), so a ratio read on
             // the filling launch would describe the tanks before the fill.
             requireArranged("the tanks must fill: ", Reply.of("stellurgytest rocket fill-fuel",
-                    exec("stellurgytest rocket fill-fuel " + measuredCraft)).ok());
+                    arrange("stellurgytest rocket fill-fuel " + measuredCraft).raw()).ok());
             LaunchDecision wet = launch(log, measuredCraft, luna, false);
             requireArranged("with the threshold at Double.MAX_VALUE the gate must refuse both times,"
                     + " and its records carry the ratios: " + dry.window + " / " + wet.window,
@@ -994,13 +983,16 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
             System.out.println("[launch-gate] dry " + dry.gate + " / wet " + wet.gate);
             requireArranged("fuel must weigh something for the two weights to differ: dry "
                     + dryRatio + ", wet " + wetRatio + "; tanks: "
-                    + exec("stellurgytest rocket fuel " + measuredCraft), wetRatio < dryRatio);
+                    + read("stellurgytest rocket fuel " + measuredCraft).raw(), wetRatio < dryRatio);
 
             setConfig("minLaunchTWR", Double.toString((dryRatio + wetRatio) / 2));
-            String assemble = RocketFixture.assembleAt(
-                    plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET),
-                    this::exec, "simple", 0, 255 - site().y,
-                    "the identical craft the assembler judges at the new threshold");
+            FixtureSite second = plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET);
+            int[] secondBuilder = RocketFixture.placeAt(second, c -> arrange(c).raw(), "simple", 0,
+                    255 - site().y, "the identical craft the assembler judges at the new threshold");
+            long pressed = rockets.mark();
+            String assemble = RocketFixture.assembleBuilt(second, c -> act(c).raw(), secondBuilder);
+            // Whatever the press made is held for disposal; whether it made one is the verdict below.
+            rockets.allBornAt(pressed, secondBuilder);
             Reply built = Reply.of("stellurgytest rocket assemble", assemble);
             boolean assemblerBuilt = built.ok();
             System.out.println("[launch-gate] assembler at the midpoint: " + assemble);

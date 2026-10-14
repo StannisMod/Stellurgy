@@ -1,17 +1,18 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.FluidStored;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.AbstractMechanicsTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.github.stannismod.forge.testing.server.ServerRoot;
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.FluidStored;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
+import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,7 +38,8 @@ import static org.junit.Assert.assertTrue;
  * it, and boots a second one over the same world directory to read what the save carried across;
  * a shared, running server cannot be stopped under its siblings.</p>
  */
-public class FluidTankNBTRoundTripsAcrossRestartTest {
+@OwnBoot(reason = OwnBoot.Reason.SERVER_RESTART)
+public class FluidTankNBTRoundTripsAcrossRestartTest extends AbstractMechanicsTest {
 
 
     /** Tank position — far enough from spawn that no other tile collides. */
@@ -48,7 +50,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
      *  so {@code fluid inject} doesn't clamp and we can read it back exactly. */
     private static final int INJECT_AMOUNT = 7500;
 
-    private Path workDir;
+    private ServerRoot workDir;
     private RealDedicatedServerHarness firstBoot;
     private RealDedicatedServerHarness secondBoot;
 
@@ -59,7 +61,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
                         + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
                 Boolean.parseBoolean(System.getProperty(
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-fluidtank-nbt-restart-");
+        workDir = ServerRoot.fresh("forge-server-fluidtank-nbt-restart-");
     }
 
     @After
@@ -68,27 +70,29 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         if (secondBoot != null) secondBoot.close();
     }
 
+    /** Pins INV-INFRA-24 (Fluid injected into a pressure tank survives a server restart at the same coords). */
+    @Pins("INV-INFRA-24")
     @Test
     public void liquidTankRetainsOxygenContentAcrossRestart() throws Exception {
         // ─────── Boot 1: place tank, inject oxygen, save & shut down ───────
-        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        firstBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/false);
 
-        String place = String.join("\n", firstBoot.client().execute(
+        String place = String.join("\n", firstBoot.client().arrange(
                 "stellurgytest place 0 " + TX + " " + TY + " " + TZ + " stellurgy:liquidTank"));
         assertTrue("liquidTank place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String preInject = String.join("\n", firstBoot.client().execute(
+        String preInject = String.join("\n", firstBoot.client().read(
                 "stellurgytest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must expose IFluidHandler capability: " + preInject,
                 Reply.of(preInject).bool("hasFluid"));
 
-        String inject = String.join("\n", firstBoot.client().execute(
+        String inject = String.join("\n", firstBoot.client().arrange(
                 "stellurgytest fluid inject 0 " + TX + " " + TY + " " + TZ + " oxygen " + INJECT_AMOUNT));
         assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
 
         // Verify the inject landed in-memory before we save the world.
-        String storedBefore = String.join("\n", firstBoot.client().execute(
+        String storedBefore = String.join("\n", firstBoot.client().read(
                 "stellurgytest fluid stored 0 " + TX + " " + TY + " " + TZ));
         String fluidBefore = fluidOrFail(storedBefore, "fluidName (boot 1)");
         int amountBefore = theTank(storedBefore, "amount (boot 1)").amount(0);
@@ -103,12 +107,12 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         firstBoot = null;
 
         // ─────── Boot 2: reload the same workDir, re-probe the tank ────────
-        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        secondBoot = RealDedicatedServerHarness.startWith(harnessBoot(), workDir, /*cleanupOnClose=*/true);
 
         // The chunk at (TX>>4, TZ>>4) may not be force-loaded after restart;
         // a /stellurgytest probe at the tank's exact coords pulls the chunk into
         // memory before reading.
-        String storedAfter = String.join("\n", secondBoot.client().execute(
+        String storedAfter = String.join("\n", secondBoot.client().read(
                 "stellurgytest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must still expose IFluidHandler after restart: " + storedAfter,
                 Reply.of(storedAfter).bool("hasFluid"));

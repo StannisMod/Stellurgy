@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import java.util.Locale;
-
+import dev.stannismod.stellurgy.api.RocketEvent;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.item.EntityXPOrb;
@@ -20,7 +19,7 @@ import net.minecraftforge.event.entity.player.PlayerWakeUpEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
-import dev.stannismod.stellurgy.api.RocketEvent;
+import java.util.Locale;
 
 /**
  * The Forge-bus half of the server's {@link ServerEventLog}: events the game already posts, turned
@@ -99,6 +98,26 @@ public final class ServerEventRecorder {
         if (log != null) {
             log.record(sideOf(world), world == null ? 0L : world.getTotalWorldTime(), type, payload);
         }
+    }
+
+    /**
+     * A command something CANCELLED before it ran — {@code command_refused}, with the command's name,
+     * the sender's class and whether a failure was handed back to it ({@code thrown}) or it was only told.
+     *
+     * <p>{@code LOWEST} with cancelled events received: the verdict read is the one every listener above
+     * left, and a command nobody cancelled is not recorded at all — the log sees a refusal, never the
+     * stream of commands a test sends.</p>
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+    public static void onCommand(net.minecraftforge.event.CommandEvent event) {
+        if (!event.isCanceled()) {
+            return;
+        }
+        net.minecraft.command.ICommandSender sender = event.getSender();
+        record(sender.getEntityWorld(), "command_refused",
+                "\"command\":\"" + TestTrace.json(event.getCommand().getName()) + "\""
+                        + ",\"sender\":\"" + TestTrace.json(sender.getClass().getName()) + "\""
+                        + ",\"thrown\":" + (event.getException() != null));
     }
 
     /**
@@ -452,6 +471,24 @@ public final class ServerEventRecorder {
                         ? ",\"destinationDim\":" + ((dev.stannismod.stellurgy.api.event.ShipLifecycleEvent
                                 .ShipDeparted) event).destinationDim
                         : "");
+    }
+
+    /**
+     * The engine let go of a ship OBJECT — {@code ship_released}, one per naming, on every path that
+     * takes an object down. Its own type rather than an edge of {@code ship_lifecycle}: it speaks for the
+     * object, not the registration, and a reader pairing namings with unnamings must not meet it.
+     */
+    @SubscribeEvent
+    public static void onShipReleased(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipReleased event) {
+        World world = event.world;
+        instrument(world, "server_bus_ship_released");
+        if (world == null) {
+            return;
+        }
+        record(world, "ship_released",
+                "\"ship\":\"" + event.shipUuid + "\""
+                        + ",\"durable\":" + (event.durableId == null ? "null" : "\"" + event.durableId + "\"")
+                        + ",\"dim\":" + world.provider.getDimension());
     }
 
     private static void recordLifecycle(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent event,

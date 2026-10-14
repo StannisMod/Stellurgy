@@ -1,7 +1,5 @@
 package dev.stannismod.stellurgy.libvulpes.inventory;
 
-import java.util.List;
-
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -11,6 +9,7 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
+import java.util.List;
 
 //import javax.annotation.Nonnull;
 

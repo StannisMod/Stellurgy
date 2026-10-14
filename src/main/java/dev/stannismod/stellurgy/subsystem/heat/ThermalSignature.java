@@ -1,10 +1,9 @@
 package dev.stannismod.stellurgy.subsystem.heat;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 
 /**
  * What a passive sensor sees when it looks at a ship, and the reason it is TWO numbers rather than

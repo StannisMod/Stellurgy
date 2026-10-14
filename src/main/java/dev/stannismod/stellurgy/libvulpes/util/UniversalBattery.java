@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.libvulpes.util;
 
-import net.minecraft.nbt.NBTTagCompound;
 import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
+import net.minecraft.nbt.NBTTagCompound;
 
 public class UniversalBattery implements IUniversalEnergy {
 

@@ -1,12 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.damage.BlockDamageSavedData;
 import dev.stannismod.stellurgy.damage.DamageLayer;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.Pins;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.BlockPos;
+import org.junit.Test;
 
 import java.util.List;
 
@@ -125,9 +126,9 @@ public class DamageLayerTest {
      * with — a block the registry still holds, and one whose mod is gone, which is the case a lookup
      * through Forge's defaulted registry turns into air. The registry is bootstrapped so that a carry
      * which did look the name up would answer as it does in a game, not throw.
-     *
-     * red-witnessed: with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by a lookup of the name in {@code Block.REGISTRY} handed to {@code recordDestroyed}, fails: "INV-DMG-10: a hole of a block no longer registered must arrive under ITS name … expected:<[removedmod:hull_plate]> but was:<[minecraft:air]>" (2026-10-08).
      */
+    @Pins("INV-DMG-10")
+    @LegacyWitness(prose = "with {@code DamageLayer#applyTo} at {@code data.recordDestroyedName(pos, entry.originalBlock, entry.originalMeta);} replaced by {@code data.recordDestroyed(pos, net.minecraft.block.Block.REGISTRY.getObject(new net.minecraft.util.ResourceLocation(entry.originalBlock)), entry.originalMeta);}, fails: \"INV-DMG-10: a hole of a block no longer registered must arrive under ITS name\" (2026-10-08; expected removedmod:hull_plate, was minecraft:air).")
     @Test
     public void aHoleOfABlockNoLongerRegisteredKeepsItsNameAcrossACarry() {
         MinecraftBootstrap.ensure();

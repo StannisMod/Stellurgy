@@ -1,17 +1,16 @@
 package dev.stannismod.stellurgy.tile.hyperdrive;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import net.minecraft.block.Block;
-import net.minecraft.util.math.BlockPos;
-
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.hyperdrive.ComponentScan;
 import dev.stannismod.stellurgy.hyperdrive.DriveTier;
 import dev.stannismod.stellurgy.hyperdrive.DriveTuning;
 import dev.stannismod.stellurgy.hyperdrive.ShipDriveStats;
 import dev.stannismod.stellurgy.tile.TileShipComponent;
+import net.minecraft.block.Block;
+import net.minecraft.util.math.BlockPos;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The ship's hyperspace field generator: the machine that decides how deep a well the ship can climb

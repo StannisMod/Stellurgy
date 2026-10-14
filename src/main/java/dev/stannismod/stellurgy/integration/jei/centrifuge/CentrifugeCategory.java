@@ -1,10 +1,10 @@
 package dev.stannismod.stellurgy.integration.jei.centrifuge;
 
-import mezz.jei.api.IGuiHelper;
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import dev.stannismod.stellurgy.integration.jei.MachineCategoryTemplate;
+import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import mezz.jei.api.IGuiHelper;
 
 public class CentrifugeCategory extends MachineCategoryTemplate<CentrifugeWrapper> {
 

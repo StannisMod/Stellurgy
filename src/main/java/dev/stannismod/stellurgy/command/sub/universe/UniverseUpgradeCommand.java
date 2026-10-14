@@ -1,19 +1,19 @@
 package dev.stannismod.stellurgy.command.sub.universe;
 
-import java.util.List;
-
-import net.minecraft.command.CommandException;
-import net.minecraft.command.ICommandSender;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.TextComponentTranslation;
 import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
 import dev.stannismod.stellurgy.item.ItemMemoryCrystal;
 import dev.stannismod.stellurgy.navigation.CrystalEntry;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import dev.stannismod.stellurgy.universe.UniverseSchema;
+import net.minecraft.command.CommandException;
+import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.text.TextComponentTranslation;
+
+import java.util.List;
 
 /**
  * Move this world onto the model the pack and this build now state — deliberately, and only after

@@ -1,10 +1,26 @@
 package dev.stannismod.stellurgy.client;
 
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
+import dev.stannismod.stellurgy.entity.EntityHoverCraft;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketChangeKeyState;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.client.FMLClientHandler;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -13,27 +29,6 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.input.Keyboard;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.Constants;
-import dev.stannismod.stellurgy.api.EntityRocketBase;
-import dev.stannismod.stellurgy.api.FreeFlightInput;
-import dev.stannismod.stellurgy.api.PilotInputCadence;
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
-import dev.stannismod.stellurgy.api.RocketFlightMode;
-import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
-import net.minecraft.util.math.BlockPos;
-import dev.stannismod.stellurgy.entity.EntityHoverCraft;
-import dev.stannismod.stellurgy.entity.EntityRocket;
-import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
-import dev.stannismod.stellurgy.tile.TilePilotSeat;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
-import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
-import dev.stannismod.stellurgy.libvulpes.network.PacketChangeKeyState;
-import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
-import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 
 /**
  * Every static field of this type is effectively final, process lifetime: built once at class initialisation.

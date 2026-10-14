@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.atmosphere.gas;
 
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
+
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
-
-import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fluids.FluidRegistry;
-import dev.stannismod.stellurgy.atmosphere.AirState;
 
 /**
  * One substance an atmosphere can be made of: what it is called, what it does, and what it is worth

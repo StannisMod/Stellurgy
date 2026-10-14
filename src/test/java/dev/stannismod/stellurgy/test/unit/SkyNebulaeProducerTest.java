@@ -1,27 +1,14 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import org.junit.Test;
-
 import dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderNebula;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.SkyNebulaeProducer;
-import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
-import dev.stannismod.stellurgy.universe.Nebula;
-import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.UniverseLawsV0;
-import dev.stannismod.stellurgy.universe.UniverseScale;
+import dev.stannismod.stellurgy.universe.*;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 /**
  * What the sky is told about the clouds around a cell.

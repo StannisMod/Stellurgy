@@ -2,11 +2,12 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * The emergency dump: heat leaves the ship inside a lump of matter that is thrown overboard.
@@ -39,21 +40,21 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
     /** A loop with a dump bolted to its end, loaded with a block of iron and powered. */
     private void buildRig(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (y - 1) + " " + (z - 2)
-                + " " + (cx + PIPES + 12) + " " + (y + 2) + " " + (z + 2) + " minecraft:air");
+                + " " + (cx + PIPES + 12) + " " + (y + 2) + " " + (z + 2) + " minecraft:air").requireOk();
         for (int i = 0; i < PIPES; i++) {
             Reply placed = arrange("stellurgytest place 0 " + (cx + i) + " " + y + " " + z
-                    + " stellurgy:heatPipe");
+                    + " stellurgy:heatPipe").requireOk();
             assertTrue("pipe place failed: " + placed, placed.bool("placed"));
         }
         Reply dump = arrange("stellurgytest place 0 " + (cx + PIPES) + " " + y + " " + z
-                + " stellurgy:heatDump");
+                + " stellurgy:heatDump").requireOk();
         assertTrue("dump place failed: " + dump, dump.bool("placed"));
         arrange("stellurgytest energy inject 0 " + (cx + PIPES) + " " + y + " " + z + " 1000000");
         Reply loaded = arrange("stellurgytest heat dump 0 " + (cx + PIPES) + " " + y + " " + z
                 + " load minecraft:iron_block");
         assertTrue("the dump must be loaded with something to charge: " + loaded,
                 loaded.bool("hasStack"));
-        arrange("stellurgytest subnet solve all 0 1");
+        act("stellurgytest subnet solve all 0 1").requireOk();
     }
 
     /**
@@ -71,20 +72,20 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
 
     /** Charge the loop to a stated temperature and advance the domain in one call. */
     private Reply cycle(int cx, long kelvin, int ticks) throws Exception {
-        Reply empty = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1");
+        Reply empty = act("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1").requireOk();
         requireArranged("premise: the pipes must form a loop: " + empty, empty.bool("inLoop"));
         long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass: " + empty, capacity > 0);
         long ambient = configValue("shipHeatAmbientKelvin");
         long charge = (kelvin - ambient) * capacity;
-        Reply cycled = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " " + ticks);
+        Reply cycled = act("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " " + ticks).requireOk();
         requireArranged("premise: the loop must still be a loop when charged: " + cycled,
                 cycled.bool("inLoop"));
         return cycled;
     }
 
     private long configValue(String key) throws Exception {
-        return arrange("stellurgytest config get " + key).longInteger("value");
+        return read("stellurgytest config get " + key).requireOk().longInteger("value");
     }
 
     /**
@@ -100,12 +101,11 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
      * <p>This asserts the CURRENT violation. Rebalancing the defaults so a dump sheds less than one
      * cell turns it red on purpose — at which point the assertion flips to {@code dump < cell} and
      * the known-bug note goes.</p>
-     *
-     * <p>red-witnessed: with the shipped default at {@code StellurgyConfiguration#loadPreInit} at {@code stellurgyConfig.shipHeatDumpThroughput = config.get(HEAT, "shipHeatDumpThroughput", 40000, "How much heat an emergency dump pushes into the slug it is charging each second. Deliberately well under what a radiator array sheds: the dump buys seconds while something else is fixed, and a value large enough to keep a ship cool would turn an emergency into a cooling system that eats iron.", 0, Integer.MAX_VALUE).getInt();} lowered from
-     * 40000 to 4000, below one cell's 6000: "KNOWN BUG: at the shipped defaults a dump's sustained
-     * throughput is at or above what the cheapest radiator (one cell) sheds … dump=4000 cell=6000",
-     * 2026-09-30. The cell premise is an arrangement and is not witnessed.</p>
      */
+    @LegacyWitness(prose = "with the shipped default at {@code StellurgyConfiguration#loadPreInit} at {@code stellurgyConfig.shipHeatDumpThroughput = config.get(HEAT, \"shipHeatDumpThroughput\", 40000, \"How much heat an emergency dump pushes into the slug it is charging each second. Deliberately well under what a radiator array sheds: the dump buys seconds while something else is fixed, and a value large enough to keep a ship cool would turn an emergency into a cooling system that eats iron.\", 0, Integer.MAX_VALUE).getInt();} lowered from"
+            + " 40000 to 4000, below one cell's 6000: \"KNOWN BUG: at the shipped defaults a dump's sustained"
+            + " throughput is at or above what the cheapest radiator (one cell) sheds … dump=4000 cell=6000\","
+            + " 2026-09-30. The cell premise is an arrangement and is not witnessed.")
     @Test
     public void atTheShippedDefaultsOneDumpOutshedsOneRadiatingCell() throws Exception {
         long dump = configValue("shipHeatDumpThroughput");
@@ -119,14 +119,12 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
                 dump >= cell);
     }
 
-    /**
-     * red-witnessed: one inversion per verdict, 2026-09-30. INTO THE SLUG — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}
-     * asking for heat only at ten times the trigger: "the dump must have taken heat off the loop and
-     * put it in the slug: … \"charge\":0 … \"hasStack\":true". POORER — {@code HeatNetwork#tickThermodynamics} at {@code stored -= sunk;}
-     * removed, so the slug is charged and reported sunk while the loop keeps every unit: "and the loop
-     * must be poorer by what left it (charged 36420, holding 36420): … \"sunk\":2000". The two
-     * premises at its head are arrangements and are not witnessed.
-     */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. INTO THE SLUG — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}"
+            + " asking for heat only at ten times the trigger: \"the dump must have taken heat off the loop and"
+            + " put it in the slug: … \\\"charge\\\":0 … \\\"hasStack\\\":true\". POORER — {@code HeatNetwork#tickThermodynamics} at {@code stored -= sunk;}"
+            + " removed, so the slug is charged and reported sunk while the loop keeps every unit: \"and the loop"
+            + " must be poorer by what left it (charged 36420, holding 36420): … \\\"sunk\\\":2000\". The two"
+            + " premises at its head are arrangements and are not witnessed.")
     @Test
     public void aLoopPastTheTriggerLosesHeatIntoTheSlugAndThrowsItOut() throws Exception {
         int cx = stand("a coolant loop with a loaded dump, about to be driven past its trigger");
@@ -153,14 +151,12 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
                 cooked.longInteger("heatStored") < cooked.longInteger("charged"));
     }
 
-    /**
-     * red-witnessed: one inversion per verdict, 2026-09-30. NOTHING AT ALL — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}
-     * dropping the trigger temperature: "below the trigger the dump must do nothing at all … expected:&lt;0&gt;
-     * but was:&lt;6000&gt;". STILL HOLDING — {@code TileHeatDump#getSinkRequestPerTick} at {@code return 0L;} firing the slug whenever it is
-     * below the trigger: "and it must still be holding the slug it was given: … \"hasStack\":false".
-     * LOSES NOTHING — {@code HeatNetwork#drainIntoSinks} at {@code return Math.min(stored, drained);} draining one unit into a dump that took none: "and the
-     * loop must lose nothing to it: … expected:&lt;0&gt; but was:&lt;1&gt;".
-     */
+    @LegacyWitness(prose = "one inversion per verdict, 2026-09-30. NOTHING AT ALL — {@code TileHeatDump#getSinkRequestPerTick} at {@code if (!HeatNetwork.enabled() || loopKelvin < triggerKelvin() || !hasEnoughEnergy(1))}"
+            + " dropping the trigger temperature: \"below the trigger the dump must do nothing at all … expected:&lt;0&gt;"
+            + " but was:&lt;6000&gt;\". STILL HOLDING — {@code TileHeatDump#getSinkRequestPerTick} at {@code return 0L;} firing the slug whenever it is"
+            + " below the trigger: \"and it must still be holding the slug it was given: … \\\"hasStack\\\":false\"."
+            + " LOSES NOTHING — {@code HeatNetwork#drainIntoSinks} at {@code return Math.min(stored, drained);} draining one unit into a dump that took none: \"and the"
+            + " loop must lose nothing to it: … expected:&lt;0&gt; but was:&lt;1&gt;\".")
     @Test
     public void aShipThatIsCopingThrowsNothingAway() throws Exception {
         int cx = stand("a coolant loop with a loaded dump, kept below its trigger");

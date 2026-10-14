@@ -1,16 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.ShipReadiness;
+import dev.stannismod.stellurgy.test.*;
 import org.junit.After;
-import dev.stannismod.stellurgy.test.ShipIdentity;
-import dev.stannismod.stellurgy.test.ShipInfo;
-
 import org.junit.Test;
-
-
-import dev.stannismod.stellurgy.test.FixtureSite;
-import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -71,23 +63,50 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // different question: nothing builds there, the crossing ARRIVES there, and clearing the
         // arrival area is an arrangement act rather than a claim about it.
         clearArrivalArea(DST_X, DST_Z);
-        String coords = placeFixture(SRC_X, SRC_Z);
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
+        int[] bp = placeFixture(SRC_X, SRC_Z);
+        buildMark = events.mark();
+        String asm = act("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]).raw();
+        builtDurable = ShipIdentity.nameFromAssembly(asm);
+        ShipBirth birth = ShipBirth.ofPress(events, buildMark, 0, bp, asm, SHIP_LINK_TICKS,
+                "the craft whose pilot seat must survive the arrival");
+        crossIntoTheHeat(birth);
+    }
+
+    /** The mark taken before this scenario's build, and the durable name of the craft it built. */
+    private long buildMark;
+    private String builtDurable;
+
+    /** The craft goes wherever its latest naming put it — the build site, or the far side of the crossing. */
+    @After
+    public void disposeOfTheCraft() throws Exception {
+        if (builtDurable != null) {
+            OwnShip.disposeOf(c -> read(c).raw(), c -> arrange(c).raw(), events, buildMark, builtDurable);
+            builtDurable = null;
+        }
+    }
+
+    /** Server ticks for this craft to be named and become usable, on either side of the crossing. */
+    private static final int SHIP_LINK_TICKS = 200;
+
+    private final Events events =
+            new Events(c -> read(c).raw(), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
+
+    private void crossIntoTheHeat(ShipBirth birth) throws Exception {
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + birth,
+                birth.rocketsBorn.isEmpty());
 
         // The source ship, by the durable name its assembler minted — which is also what the ARRIVED
         // craft is found by, since a crossing carries the name and re-mints the physics id. Both seat
         // questions below are asked THROUGH a ship rather than of the world: an unaddressed seat
         // probe answers about whichever pilot seat the world lists first, and this test has already
         // been caught reading a loose control seat that never crossed anything.
-        String durableId = ShipIdentity.nameFromAssembly(asm);
-        String srcShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        String durableId = birth.durable;
+        String srcShipId = ArrangementFailure.arranged(
+                () -> birth.awaitUsable(c -> read(c).raw(), events, SHIP_LINK_TICKS));
         assertTrue("source ship not managed by VS before the crossing; id=" + srcShipId,
-                ShipInfo.loadedIn(this::exec, 0, srcShipId));
+                ShipInfo.loadedIn(c -> read(c).raw(), 0, srcShipId));
 
-        String pre = exec("stellurgytest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
+        String pre = arrange("stellurgytest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0").raw();
         assertTrue("before the crossing the ship must have a pilot seat to lose: " + pre,
                 Reply.of(pre).bool("seatFound"));
 
@@ -106,8 +125,8 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // ARRANGEMENT: make the destination atmosphere the one that converts blocks on contact.
         // Asserted, not assumed — a test whose arrangement silently failed to arrange is a test that
         // measures nothing.
-        originalTemperature = extractInt(exec("stellurgytest planet info 0"), "averageTemperature");
-        String heated = exec("stellurgytest planet set-temp 0 " + SUPERHEATED_KELVIN);
+        originalTemperature = extractInt(read("stellurgytest planet info 0").raw(), "averageTemperature");
+        String heated = arrange("stellurgytest planet set-temp 0 " + SUPERHEATED_KELVIN).raw();
         // The atmosphere the planet ENDED UP with, read off the field that names it. Lower-casing
         // the whole reply and searching it also matched the word in `atmosphere` belonging to a
         // refusal, and would have matched a dimension or planet NAME carrying it.
@@ -129,25 +148,24 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String control = placedHot;
 
         // SUBJECT: the same atmosphere, but the seat arrives as part of a crossing structure.
-        ShipInfo srcLive = ShipInfo.byId(this::exec, 0, srcShipId);
+        ShipInfo srcLive = ShipInfo.byId(c -> read(c).raw(), 0, srcShipId);
         // The crossing CUTS a ship, so it is told which one. The source pose is still passed — the
         // riders aboard are gathered around it — but it no longer decides whose blocks are taken.
-        String cross = exec("stellurgytest vs ship-repack 0 id " + srcShipId + " "
+        String cross = act("stellurgytest vs ship-repack 0 id " + srcShipId + " "
                 + (int) srcLive.x + " " + (int) srcLive.y + " " + (int) srcLive.z
-                + " " + DST_X + " " + DST_Y + " " + DST_Z);
+                + " " + DST_X + " " + DST_Y + " " + DST_Z).raw();
         assertTrue("the crossing itself failed, so the seat question was never asked: " + cross,
                 Reply.of(cross).ok());
-        assertTrue("the crossed ship never re-loaded at the destination: " + cross,
-                loadedShips(0) >= 1);
 
         // The crew's own question: is there a seat on the arrived ship, still linked to its computer?
         // Asked of the ARRIVED ship by its own id — the crossing re-assembles the craft and mints a
         // new identity, so this deliberately is not srcShipId, and it is equally deliberately not
-        // "whatever seat the world lists first".
-        String dstShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        // "whatever seat the world lists first". Linked on the arrived craft becoming usable.
+        String dstShipId = ShipIdentity.awaitPhysicsIdOf(c -> read(c).raw(), events, 0, durableId,
+                SHIP_LINK_TICKS);
         assertTrue("the arrived ship is not managed by VS at the destination; id=" + dstShipId,
-                ShipInfo.loadedIn(this::exec, 0, dstShipId));
-        String post = exec("stellurgytest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
+                ShipInfo.loadedIn(c -> read(c).raw(), 0, dstShipId));
+        String post = arrange("stellurgytest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0").raw();
         assertTrue("the arrived ship has NO pilot seat - it burned on the way in, and its crew has "
                         + "nowhere to sit. control=" + control + " post=" + post,
                 Reply.of(post).bool("seatFound"));
@@ -155,8 +173,8 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
                 Reply.of(post).bool("afcResolved"));
 
         // And the block itself is a seat, not the fire that replaced it.
-        String seatBlock = exec("stellurgytest space get-block 0 " + extractInt(post, "seatX")
-                + " " + extractInt(post, "seatY") + " " + extractInt(post, "seatZ"));
+        String seatBlock = read("stellurgytest space get-block 0 " + extractInt(post, "seatX")
+                + " " + extractInt(post, "seatY") + " " + extractInt(post, "seatZ")).raw();
         assertEquals("the block at the arrived ship's seat position is not a pilot seat: " + seatBlock,
                 PILOT_SEAT, blockOf(seatBlock));
     }
@@ -166,15 +184,8 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // Shared-harness contract: a superheated overworld left behind would burn the next test's
         // fixtures, and a pinned ship set would hide the next test's unload behaviour.
         if (originalTemperature != Integer.MIN_VALUE) {
-            exec("stellurgytest planet set-temp 0 " + originalTemperature);
+            arrange("stellurgytest planet set-temp 0 " + originalTemperature);
         }
-    }
-
-    /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */
-    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
-     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
-    private int loadedShips(int dim) throws Exception {
-        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     /**
@@ -188,24 +199,24 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                Reply.of(exec("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+                Reply.of(arrange("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).raw()).ok());
         assertTrue("the arrival area could not be cleared",
-                Reply.of(exec("stellurgytest fill 0 " + (baseX - 4) + " " + (DST_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (DST_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
+                Reply.of(arrange("stellurgytest fill 0 " + (baseX - 4) + " " + (DST_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (DST_Y + 12) + " " + (baseZ + 20) + " minecraft:air").raw()).ok());
     }
 
     private void clearPos(int x, int y, int z) throws Exception {
-        exec("stellurgytest fill 0 " + x + " " + y + " " + z + " " + x + " " + y + " " + z + " minecraft:air");
+        arrange("stellurgytest fill 0 " + x + " " + y + " " + z + " " + x + " " + y + " " + z + " minecraft:air");
     }
 
     /** Clear a position, place a lone pilot seat there the ordinary way, and read the result back. */
     private String placeLoneSeat(int x, int y, int z) throws Exception {
         String box = x + " " + y + " " + z + " " + x + " " + y + " " + z;
         assertTrue("could not clear the position at " + box,
-                Reply.of(exec("stellurgytest fill 0 " + box + " minecraft:air")).ok());
+                Reply.of(arrange("stellurgytest fill 0 " + box + " minecraft:air").raw()).ok());
         assertTrue("could not place a pilot seat at " + box,
-                Reply.of(exec("stellurgytest fill 0 " + box + " " + PILOT_SEAT)).ok());
-        return exec("stellurgytest space get-block 0 " + x + " " + y + " " + z);
+                Reply.of(arrange("stellurgytest fill 0 " + box + " " + PILOT_SEAT).raw()).ok());
+        return read("stellurgytest space get-block 0 " + x + " " + y + " " + z).raw();
     }
 
     /**
@@ -213,11 +224,10 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
      * shared builder runs ASSERTS on an open-air site, so a block found standing here is an
      * arrangement failure that names itself instead of a craft that quietly fails to assemble.
      */
-    private String placeFixture(int baseX, int baseZ) throws Exception {
-        int[] bp = RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), this::exec,
+    private int[] placeFixture(int baseX, int baseZ) throws Exception {
+        return RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), c -> arrange(c).raw(),
                 "with-pilot-seat", 2, 10,
                 "the craft whose pilot seat must survive the arrival stands in this volume");
-        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static String blockOf(String json) {

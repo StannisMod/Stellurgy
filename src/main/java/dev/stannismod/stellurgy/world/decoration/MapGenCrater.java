@@ -1,5 +1,8 @@
 package dev.stannismod.stellurgy.world.decoration;
 
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.state.IBlockState;
@@ -12,9 +15,6 @@ import net.minecraft.world.gen.MapGenBase;
 import net.minecraftforge.common.BiomeManager;
 import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.oredict.OreDictionary;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
 
 import java.util.List;
 import java.util.stream.Collectors;

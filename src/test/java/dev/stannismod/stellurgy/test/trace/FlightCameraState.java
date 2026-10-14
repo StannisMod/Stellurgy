@@ -1,9 +1,9 @@
 package dev.stannismod.stellurgy.test.trace;
 
+import net.minecraft.util.math.MathHelper;
+
 import java.util.List;
 import java.util.Locale;
-
-import net.minecraft.util.math.MathHelper;
 
 /**
  * What the Free Flight pilot's own view was doing, accumulated over a window a test opens and closes.

@@ -1,21 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.test.CellInfo;
 import dev.stannismod.stellurgy.test.RealizedBody;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.CellInfo;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-
+import dev.stannismod.stellurgy.test.contract.LegacyWitness;
+import dev.stannismod.stellurgy.test.contract.OwnBoot;
 import org.junit.After;
 import org.junit.Test;
 
-
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * <b>A procedural planet becomes somewhere you can stand, and it is the planet the scan described.</b>
@@ -46,6 +41,7 @@ import static org.junit.Assert.assertTrue;
  * control would fail on order rather than on the code. The generator itself is NOT the reason: it is
  * installed per server and restored by {@code gen-reset}.</p>
  */
+@OwnBoot(reason = OwnBoot.Reason.GLOBAL_MUTATION)
 public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest {
 
     /**
@@ -61,25 +57,21 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
     /** In SUPER-CELLS: the probe sweeps the partition the generator itself walks. */
     private static final int SWEEP_RADIUS = 4;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     @After
     public void restoreGenerator() throws Exception {
         try {
-            exec("stellurgytest space gen-reset");
+            arrange("stellurgytest space gen-reset");
         } catch (Exception ignored) {
         }
     }
 
     @Test
     public void aProceduralBodyBecomesTheWorldTheScanDescribed() throws Exception {
-        String installed = exec(GEN_INSTALL);
+        String installed = arrange(GEN_INSTALL).raw();
         assertTrue("the procedural generator must install: " + installed,
                 Reply.of(installed).ok());
 
-        String found = exec("stellurgytest space find-procedural " + SWEEP_RADIUS);
+        String found = read("stellurgytest space find-procedural " + SWEEP_RADIUS).raw();
         assertTrue("a dense procedural galaxy must offer a landable body: " + found,
                 Reply.of(found).ok());
         String cell = jsonInt(found, "sx") + " " + jsonInt(found, "sy") + " " + jsonInt(found, "sz");
@@ -89,16 +81,16 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
         // CONTROL. Nothing in that cell is a descent target yet — which is the defect this whole path
         // exists to fix, and without measuring it first "descendTarget is true afterwards" would be a
         // statement about a flag that might always have been true.
-        CellInfo before = CellInfo.atKey(this::exec, cell);
+        CellInfo before = CellInfo.atKey(c -> read(c).raw(), cell);
         assertFalse("no procedural body may be a descent target before it is realized: "
                 + before.raw(), anyDescendTarget(before));
 
         // What the telescope would say, taken BEFORE anything is minted.
-        String scan = exec("stellurgytest space derived " + cell);
+        String scan = read("stellurgytest space derived " + cell).raw();
         assertTrue("the derivation must answer for an unrealized body: " + scan,
                 Reply.of(scan).ok());
 
-        RealizedBody realized = RealizedBody.at(this::exec, cell);
+        RealizedBody realized = RealizedBody.at(c -> act(c).raw(), cell);
         int dim = realized.dim;
         assertTrue("a realized dimension id must be real: " + realized.raw(), dim > 1);
 
@@ -143,14 +135,14 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
                 realized.starId < 0);
 
         // Idempotency: the trigger is a per-tick proximity check, so asking again is the normal case.
-        RealizedBody again = RealizedBody.at(this::exec, cell);
+        RealizedBody again = RealizedBody.at(c -> act(c).raw(), cell);
         assertEquals("a second descent must REUSE the world, not mint another: " + again.raw(),
                 dim, again.dim);
 
         // And the world is a world: it loads, and it has ground rather than a column of air.
-        String loaded = exec("stellurgytest dim time " + dim);
+        String loaded = arrange("stellurgytest dim time " + dim).raw();
         assertFalse("the realized dimension must load: " + loaded, Reply.of(loaded).has("error"));
-        String sample = exec("stellurgytest worldgen sample " + dim + " 0 0");
+        String sample = read("stellurgytest worldgen sample " + dim + " 0 0").raw();
         assertFalse("the realized world must generate terrain: " + sample, Reply.of(sample).has("error"));
         assertNotEquals("a realized planet must have ground under its sky: " + sample,
                 "minecraft:air", jsonString(sample, "topBlock"));
@@ -173,11 +165,11 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
      */
     @Test
     public void aMoonRealizedBeforeItsParentIsStillAMoon() throws Exception {
-        String installed = exec(GEN_INSTALL);
+        String installed = arrange(GEN_INSTALL).raw();
         assertTrue("the procedural generator must install: " + installed,
                 Reply.of(installed).ok());
 
-        String found = exec("stellurgytest space find-moon " + SWEEP_RADIUS);
+        String found = read("stellurgytest space find-moon " + SWEEP_RADIUS).raw();
         assertTrue("a dense procedural galaxy must offer a planet with a moon: " + found,
                 Reply.of(found).ok());
         // TWO cells, by KEY. A moon has a cell of its own inside its parent's zone, so the family is
@@ -192,14 +184,14 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
         // CONTROL. Nothing in the family has a world yet, so the moon below is genuinely realized
         // FIRST - without this the test could pass on a parent that happened to be realized already,
         // which is the one arrangement the bug does not occur in.
-        CellInfo before = CellInfo.atKey(this::exec, cell);
-        CellInfo beforeParent = CellInfo.atKey(this::exec, parentCell);
+        CellInfo before = CellInfo.atKey(c -> read(c).raw(), cell);
+        CellInfo beforeParent = CellInfo.atKey(c -> read(c).raw(), parentCell);
         assertFalse("no member of the family may hold a world before the moon is realized: "
                 + before.raw(), anyDescendTarget(before));
         assertFalse("...the parent's cell included: " + beforeParent.raw(),
                 anyDescendTarget(beforeParent));
 
-        RealizedBody moon = RealizedBody.at(this::exec, cell, moonVariant);
+        RealizedBody moon = RealizedBody.at(c -> act(c).raw(), cell, moonVariant);
         assertTrue("a moon realized before its parent must still BE a moon: " + moon.raw(),
                 moon.moon);
         int parentDim = moon.parent;
@@ -209,7 +201,7 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
         // The second half of the same corruption: a parentless moon kept its PARENT's distance from
         // the star as its own orbital distance, because that is the number its climate is derived
         // from. A moon's own orbit is around the parent, and the two are different numbers.
-        RealizedBody parent = RealizedBody.at(this::exec, parentCell, parentVariant);
+        RealizedBody parent = RealizedBody.at(c -> act(c).raw(), parentCell, parentVariant);
         assertEquals("realizing the parent afterwards must reuse the world the moon gave it",
                 parentDim, parent.dim);
         assertFalse("the parent is not a moon: " + parent.raw(), parent.moon);
@@ -235,31 +227,30 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
      *
      * <p>Positive half on the same read: the moon's parent IS listed, so an empty or unread list cannot
      * pass the verdict.</p>
-     *
-     * <p>red-witnessed: 2026-10-01, on the code as it stood before the fix — {@code PlanetRealizer#materialize}
-     * at {@code props.setStar(star)} called before the parent was set, plus a second
-     * {@code star.addPlanet(props)} after registration: "moon 15 must be listed under its planet 14,
-     * not among its star's planets [14, 15]".</p>
      */
+    @LegacyWitness(prose = "2026-10-01, on the code as it stood before the fix — {@code PlanetRealizer#materialize}"
+            + " at {@code props.setStar(star)} called before the parent was set, plus a second"
+            + " {@code star.addPlanet(props)} after registration: \"moon 15 must be listed under its planet 14,"
+            + " not among its star's planets [14, 15]\".")
     @Test
     public void aRealizedMoonIsNotListedAmongItsStarsPlanets() throws Exception {
-        String installed = exec(GEN_INSTALL);
+        String installed = arrange(GEN_INSTALL).raw();
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
                 "the procedural generator must install: " + installed, Reply.of(installed).ok());
-        String found = exec("stellurgytest space find-moon " + SWEEP_RADIUS);
+        String found = read("stellurgytest space find-moon " + SWEEP_RADIUS).raw();
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
                 "a dense procedural galaxy must offer a planet with a moon: " + found, Reply.of(found).ok());
 
-        RealizedBody parent = RealizedBody.at(this::exec, jsonString(found, "parentCellKey"),
+        RealizedBody parent = RealizedBody.at(c -> act(c).raw(), jsonString(found, "parentCellKey"),
                 jsonInt(found, "parentVariant"));
-        RealizedBody moon = RealizedBody.at(this::exec, jsonString(found, "cellKey"),
+        RealizedBody moon = RealizedBody.at(c -> act(c).raw(), jsonString(found, "cellKey"),
                 jsonInt(found, "moonVariant"));
         dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
                 "the realized moon must be a moon of the realized planet: moon " + moon.raw()
                         + " / parent " + parent.raw(), moon.moon && moon.parent == parent.dim);
 
-        Reply moonInfo = Reply.of(exec("stellurgytest planet info " + moon.dim));
-        Reply star = Reply.of(exec("stellurgytest star get " + moonInfo.integer("starId")));
+        Reply moonInfo = Reply.of(read("stellurgytest planet info " + moon.dim).raw());
+        Reply star = Reply.of(read("stellurgytest star get " + moonInfo.integer("starId")).raw());
         java.util.List<Integer> listed = new java.util.ArrayList<>();
         for (int dim : star.intArray("planetDims")) {
             listed.add(dim);
@@ -282,11 +273,11 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
      */
     @Test
     public void aGasGiantsMoonIsAMoonAndTheGiantStaysUnlandable() throws Exception {
-        String installed = exec(GEN_INSTALL);
+        String installed = arrange(GEN_INSTALL).raw();
         assertTrue("the procedural generator must install: " + installed,
                 Reply.of(installed).ok());
 
-        String found = exec("stellurgytest space find-moon " + SWEEP_RADIUS + " giant");
+        String found = read("stellurgytest space find-moon " + SWEEP_RADIUS + " giant").raw();
         assertTrue("a dense procedural galaxy must offer a gas giant with a moon: " + found,
                 Reply.of(found).ok());
         assertTrue("arrangement: the parent must be the kind nothing can descend into: " + found,
@@ -294,7 +285,7 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
         String cell = jsonString(found, "cellKey");
         String parentCell = jsonString(found, "parentCellKey");
 
-        RealizedBody moon = RealizedBody.at(this::exec, cell, jsonInt(found, "moonVariant"));
+        RealizedBody moon = RealizedBody.at(c -> act(c).raw(), cell, jsonInt(found, "moonVariant"));
         assertTrue("and it must be a moon, which it can only be if the giant got a record of its own: "
                 + moon.raw(), moon.moon);
         assertTrue("naming a real parent dimension: " + moon.raw(), moon.parent > 1);
@@ -304,7 +295,7 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
         // not somewhere to land: it has no surface, so the descent flag every downstream consumer
         // reads stays false for it. Both halves matter; a fix that made the giant landable would pass
         // the moon assertions above and break the game.
-        CellInfo after = CellInfo.atKey(this::exec, parentCell);
+        CellInfo after = CellInfo.atKey(c -> read(c).raw(), parentCell);
         CellInfo.Body giantEntry = bodyOfKind(after, "GAS_GIANT");
         assertEquals("the giant must now hold the very dimension the moon calls its parent: "
                 + after.raw(), moon.parent, giantEntry.dim);
@@ -313,8 +304,8 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
 
         // A descent aimed at the giant is still refused, which is what "not landable" MEANS here -
         // the flag above is a report, this is the behaviour.
-        String refused = exec("stellurgytest space realize " + parentCell + " "
-                + jsonInt(found, "parentVariant"));
+        String refused = act("stellurgytest space realize " + parentCell + " "
+                + jsonInt(found, "parentVariant")).raw();
         assertNotNull("realizing a gas giant as a DESCENT must stay refused: " + refused,
                 RealizedBody.refusedBecause(refused));
     }
@@ -367,5 +358,20 @@ public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest 
     private static String jsonString(String json, String key) {
         String value = Reply.of(json).text(key);
         return value;
+    }
+
+    /** A server command that OBSERVES, sent in its role. */
+    private Reply read(String command) throws Exception {
+        return Reply.answering(command, client().read(command));
+    }
+
+    /** A server command that SETS THE SCENE (an arrangement, a build, a decided outcome), sent in its role. */
+    private Reply arrange(String command) throws Exception {
+        return Reply.answering(command, client().arrange(command));
+    }
+
+    /** A server command that CALLS a production entry a player, a tick or a packet would reach, sent in its role. */
+    private Reply act(String command) throws Exception {
+        return Reply.answering(command, client().act(command));
     }
 }
