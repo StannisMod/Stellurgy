@@ -2,7 +2,7 @@
 id: C22
 covers: what a tier-2 craft does with momentum — commanded, uncommanded, manned and not
 confidence: RULED; MOTION-7 implemented (MOTION-3 is retired in place) — production still violates MOTION-2, MOTION-5 and MOTION-6, and MOTION-1's angular half
-owner-subsystem: rocket-entity (TileAdvancedFlightComputer, MixinTileAdvancedFlightComputer) + the vendored physics substrate
+owner-subsystem: rocket-entity (TileAdvancedFlightComputer, which is the physics force controller itself) + the vendored physics substrate
 see-also: [C9 (ship control — the input CHAIN; this says what the input does to the craft), C11 (physics-substrate port), C19 (reference frames — which body a velocity is measured AGAINST), C10 (ship stats)]
 ---
 

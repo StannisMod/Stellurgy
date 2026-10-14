@@ -92,6 +92,14 @@ Detail (with `file:line` citations) lives in the cluster docs.
 - **Interfaces/caps** — MECH-API-22 wear capability · 23 protective-armor capability · 24 area
   blob graph · 25 star colour · 26 star NBT tree · 27 seal-handler contract. See
   [`interfaces.md`](./interfaces.md).
+- **Ship-combat handles** (arrived with the `1.12` merge `cc55611dc`). `StellurgyBlocks` /
+  `StellurgyItems` carry the turret, gun-part, weapon-console, fire-control-sensor, plating and
+  repair-welder handles, and `StellurgyConfiguration` the `WEAPONS` section plus the repair keys
+  under `ROCKET`. This doc owns only the CONTAINERS: what each handle and key does is owned by
+  [`weapons`](../weapons.md), [`fire-control-sensor`](../fire-control-sensor.md) and
+  [`projectile-substrate`](../projectile-substrate.md), and every key is catalogued in
+  [C4](../../30-contracts/C4-config-surface.md). The `api/damage`, `api/projectile`,
+  `api/sensor` and `api/weapon` packages are owned by those subsystems' rows in `00-index.md`.
 
 ## Dependency edges
 

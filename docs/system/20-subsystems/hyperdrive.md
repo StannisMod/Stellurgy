@@ -1,6 +1,6 @@
 ---
 id: hyperdrive
-owns: [hyperdrive/, tile/hyperdrive/, tile/TileShipComponent.java]
+owns: [hyperdrive/, tile/hyperdrive/, tile/TileShipComponent.java, navigation/JumpGate.java, tile/TileAdvancedFlightComputer.java, tile/TileNavigationComputer.java, tile/TilePilotSeat.java]
 entrypoints: [TileAdvancedFlightComputer#onJumpKey, TileAdvancedFlightComputer#update (spool), TileNavigationComputer#update (forecast), JumpGate#check]
 depends-on: [space-model, api-public, network-wire, blocks]
 depended-by: [jump-hazards (planned), ship-damage (planned), client-render]
@@ -244,6 +244,13 @@ ground every ship built before the thermal system existed.
 | POWER | `charge ≥ burstCost` | HARD | `msg.jumpgate.capacitorlow` |
 | SUPPLY | `storedEnergy ≥ inFlightDraw × transitTicks` | ADVISORY | `msg.jumpgate.energyshortfall` |
 
+One NAVIGATION clause belongs beside these because it is about what the jump will cost in TIME:
+**the target's cell can get a world slot now** (`SpaceManager#canMaterialize`) — ADVISORY,
+`msg.jumpgate.destinationfull`. Not HARD: the pool is a snapshot and the departure itself frees the origin
+cell, often the very slot the arrival gets; a full pool at arrival makes the ship wait in its lane, paying
+nothing more (space, MECH-SPC-15). `JumpGate.java:333-342`, `ShipNavigation.java:74-79` `[T]`
+`JumpGateTest.java:128`.
+
 POWER and SUPPLY stay silent when there is no drive, so the one useful line is not buried under two
 useless ones — and so does the thermal clause, which is about a machine that is there. [T]
 `test/unit/JumpGateTest.java`.
@@ -290,6 +297,12 @@ Generator`, `ARjumpFieldEmitter`, `ARjumpCapacitor`, `ARgravityDampener`.
 - **INV-HYP-07 [T]** The jump bank charges only from energy the ship pushes into it: a bank with
   nothing feeding it never fills however long anybody waits, it accepts no faster than its
   throughput allows, and it is not the ship's battery. Pinned by `CapacitorChargeTest#aBankWithNoInflowNeverGetsThere`, `CapacitorChargeTest#aBankAcceptsNoFasterThanItsThroughputAllows`, `CapacitorChargeTest#theJumpBankIsNOTtheShipsBattery`, `HyperdriveTest#aFRESHBANKSTAYSEMPTYWHILETIMEPASSES`.
+- **INV-HYP-08 [T][BEH]** A destination whose cell the server cannot load now is a WARNING the pilot
+  confirms, never a refusal: the pool is a snapshot, and the departure itself frees the slot the
+  arrival often gets. The forecast is `SpaceManager#canMaterialize`, which answers what `materialize`
+  would do — yes for a live cell, a free slot or an idle evictable cell — and binds nothing. Pinned by
+  `JumpGateTest#aFullDestinationIsAWarningThePilotConfirmsNotARefusal`,
+  `SpaceManagerTest#canMaterializeForecastsMaterializeAndBindsNothing`.
 
 ## Failure modes & edge cases
 
@@ -297,7 +310,10 @@ Generator`, `ARjumpFieldEmitter`, `ARjumpCapacitor`, `ARgravityDampener`.
   departure commit, through a ship-damage service that **does not exist in the tree**. The predicate
   ships as the ADVISORY it was specified to be; the consequence arrives with that subsystem.
 - **`inFlightDraw` is a forecast stat, not a drain.** Nothing deducts it per tick during a transit, and
-  nothing ends a flight early for running dry — both belong to the planned jump-hazards subsystem.
+  nothing ends a flight early for running dry — both belong to the planned jump-hazards subsystem. When
+  that drain is built, **a ship waiting in its lane for a destination slot draws nothing** (maintainer,
+  2026-10-06: *"Во время ожидания тогда надо не списывать энергию за гиперпереход, иначе может быть очень
+  больно"*) — the wait is the server's limit, not the flight.
 - **Dampeners have no consumer.** See MECH-HYP-14.
 - A generator whose coil count exceeds `MAX_COILS` is counted up to the cap and the scan reports
   `truncated`; nothing surfaces that to the player yet.

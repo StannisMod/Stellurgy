@@ -1,6 +1,6 @@
 ---
 id: event-handlers
-owns: [event/]
+owns: [event/, player/]
 entrypoints: [PlanetEventHandler (EVENT_BUS + ORE_GEN_BUS), RocketEventHandler (client EVENT_BUS), EntityEventHandler, AcidRainHandler, WirelessDataTickHandler, WirelessNetworkRegistryHandler, WorldEvents (ForgeChunkManager callback)]
 depends-on: [dimension-planets, atmosphere-oxygen, space-stations, network-wire, wirelessdata, api-public, advancements, client-render]
 depended-by: [multiblock-machines]
@@ -40,7 +40,7 @@ The handler classes (`PlanetEventHandler`, `RocketEventHandler`, `EntityEventHan
 - **MECH-EVT-02** ore-gen suppression: on a `WorldProviderPlanet` with custom oregen, vanilla COAL/DIAMOND/…/CUSTOM generation is DENYed so only Stellurgy oregen runs — `:184` (on `ORE_GEN_BUS`).
 - **MECH-EVT-03** low-gravity falls: fall distance is scaled by the planet's `getGravitationalMultiplier` before damage — `:614`.
 - **MECH-EVT-04** off-station eviction: a player in `spaceDimId` not on any station and not riding a rocket is teleported to a station spawn, else back to dim 0 via `BasicTeleporter` — at the END of the space world's `WorldTickEvent`, `spaceDimensionGuard` → `evictIfOffStation`, `PlanetEventHandler.java:243,254` (not run from `playerTick`'s `LivingUpdateEvent` — see INV-EVT-07).
-- **MECH-EVT-05** misc player tick: refill air to 300 for LOWOXYGEN-immune entities in water; trigger `WENT_TO_THE_MOON` near a hardcoded Luna coord — `:217,223`.
+- **MECH-EVT-05** misc player tick: server side only, refill the breath bar to 300 for an entity in water whose suit would keep it alive in air with NO oxygen (`AtmosphereHazards#wouldBeImmune` of `exposureOf(NOO2)` — a tank with air left, asked for free: the suit spends nothing to answer, so swimming does not empty it). Water is not air, so it does not follow `breathingRequiresO2`. Trigger `WENT_TO_THE_MOON` near a hardcoded Luna coord. `PlanetEventHandler#playerTick`. Pinned by `client/VacuumAndSuitClientGroupTest` (`aSuitKeepsASwimmerBreathing…`, `withBreathingNotNeedingOxygenAnUnsuitedSwimmerStillDrowns`). [T]
 - **MECH-EVT-06** sleep gating: `PlayerSleepInBedEvent` → `OTHER_PROBLEM` on a planet whose atmosphere at the bed is not breathable, unless `forcePlayerRespawnInSpace` — `:282`.
 - **MECH-EVT-07** combustion suppression: in a non-combustible atmosphere, torch placement is swapped to `blockUnlitTorch`, configured `torchBlocks` placement is cancelled, and flint&steel/fire-charge/blaze right-clicks are cancelled — `:307,324`.
 - **MECH-EVT-08** water-source lock: `CreateFluidSourceEvent` DENYed at positions in the dimension's `water_source_locked_positions` — `:479`.

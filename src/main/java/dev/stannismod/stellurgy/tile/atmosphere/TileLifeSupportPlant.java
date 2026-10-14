@@ -37,7 +37,7 @@ import java.util.List;
  * does one tier down.
  */
 public class TileLifeSupportPlant extends TileInventoriedRFConsumer
-        implements IModularInventory, ISubsystemSource, IHeatEmitter {
+        implements IModularInventory, ISubsystemSource, IHeatEmitter, LifeSupportNetwork.UpkeepSupply {
 
     /** Regeneration work done but not yet worth a whole dust, in µatm·blocks. */
     private int carbonBuffer;
@@ -78,7 +78,7 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
      */
     @Override
     public int getAvailable() {
-        if (world == null || world.isRemote || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
+        if (world == null || world.isRemote)
             return 0;
         if (!hasRoomForDust())
             return 0;
@@ -114,6 +114,22 @@ public class TileLifeSupportPlant extends TileInventoriedRFConsumer
         emitDust();
         markDirty();
         return taken;
+    }
+
+    /**
+     * A port's running cost, paid from this plant's buffer — the power a port draws reaches it through
+     * the ducts, from here.
+     */
+    @Override
+    public boolean payUpkeep(int fe) {
+        if (fe <= 0)
+            return true;
+        if (energy.getUniversalEnergyStored() < fe)
+            return false;
+        energy.extractEnergy(fe, false);
+        wasteHeat.spend(fe);
+        markDirty();
+        return true;
     }
 
     /** Purely for the readout: production is what it can convert, never what its power buffer holds. */

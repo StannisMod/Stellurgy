@@ -226,6 +226,11 @@ One row per clause; `[T]` pinned by a test · `[V]` verified against code · `[A
   **What this does NOT license**: an unbounded retry nobody can see. The settle keeps working because
   the arrival is owed, and if it stops making progress that is a diagnostic to be surfaced as one —
   loud and about the machinery, not a message to a player about his ship.
+  **A full slot pool is not a failure path either**: the arrival WAITS in its lane, crew aboard, ledger
+  `IN_TRANSIT`, and lands the tick a slot frees. It is the one wait a crew is told about — once,
+  "arrival delayed" — because its cause is the server's limit, not the machinery, and nothing about it
+  says the arrival will not happen. `ShipTransitManager#tickTransits` (the `PoolExhaustedException`
+  catch) `[T]` `ShipTransitManagerTest#anArrivalIntoAFullPoolWaitsInItsLaneAndLandsOnceASlotFrees`.
 - **JUMP-16 (a hull declared finished is collected, whatever load request stands on it)** `[V][SYS]`
   A registered ship that is DEAD, or owns an empty block set, and is neither loaded nor queued for an
   immediate load leaves the registry on the next manager tick, announced `DESTROYED` (or `DEPARTED`

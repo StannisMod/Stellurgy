@@ -1,7 +1,7 @@
 ---
 id: atmosphere-oxygen
-owns: [atmosphere/, tile/atmosphere/, armor/, api/atmosphere/, api/armor/, tile/TileSuitWorkStation.java, tile/TileWearable.java]
-entrypoints: [AtmosphereHandler#onTick, AtmosphereHandler#onBlockChange, TileOxygenVent#performFunction, AtmosphereNeedsSuit#isImmune]
+owns: [atmosphere/, tile/atmosphere/, armor/, api/atmosphere/, api/armor/, tile/TileSuitWorkStation.java, tile/TileWearable.java, subsystem/ejection/]
+entrypoints: [AtmosphereHandler#onTick, AtmosphereHandler#onBlockChange, TileOxygenVent#performFunction, AtmosphereHazards#isImmune]
 depends-on: [dimension-planets, api-public, network-wire, util-core, client-render]
 depended-by: [rocket-entity, event-handlers, blocks, items]
 contracts: [C1, C2, C3, C4, C5]
@@ -14,11 +14,13 @@ Models breathable vs. hostile air on a per-dimension basis, applies per-tick dam
 effects to unprotected entities, and provides the machines (oxygen vent, CO2 scrubber, gas
 charge pad, atmosphere detector) and worn gear (space suit / chest) that let a player survive
 and pressurise a sealed room. The unit of "air" is an `AreaBlob` flood-fill anchored on a vent;
-the unit of "type" is a registered `AtmosphereType` singleton carried as the blob's data.
+the unit of "type" is a named `Atmosphere` constant (`api/atmosphere/`) carried as the blob's data,
+and what that air does to a body is one table, `atmosphere/hazard/AtmosphereHazards`.
 
 ## Responsibility boundary
 
-**Owns:** the `AtmosphereType` singleton hierarchy and their tick effects; the per-dimension
+**Owns:** the named `Atmosphere` constants and the hazard table that decides their tick effects
+(`atmosphere/hazard/`); the per-dimension
 `AtmosphereHandler` registry and blob bookkeeping; the four atmosphere machines
 (`tile/atmosphere/*`); the space-suit armor items (`armor/*`) and their protection contract;
 the suit workstation and the generic wear tile.
@@ -35,13 +37,14 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
 | `AtmosphereHandler` | Per-dimension singleton; holds `IBlobHandler→AreaBlob` map; Forge-event ticker for entity effects; block-change reactor. |
 | `AtmosphereAssertion` (`api/atmosphere/`) | What a detector can watch for: a statement about the air, not a name. Eleven of them, two of which — poisonous, corrosive — no named atmosphere ever expressed. |
 | `AtmosphereAssertions` | Evaluates a statement at a position: the AIR answers wherever there is a zone, the published atmosphere answers outdoors, and the two questions a name cannot answer read NO there rather than guessing. |
-| `Atmosphere` (`api/atmosphere/`) | The concrete named atmosphere; flags `canTick / isBreathable / allowsCombustion`; registers all singletons in a static block. |
-| `AtmosphereNeedsSuit` | Adds `isImmune(entity)` = suit/creative/riding/grace check; base for every hostile type. |
-| `AtmosphereVacuum` / `AtmosphereNoOxygen` / `AtmosphereLowOxygen` | O2-deprivation effects (damage + blindness/weakness/nausea); vacuum also uses config `vacuumDamage`. |
-| `AtmosphereHighPressure` / `AtmosphereSuperHighPressure` (+`…NoOxygen`) | Pressure effects (poison, toxicity damage, jump-block narcosis). |
-| `AtmosphereVeryHot` / `AtmosphereSuperheated` (+`…NoOxygen`) | Set fire + heat damage. |
-| `TileOxygenVent` | RF+O2 consumer; registers a blob, floods a sealed room to `PRESSURIZEDAIR`, drives adjacent scrubbers. |
-| `TileCO2Scrubber` | Inventory hatch holding a cartridge; `useCharge()` damages it; comparator reports charge. |
+| `Atmosphere` (`api/atmosphere/`) | The concrete named atmosphere; flags `canTick / isBreathable / allowsCombustion`; fourteen named constants, registered nowhere. Its `onTick` / `isImmune` delegate to the hazard table. |
+| `AtmosphereHazards` (`atmosphere/hazard/`) | The table: which hazard rows each named atmosphere raises (`exposureOf`), what they do under the current config (`effectOn`), and the one immunity question — grace, android, creative/spectator, riding, then the suit (`isImmune` / `wouldBeImmune`). |
+| `HazardEffect` / `HazardExposure` | One row (period, damage source, amount, potions, ignition, narcosis, message) / the merged set of rows one atmosphere raises. |
+| `Poisoning` | A poison carried as a DOSE on the entity, ticked from the air around it — not a row of the table. |
+| `TileOxygenVent` | T1 zone port: RF consumer holding a `SealedZone`, plus an O2 tank that is one SUPPLY — it tops the room up to sea level, paying only for what it admits; drives adjacent scrubbers. Not a ventilation-network member. |
+| `TileVentilationPort` | T4 zone port: holds a `SealedZone`, is the ventilation network's sink, has no tank; powered by the plants on its network through the ducts (MECH-ATM-34). |
+| `SealedZone` (`tile/atmosphere/`) | one zone's keeping, shared by both ports: seal cadence, breach detection and drain, the air a new zone starts with, its save. |
+| `TileCO2Scrubber` | T2: inventory hatch holding a cartridge; it absorbs its vent's room's CO2 and pays in charges (MECH-ATM-08); comparator reports charge. |
 | `TileLifeSupportPlant` | T4 central regeneration; a network source, carbon into its own slot. |
 | `TileVentilationDuct` | the two-channel duct: a throughput and nothing else — no gas is stored in a pipe. |
 | `TileJettisonPort` | the carbon's exit: an unpowered airlock that throws its slot overboard when the way ahead is clear. |
@@ -75,10 +78,11 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   `AtmosphereHandler.java:120-223`.
 - **MECH-ATM-04 entity tick effects** — `onTick(LivingUpdateEvent)` resolves the entity's
   atmosphere; if `canTick()` and not in lava/water, posts a cancellable `AtmosphereTickEvent`
-  then calls `atmosType.onTick(entity)` unless the type is immune to that entity class. Each
-  hostile type applies its own damage source + potion cocktail on a modulo cadence.
-  `AtmosphereHandler.java:235-264`; effects in each `Atmosphere*.onTick`.
-- **MECH-ATM-05 suit / immunity check** — `AtmosphereNeedsSuit.isImmune(entity)` returns true
+  then calls `atmosType.onTick(entity)` unless the type is immune to that entity class.
+  `Atmosphere#onTick` asks the hazard table what the air does (`AtmosphereHazards.effectOn`), returns
+  if no row fires on this tick, asks immunity only then (asking spends suit air), and applies the
+  merged rows (MECH-ATM-16c). `AtmosphereHandler.java:287-337`; `api/atmosphere/Atmosphere.java:129-141`.
+- **MECH-ATM-05 suit / immunity check** — `AtmosphereHazards.isImmune(exposure, entity)` returns true
   for the rocket-transfer grace window, MatterOverdrive androids, creative/spectator, riding a
   rocket/elevator capsule, or wearing protection: hazards that act on what you BREATHE need
   helm+chest, hazards that act on the whole body additionally need legs+feet, and where several are
@@ -95,13 +99,24 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   it, and when the edge went the map lost its only reader and went with it.
   `AtmosphereHandler.java:292-294`; `Atmosphere.sendToRealPlayer:29-37`.
 - **MECH-ATM-07 vent operating cycle** — while turned on, fuelled and powered, the vent
-  periodically `addBlock`s to seal (every 100t), drains O2 proportional to blob size ×
-  `getGasUsageMultiplier()`, activates adjacent scrubbers, and reverts the blob to the dim's
-  default atmosphere when the tank runs dry. Loss of power/seal clears the blob.
-  `tile/atmosphere/TileOxygenVent.java:184-372`.
-- **MECH-ATM-08 scrubber charge** — `useCharge()` increments cartridge item-damage (returns true
-  while charge remains, reducing gas usage); `getComparatorOverride()` maps remaining damage to
-  a 0..15 redstone level. `tile/atmosphere/TileCO2Scrubber.java:26-47`.
+  periodically `addBlock`s to seal (every 100t), activates adjacent scrubbers, then runs its
+  scrubbers (MECH-ATM-08) and its supply (MECH-ATM-33). Loss of power/seal clears the blob. There is
+  no other mode: a vent never burns a running cost every tick nor DECLARES its room's atmosphere —
+  life support is a core system, not a switchable one (maintainer ruling 2026-10-06).
+  `TileOxygenVent#performFunction`.
+- **MECH-ATM-08 scrubber: T2 absorbs CO2 and pays in charges** — once a second each scrubber beside a sealed vent draws up to
+  `lifeSupportScrubberRate` of gas (÷ zone volume as partial pressure) of the room's CO2, and the
+  CO2 is GONE: no oxygen comes back, which is what separates T2 from T3. Each charge of its cartridge
+  pays for `lifeSupportScrubberCo2PerCharge` of what it took; the remainder below one charge is kept
+  (`co2Unpaid`, saved), so the cartridge pays exactly for its draw, and the draw is capped at what the
+  remaining charges cover, so nothing is taken unpaid. No cartridge ⇒ nothing drawn, unless
+  `scrubberRequiresCartrige` is false. The vent powers each scrubber that drew that second
+  (`10 × OxygenVentPowerMultiplier` per tick) and its oxygen supply does not read the scrubbers at
+  all. Not affected by `breathingRequiresO2` or `enableToxicity`: the machines run whatever
+  the air does to living things. `getComparatorOverride()` maps
+  remaining charge to a 0..15 redstone level. `TileCO2Scrubber#absorb`, `TileOxygenVent#scrub`.
+  Pinned by `server/LifeSupportZoneTest` (`aScrubberTakes…`, `aVentWithTwoScrubbers…`,
+  `withBothChemistrySettingsOffTheMachinesStillMoveGas`). [T]
 - **MECH-ATM-09 gas charge pad** — for each player standing in its 1×2×1 box, tops up a fillable
   chest with tank O2, or fills H2 into fillable armor-module component stacks; O2 and H2 paths
   are mutually gated on tank fluid type. Runs every 2 ticks. `tile/atmosphere/TileGasChargePad.java:94-174`.
@@ -136,7 +151,8 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   `(period, damage source, amount, potions, ignition, narcosis, whether the client is told)`. A named
   atmosphere maps to the SET of rows it raises, and the rows that fire on a tick are MERGED — the
   strongest amplifier per potion, applied once — so a room that is two kinds of dangerous is not
-  noisier than a room that is one. Replaces fourteen `onTick` methods that were the cells of one
+  noisier than a room that is one. Replaces eleven per-class `onTick` methods (deleted, with their
+  `AtmosphereType` base and `AtmosphereNeedsSuit`, in the life-support merge `45cdb0b3b`) that were the cells of one
   product (an oxygen rung × a hot-or-dense rung) written out by hand.
   <b>Four places where those cells disagreed with what composing their hazards produces are PRESERVED
   as named rows</b> — heat ignites only where the air was breathable; the deepest pressure rung
@@ -145,8 +161,8 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   `atmosphere/hazard/AtmosphereHazards.java`; `atmosphere/hazard/HazardExposure.java`. [V/T]
 - **MECH-ATM-16d immunity is keyed by HAZARD, and spending is keyed by what the air lacks** — what a
   suit is asked is "do you stop this kind of harm", never "do you recognise this named atmosphere";
-  the piece requirement is the STRICTEST among the active hazards, which reproduces all fourteen
-  hand-written mask-or-full-suit answers. A suit spends its tank only where there is no oxidiser
+  the piece requirement is the STRICTEST among the active hazards, which reproduces every one of the
+  eleven hand-written mask-or-full-suit answers. A suit spends its tank only where there is no oxidiser
   outside to concentrate — said of the hazard rather than read off the label's hand-assigned
   combustion flag, which is the wrong source.
   <b>Immunity remains all-or-nothing per ZONE</b>: an entity that meets the strictest requirement is
@@ -167,9 +183,10 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   phase, keep the period), a living entity inside a zone the vent has declared breathable converts `lifeSupportRespirationRate / blobSize` of the zone's oxygen into CO2, and
   the blob's data is then set to `AirState.deriveAtmosphere()`. Total pressure is unchanged:
   breathing rearranges air rather than consuming it. Dividing by the zone volume is what makes a
-  bigger cabin last proportionally longer on the same crew. `AtmosphereHandler.java:respire`. [V/T]
-- **MECH-ATM-18 the derived atmosphere** — the gas state is the model, the registered
-  `AtmosphereType` singletons stay the interface: `deriveAtmosphere()` maps a zone to `VACUUM`
+  bigger cabin last proportionally longer on the same crew. Nobody breathes with `breathingRequiresO2`
+  off (MECH-ATM-35). `AtmosphereHandler.java:respire`. [V/T]
+- **MECH-ATM-18 the derived atmosphere** — the gas state is the model, the named `Atmosphere`
+  constants stay the interface: `deriveAtmosphere()` maps a zone to `VACUUM`
   (no gas), `NOO2` (no oxygen at all), `LOWOXYGEN` (below the band), `HIGHOXYGEN` (above it) or
   `PRESSURIZEDAIR`. Nothing downstream — damage, suit immunity, `PacketAtmSync`, the detector —
   learns about partial pressures. An unconfigured band (`max <= min`) governs nothing rather than
@@ -210,29 +227,85 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   `tile/atmosphere/TileGasSeparator.java`. [V/T]
 - **MECH-ATM-22 T4 ventilation network** — the centralised tier. `TileLifeSupportPlant` is a
   network SOURCE of regeneration work, `TileVentilationDuct` a CABLE with a throughput and no
-  contents, and **`TileOxygenVent` is its zone's SINK** — the vent already owns the zone, so "one
-  vent per zone connects to the plant" needed no new object that knows what a zone is. All of the
+  contents, and **`TileVentilationPort` is its zone's SINK** — a port without a tank, because the
+  network carries AIR WORK and no oxygen (ruling 2026-10-05: *"сеть вообще не передаёт кислород, она
+  передает воздух"*). The T1 oxygen vent is not a member, so the T4 plant is not tied to T1
+  bottles. All of the
   graph, the solve and the limits are the shared [subsystem-network](./subsystem-network.md)
   primitive; ventilation is a domain over it, which is why a duct and a shield cable laid through
   one wall never join (INV-NET-01). The plant serves rooms it does not stand in and takes the carbon
   into its OWN slot; a full slot backs it up rather than deleting carbon, as one tier down.
   `atmosphere/LifeSupportNetwork.java`, `tile/atmosphere/TileLifeSupportPlant.java`,
-  `TileVentilationDuct.java`, `TileOxygenVent.java:308-395`. [V/T]
+  `TileVentilationDuct.java`, `TileVentilationPort#getRequested/receive`. [V/T]
 - **MECH-ATM-25 a breach LOSES the air, it does not delete it** — when a hull is opened the
   flood-fill drops the room's cells, but the gases are not the cells: `AreaBlob.clearBlob()` empties
   the GRAPH while `AtmosphereBlob.airState` survives, and the handler hands that state back keyed by
   VENT rather than by membership. So the vent drains all three gases proportionally at
   `lifeSupportBreachVentRate` per second, on its own tick counter and regardless of power (a hole
   needs no electricity), until the room is vacuum. A hull breach therefore costs a tankful, paid
-  when the hull is patched and the vent refills (a lost seal does not make the zone and its gases cease in the same tick). `TileOxygenVent.ventBreachedAir`. [V/T]
+  when the hull is patched and the vent refills (a lost seal does not make the zone and its gases
+  cease in the same tick). `SealedZone#ventBreachedAir`, shared by both ports. [V/T]
+  **Only a fill that ANSWERED can breach a zone.** With the default `atmosphereHandleBitMask` the
+  flood fill runs off-thread and a check that starts one gets an empty zone back; `SealedZone#checkSeal`
+  takes that as "not yet" (`awaitingFill`), leaves the zone neither sealed nor breached, and asks
+  again every tick, reading the fill's own answer (`AtmosphereHandler#lastFillClosed`, null once the
+  zone has been cleared, so an answer about a zone that has since been emptied is never taken). A
+  sealed room that LOADS — a new zone is unsealed and its first check is due at once — therefore keeps
+  its air across the reload. Pinned by `server/LifeSupportZoneTest.aSealedRoomKeepsItsAirAcrossAChunkReload`. [T]
+  A fill the pool REJECTS is no answer either: the check asks again after the normal interval, not
+  every tick. [V] — not pinned; a rejection needs the pool saturated, which no instrument can do on
+  demand.
 - **MECH-ATM-26 a breached zone stops asking the plant for air** — the automatic isolation,
   under the 2026-08-15 ruling that "cutting" a zone means DISCONNECTION FROM THE NETWORK: the zone
   keeps its air, its vent and its degradation, it simply stops requesting. It falls out of the sink
-  contract rather than being a mechanism of its own — `getRequested()` returns 0 whenever the vent is
-  not maintaining — which is why the ship answers a hole by not pumping its reserves into space.
+  contract rather than being a mechanism of its own — `getRequested()` returns 0 whenever the port's
+  zone is not sealed — which is why the ship answers a hole by not pumping its reserves into space.
   The MANUAL half is older than life support: `SealableBlockHandler:133` counts a closed airlock door
   as a sealing block, so closing a bulkhead divides the hull into separately-maintained zones.
-  `TileOxygenVent.getRequested`, `SealableBlockHandler.java:133`. [V/T]
+  `TileVentilationPort#getRequested`, `SealableBlockHandler.java:133`. [V/T]
+- **MECH-ATM-33 a zone lives while it is sealed; gas comes only from a supply** (CON-C21-19..21,
+  2026-10-05) — one `SealedZone` per port decides it. A zone's air is live exactly while the zone is
+  sealed: respiration, regeneration, separation, a recirculator and the republished atmosphere all act
+  on it whatever any supply is doing (`isMaintainingAtmosphere()` = `isSealed()`). A NEW zone holds
+  the air that was around its anchor — the planet's outdoors, vacuum in space — and publishes the
+  atmosphere derived from it from registration on, because the flood fill runs off-thread and the room
+  would otherwise read as pressurised while still being measured. Restored saved air wins over that.
+  The T1 vent's tank tops the room's oxygen up to sea level at no more than its old rate,
+  `ceil(volume × 0.01 × oxygenVentConsumptionMult)` mB a tick, paying only for oxygen it admits — a
+  room that lacks nothing costs nothing. Scrubbers do not touch that rate (MECH-ATM-08). A dry tank
+  does not freeze the room breathable, a new zone does not start as 1 atm of Earth air out of
+  nothing, and the vent burns no running cost while idle. `tile/atmosphere/SealedZone.java`,
+  `TileOxygenVent#supplyOxygen`. Pinned by `server/LifeSupportZoneTest` (`aRoomWhoseVentHasNoOxygen…`,
+  `aVentSpendsNothing…`, `aRoomSealedOnAnAirlessWorld…`). [T]
+- **MECH-ATM-34 a ventilation port is powered through its ducts** (ruling 2026-10-05: *"порт
+  потребляет энергию, но немного и подается она через воздуховод от T4"*) — a port draws
+  `lifeSupportPortFePerTick` (default 1) and is not wired to anything: the life-support domain's
+  per-tick hook (`LifeSupportNetwork#payPortUpkeep`, called from `onComponentTicked` on every publish
+  path) has each plant in a component pay each port in it from the plant's buffer. A port paid this
+  world tick or the last can hold its zone (`TileVentilationPort#isPowered`); one nobody paid holds
+  none, as an unpowered vent holds none. The upkeep is spent energy and goes to the plant's
+  `WasteHeat` like the regeneration (`TileLifeSupportPlant#payUpkeep`), and a 1-FE payment after the
+  tick's regeneration does not discard that heat (ship-heat MECH-HEAT-07). Pinned by
+  `server/VentilationNetworkTest.aPortIsPoweredThroughItsDuctsByAPlant`. [T]
+- **MECH-ATM-35 two settings govern what the air's chemistry does to living things; neither stops a
+  system** (maintainer ruling 2026-10-06: *"При отключенных обоих системы все еще работают
+  … но эффекты от химии атмосферы и земли больше не оказывают влияния на сущности"*).
+  `breathingRequiresO2` off: no respiration (`AtmosphereHandler#respire`), no SUFFOCATION or
+  OXYGEN_TOXICITY harm and no suit tank spent — `AtmosphereHazards#effectOn` / `#asConfigured` hand
+  every entity-facing path the exposure `HazardExposure#withoutOxygenNeed`, which drops those rows and
+  asks no suit to supply oxygen; the enchanted-armour chest stops spending air too
+  (`ItemAirUtils.ItemAirWrapper#protectsFrom`). `enableToxicity` off: no dose taken, no poison harm,
+  no `msg.poison` warning (`Poisoning#tick`, `AtmosphereSummary#of`). DECOMPRESSION, PRESSURE and
+  HEAT are physics and answer to neither. `AtmosphereHazards#exposureOf` stays the air's own
+  description, so a detector still reports air that lacks oxygen. Zones, vents, scrubbers,
+  separators, recirculators and the network run either way. Pinned by `server/LifeSupportZoneTest`
+  (`withBreathingNotNeedingOxygen…` ×2, `withToxicityOffPoisonHurtsNobody`,
+  `withBothChemistrySettingsOffTheMachinesStillMoveGas`), each off half red-witnessed against the
+  setting ignored and each on half against the effect removed. A suit's tank in vacuum with breathing
+  off — judged protected, spending nothing, on both chest routes — is pinned on the client by
+  `client/VacuumAndSuitClientGroupTest.withBreathingNotNeedingOxygen…SpendsNoAir` (×2). Water is not
+  air: the in-water breath top-up (event-handlers MECH-EVT-05) does not follow this setting, so a
+  diver still drowns with it off. [T]
 - **MECH-ATM-29 the air is a COMPOSITION, keyed by substance** — a zone holds a sparse map of
   partial pressures over `GasRegistry`'s eleven substances rather than three named fields, so a room
   can contain something the old vocabulary could not name. Sparse on purpose: a vacuum holds an empty
@@ -254,8 +327,11 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   30 limit-seconds it does dose/30 damage per second, damage type `Poison`. Only a whole suit
   breathing its own supply keeps it out (`AtmosphereHazard.POISON`, full suit, supplied oxygen — it
   spends the chest's air while the air is poisoned). The air breathed is the zone's or, outdoors,
-  the planet's (`getAirAround`, `:382`). Off with `enableOxygen` (no handler). The readout warns
-  `msg.poison` when nothing worse is wrong (`AtmosphereSummary`). Rulings 2026-10-04.
+  the planet's (`getAirAround`, `:382`). With `enableToxicity` off nothing is taken in and nothing
+  harms — a carried dose clears as in clean air — while the air still holds and reports its poison.
+  With `breathingRequiresO2` off the suit keeps poison out without spending its chest's air. The
+  readout warns `msg.poison` when nothing worse is wrong and toxicity is on (`AtmosphereSummary`).
+  Rulings 2026-10-04.
   `Poisoning.java` `[T]` — `unit/PoisoningTest`, `server/PoisonedAirTest`; the whole suit keeping
   it out by `client/VacuumAndSuitClientGroupTest.aSealedSuitKeepsPoisonedAirOut` (outdoors, on the test mixin's `poison_breathed` record), and a helmet and a chest without legs and
   boots NOT keeping it out by `…aHelmetAndTankWithoutTheRestOfTheSuitDoNotKeepPoisonedAirOut`. NOT
@@ -286,14 +362,14 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
   same transform, which needs no ship identity and degrades to the plain facing vector off a ship,
   by construction. The carry matters as much as the aim: an item released without the hull's motion
   simply reappears inside it a tick later. `subsystem/ejection/EjectionPort.java`. [V]
-- **MECH-ATM-24 zone priority is set per vent, from its own screen** — maintainer ruling 2026-08-15:
-  assignment through the GUI, and **every zone equal by default**, so a ship nobody has configured
-  gets a plant that simply shares what it has. Three steps (low / normal / high) cycled by one
-  button; the value rides the vent's existing `INetworkMachine` packet channel, is clamped
-  SERVER-side rather than trusted, and persists in the vent's NBT (`zonePriority`). Under a deficit
-  the network fills the higher tier completely before the next one gets anything — that is
-  MECH-NET-04 acting through this domain, not a second mechanism.
-  `tile/atmosphere/TileOxygenVent.java`. [V/T]
+- **MECH-ATM-24 zone priority is set per ventilation port, from its own screen** — maintainer ruling
+  2026-08-15: assignment through the GUI, and **every zone equal by default**, so a ship nobody has
+  configured gets a plant that simply shares what it has. Three steps (low / normal / high) cycled by
+  one button; the value rides the port's `INetworkMachine` packet channel, is clamped SERVER-side
+  rather than trusted, and persists in the port's NBT (`zonePriority`). Under a deficit the network
+  fills the higher tier completely before the next one gets anything — that is MECH-NET-04 acting
+  through this domain, not a second mechanism. (On the oxygen vent until 2026-10-05, when the network
+  got its own port.) `tile/atmosphere/TileVentilationPort.java`. [V/T]
 - **MECH-ATM-23 the ventilation commodity is ABSOLUTE, not a partial pressure** — the network moves
   *regeneration work* in **ppm·blocks per tick**: a partial pressure describes one room, so a plant
   quoting one could not say what it is worth to a ship of rooms, and a large cabin would be scrubbed
@@ -306,11 +382,13 @@ themselves (network-wire); `CapabilitySpaceArmor`/`CapabilityWear` declarations 
 
 ## State & persistence
 
-The persisted and wire-only NBT keys of the vent, recirculator, detector, wearable and suit tiles and items are
-inventoried in `C1-nbt-persistence`. Not in C1: `Items` (EmbeddedInventory, `ItemSpaceArmor`/`ItemSpaceChest`) — the modular
-component slots, the entire suit persistence surface; and the vent's `airState` (the zone's gas contents), which is held in
-`pendingAirState` until `registerBlob` on the first tick and then applied once (the zone's SHAPE is rebuilt from the world on load,
-but its contents are not derivable from blocks — without them a half-used cabin would reload full of fresh air).
+The persisted and wire-only NBT keys of the vent, the ventilation port, the scrubber, the recirculator,
+detector, wearable and suit tiles and items are inventoried in `C1-nbt-persistence`. Not in C1: `Items`
+(EmbeddedInventory, `ItemSpaceArmor`/`ItemSpaceChest`) — the modular component slots, the entire suit
+persistence surface. The zone's gas contents (`airState`, written by `SealedZone` for both ports) are held
+in `pendingAirState` until the zone registers on the first tick and then applied once (the zone's SHAPE is
+rebuilt from the world on load, but its contents are not derivable from blocks — without them a half-used
+cabin would reload full of fresh air); absent, the zone starts with the air around it (MECH-ATM-33).
 
 Registry names (C3): blocks `oxygenVent`, `oxygenScrubber` (unlocalized `scrubber`),
 `airRecirculator`, `oxygenCharger`, `oxygenDetection`, `suitWorkStation`; item `carbonDust`
@@ -319,30 +397,30 @@ TE id `ARairRecirculator`. No atmosphere is registered by name any more: there i
 
 ## Invariants
 
-- **INV-ATM-01 [V][BEH]** A handler exists for a dim only when `enableOxygen && hasSurface() &&
-  (overrideGCAir || dimId!=getMoonId() || isNativeDimension)` (the galaxy's Moon id). `AtmosphereHandler.java:65`.
-- **INV-ATM-02 [V][BEH]** With `enableOxygen=false`, every type query returns `AtmosphereType.AIR` and
-  entities never take atmosphere damage. `AtmosphereHandler.java:413-457`.
+- **INV-ATM-01 [V][BEH]** A handler exists for a dim only when `hasSurface() &&
+  (overrideGCAir || dimId!=getMoonId() || isNativeDimension)` (the galaxy's Moon id).
+  `AtmosphereHandler#registerWorld`.
+- **INV-ATM-02** — retired.
 - **INV-ATM-03 [V][SYS]** Breathable types (`AIR`,`PRESSURIZEDAIR`) do not tick; hostile types
   (`VACUUM`,`LOWOXYGEN`,`HIGHPRESSURE`,`VERYHOT`,…) do — by the `canTick` constructor argument of each
-  built-in. `AtmosphereType.java:25-37,69-74`. FOR: INV-ATM-05.
+  built-in. `api/atmosphere/Atmosphere.java:41-56,64-73`. FOR: INV-ATM-05.
 - **INV-ATM-04 [V][SYS]** `AIR`/`PRESSURIZEDAIR` breathable; `VACUUM` and all `*NOO2` not breathable —
   the `isBreathable` constructor argument of each built-in; the constructor keeps the given name.
-  `AtmosphereType.java:25-37,69-74`. (Was `[T]`, same deletion.) FOR: INV-ATM-05.
+  `api/atmosphere/Atmosphere.java:41-56,64-73`. FOR: INV-ATM-05.
 - **INV-ATM-05 [V][BEH]** Unprotected entities are affected; immunity requires creative/spectator, a
   rocket/capsule ride, the grace window, or helm+chest (+legs+feet where a hazard acts on the whole
   body rather than on what is breathed). All of it or none of it: an entity that fails the strictest
   requirement takes every active hazard. `AtmosphereHazards.java`.
 - **INV-ATM-06 [V][SYS]** Tick effects are suppressed when `AtmosphereTickEvent` is cancelled or the
-  type is immune to the entity class. `AtmosphereHandler.java:256-262`. FOR: INV-ATM-05.
+  type is immune to the entity class. `AtmosphereHandler.java:329-332`. FOR: INV-ATM-05.
 - **INV-ATM-07 [A][BEH]** A vent seals only with BOTH oxygen and power; missing either → no seal, zero
   blob. `OxygenVentRequiresFuelAndPowerTest.java:96-109`. Pinned by `OxygenVentRequiresFuelAndPowerTest#ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere`, `OxygenVentRequiresFuelAndPowerTest#ventWithoutPowerDoesNotSealEvenWhenFueled`.
 - **INV-ATM-08 [A][BEH]** The blob is bounded by `oxygenVentSize`: a sealed volume within the cap
   pressurises, one past it voids to the dim baseline (binary, no partial fill).
   `OxygenVentBoundedByBlobCapTest.java:88-109`. Pinned by `OxygenVentBoundedByBlobCapTest#ventSealsWithinCapButNotBeyondIt`.
-- **INV-ATM-09 [A][BEH]** When the tank cannot supply `blobSize × gasUsageMult` O2 the vent flips
-  `hasFluid=false` and sets the blob to the dim default atmosphere. `TileOxygenVent.java:269-287`;
-  pinned `OxygenVentRequiresFuelAndPowerTest.java:71-91`. Pinned by `OxygenVentRequiresFuelAndPowerTest#ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere`.
+- **INV-ATM-09 [A][BEH]** A dry tank changes nothing about the zone — the room keeps its air and the
+  crew breathe it down (MECH-ATM-33); the tank is a supply, not the zone's life. Pinned by
+  `OxygenVentRequiresFuelAndPowerTest#ventWithoutOxygenLosesHasFluidAndRevertsAtmosphere`.
 - **INV-ATM-10 [A][BEH]** Empty scrubber → comparator 0; fresh cartridge → comparator > 0.
   `CO2ScrubberComparatorOutputTest.java:41-74`. Pinned by `CO2ScrubberComparatorOutputTest#emptyScrubberReportsZeroComparatorOutput`, `CO2ScrubberComparatorOutputTest#freshCartridgeReportsNonZeroComparatorOutput`.
 - **INV-ATM-11 [V][BEH]** Gas pad transfers O2 only when tank fluid is oxygen and H2 only when it is
@@ -364,10 +442,11 @@ TE id `ARairRecirculator`. No atmosphere is registered by name any more: there i
   composition (`AirState.java:506-507`, `oxygenRung` at `:544-557`). Only the vacuum half has a test
   (`AirStateTest#aZoneWithNoGasInItIsVacuumWhateverItsComposition`); the band bounds are read from code.
 - **INV-ATM-19 [V][SYS]** Life support acts on a zone exactly while the MACHINE holding it says it is
-  maintaining the air — `IBlobHandler.isMaintainingAtmosphere()`, which `TileOxygenVent` answers as
-  `isSealed && hasFluid` and every other handler leaves at its `false` default. A planet's own
-  atmosphere is therefore excluded because nothing is maintaining it, not because of anything about
-  its type. `AtmosphereHandler.isLifeSupportManaged`, `TileOxygenVent.java:308-317`.
+  maintaining the air — `IBlobHandler.isMaintainingAtmosphere()`, which both zone ports answer as
+  "my zone is sealed" (`SealedZone#isSealed`) and every other handler leaves at its `false` default.
+  A planet's own atmosphere is therefore excluded because nothing is maintaining it, not because of
+  anything about its type. `AtmosphereHandler.isLifeSupportManaged`. The SUPPLY is not the zone's life
+  (MECH-ATM-33): a room whose tank runs dry is still maintained.
   The test is deliberately not against the atmosphere the zone PUBLISHES: that agrees with the gases
   only in the one case a refresh is not for, and would latch the zone on the first hazard it reached. FOR: INV-ATM-09.
 - **INV-ATM-21 [T][BEH]** Fire and lungs are two different questions about the same gas: in the band
@@ -426,11 +505,12 @@ TE id `ARairRecirculator`. No atmosphere is registered by name any more: there i
 
 ## Config surface
 
-Every `enableOxygen`, `lifeSupport*`, `oxygenVent*`, `jettisonPort*`, `atmosphereHandleBitMask`,
-`vacuumDamage`, `enableNausea` and `scrubberRequiresCartrige` flag is specified in `C4-config-surface`
-with the mechanic that reads it and its full-disable path. Only two entries are not there:
-`bypassEntity` / `entityAtmBypass` (MECH-ATM-04) — entity classes immune to all effects — and
-`spaceSuitOxygenTime`, which is legacy and referenced only in a commented-out `getMaxAir` path.
+Every `breathingRequiresO2`, `enableToxicity`, `lifeSupport*` (the scrubber's rate and charge cost
+included), `oxygenVent*`, `jettisonPort*`, `atmosphereHandleBitMask`, `vacuumDamage`, `enableNausea` and
+`scrubberRequiresCartrige` flag is specified in `C4-config-surface` with the mechanic that reads it and its
+full-disable path. Only two entries are not there: `bypassEntity` / `entityAtmBypass` (MECH-ATM-04) —
+entity classes immune to all effects — and `spaceSuitOxygenTime`, which is legacy and referenced only in a
+commented-out `getMaxAir` path.
 
 ## Test coverage
 
@@ -440,6 +520,8 @@ with the mechanic that reads it and its full-disable path. Only two entries are 
 | INV-ATM-07/09 | `test/server/OxygenVentRequiresFuelAndPowerTest.java` |
 | INV-ATM-08 | `test/server/OxygenVentBoundedByBlobCapTest.java` |
 | INV-ATM-10 | `test/server/CO2ScrubberComparatorOutputTest.java` |
+| MECH-ATM-08 (T2) | `test/server/LifeSupportZoneTest.java` — no cartridge draws nothing; charged scrubbers take CO2 and their cartridges spend exactly the charges the measured draw is worth (bounded by a read either side), each cartridge its own share; two scrubbers leave the vent's supply alone. |
+| MECH-ATM-35 | `test/server/LifeSupportZoneTest.java` — with `breathingRequiresO2` off a golem in a sealed room breathes nothing and does not suffocate, and does both once it is back on; with `enableToxicity` off poisoned air does not hurt it, and does once it is back on; with both off a charged scrubber still takes CO2. `test/client/VacuumAndSuitClientGroupTest.java` — a whole suit in vacuum with breathing off spends no air on either chest route, and does once it is back on. |
 | INV-ATM-16/17/18/20 | `test/unit/AirStateTest.java` |
 | INV-ATM-21 | `test/unit/AirStateTest.java` — the governor's ceiling, an already-enriched room getting nothing, and splitting leaving oxygen alone. |
 | MECH-ATM-21 (both paths) | `test/server/LifeSupportZoneTest.java` — a placed separator draws its room's CO2 into its own tank and leaves the oxygen alone; flipped to combine by a real sneak-click it gives that oxygen back and the room reads breathable again. |

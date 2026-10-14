@@ -32,7 +32,7 @@ their hatch contents; they persist no bespoke gameplay NBT beyond libVulpes base
 | tile | sloc | block name | sound | special behaviour |
 |------|-----:|------------|-------|-------------------|
 | `TileCentrifuge` | 134 | blockCentrifuge | electrolyser | `registerRecipes` builds a lava→nugget recipe from `lavaCentrifugeOutputs` (ore-dict:chance), fixed `lavaCentrifugeTime`/`Power`, enriched-lava→lava fluid |
-| `TileChemicalReactor` | 239 | blockChemicalReactor | rollingMachine | MECH-MBM-16 suit-seal recipe generation; gated on `enableOxygen` |
+| `TileChemicalReactor` | 239 | blockChemicalReactor | rollingMachine | MECH-MBM-16 suit-seal recipe generation; ungated |
 | `TileCrystallizer` | 84 | blockCrystallizer | crystallizer | MECH-MBM-17 gravity gate |
 | `TileCuttingMachine` | 80 | blockCuttingMachine | — | plain bench |
 | `TileElectricArcFurnace` | 98 | blockArcFurnace | — | plain bench |
@@ -43,7 +43,7 @@ their hatch contents; they persist no bespoke gameplay NBT beyond libVulpes base
 | `TileRollingMachine` | 72 | blockRollingMachine | rollingMachine | plain bench |
 
 ### MECH-MBM-16 — Chemical reactor suit-seal recipes
-When `enableOxygen`, `registerRecipes` scans the whole item registry and, for every `ItemArmor`
+`registerRecipes` (unconditional) scans the whole item registry and, for every `ItemArmor`
 that is not already an `ItemSpaceArmor`, generates a recipe that consumes the armour +
 `blockPipeSealer` + titanium-aluminide sheet (+ a pressure tank for chestplates) and outputs the
 same armour enchanted with `enchantmentSpaceProtection`. `reloadRecipesSpecial` re-derives that
@@ -67,8 +67,8 @@ they are not written at runtime. [V] `TileChemicalReactor.java:84-106`.
 
 - **Recipes**: `RecipesMachine` keyed by tile class; JSON recipes loaded by
   `integration-dataloaders`. No test pins the class↔name mapping.
-- **→ atmosphere-oxygen**: chemical reactor gates on `enableOxygen`, outputs the
-  `enchantmentSpaceProtection` enchant.
+- **→ atmosphere-oxygen**: chemical reactor outputs the `enchantmentSpaceProtection` enchant; no
+  flag gates its suit recipes.
 - **→ dimension-planets**: crystallizer reads `gravitationalMultiplier`.
 
 ## Config surface

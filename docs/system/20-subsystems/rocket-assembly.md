@@ -138,6 +138,14 @@ holdable upward thrust is below its weight in the local field, the first assembl
 line) and remembers the TWR; a press on the same build (same TWR) assembles it (`:827`) `[V]`. A
 rocket keeps its hard refusal. e2e owed.
 
+**MECH-RASM-15 — Block damage travels with the blob.** `copyWorldBB` harvests the box's damage
+stages out of the world's `BlockDamageSavedData` into the blob's `DamageLayer`; `cutWorldBB` then
+clears that box in the source world, so a stage is never in both places; the layer is saved under
+`damageLayer`; `pasteInWorld` clears the destination's stage per placed block and then applies the
+layer. A lifted rocket keeps its battle damage, and landing it on a damaged pad does not inherit the
+pad's. `StorageChunk#copyWorldBB` / `#cutWorldBB` / `#readFromNBT` / `#pasteInWorld`;
+`damage/DamageLayer.java` `[V]`.
+
 ## State & persistence
 
 Assembler-tile keys (`TileRocketAssemblingMachine.writeToNBT` / `readFromNBT`, `:812` / `:850`) and `StorageChunk` blob keys
@@ -145,7 +153,8 @@ Assembler-tile keys (`TileRocketAssemblingMachine.writeToNBT` / `readFromNBT`, `
 `ErrorCodes.ordinal()` — there is no migration, so reordering the enum silently reassigns saved verdicts, and a missing key
 reads 0 = SUCCESS; `pwr`, `tik` and `id` are network-only (id 2/3 sync), never persisted; `scanTotalBlocks` ≤ 0 means idle.
 `StorageChunk.mass` is the cached blob mass in kg, re-computed on scan but persisted as a `float` `[A]`; block data is indexed
-`z + zSize*y + zSize*ySize*x`, and each entry of `tiles` carries vanilla `x`/`y`/`z` rebased to the blob origin.
+`z + zSize*y + zSize*ySize*x`, and each entry of `tiles` carries vanilla `x`/`y`/`z` rebased to the blob origin; `damageLayer`
+holds the blob's block-damage stages (MECH-RASM-15), absent ⇒ an undamaged blob.
 
 ## Invariants
 
@@ -190,6 +199,12 @@ reads 0 = SUCCESS; `pwr`, `tik` and `id` are network-only (id 2/3 sync), never p
   the climb is the body's own line: 100 000 blocks on Earth). The biprop-tanks
   check (INV-RASM-11) still applies to both. `TileRocketAssemblingMachine#scanRocket`;
   `RocketRequireFuelDisableAssemblesTest#aShipIsNotHeldToTheClimbToOrbitThatARocketIs`.
+- **INV-RASM-14 [T][BEH]** A figure the assembler's screen shows arrives WHOLE on the client. A window
+  property carries 16 bits (`writeShort`, sign-extended on receipt), so each figure is sent as
+  `ShortWireParts.PARTS` parts on ids `slot + part * SYNC_SLOTS` and folded back into a long, whatever
+  order the parts arrive in; a thrust in newtons or a mass in kilograms wider than a short reads as the
+  server computed it. `util/ShortWireParts`, `TileRocketAssemblingMachine` (the sync slots);
+  `ShortWirePartsTest#aValueArrivesWholeThroughASixteenBitWireInAnyOrder`.
 
 ## Failure modes & edge cases
 

@@ -27,22 +27,22 @@ Two states, ONE travel mechanic:
 **A jump the drive completes in at most `ShipTransitManager.DIRECT_CROSSING_MAX_TICKS` ticks is not
 flown at all** — it is performed as ONE cell→cell crossing by the machinery that carries a ship across
 a cell face (`CellCrossingController`), with no lane, no park, no snapshot and no `IN_TRANSIT` row.
-The threshold is DERIVED: `DEPARTING_TICKS + ARRIVING_TICKS` (`ShipTransitManager.java:992`), the point
-below which `phaseOf` never reports `CRUISING` — a flight with no middle. One predicate
-(`ShipTransitManager.isDirectCrossing`, `:1006`) is read by the console's forecast and by the
-departure, so the mechanism quoted is the mechanism flown. What is lost is lost by construction: a
-short jump carries no transit hazard, cannot be intercepted in the lane, and is not a place the crew
-walks around in. The rule keys on DURATION, never on route: a fast enough drive makes an interstellar
-leg short too.
+The threshold is DERIVED: `DEPARTING_TICKS + ARRIVING_TICKS`, the point below which `phaseOf` never
+reports `CRUISING` — a flight with no middle — AND the target cell must be able to get a slot now: a
+full pool sends the jump through hyperspace, where the arrival waits. One predicate
+(`ShipTransitManager.jumpsDirect`) is read by the console's forecast and by the departure, so the
+mechanism quoted is the mechanism flown. What is lost is lost by construction: a short jump carries no
+transit hazard, cannot be intercepted in the lane, and is not a place the crew walks around in. The
+rule keys on DURATION, never on route: a fast enough drive makes an interstellar leg short too.
 
 **Both routes arrive OFF their destination** `[V]`: a jump aimed at a cell holding bodies comes out on
 the widest `ShipEntryController.entryRingAround(body)` of that cell's bodies —
 `max(ENTRY_RING_BLOCKS, 2 × DescentShell.radiusAround(body))` — so the arrival is strictly outside every
-body's descent shell (`SpaceSubsystem.arrivalStandoff`, `SpaceSubsystem.java:398`; wired into the
-hyperspace arrival at `ShipTransitManager.java:652` and into the direct crosser at
-`SpaceSubsystem.java:117` / `:128`). A cell with no body is returned untouched. The direct route passes
-the standoff and never the raw target: a short jump at a body would land ON it, inside the descent
-radius, and be taken down on its first settled tick with nobody asking; pinned by
+body's descent shell (`SpaceSubsystem.arrivalStandoff`; wired into the hyperspace arrival in
+`ShipTransitManager#tickTransits` and into the direct crosser in the `SpaceSubsystem` constructor). A
+cell with no body is returned untouched. The direct route passes the standoff and never the raw target:
+a short jump at a body would land ON it, inside the descent radius, and be taken down on its first
+settled tick with nobody asking; pinned by
 `VSShortJumpCrossesDirectlyTest.aShortJumpAtABodyArrivesOnItsStandoffRingAndStaysInSpace`. The ring is
 body-derived, never a flat 1 024 / 512: a flat ring would arrive inside the trigger of Luna (shell
 7 066) or Earth (25 913); pinned in the milestone loop, `M1PlanetToPlanetMilestoneE2ETest` leg 7b.

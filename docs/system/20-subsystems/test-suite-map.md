@@ -149,7 +149,7 @@ Tests independently exercise the same seams the contract docs own:
 - **C3 registry**: `unit/FuelRegistryTest`, `unit/SatelliteRegistryFallbackTest`
 - **C4 config**: `unit/StellurgyConfigurationTest`, plus `*DisableTest`/`*GateTest` pairs
   (`WearAccrualDisableTest`, `WeatherCycleDisableTest`, `RocketRequireFuelDisableAssemblesTest`,
-  `PlanetWeatherGateTest`) — the rule that a config flag fully disables its mechanic.
+  `PlanetWeatherGateTest`) — each pins what one flag changes.
 - **C5 events**: `server/EventHandlerWiringTest`, `PlayerEventHandlerWiringTest`,
   `AdvancementsTriggerTest`.
 - **C6 mixins/AT**: `unit/StellurgyMixinPluginTest`, `unit/StellurgyKeyConflictContextTest`,

@@ -34,11 +34,9 @@ per-dim weather/time (`world/weather/*`, `dimension/`), FF camera
 | `asm/StellurgyPlugin` | `IFMLLoadingPlugin` + MixinBooter `IEarlyMixinLoader`; returns the one config name, no AT/transformer/ModContainer |
 | `mixin/StellurgyMixinPlugin` | `IMixinConfigPlugin`; reads `.cfg` at `onLoad`, gates 3 WorldInfo mixins on `perDimWorldInfo` (`MixinWorldProvider` is deliberately not among them — terrain identity is not weather) |
 
-> **The two mixins over code this mod COMPILES.** `MixinWorldServerShipManager` (over the vendored
-> `valkyrienskies/…/WorldServerShipManager`) and `MixinTileAdvancedFlightComputer` (over Stellurgy's OWN tile) both exist in
-> `src/main/java/dev/stannismod/stellurgy/mixin/` and both are listed in `mixins.stellurgy.json` (`:22,26`).
-> `TileAdvancedFlightComputer` has no `onPhysicsTick`: the force controller is `MixinTileAdvancedFlightComputer`, which
-> `implements IPhysicsBlockController`, and the double-load guard is `MixinWorldServerShipManager`'s `loadAndUnloadShips` HEAD inject.
+> **No production mixin targets code this mod COMPILES.** The vendored engine and our own tiles are edited in place:
+> `TileAdvancedFlightComputer` itself `implements IPhysicsBlockController` (its `onPhysicsTick` is the force controller), and
+> `mixins.stellurgy.json` lists mixins over vanilla and Forge only.
 >
 > **The flight recorder and the spawn diagnostics are test-side.** Production carries the control law and nothing that records; the
 > per-physics-step sample is taken by the TEST mixin `MixinPhysicsCalculationsMotionSample` around the physics loop's own call into
@@ -92,8 +90,8 @@ per-dim weather/time (`world/weather/*`, `dimension/`), FF camera
   auto-closed at the 64-block range. `mixin/MixinEntityPlayerInventoryAccess.java:36-42`,
   `mixin/MixinEntityPlayerMPInventoryAccess.java:23-29`
 - **MECH-MIX-05 — atmosphere recompute.** RETURN-inject on `World.setBlockState(...I)Z`
-  → `AtmosphereHandler.onBlockChange`; the handler self-guards on `!world.isRemote`,
-  `enableOxygen`, and chunk-loaded. `mixin/MixinWorldSetBlockState.java:27-33`,
+  → `AtmosphereHandler.onBlockChange`; the handler self-guards on `!world.isRemote` and
+  chunk-loaded; no config flag guards it. `mixin/MixinWorldSetBlockState.java:27-33`,
   `atmosphere/AtmosphereHandler.java:124`
 - **MECH-MIX-06 — WorldInfo wrapper install.** After each `WorldServerMulti` ctor,
   `PlanetWeatherManager.wrapWorldInfoIfNeeded` may replace `DerivedWorldInfo` with

@@ -1,6 +1,6 @@
 ---
 id: misc-oddities
-owns: [common/, unit/, enchant/, Stellurgy.java, tile/TileEntitySyncable.java]
+owns: [common/, unit/, enchant/, Stellurgy.java, ServerState.java, ServerStateEvents.java, tile/TileEntitySyncable.java]
 entrypoints: [Stellurgy#preInit, Stellurgy#postInit, Stellurgy#serverStarting, Stellurgy#serverStopped, IngameTestOrchestrator#runTests]
 depends-on: [api-public, dimension-planets, world-gen, network-wire, event-handlers, satellite, rocket-assembly, util-core, mission]
 depended-by: [everything — this is the @Mod bootstrap]

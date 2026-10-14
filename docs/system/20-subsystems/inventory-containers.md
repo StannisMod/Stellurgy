@@ -1,6 +1,6 @@
 ---
 id: inventory-containers
-owns: [inventory/]
+owns: [inventory/, integration/affs/AffsGuiRouter.java]
 entrypoints: [GuiHandler#getServerGuiElement, GuiHandler#getClientGuiElement, ModulePlanetSelector#onInventoryButtonPressed, ContainerOreMappingSatellite#slotClick]
 depends-on: [api-public, dimension-planets, satellite, util-core, client-render]
 depended-by: [items, multiblock-machines, infrastructure-tiles, space-stations, wirelessdata, client-render]

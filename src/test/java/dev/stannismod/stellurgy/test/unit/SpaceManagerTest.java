@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.SlotBinder;
 import dev.stannismod.stellurgy.space.SpaceManager;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -121,6 +122,37 @@ public class SpaceManagerTest {
 
     private static SpaceManager.Config never() {
         return new SpaceManager.Config(SpaceManager.GcPolicy.NEVER, 0, 0);
+    }
+
+    // -- canMaterialize: the forecast a jump's warning reads ------------------
+
+    /**
+     * {@code canMaterialize} answers what {@code materialize} would do — yes for a live cell, a free
+     * slot or an idle evictable cell; no when every slot is claimed or stood in — and changes nothing.
+     */
+    @Pins("INV-HYP-08")
+    @RedWitness(verdict = "evictable", member = "SpaceManager#canMaterialize", at = "|| lruEvictableCell() != null",
+            replacedBy = "", fails = "an idle cell can be evicted for it", on = "2026-10-06")
+    @RedWitness(verdict = "live", member = "SpaceManager#canMaterialize",
+            at = "loadedCellToSlot.containsKey(coord.cellKey()) ||", replacedBy = "",
+            fails = "a cell already live needs no slot", on = "2026-10-06")
+    @Test
+    public void canMaterializeForecastsMaterializeAndBindsNothing() {
+        FakeBinder binder = new FakeBinder(10);
+        SpaceManager m = mgr(binder, new Clock(), never());
+
+        assertTrue("a free slot can take it", m.canMaterialize(cell(2)));
+        int dim = m.materialize(cell(1));
+        assertTrue("a cell already live needs no slot", m.canMaterialize(cell(1)));
+        assertFalse("every slot claimed: no room", m.canMaterialize(cell(2)));
+
+        m.dematerialize(cell(1));
+        assertTrue("an idle cell can be evicted for it", m.canMaterialize(cell(2)));
+        binder.occupied.add(dim);
+        assertFalse("but not one somebody is standing in", m.canMaterialize(cell(2)));
+
+        assertFalse("asking bound nothing", m.isLoaded(cell(2)));
+        assertTrue("and evicted nothing", m.isLoaded(cell(1)));
     }
 
     // -- materialize / refcount ----------------------------------------------

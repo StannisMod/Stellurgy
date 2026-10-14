@@ -105,7 +105,8 @@ data-bus types on integrate/deconstruct. [V] `TileMicrowaveReciever.java:166-197
 - **→ world-gen / util-core**: `TerraformingHelper`, `BiomeHandler.terraform`,
   `ChunkManagerPlanet`, `PlanetaryTravelHelper`.
 - **→ satellite**: microwave receiver pulls `IUniversalEnergyTransmitter.transmitEnergy`.
-- **→ atmosphere-oxygen**: terraformer/chemical-reactor gate on `enableOxygen`/oxygen fluids.
+- **→ atmosphere-oxygen**: terraformer/chemical-reactor work with oxygen fluids (the reactor's suit
+  recipes are always registered; no flag gates them).
 - **→ Forge**: `ForgeChunkManager` tickets (laser drill, railgun); `MinecraftForge.EVENT_BUS`
   posts `LaserBreakEvent` for block-protection (→ `event-handlers`).
 

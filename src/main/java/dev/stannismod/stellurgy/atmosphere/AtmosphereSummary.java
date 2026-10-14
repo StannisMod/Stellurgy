@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.atmosphere;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion;
 import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
@@ -78,9 +79,12 @@ public final class AtmosphereSummary {
                 holding.add(assertion.name());
             }
         }
-        String warning = published == null ? "" : AtmosphereHazards.exposureOf(published).messageKey();
+        // The warning is about what the air does to HIM, so it follows the configuration; the
+        // statements above are about the air, and do not.
+        String warning = published == null ? "" : AtmosphereHazards.effectOn(published).messageKey();
         // Poison is the least severe warning: what else is wrong with the air is said first.
-        if (warning.isEmpty() && holding.contains(AtmosphereAssertion.TOXIC.name())) {
+        if (warning.isEmpty() && StellurgyConfiguration.getCurrentConfig().enableToxicity
+                && holding.contains(AtmosphereAssertion.TOXIC.name())) {
             warning = Poisoning.MESSAGE_KEY;
         }
         return new AtmosphereSummary(

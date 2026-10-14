@@ -98,11 +98,11 @@ detectable emission a ship cannot avoid. **slug** = a chargeable, ejectable heat
   role.
 - **HEAT-13** `[A][BEH]` Fire requires an atmosphere: no heat-driven ignition in vacuum.
 - **HEAT-14** `[A][BEH]` Crew heat damage REUSES the existing hostile-atmosphere types and their suit
-  immunity chain (the `Atmosphere.VERYHOT` / `SUPERHEATED` values and their suit-immunity chain, C21) `[V]` rather than
-  introducing a parallel damage path. This makes the first rung depend on per-entity atmosphere resolving
-  in the ship frame — which it does not: `AtmosphereHandler.getAtmosphereType(Entity)`
-  (`AtmosphereHandler.java:706-716`) keys the entity's WORLD position while a ship's blob is seeded in
-  subspace `[V]`, measured by `test/client/VSShipAtmosphereFrameSpikeTest`. **Violated aboard a ship.**
+  immunity chain — the `VERYHOT` / `SUPERHEATED` rows of the hazard table and its one immunity question
+  (`atmosphere/hazard/AtmosphereHazards`, C21) `[V]` — rather than introducing a parallel damage path. This
+  makes the first rung depend on per-entity atmosphere resolving in the ship frame — which it does not:
+  `AtmosphereHandler#getAtmosphereType(Entity)` keys the entity's WORLD position while a ship's blob is
+  seeded in subspace `[V]`, measured by `test/client/VSShipAtmosphereFrameSpikeTest`. **Violated aboard a ship.**
 
 **Signature**
 

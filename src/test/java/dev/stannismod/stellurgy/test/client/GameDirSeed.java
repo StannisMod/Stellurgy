@@ -45,6 +45,8 @@ public final class GameDirSeed implements StartFiles {
     private final Map<String, String> declaredBy = new LinkedHashMap<>();
     private String planetDefs;
     private String planetDefsDeclaredBy;
+    private String thermalTable;
+    private String thermalTableDeclaredBy;
 
     /**
      * The seed every shared harness world starts from: fuel is not required to fly
@@ -105,14 +107,30 @@ public final class GameDirSeed implements StartFiles {
         return this;
     }
 
+    /**
+     * The whole {@code thermalMaterials.json} a pack ships, because the table is one document the mod
+     * merges with its own rows at start. Two classes each declaring a different table is a clash, and
+     * says so.
+     */
+    public GameDirSeed thermalTable(String json, Class<?> declarer) {
+        if (thermalTable != null && !thermalTable.equals(json)) {
+            throw new IllegalStateException("two declarations disagree about thermalMaterials.json: "
+                    + thermalTableDeclaredBy + " and " + declarer.getName() + " each state a whole table");
+        }
+        thermalTable = json;
+        thermalTableDeclaredBy = declarer.getName();
+        return this;
+    }
+
     public boolean isEmpty() {
-        return config.isEmpty() && planetDefs == null;
+        return config.isEmpty() && planetDefs == null && thermalTable == null;
     }
 
     /**
      * What was declared, as the files the harness writes before the first boot
      * ({@code ServerRoot#seed}): {@code config/advRocketry/stellurgy.cfg} for the keys,
-     * {@code config/advRocketry/planetDefs.xml} for the catalogue — each only when declared.
+     * {@code config/advRocketry/planetDefs.xml} for the catalogue,
+     * {@code config/advRocketry/thermalMaterials.json} for the thermal table — each only when declared.
      */
     @Override
     public Map<String, String> files() {
@@ -132,6 +150,9 @@ public final class GameDirSeed implements StartFiles {
         if (planetDefs != null) {
             files.put(CONFIG_DIR + "planetDefs.xml", planetDefs);
         }
+        if (thermalTable != null) {
+            files.put(CONFIG_DIR + "thermalMaterials.json", thermalTable);
+        }
         return files;
     }
 
@@ -147,6 +168,9 @@ public final class GameDirSeed implements StartFiles {
         }
         if (planetDefs != null) {
             described.append(" planetDefs.xml(").append(planetDefsDeclaredBy).append(')');
+        }
+        if (thermalTable != null) {
+            described.append(" thermalMaterials.json(").append(thermalTableDeclaredBy).append(')');
         }
         return described.toString();
     }

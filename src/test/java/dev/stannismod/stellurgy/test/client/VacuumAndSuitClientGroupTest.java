@@ -7,6 +7,7 @@ import dev.stannismod.stellurgy.test.*;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.NotYetRed;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import dev.stannismod.stellurgy.test.contract.ServerOnly;
 import dev.stannismod.stellurgy.test.contract.Wait;
 import org.junit.FixMethodOrder;
@@ -1357,13 +1358,15 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             + " the same method. KEPT OUT — {@code Poisoning#tick} at {@code index = 0.0D;} made"
             + " {@code index = index + 0.0D;} (the gate still answering immune, its answer no longer acted on): \"a"
             + " whole sealed suit with a supply must keep poisoned air out: no second judged him exposed, and the"
-            + " dose he carried never rose\" — and, under {@code AtmosphereHazards#isImmune} at"
-            + " {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD)} answering false, the same"
+            + " dose he carried never rose\" — and, under {@code AtmosphereHazards#immune} at"
+            + " {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD, commit)} answering false (taken"
+            + " on the form before 2026-10-06, when that body was {@code isImmune}'s own), the same"
             + " verdict after one exposed second rather than a whole window. BREATHING IT — {@code Poisoning#tick}"
             + " at {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: \"a player"
             + " standing in poisoned air must be breathing it … no `poison_breathed` 6 records carrying who ="
-            + " ForgeTestClient, or one judging him exposed was recorded within 320 ticks\". CONTROL EXPOSED — {@code AtmosphereHazards#isImmune}"
-            + " at {@code if (exposure.isEmpty())} made always to hold: \"CONTROL: the same air must judge him"
+            + " ForgeTestClient, or one judging him exposed was recorded within 320 ticks\". CONTROL EXPOSED — {@code AtmosphereHazards#immune}"
+            + " at {@code if (exposure.isEmpty())} made always to hold (taken when that line was"
+            + " {@code isImmune}'s, before 2026-10-06): \"CONTROL: the same air must judge him"
             + " exposed, second after second, once the suit is off — no `poison_breathed` 3 records carrying who ="
             + " ForgeTestClient and immune = false was recorded within 260 ticks\". CONTROL RISES —"
             + " {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made {@code return dose;}: \"the dose"
@@ -1464,13 +1467,15 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
      * dry.</p>
      */
     @LegacyWitness(prose = "one inversion per verdict, 2026-10-04, each against a healthy run of the same"
-            + " method. PARTIAL EXPOSED — {@code AtmosphereHazards#isImmune} at {@code if (exposure.needsFullSuit()}"
+            + " method; the {@code AtmosphereHazards} lines were taken on the form before 2026-10-06, when the"
+            + " body now in {@code immune} was {@code isImmune}'s own. PARTIAL EXPOSED — {@code"
+            + " AtmosphereHazards#immune} at {@code if (exposure.needsFullSuit()}"
             + " made never to hold: \"a helmet and a chest with a supply must NOT keep poisoned air out … no"
             + " `poison_breathed` 3 records carrying who = ForgeTestClient and immune = false was recorded within"
             + " 260 ticks\". PARTIAL RISES — {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made"
             + " {@code return dose;}: \"and the poison must get in: the dose must climb second by second;"
-            + " doses=[0.0, 0.0, 0.0]\". WHOLE PROTECTED — {@code AtmosphereHazards#isImmune} at"
-            + " {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD)} answering false: \"CONTROL: the"
+            + " doses=[0.0, 0.0, 0.0]\". WHOLE PROTECTED — {@code AtmosphereHazards#immune} at"
+            + " {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD, commit)} answering false: \"CONTROL: the"
             + " same air must judge him protected once the whole suit is on — every second in it\". WHOLE KEPT OUT"
             + " — {@code Poisoning#tick} at {@code index = 0.0D;} made {@code index = index + 0.0D;}: \"CONTROL: in"
             + " the whole suit nothing more gets in — the dose he carried in must not rise; doses=[12.0, 16.0,"
@@ -1579,5 +1584,251 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientTest {
             climbs &= doses.get(i) > doses.get(i - 1);
         }
         return climbs;
+    }
+
+    // ── breathingRequiresO2 off: a suit still seals, and breathes nothing ─────────────────────────
+
+    /**
+     * With {@code breathingRequiresO2} off, a player in a whole enchanted suit in vacuum is judged
+     * protected and his chest spends no air; with it back on, the same chest drains.
+     */
+    @Pins("MECH-ATM-35")
+    @RedWitness(verdict = "off", member = "ItemAirWrapper#protectsFrom",
+            at = "dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().breathingRequiresO2",
+            replacedBy = "true",
+            fails = "with breathing not needing oxygen a suit in vacuum must spend no air and still keep him whole",
+            on = "2026-10-06")
+    @RedWitness(verdict = "on", member = "ItemAirWrapper#protectsFrom",
+            at = "dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().breathingRequiresO2",
+            replacedBy = "false", fails = "the same chest must drain once breathing needs oxygen",
+            on = "2026-10-06")
+    @Test
+    public void withBreathingNotNeedingOxygenAnEnchantedSuitInVacuumSpendsNoAir() throws Exception {
+        // R11-OK: ItemAirUtils.ItemAirWrapper#protectsFrom deciding whether the chest spends air;
+        // the assertions are in the shared chain below.
+        suitInVacuumSpendsNoAirWhileBreathingNeedsNone(false, "enchanted");
+    }
+
+    /**
+     * The same with the Stellurgy chest, whose air is the oxygen in its pressure tank: protected, and
+     * not one unit of the tank spent until breathing needs oxygen again.
+     */
+    @Pins("MECH-ATM-35")
+    @RedWitness(verdict = "off", member = "HazardExposure#withoutOxygenNeed",
+            at = "return new HazardExposure(kept, false);", replacedBy = "return new HazardExposure(kept, true);",
+            fails = "with breathing not needing oxygen a suit in vacuum must spend no air and still keep him whole",
+            on = "2026-10-06")
+    @RedWitness(verdict = "on", member = "HazardExposure#needsSuppliedOxygen",
+            at = "return needsSuppliedOxygen;", replacedBy = "return false;",
+            fails = "the same chest must drain once breathing needs oxygen", on = "2026-10-06")
+    @Test
+    public void withBreathingNotNeedingOxygenASpaceSuitChestInVacuumSpendsNoAir() throws Exception {
+        // R11-OK: AtmosphereHazards#asConfigured asking no suit to supply oxygen, which is what
+        // ItemSpaceChest#protectsFrom spends its tank on; the assertions are in the shared chain below.
+        suitInVacuumSpendsNoAirWhileBreathingNeedsNone(true, "component");
+    }
+
+    /**
+     * The chain both scenarios walk.
+     *
+     * <p>The gate records a verdict only when it CHANGES, and the player is shared with every other
+     * scenario here, so a verdict left by an earlier one would make this one's silent. So the chain
+     * makes the gate change its mind on purpose: the player first stands in the vacuum UNSUITED and is
+     * judged unprotected, then puts the suit on and is judged protected — that second record is the
+     * link that says the atmosphere tick asked his suit, in this scenario. He is healed of the first
+     * half's damage, and then comes a window of atmosphere ticks in which the suit must spend nothing
+     * and he must not be hurt. Last, breathing is made to need oxygen and the chest's own drain record
+     * is waited for, the half that shows the window could have seen a drain.</p>
+     *
+     * @param spaceChest {@code true} to put the Stellurgy chest in the chest slot of the enchanted suit
+     * @param route      the {@code suit_air_drained} route that chest drains through
+     */
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(ABSENCE_WINDOW_TICKS);",
+            why = "a drain that did not happen publishes nothing; the window is atmosphere ticks of vacuum after"
+                    + " the gate's suited verdict, read on the drain records, the chest and the health at its end,"
+                    + " and the drain half after it is what shows a drain would have been seen.")
+    private void suitInVacuumSpendsNoAirWhileBreathingNeedsNone(boolean spaceChest, String route)
+            throws Exception {
+        PlanetAir originalAir = PlanetAir.snapshot(c -> read(c).raw(), plot().dim);
+        String found = arrangeProbe("stellurgytest config set breathingRequiresO2 false").reported("oldValue");
+        try {
+            standOnOwnPlatformInSurvival();
+            Events events = serverEvents();
+            long unsuitedMark = events.markInstrumented();
+            setDensityAndConfirm(0, false);
+            events.awaitRecordWithFields(unsuitedMark, "suit_immunity_decided",
+                    "unsuited in the vacuum the player must be judged unprotected — vacuum is not about"
+                            + " breathing", LINK_BUDGET_TICKS, "immune", "false", "creative", "false");
+
+            // The mark comes before the suit goes on: every unit the suit spends from here, the
+            // gate's first suited question included, belongs to the window below.
+            long mark = events.mark();
+            Reply equipped = arrangeProbe("stellurgytest player equip-airsuit " + FULL_TANK);
+            if (spaceChest) {
+                equipped = arrangeProbe("stellurgytest player equip-space-chest " + FULL_TANK);
+            }
+            scenario().requireArranged("the chest must go on full: " + equipped,
+                    equipped.integerOr(CHEST_AIR, -1) == FULL_TANK);
+            int full = FULL_TANK;
+            events.awaitRecordWithFields(mark, "suit_immunity_decided",
+                    "suited, the gate must judge the same player protected in the same vacuum",
+                    LINK_BUDGET_TICKS, "immune", "true", "creative", "false");
+            arrangeProbe("stellurgytest player set-health " + FULL_HEALTH);
+            // WINDOW: eight atmosphere ticks of vacuum after the gate's verdict. No record marks a
+            // drain that did not happen; the drain half below is what shows one would have been seen.
+            advanceServerAndClient(ABSENCE_WINDOW_TICKS);
+            String drains = events.since(mark, "suit_air_drained");
+            // The suit is spent from inside the gate's own question, so the gate having run is what
+            // makes an empty drain window an answer.
+            Events.assertInstrumentRan(drains, "suit_immunity_events",
+                    "a suit judged in vacuum spent no air");
+            int after = spaceChest ? readChestAirComponentRoute() : readChestAir();
+            double health = health(bot().reportState());
+            assertTrue("with breathing not needing oxygen a suit in vacuum must spend no air and still"
+                            + " keep him whole: air " + full + " -> " + after + ", health " + health
+                            + ", drains " + drains,
+                    Events.records(drains).isEmpty() && after == full && health >= FULL_HEALTH);
+
+            long onMark = events.mark();
+            arrangeProbe("stellurgytest config set breathingRequiresO2 true");
+            events.awaitRecordWithField(onMark, "suit_air_drained", "route", route,
+                    "the same chest must drain once breathing needs oxygen", LINK_BUDGET_TICKS);
+            int drained = spaceChest ? readChestAirComponentRoute() : readChestAir();
+            assertTrue("and once breathing needs oxygen the same chest spends it: " + full + " -> "
+                    + drained, drained < full);
+        } finally {
+            arrange("stellurgytest config set breathingRequiresO2 " + found);
+            restoreDim(originalAir);
+        }
+    }
+
+    // ── under water: the suit keeps a diver breathing, and asking it costs nothing ────────────────
+
+    /**
+     * How long an unsuited dose under water is. Vanilla's breath bar is 300 ticks and a body out of
+     * breath is hurt once 20 ticks later, so 400 ticks is the first drowning hit plus room for a few
+     * more.
+     */
+    private static final int UNDER_WATER_TICKS = 400;
+
+    /**
+     * The suited window under water: the same 400 ticks. Should the suit stop keeping him breathing,
+     * the window holds at most five drowning hits of two points each (from tick 320 every 20 ticks),
+     * which leaves the shared player alive at half health rather than dead.
+     */
+    private static final int SUITED_UNDER_WATER_TICKS = 400;
+
+    /**
+     * Fill a stone basin with water three blocks deep on this scenario's plot, put the player at its
+     * bottom with his head under, and drop him to survival with regeneration off, so every point of
+     * health he loses in the water is drowning.
+     */
+    private void submergeInOwnBasin() throws Exception {
+        int dim = plot().dim;
+        int y = Plot.DEFAULT_Y;
+        arrangeProbe("stellurgytest fill " + dim + " " + plot().x(0) + " " + y + " " + plot().z(0) + " "
+                + plot().x(4) + " " + (y + 4) + " " + plot().z(4) + " minecraft:stone");
+        arrangeProbe("stellurgytest fill " + dim + " " + plot().x(1) + " " + (y + 1) + " " + plot().z(1)
+                + " " + plot().x(3) + " " + (y + 3) + " " + plot().z(3) + " minecraft:water");
+        long standMark = clientEvents().mark();
+        arrange("tp @a " + (plot().x(2) + 0.5) + " " + (y + 1) + " " + (plot().z(2) + 0.5));
+        awaitClientPlacedNear(standMark, plot().x(2) + 0.5, plot().z(2) + 0.5,
+                "the player must be at the bottom of his own basin");
+        arrangeProbe("stellurgytest player clear-armor");
+        arrange("gamerule naturalRegeneration false");
+        arrange("gamemode survival @a");
+    }
+
+    /**
+     * A suited player under water on a breathable world keeps breathing, and his suit pays nothing for
+     * it: keeping a diver alive is the suit answering a question, not the atmosphere charging him.
+     * The same player in the same water without the suit drowns, which is what says the water could
+     * hurt him at all.
+     *
+     * <p>The suited window is a straight window of {@link #SUITED_UNDER_WATER_TICKS}, not one closed on
+     * the first hurt: the only record of a breath kept is the absence of a hurt, so a window closed early
+     * would be a loop leaving on what it read. Its harm is bounded and not lethal (see the constant).</p>
+     */
+    @Pins("MECH-EVT-05")
+    @RedWitness(verdict = "free", member = "PlanetEventHandler#playerTick",
+            at = "AtmosphereHazards.wouldBeImmune( dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.exposureOf(Atmosphere.NOO2),",
+            replacedBy = "AtmosphereHazards.isImmune( dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.effectOn(Atmosphere.NOO2),",
+            fails = "in the suit the same player must not drown, and the suit must spend nothing keeping him breathing",
+            on = "2026-10-06")
+    @RedWitness(verdict = "breathing", member = "PlanetEventHandler#playerTick",
+            at = "&& dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.wouldBeImmune(",
+            replacedBy = "&& false && dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.wouldBeImmune(",
+            fails = "in the suit the same player must not drown, and the suit must spend nothing keeping him breathing",
+            on = "2026-10-06")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(UNDER_WATER_TICKS);",
+            why = "the dose is long enough under water for the breath bar to run out and drowning to hit; the"
+                    + " health and the hurt records after it are the arrangement's reading.")
+    @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(SUITED_UNDER_WATER_TICKS);",
+            why = "a breath kept publishes nothing, so the suited window is the same time under water read at"
+                    + " its end on the hurt records, the chest and the health; the recorder's own drowning record"
+                    + " above is what makes its silence an answer.")
+    @Test
+    public void aSuitKeepsASwimmerBreathingAndSpendsNothingForIt() throws Exception {
+        try {
+            submergeInOwnBasin();
+            Events events = serverEvents();
+            long drownMark = events.mark();
+            advanceServerAndClient(UNDER_WATER_TICKS);
+            double unsuited = health(bot().reportState());
+            String drowned = events.since(drownMark, "living_hurt");
+            scenario().record("unsuitedHealth", unsuited);
+            // Vanilla's drowning, and so the arrangement's: it shows this basin can hurt him at all,
+            // and that the hurt recorder sees it — which is what lets the suited window below read a
+            // silence as an answer.
+            scenario().requireArranged("unsuited, the player must drown in the basin and the drowning"
+                    + " must be recorded: health " + unsuited + ", hurts " + drowned,
+                    unsuited < FULL_HEALTH && !Events.records(drowned).isEmpty());
+
+            Reply equipped = arrangeProbe("stellurgytest player equip-airsuit " + FULL_TANK);
+            scenario().requireArranged("the chest must go on full: " + equipped,
+                    equipped.integerOr(CHEST_AIR, -1) == FULL_TANK);
+            arrangeProbe("stellurgytest player set-health " + FULL_HEALTH);
+            long hurtMark = events.mark();
+            advanceServerAndClient(SUITED_UNDER_WATER_TICKS);
+            String hurts = events.since(hurtMark, "living_hurt");
+            // SILENCE-IS-THE-ANSWER: the same recorder recorded this player's drowning in this basin
+            // moments ago (the arrangement above), so an empty hurt window is a window he was not hurt.
+            int air = readChestAir();
+            double suited = health(bot().reportState());
+            assertTrue("in the suit the same player must not drown, and the suit must spend nothing"
+                    + " keeping him breathing: health " + suited + ", chest air " + FULL_TANK + " -> "
+                    + air + ", hurts " + hurts,
+                    Events.records(hurts).isEmpty() && suited >= FULL_HEALTH && air == FULL_TANK);
+        } finally {
+            arrange("gamerule naturalRegeneration true");
+        }
+    }
+
+    /**
+     * {@code breathingRequiresO2} is about the AIR'S chemistry. Water is not air: with breathing not
+     * needing oxygen, an unsuited player under water still drowns.
+     */
+    @Pins("MECH-EVT-05")
+    @RedWitness(member = "PlanetEventHandler#playerTick",
+            at = "dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.exposureOf(Atmosphere.NOO2)",
+            replacedBy = "dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.effectOn(Atmosphere.NOO2)",
+            fails = "with breathing not needing oxygen an unsuited player must still drown under water",
+            on = "2026-10-06")
+    @Wait(shape = Wait.Shape.EXPERIMENT, at = "advanceServerAndClient(UNDER_WATER_TICKS);",
+            why = "the dose is long enough under water for the breath bar to run out and drowning to hit; the"
+                    + " health after it is the reading.")
+    @Test
+    public void withBreathingNotNeedingOxygenAnUnsuitedSwimmerStillDrowns() throws Exception {
+        String found = arrangeProbe("stellurgytest config set breathingRequiresO2 false").reported("oldValue");
+        try {
+            submergeInOwnBasin();
+            advanceServerAndClient(UNDER_WATER_TICKS);
+            double health = health(bot().reportState());
+            assertTrue("with breathing not needing oxygen an unsuited player must still drown under"
+                    + " water: health " + health, health < FULL_HEALTH);
+        } finally {
+            arrange("stellurgytest config set breathingRequiresO2 " + found);
+            arrange("gamerule naturalRegeneration true");
+        }
     }
 }

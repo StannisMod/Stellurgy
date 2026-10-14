@@ -211,7 +211,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         long thrustBipropellant = 0;
         long thrustNuclearNozzleLimit = 0;
         long thrustNuclearReactorLimit = 0;
-        int thrustNuclearTotalLimit;
+        long thrustNuclearTotalLimit;
         int monopropellantfuelUse = 0;
         int bipropellantfuelUse = 0;
         int nuclearWorkingFluidUseMax = 0;

@@ -32,11 +32,14 @@ Legend — **split**: `1` single doc · `2L` two-level (overview + subs) ·
 | [world-gen](./20-subsystems/world-gen/00-overview.md) | 2L | `world/` — terrain, decoration, providers, weather, biome |
 | [space-stations](./20-subsystems/space-stations/00-overview.md) | 2L | `stations/`, `tile/station/`, `TileOrbitalRegistry`, `TileStationAssembler` |
 | [util-core](./20-subsystems/util-core/00-overview.md) | 2L | `util/` — XML loaders, weight engine, world helpers (`StorageChunk` → rocket-assembly) |
-| [infrastructure-tiles](./20-subsystems/infrastructure-tiles/00-overview.md) | 2L | `tile/infrastructure/`, `tile/hatch/`, pump/tank/solar/forcefield roots |
+| [infrastructure-tiles](./20-subsystems/infrastructure-tiles/00-overview.md) | 2L | `tile/infrastructure/`, `tile/hatch/`, `TilePump`, `TileFluidTank`, `TileSolarPanel`, `TileBrokenPart`, forcefield roots |
 | [api-public](./20-subsystems/api-public/00-overview.md) | 2L | `api/` minus free-flight — config, registries, interfaces, capability decls |
+| [space](./20-subsystems/space/00-overview.md) | 2L | `space/` — cell addresses and poses, the slot pool and its GC, the ship ledger and space clock, crossings (entry, descent, seam, hyperspace transit), crew carry and login restore, the sky feed. The model it implements is `space-model.md` |
 | [dimension-planets](./20-subsystems/dimension-planets.md) | 1 | `dimension/` — `DimensionProperties` |
+| [universe](./20-subsystems/universe.md) | 1 | `universe/` — the procedural galaxy as a pure function of (seed, config, schema): lattices, galaxies, territories, systems and retinues, the registry that resolves a cell, body physics and realization, the telescope. The model is `universe-model.md` |
+| [navigation](./20-subsystems/navigation.md) | 1 | `navigation/` (but `JumpGate` → hyperdrive) — navigation-crystal entries and their freshness merge, starter seeding, target prediction, nav-info redaction, a ship's navigation answers |
 | [shields](./20-subsystems/shields.md) | 1 | **AFFS** (`dev.stannismod.stellurgy.affs`) — shield network solve, SDF field, impact absorption, world/ship frame seam, priority-group control |
-| [hyperdrive](./20-subsystems/hyperdrive.md) | 1 | `hyperdrive/`, `tile/hyperdrive/`, `JumpGate` — the machines a jump needs, the window, the capacitor's lazy charge, and the arm→press→spool→commit act |
+| [hyperdrive](./20-subsystems/hyperdrive.md) | 1 | `hyperdrive/`, `tile/hyperdrive/`, `JumpGate`, `TileShipComponent` — the machines a jump needs, the window, the capacitor's lazy charge, and the arm→press→spool→commit act |
 | [structural-damage](./20-subsystems/structural-damage.md) | 1 | `api/damage/`, `damage/` — the budget-and-spend engine, damage stages and where they live, destruction with provenance, target resolution and the world↔subspace conversion for an impact |
 | [projectile-substrate](./20-subsystems/projectile-substrate.md) | 1 | `api/projectile/`, `projectile/` — what a shot IS between muzzle and impact: the record, its per-world registry, swept-segment integration, earliest-crossing resolution across the field and structure layers |
 | [weapons](./20-subsystems/weapons.md) | 1 | `api/weapon/`, `weapon/`, `tile/weapon/`, `block/weapon/` — a gun: the spec derived from what was built, the assembly walk, the traverse mechanism and its failure vocabulary, the world/ship frame seam at the muzzle. Works with no network |
@@ -46,6 +49,9 @@ Legend — **split**: `1` single doc · `2L` two-level (overview + subs) ·
 | [ship-heat](./20-subsystems/ship-heat.md) | 1 | `subsystem/heat/`, `tile/heat/` — the coolant loop: heat as energy, one temperature per loop, the blocks that are its thermal mass |
 | [rocket-assembly](./20-subsystems/rocket-assembly.md) | 1 | `TileRocketAssemblingMachine`, `TileUnmannedVehicleAssembler`, `StorageChunk` |
 | [ship-flight-model](./20-subsystems/ship-flight-model.md) | 1 | `ship/mass/`, `ship/control/`, the mass/gravity/survey half of `integration/vs/`, `IShipActuatorBlock`, the reaction wheel, the flight computer's flight-model and controller sections — what a tier-2 hull can do, and flying by it |
+| [integration-vs](./20-subsystems/integration-vs.md) | 1 | `integration/vs/` minus the mass/gravity/survey half (ship-flight-model) — Stellurgy's port onto the physics substrate: ship identity, frame and velocity reads, writes and the crossing recipe, the registry watch, aboard capture and travel in the ship frame, the deck bound. Implements C11 |
+| [valkyrienskies](./20-subsystems/valkyrienskies.md) | 1 | `valkyrienskies/src/main/java/` — the vendored physics substrate as Stellurgy depends on it: ship records and shipyard claims, assembly, the manager tick and physics thread, frames, relocation, collision, persistence, and our edits to it |
+| [libvulpes](./20-subsystems/libvulpes.md) | 1 | `libvulpes/` — the vendored machine library: multiblock formation and teardown, machine tick and recipes, energy, hatches, the packet channel, the modular GUI, materials, linker and projector |
 
 ## Tier B — periphery
 
@@ -54,7 +60,7 @@ Legend — **split**: `1` single doc · `2L` two-level (overview + subs) ·
 | [blocks](./20-subsystems/blocks.md) | cat | `block/` |
 | [integration-jei](./20-subsystems/integration-jei.md) | cat | `integration/jei/` |
 | [items](./20-subsystems/items.md) | cat | `item/` |
-| [inventory-containers](./20-subsystems/inventory-containers.md) | cat | `inventory/` |
+| [inventory-containers](./20-subsystems/inventory-containers.md) | cat | `inventory/`, `AffsGuiRouter` (one GUI handler for the mod and its AFFS screens) |
 | [satellite](./20-subsystems/satellite.md) | 1 | `satellite/`, `tile/satellite/` |
 | [misc-oddities](./20-subsystems/misc-oddities.md) | 1 | `common/`, `unit/`, `enchant/`, ISC-var-sharing-fix, `Stellurgy.java`, root |
 | [commands-gameplay](./20-subsystems/commands-gameplay.md) | 1 | `command/sub/`, `command/` root (minus `test/`) |
@@ -110,7 +116,7 @@ keys, packets or flags: they would be a snapshot that goes stale without any gat
 | [C18](./30-contracts/C18-living-through-a-jump.md) | what a jump promises the people ABOARD — where they are, what they may do, what each crossing carries, and that an arrival has no failure path | `JUMP-1..16` (JUMP-7 retired) |
 | [C19](./30-contracts/C19-reference-frames.md) | which body a craft's velocity is measured AGAINST, and what a change of frame may not alter | `FRAME-1..11` |
 | [C20](./30-contracts/C20-repair.md) | what repairing a structure means — the two outcomes, who pays, how bays share a hull | `REPAIR-1..15` |
-| [C21](./30-contracts/C21-atmosphere-model.md) | what an atmosphere IS and what may be derived from it — one model for a compartment and a planet | `CON-C21-01..18` |
+| [C21](./30-contracts/C21-atmosphere-model.md) | what an atmosphere IS and what may be derived from it — one model for a compartment and a planet | `CON-C21-01..22` |
 | [C22](./30-contracts/C22-craft-motion.md) | what a craft does with momentum it did not command, manned and not | `MOTION-1..7` (MOTION-3 retired) |
 | [C23](./30-contracts/C23-deck-motion-across-the-wire.md) | what a client must be TOLD about a craft's motion, and what the server may accept back | `DECKSYNC-1..7` |
 | [C24](./30-contracts/C24-celestial-body-and-its-environment.md) | what a celestial object IS, and what the place around it offers | `BODY-1..18` |

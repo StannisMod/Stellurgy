@@ -35,11 +35,11 @@ mutates/reads them across the seam.
 
 ## Mechanics
 
-- **MECH-MODC-01 — Android air-immunity** [V]. `AtmosphereNeedsSuit.isImmune`, when
+- **MECH-MODC-01 — Android air-immunity** [V]. `AtmosphereHazards.isImmune`, when
   `matteroverdrive` is loaded, delegates to `isAndroidNeedNoOxygen`: true iff the entity
   holds an MO android capability that is an unlocked android with the `oxygen` biotic stat
   at level ≥1. Grants full suit immunity, skipping the armour checks.
-  `atmosphere/AtmosphereNeedsSuit.java:33-35`, `integration/MatterOvedriveIntegration.java:12-16`.
+  `atmosphere/hazard/AtmosphereHazards.java:216-219`, `integration/MatterOvedriveIntegration.java:12-16`.
 - **MECH-MODC-02 — Android bypass-list registration** [V]. During
   `StellurgyConfiguration.registerEntities`, when `matteroverdrive` is loaded,
   `addAndroidsToBypassList` adds `EntityDrone`, `EntityRangedRogueAndroidMob`,
@@ -72,7 +72,7 @@ seam-*.tsv greps for these files returned empty).
 
 - **INV-MODC-01** [V] Every foreign-mod entry point is reached only behind a
   `Loader.isModLoaded` guard at the caller, so absent mods never trigger classloading of
-  MO/GC types. `AtmosphereNeedsSuit.java:33`, `StellurgyConfiguration.java:785`,
+  MO/GC types. `AtmosphereHazards.java:216`, `StellurgyConfiguration.java:785`,
   `Stellurgy.java:1149`.
 - **INV-MODC-02** [V][BEH] GC suffocation is cancelled for ALL entities passed to
   `GCSuffocationEvent`, not just players — the `setCanceled(true)` is outside the
@@ -86,7 +86,7 @@ seam-*.tsv greps for these files returned empty).
   `getLoadedMods()`, which has no caller. `CompatibilityMgr.java:8-20` (grep: 0 readers).
 - **INV-MODC-05** [A][BEH] MO android immunity is intended to be an early short-circuit before
   the armour checks; inferred from ordering, no test pins the MO branch (no `matteroverdrive`
-  on the test classpath). `AtmosphereNeedsSuit.java:33-35`.
+  on the test classpath). `AtmosphereHazards.java:216-219`.
 
 ## Failure modes & edge cases
 
@@ -104,7 +104,7 @@ seam-*.tsv greps for these files returned empty).
 - Forge events (C5): subscribes `GCCoreOxygenSuffocationEvent.Pre` (foreign, GC) and
   `TickEvent.RenderTickEvent`. No Stellurgy event is published.
 - Cross-subsystem: mutates `StellurgyConfiguration.bypassEntity` (api-public) and reads
-  `StellurgyConfiguration.overrideGCAir`; called by `AtmosphereNeedsSuit` (atmosphere-oxygen) and
+  `StellurgyConfiguration.overrideGCAir`; called by `AtmosphereHazards` (atmosphere-oxygen) and
   by `Stellurgy` preInit (misc-oddities).
 - No packets, no NBT, no registry, no mixins/AT.
 

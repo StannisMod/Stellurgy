@@ -3,8 +3,8 @@ id: C21-atmosphere-model
 kind: contract
 subject: what an atmosphere IS, and what may be derived from it
 owners: [atmosphere-oxygen, dimension-planets]
-clauses: CON-C21-01 .. CON-C21-18
-ratified: 2026-08-19
+clauses: CON-C21-01 .. CON-C21-22
+ratified: 2026-08-19 (CON-C21-19 .. 22: 2026-10-05)
 confidence: mixed — a clause is `[A]` unless the CURRENT code satisfies or violates it, which the
   status table cites per clause
 ---
@@ -105,6 +105,36 @@ Ruled by the maintainer on 2026-08-19. The clause numbers here are permanent ide
 - **CON-C21-18** `[A][SYS]` Adding a gas is a **registry row plus thresholds** — never a class, never a
   per-type lang key, never a name on the wire. The cost of a new substance is data. FOR: INV-ATM-18.
 
+## Zones — where a compartment's air comes from
+
+Terms. A **zone** is the sealed volume a port's flood fill finds; it holds one composition. A
+**port** is the block whose fill defines it — the T1 oxygen vent or the T4 ventilation port. A
+**supply** ADDS gas to a zone (a vent's tank, a separator combining); a **consumer** removes or
+converts it (respiration, a breach); regeneration converts CO2 back to O2 and adds nothing.
+Ratified by the maintainer on 2026-10-05 (*"Ну да."* to the three-part proposal, and *"сеть должна
+использовать свой, отдельный вент без бака (ибо сеть вообще не передаёт кислород, она передает
+воздух)"* for the fourth).
+
+- **CON-C21-19** `[T][BEH]` A zone's air is LIVE exactly while the zone is sealed. Every mechanic that
+  reads or moves a zone's gases — respiration, regeneration, separation, a recirculator, publishing the
+  derived atmosphere — acts on it whether or not any supply is running. A supply that stops is a
+  supply that stopped, never a freeze. Pinned by
+  `LifeSupportZoneTest#aRoomWhoseVentHasNoOxygenIsStillBreathedDown`,
+  `LifeSupportZoneTest#aScrubberTakesItsRoomsCarbonDioxideAndPaysForItInCharges`.
+- **CON-C21-20** `[T][BEH]` A new zone starts with the air that was in its place: the body's outdoor air
+  at its anchor, vacuum where there is none. Sealing creates no gas, and the zone's published
+  atmosphere is derived from that air from the moment the zone exists. Pinned by
+  `LifeSupportZoneTest#aRoomSealedOnAnAirlessWorldStartsAsVacuum`.
+- **CON-C21-21** `[T][BEH]` Gas is created only by a supply, and a supply pays for exactly what it
+  adds: the T1 vent spends its tank only for oxygen it admits, at `lifeSupportFluidPerAtmBlock`, and no
+  faster than its own rate. A room that lacks nothing costs nothing. Pinned by
+  `LifeSupportZoneTest#aVentSpendsNothingOnARoomThatLacksNothing`,
+  `LifeSupportZoneTest#aVentWithTwoScrubbersStillSuppliesOxygen`.
+- **CON-C21-22** `[T][SYS]` The ventilation network carries regeneration WORK on a zone's air, never
+  gas. Its member at a zone is the ventilation port, which has no tank and is powered through the ducts
+  by the plants on its network; the T1 vent is not a network member. Pinned by
+  `VentilationNetworkTest#aPortIsPoweredThroughItsDuctsByAPlant`.
+
 ## Status
 
 The registry, the composition and the predicates are built (CON-C21-03 and 07 are built and pinned;
@@ -131,6 +161,11 @@ half-built: the state answers, and the types still carry their own flags.
 | 16 the ground inherits the chemistry | **unimplemented** | no surface chemistry of any kind |
 | 17 config may not make air lie | **`[A]`, undecided** | the intent: no setter lets anyone take the SHARED value every zone and planet resolves to and declare it breathable, and no interface lets a dependent mod assert the same by implementing it. `api/atmosphere/Atmosphere` has no setters: `isBreathable` and `allowsCombustion` are `final` fields set by its constructor (`Atmosphere.java:59-70`). No test fails if a setter returns. **Not fully honest even in intent**: the two flags are assigned by hand at construction, so an atmosphere can still be BUILT saying the wrong thing; it just cannot be changed afterwards. The last step is the flags becoming derivations of a composition |
 | 18 a new gas is data | **BUILT for the atmosphere half** | a new atmosphere is not a class, a registry row, a lang key or a wire name. It is what a COMPOSITION derives to. Adding a substance is what CON-C21-18 says it should be: a row in the gas registry and a threshold |
+| 19 a zone lives while sealed | **BUILT `[T]`** | `SealedZone`; both ports answer `isMaintainingAtmosphere()` = sealed. Pinned by `server/LifeSupportZoneTest.aRoomWhoseVentHasNoOxygenIsStillBreathedDown` |
+| 20 a new zone holds what was there | **BUILT `[T]`** | `SealedZone#register` / `#airAround`. Pinned by `server/LifeSupportZoneTest.aRoomSealedOnAnAirlessWorldStartsAsVacuum` (Luna). Not pinned: the zone↔outdoors exchange of an OPEN room, which row 10 already names unbuilt |
+| 21 a supply pays for what it adds | **BUILT `[T]`** | `TileOxygenVent#supplyOxygen`. Pinned by `server/LifeSupportZoneTest.aVentSpendsNothingOnARoomThatLacksNothing`. There is no mode in which a vent burns gas it does not add |
+| 22 the network carries work, through its own port | **BUILT `[T]`** | `TileVentilationPort` is the sink; `LifeSupportNetwork#payPortUpkeep` powers it. Pinned by `server/VentilationNetworkTest` (all four scenarios on the port; `aPortIsPoweredThroughItsDuctsByAPlant` against a port that ignores payment) |
+| 19/21 at T2 — the scrubber | **BUILT `[T]`** | a scrubber acts on its vent's LIVE zone (19) and removes CO2 without returning gas, so it creates none (21); its cartridge pays one charge per `lifeSupportScrubberCo2PerCharge` of what it took, and the vent's supply rate does not read the scrubbers. `TileCO2Scrubber#absorb`, `TileOxygenVent#scrub` (atmosphere-oxygen MECH-ATM-08). Pinned by `server/LifeSupportZoneTest.aScrubberTakesItsRoomsCarbonDioxideAndPaysForItInCharges` and `.aVentWithTwoScrubbersStillSuppliesOxygen`. A sealed room whose chunk LOADS keeps its air: the off-thread fill's "not yet" is not read as "open" (pinned by `server/LifeSupportZoneTest.aSealedRoomKeepsItsAirAcrossAChunkReload`) |
 
 ## Violations that matter most
 

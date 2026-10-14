@@ -65,7 +65,7 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
      *  status" not "the vent disconnects". Pin the observable
      *  effects, not the {@code isSealed} flag.</p>
      * Pins INV-ATM-07 (a vent seals only with both oxygen and power).
-     * Pins INV-ATM-09 (a vent that cannot supply its blob's oxygen loses hasFluid and reverts the atmosphere).
+     * Pins INV-ATM-09 (a dry tank changes nothing about the zone: the room keeps the air it has).
      */
     @Pins({"INV-ATM-07", "INV-ATM-09"})
     @Test

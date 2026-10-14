@@ -1,6 +1,6 @@
 ---
 id: ship-heat
-owns: [subsystem/heat/, tile/heat/]
+owns: [subsystem/heat/, tile/heat/, subsystem/hull/]
 entrypoints: [HeatNetwork#DOMAIN, HeatNetwork#tickThermodynamics, HeatNetwork#cacheNeighbours, CapabilityHeatEmitter#get, CapabilityHeatPump#get]
 depends-on: [subsystem-network, atmosphere-oxygen]
 depended-by: []
@@ -87,7 +87,7 @@ supplies one number and one clause to it.
   machine standing between two loops has its output split between them instead of counted twice.
   A capability implementation that answers the same number after being drained breaks this, which is
   why the interface says so. `api/capability/IHeatEmitter.java:23-27`,
-  `TileLifeSupportPlant.java:145-156` `[V]`
+  `TileLifeSupportPlant.java:151-159` `[V]`
 - **MECH-HEAT-04 `T = T_ambient + Q / C`** — with `C` summed over every member of the loop and
   recomputed each tick, so laying more pipe is immediately a colder ship.
   `HeatNetwork.java:96-101,175-262` `[V][T]`
@@ -97,10 +97,14 @@ supplies one number and one clause to it.
   `HeatNetwork.java:571-585` `[V]`
 - **MECH-HEAT-06 waste heat is derived from energy SPENT** — a machine that ran at a tenth of its
   rate makes a tenth of the heat, because the number comes from what it actually paid rather than
-  from its rating. `TileLifeSupportPlant.java:132-143` `[V]`
+  from its rating — every payment, the plant's port upkeep included. `WasteHeat.java:45-57`,
+  `TileLifeSupportPlant.java:111,131` `[V]`
 - **MECH-HEAT-07 an uncollected emitter sheds to the air** — its buffer is capped at about a
   second's worth, so a machine nobody plumbed does not bank heat for a loop built later. This is
-  C12 HEAT-4's third exit (convection), not a leak. `TileLifeSupportPlant.java:139-142` `[V]`
+  C12 HEAT-4's third exit (convection), not a leak. A payment's cap bounds only what IT adds: a
+  later, smaller payment before the loop collects never discards heat an earlier one banked.
+  `WasteHeat.java:53-56` `[V]`; pinned by
+  `server/HeatLoopTest.aMachineOnACoolantLoopWarmsIt` (regeneration, then the port's upkeep) `[T]`
 
 - **MECH-HEAT-08 what a cell RADIATES is `k · A · T⁴`, in floating point** — area buys it linearly,
   temperature to the fourth power, and that difference is the whole reason a chiller is worth building.
@@ -206,8 +210,8 @@ supplies one number and one clause to it.
   `HeatEnvironment.java:89-116`, `affs/…/shield/ShieldCoverage.java:39-72` `[V][T]`
 - **MECH-HEAT-25 overheated zone air IS a hostile atmosphere, and the gases only pick the variant** —
   the crew rung is not a damage path of its own: the derivation that turns a zone's gases into an
-  `IAtmosphere` reads the air's temperature FIRST and answers with the same `VERYHOT` / `SUPERHEATED`
-  singletons a scorching planet answers with, so the suit chain, the tick damage and the sync packet
+  `Atmosphere` reads the air's temperature FIRST and answers with the same `VERYHOT` / `SUPERHEATED`
+  constants a scorching planet answers with (`AirState.java:526-532`), so the suit chain, the tick damage and the sync packet
   are all reached unchanged (C12 HEAT-14). Whether it is the plain or the `NoO2` variant is the
   oxygen question the cold path asks anyway. A threshold of `0` is no rung rather than a rung every
   room trips, and the whole ladder is skipped when `shipHeat` is off — with it off nothing can warm a
@@ -342,11 +346,18 @@ supplies one number and one clause to it.
   rows it lacks are added** — `config/advRocketry/thermalMaterials.json` is written from the shipped
   table when absent; when present, every row it holds keeps the file's values, and every shipped row it
   does not hold is added with its shipped values, logged once by name, and written back so the player
-  can see and edit it. An empty or unreadable file answers the shipped table. The consequence to keep in
+  can see and edit it. **A file that is present but is not a table REFUSES the start**: unparsable, no `materials` object, a row that is not an object, or a row
+  missing one of `density` / `specificHeat` / `ceilingKelvin` or holding a non-whole number — each
+  throws `IllegalStateException` naming the file (and the row and field), and the shipped table is
+  never put in its place. An EMPTY `materials` object is a table with no rows and merges like any
+  other. The table is read in `Stellurgy#postInit`, beside the weight table, so the refusal stops the
+  start rather than crashing the first melt or slug; pinned by `unit/ThermalTableFileTest` (the
+  refusal) and `server/ThermalTableAtStartupTest` (taken at startup). A failure to WRITE the file
+  back is logged as a warning naming it. The consequence to keep in
   mind: DELETING a row from the file does not remove the material — the next load restores it; a player
   who wants a substance ignored must give it a ceiling of 0. The file never REPLACES the table (an older file would hide every material shipped since).
-  **Read ONCE per launch, and immutable:** `ThermalMaterials.INSTANCE` is loaded when the class loads, on whichever side
-  loads it, and nothing reloads it — a file edit takes effect on the next launch. It is a constant, not
+  **Read ONCE per launch, and immutable:** `ThermalMaterials.INSTANCE` is loaded when the class loads — forced in
+  `postInit` on each side, so a table the pack broke stops the start — and nothing reloads it — a file edit takes effect on the next launch. It is a constant, not
   state: every reader sees the table the install started with. A caller needing another table builds
   one with `ThermalMaterials.load(file)` and holds it itself; the unit tests do exactly that and do not
   read the run directory's file. `ThermalMaterials.java:86,358-446` `[V][T]`
@@ -359,7 +370,7 @@ supplies one number and one clause to it.
   (no coolant against it, or `shipHeat` off) and raises no objection at all: unlike its neighbours in
   that interface, the safe direction here is to stay quiet, or every ship built before the thermal
   system existed would be grounded. `hyperdrive/ShipDrive.java:175-214`,
-  `navigation/JumpGate.java:352-370` `[V][T]`
+  `navigation/JumpGate.java:372-390` `[V][T]`
 
 ## State & persistence
 

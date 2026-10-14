@@ -52,6 +52,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.util.ShortWireParts;
 
 /**
  * Purpose: validate the rocket structure as well as give feedback to the player as to what needs to be
@@ -318,7 +319,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         return stats.getMass();
     }
 
-    public int getThrust() {
+    public long getThrust() {
         return stats.getThrust();
     }
 
@@ -474,7 +475,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         long thrustBipropellant = 0;
         long thrustNuclearNozzleLimit = 0;
         long thrustNuclearReactorLimit = 0;
-        int thrustNuclearTotalLimit;
+        long thrustNuclearTotalLimit;
         int monopropellantfuelUse = 0;
         int bipropellantfuelUse = 0;
         int nuclearWorkingFluidUseMax = 0;
@@ -862,8 +863,12 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                         status = ErrorCodes.SHIP_TOO_LARGE;
                         break;
                     case NO_FLIGHT_COMPUTER:
-                        status = ErrorCodes.FAIL_CUT;
-                        break;
+                        // Not a player's situation: this branch runs only after the scan above found the
+                        // computer in this region, in this same call, by the same tile test. Reaching it
+                        // means the scan and the assembly disagree about the craft, which no status
+                        // message can explain to anyone.
+                        throw new IllegalStateException("the scan found a flight computer at "
+                                + scannedFlightComputerPos + " but the assembly found none in " + rocketBB);
                     default:
                         throw new IllegalStateException("an assembly refusal with no status: " + refusal);
                 }
@@ -1291,7 +1296,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         thrustText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust") + ": ???") : String.format("%s: %.1fkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.thrust"), getThrust() / 1000f));
         weightText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight") + ": ???") : String.format("%s: %.1fkN", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.weight"), stats.getWeightNewtons(getGravityMultiplier()) / 1000f));
         fuelText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fuel") + ": ???") : String.format("%s: %dmb/s", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fuel"), 20* getRocketStats().getFuelRate((stats.getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT) > 0) ? FuelType.LIQUID_MONOPROPELLANT : (stats.getFuelCapacity(FuelType.NUCLEAR_WORKING_FLUID) > 0) ? FuelType.NUCLEAR_WORKING_FLUID : FuelType.LIQUID_BIPROPELLANT)));
-        accelerationText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc") + ": ???") : String.format("%s: %.2fm/s\u00b2 (TWR %.2f)", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc"), getAcceleration(getGravityMultiplier()) * 20f, getThrustToWeightRatio()));
+        accelerationText.setText(isScanning() ? (LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc") + ": ???") : String.format("%s: %.2fm/s\u00b2 (TWR %.2f)", LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.acc"), getAcceleration(getGravityMultiplier()) * StatsRocket.STANDARD_GRAVITY / StatsRocket.GRAVITY_BLOCKS_PER_TICK_SQUARED, getThrustToWeightRatio()));
         if (!world.isRemote) {
             if (getRocketPadBounds(world, pos) == null)
                 setStatus(ErrorCodes.INCOMPLETESTRCUTURE.ordinal());
@@ -1355,7 +1360,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
 
         updateText();
 
-        for (int i = 0; i < 15; i++)
+        for (int i = 0; i < SYNC_SLOTS * SYNC_PARTS; i++)
             modules.add(new ModuleSync(i, this));
 
 
@@ -1418,14 +1423,15 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
     }
 
-    @Override
-    public void setData(int id, int value) {
-        switch (id) {
+    /** Applies one slot's whole value, as reassembled by {@link #setData}. */
+    private void applySynced(int slot, long whole) {
+        int value = (int) whole;
+        switch (slot) {
             case 0:
                 getRocketStats().setMass(value);
                 break;
             case 1:
-                getRocketStats().setThrust(value);
+                getRocketStats().setThrust(whole);
                 break;
             case 2:
                 setStatus(value);
@@ -1476,9 +1482,29 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         updateText();
     }
 
+    /**
+     * What the screen shows, by slot. A window property is 16 bits on the wire, and thrust in newtons or
+     * mass in kilograms is far wider (one motor is 490 500 N), so each slot travels as
+     * {@link ShortWireParts#PARTS} parts on ids {@code slot + part * SYNC_SLOTS}.
+     */
+    private static final int SYNC_SLOTS = 15, SYNC_PARTS = ShortWireParts.PARTS;
+    /** The client's reassembly of each slot from the parts received so far. */
+    private final long[] syncReceived = new long[SYNC_SLOTS];
+
     @Override
     public int getData(int id) {
-        switch (id) {
+        return ShortWireParts.part(syncedValue(id % SYNC_SLOTS), id / SYNC_SLOTS);
+    }
+
+    @Override
+    public void setData(int id, int value) {
+        int slot = id % SYNC_SLOTS;
+        syncReceived[slot] = ShortWireParts.fold(syncReceived[slot], id / SYNC_SLOTS, value);
+        applySynced(slot, syncReceived[slot]);
+    }
+
+    private long syncedValue(int slot) {
+        switch (slot) {
 
             case 0:
                 return Math.round(getRocketStats().getDryMass());

@@ -52,8 +52,7 @@ stalls).
 
 **S6 — Powered processing tick (consumer, libVulpes).** Each tick while running, the base
 `onRunningPoweredTick` withdraws `powerPerTick` from `batteries` and increments `currentTime` toward
-`completionTime`; a gravity / oxygen gate can suppress the advance (MECH-MBM-17 crystallizer,
-`enableOxygen` reactor). [V]
+`completionTime`; a gravity gate can suppress the advance (MECH-MBM-17 crystallizer). [V]
 
 **S7 — Completion, MECH-MBM-15.** At `currentTime == completionTime`, `processComplete` consumes the
 matched ingredients from `itemInPorts` and pushes outputs to `itemOutPorts`. The chemical reactor

@@ -96,8 +96,9 @@ public class VSConfig {
     // This field is spent against a timestep measured in WALL seconds (physSpeedMultiplier /
     // targetTps), so the value that makes a ship fall at 0.08 blocks/tick² — exactly a player's rate
     // — is 0.08 * 400 = 32. Left at 9.8 a ship fell 3.3x slower than the player standing on its deck,
-    // which is a ship that descends out from under its own crew.
-    public static double gravityVecY = -32;
+    // which is a ship that descends out from under its own crew. Derived, never typed: the same
+    // quantity as the rocket's per-tick gravity, in the engine's units.
+    public static double gravityVecY = -dev.stannismod.stellurgy.integration.vs.PhysicsUnits.ENGINE_GRAVITY;
 
     @Name("Gravity Vector Z")
     public static double gravityVecZ = 0;

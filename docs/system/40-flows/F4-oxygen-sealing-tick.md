@@ -17,22 +17,22 @@ the client. Mechanics are the atmosphere-oxygen doc's; the model of what an atmo
 ## Preconditions (owner: atmosphere-oxygen)
 
 - P0. A per-dimension `AtmosphereHandler` must exist for the vent's dim — created at world load only
-  when `enableOxygen && hasSurface() && (overrideGCAir || dim != getMoonId() || native)` (**MECH-ATM-01**;
-  the handler is a part of the world object it serves, via `WorldRuntime`; **INV-ATM-01**). No handler ⇒
-  the vent's `getOxygenHandler` returns null and `performFunction` returns early, so **no blob, no seal,
-  no effects** — the same short-circuit that gives **INV-ATM-02**.
+  when `hasSurface() && (overrideGCAir || dim != getMoonId() || native)` (**MECH-ATM-01**; the handler
+  is a part of the world object it serves, via `WorldRuntime`; **INV-ATM-01**). No handler ⇒ the vent's
+  `getOxygenHandler` returns null and `performFunction` returns early, so **no blob, no seal, no
+  effects**. No configuration flag removes the handlers.
 
 ## Step sequence (server)
 
 1. **Vent tick entry, client fork.** `TileOxygenVent.performFunction` runs each active machine tick,
    but all blob / seal logic is gated on `!world.isRemote`; on the client it only drives sound and
    particles. **Seam split #1.** (**MECH-ATM-07**)
-2. **Blob registration (once).** On `firstRun` the vent calls `atmhandler.registerBlob(this, pos)` and
-   forces a reseal by starting `isSealed = true` (to count scrubbers) then `setSealed(false)`. The vent
-   is the `IBlobHandler` key into the handler's `blobs` map.
+2. **Blob registration (once).** On `firstRun` the vent's `SealedZone` registers the blob
+   (`atmhandler.registerBlob(owner, pos)`) and forces a reseal. The vent is the `IBlobHandler` key into
+   the handler's `blobs` map.
 3. **Seal attempt every 100 t.** When off-seal, turned on, and holding `getPowerPerOperation()` energy,
-   the vent calls `setSealed(atmhandler.addBlock(this, pos))` on the 100-tick cadence. Power and fuel are
-   BOTH required or no seal forms (**INV-ATM-07**). **Producer of the seal decision.** (**MECH-ATM-07**)
+   the zone checks its seal on the 100-tick cadence (`SealedZone#checkSeal` → `atmhandler.addBlock`).
+   Power is required or no seal forms (**INV-ATM-07**). **Producer of the seal decision.** (**MECH-ATM-07**)
 4. **Handler → blob hand-off (the key SSOT seam).** `AtmosphereHandler.addBlock` looks up the vent's
    `AreaBlob` and calls `blob.addBlock(pos, getBlobWithinRadius(pos, maxBlobRadius()))`. The
    neighbour / overlap list is bounded by `maxBlobRadius()` — 256 in threaded mode, else `oxygenVentSize`
@@ -42,11 +42,14 @@ the client. Mechanics are the atmosphere-oxygen doc's; the model of what an atmo
    `oxygenVentSize`. Radius mode vs threaded-volume mode is chosen by `atmosphereHandleBitMask`.
    Reaching a cell past the cap **voids the whole blob** (`clearBlob()`) — binary, no partial fill
    (**INV-ATM-08**, **MECH-ATM-02**). Blob membership excludes sealed / already-owned cells
-   (**INV-ATM-12**).
-6. **Fill result → atmosphere.** If the room sealed and the tank can supply `blobSize × gasUsageMult`
-   O2, the vent flips `hasFluid = true` and sets the blob's data to `Atmosphere.PRESSURIZEDAIR`. If the
-   tank runs dry it reverts the blob to `DimensionProperties.getAtmosphere()` — the dim default from
-   dimension-planets (**INV-ATM-09**). **Producer writes the blob's atmosphere.**
+   (**INV-ATM-12**). A threaded fill that has not answered yet is "not yet", never "open"
+   (MECH-ATM-25).
+6. **Fill result → atmosphere type.** The port does not CHOOSE the blob's data. The zone's gases
+   (`AirState`) are the model, and the blob's named `Atmosphere` is always derived from them — when the
+   zone registers (`SealedZone#register`) and whenever its air is rewritten. The vent's tank is one
+   supply that tops the gases up; an empty tank stops the top-up and the label follows whatever the
+   gases then are (**INV-ATM-09**, MECH-ATM-33). **Producer writes the zone's gases; the label is
+   derived from them.**
 7. **Seal state to client.** `isSealed` is pushed only via the vent's update tag
    (`getUpdateTag` / `handleUpdateTag`), never persisted in `writeToNBT`; re-derived on first server
    run. **Seam split #2.**
@@ -64,25 +67,29 @@ the client. Mechanics are the atmosphere-oxygen doc's; the model of what an atmo
 10. **Tick gate + cancellable event.** Effects run only if `atmosType.canTick()` and the entity is not
     in lava / water; a cancellable `AtmosphereTickEvent` is posted, and effects are skipped if
     cancelled or the type is immune to the entity class (**INV-ATM-03**, **INV-ATM-06**).
-11. **Suit / immunity resolution.** The entity is asked — creative / spectator, android, rocket /
-    capsule ride, the rocket-transfer grace window (`RocketTransferGrace`: a player's in his
-    `IPlayerBindings`, any other entity's under ForgeData), then armour; what the SUIT is asked is a
+11. **Suit / immunity resolution.** `Atmosphere#onTick` asks the hazard table what this air does
+    (`AtmosphereHazards.effectOn`), returns if no row fires on this tick, and only then asks
+    `AtmosphereHazards.isImmune(exposure, entity)`: the rocket-transfer grace window
+    (`RocketTransferGrace`: a player's in his `IPlayerBindings`, any other entity's under ForgeData),
+    android, creative / spectator, rocket / capsule ride, or armour — helm+chest, plus legs+feet where a
+    hazard acts on the whole body, the strictest active hazard deciding. What the SUIT is asked is a
     HAZARD, not a named atmosphere (`IProtectiveArmor.protectsFrom`; C21 CON-C21-08) (**MECH-ATM-05**,
     **INV-ATM-05**). Protection is read via the `ItemAirUtils` wrapper or
     `CapabilitySpaceArmor.PROTECTIVEARMOR` (seam into api-public / armor).
-12. **Armour cost & damage.** For a fillable chest, `protectsFrom` is free in a combustible (O2-bearing)
-    atmosphere but costs 1 unit of air per commit otherwise; zero air ⇒ no protection
-    (`ItemSpaceChest.protectsFrom`; **MECH-ATM-12**, **INV-ATM-13**). Unprotected ⇒ the hostile
-    atmosphere applies its damage source (`Vacuum` / `LowOxygen` / `Heat` / `OxygenToxicity`, all
-    `bypassesArmor` + absolute) plus its potion cocktail on a per-type modulo cadence (the nausea
-    effect reads the live `enableNausea` flag, C4); vacuum also sends `PacketOxygenState`.
+12. **Armour cost & damage.** For a fillable chest, `protectsFrom` is free where the hazard does not
+    need supplied oxygen and costs 1 O2 per commit where it does (none at all with
+    `breathingRequiresO2` off); zero air ⇒ no protection (`ItemSpaceChest.protectsFrom`;
+    **MECH-ATM-12**, **INV-ATM-13**). Unprotected ⇒ the merged rows of the table apply: each row's
+    damage source (`Vacuum` / `LowOxygen` / `Heat` / `OxygenToxicity`, all `bypassesArmor` + absolute)
+    and potions on its own period (the nausea effect reads the live `enableNausea` flag, C4), and a row
+    that announces the oxygen state sends `PacketOxygenState`.
 
 ## Producer / consumer summary
 
 | state | produced by | consumed by | seam |
 |-------|-------------|-------------|------|
-| blob atmosphere | vent `setAtmosphereType` (step 6) | `onTick` → `getAtmosphereType` (step 8) | same `blobs` map, different tick |
-| seal (`isSealed`) | vent (server, step 3) | client render (update tag only) | not persisted |
+| blob atmosphere | derived from the zone's gases (step 6) | `onTick` → `getAtmosphereType` (step 8) | same `blobs` map, different tick |
+| seal (`isSealed`) | the zone (server, step 3) | client render (update tag only) | not persisted |
 | fill cap radius | live `oxygenVentSize` via `getMaxBlobRadius` | overlap search via `maxBlobRadius()`, also live | two formulas — see Gaps |
 | default atmosphere | `DimensionProperties.getAtmosphere()` (dimension-planets) | vent revert + handler fallback | cross-subsystem |
 

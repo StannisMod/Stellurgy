@@ -63,6 +63,7 @@ tile.airRecirculator.name=Рециркулятор воздуха
 tile.gasSeparator.name=Газоразделитель
 tile.lifeSupportPlant.name=Установка жизнеобеспечения
 tile.ventilationDuct.name=Вентиляционный канал
+tile.ventilationPort.name=Вентиляционный порт
 tile.jettisonPort.name=Шлюз сброса
 tile.heatPipe.name=Контур охлаждения
 tile.heatAccumulator.name=Тепловой аккумулятор
@@ -568,6 +569,7 @@ msg.shiptransit.arrived=§aПрибытие — корабль снова в о�
 msg.shiptransit.directfailed=§cПереход не удался — корабль в точке назначения, но размещён не чисто. Он цел; сообщите об этом.
 msg.shiptransit.arrivalrecovered=§eПрыжок завершён, но не чисто — корабль стоит в точке прибытия, а не на курсе. Он цел; сообщите об этом.
 msg.shiptransit.arrivalstalled=§cПрыжок сейчас не может завершиться. Корабль не потерян — он остаётся в полёте и прибудет. Сообщите об этом.
+msg.shiptransit.arrivaldelayed=§eПрибытие задержано: регион назначения переполнен. Корабль ждёт в гиперпространстве и прибудет, как только освободится место.
 
 tile.navigationComputer.name=Навигационный компьютер
 item.stellurgy:memoryCrystal.name=Кристалл памяти
@@ -586,6 +588,7 @@ msg.jumpgate.positionunknown=Положение неизвестно - кора�
 msg.jumpgate.notarget=Цель прыжка не задана
 msg.jumpgate.alreadythere=Корабль уже в этой ячейке - лететь некуда
 msg.jumpgate.targetlost=Целевое тело не найдено - задайте цель заново
+msg.jumpgate.destinationfull=Регион назначения сейчас переполнен - прибытию, возможно, придётся подождать в гиперпространстве
 
 # --- Гипердвигатель ----------------------------------------------------------
 tile.hyperdriveGenerator.name=Генератор поля гиперпространства

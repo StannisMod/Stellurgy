@@ -109,7 +109,7 @@ part of surface), `aluminumClumpSize`,`generateAluminum`, `generateIridium`,`Iri
 from the aperture; there is no horizon, patch half-width or per-light-year tick rate —
 see C4).
 
-**Oxygen** (`OXYGEN`, `:441-454`): `enableOxygen`, `overrideGCAir`, `oxygenVentConsumptionMult`,
+**Oxygen** (`OXYGEN`, `:441-454`): `breathingRequiresO2`, `enableToxicity`, `overrideGCAir`, `oxygenVentConsumptionMult`,
 `oxygenVentPowerMultiplier`, `spaceSuitOxygenTime`, `suitTankCapacity`, `scrubberRequiresCartrige`,
 `dropExTorches`, `torchBlocks`, `atmosphereHandleBitMask` (PERFORMANCE), `oxygenVentSize` (PERFORMANCE),
 `enableNausea` (CLIENT).
@@ -149,7 +149,8 @@ defaults. Both are dead config fields.
 ## Config surface
 
 This whole doc *is* the config surface for the subsystem; all owned flags are listed above. Global
-disable paths: `enableOxygen=false` disables atmosphere damage; `partsWearSystem`/`advancedWeightSystem`
+disable paths: the atmosphere system has none since 2026-10-06 — `breathingRequiresO2` and
+`enableToxicity` turn off what its chemistry does to living things, not the system; `partsWearSystem`/`advancedWeightSystem`
 gate the wear/TWR systems (consumed in rocket-entity & rocket-assembly, cross-checked there);
 `EnableOreGen=false` master-disables all ore gen; `perDimWorldInfo=false` un-weaves the planet weather
 mixins entirely (`:492`).

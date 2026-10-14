@@ -613,6 +613,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
 
     // ---- Boarding vs bystanders: terra firma near a ship never captures -------------------------
 
+    @Ignore("NO CONTRACT HERE, by the maintainer's ruling of 2026-10-06: \"Этот игнорь вообще, там"
+            + " контракта нет.\" Red alone on 2026-10-06, before and after the 1.12 merge: the walk"
+            + " drops 6-12 blocks below the ground it is meant to stay on.")
     @Test
     @Wait(shape = Wait.Shape.WINDOW, at = "advanceServerAndClient(120);",
             why = "an attitude converges and nothing in production declares it reached, so there is no record to"

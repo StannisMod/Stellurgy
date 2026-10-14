@@ -282,7 +282,8 @@ Chosen from what this codebase has actually suffered:
   `float` in persisted physics
 - **side-safety**: client-only class referenced from common code · missing `world.isRemote` guard ·
   client-trusted input in a packet handler
-- **config**: a flag gates accrual but not consequences; a flag copied into a static at class load
+- **config**: a flag whose effect is wider or narrower than its name says (it gates accrual but not
+  consequences, or reaches worlds it does not name); a flag copied into a static at class load
 - **single source of truth**: two places deciding the same thing
 - **mixin/coremod**: dev↔prod traps, the most expensive bug class here
 - **other**: registry id collisions · chunk load inside a tick · unbounded collections · hardcoded

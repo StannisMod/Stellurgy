@@ -53,7 +53,9 @@ not process-wide. `[V]`
   pilot seat of S, or (b) first contact: feet supported by S's blocks in S's subspace
   (STANDING support — box top at/below feet: `ShipFrameTravel.java`) AND NOT
   simultaneously supported by world terrain. A body on world terrain never
-  becomes ABOARD. Pinned: `VSCrewCaptureContractTest.walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame`.
+  becomes ABOARD. The terrain half is UNPINNED: its only test,
+  `VSCrewCaptureContractTest.walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame`, is `@Ignore`d by
+  the maintainer's ruling *"Этот игнорь вообще, там контракта нет."* (that test pins no contract).
   The (a) path DELIVERS the SEAT's deck point: the seed is a client-side pending
   boarding intent (`ShipFrameTravel.installPendingSeed`) that waits out the
   post-dismount riding tail, applies exactly once, supersedes a first-contact capture

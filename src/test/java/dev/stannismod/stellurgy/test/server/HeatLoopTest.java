@@ -4,11 +4,13 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.contract.LegacyWitness;
 import dev.stannismod.stellurgy.test.contract.Pins;
+import dev.stannismod.stellurgy.test.contract.RedWitness;
 import org.junit.Test;
 
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * The coolant loop as a physical body: a machine's waste heat goes into the pipes touching it, and
@@ -53,6 +55,10 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * A machine cooled by a loop heats it. Nothing rejects heat yet, so the only place the energy
      * can be is in the pipes — which is exactly what a ship with no radiators should experience.
      *
+     * <p>The plant pays its port's upkeep from the same buffer, after the tick's regeneration, so this
+     * verdict also holds a later, smaller spend to the heat an earlier one banked: replacing that sum
+     * with its pre-fix form, which sizes the buffer by the latest spend alone, reddens it.</p>
+     *
      * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
      * "hotter than it started" is this same verdict read through a division.</p>
      * Pins INV-HEAT-01 (A machine's waste heat ends up in the loop touching it, and raises its temperature above ambient).
@@ -61,6 +67,9 @@ public class HeatLoopTest extends AbstractSharedServerTest {
     @LegacyWitness(prose = "with {@code HeatNetwork#collectGeneration} at {@code if (pending > 0)} collecting no machine's pending heat: \"the"
             + " plant's waste heat must end up in the loop it touches (stored=0)\", 2026-09-30. The three"
             + " premises at its head are arrangements and are not witnessed.")
+    @RedWitness(member = "WasteHeat#spend", at = "if (pending < cap) pending = (int) Math.min(cap, pending + made);",
+            replacedBy = "pending = (int) Math.max(0L, Math.min(cap, pending + made));",
+            fails = "the plant's waste heat must end up in the loop it touches (stored=0", on = "2026-10-06")
     @Test
     public void aMachineOnACoolantLoopWarmsIt() throws Exception {
         int cxSolo = stand("a life-support plant with a short coolant loop welded to it");
@@ -78,6 +87,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
                 0L, cold.longInteger("heatStored"));
 
         powerPlant(cxSolo);
+        makeStale(cxSolo);
         solve(SOLVE_TICKS);
 
         Reply warm = loopInfo(cxSolo + 5);
@@ -122,6 +132,10 @@ public class HeatLoopTest extends AbstractSharedServerTest {
 
         powerPlant(cxShort);
         powerPlant(cxLong);
+        // Work starts when a room has carbon dioxide to clear. The long rig's room goes stale first,
+        // so any head start is the long loop's — the premise below would only be harder to meet.
+        makeStale(cxLong);
+        makeStale(cxShort);
         solve(SOLVE_TICKS);
 
         Reply warmShort = loopInfo(cxShort + 5);
@@ -171,6 +185,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         setConfig("shipHeat", "false");
         try {
             powerPlant(cxOff);
+            makeStale(cxOff);
             solve(SOLVE_TICKS);
 
             Reply off = loopInfo(cxOff + 5);
@@ -211,7 +226,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
     @Test
     public void aMachineBuiltAfterTheLoopIsStillPickedUp() throws Exception {
         int cxLate = stand("a coolant loop that settles before its machine is built");
-        buildStaleRoom(cxLate);
+        buildRoom(cxLate);
         placeDuct(cxLate + 1);
         placeDuct(cxLate + 2);
         placeDuct(cxLate + 3);
@@ -227,6 +242,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
 
         placePlant(cxLate + 4);
         powerPlant(cxLate);
+        makeStale(cxLate);
         solve(SOLVE_TICKS);
 
         Reply after = loopInfo(cxLate + 5);
@@ -238,12 +254,13 @@ public class HeatLoopTest extends AbstractSharedServerTest {
     // ─── the rig ───────────────────────────────────────────────────────
 
     /**
-     * A sealed stale room with a vent, ducts out to a life-support plant, and a run of coolant pipe
-     * welded to the plant. The plant is the heat source because it is the machine this tier already
-     * has: it spends real power doing real work, and a share of what it spends comes back as heat.
+     * A room with a ventilation port, ducts out to a life-support plant, and a run of coolant pipe
+     * welded to the plant. The plant is the heat source because it is the machine this tier
+     * already has: it spends real power doing real work, and a share of what it spends comes back as
+     * heat.
      */
     private void buildRig(int cx, int pipes) throws Exception {
-        buildStaleRoom(cx);
+        buildRoom(cx);
         placeDuct(cx + 1);
         placeDuct(cx + 2);
         placeDuct(cx + 3);
@@ -253,9 +270,16 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         }
     }
 
-    /** Powering the plant is what starts the heat, so it is deliberately separate from building. */
+    /**
+     * A powered plant pays the room's port through the ducts, and only then can the port hold its
+     * room as a zone for the plant to work on. The room is still fresh here, so nothing is regenerated
+     * and nothing heats until {@link #makeStale} gives the plant carbon dioxide to clear.
+     */
     private void powerPlant(int cx) throws Exception {
         injectEnergyAt(cx + 4, 1_000_000);
+        act("stellurgytest subnet solve lifesupport 0 1").requireOk();
+        Reply sealed = arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
+        requireArranged("the port must hold its room as a sealed zone: " + sealed, sealed.bool("sealed"));
     }
 
     /**
@@ -269,7 +293,7 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
-    private void buildStaleRoom(int cx) throws Exception {
+    private void buildRoom(int cx) throws Exception {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
                 + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone").requireOk();
         for (int yy = cy + 1; yy <= cy + 2; yy++) {
@@ -281,14 +305,13 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
                 + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone").requireOk();
 
-        place(cx, "stellurgy:oxygenVent");
-        injectEnergyAt(cx, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000").requireOk();
-
+        place(cx, "stellurgy:ventilationPort");
+        // Its first tick registers the zone, holding the overworld's own air: nothing to clear.
         act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1").requireOk();
-        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz).requireOk();
-        act("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5").requireOk();
+    }
 
+    /** Most of the room's oxygen breathed into CO2 — which is what gives its plant work to do. */
+    private void makeStale(int cx) throws Exception {
         arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
                 + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000)).requireOk();
     }

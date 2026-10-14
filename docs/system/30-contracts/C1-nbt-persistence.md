@@ -116,7 +116,8 @@ DimensionProperties above): `id`, `posX`, `posY`, `posZ`, `altitude`, `spawnX`/`
 **rocket-assembly** — `TileRocketAssemblingMachine`: `id`, `status`, `building`, `bb`, `bytes`(via),
 `minX`/`Y`/`Z`, `maxX`/`Y`/`Z`, `pwr`, `tik`, `scanTime`, `scanTotalBlocks`,
 `infrastructureLocations`. `StorageChunk` (own compound + per-tile sub-tags): `id`, `mass` (kg),
-`xSize`/`ySize`/`zSize`, `idList`, `metaList`, `tiles`, `hasServiceMonitor`, `x`/`y`/`z` (cells).
+`xSize`/`ySize`/`zSize`, `idList`, `metaList`, `tiles`, `hasServiceMonitor`, `x`/`y`/`z` (cells),
+`damageLayer` (the blob's block-damage stages, written by `DamageLayer`; absent = an undamaged blob).
 
 **infrastructure-tiles** — fueling/loader/monitor tiles: `state`, `redstoneState`,
 `inputRedstoneState`, `inputstate`, `bytes`, `masterPos`/`masterX`/`Y`/`Z`, `status`,
@@ -151,9 +152,14 @@ Orbital-laser-drill: `currentX`/`Z`, `newX`/`Z`, `laserX`/`Z`, `CenterX`/`Y`, `p
 
 **atmosphere-oxygen** — `TileOxygenVent`: `state`, `redstoneState`, `isSealed`, `trace`,
 `allowtrace`, `airState` (compound of `n2`/`o2`/`co2`/`airK`, the zone's gas contents and its
-TEMPERATURE in thousandths of a kelvin — the zone's shape is rebuilt from the world on load but its
-contents are not derivable from blocks; absent `airState` = fresh sea-level air, and an absent `airK` inside one reads as AMBIENT rather than
+TEMPERATURE in thousandths of a kelvin, written by the shared `SealedZone` — the zone's shape is
+rebuilt from the world on load but its contents are not derivable from blocks; absent `airState` = the
+zone starts with the air around it, and an absent `airK` inside one reads as AMBIENT rather than
 as zero).
+`TileVentilationPort`: `airState` (the same compound, through the same `SealedZone`), `zonePriority`
+(the zone's network priority, clamped to -1..1 on read), `isSealed` (update tag only, as the vent's).
+`TileCO2Scrubber`: `co2Unpaid` (a LONG — CO2 absorbed since the cartridge last paid a charge, below one
+charge's worth; saved so a reload neither forgives nor double-charges it; absent = 0).
 `TileAirRecirculator`: `carbonBuffer` (a LONG — sub-item carbon owed; persisted so an unload neither rounds
 the machine's output up nor drops it), `opTicks` (ticks since it last acted — its own cadence, not
 a world-clock modulo).
@@ -175,7 +181,8 @@ mass for may not be undone by a chunk reload).
 `SatelliteMicrowaveEnergy`: `teir`. `TileTerraformingTerminal`: `blockpertick`, `powergen`,
 `sat_power_per_tick`, `randomblocks_per_tick`, `was_enabled_last_tick`.
 
-**api-public** — `StatsRocket` (`rocketStats` sub-tag): `thrust` (newtons), `mass` (kg), `drillingPower`,
+**api-public** — `StatsRocket` (`rocketStats` sub-tag): `thrust` (newtons, a LONG — one nuclear core rates
+4.9e7 N, so an int saturated at a few dozen cores), `mass` (kg), `drillingPower`,
 `passengerSeats`, `dynStats`, `engineLoc`, `workingFluid`, `fuelFluid`, `oxidizerFluid`,
 `playerXPos`/`YPos`/`ZPos`, and the full `fuel*`/`fuelBaseRate*`/`fuelRate*`/`fuelCapacity*`
 family per propellant type. `SatelliteProperties`/`SatelliteRegistry`: `satId`, `dataType`,

@@ -50,7 +50,7 @@ public class StatsRocket {
      * ascent used 0.05, the classic descent 0.04905, free flight 0.04 and a ship 0.0245, so a ship
      * descended out from under the crew standing on it.</p>
      */
-    public static final float GRAVITY_BLOCKS_PER_TICK_SQUARED = 0.08f;
+    public static final double GRAVITY_BLOCKS_PER_TICK_SQUARED = 0.08D;
 
     /**
      * The newtons that one unit of the pre-3.0.0 dimensionless thrust rating maps onto
@@ -71,8 +71,8 @@ public class StatsRocket {
     public static final int ORBIT_HEIGHT_UNSET = -1;
     public float injectionBurnLenghtMult;
     HashedBlockPosition pilotSeatPos;
-    /** Engine thrust, newtons. */
-    private int thrust;
+    /** Engine thrust, newtons. A long: one nuclear core rates 4.9e7 N, so an int saturated at ~44 cores. */
+    private long thrust;
     /** Dry mass, kilograms. Fuel mass is added by {@link #getMass()}. */
     private float mass;
     private float drillingPower;
@@ -171,14 +171,13 @@ public class StatsRocket {
     }
 
     /** Engine thrust in newtons, after the config multiplier. */
-    public int getThrust() {
-        return (int) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier);
+    public long getThrust() {
+        return (long) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier);
     }
 
-    /** @param thrust engine thrust, newtons; saturates rather than wrapping, because the scan
-     *                paths sum a per-engine rating that can exceed the int range on a large hull */
+    /** @param thrust engine thrust, newtons */
     public void setThrust(long thrust) {
-        this.thrust = (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, thrust));
+        this.thrust = thrust;
     }
 
     /** Dry mass in kilograms — the rocket with empty tanks. */
@@ -282,7 +281,7 @@ public class StatsRocket {
             return 0;
         }
         float netNewtons = getThrust() - weightNewtons(massKg, gravitationalMultiplier);
-        return netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED;
+        return (float) (netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED);
     }
 
     public float getAcceleration(float gravitationalMultiplier) {
@@ -774,7 +773,7 @@ public class StatsRocket {
     public void writeToNBT(NBTTagCompound nbt) {
         NBTTagCompound stats = new NBTTagCompound();
 
-        stats.setInteger("thrust", this.thrust);
+        stats.setLong("thrust", this.thrust);
         stats.setFloat("mass", this.mass);
         stats.setFloat("drillingPower", this.drillingPower);
         stats.setString("fuelFluid", this.fuelFluid);
@@ -862,7 +861,7 @@ public class StatsRocket {
 this.reset();
         if (nbt.hasKey(TAGNAME)) {
             NBTTagCompound stats = nbt.getCompoundTag(TAGNAME);
-            this.thrust = stats.getInteger("thrust");
+            this.thrust = stats.getLong("thrust");
             this.mass = stats.getFloat("mass");
             this.fuelFluid = stats.getString("fuelFluid");
             this.oxidizerFluid = stats.getString("oxidizerFluid");

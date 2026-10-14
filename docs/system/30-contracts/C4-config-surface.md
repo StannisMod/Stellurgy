@@ -23,10 +23,9 @@ deliberately absent from this matrix: find a flag's readers with a grep for its 
 ## Legend
 
 - **Type** is the Java field type. `†` = `needsSync=true` (server value overrides client on join).
-- **Disable path** semantics (a flag must fully disable its mechanic):
-  - *boolean gate* → the flag, when off, must return the vanilla/classic baseline (both **accrual**
-    and **consequence** gated). Verified gates are cited; a gate that only covers one side is a
-    **FLAG**.
+- **Disable path** semantics (no mechanic is REQUIRED to have one — maintainer ruling 2026-10-06):
+  - *boolean gate* → what the flag changes when off, gated on both **accrual** and **consequence**
+    of what it names. Verified gates are cited; a gate that only covers one side is a **FLAG**.
   - *multiplier / scalar* → has **no true off-switch**; the calculation always runs. Neutral value
     noted where one exists (identity `1.0`, or a documented "set 0 to disable"). Marked
     `tunable — no disable semantics` otherwise. Balance numbers are tunable, never contractual.
@@ -186,7 +185,8 @@ would silently redefine what every magnitude-stated threshold means.
 
 | Flag | Type | Disk key | Gates | Disable path | FLAG |
 |---|---|---|---|---|---|
-| enableOxygen | boolean | EnableAtmosphericEffects | atmosphere effects/damage master (AtmosphereHandler) | `false` = no atmosphere damage | |
+| breathingRequiresO2 | boolean | breathingRequiresO2 | living things need oxygen: respiration, a suit's tank, suffocation and oxygen toxicity (MECH-ATM-35) | `false` = none of those happen to anybody; zones and machines still run; vacuum, pressure, heat unaffected. No flag removes the atmosphere system | |
+| enableToxicity | boolean | enableToxicity | poison dose and poison harm (MECH-ATM-32/35) | `false` = no dose, no poison harm, no poison warning; the air still holds and reports its poisons | |
 | overrideGCAir | boolean | OverrideGCAir | replace Galacticraft air (Stellurgy, AtmosphereHandler) | `false` = defer to GC | |
 | oxygenVentConsumptionMult | double | oxygenVentConsumptionMultiplier | vent O2 use scale | identity `1.0`; tunable | |
 | oxygenVentPowerMultiplier | double | OxygenVentPowerMultiplier | vent power use scale | identity `1.0`; tunable | |
@@ -194,13 +194,14 @@ would silently redefine what every magnitude-stated threshold means.
 | suitTankCapacity | float | suitTankCapacity | suit tank capacity scale | identity `1.0`; tunable | |
 | scrubberRequiresCartrige | boolean | scrubberRequiresCartrige | scrubber cartridge requirement | `false` = no cartridge | |
 | vacuumDamage | int | vacuumDamage | damage a vacuum deals per second (MECH-ATM-16c) | tunable; READ from the config object where the damage is dealt, so a runtime change reaches it | |
-| lifeSupportZones | boolean | lifeSupportZones | per-zone N2/O2/CO2 tracking and crew respiration (MECH-ATM-17) | `false` = zones keep the vent's declared atmosphere, gases never move | |
 | lifeSupportMinPartialO2 | long | lifeSupportMinPartialO2 | hypoxia threshold; AUTHORED in millionths of an atm, HELD in the composition's own unit (MECH-ATM-18/16b) | tunable; `max <= min` disables the governor | |
 | lifeSupportMaxPartialO2 | long | lifeSupportMaxPartialO2 | oxygen-toxicity threshold; same authored/held split (MECH-ATM-18/19, 16b) | tunable; see above | |
 | lifeSupportRespirationRate | long | lifeSupportRespirationRate | O2→CO2 per crew per second × zone volume; authored in millionths (MECH-ATM-17/16b) | `0` = breathing moves nothing; tunable | |
 | lifeSupportRecirculatorRate | long | lifeSupportRecirculatorRate | CO2→O2 per T3 unit per second; authored in millionths (MECH-ATM-20/16b) | `0` = machine idles; tunable | |
 | lifeSupportRecirculatorPower | int | lifeSupportRecirculatorPower | RF per recirculator operation (MECH-ATM-20) | tunable | |
-| lifeSupportCarbonPerDust | long | lifeSupportCarbonPerDust | CO2 regenerated per carbon dust; authored in millionths (MECH-ATM-20/16b) | tunable; whole mechanic gated by `lifeSupportZones` | |
+| lifeSupportCarbonPerDust | long | lifeSupportCarbonPerDust | CO2 regenerated per carbon dust; authored in millionths (MECH-ATM-20/16b) | tunable | |
+| lifeSupportScrubberRate | long | lifeSupportScrubberRate | CO2 one T2 scrubber absorbs per second, in the respiration rate's unit (× zone volume); authored in millionths (MECH-ATM-08/16b) | `0` = scrubbers draw nothing; default one crew's breath (a progression choice) | |
+| lifeSupportScrubberCo2PerCharge | long | lifeSupportScrubberCo2PerCharge | CO2 one cartridge charge pays for, same unit (MECH-ATM-08) | default ten seconds at the default rate — a cartridge's life under full load stays the classic one charge per 200 ticks; floor 1 in code; tunable | |
 | lifeSupportFluidPerAtmBlock | int | lifeSupportFluidPerAtmBlock | mB per atm per block — the room/tank exchange rate (MECH-ATM-21) | tunable | |
 | lifeSupportSeparatorRate | long | lifeSupportSeparatorRate | partial pressure a separator moves per second; authored in millionths (MECH-ATM-21/16b) | `0` = idles; tunable | |
 | lifeSupportSeparatorPower | int | lifeSupportSeparatorPower | RF per separator operation (MECH-ATM-21) | tunable | |
@@ -208,6 +209,7 @@ would silently redefine what every magnitude-stated threshold means.
 | lifeSupportPlantPower | int | lifeSupportPlantPower | RF per second at full rate, charged in proportion to work done (MECH-ATM-22) | tunable | |
 | lifeSupportPlantCarbonPerDust | int | lifeSupportPlantCarbonPerDust | work per carbon dust, ppm×blocks (MECH-ATM-22) | min 1; tunable | |
 | lifeSupportDuctThroughput | int | lifeSupportDuctThroughput | work one duct carries per second (MECH-ATM-22/23) | `0` = duct carries nothing; tunable | |
+| lifeSupportPortFePerTick | int | lifeSupportPortFePerTick | FE a ventilation port draws each tick, paid by the plants on its network through the ducts (MECH-ATM-34; ruling 2026-10-05, "что-то типа 1 FE/t") | `0` = ports cost nothing but still need a plant on their network; default 1 | |
 | lifeSupportBreachVentRate | long | lifeSupportBreachVentRate | how fast a breached zone loses its air; authored in millionths/s (MECH-ATM-25/16b) | `0` = a breached room keeps its air; tunable | |
 | jettisonPortIntervalTicks | int | jettisonPortIntervalTicks | how often a jettison port tries to fire, ticks | duty cycle, not a throughput cap; tunable | |
 | jettisonPortClearance | int | jettisonPortClearance | blocks that must be empty ahead of a jettison port | blocked ⇒ the port HOLDS its cargo, never voids it; tunable | |
