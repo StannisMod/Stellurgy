@@ -181,8 +181,9 @@ public class ShipLifecycleEvent extends Event {
 
     /**
      * The engine no longer holds a live ship object for this identity: the counterpart of
-     * {@link ShipNamed}, posted ONCE for every object a naming announced, on whatever path the object
-     * went — destroyed, dropped as a blockless remnant, or unloaded.
+     * {@link ShipNamed}, posted ONCE for every object a naming announced, on whatever path the ticking
+     * manager took it down by — destroyed, dropped as a blockless remnant, or unloaded. A world that stops
+     * ticking releases nothing, as it announces nothing.
      *
      * <p>A ship has two halves — its registration and, while loaded, its object — and they can be
      * taken down on different paths and ticks. {@link ShipUnnamed} speaks for the registration and is

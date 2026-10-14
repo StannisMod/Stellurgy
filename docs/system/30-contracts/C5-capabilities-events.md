@@ -275,8 +275,8 @@ Stellurgy **declares and posts** this one; it is not a Forge or libVulpes event.
 (`api/event/`) is the ONE ship-lifecycle family: `ShipNamed` (`ASSEMBLED` /
 `PASTED` / `LOADED`), `ShipUsable` (physics will be stepped — once per ship object, i.e. per load),
 `ShipReleased` (the engine let go of the ship OBJECT a naming announced — once per naming, on every
-path that takes an object down: the destroy pass, the spawn drain's remnant drop and the unload,
-posted before the unnaming that path produces), `ShipUnnamed` (`UNLOADED` / `DESTROYED`) and its subclass `ShipDeparted` (`DEPARTED`, carrying
+path the ticking manager takes an object down by: the destroy pass, the spawn drain's remnant drop and
+the unload, posted before the unnaming that path produces; a world that stops ticking releases nothing), `ShipUnnamed` (`UNLOADED` / `DESTROYED`) and its subclass `ShipDeparted` (`DEPARTED`, carrying
 `destinationDim`). Every edge is posted by the vendored physics manager at the place the transition
 happens (`valkyrienskies/…/WorldServerShipManager.java`), on the **server game thread** inside the
 world tick, in two flushes of `publishLifecycleEvents` (`WorldServerShipManager.java:635`, called at

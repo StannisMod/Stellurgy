@@ -58,7 +58,8 @@ import java.util.stream.Stream;
  *   <li>a compiled test class it cannot read, and a clause order git cannot give -- each is a failure,
  *       never a skip.</li>
  * </ul>
- * <p>It reports, never fails on: OWED clauses, and the {@code @Test} methods that pin no anchor.</p>
+ * <p>It reports, never fails on: OWED clauses. An {@code @Test} that pins no anchor fails only when it is
+ * missing from the shrink-only unpinned list.</p>
  *
  * <p>It writes every record and pin, with the method and source file it belongs to, to
  * {@code build/reports/test-bindings/test-bindings.json}: the tools that resolve and replay red

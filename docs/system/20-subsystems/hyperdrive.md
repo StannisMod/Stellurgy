@@ -132,7 +132,9 @@ same one the flight model weighs by). The
 speed law is normalised by `DriveTuning.BASELINE_SHIP_MASS` = **326 250 kg, the measured mass of the
 milestone's jump craft** (`with-powered-jump-drive`: the `with-jump-drive` hull's 321 250 kg plus the
 5 000 kg power plug that charges its capacitor), a calibration and not a knob: that craft flies at the
-baseline speed, and every other hull flies by its mass ratio. **An unweighable hull is ABSENT, never a stand-in**:
+baseline speed, and every other hull flies by its mass ratio. The same constant divides the hull's mass
+in the route's energy bill (`JumpSpeed.routeEnergy`), so a heavier hull also pays more per block by the
+same ratio. **An unweighable hull is ABSENT, never a stand-in**:
 the forecast reads speed 0 (so its energy reads 0 — the gate does not refuse it), and `JumpTrigger`
 refuses above the commit line with `msg.jump.nomass`. **There is deliberately no overload without the
 tier** — which generation is flying is something every caller knows, and a default would silently give

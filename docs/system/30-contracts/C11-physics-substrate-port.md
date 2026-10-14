@@ -59,8 +59,8 @@ tiles, events, GUI, commands). **ship id** = the substrate's ship identity as a 
   | attitude / transform reads | `getShipAttitude`, `shipAttitudeAt`, `shipAttitudeForId`, `shipWorldPosition`, `seatWorldPosition`, `shipDownDirection` |
   | velocity reads | `shipLinearVelocity` (blocks/second), `shipVelocityAtPointFor` (blocks/**tick** — converted in the port; there is no per-second variant), `shipAngularVelocityById` |
   | ownership / identity | `shipIdManagingBlock`, `shipIdsAt`, `shipyardBoundsAt`, `subspaceStayRegion`, `shipBlockCount` |
-  | kinematic transform-set | `teleportShipTo` (guard-flag recipe — see PORT-9) |
-  | lifecycle / assembly | `assembleTier2Ship`, `assembleBuiltTier2Ship`, `parkShipAt`, `unparkShipAt`, `declareDeparture`, `loadAllShipsCounted`, `ensureShipPhysicsEnabled`, `loadedShipCount`, `queryableShipCount` |
+  | kinematic transform-set | `teleportShipToByUuid` (guard-flag recipe — see PORT-9) |
+  | lifecycle / assembly | `assembleTier2Ship`, `assembleBuiltTier2Ship`, `parkShipAt`, `unparkShipAt`, `declareDeparture`, `loadAllShipsCounted`, `loadShip`, `ensureShipPhysicsEnabled`, `discardShip` |
   | substrate configuration | `shipYPositionMaximum(World)`, `coverShipAltitudeBand(World, floor, ceiling)` (per-world band, not config statics) |
   | entity association | `clearEntityShipAssociation`, `entityShipMovementData`, `transformConsistency` |
   | capability query | `hasShipSupport` |
@@ -88,7 +88,7 @@ tiles, events, GUI, commands). **ship id** = the substrate's ship identity as a 
 - **PORT-9** `[V][SYS]` A port operation that WRITES substrate state must reproduce the substrate's own
   write-recipe, not compose it from public setters: a naive `setShipTransform` is silently overwritten
   by the physics loop in the same tick — the working recipe needs the force-transform guard flags,
-  copied from the substrate's own `MainCommand.teleportShipToPosition` (`teleportShipTo`,
+  copied from the substrate's own `MainCommand.teleportShipToPosition` (`teleportShipToByUuid`,
   `VSBridge.java`). Disassemble the upstream recipe before wrapping. FOR: design decision: VS is a swappable substrate behind a Stellurgy-owned port.
 - **PORT-10** `[V][SYS]` Substrate physics runs **off the main thread**, and the substrate updates ship mass /
   centre-of-mass / MOI **incrementally on every block change** (`MixinChunk.java` →

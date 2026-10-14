@@ -12,9 +12,10 @@ confidence: high
 `/stellurgytest` is a **test-only** server command tree: a flat verb dispatcher that gives scenario tests in
 `src/test/` deterministic, side-effect-controlled observability into (and manipulation of) server-side Stellurgy
 state. It is not gameplay — it is a **contract surface**. Each verb reads or drives one subsystem and prints
-a single-line JSON blob that `TestClient.execute(...)` captures via the reusable framework's "say marker"
-protocol. Registered only when the JVM carries `-Dstellurgy.tests=true` (or `-Dforge.test.server=true`);
-in normal play the command is never installed. `TestProbeCommandRegistration.java:34`
+a single-line JSON blob that `TestClient.read/arrange/act(...)` captures via the reusable framework's "say marker"
+protocol. Registered only when the JVM carries `-Dstellurgy.tests=true`, `-Dforge.test.server=true` or
+`-Dforge.test.client=true`; in normal play the command is never installed — its classes ship in the jar,
+its registration is what is gated (`TestProbeCommandRegistration#isTestMode`).
 
 ## Responsibility boundary
 Owns: the `stellurgytest` verb dispatch (`getName`→`"stellurgytest"`, permission level 4), the JSON envelope helpers, the
@@ -228,7 +229,9 @@ again, the answer is `permaload false` plus a poll.
 - **INV-ART-10 [T]** Every harness child is launched in a MODE (`-Dforge.test.mode=e2e|mechanics`), and a
   harness server child with none does not start (`E2EModeGate#launchedMode`). Every probe verb has a kind in
   `ProbeVerbKind` — READ, BUILD, ARRANGE, TRIGGER (calls the production entry a player, a tick or a packet
-  reaches), DECIDE (writes a decision's outcome), and the e2e-only STATIC_CALL / WALK / START_ITEM — matched on
+  reaches), DECIDE (writes a decision's outcome), STATIC_CALL (an `invoke-static` admitted only on a named
+  instrument — `E2EInstrument` on an e2e server, `MechanicsInstrument` on a mechanics one), and the
+  e2e-only WALK / START_ITEM — matched on
   its leading one to three words; a verb with no row is UNCLASSIFIED and refused in BOTH modes. Every command
   the harness bridge carries is sent in a ROLE (`CommandRole`: `read` admits READ and a named instrument,
   `arrange` admits ARRANGE / BUILD / DECIDE and the e2e's walk and start item, `act` admits TRIGGER; a SPLIT row

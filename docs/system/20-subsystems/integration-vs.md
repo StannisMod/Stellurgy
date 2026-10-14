@@ -352,7 +352,7 @@ timestamps and the announcer's memory are runtime state — on the entity, the w
 - **`VSFlightBackend` is dead code** (MECH-VSI-11). `createShipFlightBackend`'s javadoc still says "or null
   when VS is absent" — it never returns null (`VSIntegration.java:993-1002`).
 - **Nearest-ship, unbounded, still on the facade.** `shipyardBoundsAt`, `parkShipAt`, `unparkShipAt`,
-  `teleportShipTo`, `snapshotShipAt`, `shipBlockAt`, `shipBlockHeight`, `flightComputerAt` and the positional
+  `snapshotShipAt`, `shipBlockHeight`, `flightComputerAt` and the positional
   `crossShip` overload all go through `nearestQueryableShip` (`VSBridge.java:902`), which compares a
   WORLD-frame pose to whatever position it is handed. The facade's own comment says "the nearest-ship
   lookups are gone" (`VSIntegration.java:1291-1302`), but production still calls `flightComputerAt`
