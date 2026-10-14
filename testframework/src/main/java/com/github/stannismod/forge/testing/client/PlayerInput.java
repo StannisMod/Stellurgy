@@ -81,6 +81,13 @@ public final class PlayerInput {
      * acts at the cursor where it already is.
      */
     public JsonObject setKey(int keyCode, boolean pressed) throws IOException {
+        // A mouse button pressed into the world acts on whatever the crosshair picks, and a turned head picks
+        // what vanilla's trace says, not what the turn aimed at: the pick is confirmed before the press.
+        if (keyCode < 0 && pressed && channel.lookUnconfirmed()) {
+            throw new IOException("a mouse button pressed after a turn of the head whose pick nobody confirmed:"
+                    + " ask ClientReads#reportMouseOver what the crosshair picks after the last setLook / turnLook,"
+                    + " then press");
+        }
         JsonArray events = new JsonArray();
         if (keyCode < 0) {
             events.add(mouse(keyCode + MOUSE_KEY_OFFSET, pressed));
@@ -204,7 +211,8 @@ public final class PlayerInput {
      * it is, through {@code Entity.turn}. A pitch past straight up or down stops there; NaN or an infinity is
      * refused ({@code refusedKind} {@code ARGUMENTS}). The reply's {@code yaw} / {@code pitch} are where the
      * head ended up. What the crosshair then picks is vanilla's trace — confirm it with
-     * {@link ClientReads#reportMouseOver()} before a press.
+     * {@link ClientReads#reportMouseOver()} before a press: a mouse button pressed after a look nobody
+     * confirmed is refused ({@link #setKey}).
      */
     public JsonObject setLook(float yaw, float pitch) throws IOException {
         walkBegins();

@@ -339,6 +339,18 @@ public class E2EModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectClientRefusal(notRefused, "set_frame_rate", "ARGUMENTS", () -> bot.setFrameRate(1000));
         expectClientRefusal(notRefused, "set_frame_rate", "ARGUMENTS", () -> bot.setFrameRate(15));
         expectClientRefusal(notRefused, "input", "ARGUMENTS", () -> bot.input().typeText(THREE_PRESSES_OF_ONE_KEY));
+        // ---- a press of the mouse into the world after a look whose pick nobody confirmed ----
+        bot.input().setLook(0.0F, 0.0F);
+        int useKey = -100 + 1; // the right mouse button, as a key binding names it
+        try {
+            bot.input().setKey(useKey, true);
+            notRefused.add("a use-key press after an unconfirmed look RAN");
+        } catch (java.io.IOException refused) {
+            if (!refused.getMessage().contains("whose pick nobody confirmed")) {
+                notRefused.add("a use-key press after an unconfirmed look failed otherwise: " + refused.getMessage());
+            }
+        }
+        bot.reads().reportMouseOver();
         // ---- round 5: after his first input (any of the above) the walk has begun, and no build runs ----
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest place 0 " + beside + " minecraft:stone", "AFTER_THE_WALK_BEGAN");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give @a minecraft:stone 1", "AFTER_THE_WALK_BEGAN");

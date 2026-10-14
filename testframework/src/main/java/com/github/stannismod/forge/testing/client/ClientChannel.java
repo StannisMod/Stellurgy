@@ -59,9 +59,29 @@ final class ClientChannel implements Closeable {
         return object;
     }
 
+    /**
+     * Whether the head has turned since the crosshair's pick was last asked: set by a {@code set_look} or a
+     * {@code turn_look} this channel carried, cleared by a {@code report_mouse_over}. Both the input and the
+     * reads talk through this one channel, so this is where a look and its confirmation meet. Lives with
+     * the channel, which lives with its client connection.
+     */
+    private volatile boolean lookUnconfirmed;
+
     /** Send {@code command} and answer its reply, which must be {@code ok}. */
     JsonObject call(JsonObject command) throws IOException {
-        return assertOk(execute(command));
+        JsonObject reply = assertOk(execute(command));
+        String name = command.has("command") ? command.get("command").getAsString() : "";
+        if ("set_look".equals(name) || "turn_look".equals(name)) {
+            lookUnconfirmed = true;
+        } else if ("report_mouse_over".equals(name)) {
+            lookUnconfirmed = false;
+        }
+        return reply;
+    }
+
+    /** Whether the head turned after the crosshair's pick was last read -- see {@link #lookUnconfirmed}. */
+    boolean lookUnconfirmed() {
+        return lookUnconfirmed;
     }
 
     /** Send {@code command} and answer its reply as it came, {@code ok} or not. */

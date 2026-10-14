@@ -218,8 +218,12 @@ public final class GameTicks {
         return advanceObserved(client, clock, ticks, stallNet(ticks));
     }
 
-    /** As above, with a caller-chosen liveness net. */
-    public static long advanceObserved(TestClient client, Clock clock, int ticks, Duration net)
+    /**
+     * As above, under the liveness net for {@code ticks}. The net is the only wall clock in a wait, and it is
+     * this class's: no caller chooses one, because a caller-chosen net is a budget in seconds wearing a tick
+     * count. Measured 2026-10-13: no test chose one (the overloads that let it had no callers left).
+     */
+    private static long advanceObserved(TestClient client, Clock clock, int ticks, Duration net)
             throws Exception {
         if (ticks <= 0) {
             throw new IllegalArgumentException("ticks must be positive, got " + ticks);
@@ -319,11 +323,5 @@ public final class GameTicks {
      */
     public static long advanceWorld(TestClient client, int dim, int ticks) throws Exception {
         return advanceObserved(client, world(dim), ticks);
-    }
-
-    /** As {@link #advanceWorld(TestClient, int, int)}, with a caller-chosen liveness net. */
-    public static long advanceWorld(TestClient client, int dim, int ticks, Duration net)
-            throws Exception {
-        return advanceObserved(client, world(dim), ticks, net);
     }
 }

@@ -52,6 +52,14 @@ import java.util.stream.Stream;
  *       it ({@code ready = read() > 1}, {@code if (read() > 1) i = n;}); a READ is any call into the test's,
  *       the harness's or the game's code, and the JDK's clocks. One edge whose bound is a reading is a poll as
  *       much as a {@code break} is. The goal exit of a steering STIMULUS loop is the one exit that may;</li>
+ *   <li>a SETTLE: an advance of a clock by a number -- a primitive, or a test method that hands its own tick
+ *       count on to one ({@link #tickWrappers}) -- standing in no loop and followed in its method by a read,
+ *       whose line no {@link Wait} names (listed in {@value #STRAIGHT_DEBT} when the rule was set);</li>
+ *   <li>an event-log wait that drives a {@code Stimulus} between its reads -- a STIMULUS loop written
+ *       inside the clock class -- unless a STIMULUS {@link Wait} names its line and its stimulus steers by
+ *       what it reads itself (listed in {@value #STIMULUS_DEBT} when the rule was set);</li>
+ *   <li>a test-source class implementing {@code GameTicks.Clock}: a clock is one the game keeps, and a
+ *       {@code Window} reads its own stamps off one;</li>
  *   <li>a {@link Wait} or {@link ServerOnly} whose {@code at} does not occur exactly once in its method's
  *       CODE -- its words on ONE line, comments blanked, so a fragment that crosses a line break or sits in
  *       a comment names nothing (the claims that crossed one when the rule was set are listed in
@@ -78,12 +86,17 @@ final class WaitLoops {
 
     /** The committed list of the methods whose tick loops broke the rule when it was set. */
     static final String DEBT = "src/test/bindings/wait-loop-debt.txt";
+    /** The committed list of the methods whose straight-line advances were unnamed when that rule was set. */
+    static final String STRAIGHT_DEBT = "src/test/bindings/straight-wait-debt.txt";
+    /** The committed list of the methods whose stimulus-driven event-log waits broke that rule when it was set. */
+    static final String STIMULUS_DEBT = "src/test/bindings/stimulus-wait-debt.txt";
     /** The committed list of the claims whose fragment crossed line breaks when the one-line rule was set. */
     static final String SPANNING_DEBT = "src/test/bindings/multi-line-wait-claims.txt";
 
     private static final String TEST_ROOT = "src/test/java";
     private static final String GAME_TICKS = "dev/stannismod/stellurgy/test/GameTicks";
     private static final String EVENTS_STEP = "dev/stannismod/stellurgy/test/Events$Step";
+    private static final String EVENTS_STIMULUS = "dev/stannismod/stellurgy/test/Events$Stimulus";
     private static final String HARNESS_CLIENT = "com/github/stannismod/forge/testing/client/";
     private static final String PLAYER_INPUT = HARNESS_CLIENT + "PlayerInput";
     private static final String CLIENT_BOT = HARNESS_CLIENT + "ClientBot";
@@ -107,6 +120,8 @@ final class WaitLoops {
         switch (top) {
             case GAME_TICKS:
             case "dev/stannismod/stellurgy/test/Events":
+            // The window: two reads and the span between them, the shape a settle is turned INTO.
+            case "dev/stannismod/stellurgy/test/Window":
                 return true;
             default:
                 return false;
@@ -254,6 +269,16 @@ final class WaitLoops {
     private final Set<String> spanningUsed = new TreeSet<>();
     /** Every claim that does not resolve on one line now, as a debt line would name it (the report). */
     private final Set<String> spanningNow = new TreeSet<>();
+    /**
+     * owner#name+desc of every test-source method that hands an int parameter of its own, unchanged, to the tick
+     * count of a clock primitive or of another such method: a call to it chooses a number of ticks as a
+     * primitive's call does ({@code advanceServerAndClient(n)}).
+     */
+    private final Set<String> tickWrappers = new HashSet<>();
+    /** Every event-log wait driving a stimulus: {method, line, claimed|UNCLAIMED, source file, lambda}. */
+    private final List<String[]> stimulusWaits = new ArrayList<>();
+    /** Every straight-line advance followed by a read: {method, line, named|UNNAMED, source file, via}. */
+    private final List<String[]> straight = new ArrayList<>();
     /** The stack sources of each method's instructions, computed when a call's arguments are asked. */
     private final Map<String, Frame<SourceValue>[]> frames = new HashMap<>();
 
@@ -294,17 +319,51 @@ final class WaitLoops {
         w.closeTicking();
         w.closeSenders();
         w.closeAlwaysSends();
+        w.closeTickWrappers();
         Map<String, Integer> violating = new TreeMap<>();
         int[] counts = w.judge(violating);
-        String debt = w.checkDebt(violating);
+        String debt = w.checkDebt(DEBT, "wait-loop debt", "loop(s)", violating, w.pending);
+        Map<String, Integer> unnamedDoses = new TreeMap<>();
+        List<String[]> dosePending = new ArrayList<>();
+        for (String[] s : w.straight) {
+            if ("UNNAMED".equals(s[2])) {
+                unnamedDoses.merge(s[0], 1, Integer::sum);
+                dosePending.add(new String[]{s[0], "the clock advance at " + s[3] + ":" + s[1] + " in " + s[0] + " ("
+                        + s[4] + ") stands in no loop and is followed by a read, and no @Wait of its method names its"
+                        + " line -- a settle (spend N ticks, then look) is a wait on a state as much as a loop is: a"
+                        + " link on the record, or a claimed WINDOW / EXPERIMENT naming the line"});
+            }
+        }
+        String doses = w.checkDebt(STRAIGHT_DEBT, "straight-wait debt", "advance(s)", unnamedDoses, dosePending);
+        Map<String, Integer> stimulated = new TreeMap<>();
+        List<String[]> stimulusPending = new ArrayList<>();
+        for (String[] s : w.stimulusWaits) {
+            if (!"claimed-steers".equals(s[2])) {
+                stimulated.merge(s[0], 1, Integer::sum);
+                stimulusPending.add(new String[]{s[0], "the event-log wait at " + s[3] + ":" + s[1] + " in " + s[0]
+                        + " drives a stimulus between its reads " + ("UNCLAIMED".equals(s[2])
+                        ? "and no STIMULUS @Wait of its method names its line" : "that does not steer")
+                        + " -- a budgeted wait for a condition with an act in it is a STIMULUS loop: claimed, and its"
+                        + " act shaped by what the stimulus reads, or no act at all (a link)"});
+            }
+        }
+        String stimuli = w.checkDebt(STIMULUS_DEBT, "stimulus-wait debt", "wait(s)", stimulated, stimulusPending);
         String spanning = w.checkSpanningDebt();
         Path out = root.resolve("build").resolve("reports").resolve("test-bindings").resolve("wait-loops.txt");
         Files.createDirectories(out.getParent());
         Files.write(out, (String.join("\n", w.report) + "\n").getBytes(StandardCharsets.UTF_8));
         Files.write(out.resolveSibling("multi-line-wait-claims.txt"),
                 (String.join("\n", w.spanningNow) + "\n").getBytes(StandardCharsets.UTF_8));
+        Files.write(out.resolveSibling("stimulus-waits.txt"), (w.stimulusWaits.stream()
+                .map(s -> s[0] + ":" + s[1] + " " + s[2] + " " + s[4]).collect(Collectors.joining("\n")) + "\n")
+                .getBytes(StandardCharsets.UTF_8));
+        Files.write(out.resolveSibling("straight-advances.txt"), (w.straight.stream()
+                .map(s -> s[0] + ":" + s[1] + " " + s[2] + " " + s[4]).collect(Collectors.joining("\n")) + "\n")
+                .getBytes(StandardCharsets.UTF_8));
         return String.format("wait loops: %d loop(s) that wait, in %d method(s), %d of them advancing the clock"
-                + " themselves; %d claim(s) resolved; %s; %s", counts[0], counts[1], counts[3], counts[2], debt, spanning);
+                + " themselves; %d claim(s) resolved; %s; %d straight advance(s) followed by a read, %s; %d"
+                + " stimulus wait(s), %s; %s", counts[0], counts[1], counts[3], counts[2], debt, w.straight.size(), doses,
+                w.stimulusWaits.size(), stimuli, spanning);
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -332,6 +391,13 @@ final class WaitLoops {
             }
         }
         for (ClassNode node : nodes.values()) {
+            // A clock is the game's: only GameTicks makes one. A test's own Clock could stamp a Window with any
+            // span it liked, which is the forged stamp the window reads its clock itself to refuse.
+            if (node.interfaces.contains(GAME_TICKS + "$Clock") && !node.name.startsWith(GAME_TICKS + "$")) {
+                failures.add(node.name.replace('/', '.') + " implements GameTicks.Clock -- a clock is one the game keeps,"
+                        + " made by GameTicks.server() or GameTicks.world(dim); a test's own would stamp a window with"
+                        + " whatever span it chose");
+            }
             for (MethodNode m : (List<MethodNode>) node.methods) {
                 for (AbstractInsnNode insn = m.instructions.getFirst(); insn != null; insn = insn.getNext()) {
                     if (insn instanceof InvokeDynamicInsnNode) {
@@ -416,6 +482,73 @@ final class WaitLoops {
                 }
             }
         }
+    }
+
+    /** Fills {@link #tickWrappers} to its fixpoint. */
+    private void closeTickWrappers() {
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (Map.Entry<String, MethodNode> e : methods.entrySet()) {
+                if (tickWrappers.contains(e.getKey()) || instrumentKey(e.getKey())) {
+                    continue;
+                }
+                AbstractInsnNode[] code = e.getValue().instructions.toArray();
+                for (int i = 0; i < code.length && !tickWrappers.contains(e.getKey()); i++) {
+                    if (!(code[i] instanceof MethodInsnNode)) {
+                        continue;
+                    }
+                    MethodInsnNode mi = (MethodInsnNode) code[i];
+                    String target = declared(mi.owner, mi.name, mi.desc);
+                    if (!primitive(mi.owner, mi.name, mi.desc) && (target == null || !tickWrappers.contains(target))) {
+                        continue;
+                    }
+                    Type[] args = Type.getArgumentTypes(mi.desc);
+                    for (int a = 0; a < args.length; a++) {
+                        if (args[a].getSort() != Type.INT) {
+                            continue;
+                        }
+                        SourceValue v = argument(e.getKey(), code, i, a);
+                        if (v != null && parameterHandedOnInt(e.getValue(), v) != null) {
+                            tickWrappers.add(e.getKey());
+                            grew = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Whether a method key belongs to a class that IS the clock ({@link #instrument}). */
+    private static boolean instrumentKey(String methodKey) {
+        return instrument(methodKey.substring(0, methodKey.indexOf('#')));
+    }
+
+    /** The ordinal of the int parameter {@code value} is, when {@code m} never reassigns it; else null. */
+    private static Integer parameterHandedOnInt(MethodNode m, SourceValue value) {
+        if (value.insns.size() != 1 || !(value.insns.iterator().next() instanceof VarInsnNode)) {
+            return null;
+        }
+        VarInsnNode load = (VarInsnNode) value.insns.iterator().next();
+        if (load.getOpcode() != Opcodes.ILOAD) {
+            return null;
+        }
+        for (AbstractInsnNode insn = m.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if ((insn.getOpcode() == Opcodes.ISTORE && ((VarInsnNode) insn).var == load.var)
+                    || (insn instanceof IincInsnNode && ((IincInsnNode) insn).var == load.var)) {
+                return null;
+            }
+        }
+        int slot = (m.access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;
+        Type[] args = Type.getArgumentTypes(m.desc);
+        for (int p = 0; p < args.length; p++) {
+            if (slot == load.var) {
+                return p;
+            }
+            slot += args[p].getSize();
+        }
+        return null;
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -1105,6 +1238,8 @@ final class WaitLoops {
                 }
                 AbstractInsnNode[] code = m.instructions.toArray();
                 List<Loop> all = loops(code);
+                straightAdvances(node, m, code, all);
+                stimulusWaits(node, m, code);
                 for (Loop loop : all) {
                     // TICKS: the loop's own instructions advance the clock -- outside any loop nested in it,
                     // whose own claim says what its ticks are. A loop whose clock is spent only inside
@@ -1182,6 +1317,115 @@ final class WaitLoops {
             }
         }
         return new int[]{loops, withLoops.size(), claims, tickLoops};
+    }
+
+    /**
+     * The advances of a clock by a number that stand in NO loop and are followed, later in the method, by a
+     * read: a settle -- spend N ticks, then look -- which is a wait on a state as much as a loop is, only without
+     * the repeats. Each is held as a loop is: a {@link Wait} of its method names its line. Recorded in
+     * {@link #straight} as {@code where:line named|UNNAMED}.
+     */
+    private void straightAdvances(ClassNode node, MethodNode m, AbstractInsnNode[] code, List<Loop> all) {
+        String owner = claimOwner(node.name, m);
+        for (int i = 0; i < code.length; i++) {
+            if (!advances(code[i]) || inAnyLoop(all, i)) {
+                continue;
+            }
+            boolean readAfter = false;
+            for (int k = i + 1; k < code.length && !readAfter; k++) {
+                readAfter = reads(code[k]) && !advances(code[k]);
+            }
+            if (!readAfter) {
+                continue;
+            }
+            int line = lineAt(code, i);
+            MethodInsnNode mi = (MethodInsnNode) code[i];
+            String target = declared(mi.owner, mi.name, mi.desc);
+            boolean dose = primitive(mi.owner, mi.name, mi.desc) || (target != null && tickWrappers.contains(target));
+            if (!dose) {
+                continue;
+            }
+            straight.add(new String[]{display(owner), String.valueOf(line), namedAt(owner, line, null) ? "named"
+                    : "UNNAMED", node.sourceFile, primitive(mi.owner, mi.name, mi.desc) ? "primitive" : "wrapper:" + mi.name});
+        }
+    }
+
+    /**
+     * The calls of an event-log wait that drive a {@code Stimulus} between its reads -- a budgeted wait for a
+     * condition with an act in it, the shape a STIMULUS loop has, inside the clock class that is otherwise
+     * not judged. Recorded in {@link #stimulusWaits} as {where, line, claimed|UNCLAIMED, source file, lambda}.
+     */
+    private void stimulusWaits(ClassNode node, MethodNode m, AbstractInsnNode[] code) {
+        String key = key(node.name, m);
+        String owner = claimOwner(node.name, m);
+        for (int i = 0; i < code.length; i++) {
+            if (!(code[i] instanceof MethodInsnNode) || !link(((MethodInsnNode) code[i]).owner)) {
+                continue;
+            }
+            MethodInsnNode mi = (MethodInsnNode) code[i];
+            Type[] args = Type.getArgumentTypes(mi.desc);
+            for (int a = 0; a < args.length; a++) {
+                if (!("L" + EVENTS_STIMULUS + ";").equals(args[a].getDescriptor())) {
+                    continue;
+                }
+                SourceValue v = argument(key, code, i, a);
+                if (v == null || v.insns.size() != 1 || v.insns.iterator().next().getOpcode() == Opcodes.ACONST_NULL) {
+                    continue;
+                }
+                AbstractInsnNode producer = v.insns.iterator().next();
+                String lambda = producer instanceof InvokeDynamicInsnNode ? lambdaBody((InvokeDynamicInsnNode) producer) : null;
+                int line = lineAt(code, i);
+                boolean claimed = namedAt(owner, line, STIMULUS);
+                boolean steers = lambda != null && methods.containsKey(lambda) && stimulusSteers(lambda);
+                stimulusWaits.add(new String[]{display(owner), String.valueOf(line),
+                        claimed && steers ? "claimed-steers" : (claimed ? "claimed-DOSE" : "UNCLAIMED"),
+                        node.sourceFile, String.valueOf(lambda)});
+            }
+        }
+    }
+
+    /**
+     * Whether a stimulus body STEERS: it sends input shaped by what it reads itself -- an argument a read in the
+     * body computed, or a send behind a branch on such a read. A stimulus that repeats one act (a re-click, a
+     * re-teleport, a subsystem stepped) is a dose, and a wait for a condition with a dose in it is a poll.
+     * A method reference or a stimulus held in a variable is not seen into, and does not steer.
+     */
+    private boolean stimulusSteers(String lambdaKey) {
+        MethodNode body = methods.get(lambdaKey);
+        AbstractInsnNode[] code = body.instructions.toArray();
+        if (code.length == 0) {
+            return false;
+        }
+        Loop whole = new Loop(0, code.length - 1);
+        Frame<Taint>[] f = readFrames(lambdaKey.substring(0, lambdaKey.indexOf('#')), body, code, whole);
+        boolean behindRead = false;
+        for (int i = 0; i < code.length; i++) {
+            behindRead |= conditional(code[i]) && testsRead(code, i, f);
+            if (sends(lambdaKey, code, i) && (behindRead || argumentRead(code, i, f))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** owner#name+desc of the lambda body an invokedynamic makes, or null. */
+    private static String lambdaBody(InvokeDynamicInsnNode indy) {
+        for (Object arg : indy.bsmArgs) {
+            if (arg instanceof Handle && ((Handle) arg).getName().startsWith("lambda$")) {
+                Handle h = (Handle) arg;
+                return h.getOwner() + "#" + h.getName() + h.getDesc();
+            }
+        }
+        return null;
+    }
+
+    private static boolean inAnyLoop(List<Loop> all, int i) {
+        for (Loop l : all) {
+            if (l.from <= i && i <= l.to) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether instruction {@code i} of {@code outer} lies inside a loop nested in it. */
@@ -1633,19 +1877,20 @@ final class WaitLoops {
     // the debt
 
     /**
-     * The ratchet: each line of {@value #DEBT} is {@code class#method N}, the number of loops of that method
+     * A ratchet: each line of {@code list} is {@code class#method N}, the number of places of that method
      * that broke the rule when it was set. A method breaking it more often than its line says -- or not
      * listed -- fails, naming each loop; one breaking it less often fails until its line is lowered.
      */
-    private String checkDebt(Map<String, Integer> violating) throws IOException {
-        Path file = root.resolve(DEBT);
+    private String checkDebt(String list, String label, String unit, Map<String, Integer> violating,
+                             List<String[]> pending) throws IOException {
+        Path file = root.resolve(list);
         if (!Files.isRegularFile(file)) {
-            failures.add("the wait-loop debt list " + DEBT + " is missing -- without it every loop that breaks the"
+            failures.add("the " + label + " list " + list + " is missing -- without it every place that breaks the"
                     + " rule is new");
             for (String[] p : pending) {
                 failures.add(p[1]);
             }
-            return "wait-loop debt: MISSING";
+            return label + ": MISSING";
         }
         Map<String, Integer> debt = new TreeMap<>();
         for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
@@ -1655,9 +1900,9 @@ final class WaitLoops {
             }
             String[] parts = entry.split("\\s+");
             if (parts.length != 2 || !parts[1].matches("[1-9]\\d*")) {
-                failures.add(DEBT + ": `" + entry + "` is not `class#method N`");
+                failures.add(list + ": `" + entry + "` is not `class#method N`");
             } else if (debt.put(parts[0], Integer.parseInt(parts[1])) != null) {
-                failures.add(DEBT + " lists " + parts[0] + " twice");
+                failures.add(list + " lists " + parts[0] + " twice");
             }
         }
         for (Map.Entry<String, Integer> v : violating.entrySet()) {
@@ -1665,7 +1910,7 @@ final class WaitLoops {
             if (owed == null || v.getValue() > owed) {
                 for (String[] p : pending) {
                     if (p[0].equals(v.getKey())) {
-                        failures.add(p[1] + " (" + DEBT + " holds " + (owed == null ? "no line for" : owed + " for")
+                        failures.add(p[1] + " (" + list + " holds " + (owed == null ? "no line for" : owed + " for")
                                 + " this method, which breaks the rule " + v.getValue() + " time(s); the list only"
                                 + " shrinks)");
                     }
@@ -1675,7 +1920,7 @@ final class WaitLoops {
         for (Map.Entry<String, Integer> d : debt.entrySet()) {
             int now = violating.getOrDefault(d.getKey(), 0);
             if (now < d.getValue()) {
-                failures.add(DEBT + " lists " + d.getKey() + " " + d.getValue() + ", which breaks the rule " + now
+                failures.add(list + " lists " + d.getKey() + " " + d.getValue() + ", which breaks the rule " + now
                         + " time(s) now (fixed, renamed or gone) -- " + (now == 0 ? "delete the line" : "lower it to "
                         + now));
             }
@@ -1688,7 +1933,7 @@ final class WaitLoops {
         for (int n : violating.values()) {
             now += n;
         }
-        return String.format("wait-loop debt: %d loop(s) in %d method(s) listed, %d breaking the rule now", owed,
+        return String.format("%s: %d %s in %d method(s) listed, %d breaking the rule now", label, owed, unit,
                 debt.size(), now);
     }
 }

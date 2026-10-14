@@ -170,7 +170,7 @@ public final class TestBindingsCheck {
         System.out.println(checkOwnBootDebt(root, corpus.ownBootWithoutReason, failures));
         System.out.println(checkLegacyWitnessDebt(root, corpus.legacyWitnessed, failures));
         for (String debtList : new String[]{UNPINNED_BASELINE, OWN_BOOT_DEBT, LEGACY_WITNESS_DEBT, WaitLoops.DEBT,
-                WaitLoops.SPANNING_DEBT}) {
+                WaitLoops.SPANNING_DEBT, WaitLoops.STRAIGHT_DEBT, WaitLoops.STIMULUS_DEBT}) {
             System.out.println(checkDebtGrowth(root, debtList, failures));
         }
         checkWitnessMembers(root, corpus.witnessMembers, failures);

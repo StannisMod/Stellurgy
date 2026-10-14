@@ -12,9 +12,9 @@ package dev.stannismod.stellurgy.test;
  * function of the two, and {@link #toString} for the message, which prints both and the span. A window that
  * is consumed through one read does not compile.</p>
  *
- * <p><b>The span.</b> {@code stamp} is read immediately after each read, so the span carries the round
- * trip of each read on both ends, and is never the {@code ticks} asked of {@code advance}, which a slow box
- * overshoots.</p>
+ * <p><b>The span.</b> The window reads its clock's tick itself, immediately after each read, so the span
+ * carries the round trip of each read on both ends, is never the {@code ticks} asked of {@code advance},
+ * which a slow box overshoots, and is never a stamp a caller supplied.</p>
  *
  * <p>Not this: a window whose measurement is an EXTREMUM over many samples ({@code GameTicks#observe}), and
  * a LINK -- a record production publishes is waited on from a mark, never sampled.</p>
@@ -26,11 +26,6 @@ public final class Window<T> {
     /** One read of the subject. It talks to the game, so it may throw. */
     public interface Read<T> {
         T read() throws Exception;
-    }
-
-    /** The tick of the clock the subject runs on, read right after a read. */
-    public interface Stamp {
-        long tick() throws Exception;
     }
 
     /** The number a verdict is about, out of one read. */
@@ -49,22 +44,25 @@ public final class Window<T> {
     }
 
     /**
-     * Read, stamp, advance {@code ticks}, read, stamp.
+     * Read, stamp, advance {@code ticks}, read, stamp -- the stamps read HERE, off {@code clock} through
+     * {@code client}, so the span is the clock's and not a number a caller hands in.
      *
+     * @param clock   the clock the subject runs on, whose tick stamps each read
      * @param advance the step that moves the clocks of every side taking part (STEP 6's table) -- a
      *                window has no default clock
      * @throws AssertionError when the stamp did not move between the reads: a clock that stood still has
      *         measured nothing, and a rate over no ticks is no verdict
      */
-    public static <T> Window<T> over(Read<T> read, Stamp stamp, Events.Step advance, int ticks) throws Exception {
+    public static <T> Window<T> over(Read<T> read, com.github.stannismod.forge.testing.server.TestClient client,
+                                     GameTicks.Clock clock, Events.Step advance, int ticks) throws Exception {
         if (ticks <= 0) {
             throw new IllegalArgumentException("a window advances a positive number of ticks, got " + ticks);
         }
         T first = read.read();
-        long firstTick = stamp.tick();
+        long firstTick = GameTicks.read(client, clock);
         advance.ticks(ticks);
         T second = read.read();
-        long secondTick = stamp.tick();
+        long secondTick = GameTicks.read(client, clock);
         if (secondTick <= firstTick) {
             throw new AssertionError("the clock stood still across the window (" + firstTick + " -> " + secondTick
                     + ", " + ticks + " ticks asked): nothing was measured. first=" + first + " second=" + second);
