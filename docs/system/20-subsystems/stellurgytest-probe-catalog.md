@@ -238,7 +238,13 @@ again, the answer is `permaload false` plus a poll.
   whose later word picks between two forms admits either), carried in the bridge sender's name after a slash;
   in either mode a bridge command with no role, or of a kind its role does not admit, is refused at the call
   (`E2EModeGate#roleRefusalOf`, kinds `NO_ROLE`, `ROLE`) before the mode's own judgement, and on a mechanics
-  server so is a bridge command whose root has no kind (`E2EModeGate#rootKinds`, kind `UNCLASSIFIED`). An e2e server
+  server so is a bridge command whose form has no kind (`E2EModeGate#rootKind`, kind `UNCLASSIFIED`). A command
+  that is not a probe verb has exactly ONE kind, judged on its arguments where they choose between a read and a
+  write: `time query …` is READ and `time set|add …` ARRANGE; `gamerule` with no word or a rule's name is READ
+  and with a value ARRANGE; the mod's own tree (`stellurgy`, aliases `ar` / `advrocketry`) is resolved word by
+  word to the leaf that will run, as Forge's tree resolves it, and judged by that leaf's row
+  (`E2EModeGate#modLeafKind`) — a tree given no further word and the help tree are READ, and a word no tree
+  knows, like a leaf with no row, is `UNCLASSIFIED`. An e2e server
   admits READ, BUILD (judged further by place) and the named exceptions. On a MECHANICS server the gate
   refuses at the call an unclassified verb, a static call (`invoke-static`) on anything but a row of
   `MechanicsInstrument`, and

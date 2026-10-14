@@ -1,6 +1,32 @@
 package dev.stannismod.stellurgy.command.test;
 
 import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.command.sub.AddSealantCommand;
+import dev.stannismod.stellurgy.command.sub.AddTorchCommand;
+import dev.stannismod.stellurgy.command.sub.FillDataCommand;
+import dev.stannismod.stellurgy.command.sub.ReloadRecipesCommand;
+import dev.stannismod.stellurgy.command.sub.SetGravityCommand;
+import dev.stannismod.stellurgy.command.sub.dev.DumpBiomesCommand;
+import dev.stannismod.stellurgy.command.sub.dev.RunTestsCommand;
+import dev.stannismod.stellurgy.command.sub.planet.PlanetDeleteCommand;
+import dev.stannismod.stellurgy.command.sub.planet.PlanetGenerateCommand;
+import dev.stannismod.stellurgy.command.sub.planet.PlanetGetCommand;
+import dev.stannismod.stellurgy.command.sub.planet.PlanetListCommand;
+import dev.stannismod.stellurgy.command.sub.planet.PlanetResetCommand;
+import dev.stannismod.stellurgy.command.sub.planet.PlanetSetCommand;
+import dev.stannismod.stellurgy.command.sub.planet.PlanetWeatherCommand;
+import dev.stannismod.stellurgy.command.sub.redirect.WeatherCommand;
+import dev.stannismod.stellurgy.command.sub.star.StarGenerateCommand;
+import dev.stannismod.stellurgy.command.sub.star.StarGetCommand;
+import dev.stannismod.stellurgy.command.sub.star.StarListCommand;
+import dev.stannismod.stellurgy.command.sub.star.StarSetCommand;
+import dev.stannismod.stellurgy.command.sub.station.CreateStationCommand;
+import dev.stannismod.stellurgy.command.sub.station.GiveStationCommand;
+import dev.stannismod.stellurgy.command.sub.teleport.FetchCommand;
+import dev.stannismod.stellurgy.command.sub.teleport.GoToDimensionCommand;
+import dev.stannismod.stellurgy.command.sub.teleport.GoToStationCommand;
+import dev.stannismod.stellurgy.command.sub.universe.UniverseStatusCommand;
+import dev.stannismod.stellurgy.command.sub.universe.UniverseUpgradeCommand;
 import net.minecraft.block.Block;
 import net.minecraft.command.ICommand;
 import net.minecraft.command.ICommandSender;
@@ -13,6 +39,8 @@ import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.server.command.CommandTreeBase;
+import net.minecraftforge.server.command.CommandTreeHelp;
 
 import java.lang.management.ManagementFactory;
 import java.util.*;
@@ -314,7 +342,7 @@ final class E2EModeGate {
      * object; {@code null} when it does, or when the sender is not the harness's bridge (a player, the
      * console, a command a command runs). The role travels in the bridge sender's name, after
      * {@link #HARNESS_BRIDGE_ROLE_SEPARATOR}. A probe verb's kinds are its {@link ProbeVerbKind} row's; a
-     * command of any other root has the kinds {@link #rootKinds} gives it. An unclassified probe verb is left
+     * command of any other root has the one kind {@link #rootKind} gives its form. An unclassified probe verb is left
      * to the mode's judgement, which refuses it naming why; so is a root with no kind on an e2e server, which
      * refuses every root it does not name. On a mechanics server a bridge command of a root with no kind is
      * refused here — only the bridge's: the console's {@code stop} and a player's own commands are not sent
@@ -334,7 +362,7 @@ final class E2EModeGate {
             return refusal(name, verb, "NO_ROLE", "a harness command is sent in a role -- read, arrange or act --"
                     + " and this one names none (the bridge sender is " + sent + ")");
         }
-        Set<ProbeVerbKind> kinds = probe ? ProbeVerbKind.kindsOf(args) : rootKinds(name);
+        Set<ProbeVerbKind> kinds = probe ? ProbeVerbKind.kindsOf(args) : EnumSet.of(rootKind(command, args));
         if (kinds.contains(ProbeVerbKind.UNCLASSIFIED)) {
             return probe || servesAnE2E ? null : refusal(name, verb, ProbeVerbKind.UNCLASSIFIED.name(),
                     "no kind is declared for this command root, so no role admits it");
@@ -350,27 +378,32 @@ final class E2EModeGate {
     }
 
     /**
-     * The kinds of a command that is not the probe, by its root: what the vanilla and the mod's own commands a
-     * test sends ARE, read as {@link ProbeVerbKind} reads a verb. A root with two forms (a query and a set) has
-     * both kinds; a root with no row is {@link ProbeVerbKind#UNCLASSIFIED}.
+     * The kind of a command that is not the probe: what the vanilla and the mod's own command a test sends
+     * IS, read as {@link ProbeVerbKind} reads a verb. One concrete command has ONE kind: a root whose
+     * arguments choose between a read and a write ({@code time}, {@code gamerule}, the mod's own tree) is
+     * judged on those arguments, so the role a test sends it in is checked against the form it is. A root,
+     * or a form of one, with no row is {@link ProbeVerbKind#UNCLASSIFIED}.
      */
-    static Set<ProbeVerbKind> rootKinds(String root) {
-        switch (root) {
+    static ProbeVerbKind rootKind(ICommand command, String[] args) {
+        switch (command.getName().toLowerCase(Locale.ROOT)) {
             case "testforblock":
             case "testfor":
             case "list":
             case "help":
-                return EnumSet.of(ProbeVerbKind.READ);
-            // `time query` and `gamerule <name>` read; `time set|add` and `gamerule <name> <value>` write. The
-            // mod's own commands (`ar`, `stellurgy`) list and look up as well as set and move.
+                return ProbeVerbKind.READ;
             case "time":
+                return timeKind(args);
+            // Vanilla's CommandGameRule#execute: no word lists the rules and one word reads a rule; a name and
+            // a value set it (every word after the name is the value).
             case "gamerule":
-            case "ar":
+                return args.length < 2 ? ProbeVerbKind.READ : ProbeVerbKind.ARRANGE;
+            // Registered as `stellurgy`, with `ar` and `advrocketry` as aliases: the handler resolves every one
+            // of them to this command, whose name is the one seen here.
             case "stellurgy":
-                return EnumSet.of(ProbeVerbKind.READ, ProbeVerbKind.ARRANGE);
+                return modCommandKind(command, args);
             // The save path every autosave takes, with the persistence hooks it reaches.
             case "save-all":
-                return EnumSet.of(ProbeVerbKind.TRIGGER);
+                return ProbeVerbKind.TRIGGER;
             case "tp":
             case "teleport":
             case "give":
@@ -396,10 +429,91 @@ final class E2EModeGate {
             case "save-off":
             case "blockdata":
             case "entitydata":
-                return EnumSet.of(ProbeVerbKind.ARRANGE);
+                return ProbeVerbKind.ARRANGE;
             default:
-                return EnumSet.of(ProbeVerbKind.UNCLASSIFIED);
+                return ProbeVerbKind.UNCLASSIFIED;
         }
+    }
+
+    /**
+     * Vanilla's CommandTime#execute, word for word: with a second word, {@code query} reads a world's clock,
+     * {@code set} and {@code add} write every world's. Every other shape only throws its usage, and has no row.
+     */
+    private static ProbeVerbKind timeKind(String[] args) {
+        if (args.length < 2) {
+            return ProbeVerbKind.UNCLASSIFIED;
+        }
+        switch (args[0]) {
+            case "query":
+                return ProbeVerbKind.READ;
+            case "set":
+            case "add":
+                return ProbeVerbKind.ARRANGE;
+            default:
+                return ProbeVerbKind.UNCLASSIFIED;
+        }
+    }
+
+    /**
+     * The kind of a command of the mod's own tree, resolved word by word the way Forge's
+     * {@code CommandTreeBase#execute} resolves it — {@code getSubCommand}, a name or an alias, case as typed —
+     * down to the leaf that will run, and judged by that leaf's row ({@link #modLeafKind}). A tree given no
+     * further word only lists its subcommands, and the help tree only prints usage: both READ. A word no tree
+     * knows has no row: nobody has said what a command that is not there is.
+     */
+    private static ProbeVerbKind modCommandKind(ICommand root, String[] args) {
+        ICommand node = root;
+        int depth = 0;
+        while (node instanceof CommandTreeBase) {
+            if (node instanceof CommandTreeHelp || depth == args.length) {
+                return ProbeVerbKind.READ;
+            }
+            node = ((CommandTreeBase) node).getSubCommand(args[depth]);
+            depth++;
+            if (node == null) {
+                return ProbeVerbKind.UNCLASSIFIED;
+            }
+        }
+        return modLeafKind(node, Arrays.copyOfRange(args, depth, args.length));
+    }
+
+    /**
+     * The table of the mod's own command leaves, each row a claim about its handler's {@code execute}, traced
+     * when it was written (2026-10-14). A leaf with no row is {@link ProbeVerbKind#UNCLASSIFIED}.
+     */
+    private static ProbeVerbKind modLeafKind(ICommand leaf, String[] args) {
+        // Lookups that only message the sender. `planet weather` creates the dimension's weather record if it
+        // has none — the empty record the dimension's own load creates — as a READ resolves its dimension.
+        if (leaf instanceof PlanetListCommand || leaf instanceof PlanetGetCommand
+                || leaf instanceof PlanetWeatherCommand || leaf instanceof StarListCommand
+                || leaf instanceof StarGetCommand || leaf instanceof UniverseStatusCommand) {
+            return ProbeVerbKind.READ;
+        }
+        // Without a word it previews the upgrade; with one it pins every carried crystal's systems, adopts the
+        // pack's schema and arms the upgrade (or throws its usage).
+        if (leaf instanceof UniverseUpgradeCommand) {
+            return args.length == 0 ? ProbeVerbKind.READ : ProbeVerbKind.ARRANGE;
+        }
+        // Operator writes of world, player and config state: a planet's or a star's properties, a planet or a
+        // star registered or deleted, a station registered with its platform and chip, an item handed or
+        // filled, the weather, an entity's gravity, the sealant and torch lists, the machine recipe tables,
+        // a player moved, and a file written into the server's directory (`dev dumpBiomes`).
+        if (leaf instanceof PlanetSetCommand || leaf instanceof PlanetResetCommand
+                || leaf instanceof PlanetGenerateCommand || leaf instanceof PlanetDeleteCommand
+                || leaf instanceof StarSetCommand || leaf instanceof StarGenerateCommand
+                || leaf instanceof CreateStationCommand || leaf instanceof GiveStationCommand
+                || leaf instanceof FillDataCommand || leaf instanceof WeatherCommand
+                || leaf instanceof SetGravityCommand || leaf instanceof AddSealantCommand
+                || leaf instanceof AddTorchCommand || leaf instanceof ReloadRecipesCommand
+                || leaf instanceof FetchCommand || leaf instanceof GoToDimensionCommand
+                || leaf instanceof GoToStationCommand || leaf instanceof DumpBiomesCommand) {
+            return ProbeVerbKind.ARRANGE;
+        }
+        // Lays a launch pad and a rocket around the sender, then calls the rocket's own launch.
+        if (leaf instanceof RunTestsCommand) {
+            return ProbeVerbKind.TRIGGER;
+        }
+        return ProbeVerbKind.UNCLASSIFIED;
     }
 
     /** What the HIGHEST listener admitted: the command the handler will run, and the array it judged. */

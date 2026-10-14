@@ -37,8 +37,10 @@ import static org.junit.Assert.assertTrue;
  *
  * <p><b>What it does not see.</b> Whether an admitted instrument's body only reads (the build walks it for
  * writes); whether an admitted probe verb arranges or acts (no mechanics verb is classified yet); the static
- * FIELD read the client also refuses (no test may write that call at all); and a tag-writing command this
- * list does not send.</p>
+ * FIELD read the client also refuses (no test may write that call at all); a tag-writing command this
+ * list does not send; and whether each row of the role gate's table ({@code E2EModeGate#rootKind}) is the
+ * kind its handler is — only the forms sent here are judged, one read and one write of each root whose
+ * arguments choose between the two.</p>
  *
  * <p>SEPARATE-BOOT: a judge's refusal is the subject, and the planted calls leave things behind (an item in
  * his hand) that a shared pair would hand to every other scenario.</p>
@@ -96,6 +98,25 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#roleRefusalOf",
             at = "if (role.admits(kind)) {", replacedBy = "if (true) {",
             fails = "these were not: [`stellurgytest chunk forceload 0 0 0` RAN", on = "2026-10-13")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#timeKind",
+            at = "case \"add\": return ProbeVerbKind.ARRANGE;", replacedBy = "case \"add\": return ProbeVerbKind.READ;",
+            fails = "these were not: [`time set 6000` RAN, `time add 0` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#rootKind",
+            at = "return args.length < 2 ? ProbeVerbKind.READ : ProbeVerbKind.ARRANGE;",
+            replacedBy = "return ProbeVerbKind.READ;",
+            fails = "these were not: [`gamerule doMobSpawning false` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#modLeafKind",
+            at = "|| leaf instanceof DumpBiomesCommand) { return ProbeVerbKind.ARRANGE;",
+            replacedBy = "|| leaf instanceof DumpBiomesCommand) { return ProbeVerbKind.READ;",
+            fails = "these were not: [`ar planet set 0 atmosphereDensity 100` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "refused at the call", member = "E2EModeGate#modCommandKind",
+            at = "if (node == null) { return ProbeVerbKind.UNCLASSIFIED;",
+            replacedBy = "if (node == null) { return ProbeVerbKind.READ;",
+            fails = "these were not: [`ar definitelyNotARealSubcommand` RAN]", on = "2026-10-14")
+    @RedWitness(verdict = "answered", member = "E2EModeGate#modLeafKind",
+            at = "|| leaf instanceof UniverseStatusCommand) { return ProbeVerbKind.READ;",
+            replacedBy = "|| leaf instanceof UniverseStatusCommand) { return ProbeVerbKind.TRIGGER;",
+            fails = "these were not: [`ar planet list` was refused", on = "2026-10-14")
     @RedWitness(verdict = "refused at the call", member = "E2EModeGate#mechanicsRefusalOf",
             at = "if (ProbeVerbKind.of(args) == ProbeVerbKind.UNCLASSIFIED) {", replacedBy = "if (false) {",
             fails = "these were not: [`stellurgytest no-such-group no-such-action` RAN", on = "2026-10-13")
@@ -123,6 +144,17 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest tile force-tick 0 0 0 0 1", "ROLE");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "tp " + PLAYER + " 0 100 0", "ROLE");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "forge tps", "UNCLASSIFIED");
+        // ---- a root whose arguments choose between a read and a write: each form is the one kind it is, so the
+        // write form is refused in `read` and the read form in `arrange`; a word the mod's tree does not know
+        // has no kind ----
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "time set 6000", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "time add 0", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "time query daytime", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "gamerule doMobSpawning false", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "gamerule doMobSpawning", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar planet set 0 atmosphereDensity 100", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy planet list", "ROLE");
+        expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar definitelyNotARealSubcommand", "UNCLASSIFIED");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.dimension.DimensionManager"
                 + " getInstance", "STATIC_CALL");
         expectServerRefusal(notRefused, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest invoke-static dev.stannismod.stellurgy.test.client.ClientDimensions"
@@ -154,6 +186,12 @@ public class MechanicsModeRefusesAtTheCallTest extends AbstractMechanicsTest {
         expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "give " + PLAYER + " minecraft:stone 1");
         expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "stellurgytest clock");
         expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgytest arrange charged-item " + PLAYER + " stellurgy:repairWelder 1000");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "time query daytime");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "time set 6000");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "gamerule doMobSpawning");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "gamerule doMobSpawning true");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.READ, "ar planet list");
+        expectServerAnswered(notAnswered, com.github.stannismod.forge.testing.server.CommandRole.ARRANGE, "stellurgy planet set 0 atmosphereDensity 100");
         try {
             JsonObject opened = bot.invokeStaticInt(CLIENT_WINDOW, "open");
             bot.invokeStaticInt(CLIENT_WINDOW, "close", Integer.parseInt(opened.get("returned").getAsString()));

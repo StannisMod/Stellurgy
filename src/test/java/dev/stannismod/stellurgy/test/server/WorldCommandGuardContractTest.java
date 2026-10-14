@@ -3,7 +3,6 @@ package dev.stannismod.stellurgy.test.server;
 import dev.stannismod.stellurgy.test.contract.Pins;
 import org.junit.Test;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -79,15 +78,5 @@ public class WorldCommandGuardContractTest extends AbstractSharedServerTest {
         String resp = arrange("ar station give 7 nonExistentPlayerName123").raw();
         assertTrue("station give must report player not found — got: " + resp,
                 resp.toLowerCase().contains("found"));
-    }
-
-    /** An unknown subcommand must not echo a help envelope with the old
-     *  "Subcommands:" header (the StellurgyCommandRoot tree emits the vanilla
-     *  invalid-subcommand key instead). */
-    @Test
-    public void unknownTopLevelSubcommandDoesNotEmitHelpEnvelope() throws Exception {
-        String resp = arrange("ar definitelyNotARealSubcommand").raw();
-        assertFalse("unknown sub must NOT echo the help header — got: " + resp,
-                resp.contains("Subcommands:"));
     }
 }
